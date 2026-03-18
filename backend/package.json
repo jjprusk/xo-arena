@@ -1,0 +1,35 @@
+{
+  "name": "@xo-arena/backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --watch src --ext js,mjs --exec node src/index.js",
+    "start": "node src/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.2.1",
+    "@prisma/client": "^6.3.0",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ioredis": "^5.4.2",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.0.5",
+    "nodemon": "^3.1.9",
+    "prisma": "^6.3.0",
+    "supertest": "^7.0.0",
+    "vitest": "^3.0.5"
+  }
+}

@@ -1,0 +1,116 @@
+// This is your Prisma schema file.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  clerkId      String   @unique
+  username     String   @unique
+  email        String   @unique
+  displayName  String
+  avatarUrl    String?
+  oauthProvider String? // "google" | "apple" | "email"
+  preferences  Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  gamesAsPlayer1 Game[] @relation("Player1Games")
+  gamesAsPlayer2 Game[] @relation("Player2Games")
+  gamesWon       Game[] @relation("WinnerGames")
+
+  @@map("users")
+}
+
+model Game {
+  id               String    @id @default(cuid())
+  player1Id        String
+  player2Id        String?   // null for AI games
+  winnerId         String?   // null for draw
+  mode             GameMode
+  aiImplementationId String? // if PvAI
+  difficulty       Difficulty?
+  outcome          Outcome
+  totalMoves       Int
+  durationMs       Int
+  startedAt        DateTime
+  endedAt          DateTime  @default(now())
+  roomName         String?   // mountain name for PvP
+
+  player1  User   @relation("Player1Games", fields: [player1Id], references: [id])
+  player2  User?  @relation("Player2Games", fields: [player2Id], references: [id])
+  winner   User?  @relation("WinnerGames", fields: [winnerId], references: [id])
+  moves    Move[]
+  aiErrors AIError[]
+
+  @@index([outcome])
+  @@index([aiImplementationId])
+  @@index([difficulty])
+  @@index([endedAt])
+  @@index([player1Id])
+  @@index([player2Id])
+  @@map("games")
+}
+
+model Move {
+  id            String   @id @default(cuid())
+  gameId        String
+  moveNumber    Int
+  player        MovePlayer
+  boardState    Json     // 9-element array snapshot before the move
+  cellIndex     Int
+  computationMs Int?     // AI moves only
+  timestamp     DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([gameId])
+  @@map("moves")
+}
+
+model AIError {
+  id               String   @id @default(cuid())
+  gameId           String
+  moveNumber       Int
+  implementationId String
+  errorType        String
+  message          String
+  stackTrace       String?
+  timestamp        DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([gameId])
+  @@index([implementationId])
+  @@map("ai_errors")
+}
+
+enum GameMode {
+  PVP
+  PVAI
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Outcome {
+  PLAYER1_WIN
+  PLAYER2_WIN
+  AI_WIN
+  DRAW
+}
+
+enum MovePlayer {
+  HUMAN
+  AI
+}

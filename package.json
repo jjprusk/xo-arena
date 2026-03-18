@@ -1,0 +1,20 @@
+{
+  "name": "xo-arena",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:all": "concurrently \"npm run dev --workspace=frontend\" \"npm run dev --workspace=backend\"",
+    "test": "npm run test --workspace=frontend --workspace=backend",
+    "test:frontend": "npm run test --workspace=frontend",
+    "test:backend": "npm run test --workspace=backend",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "husky": "^9.1.7"
+  }
+}
