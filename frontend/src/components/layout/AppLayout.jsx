@@ -23,7 +23,7 @@ export default function AppLayout() {
       {/* Top nav bar */}
       <header
         className="sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
         {/* Logo */}
         <span
@@ -112,8 +112,8 @@ export default function AppLayout() {
               <SignedOut>
                 <SignInButton mode="modal">
                   <button
-                    className="text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
-                    style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}
+                    className="text-sm font-medium px-3 py-1.5 rounded-lg transition-all hover:brightness-110 active:scale-[0.97]"
+                    style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', color: 'white' }}
                   >
                     Sign in
                   </button>

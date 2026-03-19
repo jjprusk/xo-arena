@@ -61,6 +61,12 @@
   --text-primary: var(--color-gray-900);
   --text-secondary: var(--color-gray-600);
   --text-muted: var(--color-gray-400);
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-card: 0 2px 8px -1px rgb(0 0 0 / 0.08), 0 1px 3px -1px rgb(0 0 0 / 0.05);
+  --shadow-cell: 0 2px 4px -1px rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-cell-win: 0 0 0 2px var(--color-amber-500), 0 4px 12px rgb(212 137 30 / 0.3);
 }
 
 .dark {
@@ -71,6 +77,12 @@
   --text-primary: var(--color-gray-50);
   --text-secondary: var(--color-gray-300);
   --text-muted: var(--color-gray-500);
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.2);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+  --shadow-card: 0 2px 8px -1px rgb(0 0 0 / 0.35), 0 1px 3px -1px rgb(0 0 0 / 0.2);
+  --shadow-cell: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.2);
+  --shadow-cell-win: 0 0 0 2px var(--color-amber-500), 0 4px 12px rgb(212 137 30 / 0.4);
 }
 
 *,
