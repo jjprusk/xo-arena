@@ -219,4 +219,75 @@ router.post('/models/:id/checkpoints/:cpId/restore', requireAuth, async (req, re
   } catch (err) { next(err) }
 })
 
+// ─── ELO history ─────────────────────────────────────────────────────────────
+
+router.get('/models/:id/elo-history', async (req, res, next) => {
+  try {
+    const history = await svc.getEloHistory(req.params.id)
+    res.json({ history })
+  } catch (err) { next(err) }
+})
+
+// ─── Benchmark ───────────────────────────────────────────────────────────────
+
+router.post('/models/:id/benchmark', requireAuth, async (req, res, next) => {
+  try {
+    const benchmark = await svc.startBenchmark(req.params.id)
+    res.status(201).json({ benchmark })
+  } catch (err) { next(err) }
+})
+
+router.get('/models/:id/benchmarks', async (req, res, next) => {
+  try {
+    const benchmarks = await svc.listBenchmarks(req.params.id)
+    res.json({ benchmarks })
+  } catch (err) { next(err) }
+})
+
+router.get('/benchmark/:id', async (req, res, next) => {
+  try {
+    const benchmark = await svc.getBenchmark(req.params.id)
+    if (!benchmark) return res.status(404).json({ error: 'Benchmark not found' })
+    res.json({ benchmark })
+  } catch (err) { next(err) }
+})
+
+// ─── Head-to-head ─────────────────────────────────────────────────────────────
+
+router.post('/models/:id/versus/:id2', requireAuth, async (req, res, next) => {
+  try {
+    const games = Math.min(1000, Math.max(1, parseInt(req.body.games) || 100))
+    const result = await svc.runVersus(req.params.id, req.params.id2, games)
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
+// ─── Tournament ───────────────────────────────────────────────────────────────
+
+router.post('/tournament', requireAuth, async (req, res, next) => {
+  try {
+    const { modelIds, gamesPerPair } = req.body
+    const tournament = await svc.startTournament({ modelIds, gamesPerPair })
+    res.status(201).json({ tournament })
+  } catch (err) {
+    if (err.message.includes('at least 2')) return res.status(400).json({ error: err.message })
+    next(err)
+  }
+})
+
+router.get('/tournaments', async (req, res, next) => {
+  try {
+    const tournaments = await svc.listTournaments()
+    res.json({ tournaments })
+  } catch (err) { next(err) }
+})
+
+router.get('/tournament/:id', async (req, res, next) => {
+  try {
+    const tournament = await svc.getTournament(req.params.id)
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
+    res.json({ tournament })
+  } catch (err) { next(err) }
+})
+
 export default router

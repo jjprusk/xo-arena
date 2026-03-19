@@ -56,6 +56,14 @@ export const api = {
     getOpeningBook:   (id)         => api.get(`/ml/models/${id}/opening-book`),
     exportModel:      (id)         => api.get(`/ml/models/${id}/export`),
     importModel:      (data, tok)  => api.post('/ml/models/import', data, tok),
+    getEloHistory:    (id)              => api.get(`/ml/models/${id}/elo-history`),
+    startBenchmark:   (id, tok)         => api.post(`/ml/models/${id}/benchmark`, {}, tok),
+    listBenchmarks:   (id)              => api.get(`/ml/models/${id}/benchmarks`),
+    getBenchmark:     (id)              => api.get(`/ml/benchmark/${id}`),
+    runVersus:        (id, id2, g, tok) => api.post(`/ml/models/${id}/versus/${id2}`, { games: g }, tok),
+    startTournament:  (data, tok)       => api.post('/ml/tournament', data, tok),
+    listTournaments:  ()                => api.get('/ml/tournaments'),
+    getTournament:    (id)              => api.get(`/ml/tournament/${id}`),
   },
 
   rooms: {

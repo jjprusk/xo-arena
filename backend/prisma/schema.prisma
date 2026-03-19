@@ -219,6 +219,18 @@ model MLEloHistory {
   @@map("ml_elo_history")
 }
 
+model MLTournament {
+  id           String    @id @default(cuid())
+  status       String    @default("PENDING")
+  modelIds     Json
+  gamesPerPair Int       @default(50)
+  results      Json      @default("{}")
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@map("ml_tournaments")
+}
+
 enum MLAlgorithm {
   Q_LEARNING
   SARSA
