@@ -1,8 +1,10 @@
 import React from 'react'
-import { Outlet, NavLink, Link } from 'react-router-dom'
+import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
+import { useGameStore } from '../../store/gameStore.js'
+import { usePvpStore } from '../../store/pvpStore.js'
 
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -18,6 +20,15 @@ const BOTTOM_NAV = [
 ]
 
 export default function AppLayout() {
+  const navigate = useNavigate()
+
+  function handleLogoClick(e) {
+    e.preventDefault()
+    useGameStore.getState().newGame()
+    usePvpStore.getState().reset()
+    navigate('/play')
+  }
+
   return (
     <div className="flex flex-col min-h-dvh">
       {/* Top nav bar */}
@@ -26,7 +37,7 @@ export default function AppLayout() {
         style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
         {/* Logo */}
-        <Link to="/play" className="flex items-center gap-2 select-none no-underline">
+        <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
           <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
             <text x="2" y="23" fontSize="19" fontWeight="800" fill="white" fontFamily="var(--font-display), system-ui, sans-serif">X</text>
