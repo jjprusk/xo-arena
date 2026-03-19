@@ -14,25 +14,22 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-8">
-      <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-        Settings
-      </h1>
+      <PageHeader title="Settings" />
 
       {/* Appearance */}
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-muted)' }}>
-          Appearance
-        </h2>
+      <section className="space-y-3">
+        <SectionLabel>Appearance</SectionLabel>
         <div className="flex gap-3">
           {THEMES.map(({ value, label, preview }) => (
             <button
               key={value}
               onClick={() => setTheme(value)}
-              className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors ${
+              className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all active:scale-[0.97] ${
                 theme === value
                   ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]'
                   : 'border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--color-gray-400)]'
               }`}
+              style={{ boxShadow: 'var(--shadow-card)' }}
             >
               <span className="text-2xl">{preview}</span>
               <span className="text-sm font-medium">{label}</span>
@@ -42,11 +39,12 @@ export default function SettingsPage() {
       </section>
 
       {/* Sound */}
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-muted)' }}>
-          Sound
-        </h2>
-        <div className="rounded-xl border p-4 space-y-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+      <section className="space-y-3">
+        <SectionLabel>Sound</SectionLabel>
+        <div
+          className="rounded-xl border p-5 space-y-5"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+        >
           <div className="flex items-center justify-between">
             <span className="font-medium">Master sound</span>
             <button
@@ -54,13 +52,12 @@ export default function SettingsPage() {
               className={`relative w-12 h-6 rounded-full transition-colors ${muted ? 'bg-[var(--color-gray-300)]' : 'bg-[var(--color-blue-600)]'}`}
               aria-label={muted ? 'Unmute' : 'Mute'}
             >
-              <span
-                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${muted ? 'left-1' : 'left-7'}`}
-              />
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${muted ? 'left-1' : 'left-7'}`} />
             </button>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Volume</span>
+          <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium w-14" style={{ color: 'var(--text-secondary)' }}>Volume</span>
             <input
               type="range"
               min="0"
@@ -71,12 +68,28 @@ export default function SettingsPage() {
               className="flex-1 accent-[var(--color-blue-600)]"
               disabled={muted}
             />
-            <span className="text-sm w-8 text-right" style={{ color: 'var(--text-secondary)' }}>
+            <span className="text-sm font-semibold tabular-nums w-10 text-right" style={{ color: 'var(--text-secondary)' }}>
               {Math.round(volume * 100)}%
             </span>
           </div>
         </div>
       </section>
     </div>
+  )
+}
+
+function PageHeader({ title }) {
+  return (
+    <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+      <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
+    </div>
+  )
+}
+
+function SectionLabel({ children }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+      {children}
+    </h2>
   )
 }
