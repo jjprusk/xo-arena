@@ -65,6 +65,8 @@ export const api = {
     listTournaments:  ()                => api.get('/ml/tournaments'),
     getTournament:    (id)              => api.get(`/ml/tournament/${id}`),
     startHyperparamSearch: (id, body, tok) => api.post(`/ml/models/${id}/hypersearch`, body, tok),
+    explainActivations: (id, board) => api.post(`/ml/models/${id}/explain-activations`, { board }),
+    ensembleMove: (body) => api.post('/ml/models/ensemble', body),
   },
 
   rooms: {

@@ -11,6 +11,8 @@ import { QLearningEngine, runEpisode, DEFAULT_CONFIG } from '../ai/qLearning.js'
 import { SarsaEngine } from '../ai/sarsa.js'
 import { MonteCarloEngine } from '../ai/monteCarlo.js'
 import { PolicyGradientEngine } from '../ai/policyGradient.js'
+import { DQNEngine } from '../ai/dqn.js'
+import { AlphaZeroEngine } from '../ai/alphaZero.js'
 import { minimaxMove } from '../ai/minimax.js'
 import { getWinner, isBoardFull, getEmptyCells, opponent } from '../ai/gameLogic.js'
 import { proportionPValue, twoProportionPValue } from '../ai/stats.js'
@@ -557,7 +559,79 @@ function _buildEngine(modelConfig, algorithm) {
   if (alg === 'SARSA') return new SarsaEngine(modelConfig)
   if (alg === 'MONTE_CARLO' || alg === 'MC') return new MonteCarloEngine(modelConfig)
   if (alg === 'POLICY_GRADIENT' || alg === 'PG') return new PolicyGradientEngine(modelConfig)
+  if (alg === 'DQN') return new DQNEngine(modelConfig)
+  if (alg === 'ALPHA_ZERO' || alg === 'AZ') return new AlphaZeroEngine(modelConfig)
   return new QLearningEngine(modelConfig)
+}
+
+/**
+ * Run a single DQN episode.
+ * After each move: pushExperience + trainStep.
+ * At end: decayEpsilon.
+ */
+function _runDQNEpisode(engine, opponentFn, mlMark) {
+  const board = Array(9).fill(null)
+  let currentPlayer = 'X'
+  let totalMoves = 0
+
+  while (true) {
+    const isML = mlMark === 'both' || currentPlayer === mlMark
+    const prevBoard = [...board]
+    const action = isML
+      ? engine.chooseAction(board, currentPlayer, true)
+      : opponentFn(board, currentPlayer)
+
+    board[action] = currentPlayer
+    totalMoves++
+
+    const winner = getWinner(board)
+    const isDraw = !winner && isBoardFull(board)
+    const done = !!(winner || isDraw)
+
+    let reward = 0
+    if (done) {
+      if (winner) {
+        reward = winner === (mlMark === 'both' ? currentPlayer : mlMark) ? 1.0 : -1.0
+      } else {
+        reward = 0.5  // draw
+      }
+    }
+
+    if (isML) {
+      const encodedPrev = _encodeStateForDQN(prevBoard, currentPlayer)
+      const encodedNext = _encodeStateForDQN(board, opponent(currentPlayer))
+      engine.pushExperience(encodedPrev, action, reward, encodedNext, done)
+      engine.trainStep()
+    }
+
+    if (done) {
+      engine.decayEpsilon()
+      let outcome
+      if (isDraw) {
+        outcome = 'DRAW'
+      } else if (mlMark === 'both') {
+        outcome = winner === 'X' ? 'WIN' : 'LOSS'
+      } else {
+        outcome = winner === mlMark ? 'WIN' : 'LOSS'
+      }
+      return { outcome, totalMoves, avgQDelta: 0, epsilon: engine.epsilon }
+    }
+
+    currentPlayer = opponent(currentPlayer)
+  }
+}
+
+function _encodeStateForDQN(board, mark) {
+  const opp = mark === 'X' ? 'O' : 'X'
+  return board.map(c => c === mark ? 1 : c === opp ? -1 : 0)
+}
+
+/**
+ * Run a single AlphaZero episode (delegates to engine self-play).
+ */
+function _runAlphaZeroEpisode(engine) {
+  const result = engine.runEpisode()
+  return { outcome: result.outcome || 'DRAW', totalMoves: result.totalMoves || 9, avgQDelta: 0, epsilon: 0 }
 }
 
 /**
@@ -748,6 +822,8 @@ function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
   if (alg === 'SARSA') return _runSarsaEpisode(engine, mlMark, opponentFn)
   if (alg === 'MONTE_CARLO' || alg === 'MC') return _runMCEpisode(engine, mlMark, opponentFn)
   if (alg === 'POLICY_GRADIENT' || alg === 'PG') return _runPGEpisode(engine, mlMark, opponentFn)
+  if (alg === 'DQN') return _runDQNEpisode(engine, opponentFn, mlMark)
+  if (alg === 'ALPHA_ZERO' || alg === 'AZ') return _runAlphaZeroEpisode(engine)
   return runEpisode(engine, mlMark, opponentFn)
 }
 
@@ -1031,6 +1107,113 @@ export async function startHyperparamSearch(modelId, { paramGrid = {}, gamesPerC
 
   logger.info({ modelId, configsSearched: configs.length, bestConfig, bestWinRate: results[0]?.winRate }, 'Hyperparam search complete')
   return { bestConfig, results }
+}
+
+// ─── Explainability — network activations ────────────────────────────────────
+
+/**
+ * Run a forward pass through the engine and return layer activations + Q-values.
+ * For tabular engines, returns null activations and uses explainBoard.
+ */
+export async function explainActivations(modelId, board) {
+  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  if (!model) throw new Error('Model not found')
+
+  const alg = (model.algorithm || 'Q_LEARNING').toUpperCase()
+
+  if (alg === 'DQN') {
+    const engine = new DQNEngine(model.config)
+    engine.loadQTable(model.qtable)
+    const mark = 'X'
+    const { qValues, activations } = engine.explainBoard(board, mark)
+    return { activations, qValues }
+  }
+
+  if (alg === 'ALPHA_ZERO' || alg === 'AZ') {
+    const engine = new AlphaZeroEngine(model.config)
+    engine.loadQTable(model.qtable)
+    const mark = 'X'
+    const { qValues, activations, value } = engine.explainBoard(board, mark)
+    return { activations, qValues, value }
+  }
+
+  // Tabular engine — no network activations
+  const engine = _buildEngine(model.config, alg)
+  engine.loadQTable(model.qtable)
+  const qValues = engine.explainBoard ? engine.explainBoard(board) : null
+  return { activations: null, qValues }
+}
+
+// ─── Ensemble ─────────────────────────────────────────────────────────────────
+
+/**
+ * Get a move recommendation from an ensemble of models.
+ * @param {string[]} modelIds
+ * @param {'majority'|'weighted'} method
+ * @param {number[]|null} weights
+ * @param {Array} board
+ * @param {string} mark
+ */
+export async function ensembleMove(modelIds, method, weights, board, mark) {
+  const models = await Promise.all(modelIds.map(id => db.mLModel.findUnique({ where: { id } })))
+  const valid = models.filter(Boolean)
+  if (valid.length === 0) throw new Error('No valid models found')
+
+  const engines = valid.map(m => {
+    const alg = (m.algorithm || 'Q_LEARNING').toUpperCase()
+    const engine = _buildEngine(m.config, alg)
+    engine.loadQTable(m.qtable)
+    engine.epsilon = 0
+    return { engine, alg, model: m }
+  })
+
+  const votes = new Array(9).fill(0)
+
+  if (method === 'weighted' && weights && weights.length === valid.length) {
+    // Check if all engines are tabular
+    const allTabular = engines.every(({ alg }) => !['DQN', 'ALPHA_ZERO', 'AZ'].includes(alg))
+
+    if (allTabular) {
+      // Weight Q-value arrays and argmax
+      const weightedQ = new Array(9).fill(0)
+      engines.forEach(({ engine, model }, i) => {
+        const w = weights[i] ?? 1
+        const qvals = engine.explainBoard ? engine.explainBoard(board) : new Array(9).fill(0)
+        for (let c = 0; c < 9; c++) {
+          if (qvals[c] !== null) weightedQ[c] += w * qvals[c]
+        }
+      })
+      const { getEmptyCells: gec } = await import('../ai/gameLogic.js')
+      const empty = gec(board)
+      const best = empty.reduce((b, idx) => weightedQ[idx] > weightedQ[b] ? idx : b, empty[0])
+      const voteArr = engines.map(({ engine }) => engine.explainBoard ? engine.explainBoard(board) : [])
+      const voteActions = engines.map(({ engine }) => {
+        const qv = engine.explainBoard ? engine.explainBoard(board) : new Array(9).fill(0)
+        return empty.reduce((b, idx) => (qv[idx] ?? -Infinity) > (qv[b] ?? -Infinity) ? idx : b, empty[0])
+      })
+      return { move: best, votes: voteActions }
+    }
+    // Mixed/neural engines: fall through to majority
+  }
+
+  // Majority vote
+  const { getEmptyCells: gec } = await import('../ai/gameLogic.js')
+  const empty = gec(board)
+  const actions = engines.map(({ engine, alg }) => {
+    if (alg === 'DQN') return engine.chooseAction(board, mark, false)
+    if (alg === 'ALPHA_ZERO' || alg === 'AZ') return engine.chooseAction(board, mark)
+    // Tabular: greedy
+    engine.epsilon = 0
+    return engine.chooseAction(board, false)
+  })
+
+  actions.forEach(a => { if (a >= 0 && a < 9) votes[a]++ })
+
+  // Resolve: best by vote count, ties broken by lowest action index
+  const maxVotes = Math.max(...empty.map(i => votes[i]))
+  const best = empty.find(i => votes[i] === maxVotes) ?? empty[0]
+
+  return { move: best, votes: actions }
 }
 
 function _emit(room, event, data) {

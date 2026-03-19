@@ -97,6 +97,36 @@ router.post('/models/:id/explain', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+router.post('/models/:id/explain-activations', async (req, res, next) => {
+  try {
+    const { board } = req.body
+    if (!Array.isArray(board) || board.length !== 9) {
+      return res.status(400).json({ error: 'board must be a 9-element array' })
+    }
+    const result = await svc.explainActivations(req.params.id, board)
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
+// ─── Ensemble ────────────────────────────────────────────────────────────────
+
+router.post('/models/ensemble', async (req, res, next) => {
+  try {
+    const { modelIds, method = 'majority', weights, board, mark = 'X' } = req.body
+    if (!Array.isArray(modelIds) || modelIds.length === 0) {
+      return res.status(400).json({ error: 'modelIds must be a non-empty array' })
+    }
+    if (!Array.isArray(board) || board.length !== 9) {
+      return res.status(400).json({ error: 'board must be a 9-element array' })
+    }
+    if (!['majority', 'weighted'].includes(method)) {
+      return res.status(400).json({ error: 'method must be majority or weighted' })
+    }
+    const result = await svc.ensembleMove(modelIds, method, weights, board, mark)
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
 // ─── Training ─────────────────────────────────────────────────────────────────
 
 router.post('/models/:id/train', requireAuth, async (req, res, next) => {

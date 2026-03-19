@@ -19,6 +19,8 @@ const ALGORITHMS = [
   { value: 'SARSA',           label: 'SARSA',           desc: 'On-policy TD control' },
   { value: 'MONTE_CARLO',     label: 'Monte Carlo',     desc: 'Every-visit MC control' },
   { value: 'POLICY_GRADIENT', label: 'Policy Gradient', desc: 'REINFORCE (softmax policy)' },
+  { value: 'DQN',             label: 'DQN',             desc: 'Deep Q-Network (neural net)' },
+  { value: 'ALPHA_ZERO',      label: 'AlphaZero',       desc: 'MCTS + policy/value nets' },
 ]
 const STATUS_COLOR = { IDLE: 'teal', TRAINING: 'blue' }
 const SESSION_COLOR = { COMPLETED: 'teal', RUNNING: 'blue', FAILED: 'red', CANCELLED: 'amber', PENDING: 'gray', QUEUED: 'yellow' }
@@ -231,6 +233,14 @@ function TrainTab({ model, onComplete }) {
   const [earlyStopEnabled, setEarlyStop]    = useState(false)
   const [patience, setPatience]             = useState(200)
   const [minDelta, setMinDelta]             = useState(0.01)
+  // DQN-specific config
+  const [dqnBatchSize, setDqnBatchSize]           = useState(32)
+  const [dqnReplayBuffer, setDqnReplayBuffer]     = useState(10000)
+  const [dqnTargetUpdate, setDqnTargetUpdate]     = useState(100)
+  // AlphaZero-specific config
+  const [azSimulations, setAzSimulations]   = useState(50)
+  const [azCPuct, setAzCPuct]               = useState(1.5)
+  const [azTemperature, setAzTemperature]   = useState(1.0)
   const [sessions, setSessions]             = useState([])
   const [running, setRunning]               = useState(false)
   const [sessionId, setSessionId]           = useState(null)
@@ -263,6 +273,8 @@ function TrainTab({ model, onComplete }) {
       algorithm,
       ...(curriculum ? { curriculum: true } : {}),
       ...(earlyStopEnabled ? { earlyStop: { patience, minDelta } } : {}),
+      ...(algorithm === 'DQN' ? { batchSize: dqnBatchSize, replayBufferSize: dqnReplayBuffer, targetUpdateFreq: dqnTargetUpdate } : {}),
+      ...(algorithm === 'ALPHA_ZERO' ? { numSimulations: azSimulations, cPuct: azCPuct, temperature: azTemperature } : {}),
     }
     try {
       const { session } = await api.ml.train(model.id, { mode, iterations, config: cfg }, token)
@@ -350,6 +362,66 @@ function TrainTab({ model, onComplete }) {
                 ))}
               </div>
             </div>
+
+            {/* DQN config fields */}
+            {algorithm === 'DQN' && (
+              <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>DQN Configuration</p>
+                <div className="flex flex-wrap gap-4">
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Batch size</label>
+                    <input type="number" min="8" max="256" step="8" value={dqnBatchSize}
+                      onChange={e => setDqnBatchSize(Number(e.target.value))}
+                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Replay buffer size</label>
+                    <input type="number" min="1000" max="100000" step="1000" value={dqnReplayBuffer}
+                      onChange={e => setDqnReplayBuffer(Number(e.target.value))}
+                      className="w-28 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Target update freq</label>
+                    <input type="number" min="10" max="1000" step="10" value={dqnTargetUpdate}
+                      onChange={e => setDqnTargetUpdate(Number(e.target.value))}
+                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AlphaZero config fields */}
+            {algorithm === 'ALPHA_ZERO' && (
+              <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>AlphaZero Configuration</p>
+                <div className="flex flex-wrap gap-4">
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Simulations per move</label>
+                    <input type="number" min="10" max="500" step="10" value={azSimulations}
+                      onChange={e => setAzSimulations(Number(e.target.value))}
+                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>PUCT constant</label>
+                    <input type="number" min="0.1" max="5" step="0.1" value={azCPuct}
+                      onChange={e => setAzCPuct(Number(e.target.value))}
+                      className="w-20 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Temperature</label>
+                    <input type="number" min="0.1" max="2.0" step="0.1" value={azTemperature}
+                      onChange={e => setAzTemperature(Number(e.target.value))}
+                      className="w-20 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Difficulty (VS_MINIMAX only) */}
             {mode === 'VS_MINIMAX' && (
@@ -715,7 +787,9 @@ function ExplainabilityTab({ model }) {
   const [loading, setLoading]       = useState(false)
   const [openingBook, setOpeningBook] = useState(null)
   const [obLoading, setObLoading]   = useState(false)
-  const [activeSection, setSection] = useState('position') // 'position' | 'opening' | 'diff'
+  const [activeSection, setSection] = useState('position') // 'position' | 'opening' | 'diff' | 'activations'
+
+  const isNeuralNet = model.algorithm === 'DQN' || model.algorithm === 'ALPHA_ZERO'
 
   // Fetch Q-values whenever board changes
   useEffect(() => {
@@ -763,7 +837,13 @@ function ExplainabilityTab({ model }) {
     <div className="space-y-4">
       {/* Section toggle */}
       <div className="flex gap-2 flex-wrap">
-        {[['position', 'Position Analysis'], ['opening', 'Opening Book'], ['diff', 'Version Diff'], ['hypersearch', 'Hyperparam Search']].map(([s, label]) => (
+        {[
+          ['position', 'Position Analysis'],
+          ['opening', 'Opening Book'],
+          ['diff', 'Version Diff'],
+          ['hypersearch', 'Hyperparam Search'],
+          ...(isNeuralNet ? [['activations', 'Network Activations']] : []),
+        ].map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeSection === s ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
             style={{ backgroundColor: activeSection === s ? undefined : 'var(--bg-surface-hover)', color: activeSection === s ? undefined : 'var(--text-secondary)' }}>
@@ -885,7 +965,137 @@ function ExplainabilityTab({ model }) {
 
       {activeSection === 'diff' && <VersionDiffViewer model={model} />}
       {activeSection === 'hypersearch' && <HyperparamSearchPanel model={model} />}
+      {activeSection === 'activations' && isNeuralNet && <NetworkActivationsPanel model={model} />}
     </div>
+  )
+}
+
+// ─── Network Activations Panel ────────────────────────────────────────────────
+
+function NetworkActivationsPanel({ model }) {
+  const [board, setBoard]           = useState([...EMPTY_BOARD])
+  const [activations, setActivations] = useState(null)
+  const [qValues, setQValues]       = useState(null)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState(null)
+
+  function handleCellClick(i) {
+    setBoard(prev => {
+      const next = [...prev]
+      if (next[i] === null)      next[i] = 'X'
+      else if (next[i] === 'X')  next[i] = 'O'
+      else                       next[i] = null
+      return next
+    })
+  }
+
+  async function handleInspect() {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api.ml.explainActivations(model.id, board)
+      setActivations(result.activations)
+      setQValues(result.qValues)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const MAX_CIRCLES = 64
+
+  return (
+    <Card>
+      <SectionLabel>Network Activations</SectionLabel>
+      <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+        Inspect the internal activations of the neural network for a given board position.
+        Each row represents one layer; blue = positive activation, red = negative.
+      </p>
+
+      <div className="flex gap-6 flex-wrap items-start mb-4">
+        {/* Interactive board */}
+        <div>
+          <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Click cells to cycle X → O → empty</p>
+          <div className="grid grid-cols-3 gap-1 w-[140px]">
+            {board.map((cell, i) => (
+              <button key={i} type="button" onClick={() => handleCellClick(i)}
+                className="aspect-square flex items-center justify-center rounded-lg border-2 text-sm font-bold transition-all"
+                style={{
+                  minHeight: 40,
+                  backgroundColor: 'var(--bg-base)',
+                  borderColor: 'var(--border-default)',
+                  color: cell === 'X' ? 'var(--color-blue-600)' : 'var(--color-red-600)',
+                }}>
+                {cell ?? ''}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-2">
+            <Btn onClick={() => setBoard([...EMPTY_BOARD])} variant="ghost">Clear</Btn>
+            <Btn onClick={handleInspect} disabled={loading}>
+              {loading ? 'Inspecting…' : 'Inspect activations'}
+            </Btn>
+          </div>
+          {error && <p className="text-xs mt-2" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+        </div>
+
+        {/* Q-values summary */}
+        {qValues && (
+          <div>
+            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Q-values (legal moves)</p>
+            <div className="space-y-1">
+              {qValues.map((v, i) => v !== null && (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="w-10" style={{ color: 'var(--text-muted)' }}>Cell {i + 1}</span>
+                  <span className="font-mono w-14 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                    {typeof v === 'number' ? v.toFixed(4) : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Layer visualizations */}
+      {activations && (
+        <div className="space-y-4 mt-4">
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            Layer Activations ({activations.length} layers)
+          </p>
+          {activations.map((layer, li) => {
+            const displayed = layer.slice(0, MAX_CIRCLES)
+            const maxAbs    = Math.max(...displayed.map(Math.abs), 1e-6)
+            return (
+              <div key={li}>
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  Layer {li} — {layer.length} {li === 0 ? 'inputs' : li === activations.length - 1 ? 'outputs' : 'neurons'}
+                  {layer.length > MAX_CIRCLES && <span> (showing first {MAX_CIRCLES})</span>}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {displayed.map((val, ni) => {
+                    const intensity = Math.min(1, Math.abs(val) / maxAbs)
+                    const alpha     = 0.15 + intensity * 0.85
+                    const color     = val >= 0
+                      ? `rgba(37, 99, 235, ${alpha.toFixed(2)})`   // blue for positive
+                      : `rgba(220, 38, 38, ${alpha.toFixed(2)})`   // red for negative
+                    return (
+                      <div
+                        key={ni}
+                        title={`Neuron ${ni}: ${val.toFixed(4)}`}
+                        className="rounded-full transition-colors"
+                        style={{ width: 14, height: 14, backgroundColor: color, flexShrink: 0 }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
   )
 }
 
