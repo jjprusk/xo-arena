@@ -77,7 +77,7 @@ export default function PvPBoard() {
       )}
 
       {/* Board */}
-      <div className="grid grid-cols-3 gap-2 w-full">
+      <div className="grid grid-cols-3 gap-2 w-full" aria-label="Tic-tac-toe board">
         {board.map((cell, i) => {
           const isWinCell = winLine?.includes(i)
           const isPlayable = isMyTurn && cell === null && status === 'playing'

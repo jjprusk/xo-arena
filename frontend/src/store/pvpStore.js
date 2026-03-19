@@ -120,12 +120,14 @@ export const usePvpStore = create((set, get) => ({
     socket.on('room:joined', ({ slug, role, mark, room }) => {
       set({
         slug,
+        role,
         displayName: room?.displayName,
         myMark: mark || null,
         status: role === 'spectator' ? 'playing' : 'waiting',
         board: room?.board || Array(9).fill(null),
         currentTurn: room?.currentTurn || 'X',
         scores: room?.scores || { X: 0, O: 0 },
+        spectatorCount: room?.spectatorCount ?? 0,
       })
     })
 
@@ -170,6 +172,18 @@ export const usePvpStore = create((set, get) => ({
     })
 
     socket.on('error', ({ message }) => {
+      const state = get()
+      // If we tried to join as player but the room is already in progress,
+      // automatically retry as spectator.
+      if (
+        state.status === 'waiting' &&
+        state.role === 'guest' &&
+        (message === 'Room is not waiting for a player' || message === 'Room is full')
+      ) {
+        getSocket().emit('room:join', { slug: state.slug, role: 'spectator' })
+        set({ role: 'spectator' })
+        return
+      }
       set({ error: message })
     })
   },
