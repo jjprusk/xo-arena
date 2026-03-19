@@ -92,12 +92,13 @@ export default function PvPBoard() {
                 aspect-square flex items-center justify-center rounded-xl text-4xl font-bold
                 border-2 transition-all select-none
                 ${isWinCell ? 'bg-[var(--color-amber-100)] border-[var(--color-amber-500)]' : 'bg-[var(--bg-surface)] border-[var(--border-default)]'}
-                ${isPlayable ? 'hover:bg-[var(--bg-surface-hover)] cursor-pointer' : 'cursor-default'}
+                ${isPlayable ? 'hover:bg-[var(--bg-surface-hover)] hover:scale-[1.04] active:scale-[0.97] cursor-pointer' : 'cursor-default'}
               `}
               style={{
                 minHeight: 88,
                 fontFamily: 'var(--font-display)',
                 color: cell ? MARK_COLOR[cell] : 'transparent',
+                boxShadow: isWinCell ? 'var(--shadow-cell-win)' : 'var(--shadow-cell)',
               }}
             >
               {cell || '·'}
@@ -124,7 +125,8 @@ export default function PvPBoard() {
           </button>
           <button
             onClick={reset}
-            className="flex-1 py-3 rounded-xl font-semibold bg-[var(--color-blue-600)] text-white hover:bg-[var(--color-blue-700)] transition-colors"
+            className="flex-1 py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
           >
             New Game
           </button>

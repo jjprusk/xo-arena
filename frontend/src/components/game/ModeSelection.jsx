@@ -63,6 +63,7 @@ export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
         style={{
           borderColor: aiExpanded ? 'var(--color-blue-600)' : 'var(--border-default)',
           backgroundColor: 'var(--bg-surface)',
+          boxShadow: 'var(--shadow-card)',
         }}
       >
         <button
@@ -170,8 +171,8 @@ export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
 
             <button
               onClick={handlePlayAI}
-              className="w-full py-3 rounded-xl font-semibold text-white transition-colors"
-              style={{ backgroundColor: 'var(--color-blue-600)' }}
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', boxShadow: 'var(--shadow-md)' }}
             >
               Play vs AI
             </button>
@@ -183,7 +184,7 @@ export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
       <button
         onClick={onPvpCreate}
         className="w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-colors hover:border-[var(--color-teal-600)] hover:bg-[var(--color-teal-50)]"
-        style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+        style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
       >
         <span className="text-3xl">👥</span>
         <div className="flex-1">
@@ -198,7 +199,7 @@ export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
       {/* ── Join a Room ────────────────────────────────────── */}
       <div
         className="rounded-xl border-2 p-4 space-y-3"
-        style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+        style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
       >
         <div className="flex items-center gap-3">
           <span className="text-2xl">🔗</span>
@@ -227,7 +228,7 @@ export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
             onClick={handleJoin}
             disabled={!joinInput.trim()}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: 'var(--color-teal-600)' }}
+            style={{ background: 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))' }}
           >
             Join
           </button>

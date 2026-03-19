@@ -41,7 +41,7 @@ export default function RoomLobby() {
       </div>
 
       {/* Invite link */}
-      <div className="rounded-xl border p-4 space-y-3" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+      <div className="rounded-xl border p-4 space-y-3" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}>
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
           Share this link to invite your opponent:
         </p>
@@ -60,7 +60,9 @@ export default function RoomLobby() {
             onClick={handleCopy}
             className="px-3 py-2 rounded-lg text-sm font-medium transition-colors"
             style={{
-              backgroundColor: copied ? 'var(--color-teal-600)' : 'var(--color-blue-600)',
+              background: copied
+                ? 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))'
+                : 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))',
               color: 'white',
             }}
           >
