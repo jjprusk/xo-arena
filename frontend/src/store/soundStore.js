@@ -7,7 +7,7 @@ let sounds = {}
 
 function getSound(key) {
   if (!sounds[key]) {
-    sounds[key] = new Howl({ src: [`/sounds/${key}.mp3`], volume: 0.5 })
+    sounds[key] = new Howl({ src: [`/sounds/${key}.wav`], volume: 0.5 })
   }
   return sounds[key]
 }
