@@ -5,7 +5,7 @@ import { api } from '../../lib/api.js'
 
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
-export default function ModeSelection({ onStart, onPvpJoin, inviteUrl }) {
+export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
   const { setMode, setDifficulty, setAIImplementation, setPlayerMark, setPlayerName, startGame } = useGameStore()
 
   const [aiExpanded, setAiExpanded] = useState(false)
@@ -63,7 +63,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl }) {
   return (
     <div className="flex flex-col gap-4 max-w-sm mx-auto w-full">
       <h1 className="text-3xl font-bold text-center" style={{ fontFamily: 'var(--font-display)' }}>
-        XO Arena
+        {roomName || <span style={{ color: 'var(--text-muted)' }}>…</span>}
       </h1>
 
       {/* ── Play vs AI ─────────────────────────────────────── */}

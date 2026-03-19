@@ -12,7 +12,7 @@ export default function PlayPage() {
   const joinSlug = searchParams.get('join')
 
   const { status: pvaiStatus, mode: pvaiMode } = useGameStore()
-  const { status: pvpStatus, joinRoom, role, slug, isAutoRoom } = usePvpStore()
+  const { status: pvpStatus, joinRoom, role, slug, isAutoRoom, displayName } = usePvpStore()
 
   const inviteUrl = slug ? `${window.location.origin}/play?join=${slug}` : ''
 
@@ -51,6 +51,7 @@ export default function PlayPage() {
     <div className="flex flex-col items-center w-full max-w-md mx-auto">
       <ModeSelection
         inviteUrl={inviteUrl}
+        roomName={displayName}
         onPvpJoin={(s) => usePvpStore.getState().joinRoom(s, 'player')}
       />
     </div>
