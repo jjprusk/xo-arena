@@ -1,0 +1,33 @@
+Machine Learning Requirements
+Additional AI model added to current minimax engine AIsThis is to be a "Machine Learning" AI that learns from player behavior and adapts its strategy. The goal is to create a research environment for ML
+Specific ideas:
+- starts out with no strategic knowledge, just an understanding of the game rules
+- Can be reset to base starting per above
+- how it learns can be selected from any / all of the below:
+  - Can play itself to learn and improve its strategy
+  - number of iterations can be set
+  - Can play against minimax engine to learn and improve its strategy
+  - can play against human players to learn and improve its strategy
+- Track player move patterns and tendencies
+- Learn from player mistakes to improve its own strategy
+- Very detailed dashboard to track all learning progress and metrics:
+  - Win rate against different opponents
+  - Move pattern analysis
+  - Strategy adaptation over time
+  - Learning speed and efficiency
+  - Confidence levels in decisions
+  - Performance trends over time
+  - Comparison with baseline performance
+  - Statistical significance of improvements
+  - Correlation between learning and performance gains
+  - Player-specific adaptation metrics
+  - Opponent-specific strategy adjustments
+  - Adaptation to different playing styles
+  - Generalization across different game scenarios
+  - Overfitting detection and prevention
+  - Learning curve analysis
+  - Convergence analysis
+  - Performance regression detection
+  - Strategy complexity analysis
+  - Decision confidence tracking
+- Dashboard should include tracking of all the above metrics, both in tabular and visual formats. The visual formats should be interactive and allow for filtering and sorting. Also include export functionality for the data. Additionally, include a section for manual intervention and strategy adjustment. Also include a section for AI model performance comparison and evaluation. Graphical analysis should be available for all metrics. Data should also be accessible via API for external systems.

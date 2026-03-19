@@ -38,6 +38,10 @@ export const api = {
     list: () => api.get('/rooms'),
   },
 
+  games: {
+    record: (body, token) => api.post('/games', body, token),
+  },
+
   logs: {
     ingest: (entries) => api.post('/logs', { entries }),
   },

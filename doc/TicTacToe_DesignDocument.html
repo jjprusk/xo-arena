@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>XO Arena — Design Document v1.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue-50: #E6F1FB;
+    --blue-100: #B5D4F4;
+    --blue-400: #378ADD;
+    --blue-500: #1A6FD4;
+    --blue-600: #185FA5;
+    --blue-800: #0C447C;
+    --blue-900: #042C53;
+    --teal-50: #E1F5EE;
+    --teal-100: #9FE1CB;
+    --teal-400: #1D9E75;
+    --teal-600: #0F6E56;
+    --teal-800: #085041;
+    --gray-50: #F1EFE8;
+    --gray-100: #D3D1C7;
+    --gray-200: #B4B2A9;
+    --gray-400: #888780;
+    --gray-600: #5F5E5A;
+    --gray-800: #444441;
+    --gray-900: #2C2C2A;
+    --amber-50: #FAEEDA;
+    --amber-100: #FAC775;
+    --amber-400: #BA7517;
+    --amber-600: #854F0B;
+    --red-50: #FCEBEB;
+    --red-400: #E24B4A;
+    --red-600: #A32D2D;
+    --white: #FFFFFF;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-900);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* ── Page layout ── */
+  .page-wrap { max-width: 960px; margin: 0 auto; padding: 0 32px 80px; }
+
+  /* ── Cover ── */
+  .cover {
+    background: var(--gray-900);
+    margin: 0 -32px;
+    padding: 72px 32px 64px;
+    margin-bottom: 64px;
+  }
+  .cover-logo { font-family: 'Inter Tight', sans-serif; font-size: 48px; font-weight: 700; color: var(--blue-500); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .cover-logo span { color: var(--teal-400); }
+  .cover-title { font-family: 'Inter Tight', sans-serif; font-size: 28px; font-weight: 600; color: var(--white); letter-spacing: -0.01em; margin-bottom: 6px; }
+  .cover-subtitle { font-size: 16px; color: var(--gray-400); margin-bottom: 32px; }
+  .cover-meta { display: flex; gap: 24px; flex-wrap: wrap; }
+  .cover-meta-item { font-size: 13px; color: var(--gray-400); }
+  .cover-meta-item strong { color: var(--gray-200); font-weight: 500; }
+
+  /* ── TOC ── */
+  .toc { background: var(--white); border: 1px solid var(--gray-100); border-radius: 14px; padding: 28px 32px; margin-bottom: 56px; }
+  .toc-title { font-family: 'Inter Tight', sans-serif; font-size: 18px; font-weight: 600; color: var(--gray-900); margin-bottom: 16px; }
+  .toc-list { display: flex; flex-direction: column; gap: 4px; }
+  .toc-item { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--gray-600); text-decoration: none; padding: 4px 0; border-bottom: 1px solid var(--gray-50); }
+  .toc-item:last-child { border-bottom: none; }
+  .toc-num { font-family: 'Inter Tight', sans-serif; font-weight: 600; color: var(--blue-500); min-width: 28px; }
+  .toc-item:hover { color: var(--blue-500); }
+
+  /* ── Sections ── */
+  .section { margin-bottom: 64px; }
+  .section-title {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 26px; font-weight: 700;
+    color: var(--gray-900);
+    letter-spacing: -0.015em;
+    margin-bottom: 6px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid var(--blue-500);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-num { color: var(--blue-500); }
+  .section-sub { font-size: 13px; color: var(--gray-400); margin-bottom: 28px; }
+  .subsection { margin-bottom: 36px; }
+  .subsection-title { font-family: 'Inter Tight', sans-serif; font-size: 18px; font-weight: 600; color: var(--gray-900); margin-bottom: 12px; }
+  .body-text { font-size: 14px; color: var(--gray-600); line-height: 1.7; margin-bottom: 12px; }
+
+  /* ── Color palette ── */
+  .palette-group { margin-bottom: 24px; }
+  .palette-group-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); margin-bottom: 10px; }
+  .swatch-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .swatch { border-radius: 12px; padding: 14px 16px; min-width: 140px; flex: 1; max-width: 200px; }
+  .swatch-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .swatch-hex { font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: 0.8; }
+  .swatch-role { font-size: 10px; margin-top: 5px; opacity: 0.7; line-height: 1.4; }
+
+  /* ── Type scale ── */
+  .type-row { display: flex; align-items: baseline; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--gray-50); }
+  .type-meta { min-width: 200px; flex-shrink: 0; }
+  .type-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); display: block; margin-bottom: 3px; }
+  .type-spec { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--gray-400); }
+
+  /* ── Type specimens ── */
+  .t-display   { font-family: 'Inter Tight', sans-serif; font-size: 40px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--gray-900); }
+  .t-h1        { font-family: 'Inter Tight', sans-serif; font-size: 28px; font-weight: 600; line-height: 1.2; letter-spacing: -0.015em; color: var(--gray-900); }
+  .t-h2        { font-family: 'Inter Tight', sans-serif; font-size: 20px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; color: var(--gray-900); }
+  .t-h3        { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 500; line-height: 1.4; color: var(--gray-900); }
+  .t-body      { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 400; line-height: 1.6; color: var(--gray-900); }
+  .t-body-sm   { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 400; line-height: 1.6; color: var(--gray-600); }
+  .t-label     { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.03em; text-transform: uppercase; color: var(--gray-600); }
+  .t-score     { font-family: 'Inter Tight', sans-serif; font-size: 48px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; color: var(--blue-500); }
+  .t-mark-x    { font-family: 'Inter Tight', sans-serif; font-size: 36px; font-weight: 700; color: var(--blue-500); }
+  .t-mark-o    { font-family: 'Inter Tight', sans-serif; font-size: 36px; font-weight: 700; color: var(--teal-400); }
+  .t-mono      { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--gray-600); }
+
+  /* ── Component library ── */
+  .component-grid { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; align-items: flex-start; }
+  .component-card { background: var(--white); border: 1px solid var(--gray-100); border-radius: 12px; padding: 20px; flex: 1; min-width: 200px; }
+  .component-card-title { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); margin-bottom: 14px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif; cursor: pointer; border: none; margin: 4px; }
+  .btn-primary { background: var(--blue-500); color: var(--white); }
+  .btn-ghost { background: transparent; color: var(--gray-600); border: 1.5px solid var(--gray-100); }
+  .btn-danger { background: var(--red-50); color: var(--red-600); border: 1.5px solid #F7C1C1; }
+  .btn-admin { background: var(--amber-50); color: var(--amber-600); border: 1.5px solid var(--amber-100); }
+
+  /* Toggles */
+  .toggle-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12px; color: var(--gray-600); }
+  .tog { width: 38px; height: 22px; border-radius: 11px; position: relative; flex-shrink: 0; }
+  .tog-on { background: var(--blue-500); }
+  .tog-teal { background: var(--teal-400); }
+  .tog-off { background: var(--gray-100); }
+  .tog::after { content: ''; position: absolute; top: 3px; width: 16px; height: 16px; background: white; border-radius: 50%; }
+  .tog-on::after, .tog-teal::after { right: 3px; }
+  .tog-off::after { left: 3px; }
+
+  /* Badges / pills */
+  .badge { display: inline-block; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 500; margin: 3px; }
+  .badge-blue { background: var(--blue-50); color: var(--blue-800); }
+  .badge-teal { background: var(--teal-50); color: var(--teal-800); }
+  .badge-amber { background: var(--amber-50); color: var(--amber-600); }
+  .badge-gray { background: var(--gray-50); color: var(--gray-600); border: 1px solid var(--gray-100); }
+  .badge-red { background: var(--red-50); color: var(--red-600); }
+
+  /* Level badges */
+  .level-badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; margin: 3px; border: 1.5px solid transparent; }
+  .lb-debug { background: var(--gray-50); color: var(--gray-400); border-color: var(--gray-100); }
+  .lb-info  { background: var(--blue-50);  color: var(--blue-800);  border-color: var(--blue-100); }
+  .lb-warn  { background: var(--amber-50); color: var(--amber-600); border-color: var(--amber-100); }
+  .lb-error { background: var(--red-50);   color: var(--red-600);   border-color: #F7C1C1; }
+  .lb-fatal { background: var(--red-600);  color: var(--white);     border-color: var(--red-600); }
+
+  /* Board mini */
+  .mini-board { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 2px; background: var(--gray-100); border-radius: 10px; overflow: hidden; }
+  .mc { background: var(--white); display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-size: 26px; font-weight: 700; }
+  .mc-x { color: var(--blue-500); }
+  .mc-o { color: var(--teal-400); }
+  .mc-win { background: var(--amber-50); }
+  .mc-empty { }
+
+  /* Score cards */
+  .score-row { display: flex; gap: 8px; margin-top: 12px; }
+  .score-pill { background: var(--white); border: 1px solid var(--gray-100); border-radius: 8px; padding: 8px 14px; text-align: center; flex: 1; }
+  .score-val { font-family: 'Inter Tight', sans-serif; font-size: 24px; font-weight: 700; display: block; }
+  .score-lbl { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); }
+
+  /* Streak dots */
+  .streak-grid { display: flex; gap: 4px; flex-wrap: wrap; }
+  .sd { width: 16px; height: 16px; border-radius: 3px; }
+  .sd-w { background: var(--teal-400); }
+  .sd-l { background: var(--red-400); }
+  .sd-d { background: var(--amber-400); }
+
+  /* Win rate bars */
+  .wr-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 12px; }
+  .wr-lbl { min-width: 60px; color: var(--gray-600); font-weight: 500; }
+  .wr-track { flex: 1; height: 7px; background: var(--gray-50); border-radius: 4px; overflow: hidden; }
+  .wr-fill { height: 100%; border-radius: 4px; }
+  .wr-pct { min-width: 32px; text-align: right; color: var(--gray-400); font-size: 11px; }
+
+  /* Room name tag */
+  .room-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: 8px; padding: 6px 12px; font-family: 'Inter Tight', sans-serif; font-size: 14px; font-weight: 700; color: var(--gray-900); }
+
+  /* ── Wireframe frames ── */
+  .wireframe-frame { background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+  .wireframe-label { background: var(--gray-900); color: var(--gray-200); font-size: 11px; font-weight: 500; font-family: 'JetBrains Mono', monospace; padding: 8px 16px; display: flex; align-items: center; gap: 8px; }
+  .wf-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .wf-inner { padding: 0; }
+
+  /* Wireframe shell */
+  .wf-topnav { background: var(--white); border-bottom: 1px solid var(--gray-100); height: 48px; display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+  .wf-logo { font-family: 'Inter Tight', sans-serif; font-size: 15px; font-weight: 700; color: var(--blue-500); }
+  .wf-logo span { color: var(--teal-400); }
+  .wf-navlink { font-size: 12px; color: var(--gray-600); padding: 4px 8px; border-radius: 5px; font-weight: 500; }
+  .wf-navlink.active { background: var(--blue-50); color: var(--blue-500); }
+  .wf-navright { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .wf-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--blue-500); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--white); }
+  .wf-avatar.amber { background: var(--amber-400); }
+  .wf-theme { width: 26px; height: 26px; border-radius: 5px; background: var(--gray-50); border: 1px solid var(--gray-100); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .wf-admin-badge { background: var(--amber-50); color: var(--amber-600); border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 600; }
+  .wf-body { display: flex; min-height: 400px; }
+  .wf-sidebar { width: 176px; background: var(--white); border-right: 1px solid var(--gray-100); padding: 10px 8px; display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+  .wf-sb-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; font-size: 11px; font-weight: 500; color: var(--gray-600); }
+  .wf-sb-item.active { background: var(--blue-50); color: var(--blue-500); }
+  .wf-sb-item.admin-active { background: var(--amber-50); color: var(--amber-600); }
+  .wf-sb-item.dim { color: var(--gray-200); }
+  .wf-sb-divider { height: 1px; background: var(--gray-100); margin: 5px 2px; }
+  .wf-sb-section { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--amber-400); padding: 4px 9px 1px; }
+  .wf-main { flex: 1; padding: 20px 24px; }
+  .wf-page-title { font-family: 'Inter Tight', sans-serif; font-size: 20px; font-weight: 700; color: var(--gray-900); margin-bottom: 4px; }
+  .wf-page-sub { font-size: 12px; color: var(--gray-400); margin-bottom: 18px; }
+
+  /* Mode cards */
+  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 480px; margin-bottom: 16px; }
+  .mode-card { background: var(--white); border: 2px solid var(--gray-100); border-radius: 12px; padding: 16px; }
+  .mode-card.sel { border-color: var(--blue-500); background: var(--blue-50); }
+  .mode-icon { font-size: 20px; margin-bottom: 8px; }
+  .mode-title { font-family: 'Inter Tight', sans-serif; font-size: 13px; font-weight: 600; color: var(--gray-900); margin-bottom: 3px; }
+  .mode-desc { font-size: 11px; color: var(--gray-400); line-height: 1.4; }
+
+  /* Pills */
+  .pill-row { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pill { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; border: 1.5px solid var(--gray-100); color: var(--gray-600); background: var(--white); }
+  .pill.sel { background: var(--blue-500); border-color: var(--blue-500); color: var(--white); }
+  .pill.sel-teal { background: var(--teal-400); border-color: var(--teal-400); color: var(--white); }
+
+  /* Field */
+  .field-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); display: block; margin-bottom: 5px; }
+  .field-input { width: 100%; padding: 8px 10px; border: 1.5px solid var(--gray-100); border-radius: 7px; font-size: 12px; background: var(--white); color: var(--gray-900); font-family: 'Inter', sans-serif; margin-bottom: 12px; }
+  .cta-row { display: flex; gap: 8px; }
+  .btn-wf-primary { background: var(--blue-500); color: var(--white); border: none; border-radius: 7px; padding: 10px 20px; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; }
+  .btn-wf-ghost { background: transparent; color: var(--gray-600); border: 1.5px solid var(--gray-100); border-radius: 7px; padding: 9px 16px; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; }
+
+  /* Game board wf */
+  .wf-board-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .wf-turn { background: var(--white); border: 1px solid var(--gray-100); border-radius: 9px; padding: 9px 14px; display: flex; align-items: center; gap: 9px; width: 268px; }
+  .wf-turn-mark { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-size: 15px; font-weight: 700; }
+  .tm-x { background: var(--blue-50); color: var(--blue-500); }
+  .tm-o { background: var(--teal-50); color: var(--teal-400); }
+  .wf-turn-name { font-size: 12px; font-weight: 500; color: var(--gray-900); }
+  .wf-turn-sub { font-size: 10px; color: var(--gray-400); }
+  .wf-board { display: grid; grid-template-columns: repeat(3, 80px); grid-template-rows: repeat(3, 80px); gap: 2px; background: var(--gray-100); border-radius: 11px; overflow: hidden; }
+  .wf-cell { background: var(--white); display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-size: 36px; font-weight: 700; }
+  .wf-cell.x { color: var(--blue-500); }
+  .wf-cell.o { color: var(--teal-400); }
+  .wf-cell.win { background: var(--amber-50); }
+  .wf-cell.empty::after { content: ''; width: 20px; height: 20px; border-radius: 50%; border: 2px dashed var(--gray-100); }
+  .wf-scores { display: flex; gap: 7px; width: 268px; }
+  .wf-score { flex: 1; background: var(--white); border: 1px solid var(--gray-100); border-radius: 7px; padding: 7px 9px; text-align: center; }
+  .wf-score-val { font-family: 'Inter Tight', sans-serif; font-size: 20px; font-weight: 700; color: var(--gray-900); display: block; }
+  .wf-score-val.blue { color: var(--blue-500); }
+  .wf-score-val.teal { color: var(--teal-400); }
+  .wf-score-lbl { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-400); }
+  .wf-actions { display: flex; gap: 7px; width: 268px; }
+  .wf-action { flex: 1; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; text-align: center; }
+  .wa-ghost { background: transparent; color: var(--gray-600); border: 1.5px solid var(--gray-100); }
+  .wa-danger { background: var(--red-50); color: var(--red-600); border: 1.5px solid #F7C1C1; }
+  .wf-info-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .wf-panel { background: var(--white); border: 1px solid var(--gray-100); border-radius: 9px; padding: 12px 14px; }
+  .wf-panel-title { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); margin-bottom: 8px; }
+  .wf-player-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--gray-50); font-size: 11px; }
+  .wf-player-row:last-child { border-bottom: none; }
+  .wf-pm { width: 24px; height: 24px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-size: 12px; font-weight: 700; }
+  .wf-pm.x { background: var(--blue-50); color: var(--blue-500); }
+  .wf-pm.o { background: var(--teal-50); color: var(--teal-400); }
+  .wf-room-bar { background: var(--white); border: 1px solid var(--gray-100); border-radius: 9px; padding: 8px 13px; display: flex; align-items: center; gap: 9px; width: 268px; }
+  .wf-room-name { font-family: 'Inter Tight', sans-serif; font-size: 14px; font-weight: 700; color: var(--gray-900); }
+  .wf-room-copy { margin-left: auto; font-size: 11px; color: var(--blue-500); font-weight: 500; }
+  .spec-badge { background: var(--amber-50); color: var(--amber-600); border-radius: 4px; padding: 2px 6px; font-size: 9px; font-weight: 600; margin-left: auto; }
+
+  /* Waiting */
+  .player-slot { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 7px; background: var(--gray-50); border: 1px solid var(--gray-100); margin-bottom: 6px; }
+  .player-slot.filled { background: var(--teal-50); border-color: var(--teal-100); }
+  .slot-waiting { font-size: 11px; color: var(--gray-400); font-style: italic; flex: 1; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--amber-400); }
+  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal-400); }
+  .invite-box { background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: 7px; padding: 9px 12px; display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .invite-url { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--blue-800); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .copy-btn { background: var(--blue-500); color: var(--white); border: none; border-radius: 5px; padding: 4px 9px; font-size: 10px; font-weight: 500; }
+
+  /* Profile */
+  .profile-hdr { background: var(--white); border: 1px solid var(--gray-100); border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .profile-av { width: 56px; height: 56px; border-radius: 50%; background: var(--blue-500); display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-size: 22px; font-weight: 700; color: var(--white); flex-shrink: 0; }
+  .profile-name { font-family: 'Inter Tight', sans-serif; font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 3px; }
+  .profile-email { font-size: 11px; color: var(--gray-400); margin-bottom: 5px; }
+  .stats-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 14px; }
+  .stat-c { background: var(--white); border: 1px solid var(--gray-100); border-radius: 9px; padding: 12px 14px; }
+  .stat-v { font-family: 'Inter Tight', sans-serif; font-size: 24px; font-weight: 700; display: block; margin-bottom: 2px; }
+  .stat-l { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); }
+
+  /* Leaderboard podium */
+  .podium { display: flex; align-items: flex-end; justify-content: center; gap: 10px; margin-bottom: 16px; }
+  .podium-slot { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .pod-av { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-weight: 700; color: var(--white); }
+  .pod-block { border-radius: 6px 6px 0 0; display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-size: 18px; font-weight: 700; width: 72px; }
+  .pod-1 { background: var(--amber-400); color: var(--amber-50); height: 64px; }
+  .pod-2 { background: var(--gray-400); color: var(--gray-50); height: 48px; }
+  .pod-3 { background: #85B7EB; color: var(--blue-50); height: 36px; }
+  .pod-name { font-family: 'Inter Tight', sans-serif; font-size: 11px; font-weight: 600; color: var(--gray-900); }
+  .pod-stat { font-size: 10px; color: var(--gray-400); }
+
+  /* LB table */
+  .lb-table { background: var(--white); border: 1px solid var(--gray-100); border-radius: 10px; overflow: hidden; }
+  .lb-hdr { display: grid; grid-template-columns: 36px 1fr 60px 60px 60px; padding: 8px 14px; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); }
+  .lb-hc { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-400); text-align: right; }
+  .lb-hc:first-child { text-align: left; }
+  .lb-row { display: grid; grid-template-columns: 36px 1fr 60px 60px 60px; padding: 9px 14px; border-bottom: 1px solid var(--gray-50); align-items: center; }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-row.me { background: var(--blue-50); }
+  .lb-rank { font-family: 'Inter Tight', sans-serif; font-size: 13px; font-weight: 700; color: var(--gray-400); }
+  .lb-rank.g { color: var(--amber-400); }
+  .lb-rank.s { color: var(--gray-400); }
+  .lb-rank.b { color: #85B7EB; }
+  .lb-rank.me { color: var(--blue-500); }
+  .lb-pav { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--white); margin-right: 8px; }
+  .lb-name { font-size: 12px; font-weight: 500; color: var(--gray-900); display: flex; align-items: center; }
+  .you-tag { font-size: 9px; background: var(--blue-50); color: var(--blue-500); border-radius: 3px; padding: 1px 4px; margin-left: 5px; font-weight: 500; }
+  .lb-val { font-size: 12px; font-family: 'Inter Tight', sans-serif; font-weight: 500; color: var(--gray-900); text-align: right; }
+
+  /* Settings */
+  .settings-layout { display: flex; gap: 16px; }
+  .settings-nav { width: 140px; flex-shrink: 0; }
+  .settings-nav-item { padding: 7px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; color: var(--gray-600); margin-bottom: 2px; }
+  .settings-nav-item.active { background: var(--blue-50); color: var(--blue-500); }
+  .settings-content { flex: 1; }
+  .setting-card { background: var(--white); border: 1px solid var(--gray-100); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+  .sc-title { font-family: 'Inter Tight', sans-serif; font-size: 13px; font-weight: 600; color: var(--gray-900); padding: 12px 16px 0; margin-bottom: 2px; }
+  .sc-sub { font-size: 10px; color: var(--gray-400); padding: 0 16px 10px; }
+  .setting-row { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--gray-50); gap: 12px; }
+  .setting-row:last-child { border-bottom: none; }
+  .sr-lbl { font-size: 12px; font-weight: 500; color: var(--gray-900); flex: 1; }
+  .sr-desc { font-size: 10px; color: var(--gray-400); margin-top: 1px; }
+  .theme-opts { display: flex; gap: 8px; padding: 12px 16px; }
+  .theme-opt { flex: 1; border: 2px solid var(--gray-100); border-radius: 9px; padding: 10px 8px; text-align: center; }
+  .theme-opt.sel { border-color: var(--blue-500); }
+  .theme-prev { height: 36px; border-radius: 6px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-size: 12px; font-weight: 700; }
+  .tp-light { background: var(--white); border: 1px solid var(--gray-100); color: var(--gray-900); }
+  .tp-dark  { background: var(--gray-900); color: var(--gray-50); }
+  .tp-sys   { background: linear-gradient(90deg, var(--white) 50%, var(--gray-900) 50%); color: var(--gray-400); font-size: 10px; }
+  .theme-lbl { font-size: 10px; font-weight: 500; color: var(--gray-900); }
+  .sel-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue-500); margin: 4px auto 0; }
+
+  /* AI options */
+  .ai-option { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--gray-50); gap: 10px; }
+  .ai-option:last-child { border-bottom: none; }
+  .ai-option.sel { background: var(--teal-50); }
+  .ai-radio { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--gray-100); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .ai-radio.checked { border-color: var(--teal-400); background: var(--teal-400); }
+  .ai-radio.checked::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--white); }
+  .ai-name { font-size: 12px; font-weight: 500; color: var(--gray-900); }
+  .ai-desc { font-size: 10px; color: var(--gray-400); }
+
+  /* Log viewer */
+  .log-filters { background: var(--white); border-bottom: 1px solid var(--gray-100); padding: 10px 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .log-filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .log-filter-label { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); }
+  .log-area { background: var(--gray-50); }
+  .log-hdr { display: grid; grid-template-columns: 120px 52px 68px 1fr 80px 80px; padding: 6px 16px; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); }
+  .log-hc { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-400); }
+  .log-row { display: grid; grid-template-columns: 120px 52px 68px 1fr 80px 80px; padding: 7px 16px; border-bottom: 1px solid #F8F7F5; align-items: start; }
+  .log-row.fatal { border-left: 3px solid var(--red-600); background: #FFF5F5; }
+  .log-row.error { border-left: 3px solid var(--red-400); }
+  .log-row.warn  { border-left: 3px solid var(--amber-400); }
+  .log-row.info  { border-left: 3px solid var(--blue-500); }
+  .log-ts { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--gray-400); }
+  .log-lvl { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; }
+  .ll-debug { color: var(--gray-400); }
+  .ll-info  { color: var(--blue-500); }
+  .ll-warn  { color: var(--amber-400); }
+  .ll-error { color: var(--red-400); }
+  .ll-fatal { color: var(--red-600); }
+  .log-src { font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .ls-frontend { color: #534AB7; }
+  .ls-api      { color: var(--blue-500); }
+  .ls-realtime { color: var(--teal-400); }
+  .ls-ai       { color: var(--amber-400); }
+  .log-msg { font-size: 11px; color: var(--gray-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+  .log-meta { background: var(--gray-900); margin: 0 16px 10px; border-radius: 7px; padding: 10px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #D3D1C7; line-height: 1.7; }
+  .mk { color: #85B7EB; }
+  .ms { color: #9FE1CB; }
+  .mn { color: #FAC775; }
+  .mb { color: #F0997B; }
+  .log-status { background: var(--white); border-top: 1px solid var(--gray-100); padding: 6px 16px; display: flex; gap: 12px; font-size: 10px; color: var(--gray-400); align-items: center; }
+
+  /* KPI cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 14px; }
+  .kpi-card { background: var(--white); border: 1px solid var(--gray-100); border-radius: 9px; padding: 12px 14px; }
+  .kpi-label { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); margin-bottom: 4px; }
+  .kpi-val { font-family: 'Inter Tight', sans-serif; font-size: 24px; font-weight: 700; display: block; line-height: 1.1; }
+  .kpi-delta { font-size: 10px; font-weight: 500; margin-top: 2px; }
+  .d-up { color: var(--teal-400); }
+  .d-dn { color: var(--red-400); }
+
+  /* Annotation notes */
+  .annotation { margin-top: 16px; display: flex; flex-direction: column; gap: 7px; }
+  .ann-item { display: flex; gap: 8px; font-size: 12px; color: var(--gray-600); line-height: 1.5; }
+  .ann-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .ad-blue { background: var(--blue-500); }
+  .ad-teal { background: var(--teal-400); }
+  .ad-amber { background: var(--amber-400); }
+  .ad-red { background: var(--red-400); }
+
+  /* Misc */
+  .divider { height: 1px; background: var(--gray-100); margin: 24px 0; }
+  .info-box { background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: 9px; padding: 14px 18px; font-size: 13px; color: var(--blue-800); line-height: 1.6; margin-bottom: 16px; }
+  .two-col { display: flex; gap: 20px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 260px; }
+  table.spec-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.spec-table th { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); padding: 8px 12px; border-bottom: 1px solid var(--gray-100); text-align: left; background: var(--gray-50); }
+  table.spec-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-50); color: var(--gray-900); vertical-align: top; }
+  table.spec-table tr:last-child td { border-bottom: none; }
+  .mono-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--blue-800); background: var(--blue-50); padding: 2px 6px; border-radius: 4px; display: inline-block; }
+
+  /* Responsive note */
+  .resp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .resp-card { background: var(--white); border: 1px solid var(--gray-100); border-radius: 12px; padding: 18px; }
+  .resp-card-title { font-family: 'Inter Tight', sans-serif; font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+  .resp-item { display: flex; gap: 7px; font-size: 12px; color: var(--gray-600); margin-bottom: 6px; line-height: 1.4; }
+
+  @media print {
+    .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .swatch { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- COVER -->
+  <div class="cover">
+    <div class="cover-logo">X<span>O</span> Arena</div>
+    <div class="cover-title">Design Document</div>
+    <div class="cover-subtitle">Color palette · Typography · Component library · Wireframes (8 screens)</div>
+    <div class="cover-meta">
+      <div class="cover-meta-item"><strong>Version</strong> 1.0</div>
+      <div class="cover-meta-item"><strong>Date</strong> March 2026</div>
+      <div class="cover-meta-item"><strong>Status</strong> Approved</div>
+      <div class="cover-meta-item"><strong>Phase</strong> Design — ready for build</div>
+    </div>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <div class="toc-title">Contents</div>
+    <div class="toc-list">
+      <a class="toc-item" href="#s1"><span class="toc-num">1</span>Design Principles</a>
+      <a class="toc-item" href="#s2"><span class="toc-num">2</span>Color Palette</a>
+      <a class="toc-item" href="#s3"><span class="toc-num">3</span>Typography</a>
+      <a class="toc-item" href="#s4"><span class="toc-num">4</span>Component Library</a>
+      <a class="toc-item" href="#s5"><span class="toc-num">5</span>Layout & Navigation</a>
+      <a class="toc-item" href="#s6"><span class="toc-num">6</span>Wireframe 1 — Mode Selection</a>
+      <a class="toc-item" href="#s7"><span class="toc-num">7</span>Wireframe 2 — Game Board</a>
+      <a class="toc-item" href="#s8"><span class="toc-num">8</span>Wireframe 3 — Room Creation & Join</a>
+      <a class="toc-item" href="#s9"><span class="toc-num">9</span>Wireframe 4 — Account & Profile</a>
+      <a class="toc-item" href="#s10"><span class="toc-num">10</span>Wireframe 5 — Leaderboard</a>
+      <a class="toc-item" href="#s11"><span class="toc-num">11</span>Wireframe 6 — Settings</a>
+      <a class="toc-item" href="#s12"><span class="toc-num">12</span>Wireframe 7 — AI Dashboard</a>
+      <a class="toc-item" href="#s13"><span class="toc-num">13</span>Wireframe 8 — Log Viewer</a>
+      <a class="toc-item" href="#s14"><span class="toc-num">14</span>Responsive Strategy</a>
+    </div>
+  </div>
+
+  <!-- 1. DESIGN PRINCIPLES -->
+  <div class="section" id="s1">
+    <div class="section-title"><span class="section-num">1</span> Design Principles</div>
+    <div class="section-sub">The guiding values behind every design decision in this document.</div>
+    <div class="two-col">
+      <div class="col">
+        <div class="subsection">
+          <div class="subsection-title">Visual personality</div>
+          <div class="body-text">Clean, modern, minimal, and professional. The game is accessible to all ages but the aesthetic is adult — no bright primary-color cartoon styling. Every UI element earns its place.</div>
+        </div>
+        <div class="subsection">
+          <div class="subsection-title">Color carries meaning</div>
+          <div class="body-text">Blue is always X. Teal is always O. Amber signals wins and warnings. Red is reserved for errors and forfeit. Color is never decorative — it communicates state.</div>
+        </div>
+        <div class="subsection">
+          <div class="subsection-title">Balanced density</div>
+          <div class="body-text">Comfortable reading with moderate spacing. Not so sparse it feels empty, not so dense it feels overwhelming. 1.6 line-height on body, 16px base type, generous touch targets.</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="subsection">
+          <div class="subsection-title">Mobile is play-first</div>
+          <div class="body-text">On mobile the experience is focused entirely on playing. Management, admin, and analytics screens are desktop-only. The mobile UI has three screens: Play, Stats, Settings.</div>
+        </div>
+        <div class="subsection">
+          <div class="subsection-title">Type does the heavy lifting</div>
+          <div class="body-text">Inter Tight's condensed proportions give scores and marks authority. Inter keeps body text relaxed. Monospace (JetBrains Mono) is reserved strictly for technical content — logs, IDs, invite URLs.</div>
+        </div>
+        <div class="subsection">
+          <div class="subsection-title">Accessibility</div>
+          <div class="body-text">WCAG AA contrast minimum throughout. Touch targets ≥44×44px on mobile. X and O marks are distinguishable by color and shape. Sound effects have a mute toggle always accessible.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. COLOR PALETTE -->
+  <div class="section" id="s2">
+    <div class="section-title"><span class="section-num">2</span> Color Palette</div>
+    <div class="section-sub">All colors implemented as Tailwind CSS custom theme tokens and CSS variables.</div>
+
+    <div class="palette-group">
+      <div class="palette-group-label">Primary — Blue (X mark, actions, interactive)</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#E6F1FB;border:1px solid #B5D4F4;">
+          <div class="swatch-name" style="color:#0C447C;">Blue 50</div>
+          <div class="swatch-hex" style="color:#185FA5;">#E6F1FB</div>
+          <div class="swatch-role" style="color:#185FA5;">X mark tint, info backgrounds</div>
+        </div>
+        <div class="swatch" style="background:#1A6FD4;">
+          <div class="swatch-name" style="color:#E6F1FB;">Blue 500</div>
+          <div class="swatch-hex" style="color:#B5D4F4;">#1A6FD4</div>
+          <div class="swatch-role" style="color:#B5D4F4;">X mark, primary buttons, active nav</div>
+        </div>
+        <div class="swatch" style="background:#185FA5;">
+          <div class="swatch-name" style="color:#E6F1FB;">Blue 600</div>
+          <div class="swatch-hex" style="color:#B5D4F4;">#185FA5</div>
+          <div class="swatch-role" style="color:#B5D4F4;">Hover state of Blue 500</div>
+        </div>
+        <div class="swatch" style="background:#0C447C;">
+          <div class="swatch-name" style="color:#E6F1FB;">Blue 800</div>
+          <div class="swatch-hex" style="color:#85B7EB;">#0C447C</div>
+          <div class="swatch-role" style="color:#85B7EB;">Headings, pressed state</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="palette-group">
+      <div class="palette-group-label">Secondary — Teal (O mark, success, spectator)</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#E1F5EE;border:1px solid #9FE1CB;">
+          <div class="swatch-name" style="color:#085041;">Teal 50</div>
+          <div class="swatch-hex" style="color:#0F6E56;">#E1F5EE</div>
+          <div class="swatch-role" style="color:#0F6E56;">O mark tint, success backgrounds</div>
+        </div>
+        <div class="swatch" style="background:#1D9E75;">
+          <div class="swatch-name" style="color:#E1F5EE;">Teal 400</div>
+          <div class="swatch-hex" style="color:#9FE1CB;">#1D9E75</div>
+          <div class="swatch-role" style="color:#9FE1CB;">O mark, online dot, success</div>
+        </div>
+        <div class="swatch" style="background:#0F6E56;">
+          <div class="swatch-name" style="color:#E1F5EE;">Teal 600</div>
+          <div class="swatch-hex" style="color:#9FE1CB;">#0F6E56</div>
+          <div class="swatch-role" style="color:#9FE1CB;">Hover state of Teal 400</div>
+        </div>
+        <div class="swatch" style="background:#085041;">
+          <div class="swatch-name" style="color:#E1F5EE;">Teal 800</div>
+          <div class="swatch-hex" style="color:#5DCAA5;">#085041</div>
+          <div class="swatch-role" style="color:#5DCAA5;">O mark dark, pressed state</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="palette-group">
+      <div class="palette-group-label">Neutral — Gray (surfaces, borders, text)</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#F1EFE8;border:1px solid #D3D1C7;">
+          <div class="swatch-name" style="color:#2C2C2A;">Gray 50</div>
+          <div class="swatch-hex" style="color:#5F5E5A;">#F1EFE8</div>
+          <div class="swatch-role" style="color:#5F5E5A;">Light mode page background</div>
+        </div>
+        <div class="swatch" style="background:#D3D1C7;border:1px solid #B4B2A9;">
+          <div class="swatch-name" style="color:#2C2C2A;">Gray 100</div>
+          <div class="swatch-hex" style="color:#444441;">#D3D1C7</div>
+          <div class="swatch-role" style="color:#444441;">Board grid, borders, dividers</div>
+        </div>
+        <div class="swatch" style="background:#888780;">
+          <div class="swatch-name" style="color:#F1EFE8;">Gray 400</div>
+          <div class="swatch-hex" style="color:#D3D1C7;">#888780</div>
+          <div class="swatch-role" style="color:#D3D1C7;">Muted text, subtitles</div>
+        </div>
+        <div class="swatch" style="background:#2C2C2A;">
+          <div class="swatch-name" style="color:#F1EFE8;">Gray 900</div>
+          <div class="swatch-hex" style="color:#B4B2A9;">#2C2C2A</div>
+          <div class="swatch-role" style="color:#B4B2A9;">Dark mode background, code blocks</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="palette-group">
+      <div class="palette-group-label">Semantic — Amber (win highlights, draw, admin, warnings)</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#FAEEDA;border:1px solid #FAC775;">
+          <div class="swatch-name" style="color:#633806;">Amber 50</div>
+          <div class="swatch-hex" style="color:#854F0B;">#FAEEDA</div>
+          <div class="swatch-role" style="color:#854F0B;">Win cell highlight, admin backgrounds</div>
+        </div>
+        <div class="swatch" style="background:#BA7517;">
+          <div class="swatch-name" style="color:#FAEEDA;">Amber 400</div>
+          <div class="swatch-hex" style="color:#FAC775;">#BA7517</div>
+          <div class="swatch-role" style="color:#FAC775;">Win border, draw state, admin accents</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="palette-group">
+      <div class="palette-group-label">Semantic — Red (errors, danger, forfeit)</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#FCEBEB;border:1px solid #F7C1C1;">
+          <div class="swatch-name" style="color:#501313;">Red 50</div>
+          <div class="swatch-hex" style="color:#A32D2D;">#FCEBEB</div>
+          <div class="swatch-role" style="color:#A32D2D;">Error/danger backgrounds, forfeit button</div>
+        </div>
+        <div class="swatch" style="background:#E24B4A;">
+          <div class="swatch-name" style="color:#FCEBEB;">Red 400</div>
+          <div class="swatch-hex" style="color:#F7C1C1;">#E24B4A</div>
+          <div class="swatch-role" style="color:#F7C1C1;">Error states, loss streak badges</div>
+        </div>
+        <div class="swatch" style="background:#A32D2D;">
+          <div class="swatch-name" style="color:#FCEBEB;">Red 600</div>
+          <div class="swatch-hex" style="color:#F7C1C1;">#A32D2D</div>
+          <div class="swatch-role" style="color:#F7C1C1;">FATAL log level, delete account</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>Usage rule:</strong> Color encodes meaning, never sequence. Blue = X and interaction. Teal = O and success. Amber = win states and admin context. Red = error and danger only. Gray = neutral structure. Never use red for non-error states, never use amber for non-win/admin states.
+    </div>
+  </div>
+
+  <!-- 3. TYPOGRAPHY -->
+  <div class="section" id="s3">
+    <div class="section-title"><span class="section-num">3</span> Typography</div>
+    <div class="section-sub">Two typefaces from Google Fonts. Inter Tight for display and emphasis, Inter for body and UI, JetBrains Mono for technical content.</div>
+
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Display</span><span class="type-spec">Inter Tight 700 · 40px · -0.02em</span></div>
+      <div class="t-display">Tic-Tac-Toe</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Heading 1</span><span class="type-spec">Inter Tight 600 · 28px · -0.015em</span></div>
+      <div class="t-h1">Choose your mode</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Heading 2</span><span class="type-spec">Inter Tight 600 · 20px · -0.01em</span></div>
+      <div class="t-h2">Player vs. AI</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Heading 3</span><span class="type-spec">Inter 500 · 16px</span></div>
+      <div class="t-h3">Select difficulty</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Body</span><span class="type-spec">Inter 400 · 15px · 1.6 leading</span></div>
+      <div class="t-body">Challenge a friend anywhere in the world or test your skills against the AI.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Body small</span><span class="type-spec">Inter 400 · 13px · 1.6 leading</span></div>
+      <div class="t-body-sm">Game started 3 minutes ago · Room: Mt. Fuji</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Label / caps</span><span class="type-spec">Inter 500 · 12px · +0.03em · uppercase</span></div>
+      <div class="t-label">Your turn</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Score numeral</span><span class="type-spec">Inter Tight 700 · 48px · -0.02em</span></div>
+      <div class="t-score">12</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Board marks</span><span class="type-spec">Inter Tight 700 · 36px · -0.02em</span></div>
+      <div style="display:flex;gap:16px;"><span class="t-mark-x">X</span><span class="t-mark-o">O</span></div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="type-label">Monospace</span><span class="type-spec">JetBrains Mono 400 · 11–13px</span></div>
+      <div class="t-mono">14:02:11.342 · xoarena.com/room/mt-fuji · user_a1b2c3</div>
+    </div>
+  </div>
+
+  <!-- 4. COMPONENT LIBRARY -->
+  <div class="section" id="s4">
+    <div class="section-title"><span class="section-num">4</span> Component Library</div>
+    <div class="section-sub">Core reusable primitives built with Tailwind CSS utility classes and the design token set above.</div>
+
+    <div class="component-grid">
+      <div class="component-card">
+        <div class="component-card-title">Buttons</div>
+        <div><button class="btn btn-primary">Play now</button><button class="btn btn-ghost">View stats</button></div>
+        <div><button class="btn btn-danger">Forfeit</button><button class="btn btn-admin">Admin</button></div>
+      </div>
+      <div class="component-card">
+        <div class="component-card-title">Badges & pills</div>
+        <div><span class="badge badge-blue">Rank #42</span><span class="badge badge-teal">Online</span><span class="badge badge-amber">Admin</span><span class="badge badge-gray">via Google</span><span class="badge badge-red">Error</span></div>
+        <div style="margin-top:8px;"><span class="badge badge-teal" style="border-radius:6px;">👁 Spectating</span><span class="badge badge-amber" style="border-radius:6px;margin-left:6px;">⏳ Waiting</span><span class="badge badge-teal" style="border-radius:6px;margin-left:6px;">Live</span></div>
+      </div>
+      <div class="component-card">
+        <div class="component-card-title">Toggles</div>
+        <div class="toggle-row"><div class="tog tog-on"></div>Sound effects on</div>
+        <div class="toggle-row"><div class="tog tog-teal"></div>Allow spectators</div>
+        <div class="toggle-row"><div class="tog tog-off"></div>Move hints off</div>
+      </div>
+    </div>
+
+    <div class="component-grid">
+      <div class="component-card">
+        <div class="component-card-title">Log level badges</div>
+        <div><span class="level-badge lb-debug">DEBUG</span><span class="level-badge lb-info">INFO</span><span class="level-badge lb-warn">WARN</span><span class="level-badge lb-error">ERROR</span><span class="level-badge lb-fatal">FATAL</span></div>
+        <div style="margin-top:10px;font-size:11px;color:var(--gray-400);">Left border row indicators:</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">
+          <div style="border-left:3px solid #1A6FD4;padding-left:8px;font-size:11px;color:var(--gray-600);">INFO — blue</div>
+          <div style="border-left:3px solid #BA7517;padding-left:8px;font-size:11px;color:var(--gray-600);">WARN — amber</div>
+          <div style="border-left:3px solid #E24B4A;padding-left:8px;font-size:11px;color:var(--gray-600);">ERROR — red</div>
+          <div style="border-left:3px solid #A32D2D;background:#FFF5F5;padding:2px 8px;font-size:11px;color:var(--gray-600);">FATAL — deep red + bg tint</div>
+        </div>
+      </div>
+      <div class="component-card">
+        <div class="component-card-title">Game board marks</div>
+        <div class="mini-board">
+          <div class="mc mc-x">X</div><div class="mc mc-o">O</div><div class="mc mc-x">X</div>
+          <div class="mc mc-empty"></div><div class="mc mc-o">O</div><div class="mc mc-empty"></div>
+          <div class="mc mc-o mc-win">O</div><div class="mc mc-o mc-win">O</div><div class="mc mc-o mc-win">O</div>
+        </div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:11px;color:var(--gray-600);">X mark: Blue 500 on white</div>
+          <div style="font-size:11px;color:var(--gray-600);">O mark: Teal 400 on white</div>
+          <div style="font-size:11px;color:var(--gray-600);">Win cells: Amber 50 background</div>
+          <div style="font-size:11px;color:var(--gray-600);">Grid lines: Gray 100 (2px gap)</div>
+        </div>
+      </div>
+      <div class="component-card">
+        <div class="component-card-title">Score strip & streak</div>
+        <div class="score-row">
+          <div class="score-pill"><span class="score-val" style="color:var(--blue-500);">7</span><span class="score-lbl">Alex (X)</span></div>
+          <div class="score-pill"><span class="score-val">2</span><span class="score-lbl">Draws</span></div>
+          <div class="score-pill"><span class="score-val" style="color:var(--teal-400);">3</span><span class="score-lbl">Jordan (O)</span></div>
+        </div>
+        <div style="margin-top:12px;">
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;">Last 20 games</div>
+          <div class="streak-grid">
+            <div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-l"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-d"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-l"></div>
+            <div class="sd sd-w"></div><div class="sd sd-d"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:7px;font-size:10px;color:var(--gray-400);">
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--teal-400);display:inline-block;"></span>Win</span>
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--red-400);display:inline-block;"></span>Loss</span>
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--amber-400);display:inline-block;"></span>Draw</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-grid">
+      <div class="component-card" style="flex:2;">
+        <div class="component-card-title">Win rate bars</div>
+        <div class="wr-row"><div class="wr-lbl">vs. Player</div><div class="wr-track"><div class="wr-fill" style="width:58%;background:var(--blue-500);"></div></div><div class="wr-pct">58%</div></div>
+        <div class="wr-row"><div class="wr-lbl">vs. AI Easy</div><div class="wr-track"><div class="wr-fill" style="width:94%;background:var(--teal-400);"></div></div><div class="wr-pct">94%</div></div>
+        <div class="wr-row"><div class="wr-lbl">vs. AI Med.</div><div class="wr-track"><div class="wr-fill" style="width:71%;background:var(--teal-400);"></div></div><div class="wr-pct">71%</div></div>
+        <div class="wr-row"><div class="wr-lbl">vs. AI Hard</div><div class="wr-track"><div class="wr-fill" style="width:8%;background:var(--red-400);"></div></div><div class="wr-pct">8%</div></div>
+      </div>
+      <div class="component-card">
+        <div class="component-card-title">Room name tag</div>
+        <div style="margin-bottom:10px;"><span class="room-tag">⛰ Mt. Everest</span></div>
+        <div style="margin-bottom:10px;"><span class="room-tag">⛰ Mt. Kilimanjaro</span></div>
+        <div><span class="room-tag">⛰ Mt. Fuji</span></div>
+        <div style="margin-top:10px;font-size:11px;color:var(--gray-400);">Auto-assigned by server. Used as URL slug: xoarena.com/room/mt-fuji</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. LAYOUT & NAVIGATION -->
+  <div class="section" id="s5">
+    <div class="section-title"><span class="section-num">5</span> Layout & Navigation</div>
+    <div class="section-sub">Desktop uses a persistent split layout. Mobile uses a focused bottom-tab navigation.</div>
+    <div class="resp-grid">
+      <div class="resp-card">
+        <div class="resp-card-title" style="color:var(--blue-500);">Desktop (≥768px)</div>
+        <div class="resp-item"><div class="ann-dot ad-blue" style="margin-top:5px;flex-shrink:0;"></div>Top navigation bar: logo, nav links (Play, Leaderboard, Stats), theme toggle, username, avatar</div>
+        <div class="resp-item"><div class="ann-dot ad-blue" style="margin-top:5px;flex-shrink:0;"></div>Persistent left sidebar (188px): Play, My Stats, Leaderboard, History, Settings, Admin section</div>
+        <div class="resp-item"><div class="ann-dot ad-blue" style="margin-top:5px;flex-shrink:0;"></div>Main content area fills remaining width</div>
+        <div class="resp-item"><div class="ann-dot ad-amber" style="margin-top:5px;flex-shrink:0;"></div>Admin sidebar section: amber-tinted, shows AI Dashboard + Log Viewer links (admin role only)</div>
+        <div class="resp-item"><div class="ann-dot ad-teal" style="margin-top:5px;flex-shrink:0;"></div>Full suite of screens available: all 8 wireframes</div>
+      </div>
+      <div class="resp-card">
+        <div class="resp-card-title" style="color:var(--teal-400);">Mobile (&lt;768px)</div>
+        <div class="resp-item"><div class="ann-dot ad-teal" style="margin-top:5px;flex-shrink:0;"></div>Simplified top bar: logo, theme toggle, avatar only. No nav links.</div>
+        <div class="resp-item"><div class="ann-dot ad-teal" style="margin-top:5px;flex-shrink:0;"></div>Bottom tab nav (3 tabs): Play · Stats · Settings</div>
+        <div class="resp-item"><div class="ann-dot ad-teal" style="margin-top:5px;flex-shrink:0;"></div>Available screens: Mode selection, Game board, Room creation/join, Personal stats, Settings</div>
+        <div class="resp-item"><div class="ann-dot ad-amber" style="margin-top:5px;flex-shrink:0;"></div>Desktop-only screens (Leaderboard, History, AI Dashboard, Log Viewer) show an "open in full browser" prompt</div>
+        <div class="resp-item"><div class="ann-dot ad-blue" style="margin-top:5px;flex-shrink:0;"></div>Minimum supported width: 320px. All touch targets ≥44×44px.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- 6. WIREFRAME 1 — MODE SELECTION -->
+  <div class="section" id="s6">
+    <div class="section-title"><span class="section-num">6</span> Wireframe 1 — Mode Selection</div>
+    <div class="section-sub">The entry point to every game. Displays on the Play screen after login.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · Play screen · PvP selected
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div style="display:flex;gap:2px;margin-left:8px;"><div class="wf-navlink active">Play</div><div class="wf-navlink">Leaderboard</div><div class="wf-navlink">Stats</div></div>
+          <div class="wf-navright"><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item active">▶ Play</div>
+            <div class="wf-sb-item">📊 My Stats</div>
+            <div class="wf-sb-item">🏆 Leaderboard</div>
+            <div class="wf-sb-item">🕓 History</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-item">⚙ Settings</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-section">Admin</div>
+            <div class="wf-sb-item" style="color:var(--gray-400);">🤖 AI Dashboard</div>
+            <div class="wf-sb-item" style="color:var(--gray-400);">📋 Log Viewer</div>
+          </div>
+          <div class="wf-main">
+            <div class="wf-page-title">New game</div>
+            <div class="wf-page-sub">Pick a mode and start playing.</div>
+            <div class="mode-grid">
+              <div class="mode-card sel">
+                <div class="mode-icon">👥</div>
+                <div class="mode-title">Player vs. Player</div>
+                <div class="mode-desc">Challenge anyone via browser — anywhere on the internet.</div>
+              </div>
+              <div class="mode-card">
+                <div class="mode-icon">🤖</div>
+                <div class="mode-title">Player vs. AI</div>
+                <div class="mode-desc">Choose difficulty and AI implementation.</div>
+              </div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div class="field-label">Who goes first</div>
+              <div class="pill-row"><div class="pill sel">Me (X)</div><div class="pill">Opponent (X)</div><div class="pill">Random</div></div>
+            </div>
+            <div style="display:flex;gap:10px;max-width:400px;margin-bottom:16px;">
+              <div style="flex:1;"><div class="field-label">Your name</div><input class="field-input" value="Alex" /></div>
+              <div style="flex:1;"><div class="field-label">Opponent name</div><input class="field-input" placeholder="Optional" /></div>
+            </div>
+            <div class="cta-row"><button class="btn-wf-primary">Create game room →</button><button class="btn-wf-ghost">Join a room</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>Mode cards are the primary interaction — clicking selects and highlights in blue. Options below adapt to the selected mode (PvP shows names; PvAI shows difficulty + AI implementation selector).</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>CTA button label adapts: "Create game room →" for PvP, "Start game →" for PvAI. A "Join a room" ghost button is always visible.</div>
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>Player name fields are pre-filled from the account. Optional for PvP (opponent name); not shown in PvAI mode.</div>
+    </div>
+  </div>
+
+  <!-- 7. WIREFRAME 2 — GAME BOARD -->
+  <div class="section" id="s7">
+    <div class="section-title"><span class="section-num">7</span> Wireframe 2 — Game Board</div>
+    <div class="section-sub">The core gameplay screen. Identical structure for PvP and PvAI; right panel content adapts.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · PvP game · Mt. Everest · O's turn
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div style="display:flex;gap:2px;margin-left:8px;"><div class="wf-navlink active">Play</div><div class="wf-navlink">Leaderboard</div><div class="wf-navlink">Stats</div></div>
+          <div class="wf-navright"><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item active">▶ Play</div>
+            <div class="wf-sb-item">📊 My Stats</div>
+            <div class="wf-sb-item">🏆 Leaderboard</div>
+            <div class="wf-sb-item">🕓 History</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-item">⚙ Settings</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-section">Admin</div>
+            <div class="wf-sb-item" style="color:var(--gray-400);">🤖 AI Dashboard</div>
+            <div class="wf-sb-item" style="color:var(--gray-400);">📋 Log Viewer</div>
+          </div>
+          <div class="wf-main" style="display:flex;gap:24px;">
+            <div class="wf-board-col">
+              <div class="wf-room-bar"><span style="font-size:16px;">⛰</span><div><div class="wf-room-name">Mt. Everest</div><div style="font-size:10px;color:var(--gray-400);">PvP · Round 2</div></div><div class="wf-room-copy">Copy invite</div></div>
+              <div class="wf-turn">
+                <div class="wf-turn-mark tm-o">O</div>
+                <div><div class="wf-turn-name">Jordan's turn</div><div class="wf-turn-sub">O to move</div></div>
+                <div style="margin-left:auto;font-size:14px;color:var(--gray-400);">🔊</div>
+              </div>
+              <div class="wf-board">
+                <div class="wf-cell x">X</div><div class="wf-cell o">O</div><div class="wf-cell x">X</div>
+                <div class="wf-cell empty"></div><div class="wf-cell o">O</div><div class="wf-cell empty"></div>
+                <div class="wf-cell empty"></div><div class="wf-cell empty"></div><div class="wf-cell empty"></div>
+              </div>
+              <div class="wf-scores">
+                <div class="wf-score"><span class="wf-score-val blue">1</span><span class="wf-score-lbl">Alex (X)</span></div>
+                <div class="wf-score"><span class="wf-score-val">0</span><span class="wf-score-lbl">Draws</span></div>
+                <div class="wf-score"><span class="wf-score-val teal">0</span><span class="wf-score-lbl">Jordan (O)</span></div>
+              </div>
+              <div class="wf-actions">
+                <div class="wf-action wa-ghost">New game</div>
+                <div class="wf-action wa-ghost">Rematch</div>
+                <div class="wf-action wa-danger">Forfeit</div>
+              </div>
+            </div>
+            <div class="wf-info-panel">
+              <div class="wf-panel">
+                <div class="wf-panel-title">Players</div>
+                <div class="wf-player-row"><div class="wf-pm x">X</div><span style="flex:1;font-weight:500;">Alex</span><span style="color:var(--gray-400);font-size:10px;">You · Rank #42</span></div>
+                <div class="wf-player-row"><div class="wf-pm o">O</div><span style="flex:1;font-weight:500;">Jordan</span><div style="width:7px;height:7px;border-radius:50%;background:var(--teal-400);"></div><span style="color:var(--gray-400);font-size:10px;margin-left:4px;">Online</span></div>
+              </div>
+              <div class="wf-panel">
+                <div class="wf-panel-title">Move history</div>
+                <div class="wf-player-row"><div class="wf-pm x">X</div><span>Alex</span><span style="color:var(--gray-400);font-size:10px;margin-left:6px;">→ top-left</span></div>
+                <div class="wf-player-row"><div class="wf-pm o">O</div><span>Jordan</span><span style="color:var(--gray-400);font-size:10px;margin-left:6px;">→ top-center</span></div>
+                <div class="wf-player-row"><div class="wf-pm x">X</div><span>Alex</span><span style="color:var(--gray-400);font-size:10px;margin-left:6px;">→ top-right</span></div>
+                <div class="wf-player-row"><div class="wf-pm o">O</div><span>Jordan</span><span style="color:var(--gray-400);font-size:10px;margin-left:6px;">→ center</span></div>
+              </div>
+              <div class="wf-panel">
+                <div class="wf-panel-title">Spectators (2)</div>
+                <div class="wf-player-row"><div style="width:20px;height:20px;border-radius:50%;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;">S</div><span style="flex:1;font-size:11px;">Sam</span><span style="font-size:10px;color:var(--gray-400);">Joined 1 min ago</span></div>
+                <div class="wf-player-row"><div style="width:20px;height:20px;border-radius:50%;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;">R</div><span style="flex:1;font-size:11px;">Riley</span><span style="font-size:10px;color:var(--gray-400);">Just now</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>Room name bar above turn indicator: mountain name + room details + copy invite link. In spectator view this shows an amber "👁 Spectating" badge instead.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>Win state: winning cells highlight amber, board locks immediately, game-end banner appears.</div>
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>AI thinking state: board dims + spinner. Prevents double-moves while AI computes its response from the backend service.</div>
+      <div class="ann-item"><div class="ann-dot ad-red"></div>Forfeit requires a confirmation dialog. Rematch keeps scores; New Game resets all scores and returns to mode selection.</div>
+    </div>
+  </div>
+
+  <!-- 8. WIREFRAME 3 — ROOM CREATION -->
+  <div class="section" id="s8">
+    <div class="section-title"><span class="section-num">8</span> Wireframe 3 — Room Creation & Join</div>
+    <div class="section-sub">The host flow for creating a PvP room and the waiting state before the opponent joins.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · Create room · Mt. Fuji · waiting for opponent
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div style="display:flex;gap:2px;margin-left:8px;"><div class="wf-navlink active">Play</div><div class="wf-navlink">Leaderboard</div><div class="wf-navlink">Stats</div></div>
+          <div class="wf-navright"><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item active">▶ Play</div>
+            <div class="wf-sb-item">📊 My Stats</div>
+            <div class="wf-sb-item">🏆 Leaderboard</div>
+            <div class="wf-sb-item">🕓 History</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-item">⚙ Settings</div>
+          </div>
+          <div class="wf-main">
+            <div class="wf-page-title">Create a room</div>
+            <div class="wf-page-sub">Set up your game and share the invite link with your opponent.</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+              <div style="flex:1;min-width:240px;">
+                <div class="wf-panel" style="margin-bottom:12px;">
+                  <div class="wf-panel-title">⚙ Game settings</div>
+                  <div style="margin-bottom:8px;"><div class="field-label" style="font-size:9px;">Your mark</div><div class="pill-row"><div class="pill sel">X — go first</div><div class="pill">O — go second</div><div class="pill">Random</div></div></div>
+                  <div><div class="field-label" style="font-size:9px;">Allow spectators</div><div class="pill-row"><div class="pill" style="background:var(--teal-400);border-color:var(--teal-400);color:var(--white);">Yes — anyone with link</div><div class="pill">No</div></div></div>
+                </div>
+                <div class="wf-panel">
+                  <div class="wf-panel-title">⛰ Your room</div>
+                  <div style="background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;padding:11px 13px;display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                    <span style="font-size:20px;">⛰</span>
+                    <div><div style="font-family:'Inter Tight',sans-serif;font-size:15px;font-weight:700;color:var(--gray-900);">Mt. Fuji</div><div style="font-size:10px;color:var(--gray-400);">Auto-assigned · Active</div></div>
+                    <div style="margin-left:auto;font-size:11px;color:var(--blue-500);font-weight:500;cursor:pointer;">↻ New name</div>
+                  </div>
+                  <div class="invite-box"><div class="invite-url">xoarena.com/room/mt-fuji</div><button class="copy-btn">Copy</button></div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:240px;">
+                <div class="wf-panel">
+                  <div class="wf-panel-title">Waiting for opponent…</div>
+                  <div class="player-slot filled"><div class="wf-pm x">X</div><span style="flex:1;font-weight:500;font-size:12px;">Alex</span><span style="font-size:10px;color:var(--gray-400);">You · Host</span><div class="online-dot"></div></div>
+                  <div class="player-slot"><div class="wf-pm o">O</div><span class="slot-waiting">Waiting for opponent…</span><div class="pulse"></div></div>
+                  <div style="font-size:11px;color:var(--gray-400);margin:8px 0;">Game starts automatically when opponent joins.</div>
+                  <div style="height:1px;background:var(--gray-50);margin:10px 0;"></div>
+                  <div style="font-size:10px;color:var(--gray-400);font-weight:500;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Active spectators</div>
+                  <div style="font-size:11px;color:var(--gray-400);font-style:italic;">None yet — share the link to invite watchers.</div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:16px;">
+              <div style="font-size:12px;font-weight:600;color:var(--gray-900);margin-bottom:10px;">Or join an active room</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="background:var(--white);border:1px solid var(--gray-100);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:10px;">
+                  <span style="font-size:18px;">⛰</span>
+                  <div><div style="font-family:'Inter Tight',sans-serif;font-size:13px;font-weight:600;color:var(--gray-900);">Mt. Kilimanjaro</div><div style="font-size:10px;color:var(--gray-400);">Jordan vs. Sam · Round 2</div></div>
+                  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;"><span style="font-size:10px;color:var(--gray-400);">👁 3</span><span class="badge badge-teal" style="border-radius:4px;font-size:9px;">Live</span><button style="background:var(--gray-50);color:var(--gray-600);border:1.5px solid var(--gray-100);border-radius:5px;padding:4px 10px;font-size:10px;font-weight:500;">Watch</button></div>
+                </div>
+                <div style="background:var(--white);border:1px solid var(--gray-100);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:10px;">
+                  <span style="font-size:18px;">⛰</span>
+                  <div><div style="font-family:'Inter Tight',sans-serif;font-size:13px;font-weight:600;color:var(--gray-900);">Mt. Denali</div><div style="font-size:10px;color:var(--gray-400);">Riley waiting for opponent</div></div>
+                  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;"><span class="badge badge-amber" style="border-radius:4px;font-size:9px;">Waiting</span><button style="background:var(--blue-500);color:var(--white);border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:500;">Join</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>Mountain name auto-assigned. Host can request a different name with ↻ before the opponent joins. Name is locked once the opponent joins.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>Invite link uses the mountain name as the URL slug — memorable and shareable. Share via… triggers the native OS share sheet on mobile.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>Active rooms list (desktop only) lets any player browse open rooms to Join as player (Waiting rooms) or Watch as spectator (Live rooms).</div>
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>Game starts automatically the moment the opponent joins — no extra Start button required.</div>
+    </div>
+  </div>
+
+  <!-- 9. WIREFRAME 4 — ACCOUNT -->
+  <div class="section" id="s9">
+    <div class="section-title"><span class="section-num">9</span> Wireframe 4 — Account & Profile</div>
+    <div class="section-sub">Player profile, lifetime statistics, game history, and account management.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · My Stats
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div style="display:flex;gap:2px;margin-left:8px;"><div class="wf-navlink">Play</div><div class="wf-navlink">Leaderboard</div><div class="wf-navlink active">Stats</div></div>
+          <div class="wf-navright"><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item">▶ Play</div>
+            <div class="wf-sb-item active">📊 My Stats</div>
+            <div class="wf-sb-item">🏆 Leaderboard</div>
+            <div class="wf-sb-item">🕓 History</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-item">⚙ Settings</div>
+          </div>
+          <div class="wf-main">
+            <div class="profile-hdr">
+              <div class="profile-av">A</div>
+              <div style="flex:1;">
+                <div class="profile-name">Alex Chen</div>
+                <div class="profile-email">alex@example.com</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;"><span class="badge badge-blue">Rank #42</span><span class="badge badge-teal">Member since Jan 2026</span><span class="badge badge-gray">via Google</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+                <button class="btn btn-primary" style="padding:6px 12px;font-size:11px;">Edit profile</button>
+                <button class="btn btn-ghost" style="padding:5px 10px;font-size:10px;">Change password</button>
+                <button class="btn btn-danger" style="padding:5px 10px;font-size:10px;">Sign out</button>
+              </div>
+            </div>
+            <div class="stats-grid-4">
+              <div class="stat-c"><span class="stat-v" style="color:var(--gray-400);">142</span><span class="stat-l">Total games</span></div>
+              <div class="stat-c"><span class="stat-v" style="color:var(--blue-500);">89</span><span class="stat-l">Wins · 62.7%</span></div>
+              <div class="stat-c"><span class="stat-v" style="color:var(--teal-400);">7W</span><span class="stat-l">Streak · best 12W</span></div>
+              <div class="stat-c"><span class="stat-v" style="color:var(--amber-400);">18</span><span class="stat-l">Draws · 12.7%</span></div>
+            </div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;">
+              <div style="flex:2;min-width:240px;">
+                <div class="wf-panel">
+                  <div class="wf-panel-title">Win rate by mode</div>
+                  <div class="wr-row"><div class="wr-lbl" style="width:68px;">vs. Player</div><div class="wr-track"><div class="wr-fill" style="width:58%;background:var(--blue-500);"></div></div><div class="wr-pct">58%</div></div>
+                  <div class="wr-row"><div class="wr-lbl" style="width:68px;">AI Easy</div><div class="wr-track"><div class="wr-fill" style="width:94%;background:var(--teal-400);"></div></div><div class="wr-pct">94%</div></div>
+                  <div class="wr-row"><div class="wr-lbl" style="width:68px;">AI Medium</div><div class="wr-track"><div class="wr-fill" style="width:71%;background:var(--teal-400);"></div></div><div class="wr-pct">71%</div></div>
+                  <div class="wr-row"><div class="wr-lbl" style="width:68px;">AI Hard</div><div class="wr-track"><div class="wr-fill" style="width:8%;background:var(--red-400);"></div></div><div class="wr-pct">8%</div></div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:160px;">
+                <div class="wf-panel">
+                  <div class="wf-panel-title">Last 20 games</div>
+                  <div class="streak-grid">
+                    <div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-l"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-d"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-l"></div>
+                    <div class="sd sd-w"></div><div class="sd sd-d"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div><div class="sd sd-w"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>Profile header: editable avatar, display name, read-only email, rank badge, join date, OAuth provider. Edit profile covers name and avatar only.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>Win rate by mode gives instant visibility into where the player is strong and where they struggle — especially useful for AI difficulty calibration.</div>
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>Mobile: simplified — profile header, 4 KPI stats, recent games list only. Full analysis is desktop only.</div>
+    </div>
+  </div>
+
+  <!-- 10. WIREFRAME 5 — LEADERBOARD -->
+  <div class="section" id="s10">
+    <div class="section-title"><span class="section-num">10</span> Wireframe 5 — Leaderboard</div>
+    <div class="section-sub">Global rankings with podium, personal rank callout, and filterable table. Desktop only.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · Leaderboard · all time · all modes
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div style="display:flex;gap:2px;margin-left:8px;"><div class="wf-navlink">Play</div><div class="wf-navlink active">Leaderboard</div><div class="wf-navlink">Stats</div></div>
+          <div class="wf-navright"><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item">▶ Play</div>
+            <div class="wf-sb-item">📊 My Stats</div>
+            <div class="wf-sb-item active">🏆 Leaderboard</div>
+            <div class="wf-sb-item">🕓 History</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-item">⚙ Settings</div>
+          </div>
+          <div class="wf-main">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+              <div class="wf-page-title">🏆 Leaderboard</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                <div class="pill sel">All time</div><div class="pill">Monthly</div><div class="pill">Weekly</div>
+                <div style="width:1px;height:20px;background:var(--gray-100);margin:0 4px;align-self:center;"></div>
+                <div class="pill sel">All</div><div class="pill">PvP</div><div class="pill">AI</div>
+              </div>
+            </div>
+            <div class="podium">
+              <div class="podium-slot"><div class="pod-av" style="width:40px;height:40px;font-size:16px;background:var(--teal-400);">J</div><div class="pod-name">Jordan</div><div class="pod-stat">68%</div><div class="pod-block pod-2">2</div></div>
+              <div class="podium-slot"><div style="font-size:16px;text-align:center;">👑</div><div class="pod-av" style="width:48px;height:48px;font-size:20px;background:var(--amber-400);">M</div><div class="pod-name" style="font-size:13px;">Morgan</div><div class="pod-stat">81%</div><div class="pod-block pod-1">1</div></div>
+              <div class="podium-slot"><div class="pod-av" style="width:36px;height:36px;font-size:14px;background:var(--gray-400);">S</div><div class="pod-name">Sam</div><div class="pod-stat">61%</div><div class="pod-block pod-3">3</div></div>
+            </div>
+            <div style="background:var(--blue-50);border:1px solid var(--blue-100);border-radius:9px;padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+              <div style="font-family:'Inter Tight',sans-serif;font-size:26px;font-weight:700;color:var(--blue-500);">#42</div>
+              <div><div style="font-size:12px;font-weight:500;color:var(--blue-800);">Your current rank</div><div style="font-size:11px;color:var(--blue-600);">62.7% win rate · 7-game win streak · up 3 places this week</div></div>
+              <div style="margin-left:auto;"><button class="btn-wf-primary" style="font-size:11px;padding:7px 14px;">Challenge top 10 →</button></div>
+            </div>
+            <div class="lb-table">
+              <div class="lb-hdr"><div class="lb-hc">#</div><div class="lb-hc" style="text-align:left;">Player</div><div class="lb-hc">Games</div><div class="lb-hc">Wins</div><div class="lb-hc">Win %</div></div>
+              <div class="lb-row"><div class="lb-rank g">1</div><div class="lb-name"><div class="lb-pav" style="background:var(--amber-400);">M</div>Morgan</div><div class="lb-val">214</div><div class="lb-val">173</div><div class="lb-val">81%</div></div>
+              <div class="lb-row"><div class="lb-rank s">2</div><div class="lb-name"><div class="lb-pav" style="background:var(--teal-400);">J</div>Jordan</div><div class="lb-val">189</div><div class="lb-val">129</div><div class="lb-val">68%</div></div>
+              <div class="lb-row"><div class="lb-rank b">3</div><div class="lb-name"><div class="lb-pav" style="background:var(--gray-400);">S</div>Sam</div><div class="lb-val">156</div><div class="lb-val">95</div><div class="lb-val">61%</div></div>
+              <div style="text-align:center;padding:7px;font-size:10px;color:var(--gray-200);border-bottom:1px solid var(--gray-50);">· · · ranks 4–41 · · ·</div>
+              <div class="lb-row me"><div class="lb-rank me">42</div><div class="lb-name"><div class="lb-pav" style="background:var(--blue-500);">A</div>Alex<span class="you-tag">You</span></div><div class="lb-val">142</div><div class="lb-val">89</div><div class="lb-val">63%</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>Podium: gold/silver/bronze step blocks, crown on 1st, avatar + name + win rate. Scales with avatar size — 1st is tallest and widest.</div>
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>My rank callout always pinned above the table — visible without scrolling, shows rank, win rate, streak, and weekly movement delta.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>Table always shows top rows + current user + one row above and below for context. Clicking any row navigates to that player's public profile.</div>
+    </div>
+  </div>
+
+  <!-- 11. WIREFRAME 6 — SETTINGS -->
+  <div class="section" id="s11">
+    <div class="section-title"><span class="section-num">11</span> Wireframe 6 — Settings</div>
+    <div class="section-sub">User preferences — appearance, sound, AI opponent selection, and gameplay defaults.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · Settings · Appearance + Sound + AI active
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div class="wf-navright"><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item">▶ Play</div><div class="wf-sb-item">📊 My Stats</div><div class="wf-sb-item">🏆 Leaderboard</div><div class="wf-sb-item">🕓 History</div>
+            <div class="wf-sb-divider"></div><div class="wf-sb-item active">⚙ Settings</div>
+          </div>
+          <div class="wf-main">
+            <div class="wf-page-title">Settings</div>
+            <div class="settings-layout">
+              <div class="settings-nav">
+                <div class="settings-nav-item active">Appearance</div>
+                <div class="settings-nav-item">Sound</div>
+                <div class="settings-nav-item">AI opponent</div>
+                <div class="settings-nav-item">Gameplay</div>
+                <div class="settings-nav-item">Notifications</div>
+                <div class="settings-nav-item">Account</div>
+              </div>
+              <div class="settings-content">
+                <div class="setting-card">
+                  <div class="sc-title">Theme</div>
+                  <div class="sc-sub">Persists across sessions via your account.</div>
+                  <div class="theme-opts">
+                    <div class="theme-opt sel"><div class="theme-prev tp-light">X <span style="color:var(--teal-400);">O</span></div><div class="theme-lbl">Light</div><div class="sel-dot"></div></div>
+                    <div class="theme-opt"><div class="theme-prev tp-dark">X <span style="color:var(--teal-400);">O</span></div><div class="theme-lbl">Dark</div></div>
+                    <div class="theme-opt"><div class="theme-prev tp-sys">auto</div><div class="theme-lbl">System</div></div>
+                  </div>
+                </div>
+                <div class="setting-card">
+                  <div class="sc-title">Sound</div>
+                  <div class="sc-sub">All settings persist across sessions.</div>
+                  <div class="setting-row"><div style="flex:1;"><div class="sr-lbl">Enable sound effects</div><div class="sr-desc">Move placement, win fanfare, draw, forfeit</div></div><div class="tog tog-on"></div></div>
+                  <div class="setting-row"><div style="flex:1;"><div class="sr-lbl">Opponent move sound</div></div><div class="tog tog-on"></div></div>
+                  <div class="setting-row"><div style="flex:1;"><div class="sr-lbl">Victory / defeat fanfare</div></div><div class="tog tog-on"></div></div>
+                </div>
+                <div class="setting-card">
+                  <div class="sc-title">AI opponent</div>
+                  <div class="sc-sub">Default implementation. List driven from GET /api/v1/ai/implementations — new AIs appear automatically.</div>
+                  <div class="ai-option sel"><div class="ai-radio checked"></div><div style="flex:1;"><div class="ai-name">Minimax</div><div class="ai-desc">Optimal Hard, rule-based Medium, random Easy</div></div><span class="badge badge-teal" style="font-size:9px;">Default</span></div>
+                  <div class="ai-option"><div class="ai-radio"></div><div style="flex:1;"><div class="ai-name">Future AI v2</div><div class="ai-desc">Coming soon</div></div><span class="badge badge-amber" style="font-size:9px;">Soon</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>Settings sub-nav loads each section inline — no page reload. Unsaved changes indicator in the save bar warns before navigating away.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>AI implementation selector is driven live by the backend registry — no frontend change needed when new implementations are added.</div>
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>Mobile settings: Appearance, Sound, and Gameplay only. AI opponent and Notifications are desktop-only settings.</div>
+    </div>
+  </div>
+
+  <!-- 12. WIREFRAME 7 — AI DASHBOARD -->
+  <div class="section" id="s12">
+    <div class="section-title"><span class="section-num">12</span> Wireframe 7 — AI Dashboard</div>
+    <div class="section-sub">Admin-only screen for monitoring AI performance, outcomes, player behaviour, and implementation comparisons.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · AI Dashboard · Admin · last 7 days
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div style="display:flex;gap:2px;margin-left:8px;"><div class="wf-navlink">Play</div><div class="wf-navlink">Leaderboard</div><div class="wf-navlink">Stats</div></div>
+          <div class="wf-navright"><span class="wf-admin-badge">Admin</span><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar amber">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item dim">▶ Play</div><div class="wf-sb-item dim">📊 My Stats</div><div class="wf-sb-item dim">🏆 Leaderboard</div><div class="wf-sb-item dim">🕓 History</div>
+            <div class="wf-sb-divider"></div><div class="wf-sb-item dim">⚙ Settings</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-section">Admin</div>
+            <div class="wf-sb-item admin-active">🤖 AI Dashboard</div>
+            <div class="wf-sb-item dim">📋 Log Viewer</div>
+          </div>
+          <div class="wf-main">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div class="wf-page-title">🤖 AI Dashboard</div>
+              <div style="font-size:11px;color:var(--teal-400);font-weight:500;display:flex;align-items:center;gap:5px;"><div style="width:7px;height:7px;border-radius:50%;background:var(--teal-400);"></div>Live · auto-refresh 60s</div>
+            </div>
+            <div style="background:var(--white);border:1px solid var(--gray-100);border-radius:9px;padding:9px 12px;display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+              <span style="font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-400);">Implementation</span>
+              <div class="pill sel" style="background:var(--amber-400);border-color:var(--amber-400);">All</div>
+              <div class="pill" style="background:var(--teal-50);color:var(--teal-800);border-color:var(--teal-100);">Minimax</div>
+              <div style="width:1px;height:16px;background:var(--gray-100);"></div>
+              <span style="font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-400);">Difficulty</span>
+              <div class="pill sel" style="background:var(--amber-400);border-color:var(--amber-400);">All</div><div class="pill">Easy</div><div class="pill">Medium</div><div class="pill">Hard</div>
+              <div style="width:1px;height:16px;background:var(--gray-100);"></div>
+              <span style="font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-400);">Period</span>
+              <div class="pill sel" style="background:var(--amber-400);border-color:var(--amber-400);">7 days</div><div class="pill">30 days</div><div class="pill">All time</div>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-card"><div class="kpi-label">Total games</div><span class="kpi-val" style="color:var(--gray-900);">1,842</span><div class="kpi-delta d-up">↑ 12% vs last week</div></div>
+              <div class="kpi-card"><div class="kpi-label">AI win rate</div><span class="kpi-val" style="color:var(--blue-500);">61%</span><div class="kpi-delta d-up">↑ 2pp</div></div>
+              <div class="kpi-card"><div class="kpi-label">Player win rate</div><span class="kpi-val" style="color:var(--teal-400);">27%</span><div class="kpi-delta d-dn">↓ 1pp</div></div>
+              <div class="kpi-card"><div class="kpi-label">Draw rate</div><span class="kpi-val" style="color:var(--amber-400);">12%</span><div style="font-size:10px;color:var(--gray-400);">As expected for Hard</div></div>
+              <div class="kpi-card"><div class="kpi-label">Avg move time</div><span class="kpi-val" style="color:var(--gray-900);">38ms</span><div class="kpi-delta d-up">↓ 4ms improved</div></div>
+              <div class="kpi-card"><div class="kpi-label">Error rate</div><span class="kpi-val" style="color:var(--red-400);">0.3%</span><div style="font-size:10px;color:var(--gray-400);">Within threshold</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="wf-panel">
+                <div class="wf-panel-title">Outcomes by difficulty <span style="float:right;color:var(--blue-500);font-size:10px;font-weight:500;">↓ CSV</span></div>
+                <div style="display:flex;align-items:flex-end;gap:6px;height:70px;margin-bottom:6px;">
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="flex:1;display:flex;align-items:flex-end;gap:2px;width:100%;"><div style="flex:1;height:28px;background:var(--blue-500);border-radius:2px 2px 0 0;"></div><div style="flex:1;height:50px;background:var(--teal-400);border-radius:2px 2px 0 0;"></div><div style="flex:1;height:16px;background:var(--amber-400);border-radius:2px 2px 0 0;"></div></div><div style="font-size:9px;color:var(--gray-400);margin-top:3px;">Easy</div></div>
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="flex:1;display:flex;align-items:flex-end;gap:2px;width:100%;"><div style="flex:1;height:44px;background:var(--blue-500);border-radius:2px 2px 0 0;"></div><div style="flex:1;height:30px;background:var(--teal-400);border-radius:2px 2px 0 0;"></div><div style="flex:1;height:14px;background:var(--amber-400);border-radius:2px 2px 0 0;"></div></div><div style="font-size:9px;color:var(--gray-400);margin-top:3px;">Medium</div></div>
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="flex:1;display:flex;align-items:flex-end;gap:2px;width:100%;"><div style="flex:1;height:56px;background:var(--blue-500);border-radius:2px 2px 0 0;"></div><div style="flex:1;height:8px;background:var(--teal-400);border-radius:2px 2px 0 0;"></div><div style="flex:1;height:34px;background:var(--amber-400);border-radius:2px 2px 0 0;"></div></div><div style="font-size:9px;color:var(--gray-400);margin-top:3px;">Hard</div></div>
+                </div>
+                <div style="display:flex;gap:8px;font-size:10px;color:var(--gray-400);"><span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--blue-500);display:inline-block;"></span>AI win</span><span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--teal-400);display:inline-block;"></span>Player win</span><span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--amber-400);display:inline-block;"></span>Draw</span></div>
+              </div>
+              <div class="wf-panel">
+                <div class="wf-panel-title">Implementation comparison <span style="float:right;color:var(--blue-500);font-size:10px;font-weight:500;">↓ CSV</span></div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                  <tr><th style="font-size:9px;color:var(--gray-400);text-align:left;padding:0 6px 6px;border-bottom:1px solid var(--gray-50);">Version</th><th style="font-size:9px;color:var(--gray-400);text-align:right;padding:0 6px 6px;border-bottom:1px solid var(--gray-50);">Win %</th><th style="font-size:9px;color:var(--gray-400);text-align:right;padding:0 6px 6px;border-bottom:1px solid var(--gray-50);">Avg ms</th><th style="font-size:9px;color:var(--gray-400);text-align:right;padding:0 6px 6px;border-bottom:1px solid var(--gray-50);">Status</th></tr>
+                  <tr style="background:var(--blue-50);"><td style="padding:6px;font-weight:600;">Minimax v1.1</td><td style="padding:6px;text-align:right;">61%</td><td style="padding:6px;text-align:right;">38ms</td><td style="padding:6px;text-align:right;"><span class="badge badge-teal" style="font-size:9px;border-radius:3px;">OK</span></td></tr>
+                  <tr><td style="padding:6px;">Minimax v1.0</td><td style="padding:6px;text-align:right;">57%</td><td style="padding:6px;text-align:right;">44ms</td><td style="padding:6px;text-align:right;"><span class="badge badge-amber" style="font-size:9px;border-radius:3px;">Prev</span></td></tr>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>Admin context visually enforced: amber admin badge in nav, sidebar dims non-admin items, amber filter pills and accent colors throughout.</div>
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>Global filters (implementation, difficulty, period) update all KPI cards and charts simultaneously. Live indicator with 60s auto-refresh.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>5 metric categories: performance, outcomes, learning over time (win rate trend + deployment markers), player behaviour (opening heatmap), difficulty breakdowns. Every chart has a CSV export button.</div>
+    </div>
+  </div>
+
+  <!-- 13. WIREFRAME 8 — LOG VIEWER -->
+  <div class="section" id="s13">
+    <div class="section-title"><span class="section-num">13</span> Wireframe 8 — Log Viewer</div>
+    <div class="section-sub">Admin-only full-stack log viewer with real-time tail, multi-dimensional filtering, and inline JSON expansion.</div>
+
+    <div class="wireframe-frame">
+      <div class="wireframe-label">
+        <div class="wf-dot" style="background:#E24B4A;"></div>
+        <div class="wf-dot" style="background:#BA7517;"></div>
+        <div class="wf-dot" style="background:#1D9E75;"></div>
+        Desktop · Log Viewer · Admin · INFO + WARN + ERROR + FATAL · all sources
+      </div>
+      <div class="wf-inner">
+        <div class="wf-topnav">
+          <div class="wf-logo">X<span>O</span> Arena</div>
+          <div style="display:flex;gap:2px;margin-left:8px;"><div class="wf-navlink">Play</div><div class="wf-navlink">Leaderboard</div><div class="wf-navlink">Stats</div></div>
+          <div class="wf-navright"><span class="wf-admin-badge">Admin</span><div class="wf-theme">☀</div><span style="font-size:11px;color:var(--gray-600);font-weight:500;">Alex</span><div class="wf-avatar amber">A</div></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-sidebar">
+            <div class="wf-sb-item dim">▶ Play</div><div class="wf-sb-item dim">📊 My Stats</div><div class="wf-sb-item dim">🏆 Leaderboard</div><div class="wf-sb-item dim">🕓 History</div>
+            <div class="wf-sb-divider"></div><div class="wf-sb-item dim">⚙ Settings</div>
+            <div class="wf-sb-divider"></div>
+            <div class="wf-sb-section">Admin</div>
+            <div class="wf-sb-item dim">🤖 AI Dashboard</div>
+            <div class="wf-sb-item admin-active">📋 Log Viewer</div>
+          </div>
+          <div class="wf-main" style="padding:0;display:flex;flex-direction:column;">
+            <div style="padding:14px 20px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <div class="wf-page-title">📋 Log Viewer</div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <span style="font-size:11px;color:var(--teal-400);font-weight:500;display:flex;align-items:center;gap:4px;"><div style="width:7px;height:7px;border-radius:50%;background:var(--teal-400);"></div>Live tail on</span>
+                <button class="btn-wf-ghost" style="font-size:10px;padding:5px 10px;">↓ Export JSON</button>
+                <button class="btn-wf-ghost" style="font-size:10px;padding:5px 10px;">↓ Export CSV</button>
+              </div>
+            </div>
+            <div class="log-filters">
+              <div class="log-filter-group">
+                <div class="log-filter-label">Level</div>
+                <div style="display:flex;gap:4px;"><span class="level-badge lb-debug" style="opacity:0.4;">DEBUG</span><span class="level-badge lb-info">INFO</span><span class="level-badge lb-warn">WARN</span><span class="level-badge lb-error">ERROR</span><span class="level-badge lb-fatal">FATAL</span></div>
+              </div>
+              <div style="width:1px;height:28px;background:var(--gray-100);align-self:center;"></div>
+              <div class="log-filter-group">
+                <div class="log-filter-label">Source</div>
+                <div style="display:flex;gap:4px;"><span style="background:var(--gray-900);color:var(--gray-50);padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;">frontend</span><span style="background:var(--gray-900);color:var(--gray-50);padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;">api</span><span style="background:var(--gray-900);color:var(--gray-50);padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;">realtime</span><span style="background:var(--gray-900);color:var(--gray-50);padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;">ai</span></div>
+              </div>
+              <div style="width:1px;height:28px;background:var(--gray-100);align-self:center;"></div>
+              <div class="log-filter-group"><div class="log-filter-label">User ID</div><input style="padding:4px 8px;border:1.5px solid var(--gray-100);border-radius:6px;font-size:10px;font-family:'JetBrains Mono',monospace;background:var(--white);width:110px;" placeholder="user_abc123" /></div>
+              <div class="log-filter-group"><div class="log-filter-label">Room</div><input style="padding:4px 8px;border:1.5px solid var(--gray-100);border-radius:6px;font-size:10px;background:var(--white);width:90px;" placeholder="Mt. Fuji" /></div>
+              <div class="log-filter-group"><div class="log-filter-label">Search</div><input style="padding:4px 8px;border:1.5px solid var(--gray-100);border-radius:6px;font-size:10px;font-family:'JetBrains Mono',monospace;background:var(--white);width:160px;" placeholder="keyword or regex…" /></div>
+              <div style="align-self:flex-end;font-size:10px;color:var(--gray-400);margin-left:auto;"><strong style="color:var(--gray-900);">248</strong> of 12,441</div>
+            </div>
+            <div>
+              <div class="log-hdr"><div class="log-hc">Timestamp</div><div class="log-hc">Level</div><div class="log-hc">Source</div><div class="log-hc">Message</div><div class="log-hc">User</div><div class="log-hc">Room</div></div>
+              <div class="log-row fatal"><div class="log-ts">14:02:11.342</div><div class="log-lvl ll-fatal">FATAL</div><div class="log-src ls-api">api</div><div class="log-msg">Unhandled exception — Redis connection refused</div><div style="font-size:10px;color:var(--gray-400);">—</div><div style="font-size:10px;color:var(--gray-400);">—</div></div>
+              <div class="log-row error"><div class="log-ts">14:01:58.119</div><div class="log-lvl ll-error">ERROR</div><div class="log-src ls-ai">ai</div><div class="log-msg">AI move timed out after 502ms — minimax, hard ▾</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray-400);">user_a1b2</div><div style="font-size:10px;color:var(--gray-400);">Mt. Fuji</div></div>
+              <div class="log-meta">{ <span class="mk">"implementation"</span>: <span class="ms">"minimax"</span>, <span class="mk">"difficulty"</span>: <span class="ms">"hard"</span>, <span class="mk">"duration_ms"</span>: <span class="mn">502</span>, <span class="mk">"timed_out"</span>: <span class="mb">true</span> }</div>
+              <div class="log-row warn"><div class="log-ts">14:01:44.887</div><div class="log-lvl ll-warn">WARN</div><div class="log-src ls-realtime">realtime</div><div class="log-msg">Player disconnected — 60s reconnect window started</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray-400);">user_c3d4</div><div style="font-size:10px;color:var(--gray-400);">Mt. Denali</div></div>
+              <div class="log-row info"><div class="log-ts">14:01:38.221</div><div class="log-lvl ll-info">INFO</div><div class="log-src ls-api">api</div><div class="log-msg">Game ended — outcome: AI_WIN, room: Mt. Fuji</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray-400);">user_a1b2</div><div style="font-size:10px;color:var(--gray-400);">Mt. Fuji</div></div>
+              <div class="log-row info"><div class="log-ts">14:01:22.004</div><div class="log-lvl ll-info">INFO</div><div class="log-src ls-frontend">frontend</div><div class="log-msg">User toggled sound — muted: true</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray-400);">user_a1b2</div><div style="font-size:10px;color:var(--gray-400);">Mt. Fuji</div></div>
+              <div class="log-row info"><div class="log-ts">14:00:29.003</div><div class="log-lvl ll-info">INFO</div><div class="log-src ls-api">api</div><div class="log-msg">Room created — name: Mt. Fuji, host: user_a1b2</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray-400);">user_a1b2</div><div style="font-size:10px;color:var(--gray-400);">Mt. Fuji</div></div>
+            </div>
+            <div class="log-status">
+              <span><strong style="color:var(--gray-900);">248</strong> entries shown</span>
+              <div style="width:1px;height:12px;background:var(--gray-100);"></div>
+              <span>12,441 total in range</span>
+              <div style="width:1px;height:12px;background:var(--gray-100);"></div>
+              <span>Last: <strong>14:02:11</strong></span>
+              <div style="width:1px;height:12px;background:var(--gray-100);"></div>
+              <div style="display:flex;align-items:center;gap:5px;"><div style="width:13px;height:13px;border-radius:3px;background:var(--blue-500);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--white);">✓</div>Live tail</div>
+              <div style="margin-left:auto;font-size:11px;color:var(--blue-500);font-weight:500;">Page 1 of 3 &nbsp; ← &nbsp; →</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">
+      <div class="ann-item"><div class="ann-dot ad-blue"></div>Level pills are toggle-on/off in their semantic colour. DEBUG is off by default — too verbose for most sessions. Each active level is highlighted.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>Rows expand inline to show the full JSON meta payload in a dark monospace block. No modal, no navigation — stays in context.</div>
+      <div class="ann-item"><div class="ann-dot ad-teal"></div>Left border colour encodes severity at a glance: blue INFO, amber WARN, red ERROR, deep red FATAL (+ background tint).</div>
+      <div class="ann-item"><div class="ann-dot ad-amber"></div>Live tail streams new entries via Socket.io, pausing automatically when the user scrolls up to read. Export respects all active filters.</div>
+    </div>
+  </div>
+
+  <!-- 14. RESPONSIVE STRATEGY -->
+  <div class="section" id="s14">
+    <div class="section-title"><span class="section-num">14</span> Responsive Strategy</div>
+    <div class="section-sub">Screen-by-screen availability across desktop and mobile breakpoints.</div>
+
+    <table class="spec-table" style="background:var(--white);border:1px solid var(--gray-100);border-radius:12px;overflow:hidden;">
+      <thead>
+        <tr>
+          <th>Screen</th>
+          <th style="text-align:center;">Desktop ≥768px</th>
+          <th style="text-align:center;">Mobile &lt;768px</th>
+          <th>Mobile notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Mode selection</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="color:var(--gray-600);font-size:13px;">Full-width cards, stacked layout</td></tr>
+        <tr><td>Game board (PvP & PvAI)</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="color:var(--gray-600);font-size:13px;">Centered board, scores + actions below; no right info panel</td></tr>
+        <tr><td>Room creation & join</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="color:var(--gray-600);font-size:13px;">Create + waiting flow only; active rooms list desktop only</td></tr>
+        <tr><td>Account & profile</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="color:var(--gray-600);font-size:13px;">Mobile: 4 KPIs + recent games only; full analysis desktop only</td></tr>
+        <tr><td>Settings</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="color:var(--gray-600);font-size:13px;">Mobile: Appearance, Sound, Gameplay only</td></tr>
+        <tr><td>Leaderboard</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--red-400);font-weight:600;">✗</td><td style="color:var(--gray-600);font-size:13px;">"Open in full browser" prompt on mobile</td></tr>
+        <tr><td>Game history</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--red-400);font-weight:600;">✗</td><td style="color:var(--gray-600);font-size:13px;">"Open in full browser" prompt on mobile</td></tr>
+        <tr><td>AI Dashboard</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--red-400);font-weight:600;">✗</td><td style="color:var(--gray-600);font-size:13px;">Admin only + desktop only</td></tr>
+        <tr><td>Log Viewer</td><td style="text-align:center;color:var(--teal-400);font-weight:600;">✓</td><td style="text-align:center;color:var(--red-400);font-weight:600;">✗</td><td style="color:var(--gray-600);font-size:13px;">Admin only + desktop only</td></tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:24px;" class="info-box">
+      <strong>Breakpoint:</strong> 768px. Below this threshold the sidebar is hidden, the top nav is simplified to logo + theme + avatar only, and navigation switches to a 3-tab bottom bar (Play · Stats · Settings). The minimum supported width is 320px. All touch targets are ≥44×44px per WCAG AA guidelines.
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:40px 0 0;font-size:13px;color:var(--gray-400);">— XO Arena Design Document v1.0 · March 2026 —</div>
+
+</div>
+</body>
+</html>

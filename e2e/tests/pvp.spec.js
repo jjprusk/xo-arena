@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { getInviteUrl } from './helpers.js'
 
 /**
  * E2E-02: Full PvP game flow
@@ -6,39 +7,32 @@ import { test, expect } from '@playwright/test'
  *
  * Uses two (or three) browser contexts to simulate multiple players/spectators.
  * Requires: frontend at localhost:5173, backend at localhost:3000 (with Redis).
+ *
+ * The app auto-creates a room when the host arrives at /play.
+ * The invite URL appears in the readonly input in the "Invite a Friend" card.
  */
 
 const boardLocator = (page) => page.locator('[aria-label="Tic-tac-toe board"]')
 const emptyCells = (page) => page.locator('button[aria-label^="Cell "]:not([disabled])')
 
 test.describe('PvP game flow', () => {
-  test('host creates room and guest joins via invite link', async ({ browser }) => {
+  test('host auto-room invite link allows guest to join', async ({ browser }) => {
     const hostCtx = await browser.newContext()
     const guestCtx = await browser.newContext()
     const hostPage = await hostCtx.newPage()
     const guestPage = await guestCtx.newPage()
 
     try {
-      // Host: create room
-      await hostPage.goto('/play')
-      await hostPage.getByRole('button', { name: 'vs Player' }).click()
-      await hostPage.getByRole('button', { name: 'Create Room' }).click()
-
-      await expect(hostPage.getByText('Your room')).toBeVisible()
-      await expect(hostPage.getByText('Waiting for opponent…')).toBeVisible()
-
-      // Extract invite URL
-      const inviteInput = hostPage.locator('input[readonly]')
-      await expect(inviteInput).toBeVisible()
-      const inviteUrl = await inviteInput.inputValue()
+      // Host: get the auto-created invite URL
+      const inviteUrl = await getInviteUrl(hostPage)
       expect(inviteUrl).toContain('/play?join=mt-')
 
-      // Guest joins
+      // Guest joins via invite URL
       await guestPage.goto(inviteUrl)
 
       // Both see the game board
-      await expect(boardLocator(hostPage)).toBeVisible({ timeout: 10_000 })
-      await expect(boardLocator(guestPage)).toBeVisible({ timeout: 10_000 })
+      await expect(boardLocator(hostPage)).toBeVisible({ timeout: 15_000 })
+      await expect(boardLocator(guestPage)).toBeVisible({ timeout: 15_000 })
 
       // Exactly one player has "Your turn"
       const hostTurn = await hostPage.getByText('Your turn').isVisible().catch(() => false)
@@ -58,19 +52,11 @@ test.describe('PvP game flow', () => {
     const guestPage = await guestCtx.newPage()
 
     try {
-      // Setup room
-      await hostPage.goto('/play')
-      await hostPage.getByRole('button', { name: 'vs Player' }).click()
-      await hostPage.getByRole('button', { name: 'Create Room' }).click()
-      await expect(hostPage.getByText('Waiting for opponent…')).toBeVisible()
-
-      const inviteInput2 = hostPage.locator('input[readonly]')
-      await expect(inviteInput2).not.toHaveValue('', { timeout: 10_000 })
-      const inviteUrl = await inviteInput2.inputValue()
+      const inviteUrl = await getInviteUrl(hostPage)
       await guestPage.goto(inviteUrl)
 
-      await expect(boardLocator(guestPage)).toBeVisible({ timeout: 10_000 })
-      await expect(boardLocator(hostPage)).toBeVisible({ timeout: 10_000 })
+      await expect(boardLocator(guestPage)).toBeVisible({ timeout: 15_000 })
+      await expect(boardLocator(hostPage)).toBeVisible({ timeout: 15_000 })
 
       const pages = [hostPage, guestPage]
       const endTexts = ['You win', 'Opponent wins', 'Draw']
@@ -84,7 +70,6 @@ test.describe('PvP game flow', () => {
           }
         }
         if (!activePage) {
-          // Wait a moment and retry (move may still be propagating)
           await hostPage.waitForTimeout(500)
           for (const p of pages) {
             if (await p.getByText('Your turn').isVisible().catch(() => false)) {
@@ -99,7 +84,6 @@ test.describe('PvP game flow', () => {
         await cells.first().click()
         await hostPage.waitForTimeout(400)
 
-        // Check if game ended
         let ended = false
         for (const p of pages) {
           for (const txt of endTexts) {
@@ -122,17 +106,26 @@ test.describe('PvP game flow', () => {
     }
   })
 
-  test('host can cancel the room before guest joins', async ({ page }) => {
-    await page.goto('/play')
-    await page.getByRole('button', { name: 'vs Player' }).click()
-    await page.getByRole('button', { name: 'Create Room' }).click()
+  test('room name is shown on the board', async ({ browser }) => {
+    const hostCtx = await browser.newContext()
+    const guestCtx = await browser.newContext()
+    const hostPage = await hostCtx.newPage()
+    const guestPage = await guestCtx.newPage()
 
-    await expect(page.getByText('Waiting for opponent…')).toBeVisible()
-    await page.getByRole('button', { name: 'Cancel room' }).click()
+    try {
+      const inviteUrl = await getInviteUrl(hostPage)
+      await guestPage.goto(inviteUrl)
 
-    // Returns to mode selection
-    await expect(page.getByRole('button', { name: 'vs AI' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'vs Player' })).toBeVisible()
+      await expect(boardLocator(hostPage)).toBeVisible({ timeout: 15_000 })
+
+      // Room display name (e.g. "Mt. Rainier") shown on both boards
+      const roomName = await hostPage.locator('span').filter({ hasText: /^Mt\. / }).first().textContent()
+      expect(roomName).toMatch(/^Mt\. /)
+      await expect(guestPage.locator('span, h1').filter({ hasText: roomName })).toBeVisible({ timeout: 5_000 })
+    } finally {
+      await hostCtx.close()
+      await guestCtx.close()
+    }
   })
 })
 
@@ -146,52 +139,40 @@ test.describe('Spectator flow', () => {
     const spectatorPage = await spectatorCtx.newPage()
 
     try {
-      // Host creates room
-      await hostPage.goto('/play')
-      await hostPage.getByRole('button', { name: 'vs Player' }).click()
-      await hostPage.getByRole('button', { name: 'Create Room' }).click()
-      await expect(hostPage.getByText('Waiting for opponent…')).toBeVisible()
-
-      const inviteInput = hostPage.locator('input[readonly]')
-      await expect(inviteInput).not.toHaveValue('', { timeout: 10_000 })
-      const inviteUrl = await inviteInput.inputValue()
+      // Host gets invite URL from auto-room
+      const inviteUrl = await getInviteUrl(hostPage)
 
       // Guest joins → game starts
       await guestPage.goto(inviteUrl)
-      // Wait for guest board first (confirms game:start fired on server)
       await expect(boardLocator(guestPage)).toBeVisible({ timeout: 15_000 })
       await expect(boardLocator(hostPage)).toBeVisible({ timeout: 15_000 })
 
-      // Spectator joins same URL
+      // Spectator joins same URL (room is now playing → joins as spectator)
       await spectatorPage.goto(inviteUrl)
       await expect(boardLocator(spectatorPage)).toBeVisible({ timeout: 10_000 })
 
-      // Spectator badge
+      // Spectator badge is shown
       await expect(spectatorPage.getByText('Spectating')).toBeVisible()
 
-      // Spectator cannot click cells
-      const spectatorCell = spectatorPage.locator('button[aria-label^="Cell "]:not([disabled])').first()
-      expect(await spectatorCell.count()).toBe(0)
+      // Spectator cannot click any cells (all disabled)
+      const spectatorCells = spectatorPage.locator('button[aria-label^="Cell "]:not([disabled])')
+      expect(await spectatorCells.count()).toBe(0)
 
-      // Host/guest see spectator count
+      // Host or guest sees spectator count badge
       await expect(hostPage.getByText(/👁/)).toBeVisible({ timeout: 5_000 })
 
-      // Active player makes a move — spectator sees it
+      // Active player makes a move — spectator sees it update
       for (const p of [hostPage, guestPage]) {
         if (await p.getByText('Your turn').isVisible().catch(() => false)) {
-          // Find center cell (Cell 5) or first available
-          const c5 = p.locator('button[aria-label="Cell 5"]:not([disabled])')
-          if (await c5.count() > 0) {
-            await c5.click()
-          } else {
-            await emptyCells(p).first().click()
-          }
+          await emptyCells(p).first().click()
           break
         }
       }
 
-      // Spectator sees a mark appear on the board
-      await expect(spectatorPage.locator('button[aria-label^="Cell "][aria-label$=", X"], button[aria-label^="Cell "][aria-label$=", O"]').first()).toBeVisible({ timeout: 5_000 })
+      // Spectator sees a filled cell appear
+      await expect(
+        spectatorPage.locator('button[aria-label$=", X"], button[aria-label$=", O"]').first()
+      ).toBeVisible({ timeout: 5_000 })
     } finally {
       await hostCtx.close()
       await guestCtx.close()

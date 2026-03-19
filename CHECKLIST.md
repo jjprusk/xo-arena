@@ -69,11 +69,11 @@ Tracks every task from the Development Plan. `Done` = implementation complete. `
 | FE-16 | PvP game board | ✓ | ✓ |
 | FE-17 | Spectator view | ✓ | ✓ |
 | LB-01 | Leaderboard screen (desktop) | ✓ | ✓ |
-| LB-02 | Game history screen | ✓ | — |
+| LB-02 | Game history screen | ✓ | ✓ |
 | LOG-01 | Log viewer screen (admin) | ✓ | ✓ |
-| E2E-01 | Full PvAI game flow | | |
-| E2E-02 | Full PvP game flow | | |
-| E2E-03 | Spectator flow | | |
+| E2E-01 | Full PvAI game flow | ✓ | ✓ |
+| E2E-02 | Full PvP game flow | ✓ | ✓ |
+| E2E-03 | Spectator flow | ✓ | ✓ |
 | AID-01 | AI dashboard data collection (game/move logging) | ✓ | ✓ |
 | AID-02 | AI dashboard API endpoints | ✓ | ✓ |
 | AID-03 | AI dashboard frontend (Recharts) | ✓ | ✓ |

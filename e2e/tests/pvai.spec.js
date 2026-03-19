@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { startPvAIGame, playPvAIToEnd } from './helpers.js'
 
 /**
  * E2E-01: Full PvAI game flow
@@ -6,27 +7,11 @@ import { test, expect } from '@playwright/test'
  * Requires: frontend running at localhost:5173, backend at localhost:3000
  */
 
-// Board is a div with aria-label, not role=grid
 const boardLocator = (page) => page.locator('[aria-label="Tic-tac-toe board"]')
-
-// Only enabled (player's turn) empty cells
-const emptyCells = (page) => page.locator('button[aria-label^="Cell "]:not([disabled])')
-
-// Wait for AI to finish and it to become the player's turn
-async function waitForPlayerTurn(page) {
-  await expect(page.getByText('Your turn')).toBeVisible({ timeout: 10_000 })
-}
 
 test.describe('PvAI game flow', () => {
   test('can start a game and play moves', async ({ page }) => {
-    await page.goto('/play')
-
-    await page.getByRole('button', { name: 'vs AI' }).click()
-    await expect(page.getByRole('button', { name: 'medium' })).toBeVisible()
-
-    await page.getByRole('button', { name: 'easy' }).click()
-    await page.getByRole('button', { name: 'X', exact: true }).click()
-    await page.getByRole('button', { name: 'Play vs AI' }).click()
+    await startPvAIGame(page, { difficulty: 'easy', mark: 'X' })
 
     // Board should appear
     await expect(boardLocator(page)).toBeVisible()
@@ -39,82 +24,35 @@ test.describe('PvAI game flow', () => {
     await expect(page.getByRole('button', { name: 'Cell 1, X' })).toBeVisible()
 
     // Wait for AI to respond then player's turn again
-    await waitForPlayerTurn(page)
+    await expect(page.getByText('Your turn')).toBeVisible({ timeout: 10_000 })
   })
 
   test('shows win state when player wins', async ({ page }) => {
-    await page.goto('/play')
-    await page.getByRole('button', { name: 'vs AI' }).click()
-    await page.getByRole('button', { name: 'easy' }).click()
-    await page.getByRole('button', { name: 'Play vs AI' }).click()
-
+    await startPvAIGame(page, { difficulty: 'easy', mark: 'X' })
     await expect(boardLocator(page)).toBeVisible()
 
-    // Play through game — click only enabled cells (player's turn cells)
-    for (let attempt = 0; attempt < 9; attempt++) {
-      // Check if game already ended
-      const endTexts = ['You win', 'AI wins', 'Draw']
-      let ended = false
-      for (const t of endTexts) {
-        if (await page.getByText(t, { exact: false }).isVisible().catch(() => false)) {
-          ended = true; break
-        }
-      }
-      if (ended) break
-
-      // Wait for our turn then click an enabled empty cell
-      await waitForPlayerTurn(page)
-      const cells = emptyCells(page)
-      const count = await cells.count()
-      if (count === 0) break
-      await cells.first().click()
-    }
-
-    // Game must have ended
-    const endStates = ['You win', 'AI wins', 'Draw']
-    let found = false
-    for (const state of endStates) {
-      if (await page.getByText(state, { exact: false }).isVisible().catch(() => false)) {
-        found = true; break
-      }
-    }
-    expect(found).toBe(true)
+    const result = await playPvAIToEnd(page)
+    expect(result).not.toBeNull()
 
     await expect(page.getByRole('button', { name: 'Rematch' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'New Game' })).toBeVisible()
   })
 
   test('rematch resets the board', async ({ page }) => {
-    await page.goto('/play')
-    await page.getByRole('button', { name: 'vs AI' }).click()
-    await page.getByRole('button', { name: 'easy' }).click()
-    await page.getByRole('button', { name: 'Play vs AI' }).click()
-
+    await startPvAIGame(page, { difficulty: 'easy', mark: 'X' })
     await expect(boardLocator(page)).toBeVisible()
 
-    // Play through the game
-    for (let i = 0; i < 9; i++) {
-      const rematch = page.getByRole('button', { name: 'Rematch' })
-      if (await rematch.isVisible().catch(() => false)) break
-      await waitForPlayerTurn(page)
-      const cells = emptyCells(page)
-      if (await cells.count() === 0) break
-      await cells.first().click()
-    }
+    await playPvAIToEnd(page)
 
     await page.getByRole('button', { name: 'Rematch' }).click()
 
-    // Board resets
+    // Board resets — all cells empty and player's turn
     await expect(page.getByRole('button', { name: 'Cell 1' })).toBeVisible()
     await expect(page.getByText('Your turn')).toBeVisible()
   })
 
   test('forfeit ends the game', async ({ page }) => {
-    await page.goto('/play')
-    await page.getByRole('button', { name: 'vs AI' }).click()
-    await page.getByRole('button', { name: 'easy' }).click()
-    await page.getByRole('button', { name: 'Play vs AI' }).click()
-
+    await startPvAIGame(page, { difficulty: 'easy', mark: 'X' })
     await expect(boardLocator(page)).toBeVisible()
 
     await page.getByRole('button', { name: 'Forfeit' }).click()
@@ -122,5 +60,17 @@ test.describe('PvAI game flow', () => {
     await page.getByRole('button', { name: 'Forfeit' }).last().click()
 
     await expect(page.getByText('Forfeited.')).toBeVisible()
+  })
+
+  test('new game returns to mode selection', async ({ page }) => {
+    await startPvAIGame(page, { difficulty: 'easy', mark: 'X' })
+    await expect(boardLocator(page)).toBeVisible()
+
+    await playPvAIToEnd(page)
+
+    await page.getByRole('button', { name: 'New Game' }).click()
+
+    // Mode selection is visible again — Play vs AI accordion toggle
+    await expect(page.locator('button').filter({ hasText: 'Play vs AI' }).first()).toBeVisible()
   })
 })

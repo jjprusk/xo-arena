@@ -8,7 +8,29 @@ import { createAdapter } from '@socket.io/redis-adapter'
 import ioredis from 'ioredis'
 const { createClient } = ioredis
 import { roomManager } from './roomManager.js'
+import { createClerkClient } from '@clerk/backend'
+import { getUserByClerkId, createGame } from '../services/userService.js'
 import logger from '../logger.js'
+
+let clerkClient = null
+function getClerk() {
+  if (!clerkClient && process.env.CLERK_SECRET_KEY) {
+    clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+  }
+  return clerkClient
+}
+
+async function resolveSocketUser(token) {
+  if (!token) return null
+  try {
+    const clerk = getClerk()
+    if (!clerk) return null
+    const payload = await clerk.verifyToken(token)
+    return await getUserByClerkId(payload.sub)
+  } catch {
+    return null
+  }
+}
 
 /**
  * Attach Socket.io to an HTTP server.
@@ -38,9 +60,14 @@ export async function attachSocketIO(httpServer) {
 
     // ── Room lifecycle ──────────────────────────────────────────────
 
-    socket.on('room:create', ({ spectatorAllowed = true } = {}) => {
+    socket.on('room:create', async ({ spectatorAllowed = true, authToken = null } = {}) => {
       try {
-        const room = roomManager.createRoom({ hostSocketId: socket.id, spectatorAllowed })
+        const user = await resolveSocketUser(authToken)
+        const room = roomManager.createRoom({
+          hostSocketId: socket.id,
+          hostUserId: user?.id || null,
+          spectatorAllowed,
+        })
         socket.join(room.slug)
         socket.emit('room:created', { slug: room.slug, displayName: room.displayName, mark: 'X' })
       } catch (err) {
@@ -48,7 +75,8 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    socket.on('room:join', ({ slug, role = 'player' }) => {
+    socket.on('room:join', async ({ slug, role = 'player', authToken = null }) => {
+      const user = await resolveSocketUser(authToken)
       if (role === 'spectator') {
         const result = roomManager.joinAsSpectator({ slug, socketId: socket.id })
         if (result.error) return socket.emit('error', { message: result.error })
@@ -57,7 +85,7 @@ export async function attachSocketIO(httpServer) {
         socket.emit('room:joined', { slug, role: 'spectator', room: sanitizeRoom(result.room) })
         io.to(slug).emit('room:spectatorJoined', { spectatorCount: result.room.spectatorIds.size })
       } else {
-        const result = roomManager.joinRoom({ slug, guestSocketId: socket.id })
+        const result = roomManager.joinRoom({ slug, guestSocketId: socket.id, guestUserId: user?.id || null })
         if (result.error) return socket.emit('error', { message: result.error })
 
         const room = result.room
@@ -102,6 +130,10 @@ export async function attachSocketIO(httpServer) {
         winLine: room.winLine,
         scores: room.scores,
       })
+
+      if (room.status === 'finished') {
+        recordPvpGame(room).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
+      }
     })
 
     socket.on('game:rematch', () => {
@@ -127,6 +159,7 @@ export async function attachSocketIO(httpServer) {
       room.scores[oppMark]++
       room.status = 'finished'
       io.to(slug).emit('game:forfeit', { forfeiterMark: mark, winner: oppMark, scores: room.scores })
+      recordPvpGame(room).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
     })
 
     // ── Disconnect ──────────────────────────────────────────────────
@@ -161,6 +194,51 @@ export async function attachSocketIO(httpServer) {
   })
 
   return io
+}
+
+/**
+ * Record a finished PvP game for any authenticated players.
+ * Skipped silently if neither player has a DB user.
+ */
+async function recordPvpGame(room) {
+  if (!room.hostUserId && !room.guestUserId) return
+
+  const totalMoves = room.board.filter(Boolean).length
+  const durationMs = room.lastActivityAt ? room.lastActivityAt - room.createdAt : 0
+
+  // Determine outcome from winner mark
+  let outcome = 'DRAW'
+  if (room.winner) {
+    const winnerIsHost = room.playerMarks[room.hostId] === room.winner ||
+      Object.entries(room.playerMarks).find(([, m]) => m === room.winner)?.[0] === room.hostId
+    outcome = winnerIsHost ? 'PLAYER1_WIN' : 'PLAYER2_WIN'
+  }
+
+  // Determine winnerId
+  let winnerId = null
+  if (room.winner === 'X') {
+    // Find which userId has X
+    winnerId = Object.entries(room.playerMarks).find(([, m]) => m === 'X')?.[0] === room.hostId
+      ? room.hostUserId : room.guestUserId
+  } else if (room.winner === 'O') {
+    winnerId = Object.entries(room.playerMarks).find(([, m]) => m === 'O')?.[0] === room.hostId
+      ? room.hostUserId : room.guestUserId
+  }
+
+  // Record for player1 (host) if authenticated
+  if (room.hostUserId) {
+    await createGame({
+      player1Id: room.hostUserId,
+      player2Id: room.guestUserId || null,
+      winnerId,
+      mode: 'PVP',
+      outcome,
+      totalMoves,
+      durationMs,
+      startedAt: new Date(room.createdAt),
+      roomName: room.name,
+    })
+  }
 }
 
 function sanitizeRoom(room) {

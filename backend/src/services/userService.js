@@ -160,3 +160,37 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50 
     winRate: e.winRate,
   }))
 }
+
+/**
+ * Record a completed game.
+ */
+export async function createGame({
+  player1Id,
+  player2Id = null,
+  winnerId = null,
+  mode,           // 'PVP' | 'PVAI'
+  outcome,        // 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'AI_WIN' | 'DRAW'
+  difficulty = null,
+  aiImplementationId = null,
+  totalMoves,
+  durationMs,
+  startedAt,
+  roomName = null,
+}) {
+  return db.game.create({
+    data: {
+      player1Id,
+      player2Id,
+      winnerId,
+      mode,
+      outcome,
+      difficulty,
+      aiImplementationId,
+      totalMoves,
+      durationMs,
+      startedAt: new Date(startedAt),
+      endedAt: new Date(),
+      roomName,
+    },
+  })
+}
