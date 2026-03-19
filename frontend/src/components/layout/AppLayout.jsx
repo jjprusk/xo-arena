@@ -34,16 +34,14 @@ export default function AppLayout() {
       {/* Mountain background */}
       <div
         aria-hidden="true"
-        className="fixed bottom-0 left-0 right-0 pointer-events-none select-none"
+        className="fixed inset-0 pointer-events-none select-none"
         style={{
           zIndex: 0,
-          height: '55vh',
-          opacity: 0.06,
-          backgroundImage: 'url(/mountain-bg.svg)',
-          backgroundSize: '100% 100%',
+          opacity: 0.30,
+          backgroundImage: 'url(/mountain-bg.jpg)',
+          backgroundSize: 'cover',
           backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'bottom center',
-          filter: 'var(--mountain-filter)',
+          backgroundPosition: 'center center',
         }}
       />
       {/* Top nav bar */}

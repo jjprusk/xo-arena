@@ -43,7 +43,7 @@ export default function PlayPage() {
   const inGame = pvaiStatus !== 'idle' && pvaiMode === 'pvai'
   if (inGame) return (
     <div className="flex flex-col items-center w-full max-w-md mx-auto">
-      <GameBoard inviteUrl={inviteUrl} />
+      <GameBoard inviteUrl={inviteUrl} roomName={displayName} />
     </div>
   )
 

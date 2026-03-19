@@ -17,6 +17,8 @@ import { mountainPool, MountainNamePool } from './mountainNames.js'
 import { getWinner, isBoardFull, WIN_LINES } from '../ai/gameLogic.js'
 
 const RECONNECT_WINDOW_MS = 60_000
+const STALE_WAITING_MS = 30 * 60 * 1000   // 30 min — waiting room with no guest
+const STALE_FINISHED_MS = 10 * 60 * 1000  // 10 min — finished game
 
 class RoomManager {
   constructor(pool = mountainPool) {
@@ -25,6 +27,10 @@ class RoomManager {
     this._rooms = new Map()
     /** @type {Map<string, string>} socketId → slug */
     this._socketToRoom = new Map()
+
+    // Periodic sweep: remove stale rooms every 5 minutes
+    this._cleanupInterval = setInterval(() => this._sweepStaleRooms(), 5 * 60 * 1000)
+    this._cleanupInterval.unref?.() // don't block process exit
   }
 
   /**
@@ -35,6 +41,7 @@ class RoomManager {
     if (!name) throw new Error('No mountain names available')
     const slug = MountainNamePool.toSlug(name)
 
+    const now = Date.now()
     const room = {
       name,
       slug,
@@ -54,6 +61,8 @@ class RoomManager {
       winLine: null,
       spectatorAllowed,
       disconnectTimers: {},
+      createdAt: now,
+      lastActivityAt: now,
     }
 
     this._rooms.set(slug, room)
@@ -107,6 +116,7 @@ class RoomManager {
     if (room.board[cellIndex] !== null) return { error: 'Cell already occupied' }
 
     room.board[cellIndex] = playerMark
+    room.lastActivityAt = Date.now()
     const winner = getWinner(room.board)
     const draw = !winner && isBoardFull(room.board)
 
@@ -163,6 +173,12 @@ class RoomManager {
       return { room, wasSpectator: true }
     }
 
+    if (room.status === 'waiting') {
+      // Host left before anyone joined — close immediately
+      this.closeRoom(slug)
+      return { room, wasPlayer: true, roomClosed: true }
+    }
+
     if (room.status === 'playing') {
       const timer = setTimeout(() => {
         if (this._rooms.has(slug)) {
@@ -209,6 +225,22 @@ class RoomManager {
     this._socketToRoom.set(newSocketId, slug)
 
     return { room }
+  }
+
+  /**
+   * Remove rooms that have been idle too long.
+   * Called automatically every 5 minutes.
+   */
+  _sweepStaleRooms() {
+    const now = Date.now()
+    for (const [slug, room] of this._rooms) {
+      const age = now - (room.lastActivityAt ?? room.createdAt ?? 0)
+      if (room.status === 'waiting' && age > STALE_WAITING_MS) {
+        this.closeRoom(slug)
+      } else if (room.status === 'finished' && age > STALE_FINISHED_MS) {
+        this.closeRoom(slug)
+      }
+    }
   }
 
   /**

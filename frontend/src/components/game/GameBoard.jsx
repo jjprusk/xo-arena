@@ -9,7 +9,7 @@ const MARK_COLOR = {
   O: 'var(--color-teal-600)',
 }
 
-export default function GameBoard({ inviteUrl }) {
+export default function GameBoard({ inviteUrl, roomName }) {
   const [inviteCopied, setInviteCopied] = useState(false)
 
   function handleCopyInvite() {
@@ -76,6 +76,13 @@ export default function GameBoard({ inviteUrl }) {
 
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto">
+      {/* Room name */}
+      {roomName && (
+        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+          {roomName}
+        </h1>
+      )}
+
       {/* Round + score strip */}
       <div className="w-full flex items-center justify-between px-2">
         <ScorePill mark="X" score={scores.X} />
