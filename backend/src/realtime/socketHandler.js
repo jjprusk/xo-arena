@@ -8,7 +8,7 @@ import { createAdapter } from '@socket.io/redis-adapter'
 import ioredis from 'ioredis'
 const { createClient } = ioredis
 import { roomManager } from './roomManager.js'
-import { createClerkClient } from '@clerk/backend'
+import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend'
 import { getUserByClerkId, createGame } from '../services/userService.js'
 import logger from '../logger.js'
 
@@ -23,9 +23,7 @@ function getClerk() {
 async function resolveSocketUser(token) {
   if (!token) return null
   try {
-    const clerk = getClerk()
-    if (!clerk) return null
-    const payload = await clerk.verifyToken(token)
+    const payload = await clerkVerifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
     return await getUserByClerkId(payload.sub)
   } catch {
     return null

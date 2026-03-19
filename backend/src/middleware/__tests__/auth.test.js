@@ -5,10 +5,6 @@ import request from 'supertest'
 // Mock @clerk/backend before importing the middleware
 vi.mock('@clerk/backend', () => ({
   createClerkClient: vi.fn(() => ({
-    verifyToken: vi.fn(async (token) => {
-      if (token === 'valid-token') return { sub: 'user_123', sid: 'sess_abc' }
-      throw new Error('Invalid token')
-    }),
     users: {
       getUser: vi.fn(async (userId) => {
         if (userId === 'user_123') return { publicMetadata: { role: 'admin' } }
@@ -16,6 +12,10 @@ vi.mock('@clerk/backend', () => ({
       }),
     },
   })),
+  verifyToken: vi.fn(async (token) => {
+    if (token === 'valid-token') return { sub: 'user_123', sid: 'sess_abc' }
+    throw new Error('Invalid token')
+  }),
 }))
 
 const { requireAuth, optionalAuth, requireAdmin } = await import('../auth.js')
