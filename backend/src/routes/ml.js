@@ -262,6 +262,19 @@ router.post('/models/:id/versus/:id2', requireAuth, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── Hyperparameter Search ────────────────────────────────────────────────────
+
+router.post('/models/:id/hypersearch', requireAuth, async (req, res, next) => {
+  try {
+    const { paramGrid, gamesPerConfig } = req.body
+    const result = await svc.startHyperparamSearch(req.params.id, { paramGrid, gamesPerConfig })
+    res.json(result)
+  } catch (err) {
+    if (err.message === 'Model not found') return res.status(404).json({ error: err.message })
+    next(err)
+  }
+})
+
 // ─── Tournament ───────────────────────────────────────────────────────────────
 
 router.post('/tournament', requireAuth, async (req, res, next) => {

@@ -8,8 +8,11 @@
 
 import db from '../lib/db.js'
 import { QLearningEngine, runEpisode, DEFAULT_CONFIG } from '../ai/qLearning.js'
+import { SarsaEngine } from '../ai/sarsa.js'
+import { MonteCarloEngine } from '../ai/monteCarlo.js'
+import { PolicyGradientEngine } from '../ai/policyGradient.js'
 import { minimaxMove } from '../ai/minimax.js'
-import { getEmptyCells } from '../ai/gameLogic.js'
+import { getWinner, isBoardFull, getEmptyCells, opponent } from '../ai/gameLogic.js'
 import { proportionPValue, twoProportionPValue } from '../ai/stats.js'
 import logger from '../logger.js'
 
@@ -23,6 +26,10 @@ const engineCache = new Map()
 
 /** sessionId → true  (signals background loop to stop) */
 const cancelledSessions = new Set()
+
+// ─── Training queue ──────────────────────────────────────────────────────────
+/** Queue of pending training requests: [{ modelId, sessionId, opts }, ...] */
+const trainingQueue = []
 
 // ─── Model CRUD ─────────────────────────────────────────────────────────────
 
@@ -479,8 +486,17 @@ export async function importModel(data) {
 export async function startTraining(modelId, { mode, iterations, config = {} }) {
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
-  if (model.status === 'TRAINING') throw new Error('Model is already training')
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
+
+  if (model.status === 'TRAINING') {
+    // Queue the session instead of throwing 409
+    const session = await db.trainingSession.create({
+      data: { modelId, mode, iterations, status: 'PENDING', config },
+    })
+    trainingQueue.push({ modelId, sessionId: session.id, opts: { mode, iterations, config } })
+    logger.info({ modelId, sessionId: session.id }, 'Training queued')
+    return session
+  }
 
   const session = await db.trainingSession.create({
     data: { modelId, mode, iterations, status: 'RUNNING', config },
@@ -490,6 +506,31 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
   // Fire-and-forget background loop
   setImmediate(() => _runTraining(model, session, { mode, iterations, config }))
   return session
+}
+
+/** Process the next session in the queue, if any. */
+async function _processNextInQueue() {
+  if (trainingQueue.length === 0) return
+  const next = trainingQueue.shift()
+  try {
+    const model = await getModel(next.modelId)
+    if (!model) return  // model deleted while queued
+    if (model.status === 'TRAINING') {
+      // Another training snuck in — re-queue
+      trainingQueue.unshift(next)
+      return
+    }
+    // Upgrade session from PENDING → RUNNING
+    const session = await db.trainingSession.update({
+      where: { id: next.sessionId },
+      data: { status: 'RUNNING', startedAt: new Date() },
+    })
+    await db.mLModel.update({ where: { id: next.modelId }, data: { status: 'TRAINING' } })
+    setImmediate(() => _runTraining(model, session, next.opts))
+    logger.info({ modelId: next.modelId, sessionId: next.sessionId }, 'Queued training started')
+  } catch (err) {
+    logger.error({ err, next }, 'Failed to start queued training session')
+  }
 }
 
 export async function cancelSession(sessionId) {
@@ -510,36 +551,253 @@ export async function cancelSession(sessionId) {
 const BATCH_SIZE     = 50   // episodes per DB batch insert
 const CHECKPOINT_GAP = 1000 // save checkpoint every N episodes
 
+/** Instantiate the correct engine based on algorithm name. */
+function _buildEngine(modelConfig, algorithm) {
+  const alg = (algorithm || 'Q_LEARNING').toUpperCase()
+  if (alg === 'SARSA') return new SarsaEngine(modelConfig)
+  if (alg === 'MONTE_CARLO' || alg === 'MC') return new MonteCarloEngine(modelConfig)
+  if (alg === 'POLICY_GRADIENT' || alg === 'PG') return new PolicyGradientEngine(modelConfig)
+  return new QLearningEngine(modelConfig)
+}
+
+/**
+ * Run a single SARSA episode.
+ * SARSA requires the *actual* next action, not max, so we need a custom loop.
+ */
+function _runSarsaEpisode(engine, mlMark, opponentFn) {
+  const board = Array(9).fill(null)
+  let currentPlayer = 'X'
+  let totalMoves = 0
+  let totalQDelta = 0
+  let qdeltaCount = 0
+  const history = { X: [], O: [] }
+
+  // Pre-select first action for ML player if applicable
+  function mlChoose(b) { return engine.chooseAction(b, true) }
+
+  while (true) {
+    const isML = mlMark === 'both' || currentPlayer === mlMark
+    const action = isML ? mlChoose(board) : opponentFn(board, currentPlayer)
+
+    const prevBoard = [...board]
+    board[action] = currentPlayer
+    totalMoves++
+    history[currentPlayer].push({ board: prevBoard, action })
+
+    const winner = getWinner(board)
+    const isDraw = !winner && isBoardFull(board)
+
+    if (winner || isDraw) {
+      const rewards = winner === 'X'
+        ? { X: 1.0, O: -1.0 }
+        : winner === 'O'
+          ? { X: -1.0, O: 1.0 }
+          : { X: 0.5, O: 0.5 }
+
+      const marksToUpdate = mlMark === 'both' ? ['X', 'O'] : [mlMark]
+      for (const mark of marksToUpdate) {
+        const steps = history[mark]
+        for (let t = 0; t < steps.length; t++) {
+          const { board: s, action: a } = steps[t]
+          const isLast = t === steps.length - 1
+          // nextAction is the next step's action (or -1 at terminal)
+          const nextAction = isLast ? -1 : steps[t + 1].action
+          const nextBoard  = isLast ? board : steps[t + 1].board
+          const delta = engine.update(s, a, isLast ? rewards[mark] : 0, nextBoard, nextAction, isLast)
+          totalQDelta += delta
+          qdeltaCount++
+        }
+      }
+      engine.decayEpsilon()
+
+      let outcome
+      if (isDraw) outcome = 'DRAW'
+      else if (mlMark === 'both') outcome = winner === 'X' ? 'WIN' : 'LOSS'
+      else outcome = winner === mlMark ? 'WIN' : 'LOSS'
+
+      return { outcome, totalMoves, avgQDelta: qdeltaCount > 0 ? totalQDelta / qdeltaCount : 0, epsilon: engine.epsilon }
+    }
+
+    currentPlayer = opponent(currentPlayer)
+  }
+}
+
+/**
+ * Run a single Monte Carlo episode.
+ */
+function _runMCEpisode(engine, mlMark, opponentFn) {
+  const board = Array(9).fill(null)
+  let currentPlayer = 'X'
+  let totalMoves = 0
+
+  // Reset trajectory for each player
+  const trajectories = { X: [], O: [] }
+
+  while (true) {
+    const isML = mlMark === 'both' || currentPlayer === mlMark
+    const prevBoard = [...board]
+
+    let action
+    if (isML) {
+      action = engine.chooseAction(board, true)
+      trajectories[currentPlayer].push({ board: prevBoard, action })
+    } else {
+      action = opponentFn(board, currentPlayer)
+    }
+
+    board[action] = currentPlayer
+    totalMoves++
+
+    const winner = getWinner(board)
+    const isDraw = !winner && isBoardFull(board)
+
+    if (winner || isDraw) {
+      const rewards = winner === 'X'
+        ? { X: 1.0, O: -1.0 }
+        : winner === 'O'
+          ? { X: -1.0, O: 1.0 }
+          : { X: 0.5, O: 0.5 }
+
+      const marksToUpdate = mlMark === 'both' ? ['X', 'O'] : [mlMark]
+      let totalDelta = 0
+      let count = 0
+
+      for (const mark of marksToUpdate) {
+        // Feed trajectory into engine
+        engine._trajectory = trajectories[mark]
+        const delta = engine.finishEpisode(rewards[mark])
+        totalDelta += delta
+        count++
+      }
+      engine.decayEpsilon()
+
+      let outcome
+      if (isDraw) outcome = 'DRAW'
+      else if (mlMark === 'both') outcome = winner === 'X' ? 'WIN' : 'LOSS'
+      else outcome = winner === mlMark ? 'WIN' : 'LOSS'
+
+      return { outcome, totalMoves, avgQDelta: count > 0 ? totalDelta / count : 0, epsilon: engine.epsilon }
+    }
+
+    currentPlayer = opponent(currentPlayer)
+  }
+}
+
+/**
+ * Run a single Policy Gradient episode.
+ */
+function _runPGEpisode(engine, mlMark, opponentFn) {
+  const board = Array(9).fill(null)
+  let currentPlayer = 'X'
+  let totalMoves = 0
+
+  const trajectories = { X: [], O: [] }
+
+  while (true) {
+    const isML = mlMark === 'both' || currentPlayer === mlMark
+    const prevBoard = [...board]
+
+    let action
+    if (isML) {
+      action = engine.chooseAction(board, true)
+      trajectories[currentPlayer].push({ board: prevBoard, action, logProb: 0 })
+    } else {
+      action = opponentFn(board, currentPlayer)
+    }
+
+    board[action] = currentPlayer
+    totalMoves++
+
+    const winner = getWinner(board)
+    const isDraw = !winner && isBoardFull(board)
+
+    if (winner || isDraw) {
+      const rewards = winner === 'X'
+        ? { X: 1.0, O: -1.0 }
+        : winner === 'O'
+          ? { X: -1.0, O: 1.0 }
+          : { X: 0.5, O: 0.5 }
+
+      const marksToUpdate = mlMark === 'both' ? ['X', 'O'] : [mlMark]
+      let totalDelta = 0
+      let count = 0
+
+      for (const mark of marksToUpdate) {
+        engine._trajectory = trajectories[mark]
+        const delta = engine.finishEpisode(rewards[mark])
+        totalDelta += delta
+        count++
+      }
+      engine.decayEpsilon()
+
+      let outcome
+      if (isDraw) outcome = 'DRAW'
+      else if (mlMark === 'both') outcome = winner === 'X' ? 'WIN' : 'LOSS'
+      else outcome = winner === mlMark ? 'WIN' : 'LOSS'
+
+      return { outcome, totalMoves, avgQDelta: count > 0 ? totalDelta / count : 0, epsilon: engine.epsilon }
+    }
+
+    currentPlayer = opponent(currentPlayer)
+  }
+}
+
+/** Run one episode using whatever engine/algorithm is active. */
+function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
+  const alg = (algorithm || 'Q_LEARNING').toUpperCase()
+  if (alg === 'SARSA') return _runSarsaEpisode(engine, mlMark, opponentFn)
+  if (alg === 'MONTE_CARLO' || alg === 'MC') return _runMCEpisode(engine, mlMark, opponentFn)
+  if (alg === 'POLICY_GRADIENT' || alg === 'PG') return _runPGEpisode(engine, mlMark, opponentFn)
+  return runEpisode(engine, mlMark, opponentFn)
+}
+
+const CURRICULUM_LEVELS = ['easy', 'medium', 'hard']
+
 async function _runTraining(model, session, { mode, iterations, config }) {
   const { id: sessionId, modelId } = { id: session.id, modelId: model.id }
 
+  // Determine algorithm from config or model
+  const algorithm = config.algorithm || model.algorithm || 'Q_LEARNING'
+
   // Build engine from current model state
-  const engine = new QLearningEngine(model.config)
+  const engine = _buildEngine(model.config, algorithm)
   engine.loadQTable(model.qtable)
 
   // Build opponent function
-  const difficulty = config.difficulty || 'medium'
+  let curriculumLevel = 0  // index into CURRICULUM_LEVELS
+  let difficulty = config.difficulty || 'medium'
   const opponentFn = mode === 'VS_MINIMAX'
     ? (board, player) => minimaxMove(board, difficulty, player)
     : null
   const mlMark = mode === 'SELF_PLAY' ? 'both' : (config.mlMark || 'X')
 
+  // Early stopping config
+  const earlyStop = config.earlyStop || null
+  let bestWinRate = 0
+  let episodesWithoutImprovement = 0
+
+  // Curriculum: rolling window of last 100 outcomes
+  const CURRICULUM_WINDOW = 100
+  const outcomeWindow = []  // recent outcomes for curriculum
+
   const PROGRESS_INTERVAL = Math.max(BATCH_SIZE, Math.floor(iterations / 20))
   const episodeBatch = []
   let wins = 0, losses = 0, draws = 0, totalQDelta = 0
+  let actualEpisodes = 0
 
   try {
     for (let i = 0; i < iterations; i++) {
       // Cooperative cancellation check
       if (cancelledSessions.has(sessionId)) {
         cancelledSessions.delete(sessionId)
-        await _finishSession(sessionId, modelId, engine, iterations, 'CANCELLED', { wins, losses, draws, totalQDelta, i })
+        await _finishSession(sessionId, modelId, engine, actualEpisodes, 'CANCELLED', { wins, losses, draws, totalQDelta })
         return
       }
 
       const t0 = Date.now()
-      const result = runEpisode(engine, mlMark, opponentFn)
+      const result = _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm)
       const durationMs = Date.now() - t0
+      actualEpisodes++
 
       if (result.outcome === 'WIN')       wins++
       else if (result.outcome === 'LOSS') losses++
@@ -551,6 +809,47 @@ async function _runTraining(model, session, { mode, iterations, config }) {
         outcome: result.outcome, totalMoves: result.totalMoves,
         avgQDelta: result.avgQDelta, epsilon: result.epsilon, durationMs,
       })
+
+      // ── Curriculum learning ─────────────────────────────────────────────
+      if (config.curriculum && mode === 'SELF_PLAY') {
+        outcomeWindow.push(result.outcome === 'WIN' ? 1 : 0)
+        if (outcomeWindow.length > CURRICULUM_WINDOW) outcomeWindow.shift()
+
+        if (outcomeWindow.length === CURRICULUM_WINDOW) {
+          const windowWinRate = outcomeWindow.reduce((s, v) => s + v, 0) / CURRICULUM_WINDOW
+          if (windowWinRate > 0.65 && curriculumLevel < CURRICULUM_LEVELS.length - 1) {
+            curriculumLevel++
+            difficulty = CURRICULUM_LEVELS[curriculumLevel]
+            outcomeWindow.length = 0  // reset window
+            _emit(`ml:session:${sessionId}`, 'ml:curriculum_advance', {
+              sessionId, level: curriculumLevel, difficulty, episode: i + 1,
+            })
+            logger.info({ sessionId, difficulty }, 'Curriculum advanced')
+          }
+        }
+      }
+
+      // ── Early stopping ───────────────────────────────────────────────────
+      if (earlyStop && (i + 1) % PROGRESS_INTERVAL === 0) {
+        const currentWinRate = wins / (i + 1)
+        if (currentWinRate > bestWinRate + (earlyStop.minDelta ?? 0.01)) {
+          bestWinRate = currentWinRate
+          episodesWithoutImprovement = 0
+        } else {
+          episodesWithoutImprovement += PROGRESS_INTERVAL
+        }
+        if (episodesWithoutImprovement >= (earlyStop.patience ?? 200)) {
+          // Flush batch
+          if (episodeBatch.length > 0) {
+            await db.trainingEpisode.createMany({ data: episodeBatch })
+            episodeBatch.length = 0
+          }
+          _emit(`ml:session:${sessionId}`, 'ml:early_stop', { sessionId, episode: i + 1, bestWinRate })
+          logger.info({ sessionId, episode: i + 1, bestWinRate }, 'Early stopping triggered')
+          await _finishSession(sessionId, modelId, engine, actualEpisodes, 'COMPLETED', { wins, losses, draws, totalQDelta }, { earlyStop: true, stoppedAt: i + 1 })
+          return
+        }
+      }
 
       // Batch DB write
       if (episodeBatch.length >= BATCH_SIZE || i === iterations - 1) {
@@ -581,22 +880,24 @@ async function _runTraining(model, session, { mode, iterations, config }) {
       }
     }
 
-    await _finishSession(sessionId, modelId, engine, iterations, 'COMPLETED', { wins, losses, draws, totalQDelta, i: iterations })
+    await _finishSession(sessionId, modelId, engine, actualEpisodes, 'COMPLETED', { wins, losses, draws, totalQDelta })
   } catch (err) {
     logger.error({ err, sessionId, modelId }, 'Training failed')
     await db.mLModel.update({ where: { id: modelId }, data: { status: 'IDLE' } })
     await db.trainingSession.update({ where: { id: sessionId }, data: { status: 'FAILED', completedAt: new Date() } })
     _emit(`ml:session:${sessionId}`, 'ml:error', { sessionId, error: err.message })
+    _processNextInQueue()
   }
 }
 
-async function _finishSession(sessionId, modelId, engine, iterations, status, { wins, losses, draws, totalQDelta }) {
+async function _finishSession(sessionId, modelId, engine, iterations, status, { wins, losses, draws, totalQDelta }, extraMeta = {}) {
   const summary = {
     wins, losses, draws,
     winRate:    iterations > 0 ? wins / iterations : 0,
     avgQDelta:  iterations > 0 ? totalQDelta / iterations : 0,
     finalEpsilon: engine.epsilon,
     stateCount: engine.stateCount,
+    ...extraMeta,
   }
   const updatedConfig = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
   await db.$transaction([
@@ -617,6 +918,9 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
   engineCache.delete(modelId)
   _emit(`ml:session:${sessionId}`, status === 'COMPLETED' ? 'ml:complete' : 'ml:cancelled', { sessionId, summary })
   logger.info({ sessionId, modelId, status, ...summary }, 'Training finished')
+
+  // Start next queued session if any
+  _processNextInQueue()
 
   // Forgetting detection: compare vsHard win rate with previous benchmark
   try {
@@ -646,6 +950,87 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
   } catch (forgettingErr) {
     logger.warn({ forgettingErr }, 'Forgetting detection check failed (non-fatal)')
   }
+}
+
+// ─── Hyperparameter Search ────────────────────────────────────────────────────
+
+/**
+ * Run a grid search over hyperparameter combinations.
+ *
+ * @param {string} modelId
+ * @param {{ paramGrid: Object, gamesPerConfig: number }} opts
+ * @returns {{ bestConfig: Object, results: Array }} best config and all results
+ */
+export async function startHyperparamSearch(modelId, { paramGrid = {}, gamesPerConfig = 500 } = {}) {
+  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  if (!model) throw new Error('Model not found')
+
+  // Build cartesian product of paramGrid
+  const keys   = Object.keys(paramGrid)
+  const values = keys.map(k => paramGrid[k])
+
+  function* cartesian(arrays, current = []) {
+    if (current.length === arrays.length) { yield [...current]; return }
+    for (const v of arrays[current.length]) {
+      current.push(v)
+      yield* cartesian(arrays, current)
+      current.pop()
+    }
+  }
+
+  const configs = keys.length > 0
+    ? [...cartesian(values)].map(combo => Object.fromEntries(keys.map((k, i) => [k, combo[i]])))
+    : [{}]
+
+  const BENCH_GAMES = 50
+  const opponentFn  = (board, player) => minimaxMove(board, 'hard', player)
+  const results     = []
+
+  for (const cfg of configs) {
+    const mergedConfig = { ...DEFAULT_CONFIG, ...model.config, ...cfg, currentEpsilon: cfg.epsilonStart ?? DEFAULT_CONFIG.epsilonStart }
+    const engine = new QLearningEngine(mergedConfig)
+    // Load current qtable as starting point
+    engine.loadQTable(model.qtable && typeof model.qtable === 'object' ? { ...model.qtable } : {})
+
+    // Train for gamesPerConfig episodes vs VS_MINIMAX hard
+    for (let i = 0; i < gamesPerConfig; i++) {
+      runEpisode(engine, 'X', opponentFn)
+    }
+
+    // Evaluate: 50 exploitation games vs hard
+    const greedyEng = new QLearningEngine({ ...mergedConfig, currentEpsilon: 0, epsilonMin: 0 })
+    greedyEng.loadQTable(engine.toJSON())
+    greedyEng.epsilon = 0
+    let benchWins = 0
+    for (let i = 0; i < BENCH_GAMES; i++) {
+      const res = runEpisode(greedyEng, 'X', opponentFn)
+      if (res.outcome === 'WIN') benchWins++
+    }
+
+    const winRate = benchWins / BENCH_GAMES
+    results.push({ config: cfg, winRate, wins: benchWins, total: BENCH_GAMES })
+  }
+
+  // Sort best first
+  results.sort((a, b) => b.winRate - a.winRate)
+  const bestConfig = results[0]?.config ?? {}
+
+  // Save best config + all results to model metadata
+  const currentMetadata = (model.config && typeof model.config === 'object') ? model.config : {}
+  await db.mLModel.update({
+    where: { id: modelId },
+    data: {
+      config: {
+        ...currentMetadata,
+        ...bestConfig,
+        hyperSearchResults: results,
+        hyperSearchAt: new Date().toISOString(),
+      },
+    },
+  })
+
+  logger.info({ modelId, configsSearched: configs.length, bestConfig, bestWinRate: results[0]?.winRate }, 'Hyperparam search complete')
+  return { bestConfig, results }
 }
 
 function _emit(room, event, data) {

@@ -64,6 +64,7 @@ export const api = {
     startTournament:  (data, tok)       => api.post('/ml/tournament', data, tok),
     listTournaments:  ()                => api.get('/ml/tournaments'),
     getTournament:    (id)              => api.get(`/ml/tournament/${id}`),
+    startHyperparamSearch: (id, body, tok) => api.post(`/ml/models/${id}/hypersearch`, body, tok),
   },
 
   rooms: {

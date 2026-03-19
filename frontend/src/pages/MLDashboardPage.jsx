@@ -14,8 +14,14 @@ const MODES = [
   { value: 'VS_HUMAN', label: 'vs Human', desc: 'Learns from real player games' },
 ]
 const DIFFICULTIES = ['easy', 'medium', 'hard']
+const ALGORITHMS = [
+  { value: 'Q_LEARNING',      label: 'Q-Learning',     desc: 'Off-policy TD control' },
+  { value: 'SARSA',           label: 'SARSA',           desc: 'On-policy TD control' },
+  { value: 'MONTE_CARLO',     label: 'Monte Carlo',     desc: 'Every-visit MC control' },
+  { value: 'POLICY_GRADIENT', label: 'Policy Gradient', desc: 'REINFORCE (softmax policy)' },
+]
 const STATUS_COLOR = { IDLE: 'teal', TRAINING: 'blue' }
-const SESSION_COLOR = { COMPLETED: 'teal', RUNNING: 'blue', FAILED: 'red', CANCELLED: 'amber', PENDING: 'gray' }
+const SESSION_COLOR = { COMPLETED: 'teal', RUNNING: 'blue', FAILED: 'red', CANCELLED: 'amber', PENDING: 'gray', QUEUED: 'yellow' }
 
 export default function MLDashboardPage() {
   const [models, setModels]           = useState([])
@@ -25,6 +31,7 @@ export default function MLDashboardPage() {
   const [showClone,  setShowClone]    = useState(false)
   const [showImport, setShowImport]   = useState(false)
   const [regressions, setRegressions] = useState(new Set())
+  const [toasts, setToasts]           = useState([])
 
   const selected = models.find(m => m.id === selectedId)
 
@@ -35,14 +42,30 @@ export default function MLDashboardPage() {
 
   useEffect(() => { loadModels() }, [loadModels])
 
+  const addToast = useCallback((msg, color = 'blue') => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, msg, color }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
+  }, [])
+
   useEffect(() => {
     const socket = getSocket()
     if (!socket.connected) socket.connect()
     socket.on('ml:regression_detected', ({ modelId }) => {
       setRegressions(prev => new Set([...prev, modelId]))
     })
-    return () => { socket.off('ml:regression_detected') }
-  }, [])
+    socket.on('ml:curriculum_advance', ({ difficulty }) => {
+      addToast(`Curriculum advanced! Now training at: ${difficulty}`, 'teal')
+    })
+    socket.on('ml:early_stop', () => {
+      addToast('Early stopping triggered', 'amber')
+    })
+    return () => {
+      socket.off('ml:regression_detected')
+      socket.off('ml:curriculum_advance')
+      socket.off('ml:early_stop')
+    }
+  }, [addToast])
 
   // Auto-select first model
   useEffect(() => {
@@ -179,6 +202,20 @@ export default function MLDashboardPage() {
       {showCreate && <CreateModelModal onClose={() => setShowCreate(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowCreate(false) }} />}
       {showClone  && selected && <CloneModelModal src={selected} onClose={() => setShowClone(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowClone(false) }} />}
       {showImport && <ImportModelModal onClose={() => setShowImport(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowImport(false) }} />}
+
+      {/* Toast notifications */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id}
+            className="px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg transition-all"
+            style={{
+              backgroundColor: t.color === 'teal' ? 'var(--color-teal-600)' : t.color === 'amber' ? 'var(--color-amber-600)' : 'var(--color-blue-600)',
+              color: 'white',
+            }}>
+            {t.msg}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -186,14 +223,25 @@ export default function MLDashboardPage() {
 // ─── Train Tab ───────────────────────────────────────────────────────────────
 
 function TrainTab({ model, onComplete }) {
-  const [mode, setMode]             = useState('SELF_PLAY')
-  const [iterations, setIterations] = useState(1000)
-  const [difficulty, setDifficulty] = useState('medium')
-  const [running, setRunning]       = useState(false)
-  const [sessionId, setSessionId]   = useState(null)
-  const [progress, setProgress]     = useState(null)
-  const [chartData, setChartData]   = useState([])
+  const [mode, setMode]                     = useState('SELF_PLAY')
+  const [iterations, setIterations]         = useState(1000)
+  const [difficulty, setDifficulty]         = useState('medium')
+  const [algorithm, setAlgorithm]           = useState(model.algorithm || 'Q_LEARNING')
+  const [curriculum, setCurriculum]         = useState(false)
+  const [earlyStopEnabled, setEarlyStop]    = useState(false)
+  const [patience, setPatience]             = useState(200)
+  const [minDelta, setMinDelta]             = useState(0.01)
+  const [sessions, setSessions]             = useState([])
+  const [running, setRunning]               = useState(false)
+  const [sessionId, setSessionId]           = useState(null)
+  const [progress, setProgress]             = useState(null)
+  const [chartData, setChartData]           = useState([])
   const socketRef = useRef(null)
+
+  // Load sessions to show queue status
+  useEffect(() => {
+    api.ml.getSessions(model.id).then(r => setSessions(r.sessions)).catch(() => {})
+  }, [model.id])
 
   // Cleanup socket listeners on unmount
   useEffect(() => {
@@ -210,9 +258,15 @@ function TrainTab({ model, onComplete }) {
 
   async function handleStart() {
     const token = await window.Clerk?.session?.getToken()
-    const cfg = mode === 'VS_MINIMAX' ? { difficulty } : {}
+    const cfg = {
+      ...(mode === 'VS_MINIMAX' ? { difficulty } : {}),
+      algorithm,
+      ...(curriculum ? { curriculum: true } : {}),
+      ...(earlyStopEnabled ? { earlyStop: { patience, minDelta } } : {}),
+    }
     try {
       const { session } = await api.ml.train(model.id, { mode, iterations, config: cfg }, token)
+      setSessions(prev => [session, ...prev])
       setSessionId(session.id)
       setRunning(true)
       setProgress(null)
@@ -282,6 +336,21 @@ function TrainTab({ model, onComplete }) {
               </div>
             </div>
 
+            {/* Algorithm */}
+            <div>
+              <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Algorithm</label>
+              <div className="flex flex-wrap gap-2">
+                {ALGORITHMS.map(a => (
+                  <button key={a.value} onClick={() => setAlgorithm(a.value)}
+                    className={`flex-1 min-w-[120px] text-left rounded-lg border p-3 transition-all ${algorithm === a.value ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : ''}`}
+                    style={{ borderColor: algorithm === a.value ? undefined : 'var(--border-default)', backgroundColor: algorithm === a.value ? undefined : 'var(--bg-base)' }}>
+                    <p className="text-sm font-semibold">{a.label}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{a.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Difficulty (VS_MINIMAX only) */}
             {mode === 'VS_MINIMAX' && (
               <div>
@@ -298,6 +367,17 @@ function TrainTab({ model, onComplete }) {
               </div>
             )}
 
+            {/* Curriculum learning (self-play only) */}
+            {mode === 'SELF_PLAY' && (
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="curriculum" checked={curriculum} onChange={e => setCurriculum(e.target.checked)}
+                  className="accent-[var(--color-blue-600)]" />
+                <label htmlFor="curriculum" className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Curriculum learning — auto-advance difficulty when win rate &gt; 65%
+                </label>
+              </div>
+            )}
+
             {/* Iterations */}
             <div>
               <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
@@ -311,8 +391,37 @@ function TrainTab({ model, onComplete }) {
               </div>
             </div>
 
-            <Btn onClick={handleStart} disabled={model.status === 'TRAINING'}>
-              {model.status === 'TRAINING' ? 'Already training…' : 'Start Training'}
+            {/* Early stopping */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="earlyStop" checked={earlyStopEnabled} onChange={e => setEarlyStop(e.target.checked)}
+                  className="accent-[var(--color-blue-600)]" />
+                <label htmlFor="earlyStop" className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Early stopping
+                </label>
+              </div>
+              {earlyStopEnabled && (
+                <div className="ml-6 flex flex-wrap gap-4">
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Patience (episodes)</label>
+                    <input type="number" min="50" max="10000" step="50" value={patience}
+                      onChange={e => setPatience(Number(e.target.value))}
+                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Min delta</label>
+                    <input type="number" min="0.001" max="0.1" step="0.001" value={minDelta}
+                      onChange={e => setMinDelta(Number(e.target.value))}
+                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Btn onClick={handleStart} disabled={running}>
+              Start Training
             </Btn>
           </div>
         </Card>
@@ -373,6 +482,22 @@ function TrainTab({ model, onComplete }) {
               </ChartPanel>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Queued sessions */}
+      {sessions.some(s => s.status === 'PENDING') && (
+        <Card>
+          <SectionLabel>Queued Sessions</SectionLabel>
+          <div className="mt-2 space-y-1">
+            {sessions.filter(s => s.status === 'PENDING').map(s => (
+              <div key={s.id} className="flex items-center justify-between text-xs py-1.5 px-2 rounded-lg"
+                style={{ backgroundColor: 'var(--bg-base)' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{s.mode.replace('_', ' ')} · {s.iterations.toLocaleString()} eps</span>
+                <StatusBadge status="QUEUED" tiny />
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
@@ -638,7 +763,7 @@ function ExplainabilityTab({ model }) {
     <div className="space-y-4">
       {/* Section toggle */}
       <div className="flex gap-2 flex-wrap">
-        {[['position', 'Position Analysis'], ['opening', 'Opening Book'], ['diff', 'Version Diff']].map(([s, label]) => (
+        {[['position', 'Position Analysis'], ['opening', 'Opening Book'], ['diff', 'Version Diff'], ['hypersearch', 'Hyperparam Search']].map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeSection === s ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
             style={{ backgroundColor: activeSection === s ? undefined : 'var(--bg-surface-hover)', color: activeSection === s ? undefined : 'var(--text-secondary)' }}>
@@ -759,8 +884,150 @@ function ExplainabilityTab({ model }) {
       )}
 
       {activeSection === 'diff' && <VersionDiffViewer model={model} />}
+      {activeSection === 'hypersearch' && <HyperparamSearchPanel model={model} />}
     </div>
   )
+}
+
+// ─── Hyperparameter Search Panel ──────────────────────────────────────────────
+
+function HyperparamSearchPanel({ model }) {
+  const [alphaMin,        setAlphaMin]        = useState(0.1)
+  const [alphaMax,        setAlphaMax]        = useState(0.5)
+  const [gammaMin,        setGammaMin]        = useState(0.8)
+  const [gammaMax,        setGammaMax]        = useState(0.95)
+  const [epsDecayMin,     setEpsDecayMin]     = useState(0.99)
+  const [epsDecayMax,     setEpsDecayMax]     = useState(0.999)
+  const [gamesPerConfig,  setGamesPerConfig]  = useState(500)
+  const [running,  setRunning]  = useState(false)
+  const [results,  setResults]  = useState(null)
+  const [error,    setError]    = useState(null)
+
+  async function handleRun() {
+    setRunning(true)
+    setError(null)
+    setResults(null)
+    try {
+      const token = await window.Clerk?.session?.getToken()
+      const paramGrid = {
+        learningRate:  linspace(alphaMin, alphaMax, 3),
+        discountFactor: linspace(gammaMin, gammaMax, 2),
+        epsilonDecay:  linspace(epsDecayMin, epsDecayMax, 2),
+      }
+      const data = await api.ml.startHyperparamSearch(model.id, { paramGrid, gamesPerConfig }, token)
+      setResults(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  async function handleApplyBest() {
+    if (!results?.bestConfig) return
+    const token = await window.Clerk?.session?.getToken()
+    await api.ml.updateModel(model.id, { config: { ...model.config, ...results.bestConfig } }, token)
+  }
+
+  return (
+    <Card>
+      <SectionLabel>Hyperparameter Search</SectionLabel>
+      <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+        Grid search over α, γ, εDecay ranges. Each config trains for {gamesPerConfig} episodes vs Hard then evaluates 50 games.
+      </p>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <RangeInputPair label="Learning rate (α)" min={alphaMin} max={alphaMax} setMin={setAlphaMin} setMax={setAlphaMax} step={0.05} />
+        <RangeInputPair label="Discount factor (γ)" min={gammaMin} max={gammaMax} setMin={setGammaMin} setMax={setGammaMax} step={0.05} />
+        <RangeInputPair label="Epsilon decay" min={epsDecayMin} max={epsDecayMax} setMin={setEpsDecayMin} setMax={setEpsDecayMax} step={0.001} />
+        <div>
+          <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Games per config</label>
+          <input type="number" min="100" max="2000" step="100" value={gamesPerConfig}
+            onChange={e => setGamesPerConfig(Number(e.target.value))}
+            className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <Btn onClick={handleRun} disabled={running}>
+          {running ? 'Searching…' : 'Run Search'}
+        </Btn>
+        {results?.bestConfig && (
+          <Btn onClick={handleApplyBest} variant="ghost">Apply best config</Btn>
+        )}
+      </div>
+
+      {error && <p className="text-xs mb-3" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+
+      {running && (
+        <div className="flex items-center gap-3 py-4">
+          <Spinner />
+          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Running grid search — this may take a moment…</span>
+        </div>
+      )}
+
+      {results && (
+        <div>
+          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
+            Best: α={results.bestConfig.learningRate} γ={results.bestConfig.discountFactor} εDecay={results.bestConfig.epsilonDecay}
+            {' '}— {Math.round((results.results[0]?.winRate ?? 0) * 100)}% win rate
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left" style={{ color: 'var(--text-muted)' }}>
+                  <th className="pb-2 pr-3">#</th>
+                  <th className="pb-2 pr-3">α</th>
+                  <th className="pb-2 pr-3">γ</th>
+                  <th className="pb-2 pr-3">εDecay</th>
+                  <th className="pb-2 pr-3">Win rate</th>
+                  <th className="pb-2">W / Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.results.map((r, i) => (
+                  <tr key={i} className="border-t" style={{ borderColor: 'var(--border-default)' }}>
+                    <td className="py-1.5 pr-3 font-bold" style={{ color: i === 0 ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>{i + 1}</td>
+                    <td className="py-1.5 pr-3 font-mono">{r.config.learningRate}</td>
+                    <td className="py-1.5 pr-3 font-mono">{r.config.discountFactor}</td>
+                    <td className="py-1.5 pr-3 font-mono">{r.config.epsilonDecay}</td>
+                    <td className="py-1.5 pr-3 font-bold" style={{ color: r.winRate >= 0.5 ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
+                      {Math.round(r.winRate * 100)}%
+                    </td>
+                    <td className="py-1.5" style={{ color: 'var(--text-muted)' }}>{r.wins} / {r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function RangeInputPair({ label, min, max, setMin, setMax, step }) {
+  return (
+    <div>
+      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>{label}</label>
+      <div className="flex items-center gap-2">
+        <input type="number" step={step} value={min} onChange={e => setMin(Number(e.target.value))}
+          className="w-20 text-xs rounded-lg border px-2 py-1 outline-none"
+          style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>–</span>
+        <input type="number" step={step} value={max} onChange={e => setMax(Number(e.target.value))}
+          className="w-20 text-xs rounded-lg border px-2 py-1 outline-none"
+          style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+      </div>
+    </div>
+  )
+}
+
+function linspace(min, max, n) {
+  if (n <= 1) return [min]
+  const step = (max - min) / (n - 1)
+  return Array.from({ length: n }, (_, i) => parseFloat((min + step * i).toFixed(6)))
 }
 
 // ─── Version Diff Viewer ──────────────────────────────────────────────────────
@@ -1677,7 +1944,7 @@ function ChartPanel({ label, children }) {
 }
 
 function StatusBadge({ status, tiny }) {
-  const colors = { IDLE: ['var(--color-teal-100)', 'var(--color-teal-700)'], TRAINING: ['var(--color-blue-100)', 'var(--color-blue-700)'], COMPLETED: ['var(--color-teal-100)', 'var(--color-teal-700)'], FAILED: ['var(--color-red-100)', 'var(--color-red-700)'], CANCELLED: ['var(--color-amber-100)', 'var(--color-amber-700)'], PENDING: ['var(--color-gray-100)', 'var(--color-gray-600)'], RUNNING: ['var(--color-blue-100)', 'var(--color-blue-700)'] }
+  const colors = { IDLE: ['var(--color-teal-100)', 'var(--color-teal-700)'], TRAINING: ['var(--color-blue-100)', 'var(--color-blue-700)'], COMPLETED: ['var(--color-teal-100)', 'var(--color-teal-700)'], FAILED: ['var(--color-red-100)', 'var(--color-red-700)'], CANCELLED: ['var(--color-amber-100)', 'var(--color-amber-700)'], PENDING: ['var(--color-gray-100)', 'var(--color-gray-600)'], RUNNING: ['var(--color-blue-100)', 'var(--color-blue-700)'], QUEUED: ['#fef9c3', '#a16207'] }
   const [bg, text] = colors[status] || colors.PENDING
   return (
     <span className={`font-semibold rounded-full ${tiny ? 'text-[9px] px-1.5 py-0.5' : 'text-xs px-2 py-0.5'}`}
