@@ -5,7 +5,8 @@
 
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
-import { createClient } from 'ioredis'
+import ioredis from 'ioredis'
+const { createClient } = ioredis
 import { roomManager } from './roomManager.js'
 import logger from '../logger.js'
 
