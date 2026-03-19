@@ -38,6 +38,11 @@ export const api = {
     list: () => api.get('/rooms'),
   },
 
+  users: {
+    sync: (token) => api.post('/users/sync', {}, token),
+    stats: (id) => api.get(`/users/${id}/stats`),
+  },
+
   games: {
     record: (body, token) => api.post('/games', body, token),
   },
