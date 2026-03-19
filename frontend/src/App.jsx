@@ -8,6 +8,7 @@ import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import LogViewerPage from './pages/LogViewerPage.jsx'
 import AIDashboardPage from './pages/AIDashboardPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
+import MLDashboardPage from './pages/MLDashboardPage.jsx'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/admin/logs" element={<LogViewerPage />} />
           <Route path="/admin/ai" element={<AIDashboardPage />} />
+          <Route path="/admin/ml" element={<MLDashboardPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

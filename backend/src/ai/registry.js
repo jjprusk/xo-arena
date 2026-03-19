@@ -7,6 +7,7 @@
  */
 
 import { minimaxImplementation } from './minimax.js'
+import { mlImplementation } from './mlImplementation.js'
 
 class AIRegistry {
   constructor() {
@@ -47,5 +48,6 @@ const registry = new AIRegistry()
 
 // Register built-in implementations
 registry.register(minimaxImplementation)
+registry.register(mlImplementation)
 
 export default registry

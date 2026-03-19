@@ -134,6 +134,18 @@ export default function AppLayout() {
             AI
           </NavLink>
           <NavLink
+            to="/admin/ml"
+            className={({ isActive }) =>
+              `text-xs font-medium px-2 py-1 rounded-md transition-colors ${
+                isActive
+                  ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
+                  : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
+              }`
+            }
+          >
+            ML
+          </NavLink>
+          <NavLink
             to="/admin/logs"
             className={({ isActive }) =>
               `text-xs font-medium px-2 py-1 rounded-md transition-colors ${

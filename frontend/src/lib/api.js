@@ -30,8 +30,27 @@ export const api = {
 
   ai: {
     implementations: () => api.get('/ai/implementations'),
-    move: (board, difficulty, player, implementation) =>
-      api.post('/ai/move', { board, difficulty, player, implementation }),
+    move: (board, difficulty, player, implementation, modelId) =>
+      api.post('/ai/move', { board, difficulty, player, implementation, modelId }),
+  },
+
+  ml: {
+    listModels:       ()           => api.get('/ml/models'),
+    createModel:      (body, tok)  => api.post('/ml/models', body, tok),
+    getModel:         (id)         => api.get(`/ml/models/${id}`),
+    updateModel:      (id, b, tok) => api.patch(`/ml/models/${id}`, b, tok),
+    deleteModel:      (id, tok)    => request('DELETE', `/ml/models/${id}`, null, tok),
+    resetModel:       (id, tok)    => api.post(`/ml/models/${id}/reset`, {}, tok),
+    cloneModel:       (id, b, tok) => api.post(`/ml/models/${id}/clone`, b, tok),
+    getQTable:        (id)         => api.get(`/ml/models/${id}/qtable`),
+    explainMove:      (id, board)  => api.post(`/ml/models/${id}/explain`, { board }),
+    train:            (id, b, tok) => api.post(`/ml/models/${id}/train`, b, tok),
+    getSessions:      (id)         => api.get(`/ml/models/${id}/sessions`),
+    getSession:       (id)         => api.get(`/ml/sessions/${id}`),
+    getEpisodes:      (id, page)   => api.get(`/ml/sessions/${id}/episodes?page=${page}&limit=500`),
+    cancelSession:    (id, tok)    => api.post(`/ml/sessions/${id}/cancel`, {}, tok),
+    getCheckpoints:   (id)         => api.get(`/ml/models/${id}/checkpoints`),
+    restoreCheckpoint:(id,cp,tok)  => api.post(`/ml/models/${id}/checkpoints/${cp}/restore`, {}, tok),
   },
 
   rooms: {
