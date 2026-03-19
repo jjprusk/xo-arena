@@ -30,7 +30,22 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex flex-col min-h-dvh">
+    <div className="flex flex-col min-h-dvh relative">
+      {/* Mountain background */}
+      <div
+        aria-hidden="true"
+        className="fixed bottom-0 left-0 right-0 pointer-events-none select-none"
+        style={{
+          zIndex: 0,
+          height: '55vh',
+          opacity: 0.06,
+          backgroundImage: 'url(/mountain-bg.svg)',
+          backgroundSize: '100% 100%',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'bottom center',
+          filter: 'var(--mountain-filter)',
+        }}
+      />
       {/* Top nav bar */}
       <header
         className="sticky top-0 z-40 flex items-center justify-between px-6 md:px-8 h-14 border-b"
@@ -146,7 +161,7 @@ export default function AppLayout() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6">
+      <main className="flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6 relative" style={{ zIndex: 1 }}>
         <Outlet />
       </main>
 
