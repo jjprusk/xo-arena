@@ -38,6 +38,20 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* About */}
+      <section className="space-y-3">
+        <SectionLabel>About</SectionLabel>
+        <div
+          className="rounded-xl border p-5 flex items-center justify-between"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+        >
+          <span className="font-medium">XO Arena</span>
+          <span className="text-sm font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
+            v{import.meta.env.VITE_APP_VERSION}
+          </span>
+        </div>
+      </section>
+
       {/* Sound */}
       <section className="space-y-3">
         <SectionLabel>Sound</SectionLabel>
