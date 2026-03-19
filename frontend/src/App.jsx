@@ -7,6 +7,7 @@ import SettingsPage from './pages/SettingsPage.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import LogViewerPage from './pages/LogViewerPage.jsx'
 import AIDashboardPage from './pages/AIDashboardPage.jsx'
+import ProfilePage from './pages/ProfilePage.jsx'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route index element={<Navigate to="/play" replace />} />
           <Route path="/play" element={<PlayPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/admin/logs" element={<LogViewerPage />} />

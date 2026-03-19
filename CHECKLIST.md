@@ -53,7 +53,7 @@ Tracks every task from the Development Plan. `Done` = implementation complete. `
 | FE-08 | Game board — AI thinking state (spinner, board dim) | ✓ | ✓ |
 | FE-09 | Game board — Howler.js sound effects | ✓ | — |
 | FE-10 | Game board — forfeit dialog + rematch/new game | ✓ | ✓ |
-| FE-11 | Account / Profile screen | | |
+| FE-11 | Account / Profile screen | ✓ | ✓ |
 | FE-12 | Settings screen (all sections) | ✓ | — |
 | FE-13 | Log transport (batch → POST /api/v1/logs) | ✓ | — |
 | **v2 — PvP, Real-Time & Full Feature Set** |
