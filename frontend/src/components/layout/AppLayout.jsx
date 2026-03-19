@@ -33,7 +33,7 @@ export default function AppLayout() {
     <div className="flex flex-col min-h-dvh">
       {/* Top nav bar */}
       <header
-        className="sticky top-0 z-40 flex items-center justify-between px-6 h-14 border-b"
+        className="sticky top-0 z-40 flex items-center justify-between px-6 md:px-8 h-14 border-b"
         style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
         {/* Logo */}
@@ -146,7 +146,7 @@ export default function AppLayout() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 px-4 py-6 pb-20 md:pb-6">
+      <main className="flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6">
         <Outlet />
       </main>
 
