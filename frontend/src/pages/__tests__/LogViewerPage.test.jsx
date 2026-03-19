@@ -88,7 +88,7 @@ describe('LogViewerPage', () => {
     render(<LogViewerPage />)
     await waitFor(() => expect(screen.getByText('Server started')).toBeDefined())
 
-    const searchInput = screen.getByPlaceholderText('Search message / regex…')
+    const searchInput = screen.getByPlaceholderText('Search message…')
     fireEvent.change(searchInput, { target: { value: 'Reconnect' } })
 
     await waitFor(() => {

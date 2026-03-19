@@ -26,7 +26,6 @@ export default function StatsPage() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  // When auth is wired, fetch real stats. For now show placeholder.
   useEffect(() => {
     setStats(DEMO_STATS)
   }, [])
@@ -40,29 +39,24 @@ export default function StatsPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
-      <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-        Stats
-      </h1>
+    <div className="max-w-lg mx-auto space-y-8">
+      <PageHeader title="Stats" />
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Total Games" value={stats.totalGames} />
-        <StatCard
-          label="Win Rate"
-          value={`${Math.round(stats.winRate * 100)}%`}
-          color="var(--color-teal-600)"
-        />
+        <StatCard label="Win Rate" value={`${Math.round(stats.winRate * 100)}%`} color="var(--color-teal-600)" />
         <StatCard label="Wins" value={stats.wins} color="var(--color-teal-600)" />
         <StatCard label="Draws" value={stats.draws} color="var(--color-amber-600)" />
       </div>
 
       {/* Win rate by mode */}
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-muted)' }}>
-          Win Rate by Mode
-        </h2>
-        <div className="rounded-xl border p-4 space-y-3" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+      <section className="space-y-3">
+        <SectionLabel>Win Rate by Mode</SectionLabel>
+        <div
+          className="rounded-xl border p-5 space-y-4"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+        >
           <WinRateBar label="PvP" rate={stats.pvp.rate} color="var(--color-blue-600)" />
           <WinRateBar label="AI — Easy" rate={stats.pvai.easy.rate} color="var(--color-teal-600)" />
           <WinRateBar label="AI — Medium" rate={stats.pvai.medium.rate} color="var(--color-teal-600)" />
@@ -70,12 +64,10 @@ export default function StatsPage() {
         </div>
       </section>
 
-      {/* Recent games streak grid */}
+      {/* Recent games */}
       {stats.recentGames.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-muted)' }}>
-            Last {stats.recentGames.length} Games
-          </h2>
+        <section className="space-y-3">
+          <SectionLabel>Last {stats.recentGames.length} Games</SectionLabel>
           <div className="flex gap-1.5 flex-wrap">
             {stats.recentGames.map((g, i) => {
               const result = g.winnerId === 'me' ? 'win' : g.outcome === 'DRAW' ? 'draw' : 'loss'
@@ -83,7 +75,7 @@ export default function StatsPage() {
                 <div
                   key={i}
                   title={result}
-                  className="w-4 h-4 rounded-sm"
+                  className="w-5 h-5 rounded"
                   style={{ backgroundColor: OUTCOME_COLOR[result] }}
                 />
               )
@@ -93,7 +85,10 @@ export default function StatsPage() {
       )}
 
       {/* Auth prompt */}
-      <div className="rounded-xl border p-4 text-center" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+      <div
+        className="rounded-xl border p-5 text-center"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      >
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
           Sign in to track stats across sessions.
         </p>
@@ -104,11 +99,14 @@ export default function StatsPage() {
 
 function StatCard({ label, value, color }) {
   return (
-    <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
-      <div className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: color || 'var(--text-primary)' }}>
+    <div
+      className="rounded-xl border p-5"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)', color: color || 'var(--text-primary)' }}>
         {value}
       </div>
-      <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{label}</div>
+      <div className="text-xs mt-1.5 font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</div>
     </div>
   )
 }
@@ -116,16 +114,32 @@ function StatCard({ label, value, color }) {
 function WinRateBar({ label, rate, color }) {
   return (
     <div>
-      <div className="flex justify-between text-sm mb-1">
-        <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
-        <span style={{ color: 'var(--text-secondary)' }}>{Math.round(rate * 100)}%</span>
+      <div className="flex justify-between text-sm mb-1.5">
+        <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+        <span className="font-semibold tabular-nums" style={{ color }}>{Math.round(rate * 100)}%</span>
       </div>
       <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-100)' }}>
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full rounded-full transition-all duration-500"
           style={{ width: `${Math.round(rate * 100)}%`, backgroundColor: color }}
         />
       </div>
     </div>
+  )
+}
+
+function PageHeader({ title }) {
+  return (
+    <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+      <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
+    </div>
+  )
+}
+
+function SectionLabel({ children }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+      {children}
+    </h2>
   )
 }

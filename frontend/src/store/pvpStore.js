@@ -26,17 +26,18 @@ export const usePvpStore = create((set, get) => ({
   // Connection
   connected: false,
   error: null,
+  isAutoRoom: false,
 
   // ── Actions ──────────────────────────────────────────────────────
 
   /**
    * Host creates a room.
    */
-  createRoom() {
+  createRoom({ auto = false } = {}) {
     const socket = connectSocket()
     get()._registerListeners(socket)
     socket.emit('room:create', { spectatorAllowed: true })
-    set({ status: 'waiting', role: 'host', error: null })
+    set({ status: 'waiting', role: 'host', error: null, isAutoRoom: auto })
   },
 
   /**
@@ -94,7 +95,7 @@ export const usePvpStore = create((set, get) => ({
       slug: null, displayName: null, role: null, myMark: null,
       status: 'idle', board: Array(9).fill(null), currentTurn: 'X',
       scores: { X: 0, O: 0 }, round: 1, winner: null, winLine: null,
-      spectatorCount: 0, connected: false, error: null,
+      spectatorCount: 0, connected: false, error: null, isAutoRoom: false,
     })
   },
 

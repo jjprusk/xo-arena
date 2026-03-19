@@ -5,7 +5,11 @@ import {
 import { api } from '../lib/api.js'
 
 const DIFFICULTIES = ['', 'easy', 'medium', 'hard']
-const DIFFICULTY_COLOR = { easy: 'var(--color-teal-600)', medium: 'var(--color-amber-600)', hard: 'var(--color-red-600)' }
+const DIFFICULTY_COLOR = {
+  easy: 'var(--color-teal-600)',
+  medium: 'var(--color-amber-600)',
+  hard: 'var(--color-red-600)',
+}
 const CELL_LABELS = ['TL', 'TM', 'TR', 'ML', 'C', 'MR', 'BL', 'BM', 'BR']
 
 export default function AIDashboardPage() {
@@ -15,12 +19,10 @@ export default function AIDashboardPage() {
   const [difficulty, setDifficulty] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Fetch summary once (not filtered)
   useEffect(() => {
     api.get('/admin/ai/summary').then(setSummary).catch(() => {})
   }, [])
 
-  // Fetch histogram + heatmap when difficulty changes
   useEffect(() => {
     setLoading(true)
     const qs = difficulty ? `?difficulty=${difficulty}` : ''
@@ -28,10 +30,7 @@ export default function AIDashboardPage() {
       api.get(`/admin/ai/histogram${qs}`),
       api.get(`/admin/ai/heatmap${qs}`),
     ])
-      .then(([h, hm]) => {
-        setHistogram(h.histogram || [])
-        setHeatmap(hm.heatmap || [])
-      })
+      .then(([h, hm]) => { setHistogram(h.histogram || []); setHeatmap(hm.heatmap || []) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [difficulty])
@@ -41,18 +40,19 @@ export default function AIDashboardPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-          AI Dashboard
-        </h1>
-        <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
+      <div className="pb-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-default)' }}>
+        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>AI Dashboard</h1>
+        <span
+          className="text-xs font-semibold px-2.5 py-1 rounded-full"
+          style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}
+        >
           Admin
         </span>
       </div>
 
-      {/* Scorecard */}
-      <section>
-        <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-secondary)' }}>Summary</h2>
+      {/* Summary scorecard */}
+      <section className="space-y-3">
+        <SectionLabel>Summary</SectionLabel>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard label="Total Moves" value={summary.total.toLocaleString()} />
           {summary.rows.map((row) => (
@@ -66,7 +66,7 @@ export default function AIDashboardPage() {
           ))}
         </div>
         {summary.rows.length === 0 && (
-          <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
             No moves recorded yet. Play some AI games to populate this dashboard.
           </p>
         )}
@@ -74,36 +74,35 @@ export default function AIDashboardPage() {
 
       {/* Difficulty filter */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Filter:</span>
-        {DIFFICULTIES.map((d) => (
-          <button
-            key={d || 'all'}
-            onClick={() => setDifficulty(d)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              difficulty === d ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-[var(--border-default)]'
-            }`}
-            style={{ color: difficulty === d ? 'var(--color-blue-600)' : 'var(--text-secondary)' }}
-          >
-            {d || 'All'}
-          </button>
-        ))}
+        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Filter:</span>
+        <div
+          className="flex rounded-lg border overflow-hidden"
+          style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-sm)' }}
+        >
+          {DIFFICULTIES.map((d) => (
+            <button
+              key={d || 'all'}
+              onClick={() => setDifficulty(d)}
+              className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                difficulty === d ? 'bg-[var(--color-blue-600)] text-white' : 'hover:bg-[var(--bg-surface-hover)]'
+              }`}
+              style={{ color: difficulty === d ? 'white' : 'var(--text-secondary)' }}
+            >
+              {d || 'All'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Histogram */}
-        <section>
-          <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-secondary)' }}>
-            Move Computation Time
-          </h2>
+        <section className="space-y-3">
+          <SectionLabel>Move Computation Time</SectionLabel>
           <div
             className="rounded-xl border p-4"
-            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
           >
-            {loading ? (
-              <Spinner />
-            ) : histogram.length === 0 ? (
-              <Empty />
-            ) : (
+            {loading ? <Spinner /> : histogram.length === 0 ? <Empty /> : (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={histogram} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
@@ -113,7 +112,7 @@ export default function AIDashboardPage() {
                     cursor={{ fill: 'var(--bg-surface-hover)' }}
                   />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                    {histogram.map((entry, i) => (
+                    {histogram.map((_, i) => (
                       <Cell key={i} fill="var(--color-blue-600)" fillOpacity={0.7 + 0.05 * i} />
                     ))}
                   </Bar>
@@ -124,19 +123,13 @@ export default function AIDashboardPage() {
         </section>
 
         {/* Heatmap */}
-        <section>
-          <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-secondary)' }}>
-            Cell Selection Heatmap
-          </h2>
+        <section className="space-y-3">
+          <SectionLabel>Cell Selection Heatmap</SectionLabel>
           <div
             className="rounded-xl border p-4 flex flex-col items-center"
-            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
           >
-            {loading ? (
-              <Spinner />
-            ) : heatmap.length === 0 ? (
-              <Empty />
-            ) : (
+            {loading ? <Spinner /> : heatmap.length === 0 ? <Empty /> : (
               <div className="grid grid-cols-3 gap-1.5 w-full max-w-[240px]">
                 {heatmap.map(({ index, count }) => {
                   const intensity = count / maxHeatmapCount
@@ -145,11 +138,11 @@ export default function AIDashboardPage() {
                       key={index}
                       className="aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5"
                       style={{
-                        backgroundColor: `rgba(var(--color-teal-600-raw, 20,184,166), ${0.08 + intensity * 0.7})`,
+                        backgroundColor: `color-mix(in srgb, var(--color-teal-500) ${Math.round((0.08 + intensity * 0.7) * 100)}%, transparent)`,
                         border: '1px solid var(--border-default)',
                       }}
                     >
-                      <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{count}</span>
+                      <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{count}</span>
                       <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{CELL_LABELS[index]}</span>
                     </div>
                   )
@@ -160,18 +153,14 @@ export default function AIDashboardPage() {
         </section>
       </div>
 
-      {/* Move time bar chart by difficulty */}
-      <section>
-        <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-secondary)' }}>
-          Avg Computation Time by Difficulty
-        </h2>
+      {/* Avg time by difficulty */}
+      <section className="space-y-3">
+        <SectionLabel>Avg Computation Time by Difficulty</SectionLabel>
         <div
           className="rounded-xl border p-4"
-          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
         >
-          {summary.rows.length === 0 ? (
-            <Empty />
-          ) : (
+          {summary.rows.length === 0 ? <Empty /> : (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={summary.rows} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
                 <XAxis dataKey="difficulty" tick={{ fontSize: 11, fill: 'var(--text-muted)', textTransform: 'capitalize' }} />
@@ -198,15 +187,14 @@ export default function AIDashboardPage() {
 function StatCard({ label, value, sub, accentColor }) {
   return (
     <div
-      className="rounded-xl border p-4 space-y-1"
-      style={{
-        borderColor: accentColor || 'var(--border-default)',
-        backgroundColor: 'var(--bg-surface)',
-        borderLeftWidth: accentColor ? 3 : 1,
-      }}
+      className="rounded-xl border p-4 space-y-1 overflow-hidden relative"
+      style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
     >
-      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="text-xl font-bold" style={{ color: accentColor || 'var(--text-primary)' }}>{value}</p>
+      {accentColor && (
+        <div className="absolute top-0 left-0 right-0 h-0.5" style={{ backgroundColor: accentColor }} />
+      )}
+      <p className="text-xs font-medium uppercase tracking-wide pt-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', color: accentColor || 'var(--text-primary)' }}>{value}</p>
       {sub && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
     </div>
   )
@@ -222,8 +210,14 @@ function Spinner() {
 
 function Empty() {
   return (
-    <p className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>
-      No data yet.
-    </p>
+    <p className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>No data yet.</p>
+  )
+}
+
+function SectionLabel({ children }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+      {children}
+    </h2>
   )
 }

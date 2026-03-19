@@ -10,6 +10,12 @@ export default defineConfig({
     }),
     tailwindcss(),
   ],
+  server: {
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

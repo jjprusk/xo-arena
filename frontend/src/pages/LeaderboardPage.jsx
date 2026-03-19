@@ -30,35 +30,27 @@ export default function LeaderboardPage() {
   )
 
   const top3 = filtered.slice(0, 3)
-  const rest = filtered.slice(3)
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-        Leaderboard
-      </h1>
+    <div className="max-w-3xl mx-auto space-y-8">
+      <PageHeader title="Leaderboard" />
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <FilterGroup
-          label="Period"
-          options={FILTERS_PERIOD}
-          value={period}
-          onChange={setPeriod}
-        />
-        <FilterGroup
-          label="Mode"
-          options={FILTERS_MODE}
-          value={mode}
-          onChange={setMode}
-        />
+      <div className="flex flex-wrap gap-3 items-center">
+        <FilterGroup label="Period" options={FILTERS_PERIOD} value={period} onChange={setPeriod} />
+        <FilterGroup label="Mode" options={FILTERS_MODE} value={mode} onChange={setMode} />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search player…"
           className="px-3 py-1.5 rounded-lg border text-sm outline-none focus:border-[var(--color-blue-600)] transition-colors"
-          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderColor: 'var(--border-default)',
+            color: 'var(--text-primary)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
         />
       </div>
 
@@ -72,20 +64,20 @@ export default function LeaderboardPage() {
         </p>
       ) : (
         <>
-          {/* Podium — top 3 */}
+          {/* Podium */}
           {top3.length > 0 && (
-            <div className="flex items-end justify-center gap-3 py-4">
-              {/* Reorder: 2nd, 1st, 3rd */}
-              {[top3[1], top3[0], top3[2]].filter(Boolean).map((entry, i) => {
+            <div className="flex items-end justify-center gap-4 py-2">
+              {[top3[1], top3[0], top3[2]].filter(Boolean).map((entry) => {
                 const rank = entry.rank - 1
                 const isFirst = rank === 0
                 return (
                   <div
                     key={entry.user.id}
-                    className={`flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-3 ${isFirst ? 'pb-6' : ''}`}
+                    className={`flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-3 transition-transform ${isFirst ? 'pb-6 scale-105' : ''}`}
                     style={{
                       backgroundColor: PODIUM_COLORS[rank]?.bg || 'var(--bg-surface)',
                       borderColor: PODIUM_COLORS[rank]?.border || 'var(--border-default)',
+                      boxShadow: 'var(--shadow-card)',
                       minWidth: 100,
                     }}
                   >
@@ -94,7 +86,7 @@ export default function LeaderboardPage() {
                     <span className="text-sm font-semibold text-center max-w-[90px] truncate">
                       {entry.user.displayName}
                     </span>
-                    <span className="text-xs font-bold" style={{ color: 'var(--color-teal-600)' }}>
+                    <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--color-teal-600)' }}>
                       {Math.round(entry.winRate * 100)}%
                     </span>
                   </div>
@@ -104,37 +96,40 @@ export default function LeaderboardPage() {
           )}
 
           {/* Table */}
-          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+          <div
+            className="rounded-xl border overflow-hidden"
+            style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: 'var(--bg-surface-hover)' }}>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-muted)' }}>#</th>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-muted)' }}>Player</th>
-                  <th className="text-right px-4 py-3 font-semibold hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Games</th>
-                  <th className="text-right px-4 py-3 font-semibold hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Wins</th>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-muted)' }}>Win Rate</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>#</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Player</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Games</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Wins</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Win Rate</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((entry, i) => (
+                {filtered.map((entry) => (
                   <tr
                     key={entry.user.id}
                     className="border-t transition-colors hover:bg-[var(--bg-surface-hover)]"
                     style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
                   >
-                    <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
                       {entry.rank}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <Avatar user={entry.user} size="sm" />
                         <span className="font-medium truncate max-w-[120px]">{entry.user.displayName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right hidden sm:table-cell" style={{ color: 'var(--text-secondary)' }}>
+                    <td className="px-4 py-3 text-right hidden sm:table-cell tabular-nums" style={{ color: 'var(--text-secondary)' }}>
                       {entry.total}
                     </td>
-                    <td className="px-4 py-3 text-right hidden sm:table-cell" style={{ color: 'var(--text-secondary)' }}>
+                    <td className="px-4 py-3 text-right hidden sm:table-cell tabular-nums" style={{ color: 'var(--text-secondary)' }}>
                       {entry.wins}
                     </td>
                     <td className="px-4 py-3">
@@ -145,7 +140,7 @@ export default function LeaderboardPage() {
                             style={{ width: `${Math.round(entry.winRate * 100)}%`, backgroundColor: 'var(--color-teal-600)' }}
                           />
                         </div>
-                        <span className="text-xs font-semibold" style={{ color: 'var(--color-teal-600)' }}>
+                        <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--color-teal-600)' }}>
                           {Math.round(entry.winRate * 100)}%
                         </span>
                       </div>
@@ -179,21 +174,30 @@ function Avatar({ user, size = 'md' }) {
 
 function FilterGroup({ label, options, value, onChange }) {
   return (
-    <div className="flex items-center gap-1 rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+    <div
+      className="flex items-center rounded-lg border overflow-hidden"
+      style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-sm)' }}
+    >
       {options.map((opt) => (
         <button
           key={opt}
           onClick={() => onChange(opt)}
           className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-            value === opt
-              ? 'bg-[var(--color-blue-600)] text-white'
-              : 'hover:bg-[var(--bg-surface-hover)]'
+            value === opt ? 'bg-[var(--color-blue-600)] text-white' : 'hover:bg-[var(--bg-surface-hover)]'
           }`}
           style={{ color: value === opt ? 'white' : 'var(--text-secondary)' }}
         >
           {opt}
         </button>
       ))}
+    </div>
+  )
+}
+
+function PageHeader({ title }) {
+  return (
+    <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+      <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
     </div>
   )
 }
