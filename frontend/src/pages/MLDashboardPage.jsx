@@ -842,6 +842,7 @@ function ExplainabilityTab({ model }) {
           ['opening', 'Opening Book'],
           ['diff', 'Version Diff'],
           ['hypersearch', 'Hyperparam Search'],
+          ['opponent', 'Opponent Model'],
           ...(isNeuralNet ? [['activations', 'Network Activations']] : []),
         ].map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)}
@@ -965,7 +966,176 @@ function ExplainabilityTab({ model }) {
 
       {activeSection === 'diff' && <VersionDiffViewer model={model} />}
       {activeSection === 'hypersearch' && <HyperparamSearchPanel model={model} />}
+      {activeSection === 'opponent' && <OpponentModelPanel model={model} board={board} qValues={qValues} />}
       {activeSection === 'activations' && isNeuralNet && <NetworkActivationsPanel model={model} />}
+    </div>
+  )
+}
+
+// ─── Opponent Model Panel ─────────────────────────────────────────────────────
+
+function OpponentModelPanel({ model, board, qValues }) {
+  const [profiles, setProfiles]         = useState([])
+  const [selectedUserId, setSelectedUserId] = useState(null)
+  const [profile, setProfile]           = useState(null)
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
+  const [loadingProfile, setLoadingProfile]   = useState(false)
+
+  const PROFILE_WEIGHT = 0.2
+
+  useEffect(() => {
+    setLoadingProfiles(true)
+    api.ml.getPlayerProfiles(model.id)
+      .then(r => {
+        setProfiles(r.profiles)
+        if (r.profiles.length > 0) setSelectedUserId(r.profiles[0].userId)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProfiles(false))
+  }, [model.id])
+
+  useEffect(() => {
+    if (!selectedUserId) { setProfile(null); return }
+    setLoadingProfile(true)
+    api.ml.getPlayerProfile(model.id, selectedUserId)
+      .then(r => setProfile(r.profile))
+      .catch(() => setProfile(null))
+      .finally(() => setLoadingProfile(false))
+  }, [model.id, selectedUserId])
+
+  // Compute adapted Q-values from profile move patterns for the current board
+  const adaptedQValues = (() => {
+    if (!qValues || !profile) return null
+    const movePatterns = profile.movePatterns || {}
+    const stateKey = board.join(',')
+    const statePatterns = movePatterns[stateKey] || {}
+    const totalMovesFromState = Object.values(statePatterns).reduce((s, c) => s + Number(c), 0)
+
+    return qValues.map((v, i) => {
+      if (v === null) return null
+      const bias = totalMovesFromState > 0
+        ? (Number(statePatterns[i] || 0) / totalMovesFromState)
+        : 0
+      return v + PROFILE_WEIGHT * bias
+    })
+  })()
+
+  // Find cells where ranking shifted
+  const rankingShifts = (() => {
+    if (!qValues || !adaptedQValues) return new Set()
+    const baseOrder = qValues
+      .map((v, i) => ({ i, v }))
+      .filter(x => x.v !== null)
+      .sort((a, b) => b.v - a.v)
+      .map(x => x.i)
+    const adaptOrder = adaptedQValues
+      .map((v, i) => ({ i, v }))
+      .filter(x => x.v !== null)
+      .sort((a, b) => b.v - a.v)
+      .map(x => x.i)
+    const shifted = new Set()
+    baseOrder.forEach((cell, rank) => {
+      if (adaptOrder[rank] !== cell) shifted.add(cell)
+    })
+    return shifted
+  })()
+
+  if (loadingProfiles) {
+    return <Card><div className="flex justify-center py-8"><Spinner /></div></Card>
+  }
+
+  if (profiles.length === 0) {
+    return (
+      <Card>
+        <SectionLabel>Opponent Model</SectionLabel>
+        <p className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>
+          No player profiles yet. Play against this ML model while signed in to build opponent models.
+        </p>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <SectionLabel>Opponent Model</SectionLabel>
+        <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+          Select a player profile to see how their move history influences the AI's Q-values for the current board position.
+          Cells highlighted in amber shifted ranking when adaptation is applied.
+        </p>
+
+        {/* Profile selector */}
+        <div className="mb-4">
+          <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Player</label>
+          <select
+            value={selectedUserId || ''}
+            onChange={e => setSelectedUserId(e.target.value)}
+            className="w-full sm:w-auto text-sm rounded-lg border px-3 py-1.5 outline-none"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          >
+            {profiles.map(p => (
+              <option key={p.userId} value={p.userId}>
+                {p.userId.slice(0, 24)}{p.userId.length > 24 ? '…' : ''} ({p.gamesRecorded} games)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {loadingProfile && <div className="flex justify-center py-4"><Spinner /></div>}
+
+        {!loadingProfile && profile && adaptedQValues && (
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Base Q-values */}
+            <div>
+              <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Base Q-values</p>
+              <QValueHeatmap
+                board={board}
+                qValues={qValues}
+                highlight={qValues ? qValues.reduce((b, v, i) => v !== null && (b === -1 || v > qValues[b]) ? i : b, -1) : null}
+              />
+            </div>
+
+            {/* Adapted Q-values */}
+            <div>
+              <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
+                Adapted Q-values <span style={{ color: 'var(--color-amber-600)' }}>(profile weight {PROFILE_WEIGHT})</span>
+              </p>
+              <QValueHeatmap
+                board={board}
+                qValues={adaptedQValues}
+                highlight={adaptedQValues ? adaptedQValues.reduce((b, v, i) => v !== null && (b === -1 || v > adaptedQValues[b]) ? i : b, -1) : null}
+              />
+            </div>
+
+            {/* Shift summary */}
+            {rankingShifts.size > 0 && (
+              <div className="md:col-span-2">
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Ranking shifted for cells:{' '}
+                  {[...rankingShifts].map(c => (
+                    <span key={c} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mx-0.5"
+                      style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
+                      #{c + 1}
+                    </span>
+                  ))}
+                </p>
+              </div>
+            )}
+
+            {rankingShifts.size === 0 && (
+              <div className="md:col-span-2">
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  No ranking changes for this board state — the player has no recorded moves here yet.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loadingProfile && !profile && selectedUserId && (
+          <p className="text-sm py-4" style={{ color: 'var(--text-muted)' }}>Profile not found.</p>
+        )}
+      </Card>
     </div>
   )
 }
@@ -1731,12 +1901,18 @@ function CreateModelModal({ onClose, onCreate }) {
 // ─── Evaluation Tab ───────────────────────────────────────────────────────────
 
 function EvaluationTab({ model, models }) {
-  const [section, setSection] = useState('benchmark') // 'benchmark' | 'elo' | 'versus' | 'tournament'
+  const [section, setSection] = useState('benchmark') // 'benchmark' | 'elo' | 'versus' | 'tournament' | 'profiles'
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2 flex-wrap">
-        {[['benchmark', 'Benchmark'], ['elo', 'ELO History'], ['versus', 'Head-to-Head'], ['tournament', 'Tournament']].map(([s, label]) => (
+        {[
+          ['benchmark', 'Benchmark'],
+          ['elo', 'ELO History'],
+          ['versus', 'Head-to-Head'],
+          ['tournament', 'Tournament'],
+          ['profiles', 'Player Profiles'],
+        ].map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${section === s ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
             style={{ backgroundColor: section === s ? undefined : 'var(--bg-surface-hover)', color: section === s ? undefined : 'var(--text-secondary)' }}>
@@ -1748,6 +1924,7 @@ function EvaluationTab({ model, models }) {
       {section === 'elo'        && <EloPanel model={model} />}
       {section === 'versus'     && <VersusPanel model={model} models={models} />}
       {section === 'tournament' && <TournamentPanel models={models} />}
+      {section === 'profiles'   && <PlayerProfilesPanel model={model} />}
     </div>
   )
 }
@@ -2004,6 +2181,153 @@ function VersusPanel({ model, models }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ─── Player Profiles Panel ────────────────────────────────────────────────────
+
+function MiniBoard({ counts }) {
+  // counts: { cellIndex: count } — render a 3×3 heatmap of move frequencies
+  const values = Array.from({ length: 9 }, (_, i) => Number(counts[i] || 0))
+  const maxVal = Math.max(...values, 1)
+  return (
+    <div className="grid grid-cols-3 gap-0.5 w-[90px]">
+      {values.map((v, i) => {
+        const intensity = v / maxVal
+        const alpha = 0.1 + intensity * 0.9
+        return (
+          <div
+            key={i}
+            title={`Cell ${i + 1}: ${v} times`}
+            className="rounded"
+            style={{
+              width: 28,
+              height: 28,
+              backgroundColor: `rgba(37, 99, 235, ${alpha.toFixed(2)})`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 9,
+              color: intensity > 0.5 ? 'white' : 'var(--text-muted)',
+              fontWeight: 600,
+            }}
+          >
+            {v > 0 ? v : ''}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function TendencyBar({ label, value }) {
+  const pct = Math.round((value || 0) * 100)
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-0.5" style={{ color: 'var(--text-secondary)' }}>
+        <span>{label}</span>
+        <span className="font-mono font-semibold">{pct}%</span>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-500)' }} />
+      </div>
+    </div>
+  )
+}
+
+function PlayerProfilesPanel({ model }) {
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    api.ml.getPlayerProfiles(model.id)
+      .then(r => setProfiles(r.profiles))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [model.id])
+
+  function toggleRow(id) {
+    setExpanded(prev => prev === id ? null : id)
+  }
+
+  return (
+    <Card>
+      <SectionLabel>Player Profiles</SectionLabel>
+      <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
+        Move pattern profiles recorded from human players who played this model. Profiles adapt the AI's responses per player.
+      </p>
+
+      {loading && <div className="flex justify-center py-6"><Spinner /></div>}
+
+      {!loading && profiles.length === 0 && (
+        <p className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>
+          No player profiles yet. Play a game against this ML model while signed in to start building profiles.
+        </p>
+      )}
+
+      {!loading && profiles.length > 0 && (
+        <div className="space-y-2">
+          {/* Header row */}
+          <div className="grid gap-3 text-xs font-semibold uppercase tracking-wide px-3 py-1"
+            style={{ color: 'var(--text-muted)', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}>
+            <span>Player ID</span>
+            <span>Games</span>
+            <span>Center %</span>
+            <span>Corner %</span>
+            <span>Since</span>
+          </div>
+
+          {profiles.map(p => {
+            const tendencies = p.tendencies || {}
+            const isExpanded = expanded === p.id
+            return (
+              <div key={p.id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+                {/* Summary row */}
+                <button
+                  onClick={() => toggleRow(p.id)}
+                  className="w-full grid gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
+                  style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', backgroundColor: 'var(--bg-base)' }}
+                >
+                  <span className="font-mono text-xs truncate" style={{ color: 'var(--text-secondary)' }} title={p.userId}>
+                    {p.userId.slice(0, 20)}{p.userId.length > 20 ? '…' : ''}
+                  </span>
+                  <span className="font-bold" style={{ color: 'var(--color-blue-600)' }}>{p.gamesRecorded}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{Math.round((tendencies.centerRate || 0) * 100)}%</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{Math.round((tendencies.cornerRate || 0) * 100)}%</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{new Date(p.createdAt).toLocaleDateString()}</span>
+                </button>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="px-4 py-4 border-t space-y-4" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                    <div className="flex flex-wrap gap-8 items-start">
+                      {/* Opening preferences heatmap */}
+                      <div>
+                        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Opening Preferences</p>
+                        {Object.keys(p.openingPreferences || {}).length > 0 ? (
+                          <MiniBoard counts={p.openingPreferences} />
+                        ) : (
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No opening data yet</p>
+                        )}
+                      </div>
+
+                      {/* Tendencies bars */}
+                      <div className="flex-1 min-w-[180px] space-y-2">
+                        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Move Tendencies</p>
+                        <TendencyBar label="Center rate" value={tendencies.centerRate} />
+                        <TendencyBar label="Corner rate" value={tendencies.cornerRate} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </Card>

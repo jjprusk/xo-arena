@@ -210,6 +210,34 @@ export async function explainMove(modelId, board) {
   return { qvalues, bestCell: best, epsilon: engine.epsilon, stateCount: engine.stateCount }
 }
 
+/**
+ * Get a move for an ML model, adapted to a player's observed patterns if profile exists.
+ * Falls back to standard exploitation move if no profile or adaptation fails.
+ *
+ * @param {string} modelId
+ * @param {Array}  board
+ * @param {string} mark   - AI mark ('X' or 'O')
+ * @param {string} userId - Clerk user ID for profile lookup
+ * @returns {Promise<number>} chosen cell index
+ */
+export async function getAdaptedMoveForModel(modelId, board, mark, userId) {
+  // Ensure engine is loaded
+  if (!engineCache.has(modelId)) {
+    const model = await db.mLModel.findUnique({ where: { id: modelId } })
+    if (!model) throw new Error(`ML model ${modelId} not found`)
+    const engine = new QLearningEngine(model.config)
+    engine.loadQTable(model.qtable)
+    engineCache.set(modelId, engine)
+  }
+  const engine = engineCache.get(modelId)
+
+  const profile = await getPlayerProfile(modelId, userId).catch(() => null)
+  if (profile) {
+    return adaptedChooseAction(engine, board, mark, profile)
+  }
+  return engine.chooseAction(board, false)
+}
+
 // ─── ELO ─────────────────────────────────────────────────────────────────────
 
 const ELO_K = 32
@@ -1218,4 +1246,185 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
 
 function _emit(room, event, data) {
   if (_io) _io.to(room).emit(event, data)
+}
+
+// ─── Player Profiling ─────────────────────────────────────────────────────────
+
+/**
+ * Record a human move against an ML model. Fire-and-forget — never awaited
+ * in the hot path. Errors are caught silently.
+ *
+ * @param {string} modelId
+ * @param {string} userId
+ * @param {Array}  board     - board state BEFORE the human's move
+ * @param {number} cellIndex - the cell the human played
+ */
+export function recordHumanMove(modelId, userId, board, cellIndex) {
+  // Run async without blocking caller
+  ;(async () => {
+    try {
+      const stateKey = board.join(',')
+      const occupiedCount = board.filter(Boolean).length
+
+      // Fetch or create profile
+      let profile = await db.mLPlayerProfile.findUnique({
+        where: { modelId_userId: { modelId, userId } },
+      })
+      if (!profile) {
+        profile = await db.mLPlayerProfile.create({
+          data: { modelId, userId },
+        })
+      }
+
+      // Update movePatterns
+      const movePatterns = profile.movePatterns || {}
+      if (!movePatterns[stateKey]) movePatterns[stateKey] = {}
+      movePatterns[stateKey][cellIndex] = (movePatterns[stateKey][cellIndex] || 0) + 1
+
+      // Update openingPreferences if it's an early move (0 or 1 cells occupied before this move)
+      const openingPreferences = profile.openingPreferences || {}
+      if (occupiedCount <= 1) {
+        openingPreferences[cellIndex] = (openingPreferences[cellIndex] || 0) + 1
+      }
+
+      await db.mLPlayerProfile.update({
+        where: { modelId_userId: { modelId, userId } },
+        data: { movePatterns, openingPreferences },
+      })
+    } catch (err) {
+      logger.error({ err, modelId, userId }, 'recordHumanMove failed')
+    }
+  })()
+}
+
+/**
+ * Recompute player tendencies from movePatterns at game end.
+ * Fire-and-forget.
+ *
+ * @param {string} modelId
+ * @param {string} userId
+ */
+export function updatePlayerTendencies(modelId, userId) {
+  ;(async () => {
+    try {
+      const profile = await db.mLPlayerProfile.findUnique({
+        where: { modelId_userId: { modelId, userId } },
+      })
+      if (!profile) return
+
+      const movePatterns = profile.movePatterns || {}
+      const CORNERS = [0, 2, 6, 8]
+
+      let totalMoves = 0
+      let centerMoves = 0
+      let cornerMoves = 0
+
+      for (const [, cells] of Object.entries(movePatterns)) {
+        for (const [cellIdx, count] of Object.entries(cells)) {
+          const idx = parseInt(cellIdx, 10)
+          const cnt = Number(count)
+          totalMoves += cnt
+          if (idx === 4) centerMoves += cnt
+          if (CORNERS.includes(idx)) cornerMoves += cnt
+        }
+      }
+
+      const tendencies = {
+        centerRate: totalMoves > 0 ? parseFloat((centerMoves / totalMoves).toFixed(4)) : 0,
+        cornerRate: totalMoves > 0 ? parseFloat((cornerMoves / totalMoves).toFixed(4)) : 0,
+      }
+
+      await db.mLPlayerProfile.update({
+        where: { modelId_userId: { modelId, userId } },
+        data: {
+          tendencies,
+          gamesRecorded: { increment: 1 },
+        },
+      })
+    } catch (err) {
+      logger.error({ err, modelId, userId }, 'updatePlayerTendencies failed')
+    }
+  })()
+}
+
+/**
+ * Return all player profiles for a given model.
+ *
+ * @param {string} modelId
+ */
+export async function getPlayerProfiles(modelId) {
+  const profiles = await db.mLPlayerProfile.findMany({
+    where: { modelId },
+    orderBy: { gamesRecorded: 'desc' },
+    select: {
+      id: true,
+      userId: true,
+      gamesRecorded: true,
+      openingPreferences: true,
+      tendencies: true,
+      createdAt: true,
+    },
+  })
+  return profiles
+}
+
+/**
+ * Return a single player profile for (modelId, userId), or null.
+ *
+ * @param {string} modelId
+ * @param {string} userId
+ */
+export async function getPlayerProfile(modelId, userId) {
+  return db.mLPlayerProfile.findUnique({
+    where: { modelId_userId: { modelId, userId } },
+  })
+}
+
+/**
+ * Choose an action adapted to a player's observed move patterns.
+ * For tabular engines: bias Q-values toward moves the player tends to make,
+ * so the AI can anticipate and counter them.
+ * For neural engines: fall through to normal chooseAction.
+ *
+ * @param {object} engine          - ML engine instance
+ * @param {Array}  board           - current board state
+ * @param {string} mark            - AI's mark ('X' or 'O')
+ * @param {object} profile         - MLPlayerProfile record
+ * @param {number} profileWeight   - weight for profile bias (default 0.2)
+ * @returns {number}               - chosen cell index
+ */
+export function adaptedChooseAction(engine, board, mark, profile, profileWeight = 0.2) {
+  // Neural engines don't have a qtable — delegate normally
+  if (!engine.qtable) {
+    return engine.chooseAction(board, false)
+  }
+
+  const empty = getEmptyCells(board)
+  if (empty.length === 0) return -1
+
+  // Get base Q-values
+  const stateKey = board.join(',')
+  const qvals = engine.getQValues(board)
+
+  // Compute bias from player's move history for this state
+  const movePatterns = profile.movePatterns || {}
+  const statePatterns = movePatterns[stateKey] || {}
+  const totalMovesFromState = Object.values(statePatterns).reduce((s, c) => s + Number(c), 0)
+
+  // Compute adjusted Q-values and pick argmax
+  let bestCell = empty[0]
+  let bestQ = -Infinity
+
+  for (const cell of empty) {
+    const bias = totalMovesFromState > 0
+      ? (Number(statePatterns[cell] || 0) / totalMovesFromState)
+      : 0
+    const qAdj = qvals[cell] + profileWeight * bias
+    if (qAdj > bestQ) {
+      bestQ = qAdj
+      bestCell = cell
+    }
+  }
+
+  return bestCell
 }

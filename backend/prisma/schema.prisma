@@ -130,12 +130,30 @@ model MLModel {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  sessions    TrainingSession[]
-  checkpoints MLCheckpoint[]
-  benchmarks  MLBenchmarkResult[]
-  eloHistory  MLEloHistory[]
+  sessions       TrainingSession[]
+  checkpoints    MLCheckpoint[]
+  benchmarks     MLBenchmarkResult[]
+  eloHistory     MLEloHistory[]
+  playerProfiles MLPlayerProfile[]
 
   @@map("ml_models")
+}
+
+model MLPlayerProfile {
+  id                 String   @id @default(uuid())
+  modelId            String
+  userId             String
+  gamesRecorded      Int      @default(0)
+  movePatterns       Json     @default("{}")   // { stateKey: { cellIndex: count } }
+  openingPreferences Json     @default("{}")   // { cellIndex: count } (first moves)
+  tendencies         Json     @default("{}")   // { centerRate, cornerRate, blockingRate }
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, userId])
+  @@map("ml_player_profiles")
 }
 
 model TrainingSession {

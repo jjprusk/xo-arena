@@ -2,7 +2,7 @@ import { Router } from 'express'
 import registry from '../ai/registry.js'
 import { getEmptyCells } from '../ai/gameLogic.js'
 import { recordMove } from '../services/aiMetrics.js'
-import { explainMove } from '../services/mlService.js'
+import { explainMove, getAdaptedMoveForModel, recordHumanMove } from '../services/mlService.js'
 
 const router = Router()
 
@@ -16,12 +16,16 @@ router.get('/implementations', (_req, res) => {
 
 /**
  * POST /api/v1/ai/move
- * Body: { board, difficulty, player, implementation }
+ * Body: { board, difficulty, player, implementation, modelId, userId?, humanLastMove? }
  * Returns: { move, implementation, durationMs }
+ *
+ * Optional fields for ML player profiling:
+ *   userId       — Clerk user ID of the human player
+ *   humanLastMove — cell index of the human's most recent move (before this AI move)
  */
 router.post('/move', async (req, res, next) => {
   try {
-    const { board, difficulty, player, implementation: implId, modelId } = req.body
+    const { board, difficulty, player, implementation: implId, modelId, userId, humanLastMove } = req.body
 
     // Validate board
     if (!Array.isArray(board) || board.length !== 9) {
@@ -53,7 +57,31 @@ router.post('/move', async (req, res, next) => {
     const impl = registry.get(implId)
 
     const start = Date.now()
-    const move = await Promise.resolve(impl.move(board, difficulty, player, modelId))
+    let move
+
+    // For ML models with a signed-in user, attempt profile-adapted move
+    if (implId === 'ml' && modelId && userId) {
+      try {
+        // Record human's last move (fire-and-forget) if provided
+        if (typeof humanLastMove === 'number' && humanLastMove >= 0 && humanLastMove <= 8) {
+          // Reconstruct board before the human's move
+          const boardBeforeHumanMove = [...board]
+          boardBeforeHumanMove[humanLastMove] = null
+          recordHumanMove(modelId, userId, boardBeforeHumanMove, humanLastMove)
+        }
+
+        // Get adapted move (loads engine + profile internally)
+        move = await getAdaptedMoveForModel(modelId, board, player, userId)
+      } catch (profileErr) {
+        // Non-fatal — fall through to normal move
+        move = undefined
+      }
+    }
+
+    if (move === undefined || move === null) {
+      move = await Promise.resolve(impl.move(board, difficulty, player, modelId))
+    }
+
     const durationMs = Date.now() - start
 
     recordMove({ implementation: implId, difficulty: difficulty || 'ml', durationMs, cellIndex: move })

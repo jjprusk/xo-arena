@@ -30,8 +30,12 @@ export const api = {
 
   ai: {
     implementations: () => api.get('/ai/implementations'),
-    move: (board, difficulty, player, implementation, modelId, explain = false) =>
-      request('POST', `/ai/move${explain ? '?explain=true' : ''}`, { board, difficulty, player, implementation, modelId }),
+    move: (board, difficulty, player, implementation, modelId, explain = false, userId = null, humanLastMove = null) =>
+      request('POST', `/ai/move${explain ? '?explain=true' : ''}`, {
+        board, difficulty, player, implementation, modelId,
+        ...(userId ? { userId } : {}),
+        ...(humanLastMove !== null && humanLastMove !== undefined ? { humanLastMove } : {}),
+      }),
   },
 
   ml: {
@@ -67,6 +71,9 @@ export const api = {
     startHyperparamSearch: (id, body, tok) => api.post(`/ml/models/${id}/hypersearch`, body, tok),
     explainActivations: (id, board) => api.post(`/ml/models/${id}/explain-activations`, { board }),
     ensembleMove: (body) => api.post('/ml/models/ensemble', body),
+    getPlayerProfiles: (id) => api.get(`/ml/models/${id}/player-profiles`),
+    getPlayerProfile: (id, userId) => api.get(`/ml/models/${id}/player-profiles/${userId}`),
+    recordGameEnd: (modelId, userId) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/game-end`, {}),
   },
 
   rooms: {

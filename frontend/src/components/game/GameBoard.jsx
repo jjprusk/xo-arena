@@ -1,5 +1,6 @@
 import React from 'react'
 import { useEffect, useCallback, useState, useRef } from 'react'
+import { useUser } from '@clerk/clerk-react'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import { api } from '../../lib/api.js'
@@ -26,11 +27,14 @@ export default function GameBoard({ inviteUrl, roomName }) {
     makeMove, setAIThinking, rematch, newGame,
   } = useGameStore()
 
+  const { user, isSignedIn } = useUser()
   const { play } = useSoundStore()
   const [showForfeitDialog, setShowForfeitDialog] = useState(false)
   const [aiError, setAIError] = useState(null)
   const [aiConfidence, setAIConfidence] = useState(null)
   const gameStartRef = useRef(null)
+  // Track the last cell the human played (for ML profiling)
+  const lastHumanMoveRef = useRef(null)
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isPlayerTurn = status === 'playing' && currentTurn === playerMark
@@ -71,6 +75,11 @@ export default function GameBoard({ inviteUrl, roomName }) {
         durationMs,
         startedAt,
       }, token).catch(() => {})
+
+      // Fire-and-forget ML player profile game-end update
+      if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
+        api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+      }
     }
 
     recordGame()
@@ -88,8 +97,10 @@ export default function GameBoard({ inviteUrl, roomName }) {
       setAIThinking(true)
       setAIError(null)
       const isML = aiImplementation === 'ml'
+      const profileUserId = isML && isSignedIn && user?.id ? user.id : null
+      const humanLastMove = profileUserId ? lastHumanMoveRef.current : null
       try {
-        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, isML)
+        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, isML, profileUserId, humanLastMove)
         if (!cancelled) {
           makeMove(res.move)
           play('move')
@@ -110,6 +121,7 @@ export default function GameBoard({ inviteUrl, roomName }) {
   const handleCellClick = useCallback((i) => {
     if (!isPlayerTurn) return
     if (board[i] !== null) return
+    lastHumanMoveRef.current = i
     makeMove(i)
     play('move')
   }, [isPlayerTurn, board, makeMove, play])

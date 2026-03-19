@@ -333,4 +333,28 @@ router.get('/tournament/:id', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── Player Profiles ──────────────────────────────────────────────────────────
+
+router.get('/models/:id/player-profiles', async (req, res, next) => {
+  try {
+    const profiles = await svc.getPlayerProfiles(req.params.id)
+    res.json({ profiles })
+  } catch (err) { next(err) }
+})
+
+router.get('/models/:id/player-profiles/:userId', async (req, res, next) => {
+  try {
+    const profile = await svc.getPlayerProfile(req.params.id, req.params.userId)
+    if (!profile) return res.status(404).json({ error: 'Profile not found' })
+    res.json({ profile })
+  } catch (err) { next(err) }
+})
+
+router.post('/models/:id/player-profiles/:userId/game-end', async (req, res, next) => {
+  try {
+    svc.updatePlayerTendencies(req.params.id, req.params.userId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+})
+
 export default router
