@@ -5,13 +5,32 @@ export default function MuteToggle() {
   const { muted, toggleMute } = useSoundStore()
 
   return (
-    <button
-      onClick={toggleMute}
-      aria-label={muted ? 'Unmute' : 'Mute'}
-      className="w-8 h-8 flex items-center justify-center rounded-full text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
-      style={{ color: 'var(--text-secondary)' }}
+    <div
+      className="flex items-center rounded-full border overflow-hidden"
+      style={{ borderColor: 'var(--border-default)' }}
     >
-      {muted ? '🔇' : '🔊'}
-    </button>
+      <button
+        onClick={() => muted && toggleMute()}
+        aria-label="Sound on"
+        className={`px-2 py-1 text-sm transition-colors ${
+          !muted
+            ? 'bg-[var(--color-blue-600)] text-white'
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+        }`}
+      >
+        🔊
+      </button>
+      <button
+        onClick={() => !muted && toggleMute()}
+        aria-label="Sound off"
+        className={`px-2 py-1 text-sm transition-colors ${
+          muted
+            ? 'bg-[var(--color-blue-600)] text-white'
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+        }`}
+      >
+        🔇
+      </button>
+    </div>
   )
 }

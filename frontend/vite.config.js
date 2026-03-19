@@ -11,9 +11,21 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    host: true,
     watch: {
       usePolling: true,
       interval: 300,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://backend:3000',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://backend:3000',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   test: {

@@ -5,7 +5,7 @@ import { api } from '../../lib/api.js'
 
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
-export default function ModeSelection({ onStart, onPvpJoin, inviteUrl }) {
+export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
   const { setMode, setDifficulty, setAIImplementation, setPlayerMark, setPlayerName, startGame } = useGameStore()
 
   const [aiExpanded, setAiExpanded] = useState(false)
@@ -17,6 +17,35 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl }) {
   const [loadingImpls, setLoadingImpls] = useState(false)
   const [joinInput, setJoinInput] = useState('')
   const [inviteCopied, setInviteCopied] = useState(false)
+  const [rooms, setRooms] = useState([])
+  const [showRoomList, setShowRoomList] = useState(false)
+  const joinRef = React.useRef(null)
+
+  // Fetch room list whenever the join input is focused or opened
+  function handleJoinFocus() {
+    api.rooms.list()
+      .then((res) => setRooms(res.rooms || []))
+      .catch(() => setRooms([]))
+    setShowRoomList(true)
+  }
+
+  function handleJoinBlur() {
+    // Delay so clicks on dropdown items register first
+    setTimeout(() => setShowRoomList(false), 150)
+  }
+
+  // Rooms filtered by current input text
+  const filteredRooms = joinInput.trim()
+    ? rooms.filter((r) =>
+        r.displayName.toLowerCase().includes(joinInput.toLowerCase()) ||
+        r.slug.toLowerCase().includes(joinInput.toLowerCase())
+      )
+    : rooms
+
+  function selectRoom(room) {
+    setJoinInput(room.slug)
+    setShowRoomList(false)
+  }
 
   function handleCopyInvite() {
     if (!inviteUrl) return
@@ -63,7 +92,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl }) {
   return (
     <div className="flex flex-col gap-4 max-w-sm mx-auto w-full">
       <h1 className="text-3xl font-bold text-center" style={{ fontFamily: 'var(--font-display)' }}>
-        XO Arena
+        {roomName || <span style={{ color: 'var(--text-muted)' }}>…</span>}
       </h1>
 
       {/* ── Play vs AI ─────────────────────────────────────── */}
@@ -237,24 +266,79 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl }) {
           <div>
             <div className="font-semibold text-sm">Join a Room</div>
             <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Have an invite link? Paste it below
+              Pick a room or paste an invite link
             </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <input
-            type="text"
-            value={joinInput}
-            onChange={(e) => setJoinInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-            placeholder="Invite link or room code…"
-            className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none focus:border-[var(--color-teal-600)] transition-colors"
-            style={{
-              backgroundColor: 'var(--bg-page)',
-              borderColor: 'var(--border-default)',
-              color: 'var(--text-primary)',
-            }}
-          />
+          <div className="relative flex-1" ref={joinRef}>
+            <input
+              type="text"
+              value={joinInput}
+              onChange={(e) => { setJoinInput(e.target.value); setShowRoomList(true) }}
+              onFocus={handleJoinFocus}
+              onBlur={handleJoinBlur}
+              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              placeholder="Search rooms or paste invite link…"
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none focus:border-[var(--color-teal-600)] transition-colors"
+              style={{
+                backgroundColor: 'var(--bg-page)',
+                borderColor: 'var(--border-default)',
+                color: 'var(--text-primary)',
+              }}
+            />
+            {showRoomList && filteredRooms.length > 0 && (
+              <ul
+                className="absolute left-0 right-0 top-full mt-1 rounded-lg border overflow-hidden z-50"
+                style={{
+                  backgroundColor: 'var(--bg-surface)',
+                  borderColor: 'var(--border-default)',
+                  boxShadow: 'var(--shadow-md)',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                }}
+              >
+                {filteredRooms.map((room) => (
+                  <li key={room.slug}>
+                    <button
+                      onMouseDown={() => selectRoom(room)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+                    >
+                      <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                        {room.displayName}
+                      </span>
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: room.status === 'waiting'
+                            ? 'var(--color-teal-50)'
+                            : 'var(--color-amber-50)',
+                          color: room.status === 'waiting'
+                            ? 'var(--color-teal-700)'
+                            : 'var(--color-amber-700)',
+                        }}
+                      >
+                        {room.status === 'waiting' ? 'Open' : 'Playing'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {showRoomList && filteredRooms.length === 0 && joinInput.trim() === '' && (
+              <div
+                className="absolute left-0 right-0 top-full mt-1 rounded-lg border px-3 py-2 text-sm z-50"
+                style={{
+                  backgroundColor: 'var(--bg-surface)',
+                  borderColor: 'var(--border-default)',
+                  color: 'var(--text-muted)',
+                  boxShadow: 'var(--shadow-md)',
+                }}
+              >
+                No open rooms right now
+              </div>
+            )}
+          </div>
           <button
             onClick={handleJoin}
             disabled={!joinInput.trim()}

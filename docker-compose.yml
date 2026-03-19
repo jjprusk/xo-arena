@@ -58,7 +58,7 @@ services:
       dockerfile: Dockerfile.dev
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:3000
+      VITE_SOCKET_PLACEHOLDER: ""  # API uses relative URLs via Vite proxy — do not set VITE_API_URL
       VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
     ports:
       - "5173:5173"

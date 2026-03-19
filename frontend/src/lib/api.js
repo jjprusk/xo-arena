@@ -2,7 +2,7 @@
  * Thin API client — wraps fetch with base URL and error handling.
  */
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const BASE = import.meta.env.VITE_API_URL ?? ''
 
 async function request(method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' }
@@ -32,6 +32,10 @@ export const api = {
     implementations: () => api.get('/ai/implementations'),
     move: (board, difficulty, player, implementation) =>
       api.post('/ai/move', { board, difficulty, player, implementation }),
+  },
+
+  rooms: {
+    list: () => api.get('/rooms'),
   },
 
   logs: {
