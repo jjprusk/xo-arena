@@ -12,6 +12,7 @@ vi.mock('../../../lib/api.js', () => ({
         Promise.resolve({
           implementations: [
             { id: 'minimax', name: 'Minimax', description: 'Classic', supportedDifficulties: ['easy', 'medium', 'hard'] },
+            { id: 'random', name: 'Random', description: 'Random moves', supportedDifficulties: ['easy'] },
           ],
         })
       ),
@@ -24,15 +25,16 @@ describe('ModeSelection', () => {
     useGameStore.getState().newGame()
   })
 
-  it('renders mode cards', () => {
+  it('renders three action sections', () => {
     render(<ModeSelection />)
-    expect(screen.getByText('vs AI')).toBeTruthy()
-    expect(screen.getByText('vs Player')).toBeTruthy()
+    expect(screen.getByText('Play vs AI')).toBeTruthy()
+    expect(screen.getByText('Create a Room')).toBeTruthy()
+    expect(screen.getByText('Join a Room')).toBeTruthy()
   })
 
-  it('shows difficulty options when PvAI selected', async () => {
+  it('shows difficulty options after expanding Play vs AI', async () => {
     render(<ModeSelection />)
-    fireEvent.click(screen.getByText('vs AI'))
+    fireEvent.click(screen.getByText('Play vs AI'))
     await waitFor(() => {
       expect(screen.getByText('easy')).toBeTruthy()
       expect(screen.getByText('medium')).toBeTruthy()
@@ -40,27 +42,31 @@ describe('ModeSelection', () => {
     })
   })
 
-  it('shows AI implementation list after selecting PvAI', async () => {
+  it('shows AI implementation list after expanding Play vs AI', async () => {
     render(<ModeSelection />)
-    fireEvent.click(screen.getByText('vs AI'))
+    fireEvent.click(screen.getByText('Play vs AI'))
     await waitFor(() => {
       expect(screen.getByText('Minimax')).toBeTruthy()
     })
   })
 
-  it('shows start button after mode + impl selected', async () => {
+  it('shows Play vs AI submit button inside expanded panel', async () => {
     render(<ModeSelection />)
-    fireEvent.click(screen.getByText('vs AI'))
-    await waitFor(() => screen.getByText('Play vs AI'))
-    expect(screen.getByText('Play vs AI')).toBeTruthy()
+    fireEvent.click(screen.getByText('Play vs AI'))
+    await waitFor(() => {
+      const buttons = screen.getAllByText('Play vs AI')
+      expect(buttons.length).toBeGreaterThanOrEqual(2)
+    })
   })
 
-  it('calls onStart when Play button clicked', async () => {
+  it('calls onStart when Play vs AI submit button is clicked', async () => {
     const onStart = vi.fn()
     render(<ModeSelection onStart={onStart} />)
-    fireEvent.click(screen.getByText('vs AI'))
-    await waitFor(() => screen.getByText('Play vs AI'))
     fireEvent.click(screen.getByText('Play vs AI'))
+    await waitFor(() => screen.getAllByText('Play vs AI').length >= 2)
+    // Last match is the submit button inside the expanded panel
+    const buttons = screen.getAllByText('Play vs AI')
+    fireEvent.click(buttons[buttons.length - 1])
     expect(onStart).toHaveBeenCalled()
   })
 })
