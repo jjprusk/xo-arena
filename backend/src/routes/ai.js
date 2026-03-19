@@ -2,6 +2,7 @@ import { Router } from 'express'
 import registry from '../ai/registry.js'
 import { getEmptyCells } from '../ai/gameLogic.js'
 import { recordMove } from '../services/aiMetrics.js'
+import { explainMove } from '../services/mlService.js'
 
 const router = Router()
 
@@ -57,7 +58,21 @@ router.post('/move', async (req, res, next) => {
 
     recordMove({ implementation: implId, difficulty: difficulty || 'ml', durationMs, cellIndex: move })
 
-    res.json({ move, implementation: implId, durationMs })
+    // Optional move explanation (ML only, gated by explain=true query param)
+    let explanation = null
+    if (req.query.explain === 'true' && implId === 'ml' && modelId) {
+      try {
+        const exp = await explainMove(modelId, board)
+        const legalQVals = exp.qvalues.filter(v => v !== null)
+        const sorted = [...legalQVals].sort((a, b) => b - a)
+        const confidence = sorted.length >= 2 && sorted[0] !== sorted[1]
+          ? Math.min(1, (sorted[0] - sorted[1]) / (Math.abs(sorted[0]) + Math.abs(sorted[1]) + 1e-6))
+          : 0
+        explanation = { qValues: exp.qvalues, chosenCell: move, confidence: parseFloat(confidence.toFixed(3)) }
+      } catch { /* non-fatal */ }
+    }
+
+    res.json({ move, implementation: implId, durationMs, ...(explanation && { explanation }) })
   } catch (err) { next(err) }
 })
 

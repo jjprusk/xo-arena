@@ -7,6 +7,7 @@ export const useGameStore = create((set, get) => ({
   mode: null,         // 'pvai' | 'pvp'
   difficulty: 'medium',
   aiImplementation: 'minimax',
+  mlModelId: null,    // modelId when aiImplementation === 'ml'
   playerMark: 'X',   // which mark the human plays
   playerName: '',
 
@@ -24,6 +25,7 @@ export const useGameStore = create((set, get) => ({
   setMode(mode) { set({ mode }) },
   setDifficulty(d) { set({ difficulty: d }) },
   setAIImplementation(id) { set({ aiImplementation: id }) },
+  setMLModelId(id) { set({ mlModelId: id }) },
   setPlayerMark(mark) { set({ playerMark: mark }) },
   setPlayerName(name) { set({ playerName: name }) },
 

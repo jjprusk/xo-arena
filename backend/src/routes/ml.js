@@ -112,6 +112,14 @@ router.post('/models/:id/train', requireAuth, async (req, res, next) => {
 router.get('/models/:id/sessions', async (req, res, next) => {
   try {
     const sessions = await svc.getModelSessions(req.params.id)
+    if (req.query.format === 'csv') {
+      const keys = ['id', 'mode', 'iterations', 'status', 'startedAt', 'completedAt']
+      const header = keys.join(',')
+      const lines  = sessions.map(s => keys.map(k => s[k] ?? '').join(','))
+      res.setHeader('Content-Type', 'text/csv')
+      res.setHeader('Content-Disposition', `attachment; filename="sessions_${req.params.id}.csv"`)
+      return res.send([header, ...lines].join('\n'))
+    }
     res.json({ sessions })
   } catch (err) { next(err) }
 })
@@ -126,9 +134,20 @@ router.get('/sessions/:id', async (req, res, next) => {
 
 router.get('/sessions/:id/episodes', async (req, res, next) => {
   try {
-    const page  = Math.max(1, parseInt(req.query.page)  || 1)
-    const limit = Math.min(500, parseInt(req.query.limit) || 200)
-    const data  = await svc.getSessionEpisodes(req.params.id, { page, limit })
+    const page   = Math.max(1, parseInt(req.query.page)  || 1)
+    const limit  = Math.min(500, parseInt(req.query.limit) || 200)
+    const format = req.query.format
+    const data   = await svc.getSessionEpisodes(req.params.id, { page, limit })
+
+    if (format === 'csv') {
+      const keys = ['episodeNum', 'outcome', 'totalMoves', 'avgQDelta', 'epsilon', 'durationMs']
+      const header = keys.join(',')
+      const lines  = data.episodes.map(r => keys.map(k => r[k] ?? '').join(','))
+      res.setHeader('Content-Type', 'text/csv')
+      res.setHeader('Content-Disposition', `attachment; filename="episodes_${req.params.id}.csv"`)
+      return res.send([header, ...lines].join('\n'))
+    }
+
     res.json(data)
   } catch (err) { next(err) }
 })
@@ -137,6 +156,15 @@ router.post('/sessions/:id/cancel', requireAuth, async (req, res, next) => {
   try {
     await svc.cancelSession(req.params.id)
     res.status(204).end()
+  } catch (err) { next(err) }
+})
+
+// ─── Opening book ─────────────────────────────────────────────────────────────
+
+router.get('/models/:id/opening-book', async (req, res, next) => {
+  try {
+    const data = await svc.getOpeningBook(req.params.id)
+    res.json(data)
   } catch (err) { next(err) }
 })
 

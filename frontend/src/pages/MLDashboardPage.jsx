@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { api } from '../lib/api.js'
 import { getSocket } from '../lib/socket.js'
+import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
 
 const MODES = [
   { value: 'SELF_PLAY', label: 'Self-play', desc: 'Plays both X and O' },
@@ -137,7 +138,7 @@ export default function MLDashboardPage() {
 
               {/* Tabs */}
               <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-default)' }}>
-                {['train', 'analytics', 'checkpoints', 'export'].map(tab => (
+                {['train', 'analytics', 'explainability', 'checkpoints', 'export'].map(tab => (
                   <button key={tab} onClick={() => setActiveTab(tab)}
                     className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
                     style={{ color: activeTab === tab ? undefined : 'var(--text-secondary)' }}>
@@ -146,10 +147,11 @@ export default function MLDashboardPage() {
                 ))}
               </div>
 
-              {activeTab === 'train'       && <TrainTab model={selected} onComplete={() => { refreshModel(selected.id) }} />}
-              {activeTab === 'analytics'   && <AnalyticsTab model={selected} />}
-              {activeTab === 'checkpoints' && <CheckpointsTab model={selected} onRestore={() => refreshModel(selected.id)} />}
-              {activeTab === 'export'      && <ExportTab model={selected} />}
+              {activeTab === 'train'          && <TrainTab model={selected} onComplete={() => { refreshModel(selected.id) }} />}
+              {activeTab === 'analytics'     && <AnalyticsTab model={selected} />}
+              {activeTab === 'explainability'&& <ExplainabilityTab model={selected} />}
+              {activeTab === 'checkpoints'   && <CheckpointsTab model={selected} onRestore={() => refreshModel(selected.id)} />}
+              {activeTab === 'export'        && <ExportTab model={selected} />}
             </div>
           )}
         </div>
@@ -387,11 +389,38 @@ function TrainTab({ model, onComplete }) {
 
 // ─── Analytics Tab ────────────────────────────────────────────────────────────
 
+const ROLLING_WINDOWS = [50, 100, 500]
+const SESSION_LINE_COLORS = ['var(--color-teal-600)', 'var(--color-blue-600)', 'var(--color-amber-600)', 'var(--color-red-600)']
+
+function buildRolling(episodes, W) {
+  if (episodes.length === 0) return []
+  const step = Math.max(1, Math.floor(episodes.length / 200))
+  return episodes.filter((_, i) => i % step === 0).map((_, idx) => {
+    const realIdx = idx * step
+    const slice = episodes.slice(Math.max(0, realIdx - W), realIdx + 1)
+    const wins  = slice.filter(e => e.outcome === 'WIN').length
+    return { ep: episodes[realIdx].episodeNum, winRate: Math.round((wins / slice.length) * 100) }
+  })
+}
+
+function buildChartData(episodes) {
+  if (episodes.length === 0) return []
+  const step = Math.max(1, Math.floor(episodes.length / 200))
+  return episodes.filter((_, i) => i % step === 0).map(e => ({
+    ep:      e.episodeNum,
+    qDelta:  parseFloat(e.avgQDelta.toFixed(5)),
+    epsilon: parseFloat((e.epsilon * 100).toFixed(1)),
+  }))
+}
+
 function AnalyticsTab({ model }) {
-  const [sessions, setSessions]     = useState([])
-  const [selSession, setSelSession] = useState(null)
-  const [episodes, setEpisodes]     = useState([])
-  const [loading, setLoading]       = useState(false)
+  const [sessions, setSessions]       = useState([])
+  const [selSession, setSelSession]   = useState(null)
+  const [cmpSession, setCmpSession]   = useState(null)   // comparison session
+  const [episodes, setEpisodes]       = useState([])
+  const [cmpEpisodes, setCmpEpisodes] = useState([])
+  const [window, setWindow]           = useState(50)
+  const [loading, setLoading]         = useState(false)
 
   useEffect(() => {
     api.ml.getSessions(model.id).then(r => {
@@ -403,36 +432,27 @@ function AnalyticsTab({ model }) {
   useEffect(() => {
     if (!selSession) return
     setLoading(true)
-    api.ml.getEpisodes(selSession.id, 1).then(r => {
-      setEpisodes(r.episodes)
-    }).finally(() => setLoading(false))
+    api.ml.getEpisodes(selSession.id, 1).then(r => setEpisodes(r.episodes)).finally(() => setLoading(false))
   }, [selSession])
 
-  // Build chart data (sample to 200 points max)
-  const chartData = (() => {
-    if (episodes.length === 0) return []
-    const step = Math.max(1, Math.floor(episodes.length / 200))
-    return episodes.filter((_, i) => i % step === 0).map(e => ({
-      ep: e.episodeNum,
-      win:  e.outcome === 'WIN'  ? 1 : 0,
-      loss: e.outcome === 'LOSS' ? 1 : 0,
-      draw: e.outcome === 'DRAW' ? 1 : 0,
-      qDelta: parseFloat(e.avgQDelta.toFixed(5)),
-      epsilon: parseFloat((e.epsilon * 100).toFixed(1)),
-    }))
-  })()
+  useEffect(() => {
+    if (!cmpSession) { setCmpEpisodes([]); return }
+    api.ml.getEpisodes(cmpSession.id, 1).then(r => setCmpEpisodes(r.episodes))
+  }, [cmpSession])
 
-  // Rolling win rate (window=50)
-  const rollingData = (() => {
-    if (episodes.length === 0) return []
-    const W = 50
-    const step = Math.max(1, Math.floor(episodes.length / 200))
-    return episodes.filter((_, i) => i % step === 0).map((_, idx, arr) => {
-      const realIdx = idx * step
-      const slice = episodes.slice(Math.max(0, realIdx - W), realIdx + 1)
-      const wins = slice.filter(e => e.outcome === 'WIN').length
-      return { ep: episodes[realIdx].episodeNum, winRate: Math.round((wins / slice.length) * 100) }
-    })
+  const rollingA   = buildRolling(episodes, window)
+  const rollingB   = buildRolling(cmpEpisodes, window)
+  const chartData  = buildChartData(episodes)
+
+  // Merge primary + comparison rolling data by episode index
+  const comparisonData = (() => {
+    if (rollingB.length === 0) return rollingA.map(d => ({ ...d, winRateA: d.winRate }))
+    const maxLen = Math.max(rollingA.length, rollingB.length)
+    return Array.from({ length: maxLen }).map((_, i) => ({
+      i,
+      winRateA: rollingA[i]?.winRate ?? null,
+      winRateB: rollingB[i]?.winRate ?? null,
+    }))
   })()
 
   if (sessions.length === 0) {
@@ -441,23 +461,56 @@ function AnalyticsTab({ model }) {
 
   return (
     <div className="space-y-4">
-      {/* Session selector */}
+      {/* Session selector + comparison */}
       <Card>
-        <SectionLabel>Session</SectionLabel>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {sessions.map(s => (
-            <button key={s.id} onClick={() => setSelSession(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selSession?.id === s.id ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
-              style={{ backgroundColor: selSession?.id === s.id ? undefined : 'var(--bg-surface-hover)', color: selSession?.id === s.id ? undefined : 'var(--text-secondary)' }}>
-              {s.mode.replace('_', ' ')} · {s.iterations.toLocaleString()} eps
-              <span className="ml-1.5">
-                <StatusBadge status={s.status} tiny />
-              </span>
+        <div className="flex flex-wrap items-start gap-6">
+          <div className="flex-1 min-w-[180px]">
+            <SectionLabel>Primary session</SectionLabel>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {sessions.map(s => (
+                <button key={s.id} onClick={() => setSelSession(s)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selSession?.id === s.id ? 'bg-[var(--color-teal-600)] text-white' : ''}`}
+                  style={{ backgroundColor: selSession?.id === s.id ? undefined : 'var(--bg-surface-hover)', color: selSession?.id === s.id ? undefined : 'var(--text-secondary)' }}>
+                  {s.mode.replace('_', ' ')} · {s.iterations.toLocaleString()} eps
+                </button>
+              ))}
+            </div>
+          </div>
+          {sessions.length > 1 && (
+            <div className="flex-1 min-w-[180px]">
+              <SectionLabel>Compare with</SectionLabel>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button onClick={() => setCmpSession(null)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${!cmpSession ? 'bg-[var(--color-gray-600)] text-white' : ''}`}
+                  style={{ backgroundColor: !cmpSession ? undefined : 'var(--bg-surface-hover)', color: !cmpSession ? undefined : 'var(--text-secondary)' }}>
+                  None
+                </button>
+                {sessions.filter(s => s.id !== selSession?.id).map(s => (
+                  <button key={s.id} onClick={() => setCmpSession(s)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${cmpSession?.id === s.id ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
+                    style={{ backgroundColor: cmpSession?.id === s.id ? undefined : 'var(--bg-surface-hover)', color: cmpSession?.id === s.id ? undefined : 'var(--text-secondary)' }}>
+                    {s.mode.replace('_', ' ')} · {s.iterations.toLocaleString()} eps
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Rolling window selector */}
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Rolling window:</span>
+          {ROLLING_WINDOWS.map(w => (
+            <button key={w} onClick={() => setWindow(w)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${window === w ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
+              style={{ backgroundColor: window === w ? undefined : 'var(--bg-surface-hover)', color: window === w ? undefined : 'var(--text-secondary)' }}>
+              {w}
             </button>
           ))}
         </div>
+
         {selSession?.summary && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
             <MiniStat label="Win Rate" value={`${Math.round((selSession.summary.winRate ?? 0) * 100)}%`} color="var(--color-teal-600)" />
             <MiniStat label="Final ε" value={(selSession.summary.finalEpsilon ?? 0).toFixed(4)} />
             <MiniStat label="Avg ΔQ" value={(selSession.summary.avgQDelta ?? 0).toFixed(5)} />
@@ -468,15 +521,17 @@ function AnalyticsTab({ model }) {
 
       {loading && <div className="flex justify-center py-8"><Spinner /></div>}
 
-      {!loading && rollingData.length > 1 && (
+      {!loading && comparisonData.length > 1 && (
         <>
-          <ChartPanel label="Rolling Win Rate (50-episode window)">
-            <LineChart data={rollingData}>
+          <ChartPanel label={`Rolling Win Rate (window=${window})${cmpSession ? ' — comparison overlay' : ''}`}>
+            <LineChart data={comparisonData}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-              <XAxis dataKey="ep" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+              <XAxis dataKey="i" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} label={{ value: 'episode →', position: 'insideRight', offset: -10, fontSize: 10, fill: 'var(--text-muted)' }} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
-              <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`, 'Win Rate']} />
-              <Line type="monotone" dataKey="winRate" stroke="var(--color-teal-600)" dot={false} strokeWidth={2} />
+              <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Line type="monotone" dataKey="winRateA" stroke="var(--color-teal-600)" dot={false} strokeWidth={2} name={selSession?.mode?.replace('_', ' ') ?? 'Session A'} connectNulls />
+              {cmpSession && <Line type="monotone" dataKey="winRateB" stroke="var(--color-blue-600)" dot={false} strokeWidth={2} strokeDasharray="5 3" name={cmpSession.mode.replace('_', ' ') + ' (cmp)'} connectNulls />}
             </LineChart>
           </ChartPanel>
           <ChartPanel label="Q-delta Convergence">
@@ -499,6 +554,237 @@ function AnalyticsTab({ model }) {
           </ChartPanel>
         </>
       )}
+    </div>
+  )
+}
+
+// ─── Explainability Tab ───────────────────────────────────────────────────────
+
+const EMPTY_BOARD = Array(9).fill(null)
+
+function ExplainabilityTab({ model }) {
+  const [board, setBoard]           = useState([...EMPTY_BOARD])
+  const [qValues, setQValues]       = useState(null)
+  const [bestCell, setBestCell]     = useState(null)
+  const [loading, setLoading]       = useState(false)
+  const [openingBook, setOpeningBook] = useState(null)
+  const [obLoading, setObLoading]   = useState(false)
+  const [activeSection, setSection] = useState('position') // 'position' | 'opening'
+
+  // Fetch Q-values whenever board changes
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    api.ml.explainMove(model.id, board)
+      .then(r => { if (!cancelled) { setQValues(r.qvalues); setBestCell(r.bestCell) } })
+      .catch(() => { if (!cancelled) { setQValues(null); setBestCell(null) } })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [model.id, board.join(',')])
+
+  function handleCellClick(i) {
+    setBoard(prev => {
+      const next = [...prev]
+      if (next[i] === null)      next[i] = 'X'
+      else if (next[i] === 'X')  next[i] = 'O'
+      else                       next[i] = null
+      return next
+    })
+  }
+
+  function handleLoadOpeningBook() {
+    setObLoading(true)
+    api.ml.getOpeningBook(model.id)
+      .then(r => setOpeningBook(r))
+      .finally(() => setObLoading(false))
+  }
+
+  // Ranked legal moves by Q-value
+  const rankedMoves = qValues
+    ? qValues
+        .map((v, i) => ({ i, v, mark: board[i] }))
+        .filter(m => m.mark === null && m.v !== null)
+        .sort((a, b) => b.v - a.v)
+    : []
+
+  const topQ = rankedMoves[0]?.v ?? 0
+  const secondQ = rankedMoves[1]?.v ?? 0
+  const confidence = rankedMoves.length >= 2 && topQ !== secondQ
+    ? Math.min(100, Math.round(((topQ - secondQ) / (Math.abs(topQ) + Math.abs(secondQ) + 1e-6)) * 100))
+    : 0
+
+  return (
+    <div className="space-y-4">
+      {/* Section toggle */}
+      <div className="flex gap-2">
+        {['position', 'opening'].map(s => (
+          <button key={s} onClick={() => setSection(s)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${activeSection === s ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
+            style={{ backgroundColor: activeSection === s ? undefined : 'var(--bg-surface-hover)', color: activeSection === s ? undefined : 'var(--text-secondary)' }}>
+            {s === 'position' ? 'Position Analysis' : 'Opening Book'}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === 'position' && (
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Left: interactive board */}
+          <Card>
+            <SectionLabel>Board Position</SectionLabel>
+            <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+              Click cells to cycle X → O → empty. Q-values update live.
+            </p>
+            <div className="flex justify-center mb-4">
+              <QValueHeatmap board={board} qValues={qValues} highlight={bestCell} onCellClick={handleCellClick} />
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Btn onClick={() => setBoard([...EMPTY_BOARD])} variant="ghost">Clear</Btn>
+              {bestCell !== null && (
+                <p className="text-xs self-center" style={{ color: 'var(--text-muted)' }}>
+                  Best cell: <b style={{ color: 'var(--color-blue-600)' }}>#{bestCell + 1}</b>
+                  {' '}· Confidence: <b>{confidence}%</b>
+                </p>
+              )}
+            </div>
+          </Card>
+
+          {/* Right: ranked moves */}
+          <Card>
+            <SectionLabel>Move Rankings</SectionLabel>
+            {loading && <div className="flex justify-center py-8"><Spinner /></div>}
+            {!loading && rankedMoves.length === 0 && (
+              <p className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>
+                {board.every(c => c !== null) ? 'Board is full.' : 'No Q-values for this state yet — train the model first.'}
+              </p>
+            )}
+            {!loading && rankedMoves.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {rankedMoves.map(({ i, v }, rank) => {
+                  const pct = topQ !== 0 ? Math.max(0, Math.round((v / Math.max(Math.abs(topQ), 1e-6)) * 100)) : 50
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-xs w-4 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>#{rank + 1}</span>
+                      <span className="text-xs w-12 font-mono font-bold" style={{ color: rank === 0 ? 'var(--color-teal-600)' : 'var(--text-secondary)' }}>
+                        Cell {i + 1}
+                      </span>
+                      <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.abs(pct))}%`, backgroundColor: v >= 0 ? 'var(--color-teal-500)' : 'var(--color-red-500)' }} />
+                      </div>
+                      <span className="text-xs font-mono w-14 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                        {v.toFixed(4)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {activeSection === 'opening' && (
+        <div className="space-y-4">
+          {!openingBook ? (
+            <Card>
+              <SectionLabel>Opening Book</SectionLabel>
+              <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+                Analyze the model's first-move preferences and responses to opponent openings.
+              </p>
+              <Btn onClick={handleLoadOpeningBook} disabled={obLoading}>
+                {obLoading ? 'Loading…' : 'Load Opening Book'}
+              </Btn>
+            </Card>
+          ) : (
+            <>
+              {/* Agent's own first move */}
+              <Card>
+                <SectionLabel>Agent's Preferred First Move</SectionLabel>
+                <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+                  Q-values from the empty board ({openingBook.stateCount.toLocaleString()} states learned).
+                </p>
+                <div className="flex gap-6 items-start flex-wrap">
+                  <QValueHeatmap
+                    board={EMPTY_BOARD}
+                    qValues={openingBook.firstMoveQVals}
+                    highlight={openingBook.firstMoveQVals.indexOf(Math.max(...openingBook.firstMoveQVals))}
+                  />
+                  <div className="space-y-1.5 text-xs flex-1 min-w-[140px]">
+                    {openingBook.firstMoveQVals
+                      .map((v, i) => ({ i, v }))
+                      .sort((a, b) => b.v - a.v)
+                      .slice(0, 5)
+                      .map(({ i, v }, rank) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span style={{ color: 'var(--text-muted)' }}>#{rank + 1}</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>Cell {i + 1}</span>
+                          <span className="font-mono" style={{ color: rank === 0 ? 'var(--color-teal-600)' : 'var(--text-secondary)' }}>{v.toFixed(4)}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Responses to opponent openings */}
+              <Card>
+                <SectionLabel>Responses to Opponent Openings</SectionLabel>
+                <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+                  Hover a cell below to see the agent's Q-values when the opponent plays there first.
+                </p>
+                <OpeningResponseGrid responses={openingBook.responses} />
+              </Card>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OpeningResponseGrid({ responses }) {
+  const [hovered, setHovered] = useState(null)
+  const active = hovered !== null ? responses[hovered] : null
+
+  return (
+    <div className="flex gap-6 flex-wrap items-start">
+      {/* Opponent move selector — 3×3 grid */}
+      <div>
+        <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Opponent plays:</p>
+        <div className="grid grid-cols-3 gap-1.5 w-[140px]">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <button key={i} type="button"
+              onMouseEnter={() => setHovered(i)} onFocus={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)} onBlur={() => setHovered(null)}
+              className="aspect-square flex items-center justify-center rounded-lg border-2 text-sm font-bold transition-all"
+              style={{
+                minHeight: 40,
+                backgroundColor: hovered === i ? 'var(--color-teal-100)' : 'var(--bg-base)',
+                borderColor: hovered === i ? 'var(--color-teal-600)' : 'var(--border-default)',
+                color: 'var(--color-teal-600)',
+              }}>
+              O
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Agent's response heatmap */}
+      <div>
+        <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+          {active ? `Agent's response (opponent played cell ${active.opponentCell + 1}):` : 'Hover a cell to see response'}
+        </p>
+        {active ? (
+          <QValueHeatmap
+            board={Array(9).fill(null).map((_, i) => i === active.opponentCell ? 'O' : null)}
+            qValues={active.qvals.map((v, i) => i === active.opponentCell ? null : v)}
+            highlight={active.qvals.reduce((best, v, i) => i !== active.opponentCell && (best === -1 || v > active.qvals[best]) ? i : best, -1)}
+          />
+        ) : (
+          <div className="w-[220px] h-[160px] rounded-xl border flex items-center justify-center"
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

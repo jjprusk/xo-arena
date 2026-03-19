@@ -30,8 +30,8 @@ export const api = {
 
   ai: {
     implementations: () => api.get('/ai/implementations'),
-    move: (board, difficulty, player, implementation, modelId) =>
-      api.post('/ai/move', { board, difficulty, player, implementation, modelId }),
+    move: (board, difficulty, player, implementation, modelId, explain = false) =>
+      request('POST', `/ai/move${explain ? '?explain=true' : ''}`, { board, difficulty, player, implementation, modelId }),
   },
 
   ml: {
@@ -51,6 +51,7 @@ export const api = {
     cancelSession:    (id, tok)    => api.post(`/ml/sessions/${id}/cancel`, {}, tok),
     getCheckpoints:   (id)         => api.get(`/ml/models/${id}/checkpoints`),
     restoreCheckpoint:(id,cp,tok)  => api.post(`/ml/models/${id}/checkpoints/${cp}/restore`, {}, tok),
+    getOpeningBook:   (id)         => api.get(`/ml/models/${id}/opening-book`),
   },
 
   rooms: {

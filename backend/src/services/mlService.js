@@ -149,6 +149,30 @@ export async function restoreCheckpoint(modelId, checkpointId) {
   })
 }
 
+// ─── Opening book ────────────────────────────────────────────────────────────
+
+export async function getOpeningBook(modelId) {
+  const model = await db.mLModel.findUnique({ where: { id: modelId }, select: { qtable: true } })
+  if (!model) throw new Error('Model not found')
+  const qtable = model.qtable
+
+  // Agent's first-move Q-values from the all-empty state
+  const emptyKey = '.........'
+  const firstMoveQVals = qtable[emptyKey] ?? Array(9).fill(0)
+
+  // Agent's response Q-values to each possible single opponent opening
+  const responses = []
+  for (let i = 0; i < 9; i++) {
+    const cells = Array(9).fill('.')
+    cells[i] = 'O'
+    const key = cells.join('')
+    const qvals = qtable[key] ?? Array(9).fill(0)
+    responses.push({ opponentCell: i, qvals })
+  }
+
+  return { firstMoveQVals, responses, stateCount: Object.keys(qtable).length }
+}
+
 // ─── Q-table / move ──────────────────────────────────────────────────────────
 
 export async function getQTable(modelId) {

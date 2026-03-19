@@ -22,13 +22,14 @@ export default function GameBoard({ inviteUrl, roomName }) {
 
   const {
     board, currentTurn, status, winner, winLine, scores, round,
-    playerMark, mode, difficulty, aiImplementation, isAIThinking,
+    playerMark, mode, difficulty, aiImplementation, mlModelId, isAIThinking,
     makeMove, setAIThinking, rematch, newGame,
   } = useGameStore()
 
   const { play } = useSoundStore()
   const [showForfeitDialog, setShowForfeitDialog] = useState(false)
   const [aiError, setAIError] = useState(null)
+  const [aiConfidence, setAIConfidence] = useState(null)
   const gameStartRef = useRef(null)
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
@@ -86,11 +87,14 @@ export default function GameBoard({ inviteUrl, roomName }) {
     async function fetchAIMove() {
       setAIThinking(true)
       setAIError(null)
+      const isML = aiImplementation === 'ml'
       try {
-        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation)
+        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, isML)
         if (!cancelled) {
           makeMove(res.move)
           play('move')
+          if (res.explanation) setAIConfidence(res.explanation.confidence)
+          else setAIConfidence(null)
         }
       } catch (err) {
         if (!cancelled) setAIError('AI failed to respond. Please try again.')
@@ -172,6 +176,20 @@ export default function GameBoard({ inviteUrl, roomName }) {
           <span className="font-bold" style={{ color: 'var(--color-red-600)' }}>Forfeited.</span>
         )}
       </div>
+
+      {/* ML confidence bar */}
+      {aiImplementation === 'ml' && aiConfidence !== null && status === 'playing' && (
+        <div className="w-full space-y-1">
+          <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span>AI confidence</span>
+            <span>{Math.round(aiConfidence * 100)}%</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${Math.round(aiConfidence * 100)}%`, backgroundColor: 'var(--color-teal-500)' }} />
+          </div>
+        </div>
+      )}
 
       {/* Board */}
       <div
