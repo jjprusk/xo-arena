@@ -8,6 +8,7 @@ import usersRouter from './routes/users.js'
 import leaderboardRouter from './routes/leaderboard.js'
 import roomsRouter from './routes/rooms.js'
 import adminAiRouter from './routes/adminAi.js'
+import gamesRouter from './routes/games.js'
 import { attachSocketIO } from './realtime/socketHandler.js'
 
 const PORT = process.env.PORT || 3000
@@ -19,6 +20,7 @@ registerRoutes(app, {
   '/leaderboard': leaderboardRouter,
   '/rooms': roomsRouter,
   '/admin/ai': adminAiRouter,
+  '/games': gamesRouter,
 })
 
 const server = http.createServer(app)

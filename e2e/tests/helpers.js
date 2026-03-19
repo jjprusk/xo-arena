@@ -10,12 +10,9 @@
  * Quick start:
  *   docker compose up          # start infra + app
  *   npm run test:e2e           # run Playwright
- *
- * Or for local dev servers:
- *   docker compose up postgres redis
- *   npm run dev:all            # in another terminal
- *   npm run test:e2e
  */
+
+import { expect } from '@playwright/test'
 
 /**
  * Play through a PvAI game on `page` until it ends (win, AI win, or draw).
@@ -32,11 +29,12 @@ export async function playPvAIToEnd(page) {
       }
     }
 
-    // Click an empty cell
+    // Wait for player's turn then click first available empty cell
+    await expect(page.getByText('Your turn')).toBeVisible({ timeout: 10_000 })
     const cells = page.getByRole('button', { name: /^Cell \d+$/ })
     if (await cells.count() === 0) break
     await cells.first().click()
-    await page.waitForTimeout(800) // wait for AI response
+    await page.waitForTimeout(800) // allow AI to respond
   }
 
   for (const txt of endTexts) {
@@ -48,13 +46,28 @@ export async function playPvAIToEnd(page) {
 }
 
 /**
- * Create a PvP room as host and return the invite URL.
+ * Navigate to /play and wait for the auto-created room invite URL to appear.
+ * Returns the invite URL string.
  */
-export async function createRoom(page) {
+export async function getInviteUrl(page) {
   await page.goto('/play')
-  await page.getByRole('button', { name: 'vs Player' }).click()
-  await page.getByRole('button', { name: 'Create Room' }).click()
-  const input = page.locator('input[readonly]')
-  await input.waitFor({ state: 'visible' })
+  // The "Invite a Friend" card shows a readonly input once the auto-room is ready
+  const input = page.locator('input[readonly]').first()
+  await expect(input).not.toHaveValue('', { timeout: 15_000 })
   return input.inputValue()
+}
+
+/**
+ * Start a PvAI game from /play. Expands the AI panel, selects difficulty and mark,
+ * then clicks the start button.
+ */
+export async function startPvAIGame(page, { difficulty = 'easy', mark = 'X' } = {}) {
+  await page.goto('/play')
+  // Expand the "Play vs AI" accordion — the toggle button
+  await page.locator('button').filter({ hasText: 'Play vs AI' }).first().click()
+  await expect(page.getByRole('button', { name: difficulty, exact: true })).toBeVisible()
+  await page.getByRole('button', { name: difficulty, exact: true }).click()
+  await page.getByRole('button', { name: mark, exact: true }).click()
+  // Start button is the one inside the expanded panel with exactly this label
+  await page.locator('button').filter({ hasText: /^Play vs AI$/ }).click()
 }

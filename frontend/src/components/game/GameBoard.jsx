@@ -1,5 +1,5 @@
 import React from 'react'
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import { api } from '../../lib/api.js'
@@ -29,9 +29,51 @@ export default function GameBoard({ inviteUrl, roomName }) {
   const { play } = useSoundStore()
   const [showForfeitDialog, setShowForfeitDialog] = useState(false)
   const [aiError, setAIError] = useState(null)
+  const gameStartRef = useRef(null)
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isPlayerTurn = status === 'playing' && currentTurn === playerMark
+
+  // Track game start time
+  useEffect(() => {
+    if (status === 'playing' && !gameStartRef.current) {
+      gameStartRef.current = Date.now()
+    }
+    if (status === 'idle') {
+      gameStartRef.current = null
+    }
+  }, [status])
+
+  // Record PvAI game result when game ends
+  useEffect(() => {
+    if (mode !== 'pvai') return
+    if (status !== 'won' && status !== 'draw' && status !== 'forfeit') return
+
+    async function recordGame() {
+      const token = await window.Clerk?.session?.getToken().catch(() => null)
+      if (!token) return // only record for signed-in users
+
+      const totalMoves = board.filter(Boolean).length
+      const startedAt = gameStartRef.current || Date.now()
+      const durationMs = Date.now() - startedAt
+
+      let outcome = 'DRAW'
+      if (status === 'won' || status === 'forfeit') {
+        outcome = winner === playerMark ? 'PLAYER1_WIN' : 'AI_WIN'
+      }
+
+      api.games.record({
+        outcome,
+        difficulty,
+        aiImplementationId: aiImplementation,
+        totalMoves,
+        durationMs,
+        startedAt,
+      }, token).catch(() => {})
+    }
+
+    recordGame()
+  }, [status])
 
   // AI move effect
   useEffect(() => {

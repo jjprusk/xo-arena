@@ -6,7 +6,7 @@
  * requireAdmin     — rejects non-admin users (403)
  */
 
-import { createClerkClient } from '@clerk/backend'
+import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend'
 import logger from '../logger.js'
 
 let clerkClient = null
@@ -29,8 +29,7 @@ async function verifyToken(req) {
 
   const token = header.slice(7)
   try {
-    const clerk = getClerk()
-    const payload = await clerk.verifyToken(token)
+    const payload = await clerkVerifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
     return { userId: payload.sub, sessionId: payload.sid }
   } catch (err) {
     logger.warn({ err: err.message }, 'JWT verification failed')

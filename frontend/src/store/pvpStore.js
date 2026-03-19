@@ -36,8 +36,11 @@ export const usePvpStore = create((set, get) => ({
   createRoom({ auto = false } = {}) {
     const socket = connectSocket()
     get()._registerListeners(socket)
-    socket.emit('room:create', { spectatorAllowed: true })
     set({ status: 'waiting', role: 'host', error: null, isAutoRoom: auto })
+    // Fetch auth token to pass with the create event (enables server-side user identification)
+    Promise.resolve(window.Clerk?.session?.getToken?.()).catch(() => null).then((token) => {
+      socket.emit('room:create', { spectatorAllowed: true, authToken: token || null })
+    })
   },
 
   /**
@@ -46,8 +49,10 @@ export const usePvpStore = create((set, get) => ({
   joinRoom(slug, role = 'player') {
     const socket = connectSocket()
     get()._registerListeners(socket)
-    socket.emit('room:join', { slug, role })
     set({ slug, role: role === 'spectator' ? 'spectator' : 'guest', status: 'waiting', error: null })
+    Promise.resolve(window.Clerk?.session?.getToken?.()).catch(() => null).then((token) => {
+      socket.emit('room:join', { slug, role, authToken: token || null })
+    })
   },
 
   /**
