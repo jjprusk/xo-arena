@@ -16,6 +16,7 @@ const NAV_LINKS = [
 const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
   { to: '/stats', label: 'Stats', icon: '◎' },
+  { to: '/profile', label: 'Profile', icon: '◉' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ]
 
@@ -92,6 +93,18 @@ export default function AppLayout() {
             }
           >
             Stats
+          </NavLink>
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              `text-sm font-medium transition-colors ${
+                isActive
+                  ? 'text-[var(--color-blue-600)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`
+            }
+          >
+            Profile
           </NavLink>
           <NavLink
             to="/settings"

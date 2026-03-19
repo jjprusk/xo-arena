@@ -22,11 +22,11 @@ Tracks every task from the Development Plan. `Done` = implementation complete. `
 | DB-01 | Prisma schema — Users table | ✓ | — |
 | DB-02 | Prisma schema — Games table | ✓ | — |
 | DB-03 | Prisma schema — Moves + AIErrors tables | ✓ | — |
-| DB-04 | Initial migration applied | | |
-| AUTH-01 | Clerk integration (backend JWT middleware) | | |
-| AUTH-02 | Protected route middleware | | |
-| AUTH-03 | Guest play support (unauthenticated) | | |
-| AUTH-04 | User sync on first login | | |
+| DB-04 | Initial migration applied | ✓ | — |
+| AUTH-01 | Clerk integration (backend JWT middleware) | ✓ | ✓ |
+| AUTH-02 | Protected route middleware | ✓ | ✓ |
+| AUTH-03 | Guest play support (unauthenticated) | ✓ | ✓ |
+| AUTH-04 | User sync on first login | ✓ | ✓ |
 | AI-01 | AI implementation registry | ✓ | ✓ |
 | AI-02 | Minimax engine — Hard (full lookahead) | ✓ | ✓ |
 | AI-03 | Minimax engine — Medium (rule-based) | ✓ | ✓ |
@@ -36,11 +36,11 @@ Tracks every task from the Development Plan. `Done` = implementation complete. `
 | AI-T1 | Minimax correctness tests (fixed board fixtures) | ✓ | ✓ |
 | AI-T2 | Difficulty behavioral tests | ✓ | ✓ |
 | AI-T3 | Performance regression test (Hard ≤500ms) | ✓ | ✓ |
-| API-01 | GET /users/:id | | |
-| API-02 | PATCH /users/:id | | |
-| API-03 | GET /users/:id/stats | | |
-| API-04 | GET /users/:id/games | | |
-| API-05 | GET /leaderboard | | |
+| API-01 | GET /users/:id | ✓ | ✓ |
+| API-02 | PATCH /users/:id | ✓ | ✓ |
+| API-03 | GET /users/:id/stats | ✓ | ✓ |
+| API-04 | GET /users/:id/games | ✓ | ✓ |
+| API-05 | GET /leaderboard | ✓ | ✓ |
 | API-06 | POST /api/v1/logs (log ingestion) | ✓ | — |
 | API-07 | GET /api/v1/logs (admin) | ✓ | — |
 | FE-01 | App shell — desktop layout (sidebar + top nav) | ✓ | ✓ |
@@ -53,7 +53,7 @@ Tracks every task from the Development Plan. `Done` = implementation complete. `
 | FE-08 | Game board — AI thinking state (spinner, board dim) | ✓ | ✓ |
 | FE-09 | Game board — Howler.js sound effects | ✓ | — |
 | FE-10 | Game board — forfeit dialog + rematch/new game | ✓ | ✓ |
-| FE-11 | Account / Profile screen | | |
+| FE-11 | Account / Profile screen | ✓ | ✓ |
 | FE-12 | Settings screen (all sections) | ✓ | — |
 | FE-13 | Log transport (batch → POST /api/v1/logs) | ✓ | — |
 | **v2 — PvP, Real-Time & Full Feature Set** |
