@@ -5,7 +5,7 @@ import { api } from '../../lib/api.js'
 
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
-export default function ModeSelection({ onStart, onPvpCreate }) {
+export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
   const { setMode, setDifficulty, setAIImplementation, setPlayerMark, setPlayerName, startGame } = useGameStore()
 
   const [selectedMode, setSelectedMode] = useState(null)
@@ -15,6 +15,7 @@ export default function ModeSelection({ onStart, onPvpCreate }) {
   const [playerName, setPlayerNameLocal] = useState('')
   const [implementations, setImplementations] = useState([])
   const [loadingImpls, setLoadingImpls] = useState(false)
+  const [joinInput, setJoinInput] = useState('')
 
   // Load AI implementations
   useEffect(() => {
@@ -27,6 +28,21 @@ export default function ModeSelection({ onStart, onPvpCreate }) {
   }, [selectedMode])
 
   const canStart = selectedMode === 'pvp' || (selectedMode === 'pvai' && selectedImpl)
+
+  function extractSlug(input) {
+    const trimmed = input.trim()
+    try {
+      const url = new URL(trimmed)
+      return url.searchParams.get('join') || trimmed
+    } catch {
+      return trimmed
+    }
+  }
+
+  function handleJoin() {
+    const slug = extractSlug(joinInput)
+    if (slug) onPvpJoin?.(slug)
+  }
 
   function handleStart() {
     if (selectedMode === 'pvp') {
@@ -64,6 +80,38 @@ export default function ModeSelection({ onStart, onPvpCreate }) {
           description="Play with a friend online"
           icon="👥"
         />
+      </div>
+
+      {/* Join existing room */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>or join a room</span>
+          <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={joinInput}
+            onChange={(e) => setJoinInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+            placeholder="Paste invite link or room code…"
+            className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none focus:border-[var(--color-blue-600)] transition-colors"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-default)',
+              color: 'var(--text-primary)',
+            }}
+          />
+          <button
+            onClick={handleJoin}
+            disabled={!joinInput.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: 'var(--color-teal-600)' }}
+          >
+            Join
+          </button>
+        </div>
       </div>
 
       {/* PvAI options */}

@@ -1,7 +1,10 @@
 import React from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
+
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
@@ -104,6 +107,23 @@ export default function AppLayout() {
         <div className="flex items-center gap-2">
           <MuteToggle />
           <ThemeToggle />
+          {CLERK_KEY && (
+            <>
+              <SignedOut>
+                <SignInButton mode="modal">
+                  <button
+                    className="text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
+                    style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}
+                  >
+                    Sign in
+                  </button>
+                </SignInButton>
+              </SignedOut>
+              <SignedIn>
+                <UserButton afterSignOutUrl="/play" />
+              </SignedIn>
+            </>
+          )}
         </div>
       </header>
 

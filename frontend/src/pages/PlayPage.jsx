@@ -45,7 +45,10 @@ export default function PlayPage() {
 
   return (
     <div className="flex flex-col items-center w-full max-w-md mx-auto">
-      <ModeSelection onPvpCreate={() => usePvpStore.getState().createRoom()} />
+      <ModeSelection
+        onPvpCreate={() => usePvpStore.getState().createRoom()}
+        onPvpJoin={(slug) => usePvpStore.getState().joinRoom(slug, 'player')}
+      />
     </div>
   )
 }
