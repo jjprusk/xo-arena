@@ -65,6 +65,16 @@ router.post('/models/:id/clone', requireAuth, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+router.post('/models/import', requireAuth, async (req, res, next) => {
+  try {
+    const model = await svc.importModel(req.body)
+    res.status(201).json({ model })
+  } catch (err) {
+    if (err.message === 'name is required') return res.status(400).json({ error: err.message })
+    next(err)
+  }
+})
+
 // ─── Q-table export ───────────────────────────────────────────────────────────
 
 router.get('/models/:id/qtable', async (req, res, next) => {
@@ -159,6 +169,17 @@ router.post('/sessions/:id/cancel', requireAuth, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── Export / Import ──────────────────────────────────────────────────────────
+
+router.get('/models/:id/export', async (req, res, next) => {
+  try {
+    const data = await svc.exportModel(req.params.id)
+    const filename = `${data.name.replace(/\s+/g, '_')}.ml.json`
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.json(data)
+  } catch (err) { next(err) }
+})
+
 // ─── Opening book ─────────────────────────────────────────────────────────────
 
 router.get('/models/:id/opening-book', async (req, res, next) => {
@@ -170,10 +191,24 @@ router.get('/models/:id/opening-book', async (req, res, next) => {
 
 // ─── Checkpoints ──────────────────────────────────────────────────────────────
 
+router.post('/models/:id/checkpoint', requireAuth, async (req, res, next) => {
+  try {
+    const checkpoint = await svc.saveCheckpoint(req.params.id)
+    res.status(201).json({ checkpoint })
+  } catch (err) { next(err) }
+})
+
 router.get('/models/:id/checkpoints', async (req, res, next) => {
   try {
     const checkpoints = await svc.listCheckpoints(req.params.id)
     res.json({ checkpoints })
+  } catch (err) { next(err) }
+})
+
+router.get('/models/:id/checkpoints/:cpId', async (req, res, next) => {
+  try {
+    const checkpoint = await svc.getCheckpoint(req.params.id, req.params.cpId)
+    res.json({ checkpoint })
   } catch (err) { next(err) }
 })
 

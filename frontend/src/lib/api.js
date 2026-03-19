@@ -50,8 +50,12 @@ export const api = {
     getEpisodes:      (id, page)   => api.get(`/ml/sessions/${id}/episodes?page=${page}&limit=500`),
     cancelSession:    (id, tok)    => api.post(`/ml/sessions/${id}/cancel`, {}, tok),
     getCheckpoints:   (id)         => api.get(`/ml/models/${id}/checkpoints`),
+    getCheckpoint:    (id, cpId)   => api.get(`/ml/models/${id}/checkpoints/${cpId}`),
+    saveCheckpoint:   (id, tok)    => api.post(`/ml/models/${id}/checkpoint`, {}, tok),
     restoreCheckpoint:(id,cp,tok)  => api.post(`/ml/models/${id}/checkpoints/${cp}/restore`, {}, tok),
     getOpeningBook:   (id)         => api.get(`/ml/models/${id}/opening-book`),
+    exportModel:      (id)         => api.get(`/ml/models/${id}/export`),
+    importModel:      (data, tok)  => api.post('/ml/models/import', data, tok),
   },
 
   rooms: {

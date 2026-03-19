@@ -199,6 +199,51 @@ export async function explainMove(modelId, board) {
   return { qvalues, bestCell: best, epsilon: engine.epsilon, stateCount: engine.stateCount }
 }
 
+export async function saveCheckpoint(modelId) {
+  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  if (!model) throw new Error('Model not found')
+  return db.mLCheckpoint.create({
+    data: {
+      modelId,
+      episodeNum: model.totalEpisodes,
+      qtable: model.qtable,
+      epsilon: model.config?.currentEpsilon ?? model.config?.epsilonStart ?? 1.0,
+      eloRating: model.eloRating,
+    },
+  })
+}
+
+export async function getCheckpoint(modelId, checkpointId) {
+  const cp = await db.mLCheckpoint.findUnique({ where: { id: checkpointId } })
+  if (!cp || cp.modelId !== modelId) throw new Error('Checkpoint not found')
+  return cp
+}
+
+export async function exportModel(modelId) {
+  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  if (!model) throw new Error('Model not found')
+  // eslint-disable-next-line no-unused-vars
+  const { id, createdAt, updatedAt, ...rest } = model
+  return rest
+}
+
+export async function importModel(data) {
+  const { name, description, algorithm, config, qtable, totalEpisodes, eloRating } = data
+  if (!name?.trim()) throw new Error('name is required')
+  const mergedConfig = { ...DEFAULT_CONFIG, ...(config || {}) }
+  return db.mLModel.create({
+    data: {
+      name: name.trim(),
+      description: description || null,
+      algorithm: algorithm || 'Q_LEARNING',
+      config: mergedConfig,
+      qtable: qtable || {},
+      totalEpisodes: totalEpisodes || 0,
+      eloRating: eloRating || 1000,
+    },
+  })
+}
+
 // ─── Training ────────────────────────────────────────────────────────────────
 
 export async function startTraining(modelId, { mode, iterations, config = {} }) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend,
 } from 'recharts'
 import { api } from '../lib/api.js'
@@ -21,6 +22,8 @@ export default function MLDashboardPage() {
   const [selectedId, setSelectedId]   = useState(null)
   const [activeTab, setActiveTab]     = useState('train')
   const [showCreate, setShowCreate]   = useState(false)
+  const [showClone,  setShowClone]    = useState(false)
+  const [showImport, setShowImport]   = useState(false)
 
   const selected = models.find(m => m.id === selectedId)
 
@@ -57,12 +60,10 @@ export default function MLDashboardPage() {
     refreshModel(id)
   }
 
-  async function handleClone(id) {
-    const token = await window.Clerk?.session?.getToken()
+  async function handleExport(id) {
+    const data = await api.ml.exportModel(id)
     const src = models.find(m => m.id === id)
-    const { model } = await api.ml.cloneModel(id, { name: `${src.name} (copy)` }, token)
-    setModels(ms => [model, ...ms])
-    setSelectedId(model.id)
+    downloadJSON(data, `${(src?.name || 'model').replace(/\s+/g, '_')}.ml.json`)
   }
 
   return (
@@ -73,6 +74,7 @@ export default function MLDashboardPage() {
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
             style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>Admin</span>
+          <Btn onClick={() => setShowImport(true)} variant="ghost">Import</Btn>
           <button onClick={() => setShowCreate(true)}
             className="px-3 py-1.5 text-sm font-semibold rounded-lg transition-all hover:brightness-110"
             style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}>
@@ -129,8 +131,9 @@ export default function MLDashboardPage() {
                     <span>ELO {Math.round(selected.eloRating)}</span>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Btn onClick={() => handleClone(selected.id)} variant="ghost">Clone</Btn>
+                <div className="flex flex-wrap gap-2">
+                  <Btn onClick={() => handleExport(selected.id)} variant="ghost">Export</Btn>
+                  <Btn onClick={() => setShowClone(true)} variant="ghost">Clone</Btn>
                   <Btn onClick={() => handleReset(selected.id)} variant="ghost">Reset</Btn>
                   <Btn onClick={() => handleDelete(selected.id)} variant="danger">Delete</Btn>
                 </div>
@@ -158,6 +161,8 @@ export default function MLDashboardPage() {
       </div>
 
       {showCreate && <CreateModelModal onClose={() => setShowCreate(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowCreate(false) }} />}
+      {showClone  && selected && <CloneModelModal src={selected} onClose={() => setShowClone(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowClone(false) }} />}
+      {showImport && <ImportModelModal onClose={() => setShowImport(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowImport(false) }} />}
     </div>
   )
 }
@@ -569,7 +574,7 @@ function ExplainabilityTab({ model }) {
   const [loading, setLoading]       = useState(false)
   const [openingBook, setOpeningBook] = useState(null)
   const [obLoading, setObLoading]   = useState(false)
-  const [activeSection, setSection] = useState('position') // 'position' | 'opening'
+  const [activeSection, setSection] = useState('position') // 'position' | 'opening' | 'diff'
 
   // Fetch Q-values whenever board changes
   useEffect(() => {
@@ -616,12 +621,12 @@ function ExplainabilityTab({ model }) {
   return (
     <div className="space-y-4">
       {/* Section toggle */}
-      <div className="flex gap-2">
-        {['position', 'opening'].map(s => (
+      <div className="flex gap-2 flex-wrap">
+        {[['position', 'Position Analysis'], ['opening', 'Opening Book'], ['diff', 'Version Diff']].map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${activeSection === s ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeSection === s ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
             style={{ backgroundColor: activeSection === s ? undefined : 'var(--bg-surface-hover)', color: activeSection === s ? undefined : 'var(--text-secondary)' }}>
-            {s === 'position' ? 'Position Analysis' : 'Opening Book'}
+            {label}
           </button>
         ))}
       </div>
@@ -736,6 +741,166 @@ function ExplainabilityTab({ model }) {
           )}
         </div>
       )}
+
+      {activeSection === 'diff' && <VersionDiffViewer model={model} />}
+    </div>
+  )
+}
+
+// ─── Version Diff Viewer ──────────────────────────────────────────────────────
+
+function VersionDiffViewer({ model }) {
+  const [checkpoints, setCheckpoints] = useState([])
+  const [versionA, setVersionA] = useState('current')
+  const [versionB, setVersionB] = useState(null)
+  const [qtableA, setQtableA]   = useState(null)
+  const [qtableB, setQtableB]   = useState(null)
+  const [loading, setLoading]   = useState(false)
+
+  useEffect(() => {
+    api.ml.getCheckpoints(model.id).then(r => {
+      setCheckpoints(r.checkpoints)
+      if (r.checkpoints.length > 0) setVersionB(r.checkpoints[0].id)
+    })
+  }, [model.id])
+
+  async function fetchQTable(version) {
+    if (version === 'current') {
+      const r = await api.ml.getQTable(model.id)
+      return r.qtable
+    }
+    const r = await api.ml.getCheckpoint(model.id, version)
+    return r.checkpoint.qtable
+  }
+
+  async function runDiff() {
+    if (!versionB) return
+    setLoading(true)
+    try {
+      const [a, b] = await Promise.all([fetchQTable(versionA), fetchQTable(versionB)])
+      setQtableA(a)
+      setQtableB(b)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const diff = (() => {
+    if (!qtableA || !qtableB) return null
+    const allKeys = new Set([...Object.keys(qtableA), ...Object.keys(qtableB)])
+    let added = 0, removed = 0, changed = 0
+    const deltas = []
+    for (const key of allKeys) {
+      const a = qtableA[key]
+      const b = qtableB[key]
+      if (!a) { added++; continue }
+      if (!b) { removed++; continue }
+      const maxDelta = Math.max(...a.map((v, i) => Math.abs(v - b[i])))
+      if (maxDelta > 1e-6) {
+        changed++
+        deltas.push({ key, a, b, maxDelta })
+      }
+    }
+    deltas.sort((x, y) => y.maxDelta - x.maxDelta)
+    // Build histogram (bins 0-0.1, 0.1-0.2, ..., 1+)
+    const bins = Array.from({ length: 11 }).map((_, i) => ({ range: i < 10 ? `${i/10}–${(i+1)/10}` : '1+', count: 0 }))
+    for (const d of deltas) {
+      const bi = Math.min(10, Math.floor(d.maxDelta * 10))
+      bins[bi].count++
+    }
+    return { added, removed, changed, deltas: deltas.slice(0, 20), histogram: bins }
+  })()
+
+  const cpLabel = id => {
+    const cp = checkpoints.find(c => c.id === id)
+    return cp ? `Ep ${cp.episodeNum.toLocaleString()} (ε=${cp.epsilon.toFixed(3)})` : id
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <SectionLabel>Select Versions to Compare</SectionLabel>
+        <div className="mt-3 grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Version A</label>
+            <select value={versionA} onChange={e => setVersionA(e.target.value)}
+              className="w-full text-sm rounded-lg border px-3 py-1.5 outline-none"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+              <option value="current">Current model (live Q-table)</option>
+              {checkpoints.map(cp => <option key={cp.id} value={cp.id}>{cpLabel(cp.id)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Version B</label>
+            <select value={versionB || ''} onChange={e => setVersionB(e.target.value)}
+              className="w-full text-sm rounded-lg border px-3 py-1.5 outline-none"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+              {checkpoints.map(cp => <option key={cp.id} value={cp.id}>{cpLabel(cp.id)}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mt-3">
+          <Btn onClick={runDiff} disabled={loading || !versionB || versionA === versionB}>
+            {loading ? 'Computing…' : 'Compare'}
+          </Btn>
+        </div>
+        {checkpoints.length === 0 && <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>No checkpoints yet — train the model to generate checkpoints.</p>}
+      </Card>
+
+      {diff && (
+        <>
+          {/* Summary stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <MiniStat label="States added" value={diff.added.toLocaleString()} color="var(--color-teal-600)" />
+            <MiniStat label="States removed" value={diff.removed.toLocaleString()} color="var(--color-red-600)" />
+            <MiniStat label="States changed" value={diff.changed.toLocaleString()} color="var(--color-blue-600)" />
+          </div>
+
+          {/* Delta histogram */}
+          <ChartPanel label="Q-value Delta Distribution">
+            <BarChart data={diff.histogram}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+              <XAxis dataKey="range" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
+              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Bar dataKey="count" fill="var(--color-blue-500)" name="States" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ChartPanel>
+
+          {/* Top changed states */}
+          {diff.deltas.length > 0 && (
+            <Card>
+              <SectionLabel>Top {diff.deltas.length} Most Changed States</SectionLabel>
+              <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+                States with the largest max Q-value change between versions.
+              </p>
+              <div className="space-y-4">
+                {diff.deltas.map(({ key, a, b, maxDelta }) => {
+                  const board = key.split('').map(c => c === 'X' ? 'X' : c === 'O' ? 'O' : null)
+                  return (
+                    <div key={key} className="rounded-lg border p-3" style={{ borderColor: 'var(--border-default)' }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <code className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{key}</code>
+                        <span className="text-xs font-semibold" style={{ color: 'var(--color-amber-600)' }}>Δmax={maxDelta.toFixed(4)}</span>
+                      </div>
+                      <div className="flex gap-6 flex-wrap">
+                        <div>
+                          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Version A</p>
+                          <QValueHeatmap board={board} qValues={a.map((v, i) => board[i] !== null ? null : v)} />
+                        </div>
+                        <div>
+                          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Version B</p>
+                          <QValueHeatmap board={board} qValues={b.map((v, i) => board[i] !== null ? null : v)} />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -793,10 +958,22 @@ function OpeningResponseGrid({ responses }) {
 
 function CheckpointsTab({ model, onRestore }) {
   const [checkpoints, setCheckpoints] = useState([])
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     api.ml.getCheckpoints(model.id).then(r => setCheckpoints(r.checkpoints))
   }, [model.id])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const token = await window.Clerk?.session?.getToken()
+      const { checkpoint } = await api.ml.saveCheckpoint(model.id, token)
+      setCheckpoints(prev => [checkpoint, ...prev])
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function handleRestore(cpId) {
     if (!confirm('Restore this checkpoint? Current Q-table will be replaced.')) return
@@ -807,9 +984,14 @@ function CheckpointsTab({ model, onRestore }) {
 
   return (
     <Card>
-      <SectionLabel>Checkpoints</SectionLabel>
+      <div className="flex items-center justify-between">
+        <SectionLabel>Checkpoints</SectionLabel>
+        <Btn onClick={handleSave} disabled={saving} variant="ghost">
+          {saving ? 'Saving…' : '+ Save now'}
+        </Btn>
+      </div>
       <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
-        Saved every 1,000 episodes during training. Restore any checkpoint to roll back the model.
+        Auto-saved every 1,000 episodes. Restore any checkpoint to roll back the model.
       </p>
       {checkpoints.length === 0 ? (
         <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No checkpoints yet.</p>
@@ -893,6 +1075,110 @@ function ExportTab({ model }) {
         )}
       </div>
     </Card>
+  )
+}
+
+// ─── Clone Model Modal ────────────────────────────────────────────────────────
+
+function CloneModelModal({ src, onClose, onCreate }) {
+  const [name, setName]     = useState(`${src.name} (copy)`)
+  const [desc, setDesc]     = useState(src.description || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const token = await window.Clerk?.session?.getToken()
+      const { model } = await api.ml.cloneModel(src.id, { name: name.trim(), description: desc.trim() || undefined }, token)
+      onCreate(model)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+      <div className="w-full max-w-md rounded-2xl border p-6 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}>
+        <h2 className="text-xl font-bold">Clone "{src.name}"</h2>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-sm font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Name *</label>
+            <input value={name} onChange={e => setName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none focus:border-[var(--color-blue-600)] transition-colors"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Description</label>
+            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Optional"
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none focus:border-[var(--color-blue-600)] transition-colors"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+          </div>
+          {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+          <div className="flex gap-2 justify-end pt-1">
+            <Btn type="button" onClick={onClose} variant="ghost">Cancel</Btn>
+            <Btn type="submit" disabled={saving || !name.trim()}>{saving ? 'Cloning…' : 'Clone'}</Btn>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Import Model Modal ───────────────────────────────────────────────────────
+
+function ImportModelModal({ onClose, onCreate }) {
+  const [error, setError]   = useState(null)
+  const [saving, setSaving] = useState(false)
+  const fileRef = useRef(null)
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSaving(true)
+    setError(null)
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      const token = await window.Clerk?.session?.getToken()
+      const { model } = await api.ml.importModel(data, token)
+      onCreate(model)
+    } catch (err) {
+      setError(err.message || 'Invalid model file')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+      <div className="w-full max-w-md rounded-2xl border p-6 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}>
+        <h2 className="text-xl font-bold">Import Model</h2>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Select a <code className="font-mono text-xs">.ml.json</code> file exported from this dashboard.
+        </p>
+        <div
+          onClick={() => fileRef.current?.click()}
+          className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors hover:border-[var(--color-blue-600)]"
+          style={{ borderColor: 'var(--border-default)' }}>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            {saving ? 'Importing…' : 'Click to select file'}
+          </p>
+          <input ref={fileRef} type="file" accept=".json,.ml.json" className="hidden" onChange={handleFile} disabled={saving} />
+        </div>
+        {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+        <div className="flex justify-end">
+          <Btn type="button" onClick={onClose} variant="ghost">Cancel</Btn>
+        </div>
+      </div>
+    </div>
   )
 }
 
