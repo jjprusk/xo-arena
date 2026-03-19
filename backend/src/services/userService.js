@@ -135,7 +135,7 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50 
   const totalMap = new Map(totals.map((t) => [t.player1Id, t._count.id]))
 
   const entries = [...totalMap.entries()]
-    .filter(([, total]) => total >= 5)
+    .filter(([, total]) => total >= 1)
     .map(([userId, total]) => ({
       userId,
       total,
