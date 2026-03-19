@@ -9,7 +9,17 @@ const MARK_COLOR = {
   O: 'var(--color-teal-600)',
 }
 
-export default function GameBoard() {
+export default function GameBoard({ inviteUrl }) {
+  const [inviteCopied, setInviteCopied] = useState(false)
+
+  function handleCopyInvite() {
+    if (!inviteUrl) return
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setInviteCopied(true)
+      setTimeout(() => setInviteCopied(false), 2000)
+    })
+  }
+
   const {
     board, currentTurn, status, winner, winLine, scores, round,
     playerMark, mode, difficulty, aiImplementation, isAIThinking,
@@ -72,6 +82,21 @@ export default function GameBoard() {
         <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Round {round}</span>
         <ScorePill mark="O" score={scores.O} />
       </div>
+
+      {/* Invite a friend bar */}
+      {inviteUrl && (
+        <button
+          onClick={handleCopyInvite}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
+          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+        >
+          <span style={{ color: 'var(--text-muted)' }}>👥</span>
+          <span className="flex-1 text-left truncate font-mono" style={{ color: 'var(--text-muted)' }}>{inviteUrl}</span>
+          <span className="font-semibold shrink-0" style={{ color: inviteCopied ? 'var(--color-teal-600)' : 'var(--color-blue-600)' }}>
+            {inviteCopied ? '✓ Copied' : 'Invite'}
+          </span>
+        </button>
+      )}
 
       {/* Turn indicator */}
       <div className="flex items-center gap-2 h-8">

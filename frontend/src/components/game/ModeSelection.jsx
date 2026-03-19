@@ -5,7 +5,7 @@ import { api } from '../../lib/api.js'
 
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
-export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
+export default function ModeSelection({ onStart, onPvpJoin, inviteUrl }) {
   const { setMode, setDifficulty, setAIImplementation, setPlayerMark, setPlayerName, startGame } = useGameStore()
 
   const [aiExpanded, setAiExpanded] = useState(false)
@@ -16,6 +16,15 @@ export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
   const [implementations, setImplementations] = useState([])
   const [loadingImpls, setLoadingImpls] = useState(false)
   const [joinInput, setJoinInput] = useState('')
+  const [inviteCopied, setInviteCopied] = useState(false)
+
+  function handleCopyInvite() {
+    if (!inviteUrl) return
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setInviteCopied(true)
+      setTimeout(() => setInviteCopied(false), 2000)
+    })
+  }
 
   useEffect(() => {
     if (!aiExpanded) return
@@ -180,21 +189,43 @@ export default function ModeSelection({ onStart, onPvpCreate, onPvpJoin }) {
         )}
       </div>
 
-      {/* ── Create a Room ──────────────────────────────────── */}
-      <button
-        onClick={onPvpCreate}
-        className="w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-colors hover:border-[var(--color-teal-600)] hover:bg-[var(--color-teal-50)]"
+      {/* ── Invite a Friend ────────────────────────────────── */}
+      <div
+        className="rounded-xl border-2 p-4 space-y-3"
         style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
       >
-        <span className="text-3xl">👥</span>
-        <div className="flex-1">
-          <div className="font-semibold">Create a Room</div>
-          <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            Get an invite link to share with a friend
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">👥</span>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Invite a Friend</div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              Share your room link — they jump straight in
+            </div>
           </div>
         </div>
-        <span className="text-lg" style={{ color: 'var(--text-muted)' }}>→</span>
-      </button>
+        {inviteUrl ? (
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={inviteUrl}
+              className="flex-1 px-3 py-2 rounded-lg border text-xs font-mono truncate"
+              style={{ backgroundColor: 'var(--bg-page)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            />
+            <button
+              onClick={handleCopyInvite}
+              className="px-3 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
+              style={{ background: inviteCopied ? 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))' : 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+            >
+              {inviteCopied ? '✓' : 'Copy'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-1">
+            <div className="w-3.5 h-3.5 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Creating room…</span>
+          </div>
+        )}
+      </div>
 
       {/* ── Join a Room ────────────────────────────────────── */}
       <div
