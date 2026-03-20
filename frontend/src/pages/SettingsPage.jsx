@@ -1,6 +1,6 @@
 import React from 'react'
 import { useThemeStore } from '../store/themeStore.js'
-import { useSoundStore } from '../store/soundStore.js'
+import { useSoundStore, SOUND_PACKS } from '../store/soundStore.js'
 
 const THEMES = [
   { value: 'light', label: 'Light', preview: '☀' },
@@ -10,7 +10,7 @@ const THEMES = [
 
 export default function SettingsPage() {
   const { theme, setTheme } = useThemeStore()
-  const { muted, toggleMute, volume, setVolume } = useSoundStore()
+  const { muted, toggleMute, volume, setVolume, soundPack, setSoundPack } = useSoundStore()
 
   return (
     <div className="max-w-lg mx-auto space-y-8">
@@ -85,6 +85,26 @@ export default function SettingsPage() {
             <span className="text-sm font-semibold tabular-nums w-10 text-right" style={{ color: 'var(--text-secondary)' }}>
               {Math.round(volume * 100)}%
             </span>
+          </div>
+          <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+          <div>
+            <span className="text-sm font-medium block mb-2">Sound pack</span>
+            <div className="flex flex-col gap-2">
+              {SOUND_PACKS.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setSoundPack(p.id)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg border-2 text-sm text-left transition-colors"
+                  style={{
+                    borderColor: soundPack === p.id ? 'var(--color-blue-600)' : 'var(--border-default)',
+                    backgroundColor: soundPack === p.id ? 'var(--color-blue-50)' : 'var(--bg-surface)',
+                  }}
+                >
+                  <span className="font-medium">{p.label}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{p.description}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>

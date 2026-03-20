@@ -10,7 +10,10 @@ const { createClient } = ioredis
 import { roomManager } from './roomManager.js'
 import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend'
 import { getUserByClerkId, createGame } from '../services/userService.js'
+import { updatePlayersEloAfterPvP } from '../services/eloService.js'
 import logger from '../logger.js'
+
+const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
 
 let clerkClient = null
 function getClerk() {
@@ -160,6 +163,18 @@ export async function attachSocketIO(httpServer) {
       recordPvpGame(room).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
     })
 
+    // ── Emoji reactions ──────────────────────────────────────────────
+
+    socket.on('game:reaction', ({ emoji }) => {
+      if (!ALLOWED_REACTIONS.includes(emoji)) return
+      const slug = roomManager._socketToRoom.get(socket.id)
+      if (!slug) return
+      const room = roomManager.getRoom(slug)
+      const fromMark = room?.playerMarks?.[socket.id] ?? 'spectator'
+      // Broadcast to everyone else in the room
+      socket.to(slug).emit('game:reaction', { emoji, fromMark })
+    })
+
     // ── ML training progress ─────────────────────────────────────────
 
     socket.on('ml:watch', ({ sessionId }) => {
@@ -246,6 +261,11 @@ async function recordPvpGame(room) {
       startedAt: new Date(room.createdAt),
       roomName: room.name,
     })
+  }
+
+  // Update ELO for both authenticated players (fire-and-forget)
+  if (room.hostUserId && room.guestUserId) {
+    updatePlayersEloAfterPvP(room.hostUserId, room.guestUserId, outcome).catch(() => {})
   }
 }
 

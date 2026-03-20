@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { getUserByClerkId, createGame } from '../services/userService.js'
+import { updatePlayerEloAfterPvAI } from '../services/eloService.js'
 import logger from '../logger.js'
 
 const router = Router()
@@ -36,6 +37,9 @@ router.post('/', requireAuth, async (req, res, next) => {
       durationMs,
       startedAt,
     })
+
+    // Update player ELO (fire-and-forget — non-fatal)
+    updatePlayerEloAfterPvAI(user.id, outcome, difficulty).catch(() => {})
 
     res.status(201).json({ game: { id: game.id } })
   } catch (err) {

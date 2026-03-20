@@ -28,6 +28,9 @@ export const usePvpStore = create((set, get) => ({
   error: null,
   isAutoRoom: false,
 
+  // Reactions
+  incomingReaction: null,  // { emoji, fromMark, id } — cleared after display
+
   // ── Actions ──────────────────────────────────────────────────────
 
   /**
@@ -92,6 +95,13 @@ export const usePvpStore = create((set, get) => ({
   },
 
   /**
+   * Send an emoji reaction.
+   */
+  sendReaction(emoji) {
+    getSocket().emit('game:reaction', { emoji })
+  },
+
+  /**
    * Reset state and disconnect.
    */
   reset() {
@@ -101,6 +111,7 @@ export const usePvpStore = create((set, get) => ({
       status: 'idle', board: Array(9).fill(null), currentTurn: 'X',
       scores: { X: 0, O: 0 }, round: 1, winner: null, winLine: null,
       spectatorCount: 0, connected: false, error: null, isAutoRoom: false,
+      incomingReaction: null,
     })
   },
 
@@ -175,6 +186,11 @@ export const usePvpStore = create((set, get) => ({
     socket.on('game:forfeit', ({ winner, scores }) => {
       set({ status: 'finished', winner, scores })
       useSoundStore.getState().play('forfeit')
+    })
+
+    socket.on('game:reaction', ({ emoji, fromMark }) => {
+      set({ incomingReaction: { emoji, fromMark, id: Date.now() } })
+      setTimeout(() => set({ incomingReaction: null }), 2500)
     })
 
     socket.on('error', ({ message }) => {

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { getUserById, updateUser, getUserStats, syncUser } from '../services/userService.js'
 import { createClerkClient } from '@clerk/backend'
+import db from '../lib/db.js'
 import logger from '../logger.js'
 
 const router = Router()
@@ -51,6 +52,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       id: user.id,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
+      eloRating: user.eloRating,
       createdAt: user.createdAt,
       ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider }),
     }
@@ -104,6 +106,26 @@ router.get('/:id/stats', async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/:id/elo-history
+ * Returns the last 50 ELO changes for a user.
+ */
+router.get('/:id/elo-history', async (req, res, next) => {
+  try {
+    const user = await getUserById(req.params.id)
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const history = await db.userEloHistory.findMany({
+      where: { userId: user.id },
+      orderBy: { recordedAt: 'desc' },
+      take: 50,
+    })
+    res.json({ eloHistory: history, currentElo: user.eloRating })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/users/:id/games
  * Returns paginated game history for a user.
  */
@@ -116,7 +138,6 @@ router.get('/:id/games', async (req, res, next) => {
     const limit = Math.min(50, parseInt(req.query.limit) || 20)
     const skip = (page - 1) * limit
 
-    const { default: db } = await import('../lib/db.js')
     const [games, total] = await Promise.all([
       db.game.findMany({
         where: { OR: [{ player1Id: user.id }, { player2Id: user.id }] },

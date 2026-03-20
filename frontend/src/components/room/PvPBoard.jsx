@@ -6,14 +6,17 @@ const MARK_COLOR = {
   O: 'var(--color-teal-600)',
 }
 
+const REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
+
 export default function PvPBoard() {
   const {
     board, currentTurn, status, winner, winLine, scores, round,
-    myMark, role, displayName, spectatorCount, error,
-    move, rematch, forfeit, reset,
+    myMark, role, displayName, spectatorCount, error, incomingReaction,
+    move, rematch, forfeit, reset, sendReaction,
   } = usePvpStore()
 
   const [showForfeitDialog, setShowForfeitDialog] = useState(false)
+  const [showReactions, setShowReactions] = useState(false)
 
   const isMyTurn = status === 'playing' && currentTurn === myMark && role !== 'spectator'
   const oppMark = myMark === 'X' ? 'O' : 'X'
@@ -106,6 +109,44 @@ export default function PvPBoard() {
           )
         })}
       </div>
+
+      {/* Incoming reaction */}
+      {incomingReaction && (
+        <div
+          key={incomingReaction.id}
+          className="text-5xl animate-bounce pointer-events-none select-none"
+          style={{ lineHeight: 1 }}
+        >
+          {incomingReaction.emoji}
+        </div>
+      )}
+
+      {/* Reaction bar (players only, during game or finished) */}
+      {role !== 'spectator' && (status === 'playing' || status === 'finished') && (
+        <div className="w-full">
+          <button
+            onClick={() => setShowReactions(v => !v)}
+            className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+          >
+            React {showReactions ? '▲' : '▼'}
+          </button>
+          {showReactions && (
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {REACTIONS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => { sendReaction(emoji); setShowReactions(false) }}
+                  className="text-xl p-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)] hover:scale-110 active:scale-95"
+                  style={{ borderColor: 'var(--border-default)' }}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Spectator badge */}
       {role === 'spectator' && (

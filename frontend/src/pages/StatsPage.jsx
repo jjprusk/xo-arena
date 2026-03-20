@@ -12,6 +12,7 @@ export default function StatsPage() {
   const { isSignedIn, isLoaded } = useUser()
   const [stats, setStats] = useState(null)
   const [dbUserId, setDbUserId] = useState(null)
+  const [eloData, setEloData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -30,8 +31,12 @@ export default function StatsPage() {
         const token = await window.Clerk?.session?.getToken()
         const { user } = await api.users.sync(token)
         setDbUserId(user.id)
-        const { stats: s } = await api.users.stats(user.id)
+        const [{ stats: s }, eloRes] = await Promise.all([
+          api.users.stats(user.id),
+          api.users.eloHistory(user.id).catch(() => null),
+        ])
         setStats(s)
+        if (eloRes) setEloData(eloRes)
       } catch (err) {
         setError('Failed to load stats.')
       } finally {
@@ -96,8 +101,34 @@ export default function StatsPage() {
         </div>
       ) : (
         <>
-          {/* Stats grid */}
+          {/* ELO + stats grid */}
           <div className="grid grid-cols-2 gap-3">
+            {eloData && (
+              <div
+                className="col-span-2 rounded-xl border p-5 flex items-center justify-between"
+                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+              >
+                <div>
+                  <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-blue-600)' }}>
+                    {Math.round(eloData.currentElo)}
+                  </div>
+                  <div className="text-xs mt-1 font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>ELO Rating</div>
+                </div>
+                {eloData.eloHistory.length > 0 && (
+                  <div className="text-right">
+                    <div
+                      className="text-sm font-semibold"
+                      style={{ color: eloData.eloHistory[0].delta >= 0 ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}
+                    >
+                      {eloData.eloHistory[0].delta >= 0 ? '+' : ''}{Math.round(eloData.eloHistory[0].delta)} last game
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {eloData.eloHistory.length} rated game{eloData.eloHistory.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <StatCard label="Total Games" value={stats.totalGames} />
             <StatCard label="Win Rate" value={`${Math.round(stats.winRate * 100)}%`} color="var(--color-teal-600)" />
             <StatCard label="Wins" value={stats.wins} color="var(--color-teal-600)" />
