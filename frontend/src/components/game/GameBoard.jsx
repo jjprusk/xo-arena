@@ -38,6 +38,18 @@ export default function GameBoard({ inviteUrl, roomName }) {
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isPlayerTurn = status === 'playing' && currentTurn === playerMark
+  const isOpponentTurn = status === 'playing' && currentTurn !== playerMark
+
+  // Ticking thinking timer for the opponent
+  const thinkingStartRef = useRef(null)
+  const [thinkingMs, setThinkingMs] = useState(0)
+  useEffect(() => {
+    if (!isOpponentTurn) { setThinkingMs(0); thinkingStartRef.current = null; return }
+    thinkingStartRef.current = Date.now()
+    setThinkingMs(0)
+    const id = setInterval(() => setThinkingMs(Date.now() - thinkingStartRef.current), 100)
+    return () => clearInterval(id)
+  }, [isOpponentTurn])
 
   // Track game start time
   useEffect(() => {
@@ -165,16 +177,23 @@ export default function GameBoard({ inviteUrl, roomName }) {
 
       {/* Turn indicator */}
       <div className="flex items-center gap-2 h-8">
-        {status === 'playing' && !isAIThinking && (
+        {status === 'playing' && (
           <>
             <span className="font-bold" style={{ color: MARK_COLOR[currentTurn] }}>{currentTurn}</span>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {currentTurn === playerMark ? "Your turn" : (mode === 'pvai' ? "AI's turn" : "Opponent's turn")}
-            </span>
+            {isPlayerTurn && (
+              <span style={{ color: 'var(--text-secondary)' }}>Your turn</span>
+            )}
+            {isOpponentTurn && (
+              <>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {isAIThinking ? 'AI is thinking…' : (mode === 'pvai' ? "AI's turn" : "Opponent's turn")}
+                </span>
+                <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {(thinkingMs / 1000).toFixed(1)}s
+                </span>
+              </>
+            )}
           </>
-        )}
-        {isAIThinking && (
-          <span style={{ color: 'var(--text-secondary)' }}>AI is thinking…</span>
         )}
         {status === 'won' && (
           <span className="font-bold" style={{ color: winner === playerMark ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
