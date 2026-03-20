@@ -6,7 +6,7 @@ import { api } from '../../lib/api.js'
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
 export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
-  const { setMode, setDifficulty, setAIImplementation, setPlayerMark, setPlayerName, startGame } = useGameStore()
+  const { setMode, setDifficulty, setAIImplementation, setMLModelId, setPlayerMark, setPlayerName, startGame } = useGameStore()
 
   const [aiExpanded, setAiExpanded] = useState(false)
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium')
@@ -15,6 +15,8 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   const [playerName, setPlayerNameLocal] = useState('')
   const [implementations, setImplementations] = useState([])
   const [loadingImpls, setLoadingImpls] = useState(false)
+  const [mlModels, setMlModels] = useState([])
+  const [selectedModelId, setSelectedModelId] = useState(null)
   const [joinInput, setJoinInput] = useState('')
   const [inviteCopied, setInviteCopied] = useState(false)
   const [rooms, setRooms] = useState([])
@@ -64,10 +66,23 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
       .finally(() => setLoadingImpls(false))
   }, [aiExpanded])
 
+  // Fetch ML models when ML engine is selected
+  useEffect(() => {
+    if (selectedImpl !== 'ml') return
+    api.ml.listModels()
+      .then((res) => {
+        const models = res.models || []
+        setMlModels(models)
+        if (models.length > 0 && !selectedModelId) setSelectedModelId(models[0].id)
+      })
+      .catch(() => setMlModels([]))
+  }, [selectedImpl])
+
   function handlePlayAI() {
     setMode('pvai')
     setDifficulty(selectedDifficulty)
     setAIImplementation(selectedImpl)
+    setMLModelId(selectedImpl === 'ml' ? selectedModelId : null)
     setPlayerMark(selectedMark)
     setPlayerName(playerName)
     startGame()
@@ -180,6 +195,48 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
               </div>
             )}
 
+            {/* ML model selector */}
+            {selectedImpl === 'ml' && (
+              <div>
+                <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  ML Model
+                </label>
+                {mlModels.length === 0 ? (
+                  <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+                    No models found. Train one in the ML dashboard first.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {mlModels.map((m) => (
+                      <label
+                        key={m.id}
+                        className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                          selectedModelId === m.id
+                            ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]'
+                            : 'border-[var(--border-default)] hover:border-[var(--color-gray-400)]'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="mlmodel"
+                          value={m.id}
+                          checked={selectedModelId === m.id}
+                          onChange={() => setSelectedModelId(m.id)}
+                          className="mt-0.5 accent-[var(--color-blue-600)]"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{m.name}</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            {m.algorithm?.replace('_', '-')} · {m.totalEpisodes?.toLocaleString() ?? 0} episodes · ELO {m.eloRating ?? 1200}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Mark */}
             <div>
               <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
@@ -209,7 +266,8 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
             <button
               onClick={handlePlayAI}
-              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
+              disabled={selectedImpl === 'ml' && !selectedModelId}
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', boxShadow: 'var(--shadow-md)' }}
             >
               Play vs AI
