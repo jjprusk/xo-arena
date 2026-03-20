@@ -9,6 +9,7 @@ export const useGameStore = create((set, get) => ({
   aiImplementation: 'minimax',
   mlModelId: null,    // modelId when aiImplementation === 'ml'
   playerMark: 'X',   // which mark the human plays
+  alternating: false, // swap playerMark on each rematch
   playerName: '',
 
   // Game state
@@ -27,6 +28,7 @@ export const useGameStore = create((set, get) => ({
   setAIImplementation(id) { set({ aiImplementation: id }) },
   setMLModelId(id) { set({ mlModelId: id }) },
   setPlayerMark(mark) { set({ playerMark: mark }) },
+  setAlternating(val) { set({ alternating: val }) },
   setPlayerName(name) { set({ playerName: name }) },
 
   startGame() {
@@ -72,7 +74,7 @@ export const useGameStore = create((set, get) => ({
   setAIThinking(val) { set({ isAIThinking: val }) },
 
   rematch() {
-    const { currentTurn } = get()
+    const { currentTurn, alternating, playerMark } = get()
     set({
       board: [...EMPTY_BOARD],
       currentTurn: currentTurn === 'X' ? 'O' : 'X',
@@ -81,6 +83,7 @@ export const useGameStore = create((set, get) => ({
       winLine: null,
       isAIThinking: false,
       round: get().round + 1,
+      ...(alternating ? { playerMark: playerMark === 'X' ? 'O' : 'X' } : {}),
     })
   },
 
@@ -95,6 +98,7 @@ export const useGameStore = create((set, get) => ({
       winLine: null,
       isAIThinking: false,
       mode: null,
+      alternating: false,
     })
   },
 

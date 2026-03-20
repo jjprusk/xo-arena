@@ -6,7 +6,7 @@ import { api } from '../../lib/api.js'
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
 export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
-  const { setMode, setDifficulty, setAIImplementation, setMLModelId, setPlayerMark, setPlayerName, startGame } = useGameStore()
+  const { setMode, setDifficulty, setAIImplementation, setMLModelId, setPlayerMark, setAlternating, setPlayerName, startGame } = useGameStore()
 
   const [aiExpanded, setAiExpanded] = useState(false)
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium')
@@ -68,11 +68,13 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   }, [selectedImpl])
 
   function handlePlayAI() {
+    const isAlternating = selectedMark === 'alternate'
     setMode('pvai')
     setDifficulty(selectedDifficulty)
     setAIImplementation(selectedImpl)
     setMLModelId(selectedImpl === 'ml' ? selectedModelId : null)
-    setPlayerMark(selectedMark)
+    setPlayerMark(isAlternating ? 'X' : selectedMark)
+    setAlternating(isAlternating)
     setPlayerName(playerName)
     startGame()
     onStart?.()
@@ -196,25 +198,30 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
               <div>
                 <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Play as</label>
                 <div className="flex gap-2">
-                  {['X', 'O'].map((mark) => (
+                  {[
+                    { id: 'X',         label: 'X',  color: 'var(--color-blue-600)',   bg: 'var(--color-blue-50)' },
+                    { id: 'O',         label: 'O',  color: 'var(--color-teal-600)',   bg: 'var(--color-teal-50)' },
+                    { id: 'alternate', label: '±',  color: 'var(--color-amber-600)',  bg: 'var(--color-amber-50)' },
+                  ].map(({ id, label, color, bg }) => (
                     <button
-                      key={mark}
-                      onClick={() => setSelectedMark(mark)}
+                      key={id}
+                      onClick={() => setSelectedMark(id)}
                       className="flex-1 py-2 rounded-lg text-lg font-bold border-2 transition-colors"
                       style={{
-                        borderColor: selectedMark === mark
-                          ? (mark === 'X' ? 'var(--color-blue-600)' : 'var(--color-teal-600)')
-                          : 'var(--border-default)',
-                        backgroundColor: selectedMark === mark
-                          ? (mark === 'X' ? 'var(--color-blue-50)' : 'var(--color-teal-50)')
-                          : 'var(--bg-surface)',
-                        color: mark === 'X' ? 'var(--color-blue-600)' : 'var(--color-teal-600)',
+                        borderColor: selectedMark === id ? color : 'var(--border-default)',
+                        backgroundColor: selectedMark === id ? bg : 'var(--bg-surface)',
+                        color,
                       }}
                     >
-                      {mark}
+                      {label}
                     </button>
                   ))}
                 </div>
+                {selectedMark === 'alternate' && (
+                  <p className="text-xs mt-1.5 px-0.5" style={{ color: 'var(--text-muted)' }}>
+                    Starts as X — marks swap each rematch.
+                  </p>
+                )}
               </div>
 
               <button
