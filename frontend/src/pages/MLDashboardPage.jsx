@@ -551,6 +551,7 @@ function TrainTab({ model, onComplete }) {
                 <MiniStat label="Win Rate" value={`${Math.round(progress.winRate * 100)}%`} color="var(--color-teal-600)" />
                 <MiniStat label="Epsilon ε" value={progress.epsilon.toFixed(4)} color="var(--color-amber-600)" />
                 <MiniStat label="Avg ΔQ" value={progress.avgQDelta.toFixed(5)} />
+                <MiniStat label="Avg game" value={progress.avgGameMs != null ? `${progress.avgGameMs.toFixed(1)}ms` : '—'} />
               </div>
               <div className="flex gap-4 text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
                 <span>Wins: <b style={{ color: 'var(--color-teal-600)' }}>{progress.outcomes.wins.toLocaleString()}</b></span>

@@ -888,7 +888,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
 
   const PROGRESS_INTERVAL = Math.max(BATCH_SIZE, Math.floor(iterations / 20))
   const episodeBatch = []
-  let wins = 0, losses = 0, draws = 0, totalQDelta = 0
+  let wins = 0, losses = 0, draws = 0, totalQDelta = 0, totalDurationMs = 0
   let actualEpisodes = 0
 
   try {
@@ -910,6 +910,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
       else if (result.outcome === 'LOSS') losses++
       else                                draws++
       totalQDelta += result.avgQDelta
+      totalDurationMs += durationMs
 
       episodeBatch.push({
         sessionId, episodeNum: i + 1,
@@ -980,6 +981,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
           lossRate: done > 0 ? losses / done : 0,
           drawRate: done > 0 ? draws  / done : 0,
           avgQDelta: done > 0 ? totalQDelta / done : 0,
+          avgGameMs: done > 0 ? totalDurationMs / done : 0,
           epsilon: engine.epsilon,
           outcomes: { wins, losses, draws },
         })
