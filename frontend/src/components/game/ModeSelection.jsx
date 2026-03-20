@@ -15,6 +15,8 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   const [playerName, setPlayerNameLocal] = useState('')
   const [mlModels, setMlModels] = useState([])
   const [selectedModelId, setSelectedModelId] = useState(null)
+  const [ruleSets, setRuleSets] = useState([])
+  const [selectedRuleSetId, setSelectedRuleSetId] = useState(null)
   const [joinInput, setJoinInput] = useState('')
   const [inviteCopied, setInviteCopied] = useState(false)
   const [rooms, setRooms] = useState([])
@@ -67,12 +69,26 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
       .catch(() => setMlModels([]))
   }, [selectedImpl])
 
+  // Fetch rule sets when rule_based engine is selected
+  useEffect(() => {
+    if (selectedImpl !== 'rule_based') return
+    api.ml.listRuleSets()
+      .then((res) => {
+        const sets = res.ruleSets || []
+        setRuleSets(sets)
+        if (sets.length > 0 && !selectedRuleSetId) setSelectedRuleSetId(sets[0].id)
+      })
+      .catch(() => setRuleSets([]))
+  }, [selectedImpl])
+
   function handlePlayAI() {
     const isAlternating = selectedMark === 'alternate'
     setMode('pvai')
     setDifficulty(selectedDifficulty)
     setAIImplementation(selectedImpl)
-    setMLModelId(selectedImpl === 'ml' ? selectedModelId : null)
+    if (selectedImpl === 'ml') setMLModelId(selectedModelId)
+    else if (selectedImpl === 'rule_based') setMLModelId(selectedRuleSetId)
+    else setMLModelId(null)
     setPlayerMark(isAlternating ? 'X' : selectedMark)
     setAlternating(isAlternating)
     setPlayerName(playerName)
@@ -130,7 +146,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
           <div className="border-t" style={{ borderColor: 'var(--border-default)' }}>
             {/* Tabs */}
             <div className="flex border-b" style={{ borderColor: 'var(--border-default)' }}>
-              {[{ id: 'minimax', label: 'Minimax' }, { id: 'ml', label: 'ML Agent' }].map(tab => (
+              {[{ id: 'minimax', label: 'Minimax' }, { id: 'ml', label: 'ML Agent' }, { id: 'rule_based', label: 'Rule-Based' }].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setSelectedImpl(tab.id)}
@@ -194,7 +210,32 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 </div>
               )}
 
-              {/* Play as — shared by both tabs */}
+              {/* Rule-Based tab */}
+              {selectedImpl === 'rule_based' && (
+                <div>
+                  <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Rule Set</label>
+                  {ruleSets.length === 0 ? (
+                    <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+                      No rule sets found. Extract one from a trained model in the ML dashboard first.
+                    </p>
+                  ) : (
+                    <select
+                      value={selectedRuleSetId ?? ''}
+                      onChange={e => setSelectedRuleSetId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    >
+                      {ruleSets.map((rs) => (
+                        <option key={rs.id} value={rs.id}>
+                          {rs.name} — {Array.isArray(rs.rules) ? rs.rules.filter(r => r.enabled !== false).length : 0} active rules
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* Play as — shared by all tabs */}
               <div>
                 <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Play as</label>
                 <div className="flex gap-2">
@@ -226,7 +267,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
               <button
                 onClick={handlePlayAI}
-                disabled={selectedImpl === 'ml' && !selectedModelId}
+                disabled={(selectedImpl === 'ml' && !selectedModelId) || (selectedImpl === 'rule_based' && !selectedRuleSetId)}
                 className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', boxShadow: 'var(--shadow-md)' }}
               >

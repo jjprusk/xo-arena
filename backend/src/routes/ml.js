@@ -1,11 +1,14 @@
 /**
- * ML routes — model management, training, sessions, checkpoints.
+ * ML routes — model management, training, sessions, checkpoints, rule sets.
  * All write operations require authentication.
  */
 
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import * as svc from '../services/mlService.js'
+import { extractRulesFromModel, extractRulesFromEnsemble } from '../services/ruleExtractionService.js'
+import { invalidateRuleSetCache } from '../ai/ruleBased.js'
+import db from '../lib/db.js'
 
 const router = Router()
 
@@ -354,6 +357,93 @@ router.post('/models/:id/player-profiles/:userId/game-end', async (req, res, nex
   try {
     svc.updatePlayerTendencies(req.params.id, req.params.userId)
     res.status(204).end()
+  } catch (err) { next(err) }
+})
+
+// ─── Rule Sets ───────────────────────────────────────────────────────────────
+
+/** GET /ml/rulesets — list all rule sets (summary, no full rule arrays) */
+router.get('/rulesets', async (_req, res, next) => {
+  try {
+    const sets = await db.ruleSet.findMany({ orderBy: { createdAt: 'desc' } })
+    res.json({ ruleSets: sets })
+  } catch (err) { next(err) }
+})
+
+/** POST /ml/rulesets — create a rule set and optionally run extraction */
+router.post('/rulesets', requireAuth, async (req, res, next) => {
+  try {
+    const { name, description, sourceModels } = req.body
+    if (!name) return res.status(400).json({ error: 'name is required' })
+
+    let rules = []
+    if (Array.isArray(sourceModels) && sourceModels.length > 0) {
+      rules = sourceModels.length === 1
+        ? (await extractRulesFromModel(sourceModels[0].modelId)).rules
+        : await extractRulesFromEnsemble(sourceModels)
+    }
+
+    const rs = await db.ruleSet.create({
+      data: { name, description: description || null, rules, sourceModels: sourceModels || [] },
+    })
+    res.status(201).json({ ruleSet: rs })
+  } catch (err) { next(err) }
+})
+
+/** GET /ml/rulesets/:id — get one rule set with full rules */
+router.get('/rulesets/:id', async (req, res, next) => {
+  try {
+    const rs = await db.ruleSet.findUnique({ where: { id: req.params.id } })
+    if (!rs) return res.status(404).json({ error: 'Rule set not found' })
+    res.json({ ruleSet: rs })
+  } catch (err) { next(err) }
+})
+
+/** PATCH /ml/rulesets/:id — update name, description, or rules (priority/enabled) */
+router.patch('/rulesets/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { name, description, rules } = req.body
+    const data = {}
+    if (name !== undefined) data.name = name
+    if (description !== undefined) data.description = description
+    if (rules !== undefined) data.rules = rules
+    const rs = await db.ruleSet.update({ where: { id: req.params.id }, data })
+    invalidateRuleSetCache(req.params.id)
+    res.json({ ruleSet: rs })
+  } catch (err) { next(err) }
+})
+
+/** DELETE /ml/rulesets/:id */
+router.delete('/rulesets/:id', requireAuth, async (req, res, next) => {
+  try {
+    await db.ruleSet.delete({ where: { id: req.params.id } })
+    invalidateRuleSetCache(req.params.id)
+    res.status(204).end()
+  } catch (err) { next(err) }
+})
+
+/** POST /ml/rulesets/:id/extract — re-run extraction from source models */
+router.post('/rulesets/:id/extract', requireAuth, async (req, res, next) => {
+  try {
+    const rs = await db.ruleSet.findUnique({ where: { id: req.params.id } })
+    if (!rs) return res.status(404).json({ error: 'Rule set not found' })
+
+    // Allow caller to override source models
+    const sourceModels = req.body.sourceModels || rs.sourceModels
+    if (!Array.isArray(sourceModels) || sourceModels.length === 0) {
+      return res.status(400).json({ error: 'No source models specified' })
+    }
+
+    const rules = sourceModels.length === 1
+      ? (await extractRulesFromModel(sourceModels[0].modelId)).rules
+      : await extractRulesFromEnsemble(sourceModels)
+
+    const updated = await db.ruleSet.update({
+      where: { id: req.params.id },
+      data: { rules, sourceModels },
+    })
+    invalidateRuleSetCache(req.params.id)
+    res.json({ ruleSet: updated })
   } catch (err) { next(err) }
 })
 

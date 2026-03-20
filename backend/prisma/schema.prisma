@@ -237,6 +237,18 @@ model MLEloHistory {
   @@map("ml_elo_history")
 }
 
+model RuleSet {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  rules        Json     @default("[]")
+  sourceModels Json     @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("rule_sets")
+}
+
 model MLTournament {
   id           String    @id @default(cuid())
   status       String    @default("PENDING")
