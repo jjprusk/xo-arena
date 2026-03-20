@@ -206,33 +206,22 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                     No models found. Train one in the ML dashboard first.
                   </p>
                 ) : (
-                  <div className="space-y-2">
+                  <select
+                    value={selectedModelId ?? ''}
+                    onChange={e => setSelectedModelId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                    style={{
+                      backgroundColor: 'var(--bg-base)',
+                      borderColor: 'var(--border-default)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
                     {mlModels.map((m) => (
-                      <label
-                        key={m.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                          selectedModelId === m.id
-                            ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]'
-                            : 'border-[var(--border-default)] hover:border-[var(--color-gray-400)]'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="mlmodel"
-                          value={m.id}
-                          checked={selectedModelId === m.id}
-                          onChange={() => setSelectedModelId(m.id)}
-                          className="mt-0.5 accent-[var(--color-blue-600)]"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{m.name}</div>
-                          <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                            {m.algorithm?.replace('_', '-')} · {m.totalEpisodes?.toLocaleString() ?? 0} episodes · ELO {m.eloRating ?? 1200}
-                          </div>
-                        </div>
-                      </label>
+                      <option key={m.id} value={m.id}>
+                        {m.name} — {m.algorithm?.replace(/_/g, '-')} · {m.totalEpisodes?.toLocaleString() ?? 0} eps · ELO {m.eloRating ?? 1200}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 )}
               </div>
             )}
