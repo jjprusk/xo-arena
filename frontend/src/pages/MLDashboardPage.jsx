@@ -733,33 +733,35 @@ function AnalyticsTab({ model }) {
         <div className="flex flex-wrap items-start gap-6">
           <div className="flex-1 min-w-[180px]">
             <SectionLabel>Primary session</SectionLabel>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <select
+              className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-medium"
+              style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+              value={selSession?.id ?? ''}
+              onChange={e => setSelSession(sessions.find(s => s.id === e.target.value) ?? null)}
+            >
               {sessions.map(s => (
-                <button key={s.id} onClick={() => setSelSession(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selSession?.id === s.id ? 'bg-[var(--color-teal-600)] text-white' : ''}`}
-                  style={{ backgroundColor: selSession?.id === s.id ? undefined : 'var(--bg-surface-hover)', color: selSession?.id === s.id ? undefined : 'var(--text-secondary)' }}>
+                <option key={s.id} value={s.id}>
                   {s.mode.replace('_', ' ')} · {s.iterations.toLocaleString()} eps
-                </button>
+                </option>
               ))}
-            </div>
+            </select>
           </div>
           {sessions.length > 1 && (
             <div className="flex-1 min-w-[180px]">
               <SectionLabel>Compare with</SectionLabel>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button onClick={() => setCmpSession(null)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${!cmpSession ? 'bg-[var(--color-gray-600)] text-white' : ''}`}
-                  style={{ backgroundColor: !cmpSession ? undefined : 'var(--bg-surface-hover)', color: !cmpSession ? undefined : 'var(--text-secondary)' }}>
-                  None
-                </button>
+              <select
+                className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+                value={cmpSession?.id ?? ''}
+                onChange={e => setCmpSession(sessions.find(s => s.id === e.target.value) ?? null)}
+              >
+                <option value="">None</option>
                 {sessions.filter(s => s.id !== selSession?.id).map(s => (
-                  <button key={s.id} onClick={() => setCmpSession(s)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${cmpSession?.id === s.id ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
-                    style={{ backgroundColor: cmpSession?.id === s.id ? undefined : 'var(--bg-surface-hover)', color: cmpSession?.id === s.id ? undefined : 'var(--text-secondary)' }}>
+                  <option key={s.id} value={s.id}>
                     {s.mode.replace('_', ' ')} · {s.iterations.toLocaleString()} eps
-                  </button>
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
           )}
         </div>
