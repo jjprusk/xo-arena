@@ -8,6 +8,10 @@ import { api } from '../lib/api.js'
 import { getSocket } from '../lib/socket.js'
 import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
 
+const ITERATIONS_MIN = 100
+const ITERATIONS_MAX = 50_000
+const ITERATIONS_STEP = 100
+
 const MODES = [
   { value: 'SELF_PLAY', label: 'Self-play', desc: 'Plays both X and O' },
   { value: 'VS_MINIMAX', label: 'vs Minimax', desc: 'Plays against the Minimax engine' },
@@ -486,11 +490,11 @@ function TrainTab({ model, onComplete }) {
               <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
                 Iterations: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{iterations.toLocaleString()}</span>
               </label>
-              <input type="range" min="100" max="50000" step="100" value={iterations}
+              <input type="range" min={ITERATIONS_MIN} max={ITERATIONS_MAX} step={ITERATIONS_STEP} value={iterations}
                 onChange={e => setIterations(Number(e.target.value))}
                 className="w-full accent-[var(--color-blue-600)]" />
               <div className="flex justify-between text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                <span>100</span><span>50,000</span>
+                <span>{ITERATIONS_MIN.toLocaleString()}</span><span>{ITERATIONS_MAX.toLocaleString()}</span>
               </div>
             </div>
 
