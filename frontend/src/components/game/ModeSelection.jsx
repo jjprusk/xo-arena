@@ -272,9 +272,26 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 <div>
                   <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Rule Set</label>
                   {ruleSets.length === 0 ? (
-                    <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
-                      No rule sets found. Extract one from a trained model in the ML dashboard first.
-                    </p>
+                    <div
+                      className="rounded-lg border p-3 space-y-2 text-xs"
+                      style={{ borderColor: 'var(--color-amber-500)', backgroundColor: 'var(--color-amber-50)' }}
+                    >
+                      <p className="font-semibold" style={{ color: 'var(--color-amber-700)' }}>
+                        No rule sets yet
+                      </p>
+                      <ol className="space-y-1 list-decimal list-inside" style={{ color: 'var(--color-amber-700)' }}>
+                        <li>Train an ML model in the <a href="/admin/ml" className="underline font-medium">ML Dashboard</a></li>
+                        <li>Open the model and go to the <strong>Rules</strong> tab</li>
+                        <li>Click <strong>Extract rules</strong>, then <strong>Save as rule set</strong></li>
+                      </ol>
+                      <a
+                        href="/admin/ml"
+                        className="inline-block mt-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110"
+                        style={{ background: 'linear-gradient(135deg, var(--color-amber-500), var(--color-amber-700))' }}
+                      >
+                        Go to ML Dashboard →
+                      </a>
+                    </div>
                   ) : (
                     <select
                       value={selectedRuleSetId ?? ''}
