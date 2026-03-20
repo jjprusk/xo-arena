@@ -490,7 +490,7 @@ function TrainTab({ model, onComplete }) {
                 onChange={e => setIterations(Number(e.target.value))}
                 className="w-full accent-[var(--color-blue-600)]" />
               <div className="flex justify-between text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                <span>100</span><span>10,000</span>
+                <span>100</span><span>50,000</span>
               </div>
             </div>
 
