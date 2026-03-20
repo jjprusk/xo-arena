@@ -577,7 +577,7 @@ function TrainTab({ model, onComplete }) {
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %"  strokeWidth={2} />
-                  <Line type="monotone" dataKey="lossRate" stroke="var(--color-red-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
+                  <Line type="monotone" dataKey="lossRate" stroke="var(--color-blue-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
                   <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
                 </LineChart>
               </ChartPanel>
@@ -624,7 +624,7 @@ function TrainTab({ model, onComplete }) {
                 <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %"  strokeWidth={2} />
-                <Line type="monotone" dataKey="lossRate" stroke="var(--color-red-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
+                <Line type="monotone" dataKey="lossRate" stroke="var(--color-blue-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
                 <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
               </LineChart>
             </ChartPanel>

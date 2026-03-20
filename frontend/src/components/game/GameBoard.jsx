@@ -43,8 +43,15 @@ export default function GameBoard({ inviteUrl, roomName }) {
   // Ticking thinking timer for the opponent
   const thinkingStartRef = useRef(null)
   const [thinkingMs, setThinkingMs] = useState(0)
+  const [frozenThinkingMs, setFrozenThinkingMs] = useState(null)
   useEffect(() => {
-    if (!isOpponentTurn) { setThinkingMs(0); thinkingStartRef.current = null; return }
+    if (!isOpponentTurn) {
+      if (thinkingStartRef.current) setFrozenThinkingMs(Date.now() - thinkingStartRef.current)
+      setThinkingMs(0)
+      thinkingStartRef.current = null
+      return
+    }
+    setFrozenThinkingMs(null)
     thinkingStartRef.current = Date.now()
     setThinkingMs(0)
     const id = setInterval(() => setThinkingMs(Date.now() - thinkingStartRef.current), 100)
@@ -181,7 +188,14 @@ export default function GameBoard({ inviteUrl, roomName }) {
           <>
             <span className="font-bold" style={{ color: MARK_COLOR[currentTurn] }}>{currentTurn}</span>
             {isPlayerTurn && (
-              <span style={{ color: 'var(--text-secondary)' }}>Your turn</span>
+              <>
+                <span style={{ color: 'var(--text-secondary)' }}>Your turn</span>
+                {frozenThinkingMs != null && (
+                  <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {(frozenThinkingMs / 1000).toFixed(2)}s
+                  </span>
+                )}
+              </>
             )}
             {isOpponentTurn && (
               <>
@@ -189,7 +203,7 @@ export default function GameBoard({ inviteUrl, roomName }) {
                   {isAIThinking ? 'AI is thinking…' : (mode === 'pvai' ? "AI's turn" : "Opponent's turn")}
                 </span>
                 <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
-                  {(thinkingMs / 1000).toFixed(1)}s
+                  {(thinkingMs / 1000).toFixed(2)}s
                 </span>
               </>
             )}
