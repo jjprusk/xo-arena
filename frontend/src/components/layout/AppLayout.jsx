@@ -10,14 +10,15 @@ const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
+  { to: '/puzzles', label: 'Puzzles' },
   { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
 ]
 
 const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
+  { to: '/puzzles', label: 'Puzzles', icon: '◈' },
   { to: '/stats', label: 'Stats', icon: '◎' },
   { to: '/profile', label: 'Profile', icon: '◉' },
-  { to: '/settings', label: 'Settings', icon: '⚙' },
 ]
 
 export default function AppLayout() {

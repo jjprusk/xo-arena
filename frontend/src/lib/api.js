@@ -90,6 +90,8 @@ export const api = {
   users: {
     sync: (token) => api.post('/users/sync', {}, token),
     stats: (id) => api.get(`/users/${id}/stats`),
+    eloHistory: (id) => api.get(`/users/${id}/elo-history`),
+    games: (id, page = 1) => api.get(`/users/${id}/games?page=${page}&limit=20`),
   },
 
   games: {

@@ -9,6 +9,7 @@ import LogViewerPage from './pages/LogViewerPage.jsx'
 import AIDashboardPage from './pages/AIDashboardPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import MLDashboardPage from './pages/MLDashboardPage.jsx'
+import PuzzlePage from './pages/PuzzlePage.jsx'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route index element={<Navigate to="/play" replace />} />
           <Route path="/play" element={<PlayPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/puzzles" element={<PuzzlePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
