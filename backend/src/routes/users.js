@@ -126,6 +126,35 @@ router.get('/:id/elo-history', async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/:id/ml-profiles
+ * Returns all ML player profiles for the authenticated user.
+ * Requires auth — users can only fetch their own profiles.
+ */
+router.get('/:id/ml-profiles', requireAuth, async (req, res, next) => {
+  try {
+    const user = await getUserById(req.params.id)
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (user.clerkId !== req.auth.userId) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+
+    // Use req.auth.userId (Clerk ID from JWT) directly — this is what gets
+    // stored in MLPlayerProfile.userId when the frontend records moves.
+    const profiles = await db.mLPlayerProfile.findMany({
+      where: { userId: req.auth.userId },
+      orderBy: { gamesRecorded: 'desc' },
+      include: {
+        model: { select: { id: true, name: true, algorithm: true } },
+      },
+    })
+
+    res.json({ profiles })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/users/:id/games
  * Returns paginated game history for a user.
  */

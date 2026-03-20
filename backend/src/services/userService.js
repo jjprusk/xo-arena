@@ -113,26 +113,33 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50 
   const whereMode = mode === 'pvp' ? 'PVP' : mode === 'pvai' ? 'PVAI' : undefined
 
   // Aggregate wins and total games per player
-  const [winners, totals] = await Promise.all([
+  const modeWhere = whereMode ? { mode: whereMode } : {}
+
+  const [winners, asPlayer1, asPlayer2] = await Promise.all([
     db.game.groupBy({
       by: ['winnerId'],
-      where: {
-        winnerId: { not: null },
-        ...(whereMode && { mode: whereMode }),
-      },
+      where: { winnerId: { not: null }, ...modeWhere },
       _count: { id: true },
     }),
     db.game.groupBy({
       by: ['player1Id'],
-      where: {
-        ...(whereMode && { mode: whereMode }),
-      },
+      where: modeWhere,
+      _count: { id: true },
+    }),
+    db.game.groupBy({
+      by: ['player2Id'],
+      where: { player2Id: { not: null }, ...modeWhere },
       _count: { id: true },
     }),
   ])
 
   const winMap = new Map(winners.map((w) => [w.winnerId, w._count.id]))
-  const totalMap = new Map(totals.map((t) => [t.player1Id, t._count.id]))
+
+  // Merge player1 and player2 game counts into a single total per user
+  const totalMap = new Map(asPlayer1.map((r) => [r.player1Id, r._count.id]))
+  for (const r of asPlayer2) {
+    totalMap.set(r.player2Id, (totalMap.get(r.player2Id) || 0) + r._count.id)
+  }
 
   const entries = [...totalMap.entries()]
     .filter(([, total]) => total >= 1)

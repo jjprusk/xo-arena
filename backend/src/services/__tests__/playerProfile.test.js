@@ -9,6 +9,9 @@ vi.mock('../../lib/db.js', () => ({
       update: vi.fn(),
       findMany: vi.fn(),
     },
+    user: {
+      findMany: vi.fn(),
+    },
   },
 }))
 
@@ -138,20 +141,25 @@ describe('getPlayerProfiles', () => {
     vi.clearAllMocks()
   })
 
-  it('returns all profiles for a model', async () => {
+  it('returns all profiles for a model enriched with display names', async () => {
     const mockProfiles = [
       { id: 'p1', userId: 'u1', gamesRecorded: 5, openingPreferences: {}, tendencies: {}, createdAt: new Date() },
       { id: 'p2', userId: 'u2', gamesRecorded: 2, openingPreferences: {}, tendencies: {}, createdAt: new Date() },
     ]
     db.mLPlayerProfile.findMany.mockResolvedValue(mockProfiles)
+    db.user.findMany.mockResolvedValue([
+      { clerkId: 'u1', displayName: 'Alice', username: 'alice' },
+      { clerkId: 'u2', displayName: 'Bob', username: 'bob' },
+    ])
 
     const result = await getPlayerProfiles('model_1')
 
     expect(db.mLPlayerProfile.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { modelId: 'model_1' } })
     )
-    expect(result).toEqual(mockProfiles)
     expect(result).toHaveLength(2)
+    expect(result[0]).toMatchObject({ userId: 'u1', displayName: 'Alice', username: 'alice' })
+    expect(result[1]).toMatchObject({ userId: 'u2', displayName: 'Bob', username: 'bob' })
   })
 
   it('returns empty array when no profiles exist', async () => {

@@ -92,13 +92,77 @@ export const api = {
     stats: (id) => api.get(`/users/${id}/stats`),
     eloHistory: (id) => api.get(`/users/${id}/elo-history`),
     games: (id, page = 1) => api.get(`/users/${id}/games?page=${page}&limit=20`),
+    mlProfiles: (id, token) => api.get(`/users/${id}/ml-profiles`, token),
   },
 
   games: {
     record: (body, token) => api.post('/games', body, token),
   },
 
+  admin: {
+    stats:        (token)           => api.get('/admin/stats', token),
+    users:        (token, search, page, limit) => {
+      const p = new URLSearchParams()
+      if (search) p.set('search', search)
+      if (page)   p.set('page', page)
+      if (limit)  p.set('limit', limit)
+      const qs = p.toString()
+      return api.get(`/admin/users${qs ? `?${qs}` : ''}`, token)
+    },
+    updateUser:   (id, body, token) => api.patch(`/admin/users/${id}`, body, token),
+    deleteUser:   (id, token)       => request('DELETE', `/admin/users/${id}`, null, token),
+    games:        (token, page, limit, filters) => {
+      const p = new URLSearchParams()
+      if (page)            p.set('page', page)
+      if (limit)           p.set('limit', limit)
+      if (filters?.mode)   p.set('mode', filters.mode)
+      if (filters?.outcome) p.set('outcome', filters.outcome)
+      const qs = p.toString()
+      return api.get(`/admin/games${qs ? `?${qs}` : ''}`, token)
+    },
+    deleteGame:   (id, token)       => request('DELETE', `/admin/games/${id}`, null, token),
+
+    listModels:   (token, search, status, page, limit) => {
+      const p = new URLSearchParams()
+      if (search) p.set('search', search)
+      if (status) p.set('status', status)
+      if (page)   p.set('page', page)
+      if (limit)  p.set('limit', limit)
+      const qs = p.toString()
+      return api.get(`/admin/ml/models${qs ? `?${qs}` : ''}`, token)
+    },
+    featureModel: (id, token)       => api.patch(`/admin/ml/models/${id}/feature`, {}, token),
+    deleteModel:  (id, token)       => request('DELETE', `/admin/ml/models/${id}`, null, token),
+    getMLLimits:   (token)       => api.get('/admin/ml/limits', token),
+    setMLLimits:   (body, token) => api.patch('/admin/ml/limits', body, token),
+    getLogLimit:   (token)       => api.get('/admin/logs/limit', token),
+    setLogLimit:   (body, token) => api.patch('/admin/logs/limit', body, token),
+  },
+
+  puzzles: {
+    list: (type, count) => {
+      const params = new URLSearchParams()
+      if (type) params.set('type', type)
+      if (count) params.set('count', count)
+      const qs = params.toString()
+      return api.get(`/puzzles${qs ? `?${qs}` : ''}`)
+    },
+  },
+
   logs: {
     ingest: (entries) => api.post('/logs', { entries }),
+    list:   (token, params = {}) => {
+      const p = new URLSearchParams()
+      if (params.limit)     p.set('limit',     params.limit)
+      if (params.page)      p.set('page',      params.page)
+      if (params.level)     p.set('level',     params.level)
+      if (params.source)    p.set('source',    params.source)
+      if (params.userId)    p.set('userId',    params.userId)
+      if (params.sessionId) p.set('sessionId', params.sessionId)
+      if (params.roomId)    p.set('roomId',    params.roomId)
+      if (params.search)    p.set('search',    params.search)
+      const qs = p.toString()
+      return api.get(`/logs${qs ? `?${qs}` : ''}`, token)
+    },
   },
 }

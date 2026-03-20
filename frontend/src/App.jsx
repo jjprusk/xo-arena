@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout.jsx'
+import AdminRoute from './components/admin/AdminRoute.jsx'
 import PlayPage from './pages/PlayPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
@@ -10,6 +11,10 @@ import AIDashboardPage from './pages/AIDashboardPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import MLDashboardPage from './pages/MLDashboardPage.jsx'
 import PuzzlePage from './pages/PuzzlePage.jsx'
+import AdminDashboard from './pages/admin/AdminDashboard.jsx'
+import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
+import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
+import AdminMLPage from './pages/admin/AdminMLPage.jsx'
 
 export default function App() {
   return (
@@ -23,9 +28,15 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/admin/logs" element={<LogViewerPage />} />
-          <Route path="/admin/ai" element={<AIDashboardPage />} />
-          <Route path="/admin/ml" element={<MLDashboardPage />} />
+          <Route path="/ml" element={<MLDashboardPage />} />
+
+          {/* Admin routes — all guarded by AdminRoute */}
+          <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
+          <Route path="/admin/games" element={<AdminRoute><AdminGamesPage /></AdminRoute>} />
+          <Route path="/admin/logs" element={<AdminRoute><LogViewerPage /></AdminRoute>} />
+          <Route path="/admin/ai" element={<AdminRoute><AIDashboardPage /></AdminRoute>} />
+          <Route path="/admin/ml-models" element={<AdminRoute><AdminMLPage /></AdminRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -89,22 +89,16 @@ export default function SettingsPage() {
           <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
           <div>
             <span className="text-sm font-medium block mb-2">Sound pack</span>
-            <div className="flex flex-col gap-2">
+            <select
+              value={soundPack}
+              onChange={e => setSoundPack(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            >
               {SOUND_PACKS.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => setSoundPack(p.id)}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg border-2 text-sm text-left transition-colors"
-                  style={{
-                    borderColor: soundPack === p.id ? 'var(--color-blue-600)' : 'var(--border-default)',
-                    backgroundColor: soundPack === p.id ? 'var(--color-blue-50)' : 'var(--bg-surface)',
-                  }}
-                >
-                  <span className="font-medium">{p.label}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>{p.description}</span>
-                </button>
+                <option key={p.id} value={p.id}>{p.label} — {p.description}</option>
               ))}
-            </div>
+            </select>
           </div>
         </div>
       </section>

@@ -8,6 +8,7 @@
 
 import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend'
 import logger from '../logger.js'
+import db from '../lib/db.js'
 
 let clerkClient = null
 
@@ -40,6 +41,7 @@ async function verifyToken(req) {
 /**
  * Middleware: requires a valid Clerk JWT.
  * Attaches req.auth = { userId, sessionId }
+ * Also rejects requests from banned users (403).
  */
 export async function requireAuth(req, res, next) {
   const auth = await verifyToken(req)
@@ -47,6 +49,15 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' })
   }
   req.auth = auth
+
+  // Check banned flag
+  try {
+    const user = await db.user.findUnique({ where: { clerkId: auth.userId }, select: { banned: true } })
+    if (user?.banned) return res.status(403).json({ error: 'Account suspended' })
+  } catch (err) {
+    logger.warn({ err }, 'Ban check failed — allowing request through')
+  }
+
   next()
 }
 
@@ -57,6 +68,19 @@ export async function requireAuth(req, res, next) {
 export async function optionalAuth(req, _res, next) {
   req.auth = await verifyToken(req)
   next()
+}
+
+/**
+ * Returns true if the given Clerk user ID has the admin role.
+ * Safe to call without an active request/response — never throws.
+ */
+export async function isAdmin(userId) {
+  try {
+    const user = await getClerk().users.getUser(userId)
+    return user.publicMetadata?.role === 'admin'
+  } catch {
+    return false
+  }
 }
 
 /**
