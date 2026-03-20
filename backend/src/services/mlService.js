@@ -873,7 +873,9 @@ async function _runTraining(model, session, { mode, iterations, config }) {
   const opponentFn = mode === 'VS_MINIMAX'
     ? (board, player) => minimaxMove(board, difficulty, player)
     : null
-  const mlMark = mode === 'SELF_PLAY' ? 'both' : (config.mlMark || 'X')
+  const mlMarkConfig = mode === 'SELF_PLAY' ? 'both' : (config.mlMark || 'alternating')
+  // For alternating, we flip each episode; otherwise it's fixed
+  let mlMark = mlMarkConfig === 'alternating' ? 'X' : mlMarkConfig
 
   // Early stopping config
   const earlyStop = config.earlyStop || null
@@ -902,6 +904,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
       const result = _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm)
       const durationMs = Date.now() - t0
       actualEpisodes++
+      if (mlMarkConfig === 'alternating') mlMark = mlMark === 'X' ? 'O' : 'X'
 
       if (result.outcome === 'WIN')       wins++
       else if (result.outcome === 'LOSS') losses++

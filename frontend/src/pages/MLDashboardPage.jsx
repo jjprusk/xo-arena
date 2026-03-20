@@ -228,6 +228,7 @@ function TrainTab({ model, onComplete }) {
   const [mode, setMode]                     = useState('SELF_PLAY')
   const [iterations, setIterations]         = useState(1000)
   const [difficulty, setDifficulty]         = useState('medium')
+  const [mlMark, setMlMark]                 = useState('alternating')
   const algorithm = model.algorithm || 'Q_LEARNING'
   const [curriculum, setCurriculum]         = useState(false)
   const [earlyStopEnabled, setEarlyStop]    = useState(false)
@@ -266,7 +267,7 @@ function TrainTab({ model, onComplete }) {
 
     const token = await window.Clerk?.session?.getToken()
     const cfg = {
-      ...(mode === 'VS_MINIMAX' ? { difficulty } : {}),
+      ...(mode === 'VS_MINIMAX' ? { difficulty, mlMark: mlMark === 'alternating' ? undefined : mlMark } : {}),
       algorithm,
       ...(curriculum ? { curriculum: true } : {}),
       ...(earlyStopEnabled ? { earlyStop: { patience, minDelta } } : {}),
@@ -352,6 +353,35 @@ function TrainTab({ model, onComplete }) {
                 ))}
               </div>
             </div>
+
+            {/* VS_MINIMAX options: difficulty + play as */}
+            {mode === 'VS_MINIMAX' && (
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Difficulty</label>
+                  <div className="flex gap-2">
+                    {['easy','medium','hard'].map(d => (
+                      <button key={d} onClick={() => setDifficulty(d)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 capitalize transition-colors ${difficulty === d ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]' : 'border-[var(--border-default)]'}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Play as</label>
+                  <div className="flex gap-2">
+                    {[{ v: 'X', label: 'X' }, { v: 'O', label: 'O' }, { v: 'alternating', label: '±' }].map(({ v, label }) => (
+                      <button key={v} onClick={() => setMlMark(v)}
+                        title={v === 'alternating' ? 'Alternate X/O each episode' : `Always play as ${v}`}
+                        className={`w-10 py-2 rounded-lg text-sm font-bold border-2 transition-colors ${mlMark === v ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]' : 'border-[var(--border-default)]'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Algorithm — fixed at model creation, read-only here */}
             <div>
