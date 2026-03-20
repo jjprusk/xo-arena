@@ -2749,8 +2749,9 @@ function RulesTab({ model, models }) {
     <div className="space-y-6">
 
       {/* Source Models */}
-      <Section label="Source Models">
-        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+      <Card>
+        <SectionLabel>Source Models</SectionLabel>
+        <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
           Rules are extracted by analysing how each model plays. Add multiple models to create an ensemble.
         </p>
         <div className="space-y-2">
@@ -2812,12 +2813,13 @@ function RulesTab({ model, models }) {
         >
           {extracting ? 'Extracting…' : rules ? 'Re-extract' : 'Extract Rules'}
         </button>
-      </Section>
+      </Card>
 
       {/* Extracted Rules */}
       {rules && (
-        <Section label="Extracted Rules">
-          <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+        <Card>
+          <SectionLabel>Extracted Rules</SectionLabel>
+          <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
             Rules are listed in priority order. Toggle, reorder, then save as a Rule Set.
           </p>
           <div className="space-y-1">
@@ -2912,13 +2914,14 @@ function RulesTab({ model, models }) {
               {saving ? 'Saving…' : savedId ? '✓ Saved' : 'Save Rule Set'}
             </button>
           </div>
-        </Section>
+        </Card>
       )}
 
       {/* Existing Rule Sets */}
       {existingSets.length > 0 && (
-        <Section label="Saved Rule Sets">
-          <div className="space-y-2">
+        <Card>
+          <SectionLabel>Saved Rule Sets</SectionLabel>
+          <div className="mt-3 space-y-2">
             {existingSets.map(rs => (
               <div key={rs.id} className="rounded-lg border p-3"
                 style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
@@ -2966,7 +2969,7 @@ function RulesTab({ model, models }) {
               </div>
             ))}
           </div>
-        </Section>
+        </Card>
       )}
     </div>
   )
