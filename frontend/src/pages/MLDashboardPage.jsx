@@ -228,7 +228,7 @@ function TrainTab({ model, onComplete }) {
   const [mode, setMode]                     = useState('SELF_PLAY')
   const [iterations, setIterations]         = useState(1000)
   const [difficulty, setDifficulty]         = useState('medium')
-  const [algorithm, setAlgorithm]           = useState(model.algorithm || 'Q_LEARNING')
+  const algorithm = model.algorithm || 'Q_LEARNING'
   const [curriculum, setCurriculum]         = useState(false)
   const [earlyStopEnabled, setEarlyStop]    = useState(false)
   const [patience, setPatience]             = useState(200)
@@ -348,20 +348,16 @@ function TrainTab({ model, onComplete }) {
               </div>
             </div>
 
-            {/* Algorithm */}
+            {/* Algorithm — fixed at model creation, read-only here */}
             <div>
-              <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Algorithm</label>
-              <div className="flex flex-wrap gap-2">
-                {ALGORITHMS.map(a => (
-                  <button key={a.value} onClick={() => setAlgorithm(a.value)}
-                    className={`flex-1 min-w-[120px] text-left rounded-lg border p-3 transition-all ${algorithm === a.value ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : ''}`}
-                    style={{ borderColor: algorithm === a.value ? undefined : 'var(--border-default)', backgroundColor: algorithm === a.value ? undefined : 'var(--bg-base)' }}>
-                    <p className="text-sm font-semibold">{a.label}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{a.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
+              <label className="text-sm font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Algorithm</label>
+              {(() => { const a = ALGORITHMS.find(x => x.value === algorithm); return (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a?.label}</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{a?.desc}</span>
+                  <span className="ml-auto text-xs" style={{ color: 'var(--text-muted)' }}>Set at creation</span>
+                </div>
+              )})()}</div>
 
             {/* DQN config fields */}
             {algorithm === 'DQN' && (
@@ -1850,6 +1846,7 @@ function ImportModelModal({ onClose, onCreate }) {
 function CreateModelModal({ onClose, onCreate }) {
   const [name, setName]         = useState('')
   const [desc, setDesc]         = useState('')
+  const [algorithm, setAlgorithm] = useState('Q_LEARNING')
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState(null)
 
@@ -1860,7 +1857,7 @@ function CreateModelModal({ onClose, onCreate }) {
     setError(null)
     try {
       const token = await window.Clerk?.session?.getToken()
-      const { model } = await api.ml.createModel({ name: name.trim(), description: desc.trim() || undefined }, token)
+      const { model } = await api.ml.createModel({ name: name.trim(), description: desc.trim() || undefined, algorithm }, token)
       onCreate(model)
     } catch (err) {
       setError(err.message)
@@ -1886,6 +1883,22 @@ function CreateModelModal({ onClose, onCreate }) {
             <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Optional description"
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none focus:border-[var(--color-blue-600)] transition-colors"
               style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Algorithm</label>
+            <div className="grid grid-cols-2 gap-2">
+              {ALGORITHMS.map(a => (
+                <button key={a.value} type="button" onClick={() => setAlgorithm(a.value)}
+                  className="text-left rounded-lg border p-2.5 transition-all"
+                  style={{
+                    borderColor: algorithm === a.value ? 'var(--color-blue-600)' : 'var(--border-default)',
+                    backgroundColor: algorithm === a.value ? 'var(--color-blue-50)' : 'var(--bg-base)',
+                  }}>
+                  <div className="text-sm font-semibold" style={{ color: algorithm === a.value ? 'var(--color-blue-700)' : 'var(--text-primary)' }}>{a.label}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{a.desc}</div>
+                </button>
+              ))}
+            </div>
           </div>
           {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
           <div className="flex gap-2 justify-end pt-1">
