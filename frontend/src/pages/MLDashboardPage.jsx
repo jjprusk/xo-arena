@@ -297,7 +297,8 @@ function TrainTab({ model, onComplete }) {
         setProgress(data)
         setChartData(prev => [...prev, {
           ep: data.episode,
-          winRate: Math.round(data.winRate * 100),
+          winRate:  Math.round(data.winRate  * 100),
+          lossRate: Math.round(data.lossRate * 100),
           drawRate: Math.round(data.drawRate * 100),
           epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
           qDelta: parseFloat(data.avgQDelta.toFixed(4)),
@@ -575,8 +576,9 @@ function TrainTab({ model, onComplete }) {
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="winRate" stroke="var(--color-teal-600)" dot={false} name="Win %" strokeWidth={2} />
-                  <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="4 2" />
+                  <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %"  strokeWidth={2} />
+                  <Line type="monotone" dataKey="lossRate" stroke="var(--color-red-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
+                  <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
                 </LineChart>
               </ChartPanel>
               <ChartPanel label="Exploration Rate (ε) Decay">
@@ -621,8 +623,9 @@ function TrainTab({ model, onComplete }) {
                 <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                 <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %" strokeWidth={2} />
-                <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="4 2" />
+                <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %"  strokeWidth={2} />
+                <Line type="monotone" dataKey="lossRate" stroke="var(--color-red-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
+                <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
               </LineChart>
             </ChartPanel>
             <ChartPanel label="Q-delta Convergence">
@@ -652,8 +655,15 @@ function buildRolling(episodes, W) {
   return episodes.filter((_, i) => i % step === 0).map((_, idx) => {
     const realIdx = idx * step
     const slice = episodes.slice(Math.max(0, realIdx - W), realIdx + 1)
-    const wins  = slice.filter(e => e.outcome === 'WIN').length
-    return { ep: episodes[realIdx].episodeNum, winRate: Math.round((wins / slice.length) * 100) }
+    const wins   = slice.filter(e => e.outcome === 'WIN').length
+    const losses = slice.filter(e => e.outcome === 'LOSS').length
+    const draws  = slice.filter(e => e.outcome === 'DRAW').length
+    return {
+      ep:       episodes[realIdx].episodeNum,
+      winRate:  Math.round((wins   / slice.length) * 100),
+      lossRate: Math.round((losses / slice.length) * 100),
+      drawRate: Math.round((draws  / slice.length) * 100),
+    }
   })
 }
 
