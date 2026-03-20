@@ -1,5 +1,6 @@
 import React from 'react'
 import { useEffect, useCallback, useState, useRef } from 'react'
+import { useUser } from '@clerk/clerk-react'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import { api } from '../../lib/api.js'
@@ -22,17 +23,40 @@ export default function GameBoard({ inviteUrl, roomName }) {
 
   const {
     board, currentTurn, status, winner, winLine, scores, round,
-    playerMark, mode, difficulty, aiImplementation, isAIThinking,
+    playerMark, mode, difficulty, aiImplementation, mlModelId, isAIThinking,
     makeMove, setAIThinking, rematch, newGame,
   } = useGameStore()
 
+  const { user, isSignedIn } = useUser()
   const { play } = useSoundStore()
   const [showForfeitDialog, setShowForfeitDialog] = useState(false)
   const [aiError, setAIError] = useState(null)
+  const [aiConfidence, setAIConfidence] = useState(null)
   const gameStartRef = useRef(null)
+  // Track the last cell the human played (for ML profiling)
+  const lastHumanMoveRef = useRef(null)
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isPlayerTurn = status === 'playing' && currentTurn === playerMark
+  const isOpponentTurn = status === 'playing' && currentTurn !== playerMark
+
+  // Ticking thinking timer for the opponent
+  const thinkingStartRef = useRef(null)
+  const [thinkingMs, setThinkingMs] = useState(0)
+  const [frozenThinkingMs, setFrozenThinkingMs] = useState(null)
+  useEffect(() => {
+    if (!isOpponentTurn) {
+      if (thinkingStartRef.current) setFrozenThinkingMs(Date.now() - thinkingStartRef.current)
+      setThinkingMs(0)
+      thinkingStartRef.current = null
+      return
+    }
+    setFrozenThinkingMs(null)
+    thinkingStartRef.current = Date.now()
+    setThinkingMs(0)
+    const id = setInterval(() => setThinkingMs(Date.now() - thinkingStartRef.current), 100)
+    return () => clearInterval(id)
+  }, [isOpponentTurn])
 
   // Track game start time
   useEffect(() => {
@@ -70,6 +94,11 @@ export default function GameBoard({ inviteUrl, roomName }) {
         durationMs,
         startedAt,
       }, token).catch(() => {})
+
+      // Fire-and-forget ML player profile game-end update
+      if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
+        api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+      }
     }
 
     recordGame()
@@ -86,11 +115,16 @@ export default function GameBoard({ inviteUrl, roomName }) {
     async function fetchAIMove() {
       setAIThinking(true)
       setAIError(null)
+      const isML = aiImplementation === 'ml'
+      const profileUserId = isML && isSignedIn && user?.id ? user.id : null
+      const humanLastMove = profileUserId ? lastHumanMoveRef.current : null
       try {
-        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation)
+        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, isML, profileUserId, humanLastMove)
         if (!cancelled) {
           makeMove(res.move)
           play('move')
+          if (res.explanation) setAIConfidence(res.explanation.confidence)
+          else setAIConfidence(null)
         }
       } catch (err) {
         if (!cancelled) setAIError('AI failed to respond. Please try again.')
@@ -106,6 +140,7 @@ export default function GameBoard({ inviteUrl, roomName }) {
   const handleCellClick = useCallback((i) => {
     if (!isPlayerTurn) return
     if (board[i] !== null) return
+    lastHumanMoveRef.current = i
     makeMove(i)
     play('move')
   }, [isPlayerTurn, board, makeMove, play])
@@ -149,16 +184,30 @@ export default function GameBoard({ inviteUrl, roomName }) {
 
       {/* Turn indicator */}
       <div className="flex items-center gap-2 h-8">
-        {status === 'playing' && !isAIThinking && (
+        {status === 'playing' && (
           <>
             <span className="font-bold" style={{ color: MARK_COLOR[currentTurn] }}>{currentTurn}</span>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {currentTurn === playerMark ? "Your turn" : (mode === 'pvai' ? "AI's turn" : "Opponent's turn")}
-            </span>
+            {isPlayerTurn && (
+              <>
+                <span style={{ color: 'var(--text-secondary)' }}>Your turn</span>
+                {frozenThinkingMs != null && (
+                  <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {(frozenThinkingMs / 1000).toFixed(2)}s
+                  </span>
+                )}
+              </>
+            )}
+            {isOpponentTurn && (
+              <>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {isAIThinking ? 'AI is thinking…' : (mode === 'pvai' ? "AI's turn" : "Opponent's turn")}
+                </span>
+                <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {(thinkingMs / 1000).toFixed(2)}s
+                </span>
+              </>
+            )}
           </>
-        )}
-        {isAIThinking && (
-          <span style={{ color: 'var(--text-secondary)' }}>AI is thinking…</span>
         )}
         {status === 'won' && (
           <span className="font-bold" style={{ color: winner === playerMark ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
@@ -172,6 +221,20 @@ export default function GameBoard({ inviteUrl, roomName }) {
           <span className="font-bold" style={{ color: 'var(--color-red-600)' }}>Forfeited.</span>
         )}
       </div>
+
+      {/* ML confidence bar */}
+      {aiImplementation === 'ml' && aiConfidence !== null && status === 'playing' && (
+        <div className="w-full space-y-1">
+          <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span>AI confidence</span>
+            <span>{Math.round(aiConfidence * 100)}%</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${Math.round(aiConfidence * 100)}%`, backgroundColor: 'var(--color-teal-500)' }} />
+          </div>
+        </div>
+      )}
 
       {/* Board */}
       <div

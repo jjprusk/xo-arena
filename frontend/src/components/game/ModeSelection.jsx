@@ -6,15 +6,15 @@ import { api } from '../../lib/api.js'
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
 export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
-  const { setMode, setDifficulty, setAIImplementation, setPlayerMark, setPlayerName, startGame } = useGameStore()
+  const { setMode, setDifficulty, setAIImplementation, setMLModelId, setPlayerMark, setPlayerName, startGame } = useGameStore()
 
   const [aiExpanded, setAiExpanded] = useState(false)
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium')
   const [selectedImpl, setSelectedImpl] = useState('minimax')
   const [selectedMark, setSelectedMark] = useState('X')
   const [playerName, setPlayerNameLocal] = useState('')
-  const [implementations, setImplementations] = useState([])
-  const [loadingImpls, setLoadingImpls] = useState(false)
+  const [mlModels, setMlModels] = useState([])
+  const [selectedModelId, setSelectedModelId] = useState(null)
   const [joinInput, setJoinInput] = useState('')
   const [inviteCopied, setInviteCopied] = useState(false)
   const [rooms, setRooms] = useState([])
@@ -55,19 +55,23 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     })
   }
 
+  // Fetch ML models when ML engine is selected
   useEffect(() => {
-    if (!aiExpanded) return
-    setLoadingImpls(true)
-    api.ai.implementations()
-      .then((res) => setImplementations(res.implementations || []))
-      .catch(() => setImplementations([{ id: 'minimax', name: 'Minimax', supportedDifficulties: ['easy', 'medium', 'hard'] }]))
-      .finally(() => setLoadingImpls(false))
-  }, [aiExpanded])
+    if (selectedImpl !== 'ml') return
+    api.ml.listModels()
+      .then((res) => {
+        const models = res.models || []
+        setMlModels(models)
+        if (models.length > 0 && !selectedModelId) setSelectedModelId(models[0].id)
+      })
+      .catch(() => setMlModels([]))
+  }, [selectedImpl])
 
   function handlePlayAI() {
     setMode('pvai')
     setDifficulty(selectedDifficulty)
     setAIImplementation(selectedImpl)
+    setMLModelId(selectedImpl === 'ml' ? selectedModelId : null)
     setPlayerMark(selectedMark)
     setPlayerName(playerName)
     startGame()
@@ -121,99 +125,107 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         </button>
 
         {aiExpanded && (
-          <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: 'var(--border-default)' }}>
-            {/* Difficulty */}
-            <div className="pt-3">
-              <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Difficulty
-              </label>
-              <div className="flex gap-2">
-                {DIFFICULTIES.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setSelectedDifficulty(d)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 capitalize transition-colors ${
-                      selectedDifficulty === d
-                        ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]'
-                        : 'border-[var(--border-default)] hover:border-[var(--color-gray-400)]'
-                    }`}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
+          <div className="border-t" style={{ borderColor: 'var(--border-default)' }}>
+            {/* Tabs */}
+            <div className="flex border-b" style={{ borderColor: 'var(--border-default)' }}>
+              {[{ id: 'minimax', label: 'Minimax' }, { id: 'ml', label: 'ML Agent' }].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedImpl(tab.id)}
+                  className="flex-1 py-2.5 text-sm font-medium transition-colors"
+                  style={{
+                    borderBottom: selectedImpl === tab.id ? '2px solid var(--color-blue-600)' : '2px solid transparent',
+                    color: selectedImpl === tab.id ? 'var(--color-blue-600)' : 'var(--text-muted)',
+                    marginBottom: '-1px',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            {/* AI Engine */}
-            {!loadingImpls && implementations.length > 1 && (
-              <div>
-                <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
-                  AI Engine
-                </label>
-                <div className="space-y-2">
-                  {implementations.map((impl) => (
-                    <label
-                      key={impl.id}
-                      className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                        selectedImpl === impl.id
-                          ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]'
-                          : 'border-[var(--border-default)] hover:border-[var(--color-gray-400)]'
-                      }`}
+            <div className="px-4 pb-4 pt-4 space-y-4">
+              {/* Minimax tab */}
+              {selectedImpl === 'minimax' && (
+                <div>
+                  <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Difficulty</label>
+                  <div className="flex gap-2">
+                    {DIFFICULTIES.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setSelectedDifficulty(d)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 capitalize transition-colors ${
+                          selectedDifficulty === d
+                            ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]'
+                            : 'border-[var(--border-default)] hover:border-[var(--color-gray-400)]'
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ML Agent tab */}
+              {selectedImpl === 'ml' && (
+                <div>
+                  <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Model</label>
+                  {mlModels.length === 0 ? (
+                    <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+                      No models found. Train one in the ML dashboard first.
+                    </p>
+                  ) : (
+                    <select
+                      value={selectedModelId ?? ''}
+                      onChange={e => setSelectedModelId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                     >
-                      <input
-                        type="radio"
-                        name="impl"
-                        value={impl.id}
-                        checked={selectedImpl === impl.id}
-                        onChange={() => setSelectedImpl(impl.id)}
-                        className="mt-0.5 accent-[var(--color-blue-600)]"
-                      />
-                      <div>
-                        <div className="font-medium text-sm">{impl.name}</div>
-                        {impl.description && (
-                          <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{impl.description}</div>
-                        )}
-                      </div>
-                    </label>
+                      {mlModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} — {m.algorithm?.replace(/_/g, '-')} · {m.totalEpisodes?.toLocaleString() ?? 0} eps · ELO {m.eloRating ?? 1200}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* Play as — shared by both tabs */}
+              <div>
+                <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Play as</label>
+                <div className="flex gap-2">
+                  {['X', 'O'].map((mark) => (
+                    <button
+                      key={mark}
+                      onClick={() => setSelectedMark(mark)}
+                      className="flex-1 py-2 rounded-lg text-lg font-bold border-2 transition-colors"
+                      style={{
+                        borderColor: selectedMark === mark
+                          ? (mark === 'X' ? 'var(--color-blue-600)' : 'var(--color-teal-600)')
+                          : 'var(--border-default)',
+                        backgroundColor: selectedMark === mark
+                          ? (mark === 'X' ? 'var(--color-blue-50)' : 'var(--color-teal-50)')
+                          : 'var(--bg-surface)',
+                        color: mark === 'X' ? 'var(--color-blue-600)' : 'var(--color-teal-600)',
+                      }}
+                    >
+                      {mark}
+                    </button>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Mark */}
-            <div>
-              <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Play as
-              </label>
-              <div className="flex gap-2">
-                {['X', 'O'].map((mark) => (
-                  <button
-                    key={mark}
-                    onClick={() => setSelectedMark(mark)}
-                    className="flex-1 py-2 rounded-lg text-lg font-bold border-2 transition-colors"
-                    style={{
-                      borderColor: selectedMark === mark
-                        ? (mark === 'X' ? 'var(--color-blue-600)' : 'var(--color-teal-600)')
-                        : 'var(--border-default)',
-                      backgroundColor: selectedMark === mark
-                        ? (mark === 'X' ? 'var(--color-blue-50)' : 'var(--color-teal-50)')
-                        : 'var(--bg-surface)',
-                      color: mark === 'X' ? 'var(--color-blue-600)' : 'var(--color-teal-600)',
-                    }}
-                  >
-                    {mark}
-                  </button>
-                ))}
-              </div>
+              <button
+                onClick={handlePlayAI}
+                disabled={selectedImpl === 'ml' && !selectedModelId}
+                className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', boxShadow: 'var(--shadow-md)' }}
+              >
+                Play vs AI
+              </button>
             </div>
-
-            <button
-              onClick={handlePlayAI}
-              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
-              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', boxShadow: 'var(--shadow-md)' }}
-            >
-              Play vs AI
-            </button>
           </div>
         )}
       </div>

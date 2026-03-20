@@ -160,6 +160,16 @@ export async function attachSocketIO(httpServer) {
       recordPvpGame(room).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
     })
 
+    // ── ML training progress ─────────────────────────────────────────
+
+    socket.on('ml:watch', ({ sessionId }) => {
+      if (sessionId) socket.join(`ml:session:${sessionId}`)
+    })
+
+    socket.on('ml:unwatch', ({ sessionId }) => {
+      if (sessionId) socket.leave(`ml:session:${sessionId}`)
+    })
+
     // ── Disconnect ──────────────────────────────────────────────────
 
     socket.on('disconnect', () => {

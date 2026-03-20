@@ -10,6 +10,8 @@ import roomsRouter from './routes/rooms.js'
 import adminAiRouter from './routes/adminAi.js'
 import gamesRouter from './routes/games.js'
 import { attachSocketIO } from './realtime/socketHandler.js'
+import mlRouter from './routes/ml.js'
+import { setIO as mlSetIO } from './services/mlService.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -21,11 +23,13 @@ registerRoutes(app, {
   '/rooms': roomsRouter,
   '/admin/ai': adminAiRouter,
   '/games': gamesRouter,
+  '/ml': mlRouter,
 })
 
 const server = http.createServer(app)
 
-attachSocketIO(server).then(() => {
+attachSocketIO(server).then((io) => {
+  mlSetIO(io)
   server.listen(PORT, () => {
     logger.info(`XO Arena backend running on port ${PORT}`)
   })

@@ -114,3 +114,171 @@ enum MovePlayer {
   HUMAN
   AI
 }
+
+// ─── Machine Learning ────────────────────────────────────────────────────────
+
+model MLModel {
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  algorithm     MLAlgorithm   @default(Q_LEARNING)
+  qtable        Json          @default("{}")
+  config        Json
+  status        MLModelStatus @default(IDLE)
+  totalEpisodes Int           @default(0)
+  eloRating     Float         @default(1000)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  sessions       TrainingSession[]
+  checkpoints    MLCheckpoint[]
+  benchmarks     MLBenchmarkResult[]
+  eloHistory     MLEloHistory[]
+  playerProfiles MLPlayerProfile[]
+
+  @@map("ml_models")
+}
+
+model MLPlayerProfile {
+  id                 String   @id @default(uuid())
+  modelId            String
+  userId             String
+  gamesRecorded      Int      @default(0)
+  movePatterns       Json     @default("{}")   // { stateKey: { cellIndex: count } }
+  openingPreferences Json     @default("{}")   // { cellIndex: count } (first moves)
+  tendencies         Json     @default("{}")   // { centerRate, cornerRate, blockingRate }
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, userId])
+  @@map("ml_player_profiles")
+}
+
+model TrainingSession {
+  id          String        @id @default(cuid())
+  modelId     String
+  mode        TrainingMode
+  iterations  Int
+  status      SessionStatus @default(PENDING)
+  config      Json
+  summary     Json?
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+
+  model    MLModel           @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  episodes TrainingEpisode[]
+
+  @@index([modelId])
+  @@map("training_sessions")
+}
+
+model TrainingEpisode {
+  id         String         @id @default(cuid())
+  sessionId  String
+  episodeNum Int
+  outcome    EpisodeOutcome
+  totalMoves Int
+  avgQDelta  Float
+  epsilon    Float
+  durationMs Int
+
+  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("training_episodes")
+}
+
+model MLCheckpoint {
+  id         String   @id @default(cuid())
+  modelId    String
+  episodeNum Int
+  qtable     Json
+  epsilon    Float
+  eloRating  Float
+  createdAt  DateTime @default(now())
+
+  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([modelId])
+  @@map("ml_checkpoints")
+}
+
+model MLBenchmarkResult {
+  id       String   @id @default(cuid())
+  modelId  String
+  runAt    DateTime @default(now())
+  vsRandom Json
+  vsEasy   Json
+  vsMedium Json
+  vsHard   Json
+  summary  Json
+
+  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([modelId])
+  @@map("ml_benchmark_results")
+}
+
+model MLEloHistory {
+  id           String         @id @default(cuid())
+  modelId      String
+  eloRating    Float
+  delta        Float
+  opponentId   String?
+  opponentType String
+  outcome      EpisodeOutcome
+  recordedAt   DateTime       @default(now())
+
+  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([modelId])
+  @@map("ml_elo_history")
+}
+
+model MLTournament {
+  id           String    @id @default(cuid())
+  status       String    @default("PENDING")
+  modelIds     Json
+  gamesPerPair Int       @default(50)
+  results      Json      @default("{}")
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@map("ml_tournaments")
+}
+
+enum MLAlgorithm {
+  Q_LEARNING
+  SARSA
+  MONTE_CARLO
+  POLICY_GRADIENT
+  DQN
+  ALPHA_ZERO
+}
+
+enum MLModelStatus {
+  IDLE
+  TRAINING
+}
+
+enum TrainingMode {
+  SELF_PLAY
+  VS_MINIMAX
+  VS_HUMAN
+}
+
+enum SessionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum EpisodeOutcome {
+  WIN
+  LOSS
+  DRAW
+}
