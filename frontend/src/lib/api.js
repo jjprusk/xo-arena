@@ -74,6 +74,13 @@ export const api = {
     getPlayerProfiles: (id) => api.get(`/ml/models/${id}/player-profiles`),
     getPlayerProfile: (id, userId) => api.get(`/ml/models/${id}/player-profiles/${userId}`),
     recordGameEnd: (modelId, userId) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/game-end`, {}),
+
+    listRuleSets:     ()              => api.get('/ml/rulesets'),
+    createRuleSet:    (body, tok)     => api.post('/ml/rulesets', body, tok),
+    getRuleSet:       (id)            => api.get(`/ml/rulesets/${id}`),
+    updateRuleSet:    (id, body, tok) => api.patch(`/ml/rulesets/${id}`, body, tok),
+    deleteRuleSet:    (id, tok)       => request('DELETE', `/ml/rulesets/${id}`, null, tok),
+    extractRules:     (id, body, tok) => api.post(`/ml/rulesets/${id}/extract`, body, tok),
   },
 
   rooms: {

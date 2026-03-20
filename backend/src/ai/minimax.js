@@ -7,6 +7,7 @@
  */
 
 import { getWinner, isBoardFull, getEmptyCells, opponent } from './gameLogic.js'
+import { createsFork } from './ruleLogic.js'
 
 /** Pick a random element from an array. */
 function randomChoice(arr) {
@@ -112,23 +113,6 @@ export function minimaxMove(board, difficulty, player) {
 }
 
 // ─── Move classification ──────────────────────────────────────────────────────
-
-/**
- * Returns true if placing `player` at `cell` on `board` creates two or more
- * simultaneous winning threats (a "fork").
- */
-function createsFork(board, cell, player) {
-  const next = [...board]
-  next[cell] = player
-  const empty = getEmptyCells(next)
-  let threats = 0
-  for (const i of empty) {
-    const test = [...next]
-    test[i] = player
-    if (getWinner(test) === player) threats++
-  }
-  return threats >= 2
-}
 
 /**
  * Classify the strategic rule that best explains why `chosenCell` was played.
