@@ -246,27 +246,24 @@ function TrainTab({ model, onComplete }) {
   const [sessionId, setSessionId]           = useState(null)
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
-  const socketRef = useRef(null)
+  const socketRef  = useRef(null)
+  const cleanupRef = useRef(null)
 
   // Load sessions to show queue status
   useEffect(() => {
     api.ml.getSessions(model.id).then(r => setSessions(r.sessions)).catch(() => {})
   }, [model.id])
 
-  // Cleanup socket listeners on unmount
+  // Only clean up on unmount — never on sessionId change
   useEffect(() => {
-    return () => {
-      if (socketRef.current && sessionId) {
-        socketRef.current.emit('ml:unwatch', { sessionId })
-        socketRef.current.off('ml:progress')
-        socketRef.current.off('ml:complete')
-        socketRef.current.off('ml:error')
-        socketRef.current.off('ml:cancelled')
-      }
-    }
-  }, [sessionId])
+    return () => cleanupRef.current?.()
+  }, [])
 
   async function handleStart() {
+    // Clean up any lingering listeners from a previous session before starting a new one
+    cleanupRef.current?.()
+    cleanupRef.current = null
+
     const token = await window.Clerk?.session?.getToken()
     const cfg = {
       ...(mode === 'VS_MINIMAX' ? { difficulty } : {}),
@@ -289,7 +286,8 @@ function TrainTab({ model, onComplete }) {
       socketRef.current = socket
       socket.emit('ml:watch', { sessionId: session.id })
 
-      socket.on('ml:progress', (data) => {
+      // Named handler so we can remove exactly this session's listener later
+      const onProgress = (data) => {
         if (data.sessionId !== session.id) return
         setProgress(data)
         setChartData(prev => [...prev, {
@@ -299,20 +297,27 @@ function TrainTab({ model, onComplete }) {
           epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
           qDelta: parseFloat(data.avgQDelta.toFixed(4)),
         }])
-      })
-
-      const finish = () => {
-        setRunning(false)
-        socket.emit('ml:unwatch', { sessionId: session.id })
-        socket.off('ml:progress')
-        socket.off('ml:complete')
-        socket.off('ml:error')
-        socket.off('ml:cancelled')
-        onComplete()
       }
-      socket.once('ml:complete',   finish)
-      socket.once('ml:cancelled',  finish)
-      socket.once('ml:error',      (d) => { setRunning(false); alert(`Training failed: ${d.error}`); finish() })
+
+      const teardown = () => {
+        socket.emit('ml:unwatch', { sessionId: session.id })
+        socket.off('ml:progress',  onProgress)
+        socket.off('ml:complete',  onComplete_)
+        socket.off('ml:cancelled', onCancelled)
+        socket.off('ml:error',     onError)
+        cleanupRef.current = null
+      }
+
+      const onComplete_  = () => { setRunning(false); teardown(); onComplete() }
+      const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
+      const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
+
+      socket.on('ml:progress',  onProgress)
+      socket.once('ml:complete',  onComplete_)
+      socket.once('ml:cancelled', onCancelled)
+      socket.once('ml:error',     onError)
+
+      cleanupRef.current = teardown
     } catch (err) {
       alert(err.message)
     }
