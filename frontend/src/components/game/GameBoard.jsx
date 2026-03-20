@@ -35,16 +35,12 @@ const THEME_MARKS = {
 /** Minimum ms between AI moves in AI-vs-AI mode (spectator pacing) */
 const AIVAI_MOVE_DELAY_MS = 700
 
-export default function GameBoard({ inviteUrl, roomName }) {
-  const [inviteCopied, setInviteCopied] = useState(false)
-
-  function handleCopyInvite() {
-    if (!inviteUrl) return
-    navigator.clipboard.writeText(inviteUrl).then(() => {
-      setInviteCopied(true)
-      setTimeout(() => setInviteCopied(false), 2000)
-    })
-  }
+export default function GameBoard({ roomName }) {
+  const [xModelName, setXModelName] = useState(null)
+  const [oModelName, setOModelName] = useState(null)
+  const [xCreatorName, setXCreatorName] = useState(null)
+  const [oCreatorName, setOCreatorName] = useState(null)
+  const [autoRematchCountdown, setAutoRematchCountdown] = useState(null)
 
   const {
     board, currentTurn, status, winner, winLine, scores, round,
@@ -75,10 +71,52 @@ export default function GameBoard({ inviteUrl, roomName }) {
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isAivai = mode === 'aivai'
+
+  // ── Fetch ML model names + creator for AI vs AI display ─────────────────
+  useEffect(() => {
+    if (!isAivai) return
+    setXModelName(null)
+    setOModelName(null)
+    setXCreatorName(null)
+    setOCreatorName(null)
+    if (aiImplementation === 'ml' && mlModelId) {
+      api.ml.getModel(mlModelId).then(d => {
+        setXModelName(d?.model?.name ?? null)
+        setXCreatorName(d?.model?.creatorName ?? null)
+      }).catch(() => {})
+    }
+    if (ai2Implementation === 'ml' && ai2ModelId) {
+      api.ml.getModel(ai2ModelId).then(d => {
+        setOModelName(d?.model?.name ?? null)
+        setOCreatorName(d?.model?.creatorName ?? null)
+      }).catch(() => {})
+    }
+  }, [isAivai, aiImplementation, mlModelId, ai2Implementation, ai2ModelId])
   const isPlayerTurn = !isAivai && status === 'playing' && currentTurn === playerMark
   const isOpponentTurn = !isAivai && status === 'playing' && currentTurn !== playerMark
 
   const themeMarkColor = THEME_MARKS[boardTheme] || THEME_MARKS.default
+
+  // ── Auto-rematch for AI vs AI series ────────────────────────────────────
+  useEffect(() => {
+    if (!isAivai) return
+    const gameOver = status === 'won' || status === 'draw'
+    if (!gameOver || seriesWinner) { setAutoRematchCountdown(null); return }
+
+    let seconds = 3
+    setAutoRematchCountdown(seconds)
+    const interval = setInterval(() => {
+      seconds -= 1
+      if (seconds <= 0) {
+        clearInterval(interval)
+        setAutoRematchCountdown(null)
+        rematch()
+      } else {
+        setAutoRematchCountdown(seconds)
+      }
+    }, 1000)
+    return () => { clearInterval(interval); setAutoRematchCountdown(null) }
+  }, [isAivai, status, seriesWinner])
 
   // ── Ticking thinking timer for the opponent ──────────────────────────────
   const thinkingStartRef = useRef(null)
@@ -306,7 +344,7 @@ export default function GameBoard({ inviteUrl, roomName }) {
   const themeClass = boardTheme !== 'default' ? `board-theme-${boardTheme}` : ''
 
   return (
-    <div className={`flex flex-col items-center gap-6 w-full max-w-sm mx-auto ${themeClass}`}>
+    <div className={`flex flex-col items-center ${isAivai ? 'gap-3' : 'gap-4'} w-full max-w-sm mx-auto ${themeClass}`}>
       {/* Room name */}
       {roomName && (
         <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
@@ -332,11 +370,36 @@ export default function GameBoard({ inviteUrl, roomName }) {
         </div>
       )}
 
+      {/* AI vs AI matchup strip */}
+      {isAivai && (
+        <div className="w-full flex items-center gap-2">
+          <AiPlayer
+            mark="X"
+            impl={aiImplementation}
+            difficulty={difficulty}
+            modelName={xModelName}
+            creatorName={xCreatorName}
+            isActive={status === 'playing' && currentTurn === 'X'}
+            isThinking={isAIThinking && currentTurn === 'X'}
+          />
+          <span className="shrink-0 text-xs font-bold px-1" style={{ color: 'var(--text-muted)' }}>vs</span>
+          <AiPlayer
+            mark="O"
+            impl={ai2Implementation}
+            difficulty={ai2Difficulty}
+            modelName={oModelName}
+            creatorName={oCreatorName}
+            isActive={status === 'playing' && currentTurn === 'O'}
+            isThinking={isAIThinking && currentTurn === 'O'}
+          />
+        </div>
+      )}
+
       {/* Round + score strip */}
       <div className="w-full flex items-center justify-between px-2">
         <ScorePill mark="X" score={scores.X} />
         <div className="text-center">
-          <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             Round {round}{bestOf ? ` / Best of ${bestOf}` : ''}
           </span>
           {misereMode && (
@@ -368,21 +431,6 @@ export default function GameBoard({ inviteUrl, roomName }) {
             />
           </div>
         </div>
-      )}
-
-      {/* Invite a friend bar */}
-      {inviteUrl && (
-        <button
-          onClick={handleCopyInvite}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
-          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
-        >
-          <span style={{ color: 'var(--text-muted)' }}>👥</span>
-          <span className="flex-1 text-left truncate font-mono" style={{ color: 'var(--text-muted)' }}>{inviteUrl}</span>
-          <span className="font-semibold shrink-0" style={{ color: inviteCopied ? 'var(--color-teal-600)' : 'var(--color-blue-600)' }}>
-            {inviteCopied ? '✓ Copied' : 'Invite'}
-          </span>
-        </button>
       )}
 
       {/* Turn indicator */}
@@ -423,14 +471,24 @@ export default function GameBoard({ inviteUrl, roomName }) {
           </span>
         )}
         {status === 'won' && !analyzeMode && (
-          <span className="font-bold" style={{ color: winner === playerMark ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
-            {isAivai
-              ? `${winner} wins!`
-              : winner === playerMark ? 'You win! 🎉' : (mode === 'pvai' ? 'AI wins!' : `${winner} wins!`)}
-          </span>
+          <>
+            <span className="font-bold" style={{ color: winner === playerMark ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
+              {isAivai
+                ? `${winner} wins!`
+                : winner === playerMark ? 'You win! 🎉' : (mode === 'pvai' ? 'AI wins!' : `${winner} wins!`)}
+            </span>
+            {isAivai && autoRematchCountdown !== null && (
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>· Next in {autoRematchCountdown}…</span>
+            )}
+          </>
         )}
         {status === 'draw' && !analyzeMode && (
-          <span className="font-bold" style={{ color: 'var(--color-amber-600)' }}>Draw!</span>
+          <>
+            <span className="font-bold" style={{ color: 'var(--color-amber-600)' }}>Draw!</span>
+            {isAivai && autoRematchCountdown !== null && (
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>· Next in {autoRematchCountdown}…</span>
+            )}
+          </>
         )}
         {status === 'forfeit' && !analyzeMode && (
           <span className="font-bold" style={{ color: 'var(--color-red-600)' }}>Forfeited.</span>
@@ -465,12 +523,12 @@ export default function GameBoard({ inviteUrl, roomName }) {
       )}
 
       {/* Minimax strategy panel */}
-      {aiImplementation === 'minimax' && mode === 'pvai' && !analyzeMode && (
+      {aiImplementation === 'minimax' && mode === 'pvai' && status === 'playing' && !analyzeMode && (
         <div className="w-full">
           <button
             onClick={() => setShowStrategy(v => !v)}
             className="w-full flex items-center justify-between text-xs px-3 py-2 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+            style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
           >
             <span className="font-medium">How Minimax thinks</span>
             <span>{showStrategy ? '▲' : '▼'}</span>
@@ -582,7 +640,7 @@ export default function GameBoard({ inviteUrl, roomName }) {
             onClick={handleHint}
             disabled={!isPlayerTurn || hintLoading}
             className="flex-1 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--color-teal-600)' }}
+            style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-surface)', color: 'var(--color-teal-600)' }}
           >
             {hintLoading ? 'Thinking…' : 'Hint'}
           </button>
@@ -590,7 +648,7 @@ export default function GameBoard({ inviteUrl, roomName }) {
             onClick={undoMove}
             disabled={moveHistory.length < 2}
             className="flex-1 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
           >
             Undo
           </button>
@@ -652,7 +710,7 @@ export default function GameBoard({ inviteUrl, roomName }) {
       )}
 
       {/* Game-end actions */}
-      {(status === 'won' || status === 'draw' || status === 'forfeit') && !analyzeMode && !seriesWinner && (
+      {(status === 'won' || status === 'draw' || status === 'forfeit') && !analyzeMode && !seriesWinner && !isAivai && (
         <div className="flex gap-3 w-full">
           <button
             onClick={() => { rematch(); play('move') }}
@@ -693,11 +751,11 @@ export default function GameBoard({ inviteUrl, roomName }) {
       )}
 
       {/* AI vs AI stop button */}
-      {isAivai && status === 'playing' && !analyzeMode && (
+      {isAivai && !analyzeMode && (
         <button
           onClick={newGame}
           className="text-sm transition-colors hover:text-[var(--color-red-600)]"
-          style={{ color: 'var(--text-muted)' }}
+          style={{ color: 'var(--text-secondary)' }}
         >
           Stop spectating
         </button>
@@ -729,6 +787,46 @@ export default function GameBoard({ inviteUrl, roomName }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function implLabel(impl, difficulty, modelName) {
+  if (impl === 'ml') return modelName ?? 'ML model'
+  if (impl === 'minimax') return `Minimax · ${difficulty ?? ''}`
+  if (impl === 'random') return 'Random'
+  return impl ?? '—'
+}
+
+function AiPlayer({ mark, impl, difficulty, modelName, creatorName, isActive, isThinking }) {
+  const color = mark === 'X' ? 'var(--color-blue-600)' : 'var(--color-teal-600)'
+  const bgActive = mark === 'X' ? 'var(--color-blue-50)' : 'var(--color-teal-50)'
+  const borderActive = mark === 'X' ? 'var(--color-blue-300)' : 'var(--color-teal-300)'
+  const label = implLabel(impl, difficulty, modelName)
+  const tooltip = creatorName ? `${label} · by ${creatorName}` : undefined
+  return (
+    <div
+      className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border transition-all"
+      style={{
+        backgroundColor: isActive ? bgActive : 'var(--bg-surface)',
+        borderColor: isActive ? borderActive : 'var(--border-default)',
+        boxShadow: isActive ? `0 0 0 2px ${borderActive}` : 'none',
+      }}
+    >
+      <span className="text-xl font-bold shrink-0" style={{ fontFamily: 'var(--font-display)', color }}>{mark}</span>
+      <div className="min-w-0">
+        <div className="text-xs font-semibold truncate" style={{ color: isActive ? color : 'var(--text-primary)' }} title={tooltip}>
+          {label}
+        </div>
+        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          {isThinking ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: color }} />
+              thinking…
+            </span>
+          ) : isActive ? 'to move' : 'waiting'}
+        </div>
+      </div>
     </div>
   )
 }

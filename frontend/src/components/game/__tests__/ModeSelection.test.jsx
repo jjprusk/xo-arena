@@ -36,9 +36,9 @@ describe('ModeSelection', () => {
     render(<ModeSelection />)
     fireEvent.click(screen.getByText('Play vs AI'))
     await waitFor(() => {
-      expect(screen.getByText('easy')).toBeTruthy()
-      expect(screen.getByText('medium')).toBeTruthy()
-      expect(screen.getByText('hard')).toBeTruthy()
+      const select = screen.getByDisplayValue('Medium')
+      expect(select).toBeTruthy()
+      expect(select.tagName).toBe('SELECT')
     })
   })
 

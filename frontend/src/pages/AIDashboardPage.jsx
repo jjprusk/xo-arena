@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useAuth } from '@clerk/clerk-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
@@ -13,6 +14,7 @@ const DIFFICULTY_COLOR = {
 const CELL_LABELS = ['TL', 'TM', 'TR', 'ML', 'C', 'MR', 'BL', 'BM', 'BR']
 
 export default function AIDashboardPage() {
+  const { getToken } = useAuth()
   const [summary, setSummary] = useState({ total: 0, rows: [] })
   const [histogram, setHistogram] = useState([])
   const [heatmap, setHeatmap] = useState([])
@@ -20,16 +22,16 @@ export default function AIDashboardPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    api.get('/admin/ai/summary').then(setSummary).catch(() => {})
+    getToken().then(token => api.get('/admin/ai/summary', token)).then(setSummary).catch(() => {})
   }, [])
 
   useEffect(() => {
     setLoading(true)
     const qs = difficulty ? `?difficulty=${difficulty}` : ''
-    Promise.all([
-      api.get(`/admin/ai/histogram${qs}`),
-      api.get(`/admin/ai/heatmap${qs}`),
-    ])
+    getToken().then(token => Promise.all([
+      api.get(`/admin/ai/histogram${qs}`, token),
+      api.get(`/admin/ai/heatmap${qs}`, token),
+    ]))
       .then(([h, hm]) => { setHistogram(h.histogram || []); setHeatmap(hm.heatmap || []) })
       .catch(() => {})
       .finally(() => setLoading(false))

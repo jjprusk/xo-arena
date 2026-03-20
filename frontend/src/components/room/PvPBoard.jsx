@@ -126,10 +126,11 @@ export default function PvPBoard() {
         <div className="w-full">
           <button
             onClick={() => setShowReactions(v => !v)}
-            className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+            title="Send reaction"
+            className="text-xl p-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)] hover:scale-110 active:scale-95"
+            style={{ borderColor: 'var(--border-default)' }}
           >
-            React {showReactions ? '▲' : '▼'}
+            😊
           </button>
           {showReactions && (
             <div className="flex gap-2 mt-2 flex-wrap">

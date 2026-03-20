@@ -2,10 +2,15 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
+vi.mock('@clerk/clerk-react', () => ({
+  useAuth: () => ({ getToken: () => Promise.resolve('test-token') }),
+}))
+
 // Mock api
 vi.mock('../../lib/api.js', () => ({
   api: {
     get: vi.fn(),
+    logs: { list: vi.fn() },
   },
 }))
 
@@ -30,6 +35,7 @@ const SAMPLE_LOGS = [
 beforeEach(() => {
   vi.clearAllMocks()
   api.get.mockResolvedValue({ logs: SAMPLE_LOGS, total: SAMPLE_LOGS.length })
+  api.logs.list.mockResolvedValue({ logs: SAMPLE_LOGS, total: SAMPLE_LOGS.length })
 })
 
 describe('LogViewerPage', () => {
@@ -49,7 +55,7 @@ describe('LogViewerPage', () => {
       expect(screen.getByText('Server started')).toBeDefined()
       expect(screen.getByText('Uncaught error')).toBeDefined()
     })
-    expect(api.get).toHaveBeenCalledWith('/logs')
+    expect(api.logs.list).toHaveBeenCalled()
   })
 
   it('DEBUG logs are hidden by default (not in active levels)', async () => {

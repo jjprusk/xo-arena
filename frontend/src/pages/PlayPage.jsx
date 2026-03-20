@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
 import { usePvpStore } from '../store/pvpStore.js'
@@ -39,11 +39,12 @@ export default function PlayPage() {
     </div>
   )
 
-  // PvAI flow
-  const inGame = pvaiStatus !== 'idle' && pvaiMode === 'pvai'
+  // PvAI / AI-vs-AI flow
+  const inGame = pvaiStatus !== 'idle' && (pvaiMode === 'pvai' || pvaiMode === 'aivai')
   if (inGame) return (
-    <div className="flex flex-col items-center w-full max-w-md mx-auto">
-      <GameBoard inviteUrl={inviteUrl} roomName={displayName} />
+    <div className="flex flex-col items-center w-full max-w-md mx-auto gap-4">
+      <GameBoard roomName={displayName} />
+      <InviteBar inviteUrl={inviteUrl} />
     </div>
   )
 
@@ -55,5 +56,29 @@ export default function PlayPage() {
         onPvpJoin={(s) => usePvpStore.getState().joinRoom(s, 'player')}
       />
     </div>
+  )
+}
+
+function InviteBar({ inviteUrl }) {
+  const [copied, setCopied] = useState(false)
+  if (!inviteUrl) return null
+  function handleCopy() {
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {})
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
+      style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+    >
+      <span style={{ color: 'var(--text-muted)' }}>👥</span>
+      <span className="flex-1 text-left truncate font-mono" style={{ color: 'var(--text-muted)' }}>{inviteUrl}</span>
+      <span className="font-semibold shrink-0" style={{ color: copied ? 'var(--color-teal-600)' : 'var(--color-blue-600)' }}>
+        {copied ? '✓ Copied' : 'Invite'}
+      </span>
+    </button>
   )
 }

@@ -36,24 +36,70 @@ const trainingQueue = []
 // ─── Model CRUD ─────────────────────────────────────────────────────────────
 
 export async function listModels() {
-  return db.mLModel.findMany({
+  const models = await db.mLModel.findMany({
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { sessions: true } } },
   })
+
+  // Enrich with creator display names in one extra query
+  const creatorIds = [...new Set(models.map(m => m.createdBy).filter(Boolean))]
+  const creators = creatorIds.length
+    ? await db.user.findMany({
+        where: { clerkId: { in: creatorIds } },
+        select: { clerkId: true, displayName: true, username: true },
+      })
+    : []
+  const creatorMap = Object.fromEntries(creators.map(u => [u.clerkId, u]))
+
+  const enriched = models.map(m => ({
+    ...m,
+    creatorName: m.createdBy
+      ? (creatorMap[m.createdBy]?.displayName || creatorMap[m.createdBy]?.username || null)
+      : null,
+  }))
+
+  // Featured models always appear first
+  return [...enriched.filter(m => m.featured), ...enriched.filter(m => !m.featured)]
 }
 
-export async function createModel({ name, description, algorithm = 'Q_LEARNING', config = {} }) {
+// ─── System config ────────────────────────────────────────────────────────────
+
+export async function getSystemConfig(key, defaultValue = null) {
+  const row = await db.systemConfig.findUnique({ where: { key } })
+  return row ? row.value : defaultValue
+}
+
+export async function setSystemConfig(key, value) {
+  return db.systemConfig.upsert({
+    where: { key },
+    update: { value },
+    create: { key, value },
+  })
+}
+
+export async function createModel({ name, description, algorithm = 'Q_LEARNING', config = {}, createdBy = null }) {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config }
   return db.mLModel.create({
-    data: { name, description: description || null, algorithm, qtable: {}, config: mergedConfig },
+    data: { name, description: description || null, algorithm, qtable: {}, config: mergedConfig, createdBy },
   })
 }
 
 export async function getModel(id) {
-  return db.mLModel.findUnique({
+  const model = await db.mLModel.findUnique({
     where: { id },
     include: { _count: { select: { sessions: true, checkpoints: true, benchmarks: true } } },
   })
+  if (!model) return null
+  const creator = model.createdBy
+    ? await db.user.findUnique({
+        where: { clerkId: model.createdBy },
+        select: { displayName: true, username: true },
+      })
+    : null
+  return {
+    ...model,
+    creatorName: creator?.displayName || creator?.username || null,
+  }
 }
 
 export async function updateModel(id, { name, description, config }) {
@@ -83,7 +129,7 @@ export async function resetModel(id) {
   })
 }
 
-export async function cloneModel(id, { name, description }) {
+export async function cloneModel(id, { name, description, createdBy = null }) {
   const src = await db.mLModel.findUnique({ where: { id } })
   if (!src) throw new Error('Source model not found')
   return db.mLModel.create({
@@ -95,6 +141,7 @@ export async function cloneModel(id, { name, description }) {
       config: src.config,
       totalEpisodes: src.totalEpisodes,
       eloRating: src.eloRating,
+      createdBy,
     },
   })
 }
@@ -495,7 +542,7 @@ export async function exportModel(modelId) {
 }
 
 export async function importModel(data) {
-  const { name, description, algorithm, config, qtable, totalEpisodes, eloRating } = data
+  const { name, description, algorithm, config, qtable, totalEpisodes, eloRating, createdBy = null } = data
   if (!name?.trim()) throw new Error('name is required')
   const mergedConfig = { ...DEFAULT_CONFIG, ...(config || {}) }
   return db.mLModel.create({
@@ -507,6 +554,7 @@ export async function importModel(data) {
       qtable: qtable || {},
       totalEpisodes: totalEpisodes || 0,
       eloRating: eloRating || 1000,
+      createdBy,
     },
   })
 }
@@ -517,6 +565,21 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
   const model = await getModel(modelId)
   if (!model) throw new Error('Model not found')
   if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
+
+  // Enforce admin-configurable limits
+  const [maxEpisodes, maxConcurrent] = await Promise.all([
+    getSystemConfig('ml.maxEpisodesPerSession', 100_000),
+    getSystemConfig('ml.maxConcurrentSessions', 0), // 0 = unlimited
+  ])
+  if (maxEpisodes > 0 && iterations > maxEpisodes) {
+    throw new Error(`Training limit: max ${maxEpisodes.toLocaleString()} episodes per session`)
+  }
+  if (maxConcurrent > 0) {
+    const runningCount = await db.mLModel.count({ where: { status: 'TRAINING' } })
+    if (runningCount >= maxConcurrent) {
+      throw new Error(`Training limit: max ${maxConcurrent} concurrent session${maxConcurrent !== 1 ? 's' : ''}`)
+    }
+  }
 
   if (model.status === 'TRAINING') {
     // Queue the session instead of throwing 409
@@ -1370,7 +1433,23 @@ export async function getPlayerProfiles(modelId) {
       createdAt: true,
     },
   })
-  return profiles
+
+  // Enrich with display names in one extra query.
+  // userId stored in profiles is the Clerk ID, so look up by clerkId.
+  const userIds = [...new Set(profiles.map(p => p.userId))]
+  const users = userIds.length
+    ? await db.user.findMany({
+        where: { clerkId: { in: userIds } },
+        select: { clerkId: true, displayName: true, username: true },
+      })
+    : []
+  const userMap = Object.fromEntries(users.map(u => [u.clerkId, u]))
+
+  return profiles.map(p => ({
+    ...p,
+    displayName: userMap[p.userId]?.displayName ?? null,
+    username: userMap[p.userId]?.username ?? null,
+  }))
 }
 
 /**

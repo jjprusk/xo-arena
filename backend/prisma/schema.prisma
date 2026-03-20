@@ -20,6 +20,8 @@ model User {
   oauthProvider String? // "google" | "apple" | "email"
   preferences  Json     @default("{}")
   eloRating    Float    @default(1200)
+  banned       Boolean  @default(false)
+  mlModelLimit Int?     // null = use system default (ml.maxModelsPerUser)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -142,6 +144,8 @@ model MLModel {
   qtable        Json          @default("{}")
   config        Json
   status        MLModelStatus @default(IDLE)
+  featured      Boolean       @default(false)
+  createdBy     String?       // Clerk user ID of the model's creator
   totalEpisodes Int           @default(0)
   eloRating     Float         @default(1000)
   createdAt     DateTime      @default(now())
@@ -276,6 +280,31 @@ model MLTournament {
   completedAt  DateTime?
 
   @@map("ml_tournaments")
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  level     String   // DEBUG | INFO | WARN | ERROR | FATAL
+  source    String   // frontend | api | realtime | ai
+  message   String
+  userId    String?
+  sessionId String?
+  roomId    String?
+  meta      Json?
+  timestamp DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([level])
+  @@index([source])
+  @@map("logs")
+}
+
+model SystemConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
 }
 
 enum MLAlgorithm {

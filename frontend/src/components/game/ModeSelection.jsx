@@ -4,7 +4,7 @@ import { useGameStore } from '../../store/gameStore.js'
 import { api } from '../../lib/api.js'
 
 const DIFFICULTIES = ['easy', 'medium', 'hard']
-const BEST_OF_OPTIONS = [{ label: 'Unlimited', value: null }, { label: 'Best of 3', value: 3 }, { label: 'Best of 5', value: 5 }, { label: 'Best of 7', value: 7 }]
+const BEST_OF_OPTIONS = [{ label: 'Single', value: 1 }, { label: 'Best of 3', value: 3 }, { label: 'Best of 5', value: 5 }, { label: 'Best of 7', value: 7 }, { label: 'Unlimited', value: null }]
 const TIMER_PRESETS = [15, 30, 60]
 const BOARD_THEMES = [
   { id: 'default', label: 'Default' },
@@ -44,7 +44,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   const [ai1Diff, setAi1Diff] = useState('hard')
   const [ai1ModelId, setAi1ModelId] = useState(null)
   const [ai2Impl, setAi2Impl] = useState('minimax')
-  const [ai2Diff, setAi2Diff] = useState('hard')
+  const [ai2Diff, setAi2Diff] = useState('medium')
   const [ai2ModelId, setAi2ModelId] = useState(null)
   const [aivaiModels, setAivaiModels] = useState([])
 
@@ -111,7 +111,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   useEffect(() => {
     if (!aivaiExpanded) return
     api.ml.listModels()
-      .then((res) => setAivaiModels(res.models || []))
+      .then((res) => {
+        const models = res.models || []
+        setAivaiModels(models)
+        if (models.length > 0) {
+          setAi1ModelId(prev => prev ?? models[0].id)
+          setAi2ModelId(prev => prev ?? models[0].id)
+        }
+      })
       .catch(() => setAivaiModels([]))
   }, [aivaiExpanded])
 
@@ -184,7 +191,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         }}
       >
         <button
-          onClick={() => setAiExpanded((v) => !v)}
+          onClick={() => { setAiExpanded(v => !v); setAivaiExpanded(false) }}
           className="w-full flex items-center gap-4 p-4 text-left"
         >
           <span className="text-3xl">🤖</span>
@@ -224,21 +231,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
               {selectedImpl === 'minimax' && (
                 <div>
                   <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Difficulty</label>
-                  <div className="flex gap-2">
-                    {DIFFICULTIES.map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setSelectedDifficulty(d)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 capitalize transition-colors ${
-                          selectedDifficulty === d
-                            ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]'
-                            : 'border-[var(--border-default)] hover:border-[var(--color-gray-400)]'
-                        }`}
-                      >
-                        {d}
-                      </button>
-                    ))}
-                  </div>
+                  <select
+                    value={selectedDifficulty}
+                    onChange={e => setSelectedDifficulty(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    {DIFFICULTIES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                  </select>
                 </div>
               )}
 
@@ -258,7 +258,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                       style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                     >
                       {mlModels.map((m) => (
-                        <option key={m.id} value={m.id}>
+                        <option key={m.id} value={m.id} title={m.creatorName ? `by ${m.creatorName}` : undefined}>
                           {m.name} — {m.algorithm?.replace(/_/g, '-')} · {m.totalEpisodes?.toLocaleString() ?? 0} eps · ELO {m.eloRating ?? 1200}
                         </option>
                       ))}
@@ -354,22 +354,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                     {/* Best of N */}
                     <div>
                       <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Series</label>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {BEST_OF_OPTIONS.map(opt => (
-                          <button
-                            key={opt.label}
-                            onClick={() => setLocalBestOf(opt.value)}
-                            className="px-2.5 py-1 rounded-lg text-xs font-medium border-2 transition-colors"
-                            style={{
-                              borderColor: localBestOf === opt.value ? 'var(--color-blue-600)' : 'var(--border-default)',
-                              backgroundColor: localBestOf === opt.value ? 'var(--color-blue-50)' : 'var(--bg-surface)',
-                              color: localBestOf === opt.value ? 'var(--color-blue-600)' : 'var(--text-secondary)',
-                            }}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
+                      <select
+                        value={localBestOf ?? ''}
+                        onChange={e => setLocalBestOf(e.target.value === '' ? null : Number(e.target.value))}
+                        className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                      >
+                        {BEST_OF_OPTIONS.map(opt => <option key={opt.label} value={opt.value ?? ''}>{opt.label}</option>)}
+                      </select>
                     </div>
 
                     {/* Turn timer */}
@@ -428,22 +420,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                     {/* Board theme */}
                     <div>
                       <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Board theme</label>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {BOARD_THEMES.map(t => (
-                          <button
-                            key={t.id}
-                            onClick={() => setLocalTheme(t.id)}
-                            className="px-2.5 py-1 rounded-lg text-xs font-medium border-2 transition-colors"
-                            style={{
-                              borderColor: localTheme === t.id ? 'var(--color-blue-600)' : 'var(--border-default)',
-                              backgroundColor: localTheme === t.id ? 'var(--color-blue-50)' : 'var(--bg-surface)',
-                              color: localTheme === t.id ? 'var(--color-blue-600)' : 'var(--text-secondary)',
-                            }}
-                          >
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
+                      <select
+                        value={localTheme}
+                        onChange={e => setLocalTheme(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                      >
+                        {BOARD_THEMES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                      </select>
                     </div>
                   </div>
                 )}
@@ -472,7 +456,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         }}
       >
         <button
-          onClick={() => setAivaiExpanded(v => !v)}
+          onClick={() => { setAivaiExpanded(v => !v); setAiExpanded(false) }}
           className="w-full flex items-center gap-4 p-4 text-left"
         >
           <span className="text-3xl">👁</span>
@@ -509,18 +493,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 ))}
               </div>
               {ai1Impl === 'minimax' && (
-                <div className="flex gap-1.5">
-                  {DIFFICULTIES.map(d => (
-                    <button key={d} onClick={() => setAi1Diff(d)}
-                      className="flex-1 py-1 rounded-lg text-xs font-medium border-2 capitalize transition-colors"
-                      style={{
-                        borderColor: ai1Diff === d ? 'var(--color-blue-600)' : 'var(--border-default)',
-                        backgroundColor: ai1Diff === d ? 'var(--color-blue-50)' : 'var(--bg-surface)',
-                        color: ai1Diff === d ? 'var(--color-blue-600)' : 'var(--text-secondary)',
-                      }}
-                    >{d}</button>
-                  ))}
-                </div>
+                <select
+                  value={ai1Diff}
+                  onChange={e => setAi1Diff(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  {DIFFICULTIES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                </select>
               )}
               {ai1Impl === 'ml' && (
                 aivaiModels.length === 0
@@ -531,7 +511,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                       className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                       style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                     >
-                      {aivaiModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      {aivaiModels.map(m => <option key={m.id} value={m.id} title={m.creatorName ? `by ${m.creatorName}` : undefined}>{m.name}</option>)}
                     </select>
               )}
             </div>
@@ -556,18 +536,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 ))}
               </div>
               {ai2Impl === 'minimax' && (
-                <div className="flex gap-1.5">
-                  {DIFFICULTIES.map(d => (
-                    <button key={d} onClick={() => setAi2Diff(d)}
-                      className="flex-1 py-1 rounded-lg text-xs font-medium border-2 capitalize transition-colors"
-                      style={{
-                        borderColor: ai2Diff === d ? 'var(--color-teal-600)' : 'var(--border-default)',
-                        backgroundColor: ai2Diff === d ? 'var(--color-teal-50)' : 'var(--bg-surface)',
-                        color: ai2Diff === d ? 'var(--color-teal-600)' : 'var(--text-secondary)',
-                      }}
-                    >{d}</button>
-                  ))}
-                </div>
+                <select
+                  value={ai2Diff}
+                  onChange={e => setAi2Diff(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  {DIFFICULTIES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                </select>
               )}
               {ai2Impl === 'ml' && (
                 aivaiModels.length === 0
@@ -578,7 +554,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                       className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                       style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                     >
-                      {aivaiModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      {aivaiModels.map(m => <option key={m.id} value={m.id} title={m.creatorName ? `by ${m.creatorName}` : undefined}>{m.name}</option>)}
                     </select>
               )}
             </div>
@@ -586,22 +562,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
             {/* Best of N for spectator */}
             <div>
               <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Series</label>
-              <div className="flex gap-1.5 flex-wrap">
-                {BEST_OF_OPTIONS.map(opt => (
-                  <button
-                    key={opt.label}
-                    onClick={() => setLocalBestOf(opt.value)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium border-2 transition-colors"
-                    style={{
-                      borderColor: localBestOf === opt.value ? 'var(--color-teal-600)' : 'var(--border-default)',
-                      backgroundColor: localBestOf === opt.value ? 'var(--color-teal-50)' : 'var(--bg-surface)',
-                      color: localBestOf === opt.value ? 'var(--color-teal-600)' : 'var(--text-secondary)',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              <select
+                value={localBestOf ?? ''}
+                onChange={e => setLocalBestOf(e.target.value === '' ? null : Number(e.target.value))}
+                className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              >
+                {BEST_OF_OPTIONS.map(opt => <option key={opt.label} value={opt.value ?? ''}>{opt.label}</option>)}
+              </select>
             </div>
 
             <button

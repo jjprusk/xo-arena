@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useAuth } from '@clerk/clerk-react'
 import { api } from '../lib/api.js'
 import { getSocket } from '../lib/socket.js'
 
@@ -19,6 +20,7 @@ const LEVEL_ROW_BG = {
 }
 
 export default function LogViewerPage() {
+  const { getToken } = useAuth()
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -46,11 +48,12 @@ export default function LogViewerPage() {
 
   useEffect(() => {
     setLoading(true)
-    api.get('/logs')
+    getToken()
+      .then(token => api.logs.list(token, { limit: 1000 }))
       .then((res) => { setLogs(res.logs || []); setTotal(res.total || 0) })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [getToken])
 
   useEffect(() => {
     if (!liveTail) return

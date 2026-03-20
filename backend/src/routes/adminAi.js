@@ -1,7 +1,9 @@
 import { Router } from 'express'
+import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { getSummary, getHistogram, getHeatmap, getTotal } from '../services/aiMetrics.js'
 
 const router = Router()
+router.use(requireAuth, requireAdmin)
 
 /**
  * GET /api/v1/admin/ai/summary

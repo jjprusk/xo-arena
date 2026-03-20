@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { useUser } from '@clerk/clerk-react'
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -29,7 +30,21 @@ const ALGORITHMS = [
 const STATUS_COLOR = { IDLE: 'teal', TRAINING: 'blue' }
 const SESSION_COLOR = { COMPLETED: 'teal', RUNNING: 'blue', FAILED: 'red', CANCELLED: 'amber', PENDING: 'gray', QUEUED: 'yellow' }
 
+// Returns the display name for a player profile, substituting the logged-in
+// user's current name when the profile belongs to them.
+function playerLabel(profile, currentUserId, currentUserName) {
+  if (currentUserId && profile.userId === currentUserId) {
+    return currentUserName || profile.displayName || profile.username || 'You'
+  }
+  return profile.displayName || profile.username || `${profile.userId.slice(0, 12)}…`
+}
+
 export default function MLDashboardPage() {
+  const { user } = useUser()
+  const currentUserId   = user?.id ?? null
+  const currentUserName = user?.fullName || user?.username || null
+  const isAdmin = user?.publicMetadata?.role === 'admin'
+
   const [models, setModels]           = useState([])
   const [selectedId, setSelectedId]   = useState(null)
   const [activeTab, setActiveTab]     = useState('train')
@@ -87,9 +102,23 @@ export default function MLDashboardPage() {
   async function handleDelete(id) {
     if (!confirm('Delete this model and all its training history?')) return
     const token = await window.Clerk?.session?.getToken()
-    await api.ml.deleteModel(id, token)
+    // Admin uses the unrestricted admin endpoint; regular users use the standard one
+    if (isAdmin) {
+      await api.admin.deleteModel(id, token)
+    } else {
+      await api.ml.deleteModel(id, token)
+    }
     setModels(ms => ms.filter(m => m.id !== id))
     if (selectedId === id) setSelectedId(models.find(m => m.id !== id)?.id || null)
+  }
+
+  async function handleFeatureToggle(id) {
+    const token = await window.Clerk?.session?.getToken()
+    const { model: updated } = await api.admin.featureModel(id, token)
+    setModels(ms => {
+      const next = ms.map(m => m.id === id ? { ...m, featured: updated.featured } : m)
+      return [...next.filter(m => m.featured), ...next.filter(m => !m.featured)]
+    })
   }
 
   async function handleReset(id) {
@@ -134,7 +163,10 @@ export default function MLDashboardPage() {
               className={`w-full text-left rounded-xl border p-3 transition-all ${selectedId === m.id ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : 'hover:border-[var(--color-gray-400)]'}`}
               style={{ borderColor: selectedId === m.id ? undefined : 'var(--border-default)', backgroundColor: selectedId === m.id ? undefined : 'var(--bg-surface)' }}>
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-sm truncate">{m.name}</span>
+                <span className="font-semibold text-sm truncate flex items-center gap-1" title={m.creatorName ? `by ${m.creatorName}` : undefined}>
+                  {m.featured && <span title="Featured">⭐</span>}
+                  {m.name}
+                </span>
                 <div className="flex items-center gap-1">
                   <StatusBadge status={m.status} />
                   {regressions.has(m.id) && (
@@ -167,21 +199,31 @@ export default function MLDashboardPage() {
                 style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold">{selected.name}</h2>
+                    <h2 className="text-xl font-bold" title={selected.creatorName ? `by ${selected.creatorName}` : undefined}>{selected.name}</h2>
                     <StatusBadge status={selected.status} />
                   </div>
                   {selected.description && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selected.description}</p>}
                   <div className="flex gap-4 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>{selected.algorithm?.replace('_', '-')}</span>
                     <span>{selected.totalEpisodes.toLocaleString()} episodes</span>
+                    {selected.creatorName && <span>by {selected.creatorName}</span>}
                     <span>ELO {Math.round(selected.eloRating)}</span>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {isAdmin && (
+                    <Btn onClick={() => handleFeatureToggle(selected.id)} variant="ghost">
+                      {selected.featured ? '⭐ Unfeature' : '☆ Feature'}
+                    </Btn>
+                  )}
                   <Btn onClick={() => handleExport(selected.id)} variant="ghost">Export</Btn>
                   <Btn onClick={() => setShowClone(true)} variant="ghost">Clone</Btn>
-                  <Btn onClick={() => handleReset(selected.id)} variant="ghost">Reset</Btn>
-                  <Btn onClick={() => handleDelete(selected.id)} variant="danger">Delete</Btn>
+                  {(isAdmin || selected.createdBy === currentUserId) && (
+                    <Btn onClick={() => handleReset(selected.id)} variant="ghost">Reset</Btn>
+                  )}
+                  {(isAdmin || selected.createdBy === currentUserId) && (
+                    <Btn onClick={() => handleDelete(selected.id)} variant="danger">Delete</Btn>
+                  )}
                 </div>
               </div>
 
@@ -198,8 +240,8 @@ export default function MLDashboardPage() {
 
               {activeTab === 'train'          && <TrainTab model={selected} onComplete={() => { refreshModel(selected.id) }} />}
               {activeTab === 'analytics'     && <AnalyticsTab model={selected} />}
-              {activeTab === 'evaluation'    && <EvaluationTab model={selected} models={models} />}
-              {activeTab === 'explainability'&& <ExplainabilityTab model={selected} />}
+              {activeTab === 'evaluation'    && <EvaluationTab model={selected} models={models} currentUserId={currentUserId} currentUserName={currentUserName} />}
+              {activeTab === 'explainability'&& <ExplainabilityTab model={selected} currentUserId={currentUserId} currentUserName={currentUserName} />}
               {activeTab === 'checkpoints'   && <CheckpointsTab model={selected} onRestore={() => refreshModel(selected.id)} />}
               {activeTab === 'export'        && <ExportTab model={selected} />}
               {activeTab === 'rules'         && <RulesTab model={selected} models={models} />}
@@ -350,16 +392,14 @@ function TrainTab({ model, onComplete }) {
             {/* Mode */}
             <div>
               <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Mode</label>
-              <div className="flex flex-wrap gap-2">
-                {MODES.map(m => (
-                  <button key={m.value} onClick={() => setMode(m.value)}
-                    className={`flex-1 min-w-[120px] text-left rounded-lg border p-3 transition-all ${mode === m.value ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : ''}`}
-                    style={{ borderColor: mode === m.value ? undefined : 'var(--border-default)', backgroundColor: mode === m.value ? undefined : 'var(--bg-base)' }}>
-                    <p className="text-sm font-semibold">{m.label}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{m.desc}</p>
-                  </button>
-                ))}
-              </div>
+              <select
+                value={mode}
+                onChange={e => setMode(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              >
+                {MODES.map(m => <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>)}
+              </select>
             </div>
 
             {/* VS_MINIMAX options: difficulty + play as */}
@@ -367,14 +407,14 @@ function TrainTab({ model, onComplete }) {
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Difficulty</label>
-                  <div className="flex gap-2">
-                    {['easy','medium','hard'].map(d => (
-                      <button key={d} onClick={() => setDifficulty(d)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 capitalize transition-colors ${difficulty === d ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]' : 'border-[var(--border-default)]'}`}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
+                  <select
+                    value={difficulty}
+                    onChange={e => setDifficulty(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    {['easy','medium','hard'].map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Play as</label>
@@ -408,21 +448,21 @@ function TrainTab({ model, onComplete }) {
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>DQN Configuration</p>
                 <div className="flex flex-wrap gap-4">
                   <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Batch size</label>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Batch</label>
                     <input type="number" min="8" max="256" step="8" value={dqnBatchSize}
                       onChange={e => setDqnBatchSize(Number(e.target.value))}
                       className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
                       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Replay buffer size</label>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Replay buffer</label>
                     <input type="number" min="1000" max="100000" step="1000" value={dqnReplayBuffer}
                       onChange={e => setDqnReplayBuffer(Number(e.target.value))}
                       className="w-28 text-sm rounded-lg border px-2 py-1 outline-none"
                       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Target update freq</label>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Target update</label>
                     <input type="number" min="10" max="1000" step="10" value={dqnTargetUpdate}
                       onChange={e => setDqnTargetUpdate(Number(e.target.value))}
                       className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
@@ -438,14 +478,14 @@ function TrainTab({ model, onComplete }) {
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>AlphaZero Configuration</p>
                 <div className="flex flex-wrap gap-4">
                   <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Simulations per move</label>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Simulations</label>
                     <input type="number" min="10" max="500" step="10" value={azSimulations}
                       onChange={e => setAzSimulations(Number(e.target.value))}
                       className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
                       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>PUCT constant</label>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>PUCT</label>
                     <input type="number" min="0.1" max="5" step="0.1" value={azCPuct}
                       onChange={e => setAzCPuct(Number(e.target.value))}
                       className="w-20 text-sm rounded-lg border px-2 py-1 outline-none"
@@ -462,21 +502,6 @@ function TrainTab({ model, onComplete }) {
               </div>
             )}
 
-            {/* Difficulty (VS_MINIMAX only) */}
-            {mode === 'VS_MINIMAX' && (
-              <div>
-                <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Opponent Difficulty</label>
-                <div className="flex gap-2">
-                  {DIFFICULTIES.map(d => (
-                    <button key={d} onClick={() => setDifficulty(d)}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${difficulty === d ? 'bg-[var(--color-blue-600)] text-white' : ''}`}
-                      style={{ backgroundColor: difficulty === d ? undefined : 'var(--bg-surface-hover)', color: difficulty === d ? undefined : 'var(--text-secondary)' }}>
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Curriculum learning (self-play only) */}
             {mode === 'SELF_PLAY' && (
@@ -831,7 +856,7 @@ function AnalyticsTab({ model }) {
 
 const EMPTY_BOARD = Array(9).fill(null)
 
-function ExplainabilityTab({ model }) {
+function ExplainabilityTab({ model, currentUserId, currentUserName }) {
   const [board, setBoard]           = useState([...EMPTY_BOARD])
   const [qValues, setQValues]       = useState(null)
   const [bestCell, setBestCell]     = useState(null)
@@ -1017,7 +1042,7 @@ function ExplainabilityTab({ model }) {
 
       {activeSection === 'diff' && <VersionDiffViewer model={model} />}
       {activeSection === 'hypersearch' && <HyperparamSearchPanel model={model} />}
-      {activeSection === 'opponent' && <OpponentModelPanel model={model} board={board} qValues={qValues} />}
+      {activeSection === 'opponent' && <OpponentModelPanel model={model} board={board} qValues={qValues} currentUserId={currentUserId} currentUserName={currentUserName} />}
       {activeSection === 'activations' && isNeuralNet && <NetworkActivationsPanel model={model} />}
     </div>
   )
@@ -1025,7 +1050,7 @@ function ExplainabilityTab({ model }) {
 
 // ─── Opponent Model Panel ─────────────────────────────────────────────────────
 
-function OpponentModelPanel({ model, board, qValues }) {
+function OpponentModelPanel({ model, board, qValues, currentUserId, currentUserName }) {
   const [profiles, setProfiles]         = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [profile, setProfile]           = useState(null)
@@ -1126,7 +1151,7 @@ function OpponentModelPanel({ model, board, qValues }) {
           >
             {profiles.map(p => (
               <option key={p.userId} value={p.userId}>
-                {p.userId.slice(0, 24)}{p.userId.length > 24 ? '…' : ''} ({p.gamesRecorded} games)
+                {playerLabel(p, currentUserId, currentUserName)} ({p.gamesRecorded} games)
               </option>
             ))}
           </select>
@@ -1968,7 +1993,7 @@ function CreateModelModal({ onClose, onCreate }) {
 
 // ─── Evaluation Tab ───────────────────────────────────────────────────────────
 
-function EvaluationTab({ model, models }) {
+function EvaluationTab({ model, models, currentUserId, currentUserName }) {
   const [section, setSection] = useState('benchmark') // 'benchmark' | 'elo' | 'versus' | 'tournament' | 'profiles'
 
   return (
@@ -1992,7 +2017,7 @@ function EvaluationTab({ model, models }) {
       {section === 'elo'        && <EloPanel model={model} />}
       {section === 'versus'     && <VersusPanel model={model} models={models} />}
       {section === 'tournament' && <TournamentPanel models={models} />}
-      {section === 'profiles'   && <PlayerProfilesPanel model={model} />}
+      {section === 'profiles'   && <PlayerProfilesPanel model={model} currentUserId={currentUserId} currentUserName={currentUserName} />}
     </div>
   )
 }
@@ -2306,7 +2331,7 @@ function TendencyBar({ label, value }) {
   )
 }
 
-function PlayerProfilesPanel({ model }) {
+function PlayerProfilesPanel({ model, currentUserId, currentUserName }) {
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
@@ -2343,7 +2368,7 @@ function PlayerProfilesPanel({ model }) {
           {/* Header row */}
           <div className="grid gap-3 text-xs font-semibold uppercase tracking-wide px-3 py-1"
             style={{ color: 'var(--text-muted)', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}>
-            <span>Player ID</span>
+            <span>Player</span>
             <span>Games</span>
             <span>Center %</span>
             <span>Corner %</span>
@@ -2361,8 +2386,8 @@ function PlayerProfilesPanel({ model }) {
                   className="w-full grid gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
                   style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', backgroundColor: 'var(--bg-base)' }}
                 >
-                  <span className="font-mono text-xs truncate" style={{ color: 'var(--text-secondary)' }} title={p.userId}>
-                    {p.userId.slice(0, 20)}{p.userId.length > 20 ? '…' : ''}
+                  <span className="text-xs truncate font-medium" style={{ color: 'var(--text-secondary)' }} title={playerLabel(p, currentUserId, currentUserName)}>
+                    {playerLabel(p, currentUserId, currentUserName)}
                   </span>
                   <span className="font-bold" style={{ color: 'var(--color-blue-600)' }}>{p.gamesRecorded}</span>
                   <span style={{ color: 'var(--text-secondary)' }}>{Math.round((tendencies.centerRate || 0) * 100)}%</span>

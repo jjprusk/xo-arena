@@ -1,6 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import express from 'express'
 import request from 'supertest'
+
+vi.mock('../../middleware/auth.js', () => ({
+  requireAuth:  (_req, _res, next) => next(),
+  requireAdmin: (_req, _res, next) => next(),
+}))
+
 import adminAiRouter from '../adminAi.js'
 import { _reset, recordMove } from '../../services/aiMetrics.js'
 

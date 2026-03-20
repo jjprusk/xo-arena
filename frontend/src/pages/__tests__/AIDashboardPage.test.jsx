@@ -2,6 +2,10 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 
+vi.mock('@clerk/clerk-react', () => ({
+  useAuth: () => ({ getToken: () => Promise.resolve('test-token') }),
+}))
+
 vi.mock('../../lib/api.js', () => ({
   api: {
     get: vi.fn(),

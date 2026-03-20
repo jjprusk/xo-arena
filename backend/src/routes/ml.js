@@ -4,13 +4,50 @@
  */
 
 import { Router } from 'express'
-import { requireAuth } from '../middleware/auth.js'
+import { requireAuth, isAdmin } from '../middleware/auth.js'
 import * as svc from '../services/mlService.js'
 import { extractRulesFromModel, extractRulesFromEnsemble } from '../services/ruleExtractionService.js'
 import { invalidateRuleSetCache } from '../ai/ruleBased.js'
 import db from '../lib/db.js'
 
 const router = Router()
+
+// ─── Model limit helper ───────────────────────────────────────────────────────
+
+/**
+ * Returns true if the user may create another model; otherwise sends 403 and returns false.
+ */
+async function checkModelLimit(req, res) {
+  const [userRecord, currentCount, defaultLimit] = await Promise.all([
+    db.user.findUnique({ where: { clerkId: req.auth.userId }, select: { mlModelLimit: true } }),
+    db.mLModel.count({ where: { createdBy: req.auth.userId } }),
+    svc.getSystemConfig('ml.maxModelsPerUser', 10),
+  ])
+  const limit = userRecord?.mlModelLimit ?? defaultLimit
+  if (limit > 0 && currentCount >= limit) {
+    res.status(403).json({ error: `Model limit reached (${limit}). Delete an existing model to create a new one.` })
+    return false
+  }
+  return true
+}
+
+// ─── Ownership helper ─────────────────────────────────────────────────────────
+
+/**
+ * Loads a model and asserts the requester owns it (or is admin).
+ * Returns the model on success; sends 403/404 and returns null on failure.
+ * Models with no createdBy (legacy) are treated as unowned — anyone can mutate.
+ */
+async function assertModelOwner(req, res, modelId) {
+  const model = await svc.getModel(modelId)
+  if (!model) { res.status(404).json({ error: 'Model not found' }); return null }
+  if (model.createdBy && model.createdBy !== req.auth.userId) {
+    if (!await isAdmin(req.auth.userId)) {
+      res.status(403).json({ error: 'You do not own this model' }); return null
+    }
+  }
+  return model
+}
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
@@ -25,7 +62,8 @@ router.post('/models', requireAuth, async (req, res, next) => {
   try {
     const { name, description, algorithm, config } = req.body
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' })
-    const model = await svc.createModel({ name: name.trim(), description, algorithm, config })
+    if (!await checkModelLimit(req, res)) return
+    const model = await svc.createModel({ name: name.trim(), description, algorithm, config, createdBy: req.auth.userId })
     res.status(201).json({ model })
   } catch (err) { next(err) }
 })
@@ -40,6 +78,7 @@ router.get('/models/:id', async (req, res, next) => {
 
 router.patch('/models/:id', requireAuth, async (req, res, next) => {
   try {
+    if (!await assertModelOwner(req, res, req.params.id)) return
     const { name, description, config } = req.body
     const model = await svc.updateModel(req.params.id, { name, description, config })
     res.json({ model })
@@ -48,6 +87,7 @@ router.patch('/models/:id', requireAuth, async (req, res, next) => {
 
 router.delete('/models/:id', requireAuth, async (req, res, next) => {
   try {
+    if (!await assertModelOwner(req, res, req.params.id)) return
     await svc.deleteModel(req.params.id)
     res.status(204).end()
   } catch (err) { next(err) }
@@ -55,6 +95,7 @@ router.delete('/models/:id', requireAuth, async (req, res, next) => {
 
 router.post('/models/:id/reset', requireAuth, async (req, res, next) => {
   try {
+    if (!await assertModelOwner(req, res, req.params.id)) return
     const model = await svc.resetModel(req.params.id)
     res.json({ model })
   } catch (err) { next(err) }
@@ -62,15 +103,17 @@ router.post('/models/:id/reset', requireAuth, async (req, res, next) => {
 
 router.post('/models/:id/clone', requireAuth, async (req, res, next) => {
   try {
+    if (!await checkModelLimit(req, res)) return
     const { name, description } = req.body
-    const model = await svc.cloneModel(req.params.id, { name, description })
+    const model = await svc.cloneModel(req.params.id, { name, description, createdBy: req.auth.userId })
     res.status(201).json({ model })
   } catch (err) { next(err) }
 })
 
 router.post('/models/import', requireAuth, async (req, res, next) => {
   try {
-    const model = await svc.importModel(req.body)
+    if (!await checkModelLimit(req, res)) return
+    const model = await svc.importModel({ ...req.body, createdBy: req.auth.userId })
     res.status(201).json({ model })
   } catch (err) {
     if (err.message === 'name is required') return res.status(400).json({ error: err.message })
@@ -134,6 +177,7 @@ router.post('/models/ensemble', async (req, res, next) => {
 
 router.post('/models/:id/train', requireAuth, async (req, res, next) => {
   try {
+    if (!await assertModelOwner(req, res, req.params.id)) return
     const { mode, iterations, config } = req.body
     const validModes = ['SELF_PLAY', 'VS_MINIMAX', 'VS_HUMAN']
     if (!validModes.includes(mode)) {
@@ -146,6 +190,7 @@ router.post('/models/:id/train', requireAuth, async (req, res, next) => {
     res.status(201).json({ session })
   } catch (err) {
     if (err.message === 'Model is already training') return res.status(409).json({ error: err.message })
+    if (err.message?.startsWith('Training limit:')) return res.status(429).json({ error: err.message })
     next(err)
   }
 })
@@ -197,6 +242,9 @@ router.get('/sessions/:id/episodes', async (req, res, next) => {
 
 router.post('/sessions/:id/cancel', requireAuth, async (req, res, next) => {
   try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    if (!await assertModelOwner(req, res, session.modelId)) return
     await svc.cancelSession(req.params.id)
     res.status(204).end()
   } catch (err) { next(err) }
@@ -226,6 +274,7 @@ router.get('/models/:id/opening-book', async (req, res, next) => {
 
 router.post('/models/:id/checkpoint', requireAuth, async (req, res, next) => {
   try {
+    if (!await assertModelOwner(req, res, req.params.id)) return
     const checkpoint = await svc.saveCheckpoint(req.params.id)
     res.status(201).json({ checkpoint })
   } catch (err) { next(err) }
@@ -247,6 +296,7 @@ router.get('/models/:id/checkpoints/:cpId', async (req, res, next) => {
 
 router.post('/models/:id/checkpoints/:cpId/restore', requireAuth, async (req, res, next) => {
   try {
+    if (!await assertModelOwner(req, res, req.params.id)) return
     const model = await svc.restoreCheckpoint(req.params.id, req.params.cpId)
     res.json({ model })
   } catch (err) { next(err) }
@@ -299,6 +349,7 @@ router.post('/models/:id/versus/:id2', requireAuth, async (req, res, next) => {
 
 router.post('/models/:id/hypersearch', requireAuth, async (req, res, next) => {
   try {
+    if (!await assertModelOwner(req, res, req.params.id)) return
     const { paramGrid, gamesPerConfig } = req.body
     const result = await svc.startHyperparamSearch(req.params.id, { paramGrid, gamesPerConfig })
     res.json(result)

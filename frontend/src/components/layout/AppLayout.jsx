@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
-import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignInButton, UserButton, useUser, useAuth } from '@clerk/clerk-react'
+import { api } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
 import { useGameStore } from '../../store/gameStore.js'
@@ -10,6 +11,7 @@ const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
+  { to: '/ml', label: 'ML' },
   { to: '/puzzles', label: 'Puzzles' },
   { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
 ]
@@ -23,6 +25,15 @@ const BOTTOM_NAV = [
 
 export default function AppLayout() {
   const navigate = useNavigate()
+  const { user, isSignedIn } = useUser()
+  const { getToken } = useAuth()
+  const isAdmin = user?.publicMetadata?.role === 'admin'
+
+  // Sync the signed-in user to our DB on every new session
+  useEffect(() => {
+    if (!isSignedIn) return
+    getToken().then(token => api.users.sync(token)).catch(() => {})
+  }, [isSignedIn, getToken])
 
   function handleLogoClick(e) {
     e.preventDefault()
@@ -120,44 +131,34 @@ export default function AppLayout() {
             Settings
           </NavLink>
 
-          {/* Admin section — amber-tinted, desktop-only */}
-          <span className="w-px h-4 mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
-          <NavLink
-            to="/admin/ai"
-            className={({ isActive }) =>
-              `text-xs font-medium px-2 py-1 rounded-md transition-colors ${
-                isActive
-                  ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
-                  : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
-              }`
-            }
-          >
-            AI
-          </NavLink>
-          <NavLink
-            to="/admin/ml"
-            className={({ isActive }) =>
-              `text-xs font-medium px-2 py-1 rounded-md transition-colors ${
-                isActive
-                  ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
-                  : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
-              }`
-            }
-          >
-            ML
-          </NavLink>
-          <NavLink
-            to="/admin/logs"
-            className={({ isActive }) =>
-              `text-xs font-medium px-2 py-1 rounded-md transition-colors ${
-                isActive
-                  ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
-                  : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
-              }`
-            }
-          >
-            Logs
-          </NavLink>
+          {/* Admin section — amber-tinted, desktop-only, admins only */}
+          {isAdmin && (
+            <>
+              <span className="w-px h-4 mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
+              {[
+                { to: '/admin', label: 'Admin' },
+                { to: '/admin/users', label: 'Users' },
+                { to: '/admin/ml-models', label: 'Models' },
+                { to: '/admin/ai', label: 'AI' },
+                { to: '/admin/logs', label: 'Logs' },
+              ].map(({ to, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/admin'}
+                  className={({ isActive }) =>
+                    `text-xs font-medium px-2 py-1 rounded-md transition-colors ${
+                      isActive
+                        ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
+                        : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
+                    }`
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </>
+          )}
         </nav>
 
         {/* Controls */}
@@ -177,7 +178,17 @@ export default function AppLayout() {
                 </SignInButton>
               </SignedOut>
               <SignedIn>
-                <UserButton afterSignOutUrl="/play" />
+                <UserButton afterSignOutUrl="/play">
+                  {isAdmin && (
+                    <UserButton.MenuItems>
+                      <UserButton.Link
+                        label="Admin Panel"
+                        labelIcon={<span style={{ fontSize: 14 }}>⚙</span>}
+                        href="/admin"
+                      />
+                    </UserButton.MenuItems>
+                  )}
+                </UserButton>
               </SignedIn>
             </>
           )}
