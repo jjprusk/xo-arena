@@ -10,6 +10,21 @@ const MARK_COLOR = {
   O: 'var(--color-teal-600)',
 }
 
+const MINIMAX_RULES = [
+  { id: 'win',             label: 'Win',             desc: 'Complete a two-in-a-row to win immediately' },
+  { id: 'block',           label: 'Block',           desc: "Stop your two-in-a-row threat" },
+  { id: 'fork',            label: 'Fork',            desc: 'Create two simultaneous winning threats' },
+  { id: 'block_fork',      label: 'Block fork',      desc: 'Deny you a fork opportunity' },
+  { id: 'center',          label: 'Center',          desc: 'Take the center square for maximum control' },
+  { id: 'opposite_corner', label: 'Opposite corner', desc: 'Play opposite your corner to neutralise it' },
+  { id: 'corner',          label: 'Corner',          desc: 'Claim an empty corner' },
+  { id: 'side',            label: 'Side',            desc: 'Play an empty side square' },
+]
+
+const RULE_LABELS = Object.fromEntries(
+  MINIMAX_RULES.map(r => [r.id, { short: r.label, desc: r.desc }])
+)
+
 export default function GameBoard({ inviteUrl, roomName }) {
   const [inviteCopied, setInviteCopied] = useState(false)
 
@@ -32,6 +47,8 @@ export default function GameBoard({ inviteUrl, roomName }) {
   const [showForfeitDialog, setShowForfeitDialog] = useState(false)
   const [aiError, setAIError] = useState(null)
   const [aiConfidence, setAIConfidence] = useState(null)
+  const [aiReason, setAIReason] = useState(null)
+  const [showStrategy, setShowStrategy] = useState(false)
   const gameStartRef = useRef(null)
   // Track the last cell the human played (for ML profiling)
   const lastHumanMoveRef = useRef(null)
@@ -119,12 +136,17 @@ export default function GameBoard({ inviteUrl, roomName }) {
       const profileUserId = isML && isSignedIn && user?.id ? user.id : null
       const humanLastMove = profileUserId ? lastHumanMoveRef.current : null
       try {
-        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, isML, profileUserId, humanLastMove)
+        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, true, profileUserId, humanLastMove)
         if (!cancelled) {
           makeMove(res.move)
           play('move')
-          if (res.explanation) setAIConfidence(res.explanation.confidence)
-          else setAIConfidence(null)
+          if (res.explanation) {
+            setAIConfidence(res.explanation.confidence ?? null)
+            setAIReason(res.explanation.rule ?? null)
+          } else {
+            setAIConfidence(null)
+            setAIReason(null)
+          }
         }
       } catch (err) {
         if (!cancelled) setAIError('AI failed to respond. Please try again.')
@@ -233,6 +255,77 @@ export default function GameBoard({ inviteUrl, roomName }) {
             <div className="h-full rounded-full transition-all duration-500"
               style={{ width: `${Math.round(aiConfidence * 100)}%`, backgroundColor: 'var(--color-teal-500)' }} />
           </div>
+        </div>
+      )}
+
+      {/* Minimax last-move rule badge */}
+      {aiImplementation === 'minimax' && aiReason && (
+        <div className="w-full flex items-center gap-2">
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>AI played:</span>
+          <span
+            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
+          >
+            {RULE_LABELS[aiReason]?.short ?? aiReason}
+          </span>
+        </div>
+      )}
+
+      {/* Minimax strategy panel */}
+      {aiImplementation === 'minimax' && mode === 'pvai' && (
+        <div className="w-full">
+          <button
+            onClick={() => setShowStrategy(v => !v)}
+            className="w-full flex items-center justify-between text-xs px-3 py-2 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+          >
+            <span className="font-medium">How Minimax thinks</span>
+            <span>{showStrategy ? '▲' : '▼'}</span>
+          </button>
+          {showStrategy && (
+            <div
+              className="mt-1 rounded-lg border overflow-hidden"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+            >
+              {MINIMAX_RULES.map((rule, idx) => {
+                const isActive = aiReason === rule.id
+                return (
+                  <div
+                    key={rule.id}
+                    className="flex items-start gap-3 px-3 py-2 border-b last:border-0 transition-colors"
+                    style={{
+                      borderColor: 'var(--border-default)',
+                      backgroundColor: isActive ? 'var(--color-blue-50)' : 'transparent',
+                    }}
+                  >
+                    <span
+                      className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mt-0.5"
+                      style={{
+                        backgroundColor: isActive ? 'var(--color-blue-600)' : 'var(--color-gray-200)',
+                        color: isActive ? 'white' : 'var(--text-muted)',
+                      }}
+                    >
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <div
+                        className="text-xs font-semibold"
+                        style={{ color: isActive ? 'var(--color-blue-700)' : 'var(--text-primary)' }}
+                      >
+                        {rule.label}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{rule.desc}</div>
+                    </div>
+                  </div>
+                )
+              })}
+              {difficulty === 'easy' && (
+                <p className="text-xs px-3 py-2" style={{ color: 'var(--text-muted)' }}>
+                  Easy mode plays randomly — no strategy is applied.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -111,6 +111,75 @@ export function minimaxMove(board, difficulty, player) {
   }
 }
 
+// ─── Move classification ──────────────────────────────────────────────────────
+
+/**
+ * Returns true if placing `player` at `cell` on `board` creates two or more
+ * simultaneous winning threats (a "fork").
+ */
+function createsFork(board, cell, player) {
+  const next = [...board]
+  next[cell] = player
+  const empty = getEmptyCells(next)
+  let threats = 0
+  for (const i of empty) {
+    const test = [...next]
+    test[i] = player
+    if (getWinner(test) === player) threats++
+  }
+  return threats >= 2
+}
+
+/**
+ * Classify the strategic rule that best explains why `chosenCell` was played.
+ * Returns one of: 'win' | 'block' | 'fork' | 'block_fork' | 'center' |
+ *                 'opposite_corner' | 'corner' | 'side' | 'random'
+ *
+ * @param {Array<string|null>} board   Board state BEFORE the move
+ * @param {number}             chosenCell
+ * @param {string}             player  The AI's mark
+ * @param {'easy'|'medium'|'hard'} difficulty
+ */
+export function classifyMinimaxMove(board, chosenCell, player, difficulty) {
+  if (difficulty === 'easy') return 'random'
+
+  const opp = opponent(player)
+
+  // Rule 1 — Win
+  const testWin = [...board]
+  testWin[chosenCell] = player
+  if (getWinner(testWin) === player) return 'win'
+
+  // Rule 2 — Block
+  const testBlock = [...board]
+  testBlock[chosenCell] = opp
+  if (getWinner(testBlock) === opp) return 'block'
+
+  // Rules 3 & 4 only apply to hard (medium falls through to positional)
+  if (difficulty === 'hard') {
+    // Rule 3 — Fork
+    if (createsFork(board, chosenCell, player)) return 'fork'
+
+    // Rule 4 — Block fork
+    if (createsFork(board, chosenCell, opp)) return 'block_fork'
+  }
+
+  // Rule 5 — Center
+  if (chosenCell === 4) return 'center'
+
+  // Rule 6 — Opposite corner
+  const cornerPairs = [[0, 8], [2, 6], [6, 2], [8, 0]]
+  for (const [c, opp_c] of cornerPairs) {
+    if (board[c] === opp && chosenCell === opp_c) return 'opposite_corner'
+  }
+
+  // Rule 7 — Empty corner
+  if ([0, 2, 6, 8].includes(chosenCell)) return 'corner'
+
+  // Rule 8 — Side
+  return 'side'
+}
+
 export const minimaxImplementation = {
   id: 'minimax',
   name: 'Minimax',
