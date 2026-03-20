@@ -486,7 +486,7 @@ function TrainTab({ model, onComplete }) {
               <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
                 Iterations: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{iterations.toLocaleString()}</span>
               </label>
-              <input type="range" min="100" max="10000" step="100" value={iterations}
+              <input type="range" min="100" max="50000" step="100" value={iterations}
                 onChange={e => setIterations(Number(e.target.value))}
                 className="w-full accent-[var(--color-blue-600)]" />
               <div className="flex justify-between text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
