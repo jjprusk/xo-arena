@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { signIn, signUp } from '../../lib/auth-client.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
+import AppleSignInButton from './AppleSignInButton.jsx'
 
 export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) {
   const [view, setView] = useState(defaultView)        // 'sign-in' | 'sign-up' | 'verify-email'
@@ -175,9 +176,10 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                   ))}
                 </div>
 
-                {/* Google */}
-                <div className="mb-4">
+                {/* Social sign-in */}
+                <div className="space-y-2 mb-4">
                   <GoogleSignInButton />
+                  <AppleSignInButton />
                 </div>
 
                 {/* Divider */}

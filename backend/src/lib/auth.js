@@ -31,6 +31,12 @@ export const auth = betterAuth({
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       },
     }),
+    ...(process.env.APPLE_CLIENT_ID && {
+      apple: {
+        clientId: process.env.APPLE_CLIENT_ID,
+        clientSecret: process.env.APPLE_CLIENT_SECRET,
+      },
+    }),
   },
   secret: process.env.BETTER_AUTH_SECRET || 'dev-secret-change-in-production',
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
