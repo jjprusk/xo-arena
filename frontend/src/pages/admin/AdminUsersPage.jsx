@@ -1,14 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useUser } from '@clerk/clerk-react'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
-
-async function getToken() {
-  return window.Clerk?.session?.getToken() ?? null
-}
+import { getToken } from '../../lib/getToken.js'
+import { useSession } from '../../lib/auth-client.js'
 
 export default function AdminUsersPage() {
-  const { user: currentUser } = useUser()
+  const { data: session } = useSession()
   const [users, setUsers]     = useState([])
   const [total, setTotal]     = useState(0)
   const [page, setPage]       = useState(1)
@@ -263,7 +260,7 @@ export default function AdminUsersPage() {
                   {/* Actions */}
                   <td className="px-4 py-3 whitespace-nowrap">
                     {(() => {
-                      const isSelf = u.clerkId === currentUser?.id
+                      const isSelf = u.betterAuthId === session?.user?.id
                       return (
                     <div className="flex items-center gap-2 justify-end">
                       <button

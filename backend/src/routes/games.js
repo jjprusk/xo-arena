@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
-import { getUserByClerkId, createGame } from '../services/userService.js'
+import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import { updatePlayerEloAfterPvAI } from '../services/eloService.js'
 import logger from '../logger.js'
 
@@ -13,7 +13,7 @@ const router = Router()
  */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const user = await getUserByClerkId(req.auth.userId)
+    const user = await getUserByBetterAuthId(req.auth.userId)
     if (!user) return res.status(404).json({ error: 'User not found — sign in first' })
 
     const { outcome, difficulty, aiImplementationId, totalMoves, durationMs, startedAt } = req.body

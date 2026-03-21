@@ -1,13 +1,16 @@
-import React, { useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
-import { SignedIn, SignedOut, SignInButton, UserButton, useUser, useAuth } from '@clerk/clerk-react'
+import { useSession } from '../../lib/auth-client.js'
+import { getToken } from '../../lib/getToken.js'
 import { api } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
+import AuthModal from '../auth/AuthModal.jsx'
+import UserButton from '../auth/UserButton.jsx'
+import SignedIn from '../auth/SignedIn.jsx'
+import SignedOut from '../auth/SignedOut.jsx'
 import { useGameStore } from '../../store/gameStore.js'
 import { usePvpStore } from '../../store/pvpStore.js'
-
-const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
@@ -25,15 +28,15 @@ const BOTTOM_NAV = [
 
 export default function AppLayout() {
   const navigate = useNavigate()
-  const { user, isSignedIn } = useUser()
-  const { getToken } = useAuth()
-  const isAdmin = user?.publicMetadata?.role === 'admin'
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === 'admin'
+  const [authModalOpen, setAuthModalOpen] = useState(false)
 
   // Sync the signed-in user to our DB on every new session
   useEffect(() => {
-    if (!isSignedIn) return
-    getToken().then(token => api.users.sync(token)).catch(() => {})
-  }, [isSignedIn, getToken])
+    if (!session?.user?.id) return
+    getToken().then(token => { if (token) api.users.sync(token) }).catch(() => {})
+  }, [session?.user?.id])
 
   function handleLogoClick(e) {
     e.preventDefault()
@@ -165,33 +168,19 @@ export default function AppLayout() {
         <div className="flex items-center gap-2">
           <MuteToggle />
           <ThemeToggle />
-          {CLERK_KEY && (
-            <>
-              <SignedOut>
-                <SignInButton mode="modal">
-                  <button
-                    className="text-sm font-medium px-3 py-1.5 rounded-lg transition-all hover:brightness-110 active:scale-[0.97]"
-                    style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', color: 'white' }}
-                  >
-                    Sign in
-                  </button>
-                </SignInButton>
-              </SignedOut>
-              <SignedIn>
-                <UserButton afterSignOutUrl="/play">
-                  {isAdmin && (
-                    <UserButton.MenuItems>
-                      <UserButton.Link
-                        label="Admin Panel"
-                        labelIcon={<span style={{ fontSize: 14 }}>⚙</span>}
-                        href="/admin"
-                      />
-                    </UserButton.MenuItems>
-                  )}
-                </UserButton>
-              </SignedIn>
-            </>
-          )}
+          <SignedOut>
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="text-sm font-medium px-3 py-1.5 rounded-lg transition-all hover:brightness-110 active:scale-[0.97]"
+              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', color: 'white' }}
+            >
+              Sign in
+            </button>
+          </SignedOut>
+          <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+          <SignedIn>
+            <UserButton afterSignOutUrl="/play" />
+          </SignedIn>
         </div>
       </header>
 

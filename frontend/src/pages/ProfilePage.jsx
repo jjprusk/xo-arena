@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useSession } from '../lib/auth-client.js'
+import { getToken } from '../lib/getToken.js'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
 
 export default function ProfilePage() {
-  const { isSignedIn, isLoaded, user: clerkUser } = useUser()
+  const { data: session, isPending } = useSession()
+  const isLoaded = !isPending
+  const isSignedIn = !!session?.user
+  const clerkUser = session?.user ?? null
   const [dbUser, setDbUser] = useState(null)
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -23,7 +27,7 @@ export default function ProfilePage() {
     setLoading(true)
     async function load() {
       try {
-        const token = await window.Clerk?.session?.getToken()
+        const token = await getToken()
         const { user } = await api.users.sync(token)
         setDbUser(user)
         setNameInput(user.displayName)
@@ -46,7 +50,7 @@ export default function ProfilePage() {
     setSaving(true)
     setSaveError(null)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const { user: updated } = await api.patch(`/users/${dbUser.id}`, { displayName: nameInput.trim() }, token)
       setDbUser(updated)
       setEditing(false)
@@ -111,8 +115,8 @@ export default function ProfilePage() {
             className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 overflow-hidden"
             style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
           >
-            {clerkUser?.imageUrl
-              ? <img src={clerkUser.imageUrl} alt={dbUser.displayName} className="w-full h-full object-cover" />
+            {clerkUser?.image
+              ? <img src={clerkUser.image} alt={dbUser.displayName} className="w-full h-full object-cover" />
               : initial}
           </div>
           <div className="flex-1 min-w-0">
@@ -166,7 +170,7 @@ export default function ProfilePage() {
 
         {/* Details */}
         <dl className="space-y-3">
-          <Row label="Email" value={dbUser.email || clerkUser?.primaryEmailAddress?.emailAddress || '—'} />
+          <Row label="Email" value={dbUser.email || clerkUser?.email || '—'} />
           <Row label="Sign-in method" value={dbUser.oauthProvider ? capitalize(dbUser.oauthProvider) : 'Email'} />
           <Row label="Member since" value={memberSince} />
         </dl>

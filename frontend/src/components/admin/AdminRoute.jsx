@@ -1,11 +1,11 @@
 import React from 'react'
 import { Navigate } from 'react-router-dom'
-import { useUser } from '@clerk/clerk-react'
+import { useSession } from '../../lib/auth-client.js'
 
 export default function AdminRoute({ children }) {
-  const { user, isLoaded } = useUser()
+  const { data: session, isPending } = useSession()
 
-  if (!isLoaded) {
+  if (isPending) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="w-8 h-8 border-4 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
@@ -13,7 +13,7 @@ export default function AdminRoute({ children }) {
     )
   }
 
-  if (user?.publicMetadata?.role !== 'admin') {
+  if (session?.user?.role !== 'admin') {
     return <Navigate to="/play" replace />
   }
 

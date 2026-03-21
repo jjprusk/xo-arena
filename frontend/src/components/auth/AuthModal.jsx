@@ -1,0 +1,326 @@
+import React, { useState, useEffect } from 'react'
+import { signIn, signUp } from '../../lib/auth-client.js'
+import GoogleSignInButton from './GoogleSignInButton.jsx'
+
+export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) {
+  const [view, setView] = useState(defaultView)        // 'sign-in' | 'sign-up' | 'verify-email'
+  const [step, setStep] = useState('email')             // 'email' | 'password'
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setView(defaultView)
+      setStep('email')
+      setEmail('')
+      setPassword('')
+      setConfirmPassword('')
+      setName('')
+      setError('')
+    }
+  }, [isOpen, defaultView])
+
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isOpen, onClose])
+
+  function switchView(v) {
+    setView(v)
+    setStep('email')
+    setError('')
+  }
+
+  async function handleSignIn(e) {
+    e.preventDefault()
+    setError('')
+
+    if (step === 'email') {
+      if (!email || !email.includes('@')) { setError('Enter a valid email address.'); return }
+      setStep('password')
+      return
+    }
+
+    // step === 'password'
+    setLoading(true)
+    try {
+      const result = await signIn.email({ email, password })
+      if (result?.error) { setError(result.error.message || 'Sign in failed.'); return }
+      onClose()
+    } catch (err) {
+      setError(err?.message || 'Sign in failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSignUp(e) {
+    e.preventDefault()
+    setError('')
+    if (!email || !email.includes('@')) { setError('Enter a valid email address.'); return }
+    if (!password || password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    if (password !== confirmPassword) { setError('Passwords do not match.'); return }
+
+    setLoading(true)
+    try {
+      const displayName = name.trim() || email.split('@')[0]
+      const result = await signUp.email({ email, password, name: displayName })
+      if (result?.error) { setError(result.error.message || 'Sign up failed.'); return }
+      setView('verify-email')
+    } catch (err) {
+      setError(err?.message || 'Sign up failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResendVerification() {
+    // Better Auth resend verification — use signIn.email which triggers re-verification if unverified
+    setError('')
+    try {
+      await signIn.email({ email, password })
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        {/* Card — stop propagation to prevent backdrop click closing on card click */}
+        <div
+          className="relative w-full max-w-sm rounded-2xl border shadow-2xl"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 text-lg leading-none p-1 rounded hover:bg-[var(--bg-surface-hover)]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            ✕
+          </button>
+
+          <div className="p-8">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                {view === 'verify-email' ? 'Check your email' : view === 'sign-in' ? 'Sign in' : 'Create account'}
+              </div>
+              <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                {view === 'verify-email' ? 'We sent you a verification link.' : 'to continue to XO Arena'}
+              </div>
+            </div>
+
+            {/* Verify email view */}
+            {view === 'verify-email' && (
+              <div className="text-center space-y-4">
+                <div className="text-4xl">📬</div>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  A verification email was sent to <strong>{email}</strong>.
+                  Click the link in the email to activate your account.
+                </p>
+                <button
+                  onClick={handleResendVerification}
+                  className="text-sm underline"
+                  style={{ color: 'var(--color-blue-600)' }}
+                >
+                  Resend verification email
+                </button>
+                <div className="pt-2">
+                  <button
+                    onClick={() => switchView('sign-in')}
+                    className="text-sm"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Sign-in / Sign-up views */}
+            {view !== 'verify-email' && (
+              <>
+                {/* Tab row */}
+                <div className="flex rounded-lg mb-6 p-0.5" style={{ backgroundColor: 'var(--bg-base)' }}>
+                  {['sign-in', 'sign-up'].map(v => (
+                    <button
+                      key={v}
+                      onClick={() => switchView(v)}
+                      className="flex-1 py-1.5 rounded-md text-sm font-medium transition-colors"
+                      style={{
+                        backgroundColor: view === v ? 'var(--bg-surface)' : 'transparent',
+                        color: view === v ? 'var(--text-primary)' : 'var(--text-muted)',
+                        boxShadow: view === v ? 'var(--shadow-card)' : 'none',
+                      }}
+                    >
+                      {v === 'sign-in' ? 'Sign in' : 'Sign up'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Google */}
+                <div className="mb-4">
+                  <GoogleSignInButton />
+                </div>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>or</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+                </div>
+
+                {/* Sign-in form */}
+                {view === 'sign-in' && (
+                  <form onSubmit={handleSignIn} className="space-y-3">
+                    {step === 'email' ? (
+                      <div>
+                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                          Email address
+                        </label>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                          autoFocus
+                          autoComplete="email"
+                          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                          style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--color-blue-600)' }}
+                          placeholder="you@example.com"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
+                          <span>{email}</span>
+                          <button type="button" onClick={() => setStep('email')} className="ml-auto text-xs underline" style={{ color: 'var(--color-blue-600)' }}>Change</button>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                            Password
+                          </label>
+                          <input
+                            type="password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            autoFocus
+                            autoComplete="current-password"
+                            className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+                            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                            placeholder="••••••••"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60 transition-opacity"
+                      style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+                    >
+                      {loading ? 'Please wait…' : step === 'email' ? 'Continue' : 'Sign in'}
+                    </button>
+                  </form>
+                )}
+
+                {/* Sign-up form */}
+                {view === 'sign-up' && (
+                  <form onSubmit={handleSignUp} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Display name
+                      </label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        autoFocus
+                        autoComplete="name"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                        placeholder="Your name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Email address
+                      </label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        autoComplete="email"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        autoComplete="new-password"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                        placeholder="Min. 8 characters"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Confirm password
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        autoComplete="new-password"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                        placeholder="••••••••"
+                      />
+                    </div>
+
+                    {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60 transition-opacity"
+                      style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+                    >
+                      {loading ? 'Creating account…' : 'Create account'}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}

@@ -1,15 +1,10 @@
 import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { getUserById, updateUser, getUserStats, syncUser } from '../services/userService.js'
-import { createClerkClient } from '@clerk/backend'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
 const router = Router()
-
-function clerk() {
-  return createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-}
 
 /**
  * POST /api/v1/users/sync
@@ -18,17 +13,17 @@ function clerk() {
  */
 router.post('/sync', requireAuth, async (req, res, next) => {
   try {
-    const clerkUser = await clerk().users.getUser(req.auth.userId)
-    const primaryEmail = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
-    const oauthProvider = clerkUser.externalAccounts?.[0]?.provider || 'email'
+    // req.auth.userId is the BA user ID (ba_users.id)
+    const baUser = await db.baUser.findUnique({ where: { id: req.auth.userId } })
+    if (!baUser) return res.status(404).json({ error: 'Auth user not found' })
 
     const user = await syncUser({
-      clerkId: clerkUser.id,
-      email: primaryEmail?.emailAddress || '',
-      username: clerkUser.username || clerkUser.id,
-      displayName: clerkUser.fullName || clerkUser.username || 'Player',
-      oauthProvider,
-      avatarUrl: clerkUser.imageUrl || null,
+      betterAuthId: baUser.id,
+      email: baUser.email,
+      username: baUser.name?.toLowerCase().replace(/\s+/g, '_') || baUser.email.split('@')[0],
+      displayName: baUser.name || baUser.email.split('@')[0],
+      oauthProvider: 'email',
+      avatarUrl: baUser.image || null,
     })
 
     res.json({ user })
@@ -47,7 +42,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
 
     // Only return full data to the user themselves; otherwise public view
-    const isSelf = req.auth?.userId && user.clerkId === req.auth.userId
+    const isSelf = req.auth?.userId && user.betterAuthId === req.auth.userId
     const data = {
       id: user.id,
       displayName: user.displayName,
@@ -73,7 +68,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
 
     // Only allow user to edit their own profile
-    if (user.clerkId !== req.auth.userId) {
+    if (user.betterAuthId !== req.auth.userId) {
       return res.status(403).json({ error: 'Forbidden' })
     }
 
@@ -134,11 +129,11 @@ router.get('/:id/ml-profiles', requireAuth, async (req, res, next) => {
   try {
     const user = await getUserById(req.params.id)
     if (!user) return res.status(404).json({ error: 'User not found' })
-    if (user.clerkId !== req.auth.userId) {
+    if (user.betterAuthId !== req.auth.userId) {
       return res.status(403).json({ error: 'Forbidden' })
     }
 
-    // Use req.auth.userId (Clerk ID from JWT) directly — this is what gets
+    // Use req.auth.userId (BA ID from JWT) directly — this is what gets
     // stored in MLPlayerProfile.userId when the frontend records moves.
     const profiles = await db.mLPlayerProfile.findMany({
       where: { userId: req.auth.userId },

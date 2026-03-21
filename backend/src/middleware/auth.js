@@ -1,28 +1,21 @@
 /**
- * Auth middleware using Clerk.
+ * Auth middleware using Better Auth.
  *
  * requireAuth      — rejects unauthenticated requests (401)
  * optionalAuth     — attaches user if token present, allows guests through
  * requireAdmin     — rejects non-admin users (403)
+ * isAdmin          — helper; returns boolean
  */
 
-import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend'
+import { auth } from '../lib/auth.js'
 import logger from '../logger.js'
 import db from '../lib/db.js'
 
-let clerkClient = null
-
-function getClerk() {
-  if (!clerkClient) {
-    clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-  }
-  return clerkClient
-}
-
 /**
- * Extracts and verifies the Bearer token from the Authorization header.
- * Attaches `req.auth = { userId, sessionId }` on success.
- * Returns null (and sets nothing) if no token or invalid token.
+ * Extracts and verifies the Bearer JWT from the Authorization header via
+ * the Better Auth JWT plugin's verifyJWT endpoint.
+ *
+ * Returns { userId } on success, or null if the token is absent/invalid.
  */
 async function verifyToken(req) {
   const header = req.headers.authorization
@@ -30,8 +23,11 @@ async function verifyToken(req) {
 
   const token = header.slice(7)
   try {
-    const payload = await clerkVerifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
-    return { userId: payload.sub, sessionId: payload.sid }
+    // Better Auth JWT plugin: auth.api.verifyJWT({ body: { token } })
+    // Returns { payload } where payload.sub is the BA user ID
+    const result = await auth.api.verifyJWT({ body: { token } })
+    if (!result?.payload?.sub) return null
+    return { userId: result.payload.sub }
   } catch (err) {
     logger.warn({ err: err.message }, 'JWT verification failed')
     return null
@@ -39,20 +35,23 @@ async function verifyToken(req) {
 }
 
 /**
- * Middleware: requires a valid Clerk JWT.
- * Attaches req.auth = { userId, sessionId }
+ * Middleware: requires a valid Better Auth JWT.
+ * Attaches req.auth = { userId }
  * Also rejects requests from banned users (403).
  */
 export async function requireAuth(req, res, next) {
-  const auth = await verifyToken(req)
-  if (!auth) {
+  const authPayload = await verifyToken(req)
+  if (!authPayload) {
     return res.status(401).json({ error: 'Authentication required' })
   }
-  req.auth = auth
+  req.auth = authPayload
 
-  // Check banned flag
+  // Check banned flag via betterAuthId on domain User
   try {
-    const user = await db.user.findUnique({ where: { clerkId: auth.userId }, select: { banned: true } })
+    const user = await db.user.findUnique({
+      where: { betterAuthId: authPayload.userId },
+      select: { banned: true },
+    })
     if (user?.banned) return res.status(403).json({ error: 'Account suspended' })
   } catch (err) {
     logger.warn({ err }, 'Ban check failed — allowing request through')
@@ -71,13 +70,16 @@ export async function optionalAuth(req, _res, next) {
 }
 
 /**
- * Returns true if the given Clerk user ID has the admin role.
+ * Returns true if the given Better Auth user ID has the admin role.
  * Safe to call without an active request/response — never throws.
  */
 export async function isAdmin(userId) {
   try {
-    const user = await getClerk().users.getUser(userId)
-    return user.publicMetadata?.role === 'admin'
+    const baUser = await db.baUser.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    })
+    return baUser?.role === 'admin'
   } catch {
     return false
   }
@@ -85,19 +87,16 @@ export async function isAdmin(userId) {
 
 /**
  * Middleware: requires auth AND admin role.
- * Must be chained after requireAuth.
- * Currently uses a Clerk public metadata check: { role: 'admin' }
+ * Must be chained after requireAuth (or used standalone — it handles 401 too).
  */
 export async function requireAdmin(req, res, next) {
   if (!req.auth) return res.status(401).json({ error: 'Authentication required' })
 
   try {
-    const clerk = getClerk()
-    const user = await clerk.users.getUser(req.auth.userId)
-    if (user.publicMetadata?.role !== 'admin') {
+    const adminUser = await isAdmin(req.auth.userId)
+    if (!adminUser) {
       return res.status(403).json({ error: 'Admin access required' })
     }
-    req.clerkUser = user
     next()
   } catch (err) {
     logger.error({ err }, 'Admin role check failed')

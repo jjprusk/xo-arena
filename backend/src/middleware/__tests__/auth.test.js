@@ -2,20 +2,31 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
-// Mock @clerk/backend before importing the middleware
-vi.mock('@clerk/backend', () => ({
-  createClerkClient: vi.fn(() => ({
-    users: {
-      getUser: vi.fn(async (userId) => {
-        if (userId === 'user_123') return { publicMetadata: { role: 'admin' } }
-        return { publicMetadata: {} }
+// Mock better-auth lib/auth.js before importing the middleware
+vi.mock('../../lib/auth.js', () => ({
+  auth: {
+    api: {
+      verifyJWT: vi.fn(async ({ body: { token } }) => {
+        if (token === 'valid-token') return { payload: { sub: 'user_123', aud: 'xo-arena' } }
+        return { payload: null }
       }),
     },
-  })),
-  verifyToken: vi.fn(async (token) => {
-    if (token === 'valid-token') return { sub: 'user_123', sid: 'sess_abc' }
-    throw new Error('Invalid token')
-  }),
+  },
+}))
+
+// Mock db — no user is banned
+vi.mock('../../lib/db.js', () => ({
+  default: {
+    user: {
+      findUnique: vi.fn(async () => ({ banned: false })),
+    },
+    baUser: {
+      findUnique: vi.fn(async (query) => {
+        if (query.where?.id === 'user_123') return { id: 'user_123', role: 'admin' }
+        return null
+      }),
+    },
+  },
 }))
 
 const { requireAuth, optionalAuth, requireAdmin } = await import('../auth.js')
@@ -45,7 +56,7 @@ describe('requireAuth', () => {
   it('passes through with valid token and attaches req.auth', async () => {
     const res = await request(app).get('/test').set('Authorization', 'Bearer valid-token')
     expect(res.status).toBe(200)
-    expect(res.body.auth).toMatchObject({ userId: 'user_123', sessionId: 'sess_abc' })
+    expect(res.body.auth).toMatchObject({ userId: 'user_123' })
   })
 })
 
@@ -77,8 +88,7 @@ describe('requireAdmin', () => {
   }
 
   it('allows admin user', async () => {
-    const res = await makeAdminApp().inject?.('/test') ||
-      await request(makeAdminApp()).get('/test').set('Authorization', 'Bearer valid-token')
+    const res = await request(makeAdminApp()).get('/test').set('Authorization', 'Bearer valid-token')
     expect(res.status).toBe(200)
   })
 })

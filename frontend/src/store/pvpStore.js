@@ -2,6 +2,7 @@ import React from 'react'
 import { create } from 'zustand'
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket.js'
 import { useSoundStore } from './soundStore.js'
+import { getToken } from '../lib/getToken.js'
 
 /**
  * PvP room store — manages socket-based multiplayer game state.
@@ -41,7 +42,7 @@ export const usePvpStore = create((set, get) => ({
     get()._registerListeners(socket)
     set({ status: 'waiting', role: 'host', error: null, isAutoRoom: auto })
     // Fetch auth token to pass with the create event (enables server-side user identification)
-    Promise.resolve(window.Clerk?.session?.getToken?.()).catch(() => null).then((token) => {
+    getToken().then((token) => {
       socket.emit('room:create', { spectatorAllowed: true, authToken: token || null })
     })
   },
@@ -53,7 +54,7 @@ export const usePvpStore = create((set, get) => ({
     const socket = connectSocket()
     get()._registerListeners(socket)
     set({ slug, role: role === 'spectator' ? 'spectator' : 'guest', status: 'waiting', error: null })
-    Promise.resolve(window.Clerk?.session?.getToken?.()).catch(() => null).then((token) => {
+    getToken().then((token) => {
       socket.emit('room:join', { slug, role, authToken: token || null })
     })
   },

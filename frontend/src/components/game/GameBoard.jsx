@@ -1,6 +1,7 @@
 import React from 'react'
 import { useEffect, useCallback, useState, useRef } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useSession } from '../../lib/auth-client.js'
+import { getToken } from '../../lib/getToken.js'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import { api } from '../../lib/api.js'
@@ -52,7 +53,9 @@ export default function GameBoard({ roomName }) {
     makeMove, setAIThinking, rematch, newGame, forfeit, undoMove, setHintCell,
   } = useGameStore()
 
-  const { user, isSignedIn } = useUser()
+  const { data: session } = useSession()
+  const user = session?.user ?? null
+  const isSignedIn = !!session?.user
   const { play } = useSoundStore()
   const [showForfeitDialog, setShowForfeitDialog] = useState(false)
   const [aiError, setAIError] = useState(null)
@@ -185,7 +188,7 @@ export default function GameBoard({ roomName }) {
     if (status !== 'won' && status !== 'draw' && status !== 'forfeit') return
 
     async function recordGame() {
-      const token = await window.Clerk?.session?.getToken().catch(() => null)
+      const token = await getToken()
       if (!token) return
 
       const totalMoves = board.filter(Boolean).length

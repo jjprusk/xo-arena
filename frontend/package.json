@@ -1,7 +1,7 @@
 {
   "name": "@xo-arena/frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.61.3",
+    "better-auth": "^1.5.5",
     "howler": "^2.2.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

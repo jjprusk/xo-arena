@@ -45,11 +45,11 @@ export async function listModels() {
   const creatorIds = [...new Set(models.map(m => m.createdBy).filter(Boolean))]
   const creators = creatorIds.length
     ? await db.user.findMany({
-        where: { clerkId: { in: creatorIds } },
-        select: { clerkId: true, displayName: true, username: true },
+        where: { betterAuthId: { in: creatorIds } },
+        select: { betterAuthId: true, displayName: true, username: true },
       })
     : []
-  const creatorMap = Object.fromEntries(creators.map(u => [u.clerkId, u]))
+  const creatorMap = Object.fromEntries(creators.map(u => [u.betterAuthId, u]))
 
   const enriched = models.map(m => ({
     ...m,
@@ -92,7 +92,7 @@ export async function getModel(id) {
   if (!model) return null
   const creator = model.createdBy
     ? await db.user.findUnique({
-        where: { clerkId: model.createdBy },
+        where: { betterAuthId: model.createdBy },
         select: { displayName: true, username: true },
       })
     : null
@@ -1435,15 +1435,15 @@ export async function getPlayerProfiles(modelId) {
   })
 
   // Enrich with display names in one extra query.
-  // userId stored in profiles is the Clerk ID, so look up by clerkId.
+  // userId stored in profiles is the Better Auth ID, so look up by betterAuthId.
   const userIds = [...new Set(profiles.map(p => p.userId))]
   const users = userIds.length
     ? await db.user.findMany({
-        where: { clerkId: { in: userIds } },
-        select: { clerkId: true, displayName: true, username: true },
+        where: { betterAuthId: { in: userIds } },
+        select: { betterAuthId: true, displayName: true, username: true },
       })
     : []
-  const userMap = Object.fromEntries(users.map(u => [u.clerkId, u]))
+  const userMap = Object.fromEntries(users.map(u => [u.betterAuthId, u]))
 
   return profiles.map(p => ({
     ...p,

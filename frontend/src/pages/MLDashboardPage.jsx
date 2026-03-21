@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useSession } from '../lib/auth-client.js'
+import { getToken } from '../lib/getToken.js'
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -40,10 +41,11 @@ function playerLabel(profile, currentUserId, currentUserName) {
 }
 
 export default function MLDashboardPage() {
-  const { user } = useUser()
+  const { data: session } = useSession()
+  const user = session?.user ?? null
   const currentUserId   = user?.id ?? null
-  const currentUserName = user?.fullName || user?.username || null
-  const isAdmin = user?.publicMetadata?.role === 'admin'
+  const currentUserName = user?.name || user?.username || null
+  const isAdmin = user?.role === 'admin'
 
   const [models, setModels]           = useState([])
   const [selectedId, setSelectedId]   = useState(null)
@@ -101,7 +103,7 @@ export default function MLDashboardPage() {
 
   async function handleDelete(id) {
     if (!confirm('Delete this model and all its training history?')) return
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     // Admin uses the unrestricted admin endpoint; regular users use the standard one
     if (isAdmin) {
       await api.admin.deleteModel(id, token)
@@ -113,7 +115,7 @@ export default function MLDashboardPage() {
   }
 
   async function handleFeatureToggle(id) {
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     const { model: updated } = await api.admin.featureModel(id, token)
     setModels(ms => {
       const next = ms.map(m => m.id === id ? { ...m, featured: updated.featured } : m)
@@ -123,7 +125,7 @@ export default function MLDashboardPage() {
 
   async function handleReset(id) {
     if (!confirm('Reset this model to untrained baseline? All Q-table data will be lost.')) return
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     await api.ml.resetModel(id, token)
     refreshModel(id)
   }
@@ -314,7 +316,7 @@ function TrainTab({ model, onComplete }) {
     cleanupRef.current?.()
     cleanupRef.current = null
 
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     const cfg = {
       ...(mode === 'VS_MINIMAX' ? { difficulty, mlMark: mlMark === 'alternating' ? undefined : mlMark } : {}),
       algorithm,
@@ -376,7 +378,7 @@ function TrainTab({ model, onComplete }) {
 
   async function handleCancel() {
     if (!sessionId) return
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     await api.ml.cancelSession(sessionId, token)
   }
 
@@ -1364,7 +1366,7 @@ function HyperparamSearchPanel({ model }) {
     setError(null)
     setResults(null)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const paramGrid = {
         learningRate:  linspace(alphaMin, alphaMax, 3),
         discountFactor: linspace(gammaMin, gammaMax, 2),
@@ -1381,7 +1383,7 @@ function HyperparamSearchPanel({ model }) {
 
   async function handleApplyBest() {
     if (!results?.bestConfig) return
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     await api.ml.updateModel(model.id, { config: { ...model.config, ...results.bestConfig } }, token)
   }
 
@@ -1706,7 +1708,7 @@ function CheckpointsTab({ model, onRestore }) {
   async function handleSave() {
     setSaving(true)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const { checkpoint } = await api.ml.saveCheckpoint(model.id, token)
       setCheckpoints(prev => [checkpoint, ...prev])
     } finally {
@@ -1716,7 +1718,7 @@ function CheckpointsTab({ model, onRestore }) {
 
   async function handleRestore(cpId) {
     if (!confirm('Restore this checkpoint? Current Q-table will be replaced.')) return
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     await api.ml.restoreCheckpoint(model.id, cpId, token)
     onRestore()
   }
@@ -1831,7 +1833,7 @@ function CloneModelModal({ src, onClose, onCreate }) {
     setSaving(true)
     setError(null)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const { model } = await api.ml.cloneModel(src.id, { name: name.trim(), description: desc.trim() || undefined }, token)
       onCreate(model)
     } catch (err) {
@@ -1885,7 +1887,7 @@ function ImportModelModal({ onClose, onCreate }) {
     try {
       const text = await file.text()
       const data = JSON.parse(text)
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const { model } = await api.ml.importModel(data, token)
       onCreate(model)
     } catch (err) {
@@ -1936,7 +1938,7 @@ function CreateModelModal({ onClose, onCreate }) {
     setSaving(true)
     setError(null)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const { model } = await api.ml.createModel({ name: name.trim(), description: desc.trim() || undefined, algorithm }, token)
       onCreate(model)
     } catch (err) {
@@ -2033,7 +2035,7 @@ function BenchmarkPanel({ model }) {
   }, [model.id])
 
   async function handleRun() {
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     const { benchmark } = await api.ml.startBenchmark(model.id, token)
     setRunning(true)
     setActiveBid(benchmark.id)
@@ -2206,7 +2208,7 @@ function VersusPanel({ model, models }) {
     setRunning(true)
     setResult(null)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const data = await api.ml.runVersus(model.id, opponent, games, token)
       setResult(data)
     } catch (err) {
@@ -2446,7 +2448,7 @@ function TournamentPanel({ models }) {
   async function handleRun() {
     if (selected.length < 2) return
     setRunning(true)
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     try {
       const { tournament: t } = await api.ml.startTournament({ modelIds: selected, gamesPerPair }, token)
       setTournament({ ...t, status: 'RUNNING' })
@@ -2691,7 +2693,7 @@ function RulesTab({ model, models }) {
     setRules(null)
     setSavedId(null)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       // Create a temporary rule set to trigger extraction, then read the result
       const res = await api.ml.createRuleSet({
         name: '__preview__',
@@ -2712,7 +2714,7 @@ function RulesTab({ model, models }) {
     if (!rules || !ruleSetName.trim()) return
     setSaving(true)
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const res = await api.ml.createRuleSet({ name: ruleSetName, sourceModels, rules }, token)
       setSavedId(res.ruleSet.id)
       setExistingSets(prev => [res.ruleSet, ...prev])
@@ -2725,7 +2727,7 @@ function RulesTab({ model, models }) {
 
   async function handleReExtract(rs) {
     try {
-      const token = await window.Clerk?.session?.getToken()
+      const token = await getToken()
       const res = await api.ml.extractRules(rs.id, { sourceModels }, token)
       setExistingSets(prev => prev.map(s => s.id === rs.id ? res.ruleSet : s))
     } catch (e) {
@@ -2735,7 +2737,7 @@ function RulesTab({ model, models }) {
 
   async function handleDeleteSet(id) {
     if (!confirm('Delete this rule set?')) return
-    const token = await window.Clerk?.session?.getToken()
+    const token = await getToken()
     await api.ml.deleteRuleSet(id, token)
     setExistingSets(prev => prev.filter(s => s.id !== id))
   }

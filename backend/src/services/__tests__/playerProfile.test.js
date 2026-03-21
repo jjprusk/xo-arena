@@ -148,8 +148,8 @@ describe('getPlayerProfiles', () => {
     ]
     db.mLPlayerProfile.findMany.mockResolvedValue(mockProfiles)
     db.user.findMany.mockResolvedValue([
-      { clerkId: 'u1', displayName: 'Alice', username: 'alice' },
-      { clerkId: 'u2', displayName: 'Bob', username: 'bob' },
+      { betterAuthId: 'u1', displayName: 'Alice', username: 'alice' },
+      { betterAuthId: 'u2', displayName: 'Bob', username: 'bob' },
     ])
 
     const result = await getPlayerProfiles('model_1')

@@ -2,8 +2,8 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
-vi.mock('@clerk/clerk-react', () => ({
-  useAuth: () => ({ getToken: () => Promise.resolve('test-token') }),
+vi.mock('../../lib/getToken.js', () => ({
+  getToken: () => Promise.resolve('test-token'),
 }))
 
 // Mock api

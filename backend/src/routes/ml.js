@@ -19,7 +19,7 @@ const router = Router()
  */
 async function checkModelLimit(req, res) {
   const [userRecord, currentCount, defaultLimit] = await Promise.all([
-    db.user.findUnique({ where: { clerkId: req.auth.userId }, select: { mlModelLimit: true } }),
+    db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { mlModelLimit: true } }),
     db.mLModel.count({ where: { createdBy: req.auth.userId } }),
     svc.getSystemConfig('ml.maxModelsPerUser', 10),
   ])

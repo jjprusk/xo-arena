@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api.js'
-
-async function getToken() {
-  return window.Clerk?.session?.getToken() ?? null
-}
+import { getToken } from '../../lib/getToken.js'
 
 function MLLimitsPanel() {
   const [limits, setLimits]   = useState(null)

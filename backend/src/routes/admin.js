@@ -61,7 +61,7 @@ router.get('/users', async (req, res, next) => {
         take: limit,
         select: {
           id: true,
-          clerkId: true,
+          betterAuthId: true,
           username: true,
           displayName: true,
           email: true,
@@ -218,11 +218,11 @@ router.get('/ml/models', async (req, res, next) => {
     const creatorIds = [...new Set(models.map(m => m.createdBy).filter(Boolean))]
     const creators = creatorIds.length
       ? await db.user.findMany({
-          where: { clerkId: { in: creatorIds } },
-          select: { clerkId: true, displayName: true, username: true },
+          where: { betterAuthId: { in: creatorIds } },
+          select: { betterAuthId: true, displayName: true, username: true },
         })
       : []
-    const creatorMap = Object.fromEntries(creators.map(u => [u.clerkId, u]))
+    const creatorMap = Object.fromEntries(creators.map(u => [u.betterAuthId, u]))
 
     const enriched = models.map(m => ({
       ...m,

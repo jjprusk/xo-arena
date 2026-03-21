@@ -8,26 +8,20 @@ import { createAdapter } from '@socket.io/redis-adapter'
 import ioredis from 'ioredis'
 const { createClient } = ioredis
 import { roomManager } from './roomManager.js'
-import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend'
-import { getUserByClerkId, createGame } from '../services/userService.js'
+import { auth } from '../lib/auth.js'
+import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
 import logger from '../logger.js'
 
 const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
 
-let clerkClient = null
-function getClerk() {
-  if (!clerkClient && process.env.CLERK_SECRET_KEY) {
-    clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-  }
-  return clerkClient
-}
-
 async function resolveSocketUser(token) {
   if (!token) return null
   try {
-    const payload = await clerkVerifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
-    return await getUserByClerkId(payload.sub)
+    // Verify the Bearer JWT via Better Auth's JWT plugin
+    const result = await auth.api.verifyToken({ body: { token } })
+    if (!result?.user?.id) return null
+    return await getUserByBetterAuthId(result.user.id)
   } catch {
     return null
   }

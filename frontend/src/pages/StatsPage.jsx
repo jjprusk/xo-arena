@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useSession } from '../lib/auth-client.js'
+import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 
 const OUTCOME_COLOR = {
@@ -9,8 +10,11 @@ const OUTCOME_COLOR = {
 }
 
 export default function StatsPage() {
-  const { isSignedIn, isLoaded, user } = useUser()
-  const displayName = user?.fullName || user?.username || 'You'
+  const { data: session, isPending } = useSession()
+  const isLoaded = !isPending
+  const isSignedIn = !!session?.user
+  const user = session?.user ?? null
+  const displayName = user?.name || user?.username || 'You'
   const [stats, setStats] = useState(null)
   const [dbUserId, setDbUserId] = useState(null)
   const [eloData, setEloData] = useState(null)
@@ -31,7 +35,7 @@ export default function StatsPage() {
 
     async function load() {
       try {
-        const token = await window.Clerk?.session?.getToken()
+        const token = await getToken()
         const { user } = await api.users.sync(token)
         setDbUserId(user.id)
         const [{ stats: s }, eloRes, mlRes] = await Promise.all([

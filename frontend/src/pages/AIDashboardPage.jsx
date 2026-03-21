@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useAuth } from '@clerk/clerk-react'
+import { getToken } from '../lib/getToken.js'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
@@ -14,7 +14,6 @@ const DIFFICULTY_COLOR = {
 const CELL_LABELS = ['TL', 'TM', 'TR', 'ML', 'C', 'MR', 'BL', 'BM', 'BR']
 
 export default function AIDashboardPage() {
-  const { getToken } = useAuth()
   const [summary, setSummary] = useState({ total: 0, rows: [] })
   const [histogram, setHistogram] = useState([])
   const [heatmap, setHeatmap] = useState([])

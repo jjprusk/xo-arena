@@ -4,16 +4,47 @@
 import db from '../lib/db.js'
 
 /**
- * Find or create a user from Clerk identity.
- * Called on first authenticated request after login.
+ * Find or create a domain User row.
+ * Supports both Better Auth (betterAuthId) and legacy Clerk (clerkId) paths.
+ * Auto-links existing Clerk users to Better Auth by email.
  */
-export async function syncUser({ clerkId, email, username, displayName, oauthProvider, avatarUrl }) {
-  const user = await db.user.upsert({
-    where: { clerkId },
-    update: { email, displayName, avatarUrl },
-    create: { clerkId, email, username, displayName, oauthProvider, avatarUrl },
-  })
-  return user
+export async function syncUser({ betterAuthId, clerkId, email, username, displayName, oauthProvider, avatarUrl }) {
+  if (betterAuthId) {
+    // Check if already linked by betterAuthId
+    let user = await db.user.findUnique({ where: { betterAuthId } })
+    if (user) {
+      return db.user.update({
+        where: { betterAuthId },
+        data: { email, displayName, avatarUrl },
+      })
+    }
+    // Email fallback — link an existing Clerk user row to this BA identity
+    if (email) {
+      user = await db.user.findUnique({ where: { email } })
+      if (user) {
+        return db.user.update({
+          where: { email },
+          data: { betterAuthId, displayName, avatarUrl },
+        })
+      }
+    }
+    // New user — create from scratch
+    const safeUsername = username || email?.split('@')[0] || betterAuthId
+    return db.user.create({
+      data: { betterAuthId, email, username: safeUsername, displayName, oauthProvider, avatarUrl },
+    })
+  }
+
+  // Legacy Clerk path (kept during cutover window)
+  if (clerkId) {
+    return db.user.upsert({
+      where: { clerkId },
+      update: { email, displayName, avatarUrl },
+      create: { clerkId, email, username: username || clerkId, displayName, oauthProvider, avatarUrl },
+    })
+  }
+
+  throw new Error('syncUser requires betterAuthId or clerkId')
 }
 
 /**
@@ -24,7 +55,14 @@ export async function getUserById(id) {
 }
 
 /**
- * Get a user by Clerk ID.
+ * Get a user by Better Auth ID.
+ */
+export async function getUserByBetterAuthId(betterAuthId) {
+  return db.user.findUnique({ where: { betterAuthId } })
+}
+
+/**
+ * Get a user by Clerk ID (legacy — kept for cutover window).
  */
 export async function getUserByClerkId(clerkId) {
   return db.user.findUnique({ where: { clerkId } })

@@ -1,10 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
-
-async function getToken() {
-  return window.Clerk?.session?.getToken() ?? null
-}
+import { getToken } from '../../lib/getToken.js'
 
 const OUTCOME_LABEL = {
   PLAYER1_WIN: 'P1 Win',

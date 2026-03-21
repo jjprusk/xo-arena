@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
-// Mock auth middleware to bypass Clerk in route tests
+// Mock auth middleware to bypass Better Auth in route tests
 vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req, _res, next) => {
-    req.auth = { userId: 'clerk_1', sessionId: 'sess_1' }
+    req.auth = { userId: 'ba_user_1' }
     next()
   },
   optionalAuth: (req, _res, next) => {
-    req.auth = { userId: 'clerk_1', sessionId: 'sess_1' }
+    req.auth = { userId: 'ba_user_1' }
     next()
   },
 }))
@@ -22,29 +22,26 @@ vi.mock('../../services/userService.js', () => ({
   syncUser: vi.fn(),
 }))
 
-// Mock @clerk/backend
-vi.mock('@clerk/backend', () => ({
-  createClerkClient: () => ({
-    users: {
-      getUser: vi.fn(async () => ({
-        id: 'clerk_1',
-        emailAddresses: [{ id: 'e1', emailAddress: 'a@b.com' }],
-        primaryEmailAddressId: 'e1',
-        username: 'tester',
-        fullName: 'Test User',
-        imageUrl: null,
-        externalAccounts: [],
-      })),
-    },
-  }),
-}))
-
-// Mock db for game history
+// Mock db for sync endpoint (baUser lookup) and game history
 vi.mock('../../lib/db.js', () => ({
   default: {
+    baUser: {
+      findUnique: vi.fn(async () => ({
+        id: 'ba_user_1',
+        email: 'a@b.com',
+        name: 'Test User',
+        image: null,
+      })),
+    },
     game: {
       findMany: vi.fn(async () => []),
       count: vi.fn(async () => 0),
+    },
+    userEloHistory: {
+      findMany: vi.fn(async () => []),
+    },
+    mLPlayerProfile: {
+      findMany: vi.fn(async () => []),
     },
   },
 }))
@@ -58,7 +55,7 @@ app.use('/api/v1/users', usersRouter)
 
 const mockUser = {
   id: 'usr_1',
-  clerkId: 'clerk_1',
+  betterAuthId: 'ba_user_1',
   email: 'a@b.com',
   displayName: 'Test User',
   avatarUrl: null,
@@ -95,7 +92,7 @@ describe('PATCH /api/v1/users/:id', () => {
   })
 
   it('returns 403 when editing another user', async () => {
-    getUserById.mockResolvedValue({ ...mockUser, clerkId: 'other_clerk' })
+    getUserById.mockResolvedValue({ ...mockUser, betterAuthId: 'other_ba_user' })
     const res = await request(app).patch('/api/v1/users/usr_1').send({ displayName: 'New' })
     expect(res.status).toBe(403)
   })
