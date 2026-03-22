@@ -3,7 +3,10 @@ import { signIn } from '../../lib/auth-client.js'
 
 export default function GoogleSignInButton({ callbackURL = '/play' }) {
   async function handleClick() {
-    await signIn.social({ provider: 'google', callbackURL })
+    const absoluteCallback = callbackURL.startsWith('http')
+      ? callbackURL
+      : `${window.location.origin}${callbackURL}`
+    await signIn.social({ provider: 'google', callbackURL: absoluteCallback })
   }
 
   return (

@@ -5,7 +5,7 @@ const EMPTY_BOARD = Array(9).fill(null)
 export const useGameStore = create((set, get) => ({
   // Mode selection
   mode: null,         // 'pvai' | 'pvp' | 'aivai'
-  difficulty: 'medium',
+  difficulty: 'intermediate',
   aiImplementation: 'minimax',
   mlModelId: null,    // modelId when aiImplementation === 'ml' or ruleSetId for 'rule_based'
   playerMark: 'X',   // which mark the human plays
@@ -14,7 +14,7 @@ export const useGameStore = create((set, get) => ({
 
   // AI vs AI second engine config
   ai2Implementation: 'minimax',
-  ai2Difficulty: 'hard',
+  ai2Difficulty: 'master',
   ai2ModelId: null,
 
   // Game options

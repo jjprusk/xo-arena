@@ -11,9 +11,10 @@ const K_FACTOR = 32
 
 // Fixed ELO ratings for AI opponents (used for expected-score computation)
 const AI_ELO = {
-  easy:   800,
-  medium: 1200,
-  hard:   1800,
+  novice:       800,
+  intermediate: 1200,
+  advanced:     1500,
+  master:       1800,
 }
 
 /**
@@ -35,14 +36,14 @@ function computeNewElo(currentElo, opponentElo, actualScore) {
 /**
  * Update ELO for a human player after a PvAI game.
  * outcome: 'PLAYER1_WIN' | 'AI_WIN' | 'DRAW'
- * difficulty: 'easy' | 'medium' | 'hard'
+ * difficulty: 'novice' | 'intermediate' | 'advanced' | 'master'
  */
 export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty) {
   try {
     const user = await db.user.findUnique({ where: { id: userId }, select: { eloRating: true } })
     if (!user) return
 
-    const opponentElo = AI_ELO[difficulty?.toLowerCase()] ?? AI_ELO.medium
+    const opponentElo = AI_ELO[difficulty?.toLowerCase()] ?? AI_ELO.intermediate
     const actualScore = outcome === 'PLAYER1_WIN' ? 1 : outcome === 'DRAW' ? 0.5 : 0
     const outcomeLabel = outcome === 'PLAYER1_WIN' ? 'win' : outcome === 'DRAW' ? 'draw' : 'loss'
 
@@ -56,7 +57,7 @@ export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty) {
           userId,
           eloRating: newElo,
           delta,
-          opponentType: `ai_${difficulty?.toLowerCase() ?? 'medium'}`,
+          opponentType: `ai_${difficulty?.toLowerCase() ?? 'intermediate'}`,
           outcome: outcomeLabel,
         },
       }),

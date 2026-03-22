@@ -58,6 +58,21 @@ router.get('/models', async (_req, res, next) => {
   } catch (err) { next(err) }
 })
 
+/**
+ * GET /api/v1/ml/network-config
+ * Public — returns DQN neural net defaults and admin-set limits for the create modal.
+ */
+router.get('/network-config', async (_req, res, next) => {
+  try {
+    const [defaultHiddenLayers, maxHiddenLayers, maxUnitsPerLayer] = await Promise.all([
+      svc.getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
+      svc.getSystemConfig('ml.dqn.maxHiddenLayers', 3),
+      svc.getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
+    ])
+    res.json({ dqn: { defaultHiddenLayers, maxHiddenLayers, maxUnitsPerLayer } })
+  } catch (err) { next(err) }
+})
+
 router.post('/models', requireAuth, async (req, res, next) => {
   try {
     const { name, description, algorithm, config } = req.body

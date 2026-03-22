@@ -11,7 +11,7 @@ import { getSocket } from '../lib/socket.js'
 import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
 
 const ITERATIONS_MIN = 100
-const ITERATIONS_MAX = 50_000
+const ITERATIONS_MAX = 100_000
 const ITERATIONS_STEP = 100
 
 const MODES = [
@@ -19,7 +19,7 @@ const MODES = [
   { value: 'VS_MINIMAX', label: 'vs Minimax', desc: 'Plays against the Minimax engine' },
   { value: 'VS_HUMAN', label: 'vs Human', desc: 'Learns from real player games' },
 ]
-const DIFFICULTIES = ['easy', 'medium', 'hard']
+const DIFFICULTIES = ['novice', 'intermediate', 'advanced', 'master']
 const ALGORITHMS = [
   { value: 'Q_LEARNING',      label: 'Q-Learning',     desc: 'Off-policy TD control' },
   { value: 'SARSA',           label: 'SARSA',           desc: 'On-policy TD control' },
@@ -207,7 +207,7 @@ export default function MLDashboardPage() {
                   {selected.description && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selected.description}</p>}
                   <div className="flex gap-4 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>{selected.algorithm?.replace('_', '-')}</span>
-                    <span>{selected.totalEpisodes.toLocaleString()} episodes</span>
+                    <span>{selected.totalEpisodes.toLocaleString()} / {selected.maxEpisodes > 0 ? selected.maxEpisodes.toLocaleString() : '∞'} episodes</span>
                     {selected.creatorName && <span>by {selected.creatorName}</span>}
                     <span>ELO {Math.round(selected.eloRating)}</span>
                   </div>
@@ -278,17 +278,23 @@ export default function MLDashboardPage() {
 function TrainTab({ model, onComplete }) {
   const [mode, setMode]                     = useState('SELF_PLAY')
   const [iterations, setIterations]         = useState(1000)
-  const [difficulty, setDifficulty]         = useState('medium')
+  const [difficulty, setDifficulty]         = useState('intermediate')
   const [mlMark, setMlMark]                 = useState('alternating')
   const algorithm = model.algorithm || 'Q_LEARNING'
   const [curriculum, setCurriculum]         = useState(false)
   const [earlyStopEnabled, setEarlyStop]    = useState(false)
   const [patience, setPatience]             = useState(200)
   const [minDelta, setMinDelta]             = useState(0.01)
+  // Epsilon config (all models except AlphaZero)
+  const [epsilonDecay, setEpsilonDecay]           = useState(0.995)
+  const [epsilonMin, setEpsilonMin]               = useState(0.05)
+  const [decayMethod, setDecayMethod]             = useState('exponential')
+  const [resetEpsilon, setResetEpsilon]           = useState(true)
   // DQN-specific config
   const [dqnBatchSize, setDqnBatchSize]           = useState(32)
   const [dqnReplayBuffer, setDqnReplayBuffer]     = useState(10000)
   const [dqnTargetUpdate, setDqnTargetUpdate]     = useState(100)
+  const [dqnHiddenSize, setDqnHiddenSize]         = useState(32)
   // AlphaZero-specific config
   const [azSimulations, setAzSimulations]   = useState(50)
   const [azCPuct, setAzCPuct]               = useState(1.5)
@@ -298,6 +304,7 @@ function TrainTab({ model, onComplete }) {
   const [sessionId, setSessionId]           = useState(null)
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
+  const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
   const socketRef  = useRef(null)
   const cleanupRef = useRef(null)
 
@@ -311,6 +318,73 @@ function TrainTab({ model, onComplete }) {
     return () => cleanupRef.current?.()
   }, [])
 
+  // Re-attach to in-progress training when navigating back to the page
+  useEffect(() => {
+    if (model.status !== 'TRAINING' || running) return
+    let cancelled = false
+
+    api.ml.getSessions(model.id).then(r => {
+      if (cancelled) return
+      const runningSession = r.sessions.find(s => s.status === 'RUNNING')
+      if (!runningSession) return
+
+      setSessions(r.sessions)
+      setSessionId(runningSession.id)
+      setIterations(runningSession.iterations)
+      setRunning(true)
+      setProgress(null)
+      setChartData([])
+      setCurriculumDifficulty(runningSession.config?.difficulty ?? null)
+
+      const socket = getSocket()
+      if (!socket.connected) socket.connect()
+      socketRef.current = socket
+      socket.emit('ml:watch', { sessionId: runningSession.id })
+
+      const onProgress = (data) => {
+        if (data.sessionId !== runningSession.id) return
+        setProgress(data)
+        setChartData(prev => [...prev, {
+          ep: data.episode,
+          winRate:  Math.round(data.winRate  * 100),
+          lossRate: Math.round(data.lossRate * 100),
+          drawRate: Math.round(data.drawRate * 100),
+          epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
+          qDelta: parseFloat(data.avgQDelta.toFixed(4)),
+        }])
+      }
+
+      const onCurriculumAdvance = (data) => {
+        if (data.sessionId !== runningSession.id) return
+        setCurriculumDifficulty(data.difficulty)
+      }
+
+      const teardown = () => {
+        socket.emit('ml:unwatch', { sessionId: runningSession.id })
+        socket.off('ml:progress',          onProgress)
+        socket.off('ml:curriculum_advance', onCurriculumAdvance)
+        socket.off('ml:complete',          onComplete_)
+        socket.off('ml:cancelled',         onCancelled)
+        socket.off('ml:error',             onError)
+        cleanupRef.current = null
+      }
+
+      const onComplete_  = () => { setRunning(false); teardown(); onComplete() }
+      const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
+      const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
+
+      socket.on('ml:progress',          onProgress)
+      socket.on('ml:curriculum_advance', onCurriculumAdvance)
+      socket.once('ml:complete',          onComplete_)
+      socket.once('ml:cancelled',         onCancelled)
+      socket.once('ml:error',             onError)
+
+      cleanupRef.current = teardown
+    }).catch(() => {})
+
+    return () => { cancelled = true }
+  }, [model.id, model.status, running, onComplete])
+
   async function handleStart() {
     // Clean up any lingering listeners from a previous session before starting a new one
     cleanupRef.current?.()
@@ -318,11 +392,12 @@ function TrainTab({ model, onComplete }) {
 
     const token = await getToken()
     const cfg = {
-      ...(mode === 'VS_MINIMAX' ? { difficulty, mlMark: mlMark === 'alternating' ? undefined : mlMark } : {}),
+      ...(mode === 'VS_MINIMAX' ? { difficulty: curriculum ? 'novice' : difficulty, mlMark: mlMark === 'alternating' ? undefined : mlMark } : {}),
       algorithm,
       ...(curriculum ? { curriculum: true } : {}),
       ...(earlyStopEnabled ? { earlyStop: { patience, minDelta } } : {}),
-      ...(algorithm === 'DQN' ? { batchSize: dqnBatchSize, replayBufferSize: dqnReplayBuffer, targetUpdateFreq: dqnTargetUpdate } : {}),
+      ...(algorithm !== 'ALPHA_ZERO' ? { epsilonDecay, epsilonMin, decayMethod, ...(resetEpsilon ? { currentEpsilon: 1.0 } : {}) } : {}),
+      ...(algorithm === 'DQN' ? { batchSize: dqnBatchSize, replayBufferSize: dqnReplayBuffer, targetUpdateFreq: dqnTargetUpdate, hiddenSize: dqnHiddenSize } : {}),
       ...(algorithm === 'ALPHA_ZERO' ? { numSimulations: azSimulations, cPuct: azCPuct, temperature: azTemperature } : {}),
     }
     try {
@@ -332,6 +407,7 @@ function TrainTab({ model, onComplete }) {
       setRunning(true)
       setProgress(null)
       setChartData([])
+      setCurriculumDifficulty(curriculum && mode === 'VS_MINIMAX' ? 'novice' : null)
 
       const socket = getSocket()
       if (!socket.connected) socket.connect()
@@ -352,12 +428,18 @@ function TrainTab({ model, onComplete }) {
         }])
       }
 
+      const onCurriculumAdvance_ = (data) => {
+        if (data.sessionId !== session.id) return
+        setCurriculumDifficulty(data.difficulty)
+      }
+
       const teardown = () => {
         socket.emit('ml:unwatch', { sessionId: session.id })
-        socket.off('ml:progress',  onProgress)
-        socket.off('ml:complete',  onComplete_)
-        socket.off('ml:cancelled', onCancelled)
-        socket.off('ml:error',     onError)
+        socket.off('ml:progress',          onProgress)
+        socket.off('ml:curriculum_advance', onCurriculumAdvance_)
+        socket.off('ml:complete',          onComplete_)
+        socket.off('ml:cancelled',         onCancelled)
+        socket.off('ml:error',             onError)
         cleanupRef.current = null
       }
 
@@ -365,10 +447,11 @@ function TrainTab({ model, onComplete }) {
       const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
       const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
 
-      socket.on('ml:progress',  onProgress)
-      socket.once('ml:complete',  onComplete_)
-      socket.once('ml:cancelled', onCancelled)
-      socket.once('ml:error',     onError)
+      socket.on('ml:progress',          onProgress)
+      socket.on('ml:curriculum_advance', onCurriculumAdvance_)
+      socket.once('ml:complete',          onComplete_)
+      socket.once('ml:cancelled',         onCancelled)
+      socket.once('ml:error',             onError)
 
       cleanupRef.current = teardown
     } catch (err) {
@@ -396,7 +479,7 @@ function TrainTab({ model, onComplete }) {
               <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Mode</label>
               <select
                 value={mode}
-                onChange={e => setMode(e.target.value)}
+                onChange={e => { setMode(e.target.value); setCurriculum(false) }}
                 className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
                 style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
               >
@@ -408,14 +491,18 @@ function TrainTab({ model, onComplete }) {
             {mode === 'VS_MINIMAX' && (
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Difficulty</label>
+                  <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    {curriculum ? 'Starting difficulty' : 'Difficulty'}
+                    {curriculum && <span className="ml-1 text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(locked to Easy — curriculum advances automatically)</span>}
+                  </label>
                   <select
-                    value={difficulty}
+                    value={curriculum ? 'novice' : difficulty}
                     onChange={e => setDifficulty(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                    disabled={curriculum}
+                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                   >
-                    {['easy','medium','hard'].map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                    {DIFFICULTIES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
                   </select>
                 </div>
                 <div>
@@ -470,6 +557,20 @@ function TrainTab({ model, onComplete }) {
                       className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
                       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                   </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                      Hidden size
+                      <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(neurons)</span>
+                    </label>
+                    <select value={dqnHiddenSize} onChange={e => setDqnHiddenSize(Number(e.target.value))}
+                      className="text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+                      <option value={16}>16 — fastest</option>
+                      <option value={32}>32 — default</option>
+                      <option value={64}>64 — slower</option>
+                      <option value={128}>128 — slowest</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
@@ -505,29 +606,130 @@ function TrainTab({ model, onComplete }) {
             )}
 
 
-            {/* Curriculum learning (self-play only) */}
-            {mode === 'SELF_PLAY' && (
+            {/* Epsilon config (all models except AlphaZero) */}
+            {algorithm !== 'ALPHA_ZERO' && (
+              <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Exploration</p>
+
+                {/* Decay method */}
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Decay schedule</label>
+                  <div className="flex gap-2">
+                    {[
+                      { v: 'exponential', label: 'Exponential', hint: 'ε × rate each step' },
+                      { v: 'linear',      label: 'Linear',      hint: 'straight line to min' },
+                      { v: 'cosine',      label: 'Cosine',      hint: 'smooth S-curve to min' },
+                    ].map(({ v, label, hint }) => (
+                      <button key={v} onClick={() => setDecayMethod(v)}
+                        title={hint}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition-colors ${decayMethod === v ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)] text-[var(--color-blue-600)]' : 'border-[var(--border-default)]'}`}
+                        style={{ color: decayMethod === v ? undefined : 'var(--text-secondary)' }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4">
+                  {/* Rate multiplier — only meaningful for exponential */}
+                  {decayMethod === 'exponential' && (
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Rate
+                        <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(0.99–0.9999)</span>
+                      </label>
+                      <input type="number" min="0.99" max="0.9999" step="0.0001" value={epsilonDecay}
+                        onChange={e => setEpsilonDecay(Number(e.target.value))}
+                        className="w-28 text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                      Epsilon min
+                      <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(floor)</span>
+                    </label>
+                    <input type="number" min="0.01" max="0.5" step="0.01" value={epsilonMin}
+                      onChange={e => setEpsilonMin(Number(e.target.value))}
+                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                  </div>
+                </div>
+
+                {/* Reset epsilon checkbox */}
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="resetEps" checked={resetEpsilon} onChange={e => setResetEpsilon(e.target.checked)}
+                    className="accent-[var(--color-blue-600)]" />
+                  <label htmlFor="resetEps" className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Reset ε to 1.0 at start
+                    <span className="ml-1" style={{ color: 'var(--text-muted)' }}>(recommended — otherwise continues from saved ε)</span>
+                  </label>
+                </div>
+
+                {/* Schedule hint */}
+                {decayMethod === 'exponential' && (() => {
+                  const epsAtMin = Math.ceil(Math.log(epsilonMin) / Math.log(epsilonDecay))
+                  const pct = Math.min(100, Math.round((epsAtMin / iterations) * 100))
+                  return (
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Reaches min after ~<span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                        {epsAtMin.toLocaleString()}
+                      </span> episodes ({pct}% of your {iterations.toLocaleString()} iterations)
+                    </p>
+                  )
+                })()}
+                {decayMethod === 'linear' && (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Decreases at a constant rate, reaching min at exactly {iterations.toLocaleString()} episodes
+                  </p>
+                )}
+                {decayMethod === 'cosine' && (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Starts slow, accelerates in the middle, slows again — reaches min at {iterations.toLocaleString()} episodes
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Curriculum learning (VS_MINIMAX only — advances Easy→Medium→Hard) */}
+            {mode === 'VS_MINIMAX' && (
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="curriculum" checked={curriculum} onChange={e => setCurriculum(e.target.checked)}
                   className="accent-[var(--color-blue-600)]" />
                 <label htmlFor="curriculum" className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  Curriculum learning — auto-advance difficulty when win rate &gt; 65%
+                  Curriculum learning — auto-advance Easy → Medium → Hard when win rate &gt; 65%
                 </label>
               </div>
             )}
 
             {/* Iterations */}
-            <div>
-              <label className="text-sm font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Iterations: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{iterations.toLocaleString()}</span>
-              </label>
-              <input type="range" min={ITERATIONS_MIN} max={ITERATIONS_MAX} step={ITERATIONS_STEP} value={iterations}
-                onChange={e => setIterations(Number(e.target.value))}
-                className="w-full accent-[var(--color-blue-600)]" />
-              <div className="flex justify-between text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                <span>{ITERATIONS_MIN.toLocaleString()}</span><span>{ITERATIONS_MAX.toLocaleString()}</span>
-              </div>
-            </div>
+            {(() => {
+              const remaining = model.maxEpisodes > 0 ? model.maxEpisodes - model.totalEpisodes : Infinity
+              const atLimit = remaining <= 0
+              const sliderMax = remaining === Infinity ? ITERATIONS_MAX : Math.max(ITERATIONS_MIN, Math.min(ITERATIONS_MAX, remaining))
+              const displayIterations = Math.min(iterations, sliderMax)
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      Iterations: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{displayIterations.toLocaleString()}</span>
+                    </label>
+                    {model.maxEpisodes > 0 && (
+                      <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
+                        {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
+                      </span>
+                    )}
+                  </div>
+                  <input type="range" min={ITERATIONS_MIN} max={sliderMax} step={ITERATIONS_STEP} value={displayIterations}
+                    onChange={e => setIterations(Number(e.target.value))}
+                    disabled={atLimit}
+                    className="w-full accent-[var(--color-blue-600)] disabled:opacity-40" />
+                  <div className="flex justify-between text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    <span>{ITERATIONS_MIN.toLocaleString()}</span><span>{sliderMax.toLocaleString()}</span>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Early stopping */}
             <div className="space-y-2">
@@ -558,8 +760,8 @@ function TrainTab({ model, onComplete }) {
               )}
             </div>
 
-            <Btn onClick={handleStart} disabled={running}>
-              Start Training
+            <Btn onClick={handleStart} disabled={running || (model.maxEpisodes > 0 && model.totalEpisodes >= model.maxEpisodes)}>
+              {model.maxEpisodes > 0 && model.totalEpisodes >= model.maxEpisodes ? 'Episode limit reached' : 'Start Training'}
             </Btn>
           </div>
         </Card>
@@ -569,7 +771,18 @@ function TrainTab({ model, onComplete }) {
       {running && (
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <SectionLabel>Training in Progress</SectionLabel>
+            <div className="flex items-center gap-3">
+              <SectionLabel>Training in Progress</SectionLabel>
+              {curriculumDifficulty && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize"
+                  style={{
+                    backgroundColor: curriculumDifficulty === 'novice' ? 'var(--color-teal-100)' : curriculumDifficulty === 'intermediate' ? 'var(--color-amber-100)' : curriculumDifficulty === 'advanced' ? 'var(--color-orange-100)' : 'var(--color-red-100)',
+                    color:           curriculumDifficulty === 'novice' ? 'var(--color-teal-700)' : curriculumDifficulty === 'intermediate' ? 'var(--color-amber-700)' : curriculumDifficulty === 'advanced' ? 'var(--color-orange-700)' : 'var(--color-red-700)',
+                  }}>
+                  {curriculumDifficulty}
+                </span>
+              )}
+            </div>
             <Btn onClick={handleCancel} variant="ghost">Cancel</Btn>
           </div>
 
@@ -579,21 +792,22 @@ function TrainTab({ model, onComplete }) {
               style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-600)' }} />
           </div>
 
-          {progress && (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <MiniStat label="Episode" value={`${progress.episode.toLocaleString()} / ${progress.totalEpisodes.toLocaleString()}`} />
-                <MiniStat label="Win Rate" value={`${Math.round(progress.winRate * 100)}%`} color="var(--color-teal-600)" />
-                <MiniStat label="Epsilon ε" value={progress.epsilon.toFixed(4)} color="var(--color-amber-600)" />
-                <MiniStat label="Avg ΔQ" value={progress.avgQDelta.toFixed(5)} />
-                <MiniStat label="Avg game" value={progress.avgGameMs != null ? `${progress.avgGameMs.toFixed(1)}ms` : '—'} />
-              </div>
-              <div className="flex gap-4 text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                <span>Wins: <b style={{ color: 'var(--color-teal-600)' }}>{progress.outcomes.wins.toLocaleString()}</b></span>
-                <span>Losses: <b style={{ color: 'var(--color-red-600)' }}>{progress.outcomes.losses.toLocaleString()}</b></span>
-                <span>Draws: <b style={{ color: 'var(--color-amber-600)' }}>{progress.outcomes.draws.toLocaleString()}</b></span>
-              </div>
-            </>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <MiniStat label="Episode" value={progress ? `${progress.episode.toLocaleString()} / ${progress.totalEpisodes.toLocaleString()}` : `0 / ${iterations.toLocaleString()}`} />
+            <MiniStat label="Win Rate" value={progress ? `${Math.round(progress.winRate * 100)}%` : '—'} color="var(--color-teal-600)" />
+            <MiniStat label="Epsilon ε" value={progress ? progress.epsilon.toFixed(4) : '1.0000'} color="var(--color-amber-600)" />
+            <MiniStat label="Avg ΔQ" value={progress ? progress.avgQDelta.toFixed(5) : '—'} />
+            <MiniStat label="Avg game" value={progress?.avgGameMs != null ? `${progress.avgGameMs.toFixed(1)}ms` : '—'} />
+          </div>
+          <div className="flex gap-4 text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+            <span>Wins (X): <b style={{ color: 'var(--color-teal-600)' }}>{(progress?.outcomes.wins ?? 0).toLocaleString()}</b></span>
+            <span>Losses (O wins): <b style={{ color: 'var(--color-red-600)' }}>{(progress?.outcomes.losses ?? 0).toLocaleString()}</b></span>
+            <span>Draws: <b style={{ color: 'var(--color-amber-600)' }}>{(progress?.outcomes.draws ?? 0).toLocaleString()}</b></span>
+          </div>
+          {mode === 'SELF_PLAY' && (
+            <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+              Self-play goal: Draw rate → 100% (both sides approaching perfect play). Win rate should <em>decrease</em> as draws increase.
+            </p>
           )}
 
           {/* Live charts */}
@@ -1926,11 +2140,32 @@ function ImportModelModal({ onClose, onCreate }) {
 // ─── Create Model Modal ───────────────────────────────────────────────────────
 
 function CreateModelModal({ onClose, onCreate }) {
-  const [name, setName]         = useState('')
-  const [desc, setDesc]         = useState('')
+  const [name, setName]           = useState('')
+  const [desc, setDesc]           = useState('')
   const [algorithm, setAlgorithm] = useState('Q_LEARNING')
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState(null)
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState(null)
+  // DQN network shape
+  const [networkShape, setNetworkShape] = useState([32])
+  const [netCfg, setNetCfg]             = useState(null) // { maxHiddenLayers, maxUnitsPerLayer }
+
+  useEffect(() => {
+    api.ml.getNetworkConfig().then(({ dqn }) => {
+      setNetCfg(dqn)
+      setNetworkShape(dqn.defaultHiddenLayers ?? [32])
+    }).catch(() => {})
+  }, [])
+
+  function addLayer() {
+    if (!netCfg || networkShape.length >= netCfg.maxHiddenLayers) return
+    setNetworkShape(s => [...s, s[s.length - 1] ?? 32])
+  }
+  function removeLayer(i) {
+    setNetworkShape(s => s.filter((_, idx) => idx !== i))
+  }
+  function setLayerSize(i, v) {
+    setNetworkShape(s => s.map((u, idx) => idx === i ? v : u))
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -1939,7 +2174,9 @@ function CreateModelModal({ onClose, onCreate }) {
     setError(null)
     try {
       const token = await getToken()
-      const { model } = await api.ml.createModel({ name: name.trim(), description: desc.trim() || undefined, algorithm }, token)
+      const body = { name: name.trim(), description: desc.trim() || undefined, algorithm }
+      if (algorithm === 'DQN') body.config = { networkShape: networkShape.map(Number) }
+      const { model } = await api.ml.createModel(body, token)
       onCreate(model)
     } catch (err) {
       setError(err.message)
@@ -1982,6 +2219,54 @@ function CreateModelModal({ onClose, onCreate }) {
               ))}
             </div>
           </div>
+          {algorithm === 'DQN' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  Hidden Layers
+                  <span className="ml-1.5 text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
+                    → [{['9', ...networkShape.map(String), '9'].join(', ')}]
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={addLayer}
+                  disabled={!!netCfg && networkShape.length >= netCfg.maxHiddenLayers}
+                  className="text-xs px-2 py-0.5 rounded font-medium disabled:opacity-40"
+                  style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
+                >
+                  + Add layer
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {networkShape.map((units, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs w-16 shrink-0" style={{ color: 'var(--text-muted)' }}>Layer {i + 1}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max={netCfg?.maxUnitsPerLayer ?? 256}
+                      value={units}
+                      onChange={e => setLayerSize(i, parseInt(e.target.value) || 1)}
+                      className="w-24 px-2 py-1 rounded border text-sm font-mono outline-none"
+                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    />
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>units</span>
+                    {networkShape.length > 1 && (
+                      <button type="button" onClick={() => removeLayer(i)}
+                        className="text-xs ml-auto px-1.5 py-0.5 rounded hover:bg-[var(--color-red-50)]"
+                        style={{ color: 'var(--text-muted)' }}>✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {netCfg && (
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Max {netCfg.maxHiddenLayers} layers · max {netCfg.maxUnitsPerLayer} units per layer
+                </p>
+              )}
+            </div>
+          )}
           {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
           <div className="flex gap-2 justify-end pt-1">
             <Btn type="button" onClick={onClose} variant="ghost">Cancel</Btn>
@@ -2065,6 +2350,7 @@ function BenchmarkPanel({ model }) {
     { key: 'vsRandom', label: 'vs Random' },
     { key: 'vsEasy',   label: 'vs Easy AI' },
     { key: 'vsMedium', label: 'vs Medium AI' },
+    { key: 'vsTough',  label: 'vs Tough AI' },
     { key: 'vsHard',   label: 'vs Hard AI' },
   ]
 
@@ -2087,7 +2373,7 @@ function BenchmarkPanel({ model }) {
         {running && (
           <div className="flex items-center gap-3 mt-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-base)' }}>
             <Spinner />
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Running 4,000 benchmark games…</span>
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Running 5,000 benchmark games…</span>
           </div>
         )}
 

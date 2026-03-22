@@ -61,6 +61,6 @@ export const ruleBasedImplementation = {
   id: 'rule_based',
   name: 'Rule-Based',
   description: 'Plays using ML-extracted IF-THEN rules. Select a Rule Set to play against.',
-  supportedDifficulties: ['medium'], // difficulty ignored; included for API compatibility
+  supportedDifficulties: ['intermediate'], // difficulty ignored; included for API compatibility
   move: ruleBasedMove,
 }

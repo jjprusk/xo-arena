@@ -34,8 +34,8 @@ router.post('/move', async (req, res, next) => {
     }
 
     // Validate difficulty (not enforced for ML, but kept for other implementations)
-    if (implId !== 'ml' && !['easy', 'medium', 'hard'].includes(difficulty)) {
-      return res.status(400).json({ error: 'difficulty must be easy, medium, or hard' })
+    if (implId !== 'ml' && !['novice', 'intermediate', 'advanced', 'master'].includes(difficulty)) {
+      return res.status(400).json({ error: 'difficulty must be novice, intermediate, advanced, or master' })
     }
 
     // Validate player

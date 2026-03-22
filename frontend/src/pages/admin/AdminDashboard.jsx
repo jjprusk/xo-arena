@@ -7,7 +7,10 @@ function MLLimitsPanel() {
   const [limits, setLimits]   = useState(null)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
-  const [form, setForm]       = useState({ maxEpisodesPerSession: '', maxConcurrentSessions: '', maxModelsPerUser: '' })
+  const [form, setForm] = useState({
+    maxEpisodesPerModel: '', maxEpisodesPerSession: '', maxConcurrentSessions: '', maxModelsPerUser: '',
+    dqnDefaultHiddenLayers: '32', dqnMaxHiddenLayers: '3', dqnMaxUnitsPerLayer: '256',
+  })
 
   useEffect(() => {
     async function load() {
@@ -15,7 +18,15 @@ function MLLimitsPanel() {
         const token = await getToken()
         const { limits: l } = await api.admin.getMLLimits(token)
         setLimits(l)
-        setForm({ maxEpisodesPerSession: l.maxEpisodesPerSession, maxConcurrentSessions: l.maxConcurrentSessions, maxModelsPerUser: l.maxModelsPerUser })
+        setForm({
+          maxEpisodesPerModel: l.maxEpisodesPerModel,
+          maxEpisodesPerSession: l.maxEpisodesPerSession,
+          maxConcurrentSessions: l.maxConcurrentSessions,
+          maxModelsPerUser: l.maxModelsPerUser,
+          dqnDefaultHiddenLayers: (l.dqnDefaultHiddenLayers ?? [32]).join(', '),
+          dqnMaxHiddenLayers: l.dqnMaxHiddenLayers ?? 3,
+          dqnMaxUnitsPerLayer: l.dqnMaxUnitsPerLayer ?? 256,
+        })
       } catch { /* non-fatal */ }
     }
     load()
@@ -27,10 +38,16 @@ function MLLimitsPanel() {
     setSaved(false)
     try {
       const token = await getToken()
+      const parsedLayers = form.dqnDefaultHiddenLayers
+        .split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
       const { limits: l } = await api.admin.setMLLimits({
+        maxEpisodesPerModel: form.maxEpisodesPerModel,
         maxEpisodesPerSession: form.maxEpisodesPerSession,
         maxConcurrentSessions: form.maxConcurrentSessions,
         maxModelsPerUser: form.maxModelsPerUser,
+        dqnDefaultHiddenLayers: parsedLayers.length > 0 ? parsedLayers : undefined,
+        dqnMaxHiddenLayers: form.dqnMaxHiddenLayers,
+        dqnMaxUnitsPerLayer: form.dqnMaxUnitsPerLayer,
       }, token)
       setLimits(l)
       setSaved(true)
@@ -52,14 +69,24 @@ function MLLimitsPanel() {
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           Set to <strong>0</strong> for no limit. Changes take effect on the next training session.
         </p>
-        <form onSubmit={handleSave} className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Default max episodes per model</span>
+              <input
+                type="number"
+                min="0"
+                value={form.maxEpisodesPerModel}
+                onChange={e => setForm(f => ({ ...f, maxEpisodesPerModel: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+            </label>
             <label className="space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Max episodes per session</span>
               <input
                 type="number"
                 min="0"
-                max="100000"
                 value={form.maxEpisodesPerSession}
                 onChange={e => setForm(f => ({ ...f, maxEpisodesPerSession: e.target.value }))}
                 className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
@@ -90,6 +117,49 @@ function MLLimitsPanel() {
               />
             </label>
           </div>
+          {/* DQN neural net defaults */}
+          <div className="pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
+            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>DQN Neural Network (applies to new models only)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Default hidden layers</span>
+                <input
+                  type="text"
+                  placeholder="e.g. 32 or 64, 64"
+                  value={form.dqnDefaultHiddenLayers}
+                  onChange={e => setForm(f => ({ ...f, dqnDefaultHiddenLayers: e.target.value }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none font-mono"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Comma-separated sizes, e.g. "32" or "64, 128"</span>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Max hidden layers</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={form.dqnMaxHiddenLayers}
+                  onChange={e => setForm(f => ({ ...f, dqnMaxHiddenLayers: e.target.value }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Max units per layer</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="2048"
+                  value={form.dqnMaxUnitsPerLayer}
+                  onChange={e => setForm(f => ({ ...f, dqnMaxUnitsPerLayer: e.target.value }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <button
               type="submit"

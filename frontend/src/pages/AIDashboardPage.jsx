@@ -5,11 +5,12 @@ import {
 } from 'recharts'
 import { api } from '../lib/api.js'
 
-const DIFFICULTIES = ['', 'easy', 'medium', 'hard']
+const DIFFICULTIES = ['', 'novice', 'intermediate', 'advanced', 'master']
 const DIFFICULTY_COLOR = {
-  easy: 'var(--color-teal-600)',
-  medium: 'var(--color-amber-600)',
-  hard: 'var(--color-red-600)',
+  novice:       'var(--color-teal-600)',
+  intermediate: 'var(--color-amber-600)',
+  advanced:     'var(--color-orange-600)',
+  master:       'var(--color-red-600)',
 }
 const CELL_LABELS = ['TL', 'TM', 'TR', 'ML', 'C', 'MR', 'BL', 'BM', 'BR']
 

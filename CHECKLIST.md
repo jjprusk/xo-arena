@@ -77,16 +77,22 @@ Tracks every task from the Development Plan. `Done` = implementation complete. `
 | AID-01 | AI dashboard data collection (game/move logging) | ✓ | ✓ |
 | AID-02 | AI dashboard API endpoints | ✓ | ✓ |
 | AID-03 | AI dashboard frontend (Recharts) | ✓ | ✓ |
-| **v3 — Cloud Deployment** |
-| OPS-01 | AWS RDS Postgres provisioned | | |
-| OPS-02 | AWS ElastiCache Redis provisioned | | |
-| OPS-03 | AWS Elastic Beanstalk (backend) provisioned | | |
-| OPS-04 | AWS S3 + CloudFront (frontend) provisioned | | |
-| OPS-05 | Clerk production instance configured | | |
-| OPS-06 | GitHub Actions CI pipeline (test + build) | | |
-| OPS-07 | GitHub Actions CD — staging (on push to staging) | | |
-| OPS-08 | GitHub Actions CD — production (on push to main) | | |
-| OPS-09 | Staging deployment verified | | |
-| OPS-10 | E2E tests pass on staging | | |
-| OPS-11 | Load test (AI ≤500ms, Socket.io under load) | | |
-| OPS-12 | Production go-live sign-off | | |
+| **v3 — Cloud Deployment (GCP)** |
+| OPS-01 | GCP project created + billing enabled | ✓ | — |
+| OPS-02 | Cloud SQL (Postgres) instance provisioned | | |
+| OPS-03 | Memorystore (Redis) instance provisioned | | |
+| OPS-04 | Artifact Registry repo created + Docker image pushed | | |
+| OPS-05 | Cloud Run service deployed (backend) | | |
+| OPS-06 | Firebase Hosting configured (frontend) | | |
+| OPS-07 | Custom domain configured + SSL provisioned | | |
+| OPS-08 | Better Auth production env vars set (BETTER_AUTH_URL, BETTER_AUTH_SECRET) | | |
+| OPS-09 | Google OAuth redirect URIs updated for production domain | | |
+| OPS-10 | Apple OAuth configured for production domain | | |
+| OPS-11 | Resend email configured for password reset | | |
+| OPS-12 | GitHub Actions CI pipeline (test + build) | | |
+| OPS-13 | GitHub Actions CD — staging (on push to staging) | | |
+| OPS-14 | GitHub Actions CD — production (on push to main) | | |
+| OPS-15 | Staging deployment verified | | |
+| OPS-16 | E2E tests pass on staging | | |
+| OPS-17 | Load test (AI ≤500ms, Socket.io under load) | | |
+| OPS-18 | Production go-live sign-off | | |

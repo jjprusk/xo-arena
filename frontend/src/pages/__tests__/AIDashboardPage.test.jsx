@@ -25,8 +25,8 @@ import AIDashboardPage from '../AIDashboardPage.jsx'
 const SUMMARY = {
   total: 42,
   rows: [
-    { implementation: 'minimax', difficulty: 'hard', count: 30, avgMs: 80, maxMs: 200 },
-    { implementation: 'minimax', difficulty: 'easy', count: 12, avgMs: 2, maxMs: 5 },
+    { implementation: 'minimax', difficulty: 'master', count: 30, avgMs: 80, maxMs: 200 },
+    { implementation: 'minimax', difficulty: 'novice', count: 12, avgMs: 2, maxMs: 5 },
   ],
 }
 
@@ -67,8 +67,8 @@ describe('AIDashboardPage', () => {
   it('shows per-difficulty stat cards', async () => {
     render(<AIDashboardPage />)
     await waitFor(() => {
-      expect(screen.getByText('minimax / hard')).toBeDefined()
-      expect(screen.getByText('minimax / easy')).toBeDefined()
+      expect(screen.getByText('minimax / master')).toBeDefined()
+      expect(screen.getByText('minimax / novice')).toBeDefined()
     })
   })
 
@@ -90,20 +90,20 @@ describe('AIDashboardPage', () => {
   it('difficulty filter buttons are rendered', async () => {
     render(<AIDashboardPage />)
     expect(screen.getByText('All')).toBeDefined()
-    expect(screen.getByText('easy')).toBeDefined()
-    expect(screen.getByText('medium')).toBeDefined()
-    expect(screen.getByText('hard')).toBeDefined()
+    expect(screen.getByText('novice')).toBeDefined()
+    expect(screen.getByText('intermediate')).toBeDefined()
+    expect(screen.getByText('master')).toBeDefined()
   })
 
   it('clicking a difficulty filter re-fetches histogram and heatmap', async () => {
     render(<AIDashboardPage />)
     await waitFor(() => expect(screen.getByText('AI Dashboard')).toBeDefined())
 
-    fireEvent.click(screen.getByText('hard'))
+    fireEvent.click(screen.getByText('master'))
 
     await waitFor(() => {
       const calls = api.get.mock.calls.map((c) => c[0])
-      expect(calls.some((c) => c.includes('difficulty=hard'))).toBe(true)
+      expect(calls.some((c) => c.includes('difficulty=master'))).toBe(true)
     })
   })
 })

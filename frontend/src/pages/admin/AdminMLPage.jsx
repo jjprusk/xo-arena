@@ -30,7 +30,11 @@ export default function AdminMLPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
   const [deleting, setDeleting] = useState(null)
-  const [confirming, setConfirming] = useState(null) // model id pending delete confirm
+  const [confirming, setConfirming] = useState(null)  // model id pending delete confirm
+  // Per-model max-episodes inline edit
+  const [editingMax, setEditingMax]   = useState(null)  // model id being edited
+  const [maxInput, setMaxInput]       = useState('')
+  const [savingMax, setSavingMax]     = useState(null)
 
   const limit = 25
 
@@ -70,6 +74,22 @@ export default function AdminMLPage() {
     } catch { /* non-fatal */ } finally {
       setDeleting(null)
       setConfirming(null)
+    }
+  }
+
+  async function handleSaveMax(id) {
+    const v = parseInt(maxInput)
+    if (isNaN(v) || v < 0) return
+    setSavingMax(id)
+    try {
+      const token = await getToken()
+      const { model } = await api.admin.setModelMaxEpisodes(id, v, token)
+      setModels(ms => ms.map(m => m.id === id ? { ...m, maxEpisodes: model.maxEpisodes } : m))
+    } catch (err) {
+      alert(err.message || 'Failed to update limit')
+    } finally {
+      setSavingMax(null)
+      setEditingMax(null)
     }
   }
 
@@ -117,7 +137,7 @@ export default function AdminMLPage() {
           <div
             className="grid gap-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest border-b"
             style={{
-              gridTemplateColumns: '1fr 120px 90px 80px 80px 60px 120px',
+              gridTemplateColumns: '1fr 110px 80px 70px 140px 55px 160px',
               backgroundColor: 'var(--bg-base)',
               borderColor: 'var(--border-default)',
               color: 'var(--text-muted)',
@@ -127,99 +147,134 @@ export default function AdminMLPage() {
             <span>Owner</span>
             <span>Algorithm</span>
             <span>Status</span>
-            <span className="text-right">Episodes</span>
+            <span className="text-right">Episodes / Limit</span>
             <span className="text-right">ELO</span>
             <span className="text-right">Actions</span>
           </div>
 
-          {models.map(m => (
-            <div
-              key={m.id}
-              className="grid gap-2 px-4 py-3 items-center border-b last:border-0 transition-colors hover:bg-[var(--bg-surface-hover)]"
-              style={{
-                gridTemplateColumns: '1fr 120px 90px 80px 80px 60px 120px',
-                borderColor: 'var(--border-default)',
-                backgroundColor: 'var(--bg-surface)',
-              }}
-            >
-              {/* Name */}
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 truncate">
-                  {m.featured && <span className="text-xs shrink-0" title="Featured">⭐</span>}
-                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                    {m.name}
-                  </span>
+          {models.map(m => {
+            const pct = m.maxEpisodes > 0 ? Math.min(100, Math.round((m.totalEpisodes / m.maxEpisodes) * 100)) : null
+            const atLimit = m.maxEpisodes > 0 && m.totalEpisodes >= m.maxEpisodes
+            return (
+              <div
+                key={m.id}
+                className="grid gap-2 px-4 py-3 items-center border-b last:border-0 transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{
+                  gridTemplateColumns: '1fr 110px 80px 70px 140px 55px 160px',
+                  borderColor: 'var(--border-default)',
+                  backgroundColor: 'var(--bg-surface)',
+                }}
+              >
+                {/* Name */}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 truncate">
+                    {m.featured && <span className="text-xs shrink-0" title="Featured">⭐</span>}
+                    <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {m.name}
+                    </span>
+                  </div>
+                  <div className="text-[10px] tabular-nums mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                    {m.id.slice(-8)} · {m._count?.sessions ?? 0} session{m._count?.sessions !== 1 ? 's' : ''}
+                  </div>
                 </div>
-                <div className="text-[10px] tabular-nums mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
-                  {m.id.slice(-8)} · {m._count?.sessions ?? 0} session{m._count?.sessions !== 1 ? 's' : ''}
+
+                {/* Owner */}
+                <div className="truncate text-xs" style={{ color: m.creatorName ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                  {m.creatorName ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
                 </div>
-              </div>
 
-              {/* Owner */}
-              <div className="truncate text-xs" style={{ color: m.creatorName ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
-                {m.creatorName ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
-              </div>
+                {/* Algorithm */}
+                <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                  {m.algorithm?.replace(/_/g, '-')}
+                </div>
 
-              {/* Algorithm */}
-              <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
-                {m.algorithm?.replace(/_/g, '-')}
-              </div>
+                {/* Status */}
+                <div><StatusBadge status={m.status} /></div>
 
-              {/* Status */}
-              <div><StatusBadge status={m.status} /></div>
-
-              {/* Episodes */}
-              <div className="text-xs text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                {m.totalEpisodes.toLocaleString()}
-              </div>
-
-              {/* ELO */}
-              <div className="text-xs text-right tabular-nums font-semibold" style={{ color: 'var(--color-blue-600)' }}>
-                {Math.round(m.eloRating)}
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-1">
-                <button
-                  onClick={() => handleFeature(m)}
-                  title={m.featured ? 'Unfeature' : 'Feature'}
-                  className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
-                  style={{ color: m.featured ? 'var(--color-amber-600)' : 'var(--text-muted)' }}
-                >
-                  {m.featured ? '⭐' : '☆'}
-                </button>
-
-                {confirming === m.id ? (
-                  <>
+                {/* Episodes / Limit */}
+                <div className="text-right">
+                  {editingMax === m.id ? (
+                    <div className="flex items-center justify-end gap-1">
+                      <input
+                        type="number"
+                        min={m.maxEpisodes}
+                        value={maxInput}
+                        onChange={e => setMaxInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveMax(m.id); if (e.key === 'Escape') setEditingMax(null) }}
+                        autoFocus
+                        className="w-20 text-xs rounded border px-1 py-0.5 outline-none tabular-nums"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--color-blue-400)', color: 'var(--text-primary)' }}
+                      />
+                      <button onClick={() => handleSaveMax(m.id)} disabled={savingMax === m.id}
+                        className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white"
+                        style={{ background: 'var(--color-blue-600)' }}>
+                        {savingMax === m.id ? '…' : 'OK'}
+                      </button>
+                      <button onClick={() => setEditingMax(null)}
+                        className="text-[10px] px-1 py-0.5 rounded"
+                        style={{ color: 'var(--text-muted)' }}>✕</button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => handleDelete(m.id)}
-                      disabled={deleting === m.id}
-                      className="px-2 py-1 rounded text-xs font-semibold transition-colors"
-                      style={{ backgroundColor: 'var(--color-red-600)', color: 'white' }}
+                      onClick={() => { setEditingMax(m.id); setMaxInput(m.maxEpisodes) }}
+                      className="text-xs tabular-nums text-right w-full hover:underline"
+                      title="Click to change limit"
+                      style={{ color: atLimit ? 'var(--color-red-600)' : 'var(--text-secondary)' }}
                     >
-                      {deleting === m.id ? '…' : 'Confirm'}
+                      {m.totalEpisodes.toLocaleString()} / {m.maxEpisodes > 0 ? m.maxEpisodes.toLocaleString() : '∞'}
+                      {pct !== null && <span className="ml-1 text-[10px]" style={{ color: atLimit ? 'var(--color-red-500)' : 'var(--text-muted)' }}>({pct}%)</span>}
                     </button>
+                  )}
+                </div>
+
+                {/* ELO */}
+                <div className="text-xs text-right tabular-nums font-semibold" style={{ color: 'var(--color-blue-600)' }}>
+                  {Math.round(m.eloRating)}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => handleFeature(m)}
+                    title={m.featured ? 'Unfeature' : 'Feature'}
+                    className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
+                    style={{ color: m.featured ? 'var(--color-amber-600)' : 'var(--text-muted)' }}
+                  >
+                    {m.featured ? '⭐' : '☆'}
+                  </button>
+
+                  {confirming === m.id ? (
+                    <>
+                      <button
+                        onClick={() => handleDelete(m.id)}
+                        disabled={deleting === m.id}
+                        className="px-2 py-1 rounded text-xs font-semibold transition-colors"
+                        style={{ backgroundColor: 'var(--color-red-600)', color: 'white' }}
+                      >
+                        {deleting === m.id ? '…' : 'Confirm'}
+                      </button>
+                      <button
+                        onClick={() => setConfirming(null)}
+                        className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
                     <button
-                      onClick={() => setConfirming(null)}
-                      className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
+                      onClick={() => setConfirming(m.id)}
+                      title="Delete model"
+                      className="px-2 py-1 rounded text-xs transition-colors hover:text-[var(--color-red-600)] hover:bg-[var(--color-red-50)]"
                       style={{ color: 'var(--text-muted)' }}
                     >
-                      Cancel
+                      Delete
                     </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setConfirming(m.id)}
-                    title="Delete model"
-                    className="px-2 py-1 rounded text-xs transition-colors hover:text-[var(--color-red-600)] hover:bg-[var(--color-red-50)]"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Delete
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

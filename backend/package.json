@@ -1,6 +1,6 @@
 {
   "name": "@xo-arena/backend",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.3.0",
-    "better-auth": "^1.0.0",
     "@socket.io/redis-adapter": "^8.3.0",
+    "better-auth": "^1.5.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

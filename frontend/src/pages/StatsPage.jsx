@@ -130,9 +130,10 @@ export default function StatsPage() {
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
               >
                 <WinRateBar label="PvP" rate={stats.pvp.rate} color="var(--color-blue-600)" />
-                <WinRateBar label="Easy" rate={stats.pvai.easy.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Medium" rate={stats.pvai.medium.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Hard" rate={stats.pvai.hard.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Novice" rate={stats.pvai.novice.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Intermediate" rate={stats.pvai.intermediate.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Advanced" rate={stats.pvai.advanced.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Master" rate={stats.pvai.master.rate} color="var(--color-teal-600)" />
               </div>
             </section>
 

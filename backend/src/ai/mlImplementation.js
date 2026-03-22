@@ -13,7 +13,7 @@ export const mlImplementation = {
   id: 'ml',
   name: 'ML Agent',
   description: 'Reinforcement-learning agent. Select a trained model via modelId.',
-  supportedDifficulties: ['easy', 'medium', 'hard'], // ignored — difficulty is meaningless for ML
+  supportedDifficulties: ['novice', 'intermediate', 'master'], // ignored — difficulty is meaningless for ML
   async move(board, _difficulty, _player, modelId) {
     if (!modelId) {
       // Fallback: random move if no model specified

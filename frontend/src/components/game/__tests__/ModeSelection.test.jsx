@@ -11,8 +11,8 @@ vi.mock('../../../lib/api.js', () => ({
       implementations: vi.fn(() =>
         Promise.resolve({
           implementations: [
-            { id: 'minimax', name: 'Minimax', description: 'Classic', supportedDifficulties: ['easy', 'medium', 'hard'] },
-            { id: 'random', name: 'Random', description: 'Random moves', supportedDifficulties: ['easy'] },
+            { id: 'minimax', name: 'Minimax', description: 'Classic', supportedDifficulties: ['novice', 'intermediate', 'advanced', 'master'] },
+            { id: 'random', name: 'Random', description: 'Random moves', supportedDifficulties: ['novice'] },
           ],
         })
       ),
@@ -36,7 +36,7 @@ describe('ModeSelection', () => {
     render(<ModeSelection />)
     fireEvent.click(screen.getByText('Play vs AI'))
     await waitFor(() => {
-      const select = screen.getByDisplayValue('Medium')
+      const select = screen.getByDisplayValue('Intermediate')
       expect(select).toBeTruthy()
       expect(select.tagName).toBe('SELECT')
     })

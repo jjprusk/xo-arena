@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
 import { api } from '../../lib/api.js'
 
-const DIFFICULTIES = ['easy', 'medium', 'hard']
+const DIFFICULTIES = ['novice', 'intermediate', 'advanced', 'master']
 const BEST_OF_OPTIONS = [{ label: 'Single', value: 1 }, { label: 'Best of 3', value: 3 }, { label: 'Best of 5', value: 5 }, { label: 'Best of 7', value: 7 }, { label: 'Unlimited', value: null }]
 const TIMER_PRESETS = [15, 30, 60]
 const BOARD_THEMES = [
@@ -24,7 +24,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
   const [aiExpanded, setAiExpanded] = useState(false)
   const [aivaiExpanded, setAivaiExpanded] = useState(false)
-  const [selectedDifficulty, setSelectedDifficulty] = useState('medium')
+  const [selectedDifficulty, setSelectedDifficulty] = useState('intermediate')
   const [selectedImpl, setSelectedImpl] = useState('minimax')
   const [selectedMark, setSelectedMark] = useState('X')
   const [playerName, setPlayerNameLocal] = useState('')
@@ -41,10 +41,10 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
   // AI vs AI config
   const [ai1Impl, setAi1Impl] = useState('minimax')
-  const [ai1Diff, setAi1Diff] = useState('hard')
+  const [ai1Diff, setAi1Diff] = useState('master')
   const [ai1ModelId, setAi1ModelId] = useState(null)
   const [ai2Impl, setAi2Impl] = useState('minimax')
-  const [ai2Diff, setAi2Diff] = useState('medium')
+  const [ai2Diff, setAi2Diff] = useState('intermediate')
   const [ai2ModelId, setAi2ModelId] = useState(null)
   const [aivaiModels, setAivaiModels] = useState([])
 

@@ -75,7 +75,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
       const displayName = name.trim() || email.split('@')[0]
       const result = await signUp.email({ email, password, name: displayName })
       if (result?.error) { setError(result.error.message || 'Sign up failed.'); return }
-      setView('verify-email')
+      // Email verification is disabled — sign-up completes immediately, close modal
+      onClose()
     } catch (err) {
       setError(err?.message || 'Sign up failed.')
     } finally {

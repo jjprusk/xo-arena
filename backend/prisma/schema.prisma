@@ -39,7 +39,7 @@ model UserEloHistory {
   userId       String
   eloRating    Float
   delta        Float
-  opponentType String   // 'ai_easy' | 'ai_medium' | 'ai_hard' | 'human'
+  opponentType String   // 'ai_novice' | 'ai_intermediate' | 'ai_advanced' | 'ai_master' | 'human'
   outcome      String   // 'win' | 'loss' | 'draw'
   recordedAt   DateTime @default(now())
 
@@ -148,6 +148,7 @@ model MLModel {
   featured      Boolean       @default(false)
   createdBy     String?       // Clerk user ID of the model's creator
   totalEpisodes Int           @default(0)
+  maxEpisodes   Int           @default(100000) // lifetime training cap; 0 = unlimited
   eloRating     Float         @default(1000)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -234,6 +235,7 @@ model MLBenchmarkResult {
   vsRandom Json
   vsEasy   Json
   vsMedium Json
+  vsTough  Json
   vsHard   Json
   summary  Json
 
@@ -351,6 +353,9 @@ model BaUser {
   emailVerified Boolean
   image         String?
   role          String?
+  banned        Boolean?
+  banReason     String?
+  banExpires    DateTime?
   createdAt     DateTime
   updatedAt     DateTime
 
@@ -391,6 +396,15 @@ model BaAccount {
   user                  BaUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("ba_accounts")
+}
+
+model Jwks {
+  id         String   @id
+  publicKey  String
+  privateKey String
+  createdAt  DateTime
+
+  @@map("ba_jwks")
 }
 
 model BaVerification {

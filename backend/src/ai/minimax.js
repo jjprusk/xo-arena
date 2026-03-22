@@ -1,9 +1,10 @@
 /**
  * Minimax AI implementation.
  *
- * Easy   — random valid move
- * Medium — blocks immediate losses and takes immediate wins; otherwise random
- * Hard   — full Minimax lookahead (never loses)
+ * Novice       — random valid move
+ * Intermediate — blocks immediate losses and takes immediate wins; otherwise random
+ * Advanced     — same as intermediate but 60% of the time plays the optimal minimax move
+ * Master       — full Minimax lookahead (never loses)
  */
 
 import { getWinner, isBoardFull, getEmptyCells, opponent } from './gameLogic.js'
@@ -15,56 +16,89 @@ function randomChoice(arr) {
 }
 
 /**
- * Full Minimax score for a given board position.
- * @param {Array<string|null>} board
- * @param {string} currentPlayer - whose turn it is to move
- * @param {string} aiPlayer - the AI's mark (maximising player)
- * @param {number} depth
- * @returns {number}
+ * Transposition table — persists across calls.
+ * Key: 9-char board string + 1-char current player ('X' or 'O').
+ * Value: score in [-1, 0, 1] from currentPlayer's perspective.
+ * Bounded by ~5,477 unique tic-tac-toe positions × 2 players = ~10,954 entries.
  */
-function minimax(board, currentPlayer, aiPlayer, depth = 0) {
+const _ttable = new Map()
+
+/**
+ * Negamax with transposition table (replaces full Minimax).
+ *
+ * Returns +1 if currentPlayer wins with best play, -1 if loses, 0 if draw.
+ * Mutates board in-place and restores — avoids array copies on every call.
+ */
+function negamax(board, currentPlayer) {
   const winner = getWinner(board)
-  if (winner === aiPlayer) return 10 - depth
-  if (winner === opponent(aiPlayer)) return depth - 10
-  if (isBoardFull(board)) return 0
+  if (winner === currentPlayer)          return 1
+  if (winner === opponent(currentPlayer)) return -1
+  if (isBoardFull(board))                return 0
+
+  const key = board.map(c => c ?? '.').join('') + currentPlayer
+  const cached = _ttable.get(key)
+  if (cached !== undefined) return cached
 
   const empty = getEmptyCells(board)
-  const isMaximising = currentPlayer === aiPlayer
-
-  let best = isMaximising ? -Infinity : Infinity
+  let best = -Infinity
   for (const i of empty) {
-    const next = [...board]
-    next[i] = currentPlayer
-    const score = minimax(next, opponent(currentPlayer), aiPlayer, depth + 1)
-    best = isMaximising ? Math.max(best, score) : Math.min(best, score)
+    board[i] = currentPlayer
+    const score = -negamax(board, opponent(currentPlayer))
+    board[i] = null
+    if (score > best) {
+      best = score
+      if (best === 1) break  // can't do better than immediate win
+    }
   }
+
+  _ttable.set(key, best)
   return best
 }
 
 /**
- * Hard: best move via full Minimax.
+ * Master: best move via Negamax + transposition table.
+ * Immediate wins and blocks are checked first for performance and determinism.
  */
-function hardMove(board, player) {
+function masterMove(board, player) {
   const empty = getEmptyCells(board)
+  const opp = opponent(player)
+
+  // Take immediate win
+  for (const i of empty) {
+    board[i] = player
+    const wins = getWinner(board) === player
+    board[i] = null
+    if (wins) return i
+  }
+
+  // Block immediate opponent win
+  for (const i of empty) {
+    board[i] = opp
+    const oppWins = getWinner(board) === opp
+    board[i] = null
+    if (oppWins) return i
+  }
+
   let bestScore = -Infinity
   let bestMove = empty[0]
 
   for (const i of empty) {
-    const next = [...board]
-    next[i] = player
-    const score = minimax(next, opponent(player), player, 1)
+    board[i] = player
+    const score = -negamax(board, opp)
+    board[i] = null
     if (score > bestScore) {
       bestScore = score
       bestMove = i
+      if (bestScore === 1) break  // found a winning move, stop searching
     }
   }
   return bestMove
 }
 
 /**
- * Medium: win if possible, block opponent win if possible, otherwise random.
+ * Intermediate: win if possible, block opponent win if possible, otherwise random.
  */
-function mediumMove(board, player) {
+function intermediateMove(board, player) {
   const empty = getEmptyCells(board)
   const opp = opponent(player)
 
@@ -86,9 +120,34 @@ function mediumMove(board, player) {
 }
 
 /**
- * Easy: random move.
+ * Advanced: win if possible, block opponent win if possible, then
+ * 60% of the time play the optimal minimax move — otherwise random.
  */
-function easyMove(board) {
+function advancedMove(board, player) {
+  const empty = getEmptyCells(board)
+  const opp = opponent(player)
+
+  // Take winning move
+  for (const i of empty) {
+    const next = [...board]
+    next[i] = player
+    if (getWinner(next) === player) return i
+  }
+
+  // Block opponent win
+  for (const i of empty) {
+    const next = [...board]
+    next[i] = opp
+    if (getWinner(next) === opp) return i
+  }
+
+  return Math.random() < 0.6 ? masterMove(board, player) : randomChoice(empty)
+}
+
+/**
+ * Novice: random move.
+ */
+function noviceMove(board) {
   return randomChoice(getEmptyCells(board))
 }
 
@@ -97,18 +156,20 @@ function easyMove(board) {
  * Conforms to the AI service interface: (board, difficulty, player) => moveIndex
  *
  * @param {Array<string|null>} board - 9-element board array
- * @param {'easy'|'medium'|'hard'} difficulty
+ * @param {'novice'|'intermediate'|'advanced'|'master'} difficulty
  * @param {'X'|'O'} player - mark the AI is playing
  * @returns {number} - cell index 0–8
  */
 export function minimaxMove(board, difficulty, player) {
   switch (difficulty) {
-    case 'hard':
-      return hardMove(board, player)
-    case 'medium':
-      return mediumMove(board, player)
+    case 'master':
+      return masterMove(board, player)
+    case 'advanced':
+      return advancedMove(board, player)
+    case 'intermediate':
+      return intermediateMove(board, player)
     default:
-      return easyMove(board)
+      return noviceMove(board)
   }
 }
 
@@ -122,10 +183,10 @@ export function minimaxMove(board, difficulty, player) {
  * @param {Array<string|null>} board   Board state BEFORE the move
  * @param {number}             chosenCell
  * @param {string}             player  The AI's mark
- * @param {'easy'|'medium'|'hard'} difficulty
+ * @param {'novice'|'intermediate'|'advanced'|'master'} difficulty
  */
 export function classifyMinimaxMove(board, chosenCell, player, difficulty) {
-  if (difficulty === 'easy') return 'random'
+  if (difficulty === 'novice') return 'random'
 
   const opp = opponent(player)
 
@@ -139,8 +200,8 @@ export function classifyMinimaxMove(board, chosenCell, player, difficulty) {
   testBlock[chosenCell] = opp
   if (getWinner(testBlock) === opp) return 'block'
 
-  // Rules 3 & 4 only apply to hard (medium falls through to positional)
-  if (difficulty === 'hard') {
+  // Rules 3 & 4 apply to master and advanced (both can play fork moves)
+  if (difficulty === 'master' || difficulty === 'advanced') {
     // Rule 3 — Fork
     if (createsFork(board, chosenCell, player)) return 'fork'
 
@@ -168,7 +229,7 @@ export const minimaxImplementation = {
   id: 'minimax',
   name: 'Minimax',
   description:
-    'Classic Minimax algorithm. Hard is unbeatable; Medium blocks and takes wins; Easy plays randomly.',
-  supportedDifficulties: ['easy', 'medium', 'hard'],
+    'Classic Minimax algorithm. Master is unbeatable; Advanced usually plays optimally; Intermediate blocks and takes wins; Novice plays randomly.',
+  supportedDifficulties: ['novice', 'intermediate', 'advanced', 'master'],
   move: minimaxMove,
 }

@@ -1,0 +1,1 @@
+-- Rename Prisma model BaJwks -> Jwks (no SQL change; table ba_jwks unchanged)

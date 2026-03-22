@@ -16,7 +16,7 @@ describe('GET /api/v1/ai/implementations', () => {
     expect(res.body.implementations[0]).toMatchObject({
       id: 'minimax',
       name: expect.any(String),
-      supportedDifficulties: ['easy', 'medium', 'hard'],
+      supportedDifficulties: ['novice', 'intermediate', 'advanced', 'master'],
     })
   })
 })
@@ -24,7 +24,7 @@ describe('GET /api/v1/ai/implementations', () => {
 describe('POST /api/v1/ai/move', () => {
   const validBody = {
     board: Array(9).fill(null),
-    difficulty: 'easy',
+    difficulty: 'novice',
     player: 'X',
     implementation: 'minimax',
   }

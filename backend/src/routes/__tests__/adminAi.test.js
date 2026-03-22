@@ -25,8 +25,8 @@ describe('GET /api/v1/admin/ai/summary', () => {
   })
 
   it('returns aggregated rows after recording moves', async () => {
-    recordMove({ implementation: 'minimax', difficulty: 'hard', durationMs: 10, cellIndex: 4 })
-    recordMove({ implementation: 'minimax', difficulty: 'hard', durationMs: 20, cellIndex: 0 })
+    recordMove({ implementation: 'minimax', difficulty: 'master', durationMs: 10, cellIndex: 4 })
+    recordMove({ implementation: 'minimax', difficulty: 'master', durationMs: 20, cellIndex: 0 })
 
     const res = await request(app).get('/api/v1/admin/ai/summary')
     expect(res.status).toBe(200)
@@ -44,8 +44,8 @@ describe('GET /api/v1/admin/ai/histogram', () => {
   })
 
   it('buckets correctly', async () => {
-    recordMove({ implementation: 'minimax', difficulty: 'hard', durationMs: 5, cellIndex: 0 })
-    recordMove({ implementation: 'minimax', difficulty: 'hard', durationMs: 600, cellIndex: 0 })
+    recordMove({ implementation: 'minimax', difficulty: 'master', durationMs: 5, cellIndex: 0 })
+    recordMove({ implementation: 'minimax', difficulty: 'master', durationMs: 600, cellIndex: 0 })
 
     const res = await request(app).get('/api/v1/admin/ai/histogram')
     const hist = res.body.histogram
@@ -62,8 +62,8 @@ describe('GET /api/v1/admin/ai/heatmap', () => {
   })
 
   it('counts cell selections', async () => {
-    recordMove({ implementation: 'minimax', difficulty: 'hard', durationMs: 5, cellIndex: 4 })
-    recordMove({ implementation: 'minimax', difficulty: 'hard', durationMs: 5, cellIndex: 4 })
+    recordMove({ implementation: 'minimax', difficulty: 'master', durationMs: 5, cellIndex: 4 })
+    recordMove({ implementation: 'minimax', difficulty: 'master', durationMs: 5, cellIndex: 4 })
 
     const res = await request(app).get('/api/v1/admin/ai/heatmap')
     expect(res.body.heatmap[4].count).toBe(2)

@@ -276,12 +276,25 @@ router.delete('/ml/models/:id', async (req, res, next) => {
  */
 router.get('/ml/limits', async (_req, res, next) => {
   try {
-    const [maxEpisodes, maxConcurrent, maxModels] = await Promise.all([
+    const [maxEpisodes, maxConcurrent, maxModels, maxEpisodesPerModel,
+      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer] = await Promise.all([
       getSystemConfig('ml.maxEpisodesPerSession', 100_000),
       getSystemConfig('ml.maxConcurrentSessions', 0),
       getSystemConfig('ml.maxModelsPerUser', 10),
+      getSystemConfig('ml.maxEpisodesPerModel', 100_000),
+      getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
+      getSystemConfig('ml.dqn.maxHiddenLayers', 3),
+      getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
     ])
-    res.json({ limits: { maxEpisodesPerSession: maxEpisodes, maxConcurrentSessions: maxConcurrent, maxModelsPerUser: maxModels } })
+    res.json({ limits: {
+      maxEpisodesPerSession: maxEpisodes,
+      maxConcurrentSessions: maxConcurrent,
+      maxModelsPerUser: maxModels,
+      maxEpisodesPerModel,
+      dqnDefaultHiddenLayers,
+      dqnMaxHiddenLayers,
+      dqnMaxUnitsPerLayer,
+    }})
   } catch (err) {
     next(err)
   }
@@ -292,7 +305,8 @@ router.get('/ml/limits', async (_req, res, next) => {
  */
 router.patch('/ml/limits', async (req, res, next) => {
   try {
-    const { maxEpisodesPerSession, maxConcurrentSessions, maxModelsPerUser } = req.body
+    const { maxEpisodesPerSession, maxConcurrentSessions, maxModelsPerUser, maxEpisodesPerModel,
+      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer } = req.body
     const updates = []
 
     if (maxEpisodesPerSession !== undefined) {
@@ -310,16 +324,75 @@ router.patch('/ml/limits', async (req, res, next) => {
       if (isNaN(v) || v < 0) return res.status(400).json({ error: 'maxModelsPerUser must be a non-negative integer' })
       updates.push(setSystemConfig('ml.maxModelsPerUser', v))
     }
+    if (maxEpisodesPerModel !== undefined) {
+      const v = parseInt(maxEpisodesPerModel)
+      if (isNaN(v) || v < 0) return res.status(400).json({ error: 'maxEpisodesPerModel must be a non-negative integer' })
+      updates.push(setSystemConfig('ml.maxEpisodesPerModel', v))
+    }
+    if (dqnDefaultHiddenLayers !== undefined) {
+      if (!Array.isArray(dqnDefaultHiddenLayers) || dqnDefaultHiddenLayers.length === 0) {
+        return res.status(400).json({ error: 'dqnDefaultHiddenLayers must be a non-empty array' })
+      }
+      for (const u of dqnDefaultHiddenLayers) {
+        if (!Number.isInteger(u) || u < 1) return res.status(400).json({ error: 'Each layer size must be a positive integer' })
+      }
+      updates.push(setSystemConfig('ml.dqn.defaultHiddenLayers', dqnDefaultHiddenLayers))
+    }
+    if (dqnMaxHiddenLayers !== undefined) {
+      const v = parseInt(dqnMaxHiddenLayers)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'dqnMaxHiddenLayers must be a positive integer' })
+      updates.push(setSystemConfig('ml.dqn.maxHiddenLayers', v))
+    }
+    if (dqnMaxUnitsPerLayer !== undefined) {
+      const v = parseInt(dqnMaxUnitsPerLayer)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'dqnMaxUnitsPerLayer must be a positive integer' })
+      updates.push(setSystemConfig('ml.dqn.maxUnitsPerLayer', v))
+    }
 
     if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' })
     await Promise.all(updates)
 
-    const [maxEpisodes, maxConcurrent, maxModels] = await Promise.all([
+    const [updatedMaxEpisodes, updatedMaxConcurrent, updatedMaxModels, updatedMaxEpisodesPerModel,
+      updatedDqnDefaultHiddenLayers, updatedDqnMaxHiddenLayers, updatedDqnMaxUnitsPerLayer] = await Promise.all([
       getSystemConfig('ml.maxEpisodesPerSession', 100_000),
       getSystemConfig('ml.maxConcurrentSessions', 0),
       getSystemConfig('ml.maxModelsPerUser', 10),
+      getSystemConfig('ml.maxEpisodesPerModel', 100_000),
+      getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
+      getSystemConfig('ml.dqn.maxHiddenLayers', 3),
+      getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
     ])
-    res.json({ limits: { maxEpisodesPerSession: maxEpisodes, maxConcurrentSessions: maxConcurrent, maxModelsPerUser: maxModels } })
+    res.json({ limits: {
+      maxEpisodesPerSession: updatedMaxEpisodes,
+      maxConcurrentSessions: updatedMaxConcurrent,
+      maxModelsPerUser: updatedMaxModels,
+      maxEpisodesPerModel: updatedMaxEpisodesPerModel,
+      dqnDefaultHiddenLayers: updatedDqnDefaultHiddenLayers,
+      dqnMaxHiddenLayers: updatedDqnMaxHiddenLayers,
+      dqnMaxUnitsPerLayer: updatedDqnMaxUnitsPerLayer,
+    }})
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/ml/models/:id/max-episodes
+ * Override per-model episode cap. Can only increase, not decrease.
+ */
+router.patch('/ml/models/:id/max-episodes', async (req, res, next) => {
+  try {
+    const model = await db.mLModel.findUnique({ where: { id: req.params.id }, select: { id: true, maxEpisodes: true } })
+    if (!model) return res.status(404).json({ error: 'Model not found' })
+
+    const v = parseInt(req.body.maxEpisodes)
+    if (isNaN(v) || v < 0) return res.status(400).json({ error: 'maxEpisodes must be a non-negative integer (0 = unlimited)' })
+    if (v > 0 && v < model.maxEpisodes) {
+      return res.status(400).json({ error: `Cannot decrease maxEpisodes (current: ${model.maxEpisodes.toLocaleString()})` })
+    }
+
+    const updated = await db.mLModel.update({ where: { id: req.params.id }, data: { maxEpisodes: v } })
+    res.json({ model: { id: updated.id, maxEpisodes: updated.maxEpisodes } })
   } catch (err) {
     next(err)
   }

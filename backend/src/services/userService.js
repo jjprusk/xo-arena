@@ -112,7 +112,7 @@ export async function getUserStats(userId) {
   const pvpRate = pvpGames.length > 0 ? pvpWins / pvpGames.length : 0
 
   const pvaiByDiff = {}
-  for (const diff of ['EASY', 'MEDIUM', 'HARD']) {
+  for (const diff of ['NOVICE', 'INTERMEDIATE', 'ADVANCED', 'MASTER']) {
     const games = pvaiGames.filter((g) => g.difficulty === diff)
     const w = games.filter((g) => g.winnerId === userId).length
     pvaiByDiff[diff.toLowerCase()] = {

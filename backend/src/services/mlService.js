@@ -79,8 +79,35 @@ export async function setSystemConfig(key, value) {
 
 export async function createModel({ name, description, algorithm = 'Q_LEARNING', config = {}, createdBy = null }) {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config }
+
+  // For DQN: resolve and validate the neural network shape, then bake layerSizes in.
+  if (algorithm === 'DQN') {
+    const [defaultHidden, maxLayers, maxUnits] = await Promise.all([
+      getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
+      getSystemConfig('ml.dqn.maxHiddenLayers', 3),
+      getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
+    ])
+    const networkShape = config.networkShape ?? defaultHidden
+    if (!Array.isArray(networkShape) || networkShape.length === 0) {
+      throw Object.assign(new Error('networkShape must be a non-empty array of layer sizes'), { status: 400 })
+    }
+    if (networkShape.length > maxLayers) {
+      throw Object.assign(new Error(`networkShape exceeds the maximum of ${maxLayers} hidden layers`), { status: 400 })
+    }
+    for (const units of networkShape) {
+      const n = parseInt(units)
+      if (isNaN(n) || n < 1 || n > maxUnits) {
+        throw Object.assign(new Error(`Each hidden layer must be between 1 and ${maxUnits} units`), { status: 400 })
+      }
+    }
+    mergedConfig.layerSizes   = [9, ...networkShape.map(Number), 9]
+    mergedConfig.networkShape = networkShape.map(Number)
+    delete mergedConfig.hiddenSize  // layerSizes takes precedence
+  }
+
+  const maxEpisodes = await getSystemConfig('ml.maxEpisodesPerModel', 100_000)
   return db.mLModel.create({
-    data: { name, description: description || null, algorithm, qtable: {}, config: mergedConfig, createdBy },
+    data: { name, description: description || null, algorithm, qtable: {}, config: mergedConfig, createdBy, maxEpisodes },
   })
 }
 
@@ -140,6 +167,7 @@ export async function cloneModel(id, { name, description, createdBy = null }) {
       qtable: src.qtable,
       config: src.config,
       totalEpisodes: src.totalEpisodes,
+      maxEpisodes: src.maxEpisodes,
       eloRating: src.eloRating,
       createdBy,
     },
@@ -350,7 +378,7 @@ export async function startBenchmark(modelId) {
   const model = await db.mLModel.findUnique({ where: { id: modelId } })
   if (!model) throw new Error('Model not found')
   const record = await db.mLBenchmarkResult.create({
-    data: { modelId, vsRandom: {}, vsEasy: {}, vsMedium: {}, vsHard: {}, summary: { status: 'RUNNING' } },
+    data: { modelId, vsRandom: {}, vsEasy: {}, vsMedium: {}, vsTough: {}, vsHard: {}, summary: { status: 'RUNNING' } },
   })
   setImmediate(() => _runBenchmark(model, record.id))
   return record
@@ -374,25 +402,27 @@ async function _runBenchmark(model, benchmarkId) {
 
     const vsRandom = _runGames(engine, _randomMove, GAMES)
     await new Promise(r => setImmediate(r))
-    const vsEasy   = _runGames(engine, (b, p) => minimaxMove(b, 'easy', p), GAMES)
+    const vsEasy   = _runGames(engine, (b, p) => minimaxMove(b, 'novice', p), GAMES)
     await new Promise(r => setImmediate(r))
-    const vsMedium = _runGames(engine, (b, p) => minimaxMove(b, 'medium', p), GAMES)
+    const vsMedium = _runGames(engine, (b, p) => minimaxMove(b, 'intermediate', p), GAMES)
     await new Promise(r => setImmediate(r))
-    const vsHard   = _runGames(engine, (b, p) => minimaxMove(b, 'hard', p), GAMES)
+    const vsTough  = _runGames(engine, (b, p) => minimaxMove(b, 'advanced', p), GAMES)
+    await new Promise(r => setImmediate(r))
+    const vsHard   = _runGames(engine, (b, p) => minimaxMove(b, 'master', p), GAMES)
 
     // Add p-values
-    for (const r of [vsRandom, vsEasy, vsMedium, vsHard]) {
+    for (const r of [vsRandom, vsEasy, vsMedium, vsTough, vsHard]) {
       r.pValue = proportionPValue(r.wins, r.total)
     }
 
     const summary = {
       status: 'COMPLETED',
-      avgWinRate: parseFloat(((vsRandom.winRate + vsEasy.winRate + vsMedium.winRate + vsHard.winRate) / 4).toFixed(4)),
+      avgWinRate: parseFloat(((vsRandom.winRate + vsEasy.winRate + vsMedium.winRate + vsTough.winRate + vsHard.winRate) / 5).toFixed(4)),
     }
 
     await db.mLBenchmarkResult.update({
       where: { id: benchmarkId },
-      data: { vsRandom, vsEasy, vsMedium, vsHard, summary },
+      data: { vsRandom, vsEasy, vsMedium, vsTough, vsHard, summary },
     })
 
     _emit(`ml:benchmark:${benchmarkId}`, 'ml:benchmark_complete', { benchmarkId, modelId: model.id, summary })
@@ -545,6 +575,7 @@ export async function importModel(data) {
   const { name, description, algorithm, config, qtable, totalEpisodes, eloRating, createdBy = null } = data
   if (!name?.trim()) throw new Error('name is required')
   const mergedConfig = { ...DEFAULT_CONFIG, ...(config || {}) }
+  const maxEpisodes = await getSystemConfig('ml.maxEpisodesPerModel', 100_000)
   return db.mLModel.create({
     data: {
       name: name.trim(),
@@ -553,6 +584,7 @@ export async function importModel(data) {
       config: mergedConfig,
       qtable: qtable || {},
       totalEpisodes: totalEpisodes || 0,
+      maxEpisodes,
       eloRating: eloRating || 1000,
       createdBy,
     },
@@ -578,6 +610,17 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
     const runningCount = await db.mLModel.count({ where: { status: 'TRAINING' } })
     if (runningCount >= maxConcurrent) {
       throw new Error(`Training limit: max ${maxConcurrent} concurrent session${maxConcurrent !== 1 ? 's' : ''}`)
+    }
+  }
+
+  // Enforce per-model lifetime episode cap
+  if (model.maxEpisodes > 0) {
+    const remaining = model.maxEpisodes - model.totalEpisodes
+    if (remaining <= 0) {
+      throw new Error(`Training limit: this model has reached its ${model.maxEpisodes.toLocaleString()} episode maximum`)
+    }
+    if (iterations > remaining) {
+      throw new Error(`Training limit: only ${remaining.toLocaleString()} episodes remain (limit: ${model.maxEpisodes.toLocaleString()}, used: ${model.totalEpisodes.toLocaleString()})`)
     }
   }
 
@@ -918,7 +961,7 @@ function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
   return runEpisode(engine, mlMark, opponentFn)
 }
 
-const CURRICULUM_LEVELS = ['easy', 'medium', 'hard']
+const CURRICULUM_LEVELS = ['novice', 'intermediate', 'advanced', 'master']
 
 async function _runTraining(model, session, { mode, iterations, config }) {
   const { id: sessionId, modelId } = { id: session.id, modelId: model.id }
@@ -926,13 +969,17 @@ async function _runTraining(model, session, { mode, iterations, config }) {
   // Determine algorithm from config or model
   const algorithm = config.algorithm || model.algorithm || 'Q_LEARNING'
 
-  // Build engine from current model state
-  const engine = _buildEngine(model.config, algorithm)
+  // Build engine from current model state, merging per-session overrides
+  // (epsilonDecay, epsilonMin, decayMethod, batchSize, etc. from the UI) into the stored model config.
+  // Include totalEpisodes so linear/cosine schedules know the full run length.
+  const sessionEngineConfig = { ...model.config, ...config, totalEpisodes: iterations }
+  const engine = _buildEngine(sessionEngineConfig, algorithm)
   engine.loadQTable(model.qtable)
 
   // Build opponent function
-  let curriculumLevel = 0  // index into CURRICULUM_LEVELS
-  let difficulty = config.difficulty || 'medium'
+  let difficulty = config.difficulty || 'novice'
+  // curriculumLevel must start at the selected difficulty so advances go forward correctly
+  let curriculumLevel = Math.max(0, CURRICULUM_LEVELS.indexOf(difficulty))
   const opponentFn = mode === 'VS_MINIMAX'
     ? (board, player) => minimaxMove(board, difficulty, player)
     : null
@@ -982,7 +1029,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
       })
 
       // ── Curriculum learning ─────────────────────────────────────────────
-      if (config.curriculum && mode === 'SELF_PLAY') {
+      if (config.curriculum && mode === 'VS_MINIMAX') {
         outcomeWindow.push(result.outcome === 'WIN' ? 1 : 0)
         if (outcomeWindow.length > CURRICULUM_WINDOW) outcomeWindow.shift()
 
@@ -1094,6 +1141,34 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
   // Start next queued session if any
   _processNextInQueue()
 
+  // ELO calibration: play 100 games vs each fixed minimax level and update ELO
+  try {
+    const calibModel  = await db.mLModel.findUnique({ where: { id: modelId }, select: { eloRating: true } })
+    const calibEngine = _greedyEngine(await db.mLModel.findUnique({ where: { id: modelId } }))
+    const CALIBRATION_OPPONENTS = [
+      { difficulty: 'novice',       fixedElo: 800  },
+      { difficulty: 'intermediate', fixedElo: 1200 },
+      { difficulty: 'advanced',     fixedElo: 1500 },
+      { difficulty: 'master',       fixedElo: 1800 },
+    ]
+    const CALIB_GAMES = 100
+    let currentElo = calibModel.eloRating
+    for (const { difficulty, fixedElo } of CALIBRATION_OPPONENTS) {
+      const r = _runGames(calibEngine, (b, p) => minimaxMove(b, difficulty, p), CALIB_GAMES)
+      const actual   = (r.wins + r.draws * 0.5) / CALIB_GAMES
+      const expected = _expectedScore(currentElo, fixedElo)
+      currentElo = parseFloat((currentElo + ELO_K * (actual - expected)).toFixed(2))
+      await new Promise(res => setImmediate(res))
+    }
+    const delta = parseFloat((currentElo - calibModel.eloRating).toFixed(2))
+    const outcome = delta > 0 ? 'WIN' : delta < 0 ? 'LOSS' : 'DRAW'
+    await db.mLModel.update({ where: { id: modelId }, data: { eloRating: currentElo } })
+    await db.mLEloHistory.create({ data: { modelId, eloRating: currentElo, delta, opponentType: 'MINIMAX', outcome } })
+    logger.info({ modelId, newElo: currentElo, delta }, 'ELO calibrated after training')
+  } catch (eloErr) {
+    logger.warn({ eloErr }, 'ELO calibration after training failed (non-fatal)')
+  }
+
   // Forgetting detection: compare vsHard win rate with previous benchmark
   try {
     const lastBenchmarks = await db.mLBenchmarkResult.findMany({
@@ -1108,7 +1183,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
         // Mini-benchmark: 100 games vs hard
         const freshModel = await db.mLModel.findUnique({ where: { id: modelId } })
         const greedyEng = _greedyEngine(freshModel)
-        const miniResult = _runGames(greedyEng, (b, p) => minimaxMove(b, 'hard', p), 100)
+        const miniResult = _runGames(greedyEng, (b, p) => minimaxMove(b, 'master', p), 100)
         const drop = prevHardRate - miniResult.winRate
         if (drop > 0.05) {
           _emit(`ml:model:${modelId}`, 'ml:regression_detected', {
@@ -1155,7 +1230,7 @@ export async function startHyperparamSearch(modelId, { paramGrid = {}, gamesPerC
     : [{}]
 
   const BENCH_GAMES = 50
-  const opponentFn  = (board, player) => minimaxMove(board, 'hard', player)
+  const opponentFn  = (board, player) => minimaxMove(board, 'master', player)
   const results     = []
 
   for (const cfg of configs) {

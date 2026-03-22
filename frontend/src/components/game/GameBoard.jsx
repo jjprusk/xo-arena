@@ -308,8 +308,8 @@ export default function GameBoard({ roomName }) {
     if (!isPlayerTurn || hintLoading) return
     setHintLoading(true)
     try {
-      // Always use minimax hard for best-move hints
-      const res = await api.ai.move(board, 'hard', playerMark, 'minimax', null, false)
+      // Always use minimax master for best-move hints
+      const res = await api.ai.move(board, 'master', playerMark, 'minimax', null, false)
       setHintCell(res.move)
     } catch { /* non-fatal */ } finally {
       setHintLoading(false)
@@ -573,7 +573,7 @@ export default function GameBoard({ roomName }) {
                   </div>
                 )
               })}
-              {difficulty === 'easy' && (
+              {difficulty === 'novice' && (
                 <p className="text-xs px-3 py-2" style={{ color: 'var(--text-muted)' }}>
                   Easy mode plays randomly — no strategy is applied.
                 </p>

@@ -34,13 +34,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     environment:
       NODE_ENV: development
       PORT: 3000
       DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
       REDIS_URL: redis://redis:6379
-      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
-      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
     ports:
       - "3000:3000"
     volumes:
@@ -58,8 +58,7 @@ services:
       dockerfile: Dockerfile.dev
     restart: unless-stopped
     environment:
-      VITE_SOCKET_PLACEHOLDER: ""  # API uses relative URLs via Vite proxy — do not set VITE_API_URL
-      VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
+      # API uses relative URLs via Vite proxy — do not set VITE_API_URL
     ports:
       - "5173:5173"
     volumes:

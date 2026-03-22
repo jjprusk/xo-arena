@@ -20,6 +20,11 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false,
   },
+  // Map BA's internal model names to our ba_* Prisma models
+  user:         { modelName: 'baUser' },
+  session:      { modelName: 'baSession' },
+  account:      { modelName: 'baAccount' },
+  verification: { modelName: 'baVerification' },
   plugins: [
     jwt(),
     admin({ adminRole: 'admin' }),

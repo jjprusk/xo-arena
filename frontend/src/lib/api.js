@@ -40,6 +40,7 @@ export const api = {
 
   ml: {
     listModels:       ()           => api.get('/ml/models'),
+    getNetworkConfig: ()           => api.get('/ml/network-config'),
     createModel:      (body, tok)  => api.post('/ml/models', body, tok),
     getModel:         (id)         => api.get(`/ml/models/${id}`),
     updateModel:      (id, b, tok) => api.patch(`/ml/models/${id}`, b, tok),
@@ -131,8 +132,9 @@ export const api = {
       const qs = p.toString()
       return api.get(`/admin/ml/models${qs ? `?${qs}` : ''}`, token)
     },
-    featureModel: (id, token)       => api.patch(`/admin/ml/models/${id}/feature`, {}, token),
-    deleteModel:  (id, token)       => request('DELETE', `/admin/ml/models/${id}`, null, token),
+    featureModel:        (id, token)         => api.patch(`/admin/ml/models/${id}/feature`, {}, token),
+    setModelMaxEpisodes: (id, max, token)    => api.patch(`/admin/ml/models/${id}/max-episodes`, { maxEpisodes: max }, token),
+    deleteModel:         (id, token)         => request('DELETE', `/admin/ml/models/${id}`, null, token),
     getMLLimits:   (token)       => api.get('/admin/ml/limits', token),
     setMLLimits:   (body, token) => api.patch('/admin/ml/limits', body, token),
     getLogLimit:   (token)       => api.get('/admin/logs/limit', token),
