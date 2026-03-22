@@ -86,6 +86,24 @@ export async function isAdmin(userId) {
 }
 
 /**
+ * Returns true if the given Better Auth user ID has the tournament role.
+ * Checks both the domain User.roles array and the baUser.role field.
+ * Safe to call without an active request/response — never throws.
+ */
+export async function isTournament(userId) {
+  try {
+    const [baUser, domainUser] = await Promise.all([
+      db.baUser.findUnique({ where: { id: userId }, select: { role: true } }),
+      db.user.findUnique({ where: { betterAuthId: userId }, select: { roles: true } }),
+    ])
+    // admins implicitly have tournament access too
+    return baUser?.role === 'admin' || domainUser?.roles?.includes('tournament') === true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Middleware: requires auth AND admin role.
  * Must be chained after requireAuth (or used standalone — it handles 401 too).
  */
@@ -100,6 +118,24 @@ export async function requireAdmin(req, res, next) {
     next()
   } catch (err) {
     logger.error({ err }, 'Admin role check failed')
+    res.status(500).json({ error: 'Authorization check failed' })
+  }
+}
+
+/**
+ * Middleware: requires auth AND tournament (or admin) role.
+ */
+export async function requireTournament(req, res, next) {
+  if (!req.auth) return res.status(401).json({ error: 'Authentication required' })
+
+  try {
+    const ok = await isTournament(req.auth.userId)
+    if (!ok) {
+      return res.status(403).json({ error: 'Tournament access required' })
+    }
+    next()
+  } catch (err) {
+    logger.error({ err }, 'Tournament role check failed')
     res.status(500).json({ error: 'Authorization check failed' })
   }
 }

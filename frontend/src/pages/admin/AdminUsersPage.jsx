@@ -54,6 +54,25 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function toggleRole(user, role) {
+    setActionError(null)
+    try {
+      const token = await getToken()
+      if (role === 'admin') {
+        const newBaRole = user.baRole === 'admin' ? null : 'admin'
+        const updated = await api.admin.updateUser(user.id, { baRole: newBaRole }, token)
+        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, baRole: updated.user.baRole } : u))
+      } else {
+        const current = user.roles ?? []
+        const newRoles = current.includes(role) ? current.filter(r => r !== role) : [...current, role]
+        const updated = await api.admin.updateUser(user.id, { roles: newRoles }, token)
+        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, roles: updated.user.roles } : u))
+      }
+    } catch {
+      setActionError('Role update failed.')
+    }
+  }
+
   async function saveElo(id) {
     const val = parseFloat(editingElo.value)
     if (isNaN(val)) { setEditingElo(null); return }
@@ -171,7 +190,15 @@ export default function AdminUsersPage() {
                       </div>
                       <div>
                         <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{u.displayName}</div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>@{u.username}</div>
+                        <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>@{u.username}</span>
+                          {u.baRole === 'admin' && (
+                            <span className="text-xs font-semibold px-1.5 py-0 rounded-full" style={{ backgroundColor: 'var(--color-purple-100)', color: 'var(--color-purple-700)' }}>admin</span>
+                          )}
+                          {(u.roles ?? []).includes('tournament') && (
+                            <span className="text-xs font-semibold px-1.5 py-0 rounded-full" style={{ backgroundColor: 'var(--color-orange-100)', color: 'var(--color-orange-700)' }}>tournament</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -262,7 +289,32 @@ export default function AdminUsersPage() {
                     {(() => {
                       const isSelf = u.betterAuthId === session?.user?.id
                       return (
-                    <div className="flex items-center gap-2 justify-end">
+                    <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                      <button
+                        onClick={() => !isSelf && toggleRole(u, 'admin')}
+                        disabled={isSelf}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-30 disabled:cursor-not-allowed"
+                        style={{
+                          borderColor: 'var(--color-purple-300)',
+                          color: u.baRole === 'admin' ? 'var(--color-purple-700)' : 'var(--text-muted)',
+                          fontWeight: u.baRole === 'admin' ? 600 : 400,
+                        }}
+                        title={isSelf ? 'Cannot change your own admin role' : (u.baRole === 'admin' ? 'Remove admin' : 'Make admin')}
+                      >
+                        admin
+                      </button>
+                      <button
+                        onClick={() => toggleRole(u, 'tournament')}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                        style={{
+                          borderColor: 'var(--color-orange-300)',
+                          color: (u.roles ?? []).includes('tournament') ? 'var(--color-orange-700)' : 'var(--text-muted)',
+                          fontWeight: (u.roles ?? []).includes('tournament') ? 600 : 400,
+                        }}
+                        title={(u.roles ?? []).includes('tournament') ? 'Remove tournament role' : 'Grant tournament role'}
+                      >
+                        tourn.
+                      </button>
                       <button
                         onClick={() => !isSelf && toggleBan(u)}
                         disabled={isSelf}

@@ -53,7 +53,7 @@ router.get('/users', async (req, res, next) => {
         }
       : {}
 
-    const [users, total] = await Promise.all([
+    const [rawUsers, total] = await Promise.all([
       db.user.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -68,6 +68,7 @@ router.get('/users', async (req, res, next) => {
           avatarUrl: true,
           eloRating: true,
           banned: true,
+          roles: true,
           mlModelLimit: true,
           createdAt: true,
           _count: { select: { gamesAsPlayer1: true } },
@@ -75,6 +76,18 @@ router.get('/users', async (req, res, next) => {
       }),
       db.user.count({ where }),
     ])
+
+    // Fetch BA roles for all users in one query
+    const baIds = rawUsers.map(u => u.betterAuthId).filter(Boolean)
+    const baUsers = baIds.length
+      ? await db.baUser.findMany({ where: { id: { in: baIds } }, select: { id: true, role: true } })
+      : []
+    const baRoleMap = Object.fromEntries(baUsers.map(b => [b.id, b.role]))
+
+    const users = rawUsers.map(u => ({
+      ...u,
+      baRole: baRoleMap[u.betterAuthId] ?? null,
+    }))
 
     res.json({ users, total, page, limit })
   } catch (err) {
@@ -88,7 +101,7 @@ router.get('/users', async (req, res, next) => {
  */
 router.patch('/users/:id', async (req, res, next) => {
   try {
-    const { banned, eloRating, mlModelLimit } = req.body
+    const { banned, eloRating, mlModelLimit, roles, baRole } = req.body
 
     const data = {}
     if (banned !== undefined) data.banned = Boolean(banned)
@@ -108,13 +121,50 @@ router.patch('/users/:id', async (req, res, next) => {
         data.mlModelLimit = v
       }
     }
-
-    if (Object.keys(data).length === 0) {
-      return res.status(400).json({ error: 'No valid fields to update' })
+    if (roles !== undefined) {
+      const VALID_ROLES = ['tournament']
+      const cleaned = Array.isArray(roles) ? roles.filter(r => VALID_ROLES.includes(r)) : []
+      data.roles = cleaned
     }
 
-    const user = await db.user.update({ where: { id: req.params.id }, data })
-    res.json({ user })
+    // Update domain user
+    let user = null
+    if (Object.keys(data).length > 0) {
+      user = await db.user.update({ where: { id: req.params.id }, data, select: {
+        id: true, betterAuthId: true, username: true, displayName: true,
+        email: true, avatarUrl: true, eloRating: true, banned: true,
+        roles: true, mlModelLimit: true, createdAt: true,
+        _count: { select: { gamesAsPlayer1: true } },
+      }})
+    } else {
+      user = await db.user.findUnique({ where: { id: req.params.id }, select: {
+        id: true, betterAuthId: true, username: true, displayName: true,
+        email: true, avatarUrl: true, eloRating: true, banned: true,
+        roles: true, mlModelLimit: true, createdAt: true,
+        _count: { select: { gamesAsPlayer1: true } },
+      }})
+      if (!user) return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Update BA role (admin flag) if requested
+    let baRole_ = null
+    if (baRole !== undefined && user.betterAuthId) {
+      const VALID_BA_ROLES = ['admin', null]
+      if (!VALID_BA_ROLES.includes(baRole)) {
+        return res.status(400).json({ error: 'baRole must be "admin" or null' })
+      }
+      const updated = await db.baUser.update({
+        where: { id: user.betterAuthId },
+        data: { role: baRole },
+        select: { role: true },
+      })
+      baRole_ = updated.role
+    } else if (user.betterAuthId) {
+      const ba = await db.baUser.findUnique({ where: { id: user.betterAuthId }, select: { role: true } })
+      baRole_ = ba?.role ?? null
+    }
+
+    res.json({ user: { ...user, baRole: baRole_ } })
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' })
     next(err)
