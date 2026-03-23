@@ -59,6 +59,16 @@ export default function MLDashboardPage() {
 
   const selected = models.find(m => m.id === selectedId)
 
+  // Track whether the selected model is in the local inference cache
+  const [isCached, setIsCached] = useState(false)
+  useEffect(() => {
+    if (!selectedId) { setIsCached(false); return }
+    setIsCached(isModelCached(selectedId))
+    // Re-check after a short delay in case a preload is in flight
+    const t = setTimeout(() => setIsCached(isModelCached(selectedId)), 1500)
+    return () => clearTimeout(t)
+  }, [selectedId])
+
   const loadModels = useCallback(async () => {
     const { models: ms } = await api.ml.listModels()
     setModels(ms)
@@ -213,6 +223,9 @@ export default function MLDashboardPage() {
                     <span>{selected.totalEpisodes.toLocaleString()} / {selected.maxEpisodes > 0 ? selected.maxEpisodes.toLocaleString() : '∞'} episodes</span>
                     {selected.creatorName && <span>by {selected.creatorName}</span>}
                     <span>ELO {Math.round(selected.eloRating)}</span>
+                    <span title={isCached ? 'Q-table loaded in browser — moves run locally' : 'Not yet cached — first move uses server'} style={{ color: isCached ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>
+                      {isCached ? '⚡ cached' : '○ not cached'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
