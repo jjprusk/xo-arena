@@ -26,4 +26,4 @@ COPY . .
 
 EXPOSE 3000
 # Run migrations then start the server (npx uses the locally-installed prisma CLI)
-CMD ["sh", "-c", "npx --yes prisma migrate deploy && node src/index.js"]
+CMD ["sh", "-c", "npx --yes prisma@6 migrate deploy && node src/index.js"]
