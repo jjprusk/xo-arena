@@ -776,10 +776,10 @@ export default function GameBoard({ roomName }) {
       {isAivai && !analyzeMode && (
         <button
           onClick={newGame}
-          className="text-sm transition-colors hover:text-[var(--color-red-600)]"
-          style={{ color: 'var(--text-secondary)' }}
+          className="text-sm font-medium px-4 py-2 rounded-lg border transition-colors hover:bg-[var(--color-red-50)] hover:border-[var(--color-red-400)] hover:text-[var(--color-red-600)]"
+          style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}
         >
-          Stop spectating
+          ■ Stop
         </button>
       )}
 
