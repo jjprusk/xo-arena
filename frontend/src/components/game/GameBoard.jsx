@@ -238,7 +238,7 @@ export default function GameBoard({ roomName }) {
       const humanLastMove = profileUserId ? lastHumanMoveRef.current : null
       try {
         // Use local Q-table inference if model is already cached (zero latency)
-        const localMove = isML && mlModelId ? getLocalMove(mlModelId, board) : null
+        const localMove = isML && mlModelId ? getLocalMove(mlModelId, board, aiMark) : null
         if (localMove !== null) {
           if (!cancelled) {
             makeMove(localMove)
@@ -291,7 +291,7 @@ export default function GameBoard({ roomName }) {
       const model = isXTurn ? mlModelId         : ai2ModelId
 
       try {
-        const localMove = impl === 'ml' && model ? getLocalMove(model, board) : null
+        const localMove = impl === 'ml' && model ? getLocalMove(model, board, currentTurn) : null
         const move = localMove !== null
           ? localMove
           : (await api.ai.move(board, diff, currentTurn, impl, model, false)).move
