@@ -60,6 +60,7 @@ jobs:
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
             --min-instances 1 \
+            --memory 1Gi \
             --add-cloudsql-instances ${{ env.PROJECT_ID }}:${{ env.REGION }}:aiarena-db \
             --set-secrets="DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest,BETTER_AUTH_SECRET=better-auth-secret:latest,BETTER_AUTH_URL=better-auth-url:latest,FRONTEND_URL=frontend-url:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest" \
             --set-env-vars="NODE_ENV=production" \

@@ -19,12 +19,13 @@ ENV NODE_ENV=production
 
 # Copy production node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-# Copy Prisma client generated in build stage (overwrites the one from deps)
+# Copy Prisma client + CLI from build stage (CLI is a devDep, not in deps stage)
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=build /app/node_modules/prisma ./node_modules/prisma
 
 COPY . .
 
 EXPOSE 3000
 # Run migrations then start the server
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node src/index.js"]
