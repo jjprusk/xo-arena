@@ -2,4 +2,4 @@
 NIXPACKS_NODE_VERSION = "20"
 
 [phases.install]
-cmds = ["npm install --force --ignore-scripts=false"]
+cmds = ["npm install --force --ignore-scripts=false && npm install --force @rolldown/binding-linux-x64-gnu"]
