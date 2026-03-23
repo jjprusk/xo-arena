@@ -2,6 +2,7 @@ import React from 'react'
 import { useState, useEffect } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
 import { api } from '../../lib/api.js'
+import { loadModel } from '../../lib/mlInference.js'
 
 const DIFFICULTIES = ['novice', 'intermediate', 'advanced', 'master']
 const BEST_OF_OPTIONS = [{ label: 'Single', value: 1 }, { label: 'Best of 3', value: 3 }, { label: 'Best of 5', value: 5 }, { label: 'Best of 7', value: 7 }, { label: 'Unlimited', value: null }]
@@ -97,6 +98,13 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
       .catch(() => setMlModels([]))
   }, [selectedImpl])
 
+  // Preload PvAI model weights as soon as a model is selected
+  useEffect(() => {
+    if (selectedImpl === 'ml' && selectedModelId) {
+      loadModel(selectedModelId, api.ml.exportModel).catch(() => {})
+    }
+  }, [selectedImpl, selectedModelId])
+
   useEffect(() => {
     if (selectedImpl !== 'rule_based') return
     api.ml.listRuleSets()
@@ -121,6 +129,15 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
       })
       .catch(() => setAivaiModels([]))
   }, [aivaiExpanded])
+
+  // Preload AI vs AI model weights when models are selected
+  useEffect(() => {
+    if (ai1Impl === 'ml' && ai1ModelId) loadModel(ai1ModelId, api.ml.exportModel).catch(() => {})
+  }, [ai1Impl, ai1ModelId])
+
+  useEffect(() => {
+    if (ai2Impl === 'ml' && ai2ModelId) loadModel(ai2ModelId, api.ml.exportModel).catch(() => {})
+  }, [ai2Impl, ai2ModelId])
 
   // Apply options to store
   function applyOptions() {
