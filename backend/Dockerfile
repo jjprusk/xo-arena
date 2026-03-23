@@ -22,10 +22,8 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy Prisma client + CLI from build stage (CLI is a devDep, not in deps stage)
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=build /app/node_modules/prisma ./node_modules/prisma
-
 COPY . .
 
 EXPOSE 3000
-# Run migrations then start the server
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node src/index.js"]
+# Run migrations then start the server (npx uses the locally-installed prisma CLI)
+CMD ["sh", "-c", "npx --yes prisma migrate deploy && node src/index.js"]
