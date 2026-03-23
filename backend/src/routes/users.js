@@ -26,7 +26,7 @@ router.post('/sync', requireAuth, async (req, res, next) => {
       avatarUrl: baUser.image || null,
     })
 
-    res.json({ user })
+    res.json({ user: { ...user, baRole: baUser.role ?? null } })
   } catch (err) {
     next(err)
   }

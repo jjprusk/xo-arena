@@ -151,16 +151,28 @@ export default function ProfilePage() {
                 {saveError && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{saveError}</p>}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold truncate">{dbUser.displayName}</span>
-                <button
-                  onClick={() => setEditing(true)}
-                  className="text-xs px-2 py-0.5 rounded-md transition-colors flex-shrink-0"
-                  style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}
-                  title="Edit display name"
-                >
-                  Edit
-                </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold truncate">{dbUser.displayName}</span>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="text-xs px-2 py-0.5 rounded-md transition-colors flex-shrink-0"
+                    style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}
+                    title="Edit display name"
+                  >
+                    Edit
+                  </button>
+                </div>
+                {(dbUser.baRole === 'admin' || (dbUser.roles ?? []).length > 0) && (
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {dbUser.baRole === 'admin' && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-purple-100)', color: 'var(--color-purple-700)' }}>admin</span>
+                    )}
+                    {(dbUser.roles ?? []).map(role => (
+                      <span key={role} className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-orange-100)', color: 'var(--color-orange-700)' }}>{role}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -9,7 +9,7 @@
  */
 
 import { getEmptyCells } from './gameLogic.js'
-import { DEFAULT_CONFIG } from './qLearning.js'
+import { DEFAULT_CONFIG, decayEpsilonValue } from './qLearning.js'
 
 export class SarsaEngine {
   constructor(config = {}) {
@@ -17,7 +17,11 @@ export class SarsaEngine {
     this.discountFactor = config.discountFactor ?? DEFAULT_CONFIG.discountFactor
     this.epsilonDecay   = config.epsilonDecay   ?? DEFAULT_CONFIG.epsilonDecay
     this.epsilonMin     = config.epsilonMin     ?? DEFAULT_CONFIG.epsilonMin
+    this.decayMethod    = config.decayMethod    ?? DEFAULT_CONFIG.decayMethod
     this.epsilon = config.currentEpsilon ?? config.epsilonStart ?? DEFAULT_CONFIG.epsilonStart
+    this._epsilonSessionStart = this.epsilon
+    this._decayEpisode        = 0
+    this._decayTotal          = config.totalEpisodes ?? null
     /** @type {Object.<string, number[]>} state key → [q0..q8] */
     this.qtable = {}
   }
@@ -76,7 +80,11 @@ export class SarsaEngine {
   }
 
   decayEpsilon() {
-    this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay)
+    this._decayEpisode++
+    this.epsilon = decayEpsilonValue(
+      this.epsilon, this.epsilonMin, this._epsilonSessionStart,
+      this.decayMethod, this.epsilonDecay, this._decayEpisode, this._decayTotal,
+    )
   }
 
   get stateCount() {

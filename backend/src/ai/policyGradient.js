@@ -12,6 +12,7 @@
  */
 
 import { getEmptyCells } from './gameLogic.js'
+import { DEFAULT_CONFIG, decayEpsilonValue } from './qLearning.js'
 
 export class PolicyGradientEngine {
   constructor(config = {}) {
@@ -19,9 +20,13 @@ export class PolicyGradientEngine {
     this.gamma   = config.gamma   ?? config.discountFactor ?? 0.9
     // Epsilon kept for interface parity — PG uses softmax sampling but
     // we still honour the concept so external code can read engine.epsilon
-    this.epsilon    = config.currentEpsilon ?? config.epsilonStart ?? 1.0
-    this.epsilonMin = config.epsilonMin  ?? 0.05
-    this.epsilonDecay = config.epsilonDecay ?? 0.995
+    this.epsilon      = config.currentEpsilon ?? config.epsilonStart ?? 1.0
+    this.epsilonMin   = config.epsilonMin     ?? DEFAULT_CONFIG.epsilonMin
+    this.epsilonDecay = config.epsilonDecay   ?? DEFAULT_CONFIG.epsilonDecay
+    this.decayMethod  = config.decayMethod    ?? DEFAULT_CONFIG.decayMethod
+    this._epsilonSessionStart = this.epsilon
+    this._decayEpisode        = 0
+    this._decayTotal          = config.totalEpisodes ?? null
     /**
      * Policy parameters θ: same structure as Q-table for interface parity.
      * Keyed by stateKey → 9-element array of preference scores.
@@ -143,7 +148,11 @@ export class PolicyGradientEngine {
   }
 
   decayEpsilon() {
-    this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay)
+    this._decayEpisode++
+    this.epsilon = decayEpsilonValue(
+      this.epsilon, this.epsilonMin, this._epsilonSessionStart,
+      this.decayMethod, this.epsilonDecay, this._decayEpisode, this._decayTotal,
+    )
   }
 
   toJSON() {

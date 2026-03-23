@@ -10,8 +10,7 @@
 
 import { NeuralNet } from './neuralNet.js'
 import { getEmptyCells } from './gameLogic.js'
-
-const LAYER_SIZES = [9, 64, 64, 9]
+import { DEFAULT_CONFIG, decayEpsilonValue } from './qLearning.js'
 
 export class DQNEngine {
   constructor(config = {}) {
@@ -20,13 +19,21 @@ export class DQNEngine {
     this.targetUpdateFreq  = config.targetUpdateFreq  ?? 100
     this.alpha             = config.alpha             ?? 0.001
     this.gamma             = config.gamma             ?? 0.9
-    this._epsilon          = config.currentEpsilon    ?? config.epsilonStart ?? (config.epsilonStart !== undefined ? config.epsilonStart : 1.0)
-    this.epsilonMin        = config.epsilonMin        ?? 0.05
-    this.epsilonDecay      = config.epsilonDecay      ?? 0.995
+    // hiddenSize controls network width; one hidden layer is sufficient for tic-tac-toe.
+    // Default 32 (was 64×64 — overkill for ~5,500 board states, and 9x slower).
+    const hiddenSize = config.hiddenSize ?? 32
+    const layerSizes = config.layerSizes ?? [9, hiddenSize, 9]
+    this._epsilon          = config.currentEpsilon ?? config.epsilonStart ?? 1.0
+    this.epsilonMin        = config.epsilonMin     ?? DEFAULT_CONFIG.epsilonMin
+    this.epsilonDecay      = config.epsilonDecay   ?? DEFAULT_CONFIG.epsilonDecay
+    this.decayMethod       = config.decayMethod    ?? DEFAULT_CONFIG.decayMethod
+    this._epsilonSessionStart = this._epsilon
+    this._decayEpisode        = 0
+    this._decayTotal          = config.totalEpisodes ?? null
 
     // Networks
-    this._online = new NeuralNet(LAYER_SIZES)
-    this._target = new NeuralNet(LAYER_SIZES)
+    this._online = new NeuralNet(layerSizes)
+    this._target = new NeuralNet(layerSizes)
     this.syncTargetNetwork() // start in sync
 
     // Circular replay buffer
@@ -114,13 +121,23 @@ export class DQNEngine {
   }
 
   decayEpsilon() {
-    this._epsilon = Math.max(this.epsilonMin, this._epsilon * this.epsilonDecay)
+    this._decayEpisode++
+    this._epsilon = decayEpsilonValue(
+      this._epsilon, this.epsilonMin, this._epsilonSessionStart,
+      this.decayMethod, this.epsilonDecay, this._decayEpisode, this._decayTotal,
+    )
   }
 
-  /** Copy online network weights into target network. */
+  /** Copy online network weights into target network in-place (avoids serialize/deserialize). */
   syncTargetNetwork() {
-    const data = this._online.serialize()
-    this._target = NeuralNet.fromJSON(data)
+    for (let l = 0; l < this._online.weights.length; l++) {
+      for (let j = 0; j < this._online.weights[l].length; j++) {
+        for (let i = 0; i < this._online.weights[l][j].length; i++) {
+          this._target.weights[l][j][i] = this._online.weights[l][j][i]
+        }
+        this._target.biases[l][j] = this._online.biases[l][j]
+      }
+    }
   }
 
   // ─── Checkpoint compatibility ────────────────────────────────────────────────

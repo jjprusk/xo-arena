@@ -182,9 +182,15 @@ export class NeuralNet {
   // ─── Private ────────────────────────────────────────────────────────────────
 
   _resetGradients() {
-    this._gradWeights = this.weights.map(W => W.map(row => new Array(row.length).fill(0)))
-    this._gradBiases  = this.biases.map(b => new Array(b.length).fill(0))
-    this._batchCount  = 0
+    // Zero in-place on first use; allocate once and reuse to avoid GC churn
+    if (!this._gradWeights) {
+      this._gradWeights = this.weights.map(W => W.map(row => new Float64Array(row.length)))
+      this._gradBiases  = this.biases.map(b => new Float64Array(b.length))
+    } else {
+      for (const layer of this._gradWeights) for (const row of layer) row.fill(0)
+      for (const layer of this._gradBiases) layer.fill(0)
+    }
+    this._batchCount = 0
   }
 }
 

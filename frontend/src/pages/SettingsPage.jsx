@@ -45,10 +45,17 @@ export default function SettingsPage() {
           className="rounded-xl border p-5 flex items-center justify-between"
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
         >
-          <span className="font-medium">XO Arena</span>
-          <span className="text-sm font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
-            v{import.meta.env.VITE_APP_VERSION}
-          </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">XO Arena</span>
+              <span className="text-sm font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                v{import.meta.env.VITE_APP_VERSION}
+              </span>
+            </div>
+            <div className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+              A competitive tic-tac-toe platform with trainable ML models, ELO rankings, and real-time multiplayer.
+            </div>
+          </div>
         </div>
       </section>
 
