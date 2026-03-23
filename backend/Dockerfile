@@ -9,4 +9,4 @@ RUN npx prisma generate
 
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]
+CMD ["sh", "-c", "npx prisma@6 migrate deploy && node src/index.js"]
