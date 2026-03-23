@@ -7,6 +7,7 @@ import {
   CartesianGrid, Legend,
 } from 'recharts'
 import { api } from '../lib/api.js'
+import { evictModel } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
 import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
 
@@ -99,6 +100,8 @@ export default function MLDashboardPage() {
   const refreshModel = useCallback(async (id) => {
     const { model } = await api.ml.getModel(id)
     setModels(ms => ms.map(m => m.id === id ? { ...m, ...model } : m))
+    // Evict stale cached weights so the next game downloads the updated model
+    evictModel(id)
   }, [])
 
   async function handleDelete(id) {

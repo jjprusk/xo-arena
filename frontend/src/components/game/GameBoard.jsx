@@ -5,6 +5,7 @@ import { getToken } from '../../lib/getToken.js'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import { api } from '../../lib/api.js'
+import { loadModel, getLocalMove, isModelCached, evictModel } from '../../lib/mlInference.js'
 
 const MARK_COLOR = {
   X: 'var(--color-blue-600)',
@@ -87,12 +88,16 @@ export default function GameBoard({ roomName }) {
         setXModelName(d?.model?.name ?? null)
         setXCreatorName(d?.model?.creatorName ?? null)
       }).catch(() => {})
+      // Preload model weights for local inference
+      loadModel(mlModelId, api.ml.exportModel).catch(() => {})
     }
     if (ai2Implementation === 'ml' && ai2ModelId) {
       api.ml.getModel(ai2ModelId).then(d => {
         setOModelName(d?.model?.name ?? null)
         setOCreatorName(d?.model?.creatorName ?? null)
       }).catch(() => {})
+      // Preload model weights for local inference
+      loadModel(ai2ModelId, api.ml.exportModel).catch(() => {})
     }
   }, [isAivai, aiImplementation, mlModelId, ai2Implementation, ai2ModelId])
   const isPlayerTurn = !isAivai && status === 'playing' && currentTurn === playerMark
@@ -232,16 +237,27 @@ export default function GameBoard({ roomName }) {
       const profileUserId = isML && isSignedIn && user?.id ? user.id : null
       const humanLastMove = profileUserId ? lastHumanMoveRef.current : null
       try {
-        const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, true, profileUserId, humanLastMove)
-        if (!cancelled) {
-          makeMove(res.move)
-          play('move')
-          if (res.explanation) {
-            setAIConfidence(res.explanation.confidence ?? null)
-            setAIReason(res.explanation.rule ?? null)
-          } else {
+        // Use local Q-table inference if model is already cached (zero latency)
+        const localMove = isML && mlModelId ? getLocalMove(mlModelId, board) : null
+        if (localMove !== null) {
+          if (!cancelled) {
+            makeMove(localMove)
+            play('move')
             setAIConfidence(null)
             setAIReason(null)
+          }
+        } else {
+          const res = await api.ai.move(board, difficulty, aiMark, aiImplementation, mlModelId, true, profileUserId, humanLastMove)
+          if (!cancelled) {
+            makeMove(res.move)
+            play('move')
+            if (res.explanation) {
+              setAIConfidence(res.explanation.confidence ?? null)
+              setAIReason(res.explanation.rule ?? null)
+            } else {
+              setAIConfidence(null)
+              setAIReason(null)
+            }
           }
         }
       } catch (err) {
@@ -275,14 +291,17 @@ export default function GameBoard({ roomName }) {
       const model = isXTurn ? mlModelId         : ai2ModelId
 
       try {
-        const res = await api.ai.move(board, diff, currentTurn, impl, model, false)
+        const localMove = impl === 'ml' && model ? getLocalMove(model, board) : null
+        const move = localMove !== null
+          ? localMove
+          : (await api.ai.move(board, diff, currentTurn, impl, model, false)).move
         if (!cancelled) {
           // Enforce minimum delay for spectator pacing
           const elapsed = Date.now() - moveStart
           const delay = Math.max(0, AIVAI_MOVE_DELAY_MS - elapsed)
           await new Promise(r => setTimeout(r, delay))
           if (!cancelled) {
-            makeMove(res.move)
+            makeMove(move)
             play('move')
           }
         }
