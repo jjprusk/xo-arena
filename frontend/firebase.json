@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "xo-arena",
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

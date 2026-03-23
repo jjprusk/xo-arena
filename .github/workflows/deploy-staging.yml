@@ -1,0 +1,93 @@
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [staging]
+
+env:
+  PROJECT_ID: aiarena-491018
+  REGION: us-east1
+  BACKEND_SERVICE: xo-backend-staging
+  BACKEND_IMAGE: us-east1-docker.pkg.dev/aiarena-491018/games/xo-backend
+  FIREBASE_SITE: xo-arena
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Auth ────────────────────────────────────────────────────────────────
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # ── Backend ─────────────────────────────────────────────────────────────
+      - name: Build and push backend image
+        run: |
+          IMAGE=${{ env.BACKEND_IMAGE }}:${{ github.sha }}-staging
+          docker build -t $IMAGE ./backend
+          docker push $IMAGE
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.BACKEND_SERVICE }} \
+            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}-staging \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --add-cloudsql-instances ${{ env.PROJECT_ID }}:${{ env.REGION }}:aiarena-db \
+            --set-secrets="DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest,BETTER_AUTH_SECRET=better-auth-secret:latest,BETTER_AUTH_URL=better-auth-url:latest,FRONTEND_URL=frontend-url:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest" \
+            --set-env-vars="NODE_ENV=production" \
+            --project ${{ env.PROJECT_ID }}
+
+      - name: Get backend URL
+        id: backend
+        run: |
+          URL=$(gcloud run services describe ${{ env.BACKEND_SERVICE }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --format 'value(status.url)')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      # ── Frontend ────────────────────────────────────────────────────────────
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ steps.backend.outputs.url }}
+          VITE_APP_VERSION: staging-${{ github.sha }}
+        run: npm run build
+
+      - name: Deploy frontend to Firebase (staging preview channel)
+        working-directory: frontend
+        run: |
+          npx firebase-tools hosting:channel:deploy staging \
+            --site ${{ env.FIREBASE_SITE }} \
+            --project ${{ env.PROJECT_ID }} \
+            --expires 7d
