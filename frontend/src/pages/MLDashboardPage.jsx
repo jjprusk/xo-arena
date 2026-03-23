@@ -193,6 +193,7 @@ export default function MLDashboardPage() {
                 <span>{m.totalEpisodes.toLocaleString()} eps</span>
                 <span>·</span>
                 <span>ELO {Math.round(m.eloRating)}</span>
+                {isModelCached(m.id) && <span title="Q-table loaded in browser" style={{ color: 'var(--color-teal-600)' }}>⚡</span>}
               </div>
             </button>
           ))}
