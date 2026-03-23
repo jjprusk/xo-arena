@@ -5,8 +5,7 @@
 
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
-import ioredis from 'ioredis'
-const { createClient } = ioredis
+import Redis from 'ioredis'
 import { roomManager } from './roomManager.js'
 import { auth } from '../lib/auth.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
@@ -40,7 +39,7 @@ export async function attachSocketIO(httpServer) {
   // Redis adapter for horizontal scaling
   if (process.env.REDIS_URL) {
     try {
-      const pubClient = new createClient({ lazyConnect: true, ...parseRedisUrl(process.env.REDIS_URL) })
+      const pubClient = new Redis(process.env.REDIS_URL)
       const subClient = pubClient.duplicate()
       await Promise.all([pubClient.connect(), subClient.connect()])
       io.adapter(createAdapter(pubClient, subClient))

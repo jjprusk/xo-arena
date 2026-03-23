@@ -57,8 +57,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     restart: unless-stopped
-    environment:
-      # API uses relative URLs via Vite proxy — do not set VITE_API_URL
+    # API uses relative URLs via Vite proxy — no VITE_API_URL needed
     ports:
       - "5173:5173"
     volumes:
