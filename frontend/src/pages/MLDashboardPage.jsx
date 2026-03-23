@@ -7,7 +7,7 @@ import {
   CartesianGrid, Legend,
 } from 'recharts'
 import { api } from '../lib/api.js'
-import { evictModel } from '../lib/mlInference.js'
+import { evictModel, isModelCached } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
 import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
 
