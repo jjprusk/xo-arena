@@ -23,8 +23,41 @@ let _io = null
 export function setIO(io) { _io = io }
 
 // ─── In-memory caches ───────────────────────────────────────────────────────
-/** modelId → QLearningEngine (loaded on first move, invalidated after training) */
-const engineCache = new Map()
+
+/**
+ * Lightweight LRU Map — same interface as Map (has/get/set/delete).
+ * On `get`, the entry is moved to tail (most-recently-used).
+ * On `set`, if at capacity, the head (least-recently-used) is evicted first.
+ * Internally backed by a plain Map which preserves insertion order.
+ */
+class LRUMap {
+  constructor(maxSize = 20) {
+    this.maxSize = maxSize
+    this._map = new Map()
+  }
+  has(key) { return this._map.has(key) }
+  get(key) {
+    if (!this._map.has(key)) return undefined
+    const val = this._map.get(key)
+    this._map.delete(key)
+    this._map.set(key, val)   // move to tail
+    return val
+  }
+  set(key, val) {
+    if (this._map.has(key)) this._map.delete(key)   // refresh position
+    else if (this._map.size >= this.maxSize) {
+      // evict LRU (first entry)
+      this._map.delete(this._map.keys().next().value)
+    }
+    this._map.set(key, val)
+    return this
+  }
+  delete(key) { return this._map.delete(key) }
+}
+export { LRUMap }
+
+/** modelId → engine instance (loaded on first move, invalidated after training) */
+const engineCache = new LRUMap(20)
 
 /** sessionId → true  (signals background loop to stop) */
 const cancelledSessions = new Set()

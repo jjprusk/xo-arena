@@ -3,10 +3,10 @@
 ## Architecture Overview
 
 ```
-Railway Project: aiarena
-├── aiarena-landing  (Static site, /landing subdirectory → aiarena.callidity.com)
-├── xo-frontend      (Static site, /frontend subdirectory → xo.aiarena.callidity.com)
-├── xo-backend       (Node.js, /backend subdirectory → api.xo.aiarena.callidity.com)
+Railway Project: xo-arena
+├── aiarena-landing  (/landing → aiarena.callidity.com)
+├── xo-frontend      (/frontend → xo.aiarena.callidity.com)
+├── xo-backend       (/backend → api.xo.aiarena.callidity.com)
 ├── Postgres         (Railway managed, DATABASE_URL auto-injected)
 └── Redis            (Railway managed, REDIS_URL auto-injected)
 ```
@@ -24,107 +24,106 @@ Staging:      Provided by Railway (*.up.railway.app subdomains)
 
 ### How deploys work
 - Push to `staging` branch → Railway staging environment auto-deploys
-- Push to `main` branch (merge) → Railway production environment auto-deploys
-- No GitHub Actions workflows needed — Railway handles it natively
+- Push to `main` branch → Railway production environment auto-deploys
+- No GitHub Actions deploy workflows needed — Railway handles it natively
 
 ---
 
 ## Checklist
 
-### Phase 0 — Cleanup
+### Phase 0 — Code Prep ✅
 | # | Task | Done |
 |---|------|------|
-| R-01 | Delete `.github/workflows/deploy-staging.yml` and `deploy-prod.yml` (no longer needed) | |
-| R-02 | Delete `backend/Dockerfile` (Railway auto-detects Node.js) | |
-| R-03 | Verify `backend/package.json` has a `"start"` script (`node src/index.js`) | |
+| R-01 | Delete `.github/workflows/deploy-staging.yml` and `deploy-prod.yml` | ✅ |
+| R-02 | Delete `backend/Dockerfile` and `frontend/Dockerfile` (not needed by Railway) | ✅ |
+| R-03 | `backend/package.json` has `"start": "node src/index.js"` | ✅ |
+| R-04 | `backend/railway.json` — runs `prisma migrate deploy` before start, healthcheck on `/health` | ✅ |
+| R-05 | `frontend/server.js` — Express static server for built `dist/` folder | ✅ |
+| R-06 | `frontend/railway.json` — build command `npm run build`, start `node server.js` | ✅ |
+| R-07 | `landing/railway.json` — start `node server.js` | ✅ |
+| R-08 | `frontend/package.json` has `"start": "node server.js"` and `express` dependency | ✅ |
 
 ### Phase 1 — Railway Account & Project
 | # | Task | Done |
 |---|------|------|
-| R-04 | Create account at railway.app (sign up with GitHub) | |
-| R-05 | Create new project: **New Project → Empty Project**, name it `xo-arena` | |
-| R-06 | In project settings, note the project has two default environments: **Production** and **Staging** | |
+| R-09 | Create account at railway.app (sign up with GitHub) | |
+| R-10 | Create new project: **New Project → Empty Project**, name it `xo-arena` | |
+| R-11 | Railway creates two default environments automatically: **Production** and **Staging** | |
 
 ### Phase 2 — Database & Cache
 | # | Task | Done |
 |---|------|------|
-| R-07 | In Railway project: **+ New → Database → PostgreSQL** — Railway provisions Postgres and injects `DATABASE_URL` automatically | |
-| R-08 | In Railway project: **+ New → Database → Redis** — Railway provisions Redis and injects `REDIS_URL` automatically | |
-| R-09 | Note: `DATABASE_URL` and `REDIS_URL` are available as shared variables — no manual configuration needed | |
+| R-12 | **+ New → Database → PostgreSQL** — Railway provisions Postgres, `DATABASE_URL` auto-injected | |
+| R-13 | **+ New → Database → Redis** — Railway provisions Redis, `REDIS_URL` auto-injected | |
 
 ### Phase 3 — Backend Service
 | # | Task | Done |
 |---|------|------|
-| R-10 | In Railway project: **+ New → GitHub Repo** → select `xo-arena` repo | |
-| R-11 | Set **Root Directory** to `/backend` in service settings | |
-| R-12 | Railway will detect Node.js and use `npm install` + `npm start` automatically | |
-| R-13 | Add environment variables in the backend service settings: | |
-|      | `NODE_ENV=production` | |
-|      | `BETTER_AUTH_SECRET=<strong random secret>` | |
-|      | `BETTER_AUTH_URL=https://api.xo.aiarena.callidity.com` | |
-|      | `FRONTEND_URL=https://xo.aiarena.callidity.com` | |
-|      | `GOOGLE_CLIENT_ID=<from GCP OAuth>` | |
-|      | `GOOGLE_CLIENT_SECRET=<from GCP OAuth>` | |
-|      | `DATABASE_URL` and `REDIS_URL` are auto-injected from the Postgres/Redis services — no manual entry needed | |
-| R-14 | Add start command override if needed: `npx prisma migrate deploy && node src/index.js` | |
-| R-15 | Trigger first deploy — watch build logs | |
-| R-16 | Verify backend health: open the Railway-provided URL + `/health` | |
+| R-14 | **+ New → GitHub Repo** → select `xo-arena` repo, name service `xo-backend` | |
+| R-15 | Set **Root Directory** to `/backend` | |
+| R-16 | Railway auto-detects Node.js and uses `railway.json` for start command (no manual override needed) | |
+| R-17 | Add environment variables: | |
+|       | `NODE_ENV=production` | |
+|       | `BETTER_AUTH_SECRET=<strong random secret>` | |
+|       | `BETTER_AUTH_URL=https://api.xo.aiarena.callidity.com` | |
+|       | `FRONTEND_URL=https://xo.aiarena.callidity.com` | |
+|       | `GOOGLE_CLIENT_ID=<from Google Cloud OAuth>` | |
+|       | `GOOGLE_CLIENT_SECRET=<from Google Cloud OAuth>` | |
+|       | `DATABASE_URL` and `REDIS_URL` auto-injected — no manual entry | |
+| R-18 | Trigger first deploy — watch build logs | |
+| R-19 | Verify: open Railway-provided URL + `/health` → should return `{"status":"ok"}` | |
 
 ### Phase 4 — Landing Page Service
 | # | Task | Done |
 |---|------|------|
-| R-17 | In Railway project: **+ New → GitHub Repo** → select `xo-arena` repo, name service `aiarena-landing` | |
-| R-18 | Set **Root Directory** to `/landing` | |
-| R-19 | Set **Build Command** to `npm install && npm run build` | |
-| R-20 | Set **Start Command** to `npm start` | |
-| R-21 | Trigger first deploy — verify landing page loads at Railway-provided URL | |
+| R-20 | **+ New → GitHub Repo** → select `xo-arena` repo, name service `aiarena-landing` | |
+| R-21 | Set **Root Directory** to `/landing` | |
+| R-22 | Trigger deploy — verify landing page loads at Railway-provided URL | |
 
 ### Phase 5 — Frontend Service
 | # | Task | Done |
 |---|------|------|
-| R-17 | In Railway project: **+ New → GitHub Repo** → select `xo-arena` repo again (second service) | |
-| R-18 | Set **Root Directory** to `/frontend` | |
-| R-19 | Set **Build Command** to `npm install && npm run build` | |
-| R-20 | Set **Start Command** to blank or use a static file server (see note below) | |
-| R-21 | Add environment variable: `VITE_API_URL=<Railway backend URL>` (get from backend service after R-15) | |
-| R-22 | Trigger first frontend deploy — watch build logs | |
-| R-23 | Verify frontend loads at Railway-provided URL | |
-
-> **Note on static serving:** Railway doesn't serve static files natively. Two options:
-> - Add `"serve": "npx serve dist -s -l $PORT"` to `frontend/package.json` scripts and set start command to `npm run serve`
-> - Or add a minimal `frontend/server.js` (see appendix below)
+| R-23 | **+ New → GitHub Repo** → select `xo-arena` repo again, name service `xo-frontend` | |
+| R-24 | Set **Root Directory** to `/frontend` | |
+| R-25 | Add environment variable: `VITE_API_URL=<backend Railway URL from R-19>` | |
+| R-26 | Trigger first deploy — watch build logs | |
+| R-27 | Verify frontend loads at Railway-provided URL | |
 
 ### Phase 6 — Custom Domains
 | # | Task | Done |
 |---|------|------|
-| R-24 | Backend service → Settings → Domains → **Add Custom Domain**: `api.xo.aiarena.callidity.com` | |
-| R-25 | Railway provides a CNAME target — add it as a DNS CNAME record at your registrar | |
-| R-26 | Frontend service → Settings → Domains → **Add Custom Domain**: `xo.aiarena.callidity.com` | |
-| R-27 | Add CNAME record for frontend domain at registrar | |
-| R-28 | Wait for SSL certificates (Railway auto-provisions, usually < 5 minutes) | |
-| R-29 | Update `BETTER_AUTH_URL` env var to `https://api.xo.aiarena.callidity.com` | |
-| R-30 | Update `FRONTEND_URL` env var to `https://xo.aiarena.callidity.com` | |
-| R-31 | Update `VITE_API_URL` env var to `https://api.xo.aiarena.callidity.com` and redeploy frontend | |
-| R-32 | Update Google OAuth: add `https://api.xo.aiarena.callidity.com` to authorised redirect URIs | |
+| R-28 | Backend → Settings → Domains → **Add Custom Domain**: `api.xo.aiarena.callidity.com` | |
+| R-29 | Add CNAME record at registrar pointing to Railway-provided target | |
+| R-30 | Frontend → Settings → Domains → **Add Custom Domain**: `xo.aiarena.callidity.com` | |
+| R-31 | Add CNAME record for frontend domain | |
+| R-32 | Landing → Settings → Domains → **Add Custom Domain**: `aiarena.callidity.com` | |
+| R-33 | Add CNAME record for landing domain | |
+| R-34 | Wait for SSL (Railway auto-provisions, usually < 5 min) | |
+| R-35 | Update env vars: `BETTER_AUTH_URL` → `https://api.xo.aiarena.callidity.com` | |
+| R-36 | Update env vars: `FRONTEND_URL` → `https://xo.aiarena.callidity.com` | |
+| R-37 | Update env vars: `VITE_API_URL` → `https://api.xo.aiarena.callidity.com`, redeploy frontend | |
+| R-38 | Update Google OAuth: add `https://api.xo.aiarena.callidity.com` to authorised redirect URIs | |
 
 ### Phase 7 — Staging Environment
 | # | Task | Done |
 |---|------|------|
-| R-33 | In Railway project, switch to **Staging** environment | |
-| R-34 | Railway clones all services into staging — configure staging-specific env vars if needed | |
-| R-35 | In backend service (staging): set **Deploy Branch** to `staging` | |
-| R-36 | In frontend service (staging): set **Deploy Branch** to `staging` | |
-| R-37 | Push to `staging` branch — verify staging auto-deploys | |
-| R-38 | Verify production still deploys on push to `main` | |
+| R-39 | In Railway project, switch to **Staging** environment | |
+| R-40 | Railway clones all services into staging automatically | |
+| R-41 | Backend (staging): set **Deploy Branch** to `staging` | |
+| R-42 | Frontend (staging): set **Deploy Branch** to `staging` | |
+| R-43 | Landing (staging): set **Deploy Branch** to `staging` | |
+| R-44 | Push to `staging` branch — verify auto-deploy triggers | |
+| R-45 | Verify production still deploys on push to `main` | |
 
 ### Phase 8 — Smoke Test
 | # | Task | Done |
 |---|------|------|
-| R-39 | Sign up with email | |
-| R-40 | Sign in with Google OAuth | |
-| R-41 | Play a game vs AI | |
-| R-42 | Create a PvP room, join from a second browser tab, play a move | |
-| R-43 | Check ELO updates after game | |
+| R-46 | Sign up with email | |
+| R-47 | Sign in with Google OAuth | |
+| R-48 | Play a game vs AI | |
+| R-49 | Create a PvP room, join from a second browser tab, play a move | |
+| R-50 | Check ELO updates after game | |
+| R-51 | Run stress tests against production URL: `BASE_URL=https://api.xo.aiarena.callidity.com ./stress/run.sh` | |
 
 ---
 
@@ -133,45 +132,18 @@ Staging:      Provided by Railway (*.up.railway.app subdomains)
 ### Backend (set in Railway service)
 ```
 NODE_ENV=production
-BETTER_AUTH_SECRET=<strong random secret>
+BETTER_AUTH_SECRET=<strong random secret — generate with: openssl rand -base64 32>
 BETTER_AUTH_URL=https://api.xo.aiarena.callidity.com
 FRONTEND_URL=https://xo.aiarena.callidity.com
-GOOGLE_CLIENT_ID=<from GCP OAuth>
-GOOGLE_CLIENT_SECRET=<from GCP OAuth>
+GOOGLE_CLIENT_ID=<from Google Cloud OAuth>
+GOOGLE_CLIENT_SECRET=<from Google Cloud OAuth>
 DATABASE_URL=<auto-injected by Railway Postgres>
 REDIS_URL=<auto-injected by Railway Redis>
 ```
 
-### Frontend (set in Railway service, baked in at build time by Vite)
+### Frontend (set in Railway service — baked in at build time by Vite)
 ```
 VITE_API_URL=https://api.xo.aiarena.callidity.com
-VITE_APP_VERSION=<set manually or via Railway variable>
-```
-
----
-
-## Appendix — Static File Server for Frontend
-
-If Railway can't serve the built `dist/` folder directly, add this file:
-
-**`frontend/server.js`**
-```js
-import express from 'express'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
-
-const app = express()
-const __dirname = dirname(fileURLToPath(import.meta.url))
-
-app.use(express.static(join(__dirname, 'dist')))
-app.get('*', (req, res) => res.sendFile(join(__dirname, 'dist', 'index.html')))
-
-app.listen(process.env.PORT || 3000)
-```
-
-And add to `frontend/package.json`:
-```json
-"start": "node server.js"
 ```
 
 ---
@@ -182,20 +154,9 @@ And add to `frontend/package.json`:
 |----------|------|-------------|
 | Backend service | Hobby ($5/mo flat) | ~$5 |
 | Frontend service | Included in Hobby | ~$0 |
+| Landing service | Included in Hobby | ~$0 |
 | Postgres | $0.000231/GB-hr | ~$1–3 |
 | Redis | $0.000231/GB-hr | ~$1 |
 | **Total** | | **~$7–10/month** |
 
-Railway Hobby plan: $5/month gives 8GB RAM / 100GB bandwidth.
-Much cheaper than GCP for low-to-medium traffic.
-
----
-
-## GCP Cleanup (when ready)
-
-Once Railway is stable, these GCP resources can be deleted to stop any charges:
-- Cloud Run services (`xo-backend`, `xo-backend-staging`)
-- Cloud SQL instance (`aiarena-db`)
-- Memorystore Redis instance
-- Artifact Registry images
-- Firebase Hosting sites (keep if using for landing page)
+Railway Hobby plan: $5/month gives 8 GB RAM / 100 GB bandwidth.
