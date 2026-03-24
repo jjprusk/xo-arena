@@ -8,23 +8,31 @@
  */
 
 import { auth } from '../lib/auth.js'
+import { fromNodeHeaders } from 'better-auth/node'
 import logger from '../logger.js'
 import db from '../lib/db.js'
 
 /**
- * Extracts and verifies the Bearer JWT from the Authorization header via
- * the Better Auth JWT plugin's verifyJWT endpoint.
+ * Resolves the authenticated user from either:
+ *   1. Bearer JWT in Authorization header (getToken() flow)
+ *   2. Session cookie (same-origin proxy flow)
  *
- * Returns { userId } on success, or null if the token is absent/invalid.
+ * Returns { userId } on success, or null if unauthenticated.
  */
 async function verifyToken(req) {
+  try {
+    // Try session cookie first (works via same-origin proxy)
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) })
+    if (session?.user?.id) return { userId: session.user.id }
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Session verification failed')
+  }
+
+  // Fallback: Bearer JWT (kept for compatibility)
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) return null
-
   const token = header.slice(7)
   try {
-    // Better Auth JWT plugin: auth.api.verifyJWT({ body: { token } })
-    // Returns { payload } where payload.sub is the BA user ID
     const result = await auth.api.verifyJWT({ body: { token } })
     if (!result?.payload?.sub) return null
     return { userId: result.payload.sub }
