@@ -18,7 +18,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const { outcome, difficulty, aiImplementationId, totalMoves, durationMs, startedAt } = req.body
 
-    if (!outcome || !totalMoves || !durationMs || !startedAt) {
+    if (!outcome || totalMoves == null || durationMs == null || !startedAt) {
       return res.status(400).json({ error: 'Missing required fields' })
     }
 
