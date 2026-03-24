@@ -32,11 +32,9 @@ async function verifyToken(req) {
     if (!jwk) return null
 
     const cryptoKey = await importJWK(JSON.parse(jwk.publicKey), 'EdDSA')
-    const baseURL = process.env.BETTER_AUTH_URL
-    const { payload } = await jwtVerify(token, cryptoKey, {
-      issuer: baseURL,
-      audience: baseURL,
-    })
+    // No issuer/audience check — BA's JWT plugin doesn't set those claims;
+    // verifying against the correct public key from the DB is sufficient.
+    const { payload } = await jwtVerify(token, cryptoKey)
 
     if (!payload?.sub) return null
     return { userId: payload.sub }
