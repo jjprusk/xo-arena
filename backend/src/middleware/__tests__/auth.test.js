@@ -6,6 +6,7 @@ import request from 'supertest'
 vi.mock('../../lib/auth.js', () => ({
   auth: {
     api: {
+      getSession: vi.fn(async () => null),
       verifyJWT: vi.fn(async ({ body: { token } }) => {
         if (token === 'valid-token') return { payload: { sub: 'user_123', aud: 'xo-arena' } }
         return { payload: null }
