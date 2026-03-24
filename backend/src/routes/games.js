@@ -6,6 +6,14 @@ import logger from '../logger.js'
 
 const router = Router()
 
+// Maps frontend difficulty strings to Prisma Difficulty enum values
+const DIFFICULTY_MAP = {
+  novice: 'NOVICE',
+  intermediate: 'INTERMEDIATE',
+  advanced: 'ADVANCED',
+  master: 'MASTER',
+}
+
 /**
  * POST /api/v1/games
  * Record a completed PvAI game for the authenticated user.
@@ -31,7 +39,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       mode: 'PVAI',
       outcome,
       winnerId,
-      difficulty: difficulty?.toUpperCase() || null,
+      difficulty: DIFFICULTY_MAP[difficulty] || null,
       aiImplementationId: aiImplementationId || null,
       totalMoves,
       durationMs,
