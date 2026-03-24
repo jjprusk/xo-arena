@@ -7,35 +7,39 @@
  * isAdmin          — helper; returns boolean
  */
 
-import { auth } from '../lib/auth.js'
-import { fromNodeHeaders } from 'better-auth/node'
 import logger from '../logger.js'
 import db from '../lib/db.js'
+import { jwtVerify, importJWK } from 'jose'
 
 /**
- * Resolves the authenticated user from either:
- *   1. Bearer JWT in Authorization header (getToken() flow)
- *   2. Session cookie (same-origin proxy flow)
+ * Verifies a Better Auth JWT by looking up the signing key from the JWKS table.
+ * Mirrors what Better Auth's verifyJWT plugin does internally.
  *
- * Returns { userId } on success, or null if unauthenticated.
+ * Returns { userId } on success, or null if absent/invalid.
  */
 async function verifyToken(req) {
-  try {
-    // Try session cookie first (works via same-origin proxy)
-    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) })
-    if (session?.user?.id) return { userId: session.user.id }
-  } catch (err) {
-    logger.warn({ err: err.message }, 'Session verification failed')
-  }
-
-  // Fallback: Bearer JWT (kept for compatibility)
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) return null
   const token = header.slice(7)
+
   try {
-    const result = await auth.api.verifyJWT({ body: { token } })
-    if (!result?.payload?.sub) return null
-    return { userId: result.payload.sub }
+    // Parse kid from JWT header to find the right key
+    const [rawHeader] = token.split('.')
+    const { kid } = JSON.parse(Buffer.from(rawHeader, 'base64url').toString())
+    if (!kid) return null
+
+    const jwk = await db.jwks.findUnique({ where: { id: kid } })
+    if (!jwk) return null
+
+    const cryptoKey = await importJWK(JSON.parse(jwk.publicKey), 'EdDSA')
+    const baseURL = process.env.BETTER_AUTH_URL
+    const { payload } = await jwtVerify(token, cryptoKey, {
+      issuer: baseURL,
+      audience: baseURL,
+    })
+
+    if (!payload?.sub) return null
+    return { userId: payload.sub }
   } catch (err) {
     logger.warn({ err: err.message }, 'JWT verification failed')
     return null
