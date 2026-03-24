@@ -40,7 +40,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: backend
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Generate Prisma client
         working-directory: backend
@@ -79,7 +79,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run tests
         working-directory: frontend
