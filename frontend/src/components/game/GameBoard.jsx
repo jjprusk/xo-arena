@@ -72,6 +72,7 @@ export default function GameBoard({ roomName }) {
   const gameStartRef = useRef(null)
   const lastHumanMoveRef = useRef(null)
   const aivaiMoveActiveRef = useRef(false)
+  const gameRecordedRef = useRef(false)
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isAivai = mode === 'aivai'
@@ -168,13 +169,15 @@ export default function GameBoard({ roomName }) {
     return () => clearInterval(timerRef.current)
   }, [currentTurn, status, timerEnabled, timerSeconds, isAivai])
 
-  // ── Track game start time ────────────────────────────────────────────────
+  // ── Track game start time + reset per-round recording guard ────────────
   useEffect(() => {
-    if (status === 'playing' && !gameStartRef.current) {
-      gameStartRef.current = Date.now()
+    if (status === 'playing') {
+      if (!gameStartRef.current) gameStartRef.current = Date.now()
+      gameRecordedRef.current = false  // new round started — allow recording again
     }
     if (status === 'idle') {
       gameStartRef.current = null
+      gameRecordedRef.current = false
     }
   }, [status])
 
@@ -191,6 +194,8 @@ export default function GameBoard({ roomName }) {
   useEffect(() => {
     if (mode !== 'pvai') return
     if (status !== 'won' && status !== 'draw' && status !== 'forfeit') return
+    if (gameRecordedRef.current) return  // already recorded for this round
+    gameRecordedRef.current = true
 
     async function recordGame() {
       const token = await getToken()
