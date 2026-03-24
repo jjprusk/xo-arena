@@ -47,6 +47,17 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
   trustedOrigins: (process.env.FRONTEND_URL || 'http://localhost:5173')
     .split(',').map(o => o.trim()).filter(Boolean),
+  advanced: {
+    crossSubdomainCookies: { enabled: false },
+    cookies: {
+      session_token: {
+        attributes: {
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          secure: process.env.NODE_ENV === 'production',
+        },
+      },
+    },
+  },
   databaseHooks: {
     user: {
       create: {
