@@ -101,20 +101,20 @@ Staging:      Provided by Railway (*.up.railway.app subdomains)
 | R-27 | Trigger first deploy — watch build logs | ✅ |
 | R-28 | Verify frontend loads at Railway-provided URL | ✅ |
 
-### Phase 6 — Custom Domains
+### Phase 6 — Custom Domains ✅
 | # | Task | Done |
 |---|------|------|
-| R-29 | Backend → Settings → Domains → **Add Custom Domain**: `api.xo.aiarena.callidity.com` | |
-| R-30 | Add CNAME record at registrar pointing to Railway-provided target | |
-| R-31 | Frontend → Settings → Domains → **Add Custom Domain**: `xo.aiarena.callidity.com` | |
-| R-32 | Add CNAME record for frontend domain | |
-| R-33 | Landing → Settings → Domains → **Add Custom Domain**: `aiarena.callidity.com` | |
-| R-34 | Add CNAME record for landing domain | |
-| R-35 | Wait for SSL (Railway auto-provisions, usually < 5 min) | |
-| R-36 | Update env vars: `BETTER_AUTH_URL` → `https://api.xo.aiarena.callidity.com` | |
-| R-37 | Update env vars: `FRONTEND_URL` → `https://xo.aiarena.callidity.com` | |
-| R-38 | Update env vars: `BACKEND_URL` → `https://api.xo.aiarena.callidity.com`, redeploy frontend | |
-| R-39 | Update Google OAuth: add `https://api.xo.aiarena.callidity.com` to authorised redirect URIs | |
+| R-29 | Backend → Settings → Domains → **Add Custom Domain**: `api.xo.aiarena.callidity.com` | ✅ |
+| R-30 | Add CNAME record at registrar pointing to Railway-provided target | ✅ |
+| R-31 | Frontend → Settings → Domains → **Add Custom Domain**: `xo.aiarena.callidity.com` | ✅ |
+| R-32 | Add CNAME record for frontend domain | ✅ |
+| R-33 | Landing → Settings → Domains → **Add Custom Domain**: `aiarena.callidity.com` | ✅ |
+| R-34 | Add CNAME record for landing domain | ✅ |
+| R-35 | Wait for SSL (Railway auto-provisions, usually < 5 min) | ✅ |
+| R-36 | Update env vars: `BETTER_AUTH_URL` → `https://api.xo.aiarena.callidity.com` | ✅ |
+| R-37 | Update env vars: `FRONTEND_URL` → `https://xo.aiarena.callidity.com` | ✅ |
+| R-38 | Update env vars: `BACKEND_URL` → `https://api.xo.aiarena.callidity.com`, redeploy frontend | ✅ |
+| R-39 | Update Google OAuth: add `https://api.xo.aiarena.callidity.com` to authorised redirect URIs | ✅ |
 
 ### Phase 7 — Staging Environment ✅
 | # | Task | Done |
