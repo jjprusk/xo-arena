@@ -15,11 +15,13 @@ import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
 import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
 import AdminMLPage from './pages/admin/AdminMLPage.jsx'
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<AppLayout />}>
           <Route index element={<Navigate to="/play" replace />} />
           <Route path="/play" element={<PlayPage />} />
