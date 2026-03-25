@@ -128,15 +128,47 @@ Staging:      Provided by Railway (*.up.railway.app subdomains)
 | R-46 | Push to `staging` branch — verify auto-deploy triggers | ✅ |
 | R-47 | Verify production still deploys on push to `main` | ✅ |
 
-### Phase 8 — Smoke Test
+### Phase 8 — Email (Resend)
 | # | Task | Done |
 |---|------|------|
-| R-48 | Sign up with email | |
-| R-49 | Sign in with Google OAuth | ✅ |
-| R-50 | Play a game vs AI | |
-| R-51 | Create a PvP room, join from a second browser tab, play a move | |
-| R-52 | Check ELO updates after game | |
-| R-53 | Run stress tests against production URL: `BASE_URL=https://api.xo.aiarena.callidity.com ./stress/run.sh` | |
+| R-48 | Create account at resend.com | |
+| R-49 | Add domain `callidity.com` → Resend verifies ownership via DNS TXT record | |
+| R-50 | Get API key from Resend dashboard | |
+| R-51 | Add `RESEND_API_KEY=<key>` to Railway backend env vars (production + staging) | |
+| R-52 | Add `EMAIL_FROM=noreply@callidity.com` to Railway backend env vars | |
+| R-53 | Wire Better Auth email config in `backend/src/lib/auth.js` to use Resend | |
+| R-54 | Enable `emailVerification` in Better Auth config (sends link on sign-up) | |
+| R-55 | Enable `forgetPassword` in Better Auth config (sends reset link) | |
+| R-56 | Test: sign up with a real email → verify link arrives | |
+| R-57 | Test: click "Forgot password" → reset link arrives | |
+
+### Phase 9 — Apple OAuth
+| # | Task | Done |
+|---|------|------|
+| R-58 | In Apple Developer account: create an App ID with "Sign In with Apple" capability | |
+| R-59 | Create a Services ID (this is the OAuth client ID, e.g. `com.callidity.xo-arena`) | |
+| R-60 | Add `xo.aiarena.callidity.com` as a Return URL on the Services ID | |
+| R-61 | Create a Key with "Sign In with Apple" enabled — download the `.p8` private key file | |
+| R-62 | Note: Key ID, Team ID, Services ID (client ID) | |
+| R-63 | Add env vars to Railway backend: | |
+|       | `APPLE_CLIENT_ID=<Services ID>` | |
+|       | `APPLE_TEAM_ID=<10-char Team ID>` | |
+|       | `APPLE_KEY_ID=<Key ID>` | |
+|       | `APPLE_PRIVATE_KEY=<contents of .p8 file>` | |
+| R-64 | Wire Better Auth Apple provider in `backend/src/lib/auth.js` | |
+| R-65 | Add Apple sign-in button to frontend `AuthModal` | |
+| R-66 | Test: sign in with Apple on production domain | |
+
+### Phase 10 — Smoke Test
+| # | Task | Done |
+|---|------|------|
+| R-67 | Sign up with email → verify confirmation email arrives | |
+| R-68 | Sign in with Google OAuth | ✅ |
+| R-69 | Sign in with Apple OAuth | |
+| R-70 | Play a game vs AI | |
+| R-71 | Create a PvP room, join from a second browser tab, play a move | |
+| R-72 | Check ELO updates after game | |
+| R-73 | Run stress tests against production URL: `BASE_URL=https://api.xo.aiarena.callidity.com ./stress/run.sh` | |
 
 ---
 
