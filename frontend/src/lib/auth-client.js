@@ -14,4 +14,4 @@ export const authClient = createAuthClient({
       : 'http://localhost:3000/api/auth',
 })
 
-export const { useSession, signIn, signUp, signOut } = authClient
+export const { useSession, signIn, signUp, signOut, forgetPassword, resetPassword } = authClient
