@@ -7,9 +7,29 @@ import { betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { jwt } from 'better-auth/plugins'
 import { admin } from 'better-auth/plugins'
+import { Resend } from 'resend'
 import db from './db.js'
 import logger from '../logger.js'
 import { syncUser } from '../services/userService.js'
+
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null
+
+const FROM = process.env.EMAIL_FROM || 'noreply@aiarena.callidity.com'
+
+async function sendEmail({ to, subject, html }) {
+  if (!resend) {
+    logger.warn({ to, subject }, 'Email not sent — RESEND_API_KEY not set')
+    return
+  }
+  try {
+    await resend.emails.send({ from: FROM, to, subject, html })
+    logger.info({ to, subject }, 'Email sent')
+  } catch (err) {
+    logger.error({ err: err.message, to, subject }, 'Failed to send email')
+  }
+}
 
 export const auth = betterAuth({
   database: prismaAdapter(db, {
@@ -18,7 +38,29 @@ export const auth = betterAuth({
   // Email + password is built-in — no plugin import needed
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false,
+    requireEmailVerification: true,
+    sendResetPassword: async ({ user, url }) => {
+      await sendEmail({
+        to: user.email,
+        subject: 'Reset your XO Arena password',
+        html: `<p>Hi ${user.name || user.email},</p>
+               <p>Click the link below to reset your password. This link expires in 1 hour.</p>
+               <p><a href="${url}">Reset password</a></p>
+               <p>If you didn't request this, you can ignore this email.</p>`,
+      })
+    },
+  },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendEmail({
+        to: user.email,
+        subject: 'Verify your XO Arena email',
+        html: `<p>Hi ${user.name || user.email},</p>
+               <p>Click the link below to verify your email address.</p>
+               <p><a href="${url}">Verify email</a></p>
+               <p>If you didn't create an account, you can ignore this email.</p>`,
+      })
+    },
   },
   // Map BA's internal model names to our ba_* Prisma models
   user:         { modelName: 'baUser' },
