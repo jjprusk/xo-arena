@@ -1,0 +1,5 @@
+[variables]
+NIXPACKS_NODE_VERSION = "24"
+
+[phases.install]
+cmds = ["rm -f package-lock.json && npm install --ignore-scripts=false"]
