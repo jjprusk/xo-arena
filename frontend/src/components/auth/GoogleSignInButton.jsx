@@ -12,7 +12,7 @@ export default function GoogleSignInButton({ callbackURL = '/play' }) {
   return (
     <button
       onClick={handleClick}
-      className="w-full h-10 rounded-lg border flex items-center justify-center gap-3 text-sm font-medium transition-colors hover:bg-[var(--bg-surface-hover)]"
+      className="w-full h-10 rounded-lg border flex items-center justify-center gap-3 text-sm font-medium transition-all hover:bg-[var(--bg-surface-hover)] active:scale-[0.97] active:brightness-95"
       style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-surface)' }}
     >
       {/* Google SVG logo */}
