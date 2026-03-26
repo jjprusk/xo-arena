@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout.jsx'
 import AdminRoute from './components/admin/AdminRoute.jsx'
@@ -15,11 +15,19 @@ import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
 import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
 import AdminMLPage from './pages/admin/AdminMLPage.jsx'
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+
+const isStaging = import.meta.env.VITE_ENV === 'staging'
 
 export default function App() {
+  useEffect(() => {
+    if (isStaging) document.title = '[STAGING] XO Arena'
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<AppLayout />}>
           <Route index element={<Navigate to="/play" replace />} />
           <Route path="/play" element={<PlayPage />} />

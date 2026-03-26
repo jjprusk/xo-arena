@@ -4,7 +4,9 @@
  */
 import { io } from 'socket.io-client'
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? import.meta.env.VITE_API_URL ?? ''
+// Socket.IO connects to same origin — server.js proxies /socket.io/* to the backend.
+// In local dev (Vite), VITE_SOCKET_URL points directly to the backend dev server.
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? ''
 
 let _socket = null
 

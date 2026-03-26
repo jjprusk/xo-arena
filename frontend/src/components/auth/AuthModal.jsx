@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { signIn, signUp } from '../../lib/auth-client.js'
+import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
 
 export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) {
-  const [view, setView] = useState(defaultView)        // 'sign-in' | 'sign-up' | 'verify-email'
+  const [view, setView] = useState(defaultView)        // 'sign-in' | 'sign-up' | 'verify-email' | 'forgot-password' | 'reset-sent'
   const [step, setStep] = useState('email')             // 'email' | 'password'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -12,6 +12,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
 
   // Reset state when modal opens
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
       setConfirmPassword('')
       setName('')
       setError('')
+      setResendSent(false)
     }
   }, [isOpen, defaultView])
 
@@ -75,8 +77,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
       const displayName = name.trim() || email.split('@')[0]
       const result = await signUp.email({ email, password, name: displayName })
       if (result?.error) { setError(result.error.message || 'Sign up failed.'); return }
-      // Email verification is disabled — sign-up completes immediately, close modal
-      onClose()
+      setView('verify-email')
     } catch (err) {
       setError(err?.message || 'Sign up failed.')
     } finally {
@@ -84,13 +85,36 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
     }
   }
 
-  async function handleResendVerification() {
-    // Better Auth resend verification — use signIn.email which triggers re-verification if unverified
+  async function handleForgotPassword(e) {
+    e.preventDefault()
     setError('')
+    if (!email || !email.includes('@')) { setError('Enter a valid email address.'); return }
+    setLoading(true)
     try {
-      await signIn.email({ email, password })
-    } catch {
-      // ignore
+      const redirectTo = `${window.location.origin}/reset-password`
+      await forgetPassword({ email, redirectTo })
+      setView('reset-sent')
+    } catch (err) {
+      setError(err?.message || 'Failed to send reset email.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResendVerification() {
+    setError('')
+    setLoading(true)
+    try {
+      await sendVerificationEmail({
+        email,
+        callbackURL: window.location.origin,
+      })
+      setResendSent(true)
+      setView('verify-email')
+    } catch (err) {
+      setError(err?.message || 'Failed to resend verification email.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -122,10 +146,17 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
             {/* Header */}
             <div className="text-center mb-6">
               <div className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                {view === 'verify-email' ? 'Check your email' : view === 'sign-in' ? 'Sign in' : 'Create account'}
+                {view === 'verify-email' ? 'Check your email'
+                  : view === 'forgot-password' ? 'Reset password'
+                  : view === 'reset-sent' ? 'Check your email'
+                  : view === 'sign-in' ? 'Sign in'
+                  : 'Create account'}
               </div>
               <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                {view === 'verify-email' ? 'We sent you a verification link.' : 'to continue to XO Arena'}
+                {view === 'verify-email' ? 'We sent you a verification link.'
+                  : view === 'forgot-password' ? 'Enter your email to receive a reset link.'
+                  : view === 'reset-sent' ? 'We sent you a password reset link.'
+                  : 'to continue to XO Arena'}
               </div>
             </div>
 
@@ -137,13 +168,80 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                   A verification email was sent to <strong>{email}</strong>.
                   Click the link in the email to activate your account.
                 </p>
+                {resendSent ? (
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-green-600, #16a34a)' }}>
+                    ✓ Email sent — check your inbox
+                  </p>
+                ) : (
+                  <button
+                    onClick={handleResendVerification}
+                    disabled={loading}
+                    className="text-sm underline disabled:opacity-60"
+                    style={{ color: 'var(--color-blue-600)' }}
+                  >
+                    {loading ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                )}
+                <div className="pt-2">
+                  <button
+                    onClick={() => switchView('sign-in')}
+                    className="text-sm"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Forgot password view */}
+            {view === 'forgot-password' && (
+              <form onSubmit={handleForgotPassword} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    Email address
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    autoFocus
+                    autoComplete="email"
+                    className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    placeholder="you@example.com"
+                  />
+                </div>
+                {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
                 <button
-                  onClick={handleResendVerification}
-                  className="text-sm underline"
-                  style={{ color: 'var(--color-blue-600)' }}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60 transition-opacity"
+                  style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
                 >
-                  Resend verification email
+                  {loading ? 'Sending…' : 'Send reset link'}
                 </button>
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => switchView('sign-in')}
+                    className="text-sm"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Reset sent view */}
+            {view === 'reset-sent' && (
+              <div className="text-center space-y-4">
+                <div className="text-4xl">📬</div>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  A password reset link was sent to <strong>{email}</strong>.
+                  Click the link in the email to choose a new password.
+                </p>
                 <div className="pt-2">
                   <button
                     onClick={() => switchView('sign-in')}
@@ -157,7 +255,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
             )}
 
             {/* Sign-in / Sign-up views */}
-            {view !== 'verify-email' && (
+            {view !== 'verify-email' && view !== 'forgot-password' && view !== 'reset-sent' && (
               <>
                 {/* Tab row */}
                 <div className="flex rounded-lg mb-6 p-0.5" style={{ backgroundColor: 'var(--bg-base)' }}>
@@ -229,11 +327,42 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                             style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                             placeholder="••••••••"
                           />
+                          <div className="text-right mt-1">
+                            <button
+                              type="button"
+                              onClick={() => switchView('forgot-password')}
+                              className="text-xs"
+                              style={{ color: 'var(--color-blue-600)' }}
+                            >
+                              Forgot password?
+                            </button>
+                          </div>
                         </div>
                       </>
                     )}
 
-                    {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+                    {error && (
+                      <div>
+                        <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>
+                        {error.toLowerCase().includes('verif') && step === 'password' && (
+                          resendSent ? (
+                            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-green-600, #16a34a)' }}>
+                              ✓ Email sent — check your inbox
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleResendVerification}
+                              disabled={loading}
+                              className="text-xs underline mt-1 disabled:opacity-60"
+                              style={{ color: 'var(--color-blue-600)' }}
+                            >
+                              {loading ? 'Sending…' : 'Resend verification email'}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
 
                     <button
                       type="submit"
