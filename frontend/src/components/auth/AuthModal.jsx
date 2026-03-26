@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { signIn, signUp, forgetPassword } from '../../lib/auth-client.js'
+import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
 
@@ -100,12 +100,18 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
   }
 
   async function handleResendVerification() {
-    // Better Auth resend verification — use signIn.email which triggers re-verification if unverified
     setError('')
+    setLoading(true)
     try {
-      await signIn.email({ email, password })
-    } catch {
-      // ignore
+      await sendVerificationEmail({
+        email,
+        callbackURL: window.location.origin,
+      })
+      setView('verify-email')
+    } catch (err) {
+      setError(err?.message || 'Failed to resend verification email.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -325,7 +331,22 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                       </>
                     )}
 
-                    {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+                    {error && (
+                      <div>
+                        <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>
+                        {error.toLowerCase().includes('verif') && step === 'password' && (
+                          <button
+                            type="button"
+                            onClick={handleResendVerification}
+                            disabled={loading}
+                            className="text-xs underline mt-1 disabled:opacity-60"
+                            style={{ color: 'var(--color-blue-600)' }}
+                          >
+                            Resend verification email
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     <button
                       type="submit"
