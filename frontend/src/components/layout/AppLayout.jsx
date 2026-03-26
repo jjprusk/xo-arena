@@ -23,7 +23,7 @@ const NAV_LINKS = [
 const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
   { to: '/puzzles', label: 'Puzzles', icon: '◈' },
-  { to: '/leaderboard', label: 'Ranks', icon: '🏆' },
+  { to: '/leaderboard', label: 'Ranks', icon: '★' },
   { to: '/stats', label: 'Stats', icon: '◎' },
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
