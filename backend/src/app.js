@@ -6,8 +6,11 @@ import logger from './logger.js'
 
 const app = express()
 
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
-  .split(',').map(o => o.trim()).filter(Boolean)
+const allowedOrigins = [
+  ...(process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',').map(o => o.trim()).filter(Boolean),
+  'https://appleid.apple.com',
+]
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
