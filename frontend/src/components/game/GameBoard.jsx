@@ -345,8 +345,7 @@ export default function GameBoard({ roomName }) {
     if (board[i] !== null) return
     lastHumanMoveRef.current = i
     makeMove(i)
-    play('move')
-  }, [isPlayerTurn, board, makeMove, play])
+  }, [isPlayerTurn, board, makeMove])
 
   const handleForfeit = () => {
     forfeit()
