@@ -139,6 +139,34 @@ export const api = {
     setMLLimits:   (body, token) => api.patch('/admin/ml/limits', body, token),
     getLogLimit:   (token)       => api.get('/admin/logs/limit', token),
     setLogLimit:   (body, token) => api.patch('/admin/logs/limit', body, token),
+
+    listBots: (token, search, page, limit) => {
+      const p = new URLSearchParams()
+      if (search) p.set('search', search)
+      if (page)   p.set('page', page)
+      if (limit)  p.set('limit', limit)
+      const qs = p.toString()
+      return api.get(`/admin/bots${qs ? `?${qs}` : ''}`, token)
+    },
+    updateBot: (id, body, token) => api.patch(`/admin/bots/${id}`, body, token),
+    deleteBot: (id, token) => request('DELETE', `/admin/bots/${id}`, null, token),
+    getBotLimits: (token) => api.get('/admin/bot-limits', token),
+    setBotLimits: (body, token) => api.patch('/admin/bot-limits', body, token),
+  },
+
+  bots: {
+    list: (params = {}) => {
+      const p = new URLSearchParams()
+      if (params.ownerId) p.set('ownerId', params.ownerId)
+      if (params.includeInactive) p.set('includeInactive', 'true')
+      const qs = p.toString()
+      return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
+    },
+    myMlModels: (token) => request('GET', '/bots/ml-models', null, token),
+    create: (body, token) => request('POST', '/bots', body, token),
+    update: (id, body, token) => request('PATCH', `/bots/${id}`, body, token),
+    resetElo: (id, token) => request('POST', `/bots/${id}/reset-elo`, {}, token),
+    delete: (id, token) => request('DELETE', `/bots/${id}`, null, token),
   },
 
   puzzles: {

@@ -3,6 +3,18 @@
  */
 import db from '../lib/db.js'
 
+const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
+
+/**
+ * Local helper — mirrors mlService.getSystemConfig to avoid a circular import
+ * (mlService already imports resetBotElo from this module).
+ */
+async function _getSystemConfig(key, defaultValue = null) {
+  const row = await db.systemConfig.findUnique({ where: { key } })
+  if (!row) return defaultValue
+  try { return JSON.parse(row.value) } catch { return row.value }
+}
+
 /**
  * Find or create a domain User row.
  * Supports both Better Auth (betterAuthId) and legacy Clerk (clerkId) paths.
@@ -298,6 +310,129 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
     wins: e.wins,
     winRate: e.winRate,
   }))
+}
+
+/**
+ * Create a bot user row owned by the given user.
+ * Enforces reserved name, profanity, and deduplication rules.
+ */
+export async function createBot(ownerId, { name, algorithm, difficulty, modelId, competitive, avatarUrl } = {}) {
+  if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
+  const trimmedName = name.trim()
+
+  // 1. Reserved name check (case-insensitive)
+  if (RESERVED_BOT_NAMES.includes(trimmedName.toLowerCase())) {
+    throw Object.assign(new Error(`"${trimmedName}" is a reserved name`), { code: 'RESERVED_NAME' })
+  }
+
+  // 2. Profanity check
+  const profanityList = await _getSystemConfig('bots.profanityList', [])
+  if (Array.isArray(profanityList) && profanityList.length > 0) {
+    const lower = trimmedName.toLowerCase()
+    for (const word of profanityList) {
+      if (lower.includes(word.toLowerCase())) {
+        throw Object.assign(new Error('Bot name contains disallowed content'), { code: 'PROFANITY' })
+      }
+    }
+  }
+
+  // 3. Name dedup: find all existing bot display names (case-insensitive)
+  const existingBots = await db.user.findMany({
+    where: { isBot: true },
+    select: { displayName: true },
+  })
+  const existingNames = new Set(existingBots.map(b => b.displayName.toLowerCase()))
+
+  let finalName = trimmedName
+  if (existingNames.has(finalName.toLowerCase())) {
+    let suffix = 1
+    while (existingNames.has(`${trimmedName.toLowerCase()}${suffix}`)) {
+      suffix++
+    }
+    finalName = `${trimmedName}${suffix}`
+  }
+
+  // 4. Determine botModelId
+  let botModelId
+  const alg = algorithm || 'minimax'
+  const diff = difficulty || 'novice'
+  if (alg === 'minimax') {
+    botModelId = `user:${ownerId}:minimax:${diff}`
+  } else if (alg === 'mcts') {
+    botModelId = `user:${ownerId}:mcts:${diff}`
+  } else if (alg === 'ml') {
+    if (!modelId) throw Object.assign(new Error('modelId is required for ML bots'), { code: 'INVALID_MODEL' })
+    botModelId = modelId
+  } else if (alg === 'rule_based') {
+    botModelId = `user:${ownerId}:rule_based:${modelId || 'default'}`
+  } else {
+    throw Object.assign(new Error(`Unknown algorithm: ${alg}`), { code: 'INVALID_ALGORITHM' })
+  }
+
+  // 5. Competitive flag: only honored for ml bots
+  const botCompetitive = alg === 'ml' ? Boolean(competitive) : false
+
+  // 6. Generate unique username slug
+  const slugBase = `bot_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
+  const existingUsernames = await db.user.findMany({
+    where: { username: { startsWith: slugBase } },
+    select: { username: true },
+  })
+  const usedUsernames = new Set(existingUsernames.map(u => u.username))
+  let username = slugBase
+  if (usedUsernames.has(username)) {
+    let i = 1
+    while (usedUsernames.has(`${slugBase}_${i}`)) i++
+    username = `${slugBase}_${i}`
+  }
+  const email = `${username}@xo-arena.internal`
+
+  // 7. Create the bot user row
+  return db.user.create({
+    data: {
+      username,
+      email,
+      displayName: finalName,
+      avatarUrl: avatarUrl ?? null,
+      isBot: true,
+      botModelType: alg,
+      botModelId,
+      botOwnerId: ownerId,
+      botActive: true,
+      botCompetitive,
+      botCalibrating: true,
+    },
+  })
+}
+
+/**
+ * List bot users.
+ * @param {{ ownerId?: string, includeInactive?: boolean }} options
+ */
+export async function listBots({ ownerId, includeInactive = false } = {}) {
+  const where = {
+    isBot: true,
+    ...(ownerId ? { botOwnerId: ownerId } : {}),
+    ...(includeInactive ? {} : { botActive: true }),
+  }
+  return db.user.findMany({
+    where,
+    select: {
+      id: true,
+      displayName: true,
+      avatarUrl: true,
+      eloRating: true,
+      botModelType: true,
+      botModelId: true,
+      botActive: true,
+      botCompetitive: true,
+      botCalibrating: true,
+      botInTournament: true,
+      botOwnerId: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  })
 }
 
 /**

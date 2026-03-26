@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useSession } from '../lib/auth-client.js'
 import { getToken } from '../lib/getToken.js'
 import { Link } from 'react-router-dom'
@@ -20,6 +20,16 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
 
+  // My Bots
+  const [bots, setBots] = useState([])
+  const [limitInfo, setLimitInfo] = useState(null)
+  const [botsLoading, setBotsLoading] = useState(false)
+  const [showCreateBot, setShowCreateBot] = useState(false)
+  const [botActionError, setBotActionError] = useState(null)
+  const [renamingBot, setRenamingBot] = useState(null) // { id, value }
+  const [mlModels, setMlModels] = useState([])
+  const [createForm, setCreateForm] = useState({ name: '', algorithm: 'minimax', difficulty: 'novice', modelId: '', competitive: false })
+
   useEffect(() => {
     if (!isLoaded) return
     if (!isSignedIn) return
@@ -33,6 +43,15 @@ export default function ProfilePage() {
         setNameInput(user.displayName)
         const { stats: s } = await api.users.stats(user.id)
         setStats(s)
+        // Load bots
+        setBotsLoading(true)
+        try {
+          const { bots: b, limitInfo: li } = await api.bots.list({ ownerId: user.id, includeInactive: true })
+          setBots(b)
+          setLimitInfo(li)
+        } catch { /* non-fatal */ } finally {
+          setBotsLoading(false)
+        }
       } catch {
         setError('Failed to load profile.')
       } finally {
@@ -93,6 +112,84 @@ export default function ProfilePage() {
         <p className="text-sm text-center" style={{ color: 'var(--color-red-600)' }}>{error}</p>
       </div>
     )
+  }
+
+  async function loadMlModels() {
+    try {
+      const token = await getToken()
+      const { models } = await api.bots.myMlModels(token)
+      setMlModels(models)
+    } catch { /* non-fatal */ }
+  }
+
+  async function handleToggleBotActive(bot) {
+    setBotActionError(null)
+    try {
+      const token = await getToken()
+      const { bot: updated } = await api.bots.update(bot.id, { botActive: !bot.botActive }, token)
+      setBots(prev => prev.map(b => b.id === bot.id ? { ...b, botActive: updated.botActive } : b))
+    } catch (err) {
+      setBotActionError(err.message || 'Action failed.')
+    }
+  }
+
+  async function handleRenameBot(id) {
+    if (!renamingBot || renamingBot.id !== id) return
+    setBotActionError(null)
+    try {
+      const token = await getToken()
+      const { bot: updated } = await api.bots.update(id, { displayName: renamingBot.value }, token)
+      setBots(prev => prev.map(b => b.id === id ? { ...b, displayName: updated.displayName } : b))
+      setRenamingBot(null)
+    } catch (err) {
+      setBotActionError(err.message || 'Rename failed.')
+    }
+  }
+
+  async function handleResetElo(bot) {
+    if (!confirm(`Reset ELO for "${bot.displayName}"? This will wipe the bot's rating to 1200 and queue calibration games. This cannot be undone.`)) return
+    setBotActionError(null)
+    try {
+      const token = await getToken()
+      await api.bots.resetElo(bot.id, token)
+      setBots(prev => prev.map(b => b.id === bot.id ? { ...b, eloRating: 1200, botCalibrating: true } : b))
+    } catch (err) {
+      setBotActionError(err.message || 'Reset failed.')
+    }
+  }
+
+  async function handleDeleteBot(bot) {
+    if (!confirm(`Delete "${bot.displayName}"? This is permanent and cannot be undone.`)) return
+    setBotActionError(null)
+    try {
+      const token = await getToken()
+      await api.bots.delete(bot.id, token)
+      setBots(prev => prev.filter(b => b.id !== bot.id))
+      setLimitInfo(prev => prev ? { ...prev, count: prev.count - 1 } : prev)
+    } catch (err) {
+      setBotActionError(err.message || 'Delete failed.')
+    }
+  }
+
+  async function handleCreateBot(e) {
+    e.preventDefault()
+    setBotActionError(null)
+    try {
+      const token = await getToken()
+      const payload = {
+        name: createForm.name,
+        algorithm: createForm.algorithm,
+        ...(createForm.algorithm === 'minimax' || createForm.algorithm === 'mcts' ? { difficulty: createForm.difficulty } : {}),
+        ...(createForm.algorithm === 'ml' ? { modelId: createForm.modelId, competitive: createForm.competitive } : {}),
+      }
+      const { bot: newBot } = await api.bots.create(payload, token)
+      setBots(prev => [newBot, ...prev])
+      setLimitInfo(prev => prev ? { ...prev, count: prev.count + 1 } : prev)
+      setCreateForm({ name: '', algorithm: 'minimax', difficulty: 'novice', modelId: '', competitive: false })
+      setShowCreateBot(false)
+    } catch (err) {
+      setBotActionError(err.message || 'Create failed.')
+    }
   }
 
   if (!dbUser) return null
@@ -206,6 +303,260 @@ export default function ProfilePage() {
           </Link>
         </section>
       )}
+
+      {/* My Bots */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <SectionLabel>My Bots</SectionLabel>
+          {limitInfo && (
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {limitInfo.isExempt
+                ? `${limitInfo.count} bots (no limit)`
+                : `${limitInfo.count} / ${limitInfo.limit} bots`}
+            </span>
+          )}
+        </div>
+
+        {botActionError && (
+          <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{botActionError}</p>
+        )}
+
+        {botsLoading && (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-5 h-5 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {!botsLoading && bots.length === 0 && (
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>You have no bots yet.</p>
+        )}
+
+        {!botsLoading && bots.length > 0 && (
+          <div
+            className="rounded-xl border divide-y overflow-hidden"
+            style={{ borderColor: 'var(--border-default)', borderWidth: '1px' }}
+          >
+            {bots.map(bot => (
+              <div
+                key={bot.id}
+                className="flex items-center gap-3 px-4 py-3"
+                style={{ backgroundColor: 'var(--bg-surface)' }}
+              >
+                {/* Name + badges */}
+                <div className="flex-1 min-w-0">
+                  {renamingBot?.id === bot.id ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        value={renamingBot.value}
+                        onChange={e => setRenamingBot({ id: bot.id, value: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRenameBot(bot.id); if (e.key === 'Escape') setRenamingBot(null) }}
+                        maxLength={40}
+                        className="px-2 py-0.5 rounded border text-sm focus:outline-none"
+                        style={{ borderColor: 'var(--color-blue-400)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', width: '140px' }}
+                      />
+                      <button onClick={() => handleRenameBot(bot.id)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>✓</button>
+                      <button onClick={() => setRenamingBot(null)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>✕</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link
+                        to={`/bots/${bot.id}`}
+                        className="text-sm font-semibold hover:underline"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {bot.displayName}
+                      </Link>
+                      <span
+                        className="text-xs px-1.5 py-0 rounded-full font-medium"
+                        style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
+                      >
+                        {bot.botModelType}
+                      </span>
+                      {bot.botCalibrating && (
+                        <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>calibrating</span>
+                      )}
+                      {!bot.botActive && (
+                        <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>
+                    ELO {Math.round(bot.eloRating)}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => setRenamingBot({ id: bot.id, value: bot.displayName })}
+                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                    title="Rename"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={() => handleToggleBotActive(bot)}
+                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                    style={{
+                      borderColor: bot.botActive ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
+                      color: bot.botActive ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
+                    }}
+                    title={bot.botActive ? 'Disable bot' : 'Enable bot'}
+                  >
+                    {bot.botActive ? 'Disable' : 'Enable'}
+                  </button>
+                  <button
+                    onClick={() => handleResetElo(bot)}
+                    disabled={bot.botInTournament}
+                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ borderColor: 'var(--color-purple-300)', color: 'var(--color-purple-600)' }}
+                    title={bot.botInTournament ? 'Cannot reset ELO while in tournament' : 'Reset ELO to 1200'}
+                  >
+                    Reset ELO
+                  </button>
+                  <button
+                    onClick={() => handleDeleteBot(bot)}
+                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)]"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                    title="Delete bot"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Create bot form */}
+        {showCreateBot ? (
+          <form
+            onSubmit={handleCreateBot}
+            className="rounded-xl border p-4 space-y-3"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+          >
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>New bot</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Name</span>
+                <input
+                  type="text"
+                  required
+                  maxLength={40}
+                  value={createForm.name}
+                  onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Algorithm</span>
+                <select
+                  value={createForm.algorithm}
+                  onChange={e => setCreateForm(f => ({ ...f, algorithm: e.target.value, modelId: '', competitive: false }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  <option value="minimax">Minimax</option>
+                  <option value="ml">ML model</option>
+                </select>
+              </label>
+            </div>
+
+            {(createForm.algorithm === 'minimax' || createForm.algorithm === 'mcts') && (
+              <label className="space-y-1 block">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Difficulty</span>
+                <select
+                  value={createForm.difficulty}
+                  onChange={e => setCreateForm(f => ({ ...f, difficulty: e.target.value }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  <option value="novice">Novice</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="master">Master</option>
+                </select>
+              </label>
+            )}
+
+            {createForm.algorithm === 'ml' && (
+              <div className="space-y-3">
+                <label className="space-y-1 block">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>ML Model</span>
+                  {mlModels.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={loadMlModels}
+                      className="text-xs underline"
+                      style={{ color: 'var(--color-blue-600)' }}
+                    >
+                      Load my models
+                    </button>
+                  ) : (
+                    <select
+                      required
+                      value={createForm.modelId}
+                      onChange={e => setCreateForm(f => ({ ...f, modelId: e.target.value }))}
+                      className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="">Select a model…</option>
+                      {mlModels.map(m => (
+                        <option key={m.id} value={m.id}>{m.name} ({m.algorithm}, {m.totalEpisodes?.toLocaleString()} ep)</option>
+                      ))}
+                    </select>
+                  )}
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createForm.competitive}
+                    onChange={e => setCreateForm(f => ({ ...f, competitive: e.target.checked }))}
+                  />
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Competitive (eligible for leaderboard & tournaments)</span>
+                </label>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+              >
+                Create
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowCreateBot(false); setBotActionError(null) }}
+                className="px-4 py-1.5 rounded-lg text-sm border"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            onClick={() => {
+              if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
+                setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
+                return
+              }
+              setBotActionError(null)
+              setShowCreateBot(true)
+              setMlModels([])
+            }}
+            className="text-sm font-medium transition-colors"
+            style={{ color: 'var(--color-blue-600)' }}
+          >
+            + Create new bot
+          </button>
+        )}
+      </section>
     </div>
   )
 }

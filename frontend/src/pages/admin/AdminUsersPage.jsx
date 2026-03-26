@@ -63,10 +63,11 @@ export default function AdminUsersPage() {
         const updated = await api.admin.updateUser(user.id, { baRole: newBaRole }, token)
         setUsers(prev => prev.map(u => u.id === user.id ? { ...u, baRole: updated.user.baRole } : u))
       } else {
+        // role is already the correct enum value (e.g. 'BOT_ADMIN', 'TOURNAMENT_ADMIN')
         const current = user.roles ?? []
         const newRoles = current.includes(role) ? current.filter(r => r !== role) : [...current, role]
         const updated = await api.admin.updateUser(user.id, { roles: newRoles }, token)
-        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, roles: updated.user.roles } : u))
+        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, roles: updated.user.roles ?? [] } : u))
       }
     } catch {
       setActionError('Role update failed.')
@@ -195,8 +196,11 @@ export default function AdminUsersPage() {
                           {u.baRole === 'admin' && (
                             <span className="text-xs font-semibold px-1.5 py-0 rounded-full" style={{ backgroundColor: 'var(--color-purple-100)', color: 'var(--color-purple-700)' }}>admin</span>
                           )}
-                          {(u.roles ?? []).includes('tournament') && (
+                          {(u.roles ?? []).includes('TOURNAMENT_ADMIN') && (
                             <span className="text-xs font-semibold px-1.5 py-0 rounded-full" style={{ backgroundColor: 'var(--color-orange-100)', color: 'var(--color-orange-700)' }}>tournament</span>
+                          )}
+                          {(u.roles ?? []).includes('BOT_ADMIN') && (
+                            <span className="text-xs font-semibold px-1.5 py-0 rounded-full" style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>bot admin</span>
                           )}
                         </div>
                       </div>
@@ -304,14 +308,26 @@ export default function AdminUsersPage() {
                         admin
                       </button>
                       <button
-                        onClick={() => toggleRole(u, 'tournament')}
+                        onClick={() => toggleRole(u, 'BOT_ADMIN')}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                        style={{
+                          borderColor: 'var(--color-teal-300)',
+                          color: (u.roles ?? []).includes('BOT_ADMIN') ? 'var(--color-teal-700)' : 'var(--text-muted)',
+                          fontWeight: (u.roles ?? []).includes('BOT_ADMIN') ? 600 : 400,
+                        }}
+                        title={(u.roles ?? []).includes('BOT_ADMIN') ? 'Remove bot admin role' : 'Grant bot admin role'}
+                      >
+                        bot admin
+                      </button>
+                      <button
+                        onClick={() => toggleRole(u, 'TOURNAMENT_ADMIN')}
                         className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
                         style={{
                           borderColor: 'var(--color-orange-300)',
-                          color: (u.roles ?? []).includes('tournament') ? 'var(--color-orange-700)' : 'var(--text-muted)',
-                          fontWeight: (u.roles ?? []).includes('tournament') ? 600 : 400,
+                          color: (u.roles ?? []).includes('TOURNAMENT_ADMIN') ? 'var(--color-orange-700)' : 'var(--text-muted)',
+                          fontWeight: (u.roles ?? []).includes('TOURNAMENT_ADMIN') ? 600 : 400,
                         }}
-                        title={(u.roles ?? []).includes('tournament') ? 'Remove tournament role' : 'Grant tournament role'}
+                        title={(u.roles ?? []).includes('TOURNAMENT_ADMIN') ? 'Remove tournament role' : 'Grant tournament role'}
                       >
                         tourn.
                       </button>

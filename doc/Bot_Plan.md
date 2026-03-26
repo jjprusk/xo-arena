@@ -313,21 +313,21 @@ When a user deletes their account, all their bots are deleted with them (cascade
 ### Phase 4 — Bot management & roles
 | # | Task | Done |
 |---|------|------|
-| B-21 | User profile: "My Bots" section showing owned bots and bot count vs limit | |
-| B-22 | Create bot flow: name, algorithm/model, avatar, competitive flag (ML only) | |
-| B-22a | Bot name validation: block reserved names (built-in bot names: Rusty, Copper, Sterling, Magnus, plus any future built-ins) — return a clear error if attempted | |
-| B-22b | Bot name deduplication: if the requested name is already taken, auto-append an incrementing suffix (`joe`, `joe1`, `joe2`, …) and inform the user of the adjusted name | |
-| B-22c | Profanity filter: apply to bot names and usernames at creation and rename time. Use a configurable word list (server-side, not client-side) so it can be updated without a deploy | |
-| B-23 | Enforce per-user bot limit (`user.botLimit ?? systemConfig.defaultBotLimit`) | |
-| B-24 | Disable / Enable bot toggle (`botActive`) | |
-| B-24a | Rename bot — update display name and avatar only; `botModelId` cannot be reassigned. Same naming rules as creation (reserved names, profanity filter) apply on rename | |
-| B-24b | Reset ELO: owner-triggered reset — wipes bot's `eloRating` to 1200, clears `UserEloHistory` for the bot, and queues calibration games against built-in bots. Requires confirmation popup. Not available while `botInTournament = true`. | |
-| B-25 | Delete bot: confirmation popup, cascade delete, irrecoverable | |
-| B-26 | Cascade delete user's bots when user deletes their account | |
-| B-26a | Block ML model deletion if a bot references it (`botModelId` FK) — return a clear error directing the user to delete the bot first | |
-| B-27 | Admin panel: bot management section (view all bots, delete any, set per-user limits) | |
-| B-28 | Admin panel: role management (grant/revoke roles, audit log) | |
-| B-29 | `BOT_ADMIN` and `ADMIN` exempt from bot limit | |
+| B-21 | User profile: "My Bots" section showing owned bots and bot count vs limit | ✅ |
+| B-22 | Create bot flow: name, algorithm/model, avatar, competitive flag (ML only) | ✅ |
+| B-22a | Bot name validation: block reserved names (built-in bot names: Rusty, Copper, Sterling, Magnus, plus any future built-ins) — return a clear error if attempted | ✅ |
+| B-22b | Bot name deduplication: if the requested name is already taken, auto-append an incrementing suffix (`joe`, `joe1`, `joe2`, …) and inform the user of the adjusted name | ✅ |
+| B-22c | Profanity filter: apply to bot names and usernames at creation and rename time. Use a configurable word list (server-side, not client-side) so it can be updated without a deploy | ✅ |
+| B-23 | Enforce per-user bot limit (`user.botLimit ?? systemConfig.defaultBotLimit`) | ✅ |
+| B-24 | Disable / Enable bot toggle (`botActive`) | ✅ |
+| B-24a | Rename bot — update display name and avatar only; `botModelId` cannot be reassigned. Same naming rules as creation (reserved names, profanity filter) apply on rename | ✅ |
+| B-24b | Reset ELO: owner-triggered reset — wipes bot's `eloRating` to 1200, clears `UserEloHistory` for the bot, and queues calibration games against built-in bots. Requires confirmation popup. Not available while `botInTournament = true`. | ✅ |
+| B-25 | Delete bot: confirmation popup, cascade delete, irrecoverable | ✅ |
+| B-26 | Cascade delete user's bots when user deletes their account | ✅ |
+| B-26a | Block ML model deletion if a bot references it (`botModelId` FK) — return a clear error directing the user to delete the bot first | ✅ |
+| B-27 | Admin panel: bot management section (view all bots, delete any, set per-user limits) | ✅ |
+| B-28 | Admin panel: role management (grant/revoke roles, audit log) | ✅ |
+| B-29 | `BOT_ADMIN` and `ADMIN` exempt from bot limit | ✅ |
 
 ### Phase 5 — Mode selection UX
 | # | Task | Done |
@@ -377,4 +377,4 @@ model Bot {
 
 Games would need a polymorphic or union player reference (`player1UserId` + `player1BotId`, with a constraint that exactly one is set). Leaderboard queries require a UNION across two tables. Profile pages need a separate route and component.
 
-**Why not chosen:** All existing infrastructure assumes `player1Id`/`player2Id` are `User` FK refs. Option B requires forking every query that touches players — ELO updates, leaderboard, game history, profiles. The maintenance surface grows with every new feature. Option A achieves the same result with two extra columns.
+**Why not chosen:** All existing infrastructure assumes `player1Id`/`player2Id` are `User` FK refs. Option B requires forking every query that touches players — ELO updates, leaderboard, game history, profiles. The maintenance surface grows with every new feature. Option A achieves the same result with two extra column

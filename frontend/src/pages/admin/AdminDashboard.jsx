@@ -299,6 +299,7 @@ export default function AdminDashboard() {
             { to: '/admin/users',  label: 'User Management', desc: 'Search, ban, adjust ELO' },
             { to: '/admin/games',  label: 'Game Log',         desc: 'All games across all users' },
             { to: '/admin/ml-models', label: 'ML Models',      desc: 'All models, owners, feature & delete' },
+            { to: '/admin/bots',   label: 'Bot Management',   desc: 'View all bots, enable/disable, delete' },
             { to: '/admin/ai',     label: 'AI Metrics',       desc: 'Move timing & heatmaps' },
             { to: '/admin/logs',   label: 'Log Viewer',       desc: 'Frontend & API logs' },
           ].map(({ to, label, desc }) => (
