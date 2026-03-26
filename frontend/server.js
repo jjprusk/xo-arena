@@ -9,15 +9,16 @@ const dist = join(__dirname, 'dist')
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
 
-// Proxy /api/* and /socket.io/* to the backend (includes WebSocket upgrade)
+// Proxy /api/* and /socket.io/* to the backend, preserving the full path.
+// pathFilter keeps the prefix intact (unlike app.use('/api', proxy) which strips it).
 const backendProxy = createProxyMiddleware({
   target: BACKEND_URL,
   changeOrigin: true,
   ws: true,
+  pathFilter: ['/api', '/socket.io'],
 })
 
-app.use('/api', backendProxy)
-app.use('/socket.io', backendProxy)
+app.use(backendProxy)
 
 // Serve static frontend files
 app.use(express.static(dist))
