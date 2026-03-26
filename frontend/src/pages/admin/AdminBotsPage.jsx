@@ -65,6 +65,17 @@ export default function AdminBotsPage() {
     }
   }
 
+  async function toggleAvailable(bot) {
+    setActionError(null)
+    try {
+      const token = await getToken()
+      const { bot: updated } = await api.admin.updateBot(bot.id, { botAvailable: !bot.botAvailable }, token)
+      setBots(prev => prev.map(b => b.id === bot.id ? { ...b, botAvailable: updated.botAvailable } : b))
+    } catch {
+      setActionError('Action failed. Try again.')
+    }
+  }
+
   async function startBotGame() {
     if (!sgBot1 || !sgBot2 || sgBot1 === sgBot2) return
     setSgStarting(true)
@@ -208,6 +219,7 @@ export default function AdminBotsPage() {
                 <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>Algorithm</th>
                 <th className="text-right px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>ELO</th>
                 <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Status</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wide hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Available</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -285,6 +297,23 @@ export default function AdminBotsPage() {
                       >
                         {bot.botActive ? 'Active' : 'Inactive'}
                       </span>
+                    </td>
+
+                    {/* Available (tournament eligibility) */}
+                    <td className="px-4 py-3 text-center hidden lg:table-cell">
+                      <button
+                        onClick={() => toggleAvailable(bot)}
+                        disabled={bot.botInTournament}
+                        className="text-xs px-2 py-0.5 rounded-full font-semibold border transition-colors hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{
+                          backgroundColor: bot.botAvailable ? 'var(--color-blue-50)' : 'var(--color-gray-100)',
+                          color: bot.botAvailable ? 'var(--color-blue-600)' : 'var(--text-muted)',
+                          borderColor: bot.botAvailable ? 'var(--color-blue-200)' : 'var(--border-default)',
+                        }}
+                        title={bot.botInTournament ? 'In tournament — cannot change' : 'Toggle tournament availability'}
+                      >
+                        {bot.botAvailable ? 'Yes' : 'No'}
+                      </button>
                     </td>
 
                     {/* Actions */}

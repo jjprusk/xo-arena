@@ -193,6 +193,16 @@ router.post('/models/ensemble', async (req, res, next) => {
 router.post('/models/:id/train', requireAuth, async (req, res, next) => {
   try {
     if (!await assertModelOwner(req, res, req.params.id)) return
+
+    // Block training if this model is linked to a bot currently in a tournament
+    const tournamentBot = await db.user.findFirst({
+      where: { botModelId: req.params.id, isBot: true, botInTournament: true },
+      select: { displayName: true },
+    })
+    if (tournamentBot) {
+      return res.status(409).json({ error: `Cannot train while ${tournamentBot.displayName} is in a tournament`, code: 'BOT_IN_TOURNAMENT' })
+    }
+
     const { mode, iterations, config } = req.body
     const validModes = ['SELF_PLAY', 'VS_MINIMAX', 'VS_HUMAN']
     if (!validModes.includes(mode)) {

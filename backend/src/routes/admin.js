@@ -552,6 +552,7 @@ router.get('/bots', async (req, res, next) => {
           botModelType: true,
           botModelId: true,
           botActive: true,
+          botAvailable: true,
           botCompetitive: true,
           botCalibrating: true,
           botInTournament: true,
@@ -592,9 +593,10 @@ router.patch('/bots/:id', async (req, res, next) => {
     const bot = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true, isBot: true } })
     if (!bot || !bot.isBot) return res.status(404).json({ error: 'Bot not found' })
 
-    const { botActive, displayName } = req.body
+    const { botActive, botAvailable, displayName } = req.body
     const data = {}
     if (botActive !== undefined) data.botActive = Boolean(botActive)
+    if (botAvailable !== undefined) data.botAvailable = Boolean(botAvailable)
     if (displayName !== undefined) {
       const trimmed = displayName.trim()
       if (!trimmed) return res.status(400).json({ error: 'Name cannot be empty' })

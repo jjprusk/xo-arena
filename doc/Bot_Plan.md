@@ -348,15 +348,15 @@ When a user deletes their account, all their bots are deleted with them (cascade
 ### Phase 7 — Tournament readiness
 | # | Task | Done |
 |---|------|------|
-| B-38 | Add `botAvailable` boolean to `User` — bots must be marked available before tournament scheduling can slot them | |
-| B-39 | Bot owner can toggle availability on/off from the bot profile page | |
-| B-40 | Bot admin can override availability for any bot | |
-| B-41 | Tournament scheduler checks `botAvailable` before slotting a bot into a bracket | |
-| B-42 | Add `botMinGamesPlayed` threshold to system config — bots must have played at least N games before tournament eligibility (prevents unreliable 1200 ELO seeds) | |
-| B-43 | Lock `botModelId` at tournament registration — the model snapshot at entry time competes, not a live pointer to current weights | |
-| B-43a | Add `botInTournament` boolean to `User` — set true when a bot is registered in an active tournament, cleared when eliminated or tournament ends | |
-| B-43b | Block all model training (fine-tune and from-scratch) while `botInTournament = true` — enforced at the API level with a clear error message to the owner | |
-| B-44 | Auto-forfeit on bot error mid-game — a crash or model load failure forfeits the game cleanly, sets `botInTournament = false`, and eliminates the bot from the bracket rather than hanging it | |
+| B-38 | Add `botAvailable` boolean to `User` — bots must be marked available before tournament scheduling can slot them | ✅ |
+| B-39 | Bot owner can toggle availability on/off from the bot profile page | ✅ |
+| B-40 | Bot admin can override availability for any bot | ✅ |
+| B-41 | Tournament scheduler checks `botAvailable` before slotting a bot into a bracket | ✅ |
+| B-42 | Add `botMinGamesPlayed` threshold to system config — bots must have played at least N games before tournament eligibility (prevents unreliable 1200 ELO seeds) | ✅ |
+| B-43 | Lock `botModelId` at tournament registration — the model snapshot at entry time competes, not a live pointer to current weights | ✅ |
+| B-43a | Add `botInTournament` boolean to `User` — set true when a bot is registered in an active tournament, cleared when eliminated or tournament ends | ✅ |
+| B-43b | Block all model training (fine-tune and from-scratch) while `botInTournament = true` — enforced at the API level with a clear error message to the owner | ✅ |
+| B-44 | Auto-forfeit on bot error mid-game — a crash or model load failure forfeits the game cleanly, sets `botInTournament = false`, and eliminates the bot from the bracket rather than hanging it | ✅ |
 | B-45 | **Bot vs Human tournaments** — flag: mixed-bracket tournaments (bots and humans in the same bracket) must be explicitly supported. Human players join via the normal lobby; bot moves are executed server-side on the bot's turn. ELO updates for both sides. The bracket and scheduling logic must handle both player types without distinguishing — since bots are `User` rows, this should work without special-casing once server-side execution is in place. Design note: clearly label bracket slots as "(Bot)" so human players know they may face automated opponents. | |
 
 ---

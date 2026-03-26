@@ -137,7 +137,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const result = await loadBotAndAuthorize(req, res)
     if (!result) return
 
-    const { displayName, botActive } = req.body
+    const { displayName, botActive, botAvailable } = req.body
     const data = {}
 
     if (displayName !== undefined) {
@@ -164,6 +164,10 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
     if (botActive !== undefined) {
       data.botActive = Boolean(botActive)
+    }
+
+    if (botAvailable !== undefined) {
+      data.botAvailable = Boolean(botAvailable)
     }
 
     if (Object.keys(data).length === 0) {

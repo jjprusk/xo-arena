@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
+import { getToken } from '../lib/getToken.js'
+import { useSession } from '../lib/auth-client.js'
 
 const ALGORITHM_LABELS = {
   Q_LEARNING: 'Q-Learning',
@@ -16,11 +18,14 @@ const ALGORITHM_LABELS = {
 
 export default function BotProfilePage() {
   const { id } = useParams()
+  const { data: session } = useSession()
   const [bot, setBot] = useState(null)
   const [botStats, setBotStats] = useState(null)
   const [eloData, setEloData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [availToggling, setAvailToggling] = useState(false)
+  const [availError, setAvailError] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -66,6 +71,22 @@ export default function BotProfilePage() {
         </div>
       </div>
     )
+  }
+
+  const isOwner = session?.user?.id && bot.ownerBetterAuthId && session.user.id === bot.ownerBetterAuthId
+
+  async function toggleAvailability() {
+    setAvailToggling(true)
+    setAvailError(null)
+    try {
+      const token = await getToken()
+      const { bot: updated } = await api.bots.update(id, { botAvailable: !bot.botAvailable }, token)
+      setBot(prev => ({ ...prev, botAvailable: updated.botAvailable }))
+    } catch (err) {
+      setAvailError(err.message || 'Failed to update availability.')
+    } finally {
+      setAvailToggling(false)
+    }
   }
 
   const initial = (bot.displayName?.[0] || '?').toUpperCase()
@@ -179,6 +200,45 @@ export default function BotProfilePage() {
             {botStats.vsBots.played > 0 && (
               <WinRateBar label="Win rate vs bots" rate={botStats.vsBots.rate} color="#9333ea" />
             )}
+          </div>
+        </section>
+      )}
+
+      {/* Owner availability toggle */}
+      {isOwner && (
+        <section className="space-y-2">
+          <SectionLabel>Tournament availability</SectionLabel>
+          <div
+            className="rounded-xl border p-4 flex items-center justify-between gap-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                {bot.botAvailable ? 'Available for tournaments' : 'Not available for tournaments'}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                {bot.botAvailable
+                  ? 'Your bot may be slotted into bracket tournaments.'
+                  : 'Your bot will be skipped when building tournament brackets.'}
+              </p>
+              {bot.botInTournament && (
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-amber-600)' }}>
+                  Currently in a tournament — availability cannot be changed.
+                </p>
+              )}
+              {availError && <p className="text-xs mt-1" style={{ color: 'var(--color-red-600)' }}>{availError}</p>}
+            </div>
+            <button
+              onClick={toggleAvailability}
+              disabled={availToggling || bot.botInTournament}
+              className="shrink-0 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40"
+              style={{
+                borderColor: bot.botAvailable ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
+                color: bot.botAvailable ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
+              }}
+            >
+              {availToggling ? '…' : bot.botAvailable ? 'Opt out' : 'Opt in'}
+            </button>
           </div>
         </section>
       )}

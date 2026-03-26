@@ -436,6 +436,31 @@ export async function listBots({ ownerId, includeInactive = false } = {}) {
 }
 
 /**
+ * Check whether a bot is eligible for tournament participation.
+ * Returns { eligible: true } or { eligible: false, reason: string }.
+ */
+export async function checkBotEligibility(botId) {
+  const bot = await db.user.findUnique({
+    where: { id: botId },
+    select: { isBot: true, botActive: true, botAvailable: true, botInTournament: true },
+  })
+  if (!bot || !bot.isBot) return { eligible: false, reason: 'Bot not found' }
+  if (!bot.botActive)      return { eligible: false, reason: 'Bot is inactive' }
+  if (!bot.botAvailable)   return { eligible: false, reason: 'Bot is not available for tournaments' }
+  if (bot.botInTournament) return { eligible: false, reason: 'Bot is already in a tournament' }
+
+  const minGames = await _getSystemConfig('bots.minGamesForTournament', 10)
+  const gamesPlayed = await db.game.count({
+    where: { OR: [{ player1Id: botId }, { player2Id: botId }] },
+  })
+  if (gamesPlayed < minGames) {
+    return { eligible: false, reason: `Bot needs at least ${minGames} games (has ${gamesPlayed})` }
+  }
+
+  return { eligible: true }
+}
+
+/**
  * Record a completed game.
  */
 export async function createGame({

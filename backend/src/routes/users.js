@@ -13,7 +13,7 @@ async function getBotProfileData(user) {
 
   const [owner, mlModel] = await Promise.all([
     user.botOwnerId
-      ? db.user.findUnique({ where: { id: user.botOwnerId }, select: { id: true, displayName: true } })
+      ? db.user.findUnique({ where: { id: user.botOwnerId }, select: { id: true, displayName: true, betterAuthId: true } })
       : null,
     user.botModelId && user.botModelId.startsWith('builtin:') === false
       ? db.mLModel.findUnique({
@@ -28,9 +28,12 @@ async function getBotProfileData(user) {
     botModelType: user.botModelType,
     botModelId: user.botModelId,
     botActive: user.botActive,
+    botAvailable: user.botAvailable,
+    botInTournament: user.botInTournament,
     botCompetitive: user.botCompetitive,
     botCalibrating: user.botCalibrating,
     botEloResetAt: user.botEloResetAt,
+    ownerBetterAuthId: owner?.betterAuthId ?? null,
     owner: owner ? { id: owner.id, displayName: owner.displayName } : null,
     mlModel: mlModel ? { id: mlModel.id, name: mlModel.name, algorithm: mlModel.algorithm, updatedAt: mlModel.updatedAt, totalEpisodes: mlModel.totalEpisodes } : null,
   }

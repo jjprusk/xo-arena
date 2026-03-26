@@ -11,6 +11,7 @@ import { getWinner, isBoardFull, getEmptyCells, WIN_LINES } from '../ai/gameLogi
 import registry from '../ai/registry.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
+import db from '../lib/db.js'
 import logger from '../logger.js'
 
 const DEFAULT_MOVE_DELAY_MS = 800
@@ -127,10 +128,20 @@ class BotGameRunner {
         const aiImpl = registry.get(impl)
         cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn)
       } catch (err) {
-        logger.warn({ err, slug, bot: bot.displayName }, 'Bot move failed — picking random cell')
-        const empty = getEmptyCells(game.board)
-        if (empty.length === 0) break
-        cellIndex = empty[Math.floor(Math.random() * empty.length)]
+        logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
+        // Forfeit: the erroring bot loses
+        game.winner = game.currentTurn === 'X' ? 'O' : 'X'
+        game.status = 'finished'
+        this._io?.to(slug).emit('game:moved', {
+          cellIndex: null,
+          board: game.board,
+          currentTurn: game.currentTurn,
+          status: game.status,
+          winner: game.winner,
+          winLine: null,
+          forfeit: true,
+        })
+        break
       }
 
       // Apply move
@@ -200,6 +211,12 @@ class BotGameRunner {
 
     // Update ELO for both bots
     await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})
+
+    // Clear botInTournament flag for both bots (no-op if neither was in tournament)
+    await db.user.updateMany({
+      where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
+      data: { botInTournament: false },
+    }).catch(() => {})
 
     logger.info({ slug, outcome, winner: game.winner }, 'Bot game recorded')
   }
