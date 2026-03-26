@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
 
 const PODIUM_COLORS = {
@@ -9,6 +10,7 @@ const PODIUM_COLORS = {
 
 const FILTERS_PERIOD = ['all', 'monthly', 'weekly']
 const FILTERS_MODE = ['all', 'pvp', 'pvai']
+const LS_SHOW_BOTS = 'xo-leaderboard-show-bots'
 
 export default function LeaderboardPage() {
   const [board, setBoard] = useState([])
@@ -16,14 +18,21 @@ export default function LeaderboardPage() {
   const [period, setPeriod] = useState('all')
   const [mode, setMode] = useState('all')
   const [search, setSearch] = useState('')
+  const [showBots, setShowBots] = useState(() => {
+    try { return localStorage.getItem(LS_SHOW_BOTS) === 'true' } catch { return false }
+  })
+
+  useEffect(() => {
+    try { localStorage.setItem(LS_SHOW_BOTS, showBots) } catch {}
+  }, [showBots])
 
   useEffect(() => {
     setLoading(true)
-    api.get(`/leaderboard?period=${period}&mode=${mode}`)
+    api.get(`/leaderboard?period=${period}&mode=${mode}&includeBots=${showBots}`)
       .then((res) => setBoard(res.leaderboard || []))
       .catch(() => setBoard([]))
       .finally(() => setLoading(false))
-  }, [period, mode])
+  }, [period, mode, showBots])
 
   const filtered = board.filter((e) =>
     !search || e.user.displayName.toLowerCase().includes(search.toLowerCase())
@@ -52,6 +61,22 @@ export default function LeaderboardPage() {
             boxShadow: 'var(--shadow-sm)',
           }}
         />
+        {/* Show bots toggle */}
+        <label className="flex items-center gap-2 cursor-pointer select-none ml-auto">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Show bots</span>
+          <button
+            role="switch"
+            aria-checked={showBots}
+            onClick={() => setShowBots((v) => !v)}
+            className="relative w-9 h-5 rounded-full transition-colors focus:outline-none focus-visible:ring-2"
+            style={{ backgroundColor: showBots ? 'var(--color-blue-600)' : 'var(--color-gray-300)' }}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: showBots ? 'translateX(16px)' : 'translateX(0)' }}
+            />
+          </button>
+        </label>
       </div>
 
       {loading ? (
@@ -71,9 +96,10 @@ export default function LeaderboardPage() {
                 const rank = entry.rank - 1
                 const isFirst = rank === 0
                 return (
-                  <div
+                  <Link
                     key={entry.user.id}
-                    className={`flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-3 transition-transform ${isFirst ? 'pb-6 scale-105' : ''}`}
+                    to={entry.user.isBot ? `/bots/${entry.user.id}` : '#'}
+                    className={`flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-3 transition-transform no-underline ${isFirst ? 'pb-6 scale-105' : ''}`}
                     style={{
                       backgroundColor: PODIUM_COLORS[rank]?.bg || 'var(--bg-surface)',
                       borderColor: PODIUM_COLORS[rank]?.border || 'var(--border-default)',
@@ -83,13 +109,16 @@ export default function LeaderboardPage() {
                   >
                     <span className="text-2xl">{PODIUM_COLORS[rank]?.label}</span>
                     <Avatar user={entry.user} size={isFirst ? 'lg' : 'md'} />
-                    <span className="text-sm font-semibold text-center max-w-[90px] truncate">
-                      {entry.user.displayName}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      {entry.user.isBot && <span title="Bot">🤖</span>}
+                      <span className="text-sm font-semibold text-center max-w-[90px] truncate">
+                        {entry.user.displayName}
+                      </span>
+                    </div>
                     <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--color-teal-600)' }}>
                       {Math.round(entry.winRate * 100)}%
                     </span>
-                  </div>
+                  </Link>
                 )
               })}
             </div>
@@ -123,7 +152,18 @@ export default function LeaderboardPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <Avatar user={entry.user} size="sm" />
-                        <span className="font-medium truncate max-w-[120px]">{entry.user.displayName}</span>
+                        {entry.user.isBot ? (
+                          <Link
+                            to={`/bots/${entry.user.id}`}
+                            className="flex items-center gap-1 font-medium truncate max-w-[120px] hover:underline"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            <span title="Bot">🤖</span>
+                            {entry.user.displayName}
+                          </Link>
+                        ) : (
+                          <span className="font-medium truncate max-w-[120px]">{entry.user.displayName}</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right hidden sm:table-cell tabular-nums" style={{ color: 'var(--text-secondary)' }}>

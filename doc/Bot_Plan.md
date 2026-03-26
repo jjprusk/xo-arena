@@ -283,7 +283,7 @@ When a user deletes their account, all their bots are deleted with them (cascade
 | B-11 | Backend: update bot ELO after every `PVBOT` game | ✅ |
 | B-12 | Backend: write `UserEloHistory` entries for both human and bot sides | ✅ |
 | B-13 | Backend: auto-reset bot ELO to 1200 and queue calibration when ML model is retrained from scratch | ✅ |
-| B-14 | Bot profile: show "Model retrained from scratch on [date]" when ELO resets | |
+| B-14 | Bot profile: show "Model retrained from scratch on [date]" when ELO resets | ✅ |
 | B-14a | Add `calibrationGamesTotal` to system config (default: 12 — 3 rounds vs each of the 4 built-in bots) | ✅ |
 | B-14b | Add `botCalibrating` boolean to `User` — set `true` when calibration is queued or in progress, cleared when all calibration games complete | ✅ |
 | B-14c | Calibration scheduler: on trigger (first creation, ELO reset, scratch retrain), enqueue `calibrationGamesTotal` games against built-in bots in round-robin order (Rusty → Copper → Sterling → Magnus → repeat) | ✅ (trigger wired; actual game execution deferred to Phase 6) |
@@ -303,12 +303,12 @@ When a user deletes their account, all their bots are deleted with them (cascade
 ### Phase 3 — Leaderboard & profiles
 | # | Task | Done |
 |---|------|------|
-| B-15 | Leaderboard: add `includeBots` filter (default off) | |
-| B-16 | Leaderboard: "Show bots" toggle, persisted to localStorage | |
-| B-17 | Leaderboard: robot icon badge on bot rows | |
-| B-18 | Bot profile page: "Bot" badge, "Powered by", "Created by", model update date | |
-| B-19 | Bot profile page: win rate vs humans and vs bots shown separately | |
-| B-20 | Bot profiles publicly visible to guests | |
+| B-15 | Leaderboard: add `includeBots` filter (default off) | ✅ |
+| B-16 | Leaderboard: "Show bots" toggle, persisted to localStorage | ✅ |
+| B-17 | Leaderboard: robot icon badge on bot rows | ✅ |
+| B-18 | Bot profile page: "Bot" badge, "Powered by", "Created by", model update date | ✅ |
+| B-19 | Bot profile page: win rate vs humans and vs bots shown separately | ✅ |
+| B-20 | Bot profiles publicly visible to guests | ✅ |
 
 ### Phase 4 — Bot management & roles
 | # | Task | Done |

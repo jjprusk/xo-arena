@@ -9,11 +9,12 @@ const router = Router()
  */
 router.get('/', async (req, res, next) => {
   try {
-    const { period = 'all', mode = 'all', limit } = req.query
+    const { period = 'all', mode = 'all', limit, includeBots } = req.query
     const board = await getLeaderboard({
       period,
       mode,
       limit: limit ? Math.min(100, parseInt(limit)) : 50,
+      includeBots: includeBots === 'true',
     })
     res.json({ leaderboard: board })
   } catch (err) {

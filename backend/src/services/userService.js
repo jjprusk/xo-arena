@@ -49,9 +49,13 @@ export async function syncUser({ betterAuthId, clerkId, email, username, display
 
 /**
  * Get a user by internal ID.
+ * Includes bot fields so callers can build bot profile data.
  */
 export async function getUserById(id) {
-  return db.user.findUnique({ where: { id } })
+  return db.user.findUnique({
+    where: { id },
+    include: { userRoles: { select: { role: true } } },
+  })
 }
 
 /**
@@ -203,9 +207,38 @@ export async function getUserStats(userId) {
 }
 
 /**
+ * Compute stats for a bot from the bot's perspective.
+ * Queries games where the bot is player2 (PVBOT challenges).
+ * Returns win rates vs humans and vs other bots separately.
+ */
+export async function getBotStats(botId) {
+  const games = await db.game.findMany({
+    where: { player2Id: botId, mode: 'PVBOT' },
+    select: { outcome: true, winnerId: true, player1Id: true },
+    include: { player1: { select: { isBot: true } } },
+  })
+
+  const vsHumans = games.filter((g) => !g.player1?.isBot)
+  const vsBots = games.filter((g) => g.player1?.isBot)
+
+  const calc = (list) => {
+    const played = list.length
+    const wins = list.filter((g) => g.winnerId === botId).length
+    const draws = list.filter((g) => g.outcome === 'DRAW').length
+    return { played, wins, draws, losses: played - wins - draws, rate: played > 0 ? wins / played : 0 }
+  }
+
+  return {
+    total: games.length,
+    vsHumans: calc(vsHumans),
+    vsBots: calc(vsBots),
+  }
+}
+
+/**
  * Get the global leaderboard (top 50 by win rate, minimum 5 games).
  */
-export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50 } = {}) {
+export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50, includeBots = false } = {}) {
   const whereMode = mode === 'pvp' ? 'PVP' : mode === 'pvai' ? 'PVAI' : undefined
 
   // Aggregate wins and total games per player
@@ -237,8 +270,18 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50 
     totalMap.set(r.player2Id, (totalMap.get(r.player2Id) || 0) + r._count.id)
   }
 
+  const allUserIds = [...totalMap.keys()]
+  const users = await db.user.findMany({
+    where: {
+      id: { in: allUserIds },
+      ...(includeBots ? {} : { isBot: false }),
+    },
+    select: { id: true, displayName: true, avatarUrl: true, isBot: true },
+  })
+  const userMap = new Map(users.map((u) => [u.id, u]))
+
   const entries = [...totalMap.entries()]
-    .filter(([, total]) => total >= 1)
+    .filter(([userId, total]) => total >= 1 && userMap.has(userId))
     .map(([userId, total]) => ({
       userId,
       total,
@@ -248,16 +291,9 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50 
     .sort((a, b) => b.winRate - a.winRate || b.total - a.total)
     .slice(0, limit)
 
-  const userIds = entries.map((e) => e.userId)
-  const users = await db.user.findMany({
-    where: { id: { in: userIds } },
-    select: { id: true, displayName: true, avatarUrl: true },
-  })
-  const userMap = new Map(users.map((u) => [u.id, u]))
-
   return entries.map((e, i) => ({
     rank: i + 1,
-    user: userMap.get(e.userId) || { id: e.userId, displayName: 'Unknown', avatarUrl: null },
+    user: userMap.get(e.userId) || { id: e.userId, displayName: 'Unknown', avatarUrl: null, isBot: false },
     total: e.total,
     wins: e.wins,
     winRate: e.winRate,

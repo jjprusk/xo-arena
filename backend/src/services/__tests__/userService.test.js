@@ -63,7 +63,9 @@ describe('getUserById', () => {
     db.user.findUnique.mockResolvedValue(mockUser)
     const result = await getUserById('usr_1')
     expect(result).toEqual(mockUser)
-    expect(db.user.findUnique).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
+    expect(db.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'usr_1' } })
+    )
   })
 
   it('returns null when not found', async () => {

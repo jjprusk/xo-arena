@@ -16,6 +16,7 @@ import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
 import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
 import AdminMLPage from './pages/admin/AdminMLPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+import BotProfilePage from './pages/BotProfilePage.jsx'
 
 const isStaging = import.meta.env.VITE_ENV === 'staging'
 
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/bots/:id" element={<BotProfilePage />} />
           <Route path="/ml" element={<MLDashboardPage />} />
 
           {/* Admin routes — all guarded by AdminRoute */}
