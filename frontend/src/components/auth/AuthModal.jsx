@@ -12,6 +12,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
 
   // Reset state when modal opens
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
       setConfirmPassword('')
       setName('')
       setError('')
+      setResendSent(false)
     }
   }, [isOpen, defaultView])
 
@@ -107,6 +109,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
         email,
         callbackURL: window.location.origin,
       })
+      setResendSent(true)
       setView('verify-email')
     } catch (err) {
       setError(err?.message || 'Failed to resend verification email.')
@@ -165,13 +168,20 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                   A verification email was sent to <strong>{email}</strong>.
                   Click the link in the email to activate your account.
                 </p>
-                <button
-                  onClick={handleResendVerification}
-                  className="text-sm underline"
-                  style={{ color: 'var(--color-blue-600)' }}
-                >
-                  Resend verification email
-                </button>
+                {resendSent ? (
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-green-600, #16a34a)' }}>
+                    ✓ Email sent — check your inbox
+                  </p>
+                ) : (
+                  <button
+                    onClick={handleResendVerification}
+                    disabled={loading}
+                    className="text-sm underline disabled:opacity-60"
+                    style={{ color: 'var(--color-blue-600)' }}
+                  >
+                    {loading ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                )}
                 <div className="pt-2">
                   <button
                     onClick={() => switchView('sign-in')}
@@ -335,15 +345,21 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                       <div>
                         <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>
                         {error.toLowerCase().includes('verif') && step === 'password' && (
-                          <button
-                            type="button"
-                            onClick={handleResendVerification}
-                            disabled={loading}
-                            className="text-xs underline mt-1 disabled:opacity-60"
-                            style={{ color: 'var(--color-blue-600)' }}
-                          >
-                            Resend verification email
-                          </button>
+                          resendSent ? (
+                            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-green-600, #16a34a)' }}>
+                              ✓ Email sent — check your inbox
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleResendVerification}
+                              disabled={loading}
+                              className="text-xs underline mt-1 disabled:opacity-60"
+                              style={{ color: 'var(--color-blue-600)' }}
+                            >
+                              {loading ? 'Sending…' : 'Resend verification email'}
+                            </button>
+                          )
                         )}
                       </div>
                     )}
