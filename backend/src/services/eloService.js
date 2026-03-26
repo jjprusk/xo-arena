@@ -127,6 +127,77 @@ export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
 }
 
 /**
+ * Update ELO for both bots after a BotVsBot game.
+ * bot1Id: domain User.id of the X player (bot1)
+ * bot2Id: domain User.id of the O player (bot2)
+ * outcome: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW'
+ */
+export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome) {
+  try {
+    const [bot1, bot2] = await Promise.all([
+      db.user.findUnique({ where: { id: bot1Id }, select: { eloRating: true, botCalibrating: true } }),
+      db.user.findUnique({ where: { id: bot2Id }, select: { eloRating: true, botCalibrating: true } }),
+    ])
+    if (!bot1 || !bot2) return
+
+    const r1 = bot1.eloRating ?? 1200
+    const r2 = bot2.eloRating ?? 1200
+
+    const exp1 = expectedScore(r1, r2)
+    const exp2 = expectedScore(r2, r1)
+
+    let score1 = 0.5
+    if (outcome === 'PLAYER1_WIN') score1 = 1
+    else if (outcome === 'PLAYER2_WIN') score1 = 0
+
+    const score2 = 1 - score1
+
+    const newR1 = Math.max(100, Math.round(r1 + K_FACTOR * (score1 - exp1)))
+    const newR2 = Math.max(100, Math.round(r2 + K_FACTOR * (score2 - exp2)))
+
+    await Promise.all([
+      db.user.update({
+        where: { id: bot1Id },
+        data: {
+          eloRating: newR1,
+          botCalibrating: false,
+          userEloHistory: {
+            create: {
+              eloRating: newR1,
+              delta: newR1 - r1,
+              outcome: outcome === 'PLAYER1_WIN' ? 'win' : outcome === 'DRAW' ? 'draw' : 'loss',
+              opponentType: 'bot',
+            },
+          },
+        },
+      }),
+      db.user.update({
+        where: { id: bot2Id },
+        data: {
+          eloRating: newR2,
+          botCalibrating: false,
+          userEloHistory: {
+            create: {
+              eloRating: newR2,
+              delta: newR2 - r2,
+              outcome: outcome === 'PLAYER2_WIN' ? 'win' : outcome === 'DRAW' ? 'draw' : 'loss',
+              opponentType: 'bot',
+            },
+          },
+        },
+      }),
+    ])
+
+    return {
+      bot1: { newElo: newR1, delta: newR1 - r1 },
+      bot2: { newElo: newR2, delta: newR2 - r2 },
+    }
+  } catch (err) {
+    console.error('[eloService] updateBothElosAfterBotVsBot error:', err.message)
+  }
+}
+
+/**
  * Update ELO for both players after a PvP game.
  * outcome: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW'
  */

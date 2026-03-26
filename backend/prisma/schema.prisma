@@ -148,8 +148,9 @@ model AIError {
 
 enum GameMode {
   PVP
-  PVAI   // quick game vs built-in difficulty (no named bot)
-  PVBOT  // challenge a named bot
+  PVAI     // quick game vs built-in difficulty (no named bot)
+  PVBOT    // challenge a named bot
+  BOTVBOT  // server-side bot vs bot game
 }
 
 enum Difficulty {

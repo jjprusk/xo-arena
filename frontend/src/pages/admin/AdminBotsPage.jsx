@@ -21,6 +21,13 @@ export default function AdminBotsPage() {
   const [error, setError]     = useState(null)
   const [actionError, setActionError] = useState(null)
 
+  // Start bot game state
+  const [sgBot1, setSgBot1] = useState('')
+  const [sgBot2, setSgBot2] = useState('')
+  const [sgStarting, setSgStarting] = useState(false)
+  const [sgResult, setSgResult] = useState(null)
+  const [sgError, setSgError] = useState(null)
+
   const LIMIT = 25
   const totalPages = Math.ceil(total / LIMIT)
 
@@ -58,6 +65,22 @@ export default function AdminBotsPage() {
     }
   }
 
+  async function startBotGame() {
+    if (!sgBot1 || !sgBot2 || sgBot1 === sgBot2) return
+    setSgStarting(true)
+    setSgError(null)
+    setSgResult(null)
+    try {
+      const token = await getToken()
+      const { slug, displayName } = await api.botGames.start({ bot1Id: sgBot1, bot2Id: sgBot2 }, token)
+      setSgResult({ slug, displayName })
+    } catch (err) {
+      setSgError(err.message || 'Failed to start game.')
+    } finally {
+      setSgStarting(false)
+    }
+  }
+
   async function deleteBot(bot) {
     if (!confirm(`Delete "${bot.displayName}"? This is permanent and cannot be undone.`)) return
     setActionError(null)
@@ -74,6 +97,68 @@ export default function AdminBotsPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-5">
       <AdminHeader title="Bots" subtitle={`${total} total`} />
+
+      {/* Start Bot vs Bot Game */}
+      <div
+        className="rounded-xl border p-4 space-y-3"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚔️</span>
+          <span className="text-sm font-semibold">Start Bot vs Bot Game</span>
+        </div>
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Bot 1 (X)</label>
+            <select
+              value={sgBot1}
+              onChange={e => setSgBot1(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border text-sm"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', minWidth: '160px' }}
+            >
+              <option value="">Select bot…</option>
+              {bots.filter(b => b.botActive).map(b => (
+                <option key={b.id} value={b.id}>{b.displayName} (ELO {Math.round(b.eloRating)})</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Bot 2 (O)</label>
+            <select
+              value={sgBot2}
+              onChange={e => setSgBot2(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border text-sm"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', minWidth: '160px' }}
+            >
+              <option value="">Select bot…</option>
+              {bots.filter(b => b.botActive && b.id !== sgBot1).map(b => (
+                <option key={b.id} value={b.id}>{b.displayName} (ELO {Math.round(b.eloRating)})</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={startBotGame}
+            disabled={!sgBot1 || !sgBot2 || sgBot1 === sgBot2 || sgStarting}
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
+            style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)' }}
+          >
+            {sgStarting ? 'Starting…' : 'Start Game'}
+          </button>
+        </div>
+        {sgError && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{sgError}</p>}
+        {sgResult && (
+          <p className="text-xs" style={{ color: 'var(--color-teal-600)' }}>
+            Game started: <strong>{sgResult.displayName}</strong> —{' '}
+            <a
+              href={`/play?spectate=${sgResult.slug}`}
+              className="underline"
+              style={{ color: 'var(--color-blue-600)' }}
+            >
+              spectate
+            </a>
+          </p>
+        )}
+      </div>
 
       {/* Search */}
       <form onSubmit={handleSearch} className="flex gap-2">

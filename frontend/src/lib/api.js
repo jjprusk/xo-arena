@@ -154,6 +154,12 @@ export const api = {
     setBotLimits: (body, token) => api.patch('/admin/bot-limits', body, token),
   },
 
+  botGames: {
+    start: (body, token) => request('POST', '/bot-games', body, token),
+    list: () => api.get('/bot-games'),
+    get: (slug) => api.get(`/bot-games/${slug}`),
+  },
+
   bots: {
     list: (params = {}) => {
       const p = new URLSearchParams()

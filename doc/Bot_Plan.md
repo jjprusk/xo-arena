@@ -340,10 +340,10 @@ When a user deletes their account, all their bots are deleted with them (cascade
 ### Phase 6 — Server-side execution & spectating
 | # | Task | Done |
 |---|------|------|
-| B-34 | Backend-driven bot vs bot game execution (no browser required) | |
-| B-35 | Bot vs bot rooms appear in the room list | |
-| B-36 | Bot vs bot rooms joinable mid-game as spectators | |
-| B-37 | Foundation in place for tournament scheduling | |
+| B-34 | Backend-driven bot vs bot game execution (no browser required) | ✅ |
+| B-35 | Bot vs bot rooms appear in the room list | ✅ |
+| B-36 | Bot vs bot rooms joinable mid-game as spectators | ✅ |
+| B-37 | Foundation in place for tournament scheduling | ✅ |
 
 ### Phase 7 — Tournament readiness
 | # | Task | Done |
