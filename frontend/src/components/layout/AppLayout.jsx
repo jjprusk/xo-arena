@@ -23,7 +23,7 @@ const NAV_LINKS = [
 const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
   { to: '/puzzles', label: 'Puzzles', icon: '◈' },
-  { to: '/leaderboard', label: 'Ranks', icon: '🏆' },
+  { to: '/leaderboard', label: 'Ranks', icon: '★' },
   { to: '/stats', label: 'Stats', icon: '◎' },
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
@@ -65,7 +65,7 @@ export default function AppLayout() {
       {/* Top nav bar */}
       <header
         className="sticky top-0 z-40 flex items-center justify-between px-6 md:px-8 h-14 border-b"
-        style={{ backgroundColor: isStaging ? '#92400e' : 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+        style={{ backgroundColor: isStaging ? '#b45309' : 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
         {/* Logo */}
         <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
@@ -194,7 +194,7 @@ export default function AppLayout() {
       {/* Mobile bottom nav */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {BOTTOM_NAV.map(({ to, label, icon }) => (
           <NavLink
