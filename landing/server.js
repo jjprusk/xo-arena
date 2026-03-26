@@ -8,4 +8,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 app.use(express.static(join(__dirname, 'public')))
 app.get('*', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html')))
 
-app.listen(process.env.PORT || 3000)
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => console.log(`Landing page listening on port ${PORT}`))
+process.on('uncaughtException', (err) => { console.error('Uncaught:', err); process.exit(1) })

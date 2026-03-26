@@ -119,9 +119,10 @@ enum GameMode {
 }
 
 enum Difficulty {
-  EASY
-  MEDIUM
-  HARD
+  NOVICE
+  INTERMEDIATE
+  ADVANCED
+  MASTER
 }
 
 enum Outcome {
