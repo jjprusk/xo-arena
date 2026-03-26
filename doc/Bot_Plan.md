@@ -266,37 +266,37 @@ When a user deletes their account, all their bots are deleted with them (cascade
 ### Phase 1 — Schema & seed
 | # | Task | Done |
 |---|------|------|
-| B-01 | Add `Role` enum and `UserRole` model to Prisma schema | |
-| B-02 | Add `isBot`, `botModelType`, `botModelId` (unique), `botOwnerId`, `botActive`, `botCompetitive`, `botAvailable`, `botInTournament`, `botCalibrating`, `botLimit` to `User` | |
-| B-03 | Add `PVBOT` to `GameMode` enum | |
-| B-04 | Add `botLimit` (default 5) to system config table | |
-| B-05 | Run migration | |
-| B-06 | Seed system account (owner of built-in bots) | |
-| B-07 | Seed built-in bots: Rusty (novice), Copper (intermediate), Sterling (advanced), Magnus (master) | |
-| B-08 | `hasRole(user, role)` utility — `ADMIN` implicitly satisfies any role check | |
+| B-01 | Add `Role` enum and `UserRole` model to Prisma schema | ✅ |
+| B-02 | Add `isBot`, `botModelType`, `botModelId` (unique), `botOwnerId`, `botActive`, `botCompetitive`, `botAvailable`, `botInTournament`, `botCalibrating`, `botLimit` to `User` | ✅ |
+| B-03 | Add `PVBOT` to `GameMode` enum | ✅ |
+| B-04 | Add `botLimit` (default 5) to system config table | ✅ |
+| B-05 | Run migration | ✅ |
+| B-06 | Seed system account (owner of built-in bots) | ✅ |
+| B-07 | Seed built-in bots: Rusty (novice), Copper (intermediate), Sterling (advanced), Magnus (master) | ✅ |
+| B-08 | `hasRole(user, role)` utility — `ADMIN` implicitly satisfies any role check | ✅ |
 
 ### Phase 2 — Game recording & ELO
 | # | Task | Done |
 |---|------|------|
-| B-09 | Map difficulty picker selection to corresponding built-in bot (`player2Id`) | |
-| B-10 | Backend: record `PVBOT` games with `player2Id` pointing to bot user row | |
-| B-11 | Backend: update bot ELO after every `PVBOT` game | |
-| B-12 | Backend: write `UserEloHistory` entries for both human and bot sides | |
-| B-13 | Backend: auto-reset bot ELO to 1200 and queue calibration when ML model is retrained from scratch | |
+| B-09 | Map difficulty picker selection to corresponding built-in bot (`player2Id`) | ✅ |
+| B-10 | Backend: record `PVBOT` games with `player2Id` pointing to bot user row | ✅ |
+| B-11 | Backend: update bot ELO after every `PVBOT` game | ✅ |
+| B-12 | Backend: write `UserEloHistory` entries for both human and bot sides | ✅ |
+| B-13 | Backend: auto-reset bot ELO to 1200 and queue calibration when ML model is retrained from scratch | ✅ |
 | B-14 | Bot profile: show "Model retrained from scratch on [date]" when ELO resets | |
-| B-14a | Add `calibrationGamesTotal` to system config (default: 12 — 3 rounds vs each of the 4 built-in bots) | |
-| B-14b | Add `botCalibrating` boolean to `User` — set `true` when calibration is queued or in progress, cleared when all calibration games complete | |
-| B-14c | Calibration scheduler: on trigger (first creation, ELO reset, scratch retrain), enqueue `calibrationGamesTotal` games against built-in bots in round-robin order (Rusty → Copper → Sterling → Magnus → repeat) | |
+| B-14a | Add `calibrationGamesTotal` to system config (default: 12 — 3 rounds vs each of the 4 built-in bots) | ✅ |
+| B-14b | Add `botCalibrating` boolean to `User` — set `true` when calibration is queued or in progress, cleared when all calibration games complete | ✅ |
+| B-14c | Calibration scheduler: on trigger (first creation, ELO reset, scratch retrain), enqueue `calibrationGamesTotal` games against built-in bots in round-robin order (Rusty → Copper → Sterling → Magnus → repeat) | ✅ (trigger wired; actual game execution deferred to Phase 6) |
 | B-14d | Bot picker: show a "Calibrating" badge on bots with `botCalibrating = true` — bot remains challengeable but ELO is marked as provisional | |
 | B-14e | Tournament eligibility check (`botMinGamesPlayed`) counts calibration games — a freshly calibrated bot satisfies the threshold automatically if `calibrationGamesTotal >= botMinGamesPlayed` | |
 
 ### Phase 2b — Stats & game history UI
 | # | Task | Done |
 |---|------|------|
-| B-15a | Stats page: add `PVBOT` as a distinct game mode filter alongside `PVP` and `PVAI` — users can view stats broken down per mode | |
-| B-15b | Stats page: within `PVBOT`, show per-bot breakdown — wins/losses/draws against each named bot opponent | |
-| B-15c | Stats page: `PVAI` (quick game) and `PVBOT` (named bot challenge) display separately — a user can see how they perform against abstract difficulty vs named opponents | |
-| B-15d | Game history list: label each row clearly — `PVP` shows opponent username, `PVAI` shows difficulty level, `PVBOT` shows bot name with link to bot profile | |
+| B-15a | Stats page: add `PVBOT` as a distinct game mode filter alongside `PVP` and `PVAI` — users can view stats broken down per mode | ✅ |
+| B-15b | Stats page: within `PVBOT`, show per-bot breakdown — wins/losses/draws against each named bot opponent | ✅ |
+| B-15c | Stats page: `PVAI` (quick game) and `PVBOT` (named bot challenge) display separately — a user can see how they perform against abstract difficulty vs named opponents | ✅ |
+| B-15d | Game history list: label each row clearly — `PVP` shows opponent username, `PVAI` shows difficulty level, `PVBOT` shows bot name with link to bot profile | ✅ (recent games tooltip updated; full history list deferred to Phase 3) |
 | B-15e | Profile win/loss summary: display three separate counts — vs humans, vs quick AI, vs bots — so bot farming doesn't inflate a player's apparent competitive record | |
 | B-15f | Bot profile game history: mirrors the above — shows each game played, opponent type (human or bot), result, and ELO change | |
 

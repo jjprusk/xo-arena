@@ -33,7 +33,8 @@ model User {
   botCompetitive  Boolean  @default(false)  // true = eligible for leaderboard + tournaments
   botAvailable    Boolean  @default(false)  // true = available for tournament scheduling
   botInTournament Boolean  @default(false)  // true = in active tournament; blocks training
-  botCalibrating  Boolean  @default(false)  // true = calibration games in progress
+  botCalibrating  Boolean   @default(false)  // true = calibration games in progress
+  botEloResetAt   DateTime?                 // set when ELO is reset (scratch retrain or owner reset)
   botLimit        Int?     // per-user override for max bots; null = system default
 
   createdAt     DateTime @default(now())

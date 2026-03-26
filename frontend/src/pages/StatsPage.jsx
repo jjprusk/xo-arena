@@ -130,10 +130,13 @@ export default function StatsPage() {
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
               >
                 <WinRateBar label="PvP" rate={stats.pvp.rate} color="var(--color-blue-600)" />
-                <WinRateBar label="Novice" rate={stats.pvai.novice.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Intermediate" rate={stats.pvai.intermediate.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Advanced" rate={stats.pvai.advanced.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Master" rate={stats.pvai.master.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Novice AI" rate={stats.pvai.novice.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Intermediate AI" rate={stats.pvai.intermediate.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Advanced AI" rate={stats.pvai.advanced.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="Master AI" rate={stats.pvai.master.rate} color="var(--color-teal-600)" />
+                {stats.pvbot?.played > 0 && (
+                  <WinRateBar label="vs Bots" rate={stats.pvbot.rate} color="#9333ea" />
+                )}
               </div>
             </section>
 
@@ -151,7 +154,7 @@ export default function StatsPage() {
                       return (
                         <div
                           key={i}
-                          title={`${result} · ${g.mode === 'PVP' ? 'PvP' : `vs AI (${g.difficulty?.toLowerCase()})`}`}
+                          title={`${result} · ${g.mode === 'PVP' ? 'PvP' : g.mode === 'PVBOT' ? `vs ${g.player2?.displayName ?? 'Bot'}` : `vs AI (${g.difficulty?.toLowerCase()})`}`}
                           className="w-4 h-4 rounded-sm"
                           style={{ backgroundColor: OUTCOME_COLOR[result] }}
                         />
@@ -170,6 +173,34 @@ export default function StatsPage() {
               </section>
             )}
           </div>
+
+          {/* PvBot breakdown */}
+          {stats.pvbot?.played > 0 && (
+            <section className="space-y-2">
+              <SectionLabel>Bot Challenges</SectionLabel>
+              <div
+                className="rounded-xl border divide-y"
+                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)', divideColor: 'var(--border-default)' }}
+              >
+                {Object.values(stats.pvbot.byBot).map((entry) => (
+                  <div key={entry.bot.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {entry.bot.avatarUrl && (
+                        <img src={entry.bot.avatarUrl} alt="" className="w-6 h-6 rounded-full" />
+                      )}
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                        {entry.bot.displayName ?? 'Bot'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                      <span>{entry.played} game{entry.played !== 1 ? 's' : ''}</span>
+                      <span style={{ color: '#9333ea', fontWeight: 600 }}>{Math.round(entry.rate * 100)}% win</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* ML behavior profiles */}
           {mlProfiles.length > 0 && (

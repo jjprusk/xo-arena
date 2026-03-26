@@ -1,8 +1,9 @@
 /**
- * ELO Rating Service — Human Players
+ * ELO Rating Service
  *
  * Computes ELO updates after game outcomes and persists them.
  * AI opponents have fixed ELO ratings by difficulty level.
+ * Bot opponents (PVBOT) use live ELO from their User row.
  */
 
 import db from '../lib/db.js'
@@ -67,6 +68,61 @@ export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty) {
   } catch (err) {
     // Non-fatal — log and continue
     console.error('[eloService] updatePlayerEloAfterPvAI error:', err.message)
+  }
+}
+
+/**
+ * Update ELO for both sides after a PvBot game.
+ * humanId: domain User.id of the human player (player1)
+ * botId:   domain User.id of the bot (player2)
+ * outcome: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW'
+ */
+export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
+  try {
+    const [human, bot] = await Promise.all([
+      db.user.findUnique({ where: { id: humanId }, select: { eloRating: true } }),
+      db.user.findUnique({ where: { id: botId }, select: { eloRating: true } }),
+    ])
+    if (!human || !bot) return
+
+    const humanScore = outcome === 'PLAYER1_WIN' ? 1 : outcome === 'PLAYER2_WIN' ? 0 : 0.5
+    const botScore = 1 - humanScore
+
+    const humanNewElo = computeNewElo(human.eloRating, bot.eloRating, humanScore)
+    const botNewElo = computeNewElo(bot.eloRating, human.eloRating, botScore)
+
+    const humanOutcome = humanScore === 1 ? 'win' : humanScore === 0 ? 'loss' : 'draw'
+    const botOutcome = botScore === 1 ? 'win' : botScore === 0 ? 'loss' : 'draw'
+
+    await db.$transaction([
+      db.user.update({ where: { id: humanId }, data: { eloRating: humanNewElo } }),
+      db.user.update({ where: { id: botId }, data: { eloRating: botNewElo } }),
+      db.userEloHistory.create({
+        data: {
+          userId: humanId,
+          eloRating: humanNewElo,
+          delta: humanNewElo - human.eloRating,
+          opponentType: 'bot',
+          outcome: humanOutcome,
+        },
+      }),
+      db.userEloHistory.create({
+        data: {
+          userId: botId,
+          eloRating: botNewElo,
+          delta: botNewElo - bot.eloRating,
+          opponentType: 'human',
+          outcome: botOutcome,
+        },
+      }),
+    ])
+
+    return {
+      human: { newElo: humanNewElo, delta: humanNewElo - human.eloRating },
+      bot: { newElo: botNewElo, delta: botNewElo - bot.eloRating },
+    }
+  } catch (err) {
+    console.error('[eloService] updateBothElosAfterPvBot error:', err.message)
   }
 }
 

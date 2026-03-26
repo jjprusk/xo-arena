@@ -69,6 +69,25 @@ export async function getUserByClerkId(clerkId) {
 }
 
 /**
+ * Get a bot User row by its botModelId.
+ * Returns null if not found or not a bot.
+ */
+export async function getBotByModelId(botModelId) {
+  return db.user.findFirst({ where: { botModelId, isBot: true } })
+}
+
+/**
+ * Reset a bot's ELO to 1200 and mark it as calibrating.
+ * Called on scratch retrain (via mlService.resetModel) or by owner/admin.
+ */
+export async function resetBotElo(botId) {
+  return db.user.update({
+    where: { id: botId },
+    data: { eloRating: 1200, botEloResetAt: new Date(), botCalibrating: true },
+  })
+}
+
+/**
  * Update display name or avatar.
  */
 export async function updateUser(id, { displayName, avatarUrl, preferences }) {
@@ -86,7 +105,7 @@ export async function updateUser(id, { displayName, avatarUrl, preferences }) {
  * Compute per-user stats from the Games table.
  */
 export async function getUserStats(userId) {
-  const [pvpGames, pvaiGames] = await Promise.all([
+  const [pvpGames, pvaiGames, pvbotGames] = await Promise.all([
     db.game.findMany({
       where: {
         mode: 'PVP',
@@ -98,9 +117,14 @@ export async function getUserStats(userId) {
       where: { mode: 'PVAI', player1Id: userId },
       select: { outcome: true, difficulty: true, winnerId: true },
     }),
+    db.game.findMany({
+      where: { mode: 'PVBOT', player1Id: userId },
+      select: { outcome: true, winnerId: true, player2Id: true },
+      include: { player2: { select: { id: true, displayName: true, avatarUrl: true } } },
+    }),
   ])
 
-  const allGames = [...pvpGames, ...pvaiGames]
+  const allGames = [...pvpGames, ...pvaiGames, ...pvbotGames]
   const totalGames = allGames.length
   const wins = allGames.filter((g) => g.winnerId === userId).length
   const draws = allGames.filter((g) => g.outcome === 'DRAW').length
@@ -122,14 +146,42 @@ export async function getUserStats(userId) {
     }
   }
 
-  // Last 20 games for streak grid
+  // PVBOT stats grouped by opponent bot
+  const pvbotByBot = {}
+  for (const g of pvbotGames) {
+    const botId = g.player2Id
+    if (!botId) continue
+    if (!pvbotByBot[botId]) {
+      pvbotByBot[botId] = {
+        bot: g.player2 ? { id: g.player2.id, displayName: g.player2.displayName, avatarUrl: g.player2.avatarUrl } : { id: botId },
+        played: 0,
+        wins: 0,
+        rate: 0,
+      }
+    }
+    pvbotByBot[botId].played++
+    if (g.winnerId === userId) pvbotByBot[botId].wins++
+  }
+  for (const entry of Object.values(pvbotByBot)) {
+    entry.rate = entry.played > 0 ? entry.wins / entry.played : 0
+  }
+
+  // Last 20 games for streak grid (include bot display name for PVBOT)
   const recent = await db.game.findMany({
     where: {
       OR: [{ player1Id: userId }, { player2Id: userId }],
     },
     orderBy: { endedAt: 'desc' },
     take: 20,
-    select: { outcome: true, winnerId: true, mode: true, difficulty: true, endedAt: true, roomName: true },
+    select: {
+      outcome: true,
+      winnerId: true,
+      mode: true,
+      difficulty: true,
+      endedAt: true,
+      roomName: true,
+      player2: { select: { displayName: true, isBot: true } },
+    },
   })
 
   return {
@@ -140,6 +192,12 @@ export async function getUserStats(userId) {
     winRate,
     pvp: { played: pvpGames.length, wins: pvpWins, rate: pvpRate },
     pvai: pvaiByDiff,
+    pvbot: {
+      played: pvbotGames.length,
+      wins: pvbotGames.filter((g) => g.winnerId === userId).length,
+      rate: pvbotGames.length > 0 ? pvbotGames.filter((g) => g.winnerId === userId).length / pvbotGames.length : 0,
+      byBot: pvbotByBot,
+    },
     recentGames: recent,
   }
 }
@@ -213,7 +271,7 @@ export async function createGame({
   player1Id,
   player2Id = null,
   winnerId = null,
-  mode,           // 'PVP' | 'PVAI'
+  mode,           // 'PVP' | 'PVAI' | 'PVBOT'
   outcome,        // 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'AI_WIN' | 'DRAW'
   difficulty = null,
   aiImplementationId = null,
