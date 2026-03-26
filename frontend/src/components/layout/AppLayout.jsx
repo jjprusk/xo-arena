@@ -65,12 +65,12 @@ export default function AppLayout() {
       {/* Top nav bar */}
       <header
         className="sticky top-0 z-40 flex items-center justify-between px-6 md:px-8 h-14 border-b"
-        style={{ backgroundColor: isStaging ? '#92400e' : 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
         {/* Logo */}
         <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
           <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
+            <rect width="32" height="32" rx="7" fill={isStaging ? '#d97706' : 'var(--color-blue-600)'} />
             <text x="2" y="23" fontSize="19" fontWeight="800" fill="white" fontFamily="var(--font-display), system-ui, sans-serif">X</text>
             <text x="16" y="23" fontSize="19" fontWeight="800" fill="var(--color-teal-500)" fontFamily="var(--font-display), system-ui, sans-serif">O</text>
           </svg>
