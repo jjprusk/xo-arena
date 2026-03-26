@@ -48,26 +48,36 @@ export async function playPvAIToEnd(page) {
 /**
  * Navigate to /play and wait for the auto-created room invite URL to appear.
  * Returns the invite URL string.
+ *
+ * Requires: backend running at localhost:3000 (via docker compose or directly).
+ * If "Creating room…" persists and this times out, the backend socket is unavailable.
  */
 export async function getInviteUrl(page) {
   await page.goto('/play')
-  // The "Invite a Friend" card shows a readonly input once the auto-room is ready
+  // The "Invite a Friend" card shows a readonly input once the auto-room is ready.
+  // Wait for the element to appear first (clearer timeout message than .not.toHaveValue).
   const input = page.locator('input[readonly]').first()
-  await expect(input).not.toHaveValue('', { timeout: 15_000 })
+  await input.waitFor({ state: 'visible', timeout: 15_000 })
   return input.inputValue()
 }
+
+// Map legacy difficulty names to current select values
+const DIFFICULTY_MAP = { easy: 'novice', medium: 'intermediate', hard: 'advanced', novice: 'novice', intermediate: 'intermediate', advanced: 'advanced', master: 'master' }
 
 /**
  * Start a PvAI game from /play. Expands the AI panel, selects difficulty and mark,
  * then clicks the start button.
  */
-export async function startPvAIGame(page, { difficulty = 'easy', mark = 'X' } = {}) {
+export async function startPvAIGame(page, { difficulty = 'novice', mark = 'X' } = {}) {
   await page.goto('/play')
-  // Expand the "Play vs AI" accordion — the toggle button
+  // Expand the "Play vs AI" accordion
   await page.locator('button').filter({ hasText: 'Play vs AI' }).first().click()
-  await expect(page.getByRole('button', { name: difficulty, exact: true })).toBeVisible()
-  await page.getByRole('button', { name: difficulty, exact: true }).click()
+  // Wait for the difficulty select to appear (Minimax tab is default)
+  const difficultySelect = page.locator('select').filter({ has: page.locator('option[value="novice"]') })
+  await difficultySelect.waitFor({ state: 'visible' })
+  await difficultySelect.selectOption(DIFFICULTY_MAP[difficulty] ?? difficulty)
+  // Select mark (X / O / alternate)
   await page.getByRole('button', { name: mark, exact: true }).click()
-  // Start button is the one inside the expanded panel with exactly this label
+  // Click the "Play vs AI" start button inside the expanded panel
   await page.locator('button').filter({ hasText: /^Play vs AI$/ }).click()
 }

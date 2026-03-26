@@ -179,4 +179,76 @@ test.describe('Spectator flow', () => {
       await spectatorCtx.close()
     }
   })
+
+  test('multiple spectators all see moves in real time', async ({ browser }) => {
+    const hostCtx      = await browser.newContext()
+    const guestCtx     = await browser.newContext()
+    const spectator1Ctx = await browser.newContext()
+    const spectator2Ctx = await browser.newContext()
+    const spectator3Ctx = await browser.newContext()
+
+    const hostPage      = await hostCtx.newPage()
+    const guestPage     = await guestCtx.newPage()
+    const spec1Page     = await spectator1Ctx.newPage()
+    const spec2Page     = await spectator2Ctx.newPage()
+    const spec3Page     = await spectator3Ctx.newPage()
+    const spectatorPages = [spec1Page, spec2Page, spec3Page]
+
+    try {
+      const inviteUrl = await getInviteUrl(hostPage)
+
+      // Guest joins → game starts
+      await guestPage.goto(inviteUrl)
+      await expect(boardLocator(guestPage)).toBeVisible({ timeout: 15_000 })
+      await expect(boardLocator(hostPage)).toBeVisible({ timeout: 15_000 })
+
+      // All 3 spectators join
+      for (const spec of spectatorPages) {
+        await spec.goto(inviteUrl)
+        await expect(boardLocator(spec)).toBeVisible({ timeout: 10_000 })
+        await expect(spec.getByText('Spectating')).toBeVisible()
+      }
+
+      // Players see spectator count = 3
+      await expect(hostPage.getByText(/👁.*3|3.*👁/)).toBeVisible({ timeout: 8_000 })
+
+      // Active player makes a move
+      for (const p of [hostPage, guestPage]) {
+        if (await p.getByText('Your turn').isVisible().catch(() => false)) {
+          await emptyCells(p).first().click()
+          break
+        }
+      }
+
+      // All spectators see the filled cell
+      const filledCell = 'button[aria-label$=", X"], button[aria-label$=", O"]'
+      for (const spec of spectatorPages) {
+        await expect(spec.locator(filledCell).first()).toBeVisible({ timeout: 5_000 })
+      }
+
+      // Active player makes a second move
+      for (const p of [hostPage, guestPage]) {
+        if (await p.getByText('Your turn').isVisible().catch(() => false)) {
+          await emptyCells(p).first().click()
+          break
+        }
+      }
+
+      // All spectators see 2 filled cells
+      for (const spec of spectatorPages) {
+        await expect(spec.locator(filledCell)).toHaveCount(2, { timeout: 5_000 })
+      }
+
+      // Spectators still cannot interact with the board
+      for (const spec of spectatorPages) {
+        expect(await spec.locator('button[aria-label^="Cell "]:not([disabled])').count()).toBe(0)
+      }
+    } finally {
+      await hostCtx.close()
+      await guestCtx.close()
+      await spectator1Ctx.close()
+      await spectator2Ctx.close()
+      await spectator3Ctx.close()
+    }
+  })
 })

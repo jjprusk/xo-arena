@@ -22,8 +22,20 @@ model User {
   preferences   Json     @default("{}")
   eloRating     Float    @default(1200)
   banned        Boolean  @default(false)
-  roles         String[] @default([])  // extra roles e.g. ['tournament']
   mlModelLimit  Int?     // null = use system default (ml.maxModelsPerUser)
+
+  // Bot fields — null/false on all regular users
+  isBot           Boolean  @default(false)
+  botModelType    String?  // 'minimax' | 'mcts' | 'rule_based' | 'ml'
+  botModelId      String?  @unique // FK to MLModel.id or built-in ID; unique = one bot per model
+  botOwnerId      String?  // FK to User.id; null for built-in bots
+  botActive       Boolean  @default(true)   // false = hidden from picker (soft disable)
+  botCompetitive  Boolean  @default(false)  // true = eligible for leaderboard + tournaments
+  botAvailable    Boolean  @default(false)  // true = available for tournament scheduling
+  botInTournament Boolean  @default(false)  // true = in active tournament; blocks training
+  botCalibrating  Boolean  @default(false)  // true = calibration games in progress
+  botLimit        Int?     // per-user override for max bots; null = system default
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -31,8 +43,28 @@ model User {
   gamesAsPlayer2 Game[]           @relation("Player2Games")
   gamesWon       Game[]           @relation("WinnerGames")
   eloHistory     UserEloHistory[]
+  userRoles      UserRole[]
 
   @@map("users")
+}
+
+enum Role {
+  ADMIN            // full platform access — implicitly satisfies any role check
+  BOT_ADMIN        // manage all bots, set per-user bot limits
+  TOURNAMENT_ADMIN // future
+}
+
+model UserRole {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role
+  grantedById String   // User.id of who assigned the role
+  grantedAt   DateTime @default(now())
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("user_roles")
 }
 
 model UserEloHistory {
@@ -115,7 +147,8 @@ model AIError {
 
 enum GameMode {
   PVP
-  PVAI
+  PVAI   // quick game vs built-in difficulty (no named bot)
+  PVBOT  // challenge a named bot
 }
 
 enum Difficulty {

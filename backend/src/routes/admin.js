@@ -68,7 +68,7 @@ router.get('/users', async (req, res, next) => {
           avatarUrl: true,
           eloRating: true,
           banned: true,
-          roles: true,
+          userRoles: { select: { role: true, grantedAt: true } },
           mlModelLimit: true,
           createdAt: true,
           _count: { select: { gamesAsPlayer1: true } },
@@ -121,29 +121,44 @@ router.patch('/users/:id', async (req, res, next) => {
         data.mlModelLimit = v
       }
     }
-    if (roles !== undefined) {
-      const VALID_ROLES = ['tournament']
-      const cleaned = Array.isArray(roles) ? roles.filter(r => VALID_ROLES.includes(r)) : []
-      data.roles = cleaned
+    // Update domain user scalar fields
+    let user = null
+    const USER_SELECT = {
+      id: true, betterAuthId: true, username: true, displayName: true,
+      email: true, avatarUrl: true, eloRating: true, banned: true,
+      mlModelLimit: true, createdAt: true,
+      userRoles: { select: { role: true, grantedAt: true } },
+      _count: { select: { gamesAsPlayer1: true } },
     }
 
-    // Update domain user
-    let user = null
     if (Object.keys(data).length > 0) {
-      user = await db.user.update({ where: { id: req.params.id }, data, select: {
-        id: true, betterAuthId: true, username: true, displayName: true,
-        email: true, avatarUrl: true, eloRating: true, banned: true,
-        roles: true, mlModelLimit: true, createdAt: true,
-        _count: { select: { gamesAsPlayer1: true } },
-      }})
+      user = await db.user.update({ where: { id: req.params.id }, data, select: USER_SELECT })
     } else {
-      user = await db.user.findUnique({ where: { id: req.params.id }, select: {
-        id: true, betterAuthId: true, username: true, displayName: true,
-        email: true, avatarUrl: true, eloRating: true, banned: true,
-        roles: true, mlModelLimit: true, createdAt: true,
-        _count: { select: { gamesAsPlayer1: true } },
-      }})
+      user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
       if (!user) return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Update domain roles via UserRole join table
+    if (roles !== undefined) {
+      const VALID_DOMAIN_ROLES = ['BOT_ADMIN', 'TOURNAMENT_ADMIN']
+      const desired = Array.isArray(roles) ? roles.filter(r => VALID_DOMAIN_ROLES.includes(r)) : []
+      const current = user.userRoles.map(r => r.role)
+      const toAdd    = desired.filter(r => !current.includes(r))
+      const toRemove = current.filter(r => !desired.includes(r) && VALID_DOMAIN_ROLES.includes(r))
+
+      const adminUserId = req.body._adminUserId ?? null // caller may pass their own id for audit
+
+      await Promise.all([
+        ...toAdd.map(role =>
+          db.userRole.create({ data: { userId: req.params.id, role, grantedById: adminUserId ?? req.params.id } })
+        ),
+        ...toRemove.map(role =>
+          db.userRole.deleteMany({ where: { userId: req.params.id, role } })
+        ),
+      ])
+
+      // Re-fetch to return updated roles
+      user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
     }
 
     // Update BA role (admin flag) if requested

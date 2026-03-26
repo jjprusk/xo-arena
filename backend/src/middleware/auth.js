@@ -71,33 +71,46 @@ export async function optionalAuth(req, _res, next) {
 
 /**
  * Returns true if the given Better Auth user ID has the admin role.
+ * Checks both the BA role field (for BA-level admin) and the domain UserRole table.
  * Safe to call without an active request/response — never throws.
  */
 export async function isAdmin(userId) {
   try {
-    const baUser = await db.baUser.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    })
-    return baUser?.role === 'admin'
+    const [baUser, domainUser] = await Promise.all([
+      db.baUser.findUnique({ where: { id: userId }, select: { role: true } }),
+      db.user.findUnique({
+        where: { betterAuthId: userId },
+        select: { userRoles: { select: { role: true } } },
+      }),
+    ])
+    return (
+      baUser?.role === 'admin' ||
+      domainUser?.userRoles?.some(r => r.role === 'ADMIN') === true
+    )
   } catch {
     return false
   }
 }
 
 /**
- * Returns true if the given Better Auth user ID has the tournament role.
- * Checks both the domain User.roles array and the baUser.role field.
+ * Returns true if the given Better Auth user ID has the TOURNAMENT_ADMIN role (or ADMIN).
  * Safe to call without an active request/response — never throws.
  */
 export async function isTournament(userId) {
   try {
     const [baUser, domainUser] = await Promise.all([
       db.baUser.findUnique({ where: { id: userId }, select: { role: true } }),
-      db.user.findUnique({ where: { betterAuthId: userId }, select: { roles: true } }),
+      db.user.findUnique({
+        where: { betterAuthId: userId },
+        select: { userRoles: { select: { role: true } } },
+      }),
     ])
-    // admins implicitly have tournament access too
-    return baUser?.role === 'admin' || domainUser?.roles?.includes('tournament') === true
+    const roles = domainUser?.userRoles?.map(r => r.role) ?? []
+    return (
+      baUser?.role === 'admin' ||
+      roles.includes('ADMIN') ||
+      roles.includes('TOURNAMENT_ADMIN')
+    )
   } catch {
     return false
   }
