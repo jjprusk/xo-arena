@@ -26,16 +26,6 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {isStaging && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-          background: '#f59e0b', color: '#000', textAlign: 'center',
-          fontSize: '12px', fontWeight: '600', padding: '4px',
-          letterSpacing: '0.05em',
-        }}>
-          STAGING ENVIRONMENT — not production
-        </div>
-      )}
       <Routes>
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<AppLayout />}>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+const isStaging = import.meta.env.VITE_ENV === 'staging'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
 import { useSession } from '../../lib/auth-client.js'
 import { getToken } from '../../lib/getToken.js'
@@ -64,7 +65,7 @@ export default function AppLayout() {
       {/* Top nav bar */}
       <header
         className="sticky top-0 z-40 flex items-center justify-between px-6 md:px-8 h-14 border-b"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+        style={{ backgroundColor: isStaging ? '#92400e' : 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
         {/* Logo */}
         <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
