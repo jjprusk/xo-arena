@@ -8,6 +8,7 @@ export const useGameStore = create((set, get) => ({
   difficulty: 'intermediate',
   aiImplementation: 'minimax',
   mlModelId: null,    // modelId when aiImplementation === 'ml' or ruleSetId for 'rule_based'
+  pvbotModelId: null, // when set, game records as PVBOT with this botModelId string
   playerMark: 'X',   // which mark the human plays
   alternating: false, // swap playerMark on each rematch
   playerName: '',
@@ -42,6 +43,7 @@ export const useGameStore = create((set, get) => ({
   setDifficulty(d) { set({ difficulty: d }) },
   setAIImplementation(id) { set({ aiImplementation: id }) },
   setMLModelId(id) { set({ mlModelId: id }) },
+  setPvbotModelId(id) { set({ pvbotModelId: id }) },
   setAI2Implementation(id) { set({ ai2Implementation: id }) },
   setAI2Difficulty(d) { set({ ai2Difficulty: d }) },
   setAI2ModelId(id) { set({ ai2ModelId: id }) },
@@ -162,6 +164,7 @@ export const useGameStore = create((set, get) => ({
       winLine: null,
       isAIThinking: false,
       mode: null,
+      pvbotModelId: null,
       alternating: false,
       seriesWinner: null,
       moveHistory: [],

@@ -1,8 +1,38 @@
 import React from 'react'
 import { useState, useEffect } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
+import { useSession } from '../../lib/auth-client.js'
 import { api } from '../../lib/api.js'
 import { loadModel } from '../../lib/mlInference.js'
+
+const ALGO_LABELS = {
+  minimax: 'Minimax',
+  mcts: 'MCTS',
+  rule_based: 'Rule-Based',
+  Q_LEARNING: 'Q-Learning',
+  SARSA: 'SARSA',
+  MONTE_CARLO: 'Monte Carlo',
+  POLICY_GRADIENT: 'Policy Gradient',
+  DQN: 'DQN',
+  ALPHA_ZERO: 'AlphaZero',
+}
+
+/** Derive AI play config from a bot record */
+function getBotPlayConfig(bot) {
+  const id = bot.botModelId || ''
+  if (id.startsWith('builtin:minimax:')) {
+    return { implementation: 'minimax', difficulty: id.split(':')[2] || 'intermediate', mlModelId: null }
+  }
+  if (id.startsWith('user:')) {
+    const parts = id.split(':')
+    const algo = parts[2] || 'minimax'
+    const diff = parts[3] || 'intermediate'
+    const impl = algo === 'rule_based' ? 'rule_based' : 'minimax'
+    return { implementation: impl, difficulty: diff, mlModelId: bot.mlModel?.id || null }
+  }
+  // ML model ID direct
+  return { implementation: 'ml', difficulty: 'intermediate', mlModelId: id }
+}
 
 const DIFFICULTIES = ['novice', 'intermediate', 'advanced', 'master']
 const BEST_OF_OPTIONS = [{ label: 'Single', value: 1 }, { label: 'Best of 3', value: 3 }, { label: 'Best of 5', value: 5 }, { label: 'Best of 7', value: 7 }, { label: 'Unlimited', value: null }]
@@ -16,15 +46,19 @@ const BOARD_THEMES = [
 
 export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
   const {
-    setMode, setDifficulty, setAIImplementation, setMLModelId,
+    setMode, setDifficulty, setAIImplementation, setMLModelId, setPvbotModelId,
     setAI2Implementation, setAI2Difficulty, setAI2ModelId,
     setPlayerMark, setAlternating, setPlayerName, startGame,
     setTimerEnabled, setTimerSeconds, setBestOf, setMisereMode, setBoardTheme,
     timerEnabled, timerSeconds, bestOf, misereMode, boardTheme,
   } = useGameStore()
 
+  const { data: session } = useSession()
+  const isSignedIn = !!session?.user
+
   const [aiExpanded, setAiExpanded] = useState(false)
   const [aivaiExpanded, setAivaiExpanded] = useState(false)
+  const [botExpanded, setBotExpanded] = useState(false)
   const [selectedDifficulty, setSelectedDifficulty] = useState('intermediate')
   const [selectedImpl, setSelectedImpl] = useState('minimax')
   const [selectedMark, setSelectedMark] = useState('X')
@@ -39,6 +73,11 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   const [showRoomList, setShowRoomList] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
   const joinRef = React.useRef(null)
+
+  // Challenge a bot state
+  const [bots, setBots] = useState([])
+  const [botsLoading, setBotsLoading] = useState(false)
+  const [selectedBotId, setSelectedBotId] = useState(null)
 
   // AI vs AI config
   const [ai1Impl, setAi1Impl] = useState('minimax')
@@ -117,6 +156,19 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   }, [selectedImpl])
 
   useEffect(() => {
+    if (!botExpanded) return
+    setBotsLoading(true)
+    api.bots.list()
+      .then((res) => {
+        const sorted = (res.bots || []).sort((a, b) => (b.eloRating ?? 1200) - (a.eloRating ?? 1200))
+        setBots(sorted)
+        if (sorted.length > 0 && !selectedBotId) setSelectedBotId(sorted[0].id)
+      })
+      .catch(() => setBots([]))
+      .finally(() => setBotsLoading(false))
+  }, [botExpanded])
+
+  useEffect(() => {
     if (!aivaiExpanded) return
     api.ml.listModels()
       .then((res) => {
@@ -154,9 +206,33 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     setMode('pvai')
     setDifficulty(selectedDifficulty)
     setAIImplementation(selectedImpl)
-    if (selectedImpl === 'ml') setMLModelId(selectedModelId)
-    else if (selectedImpl === 'rule_based') setMLModelId(selectedRuleSetId)
-    else setMLModelId(null)
+    if (selectedImpl === 'ml') {
+      setMLModelId(selectedModelId)
+      setPvbotModelId(null)
+    } else if (selectedImpl === 'rule_based') {
+      setMLModelId(selectedRuleSetId)
+      setPvbotModelId(null)
+    } else {
+      // minimax — record as PVBOT against the built-in bot persona
+      setMLModelId(null)
+      setPvbotModelId(`builtin:minimax:${selectedDifficulty}`)
+    }
+    setPlayerMark(isAlternating ? 'X' : selectedMark)
+    setAlternating(isAlternating)
+    setPlayerName(playerName)
+    startGame()
+    onStart?.()
+  }
+
+  function handleChallengeBot(bot) {
+    applyOptions()
+    const cfg = getBotPlayConfig(bot)
+    const isAlternating = selectedMark === 'alternate'
+    setMode('pvai')
+    setDifficulty(cfg.difficulty)
+    setAIImplementation(cfg.implementation)
+    setMLModelId(cfg.mlModelId)
+    setPvbotModelId(bot.botModelId)
     setPlayerMark(isAlternating ? 'X' : selectedMark)
     setAlternating(isAlternating)
     setPlayerName(playerName)
@@ -208,7 +284,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         }}
       >
         <button
-          onClick={() => { setAiExpanded(v => !v); setAivaiExpanded(false) }}
+          onClick={() => { setAiExpanded(v => !v); setAivaiExpanded(false); setBotExpanded(false) }}
           className="w-full flex items-center gap-4 p-4 text-left"
         >
           <span className="text-3xl">🤖</span>
@@ -463,6 +539,137 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         )}
       </div>
 
+      {/* ── Challenge a Bot ─────────────────────────────────── */}
+      <div
+        className="rounded-xl border-2 overflow-hidden transition-colors"
+        style={{
+          borderColor: botExpanded ? 'var(--color-purple-600, #9333ea)' : 'var(--border-default)',
+          backgroundColor: 'var(--bg-surface)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        <button
+          onClick={() => { setBotExpanded(v => !v); setAiExpanded(false); setAivaiExpanded(false) }}
+          className="w-full flex items-center gap-4 p-4 text-left"
+        >
+          <span className="text-3xl">🤺</span>
+          <div className="flex-1">
+            <div className="font-semibold">Challenge a Bot</div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              Play a ranked match against a named bot
+            </div>
+          </div>
+          <span className="text-lg" style={{ color: 'var(--text-muted)' }}>
+            {botExpanded ? '▲' : '▼'}
+          </span>
+        </button>
+
+        {botExpanded && (
+          <div className="border-t" style={{ borderColor: 'var(--border-default)' }}>
+            {botsLoading ? (
+              <div className="flex items-center justify-center py-8 gap-2">
+                <div className="w-5 h-5 border-2 border-[#9333ea] border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading bots…</span>
+              </div>
+            ) : bots.length === 0 ? (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No active bots available yet.</p>
+              </div>
+            ) : (
+              <div className="divide-y" style={{ divideColor: 'var(--border-default)' }}>
+                {bots.map((bot) => {
+                  const initial = (bot.displayName?.[0] || '?').toUpperCase()
+                  const algoLabel = ALGO_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'
+                  const elo = Math.round(bot.eloRating ?? 1200)
+                  return (
+                    <div key={bot.id} className="flex items-center gap-3 px-4 py-3">
+                      {/* Avatar */}
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
+                        style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
+                      >
+                        {bot.avatarUrl
+                          ? <img src={bot.avatarUrl} alt={bot.displayName} className="w-full h-full object-cover" />
+                          : initial}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold truncate">{bot.displayName}</span>
+                          {bot.botCalibrating && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
+                              ~
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>ELO {elo}</span>
+                          <span className="text-[10px]" style={{ color: 'var(--border-default)' }}>·</span>
+                          <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{algoLabel}</span>
+                          {bot.botCompetitive && (
+                            <>
+                              <span className="text-[10px]" style={{ color: 'var(--border-default)' }}>·</span>
+                              <span className="text-[10px] font-semibold" style={{ color: '#0d9488' }}>Competitive</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Challenge button */}
+                      {isSignedIn ? (
+                        <button
+                          onClick={() => handleChallengeBot(bot)}
+                          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
+                          style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)' }}
+                        >
+                          Challenge
+                        </button>
+                      ) : (
+                        <a
+                          href="/sign-in"
+                          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
+                          style={{ backgroundColor: 'var(--bg-page)', borderColor: 'var(--border-default)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
+                        >
+                          Sign in
+                        </a>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Play as selector — shown for signed-in users so they can pick X/O */}
+            {isSignedIn && bots.length > 0 && (
+              <div className="px-4 pb-4 pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
+                <label className="text-xs font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Play as</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'X',         label: 'X',  color: 'var(--color-blue-600)',   bg: 'var(--color-blue-50)' },
+                    { id: 'O',         label: 'O',  color: 'var(--color-teal-600)',   bg: 'var(--color-teal-50)' },
+                    { id: 'alternate', label: '±',  color: 'var(--color-amber-600)',  bg: 'var(--color-amber-50)' },
+                  ].map(({ id, label, color, bg }) => (
+                    <button
+                      key={id}
+                      onClick={() => setSelectedMark(id)}
+                      className="flex-1 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors"
+                      style={{
+                        borderColor: selectedMark === id ? color : 'var(--border-default)',
+                        backgroundColor: selectedMark === id ? bg : 'var(--bg-surface)',
+                        color,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ── AI vs AI Spectator ──────────────────────────────── */}
       <div
         className="rounded-xl border-2 overflow-hidden transition-colors"
@@ -473,7 +680,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         }}
       >
         <button
-          onClick={() => { setAivaiExpanded(v => !v); setAiExpanded(false) }}
+          onClick={() => { setAivaiExpanded(v => !v); setAiExpanded(false); setBotExpanded(false) }}
           className="w-full flex items-center gap-4 p-4 text-left"
         >
           <span className="text-3xl">👁</span>

@@ -332,10 +332,10 @@ When a user deletes their account, all their bots are deleted with them (cascade
 ### Phase 5 — Mode selection UX
 | # | Task | Done |
 |---|------|------|
-| B-30 | Mode selection: "Quick game" path maps difficulty to built-in bot silently | |
-| B-31 | Mode selection: "Challenge a bot" picker showing name, ELO, algorithm | |
-| B-32 | Bot picker: casual and competitive bots listed, sorted by ELO | |
-| B-33 | Bot picker: visible to guests (challenge flow requires sign-in) | |
+| B-30 | Mode selection: "Quick game" path maps difficulty to built-in bot silently | ✅ |
+| B-31 | Mode selection: "Challenge a bot" picker showing name, ELO, algorithm | ✅ |
+| B-32 | Bot picker: casual and competitive bots listed, sorted by ELO | ✅ |
+| B-33 | Bot picker: visible to guests (challenge flow requires sign-in) | ✅ |
 
 ### Phase 6 — Server-side execution & spectating
 | # | Task | Done |

@@ -12,12 +12,25 @@ vi.mock('../../../lib/api.js', () => ({
         Promise.resolve({
           implementations: [
             { id: 'minimax', name: 'Minimax', description: 'Classic', supportedDifficulties: ['novice', 'intermediate', 'advanced', 'master'] },
-            { id: 'random', name: 'Random', description: 'Random moves', supportedDifficulties: ['novice'] },
           ],
         })
       ),
     },
+    ml: {
+      listModels: vi.fn(() => Promise.resolve({ models: [] })),
+      listRuleSets: vi.fn(() => Promise.resolve({ ruleSets: [] })),
+    },
+    rooms: {
+      list: vi.fn(() => Promise.resolve({ rooms: [] })),
+    },
+    bots: {
+      list: vi.fn(() => Promise.resolve({ bots: [] })),
+    },
   },
+}))
+
+vi.mock('../../../lib/auth-client.js', () => ({
+  useSession: vi.fn(() => ({ data: null })),
 }))
 
 describe('ModeSelection', () => {
@@ -25,9 +38,10 @@ describe('ModeSelection', () => {
     useGameStore.getState().newGame()
   })
 
-  it('renders three action sections', () => {
+  it('renders main action sections', () => {
     render(<ModeSelection />)
     expect(screen.getByText('Play vs AI')).toBeTruthy()
+    expect(screen.getByText('Challenge a Bot')).toBeTruthy()
     expect(screen.getByText('Invite a Friend')).toBeTruthy()
     expect(screen.getByText('Join a Room')).toBeTruthy()
   })

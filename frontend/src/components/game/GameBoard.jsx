@@ -46,7 +46,7 @@ export default function GameBoard({ roomName }) {
 
   const {
     board, currentTurn, status, winner, winLine, scores, round,
-    playerMark, mode, difficulty, aiImplementation, mlModelId, isAIThinking,
+    playerMark, mode, difficulty, aiImplementation, mlModelId, pvbotModelId, isAIThinking,
     timerEnabled, timerSeconds, bestOf, seriesWinner, moveHistory, hintCell, misereMode,
     boardTheme,
     // AI vs AI
@@ -205,22 +205,38 @@ export default function GameBoard({ roomName }) {
       const startedAt = gameStartRef.current || Date.now()
       const durationMs = Date.now() - startedAt
 
-      let outcome = 'DRAW'
-      if (status === 'won' || status === 'forfeit') {
-        outcome = winner === playerMark ? 'PLAYER1_WIN' : 'AI_WIN'
-      }
+      if (pvbotModelId) {
+        // Record as PVBOT — named bot challenge or quick minimax game
+        let outcome = 'DRAW'
+        if (status === 'won' || status === 'forfeit') {
+          outcome = winner === playerMark ? 'PLAYER1_WIN' : 'PLAYER2_WIN'
+        }
+        api.games.record({
+          mode: 'PVBOT',
+          outcome,
+          botModelId: pvbotModelId,
+          totalMoves,
+          durationMs,
+          startedAt,
+        }, token).catch(() => {})
+      } else {
+        // Record as PVAI (ML or rule-based)
+        let outcome = 'DRAW'
+        if (status === 'won' || status === 'forfeit') {
+          outcome = winner === playerMark ? 'PLAYER1_WIN' : 'AI_WIN'
+        }
+        api.games.record({
+          outcome,
+          difficulty,
+          aiImplementationId: aiImplementation,
+          totalMoves,
+          durationMs,
+          startedAt,
+        }, token).catch(() => {})
 
-      api.games.record({
-        outcome,
-        difficulty,
-        aiImplementationId: aiImplementation,
-        totalMoves,
-        durationMs,
-        startedAt,
-      }, token).catch(() => {})
-
-      if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
-        api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+        if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
+          api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+        }
       }
     }
 
