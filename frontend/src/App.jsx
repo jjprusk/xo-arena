@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout.jsx'
 import AdminRoute from './components/admin/AdminRoute.jsx'
@@ -17,9 +17,25 @@ import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
 import AdminMLPage from './pages/admin/AdminMLPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 
+const isStaging = import.meta.env.VITE_ENV === 'staging'
+
 export default function App() {
+  useEffect(() => {
+    if (isStaging) document.title = '[STAGING] XO Arena'
+  }, [])
+
   return (
     <BrowserRouter>
+      {isStaging && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: '#f59e0b', color: '#000', textAlign: 'center',
+          fontSize: '12px', fontWeight: '600', padding: '4px',
+          letterSpacing: '0.05em',
+        }}>
+          STAGING ENVIRONMENT — not production
+        </div>
+      )}
       <Routes>
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<AppLayout />}>
