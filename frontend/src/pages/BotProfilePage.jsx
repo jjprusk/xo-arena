@@ -26,6 +26,8 @@ export default function BotProfilePage() {
   const [error, setError] = useState(null)
   const [availToggling, setAvailToggling] = useState(false)
   const [availError, setAvailError] = useState(null)
+  const [sessions, setSessions] = useState([])
+  const [selectedSession, setSelectedSession] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -42,9 +44,17 @@ export default function BotProfilePage() {
           setError('Not a bot profile.')
           return
         }
-        setBot(userRes.user)
+        const botUser = userRes.user
+        setBot(botUser)
         if (statsRes?.stats) setBotStats(statsRes.stats)
         if (eloRes) setEloData(eloRes)
+        // Load training sessions if this bot has an ML model
+        if (botUser.mlModel?.id) {
+          api.ml.getSessions(botUser.mlModel.id).then(r => {
+            setSessions(r.sessions || [])
+            if (r.sessions?.length > 0) setSelectedSession(r.sessions[0].id)
+          }).catch(() => {})
+        }
       })
       .catch(() => setError('Failed to load bot profile.'))
       .finally(() => setLoading(false))
@@ -267,6 +277,45 @@ export default function BotProfilePage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* Training sessions */}
+      {sessions.length > 0 && (
+        <section className="space-y-2">
+          <SectionLabel>Training sessions</SectionLabel>
+          <div className="rounded-xl border p-4 space-y-3"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}>
+            <select value={selectedSession} onChange={e => setSelectedSession(e.target.value)}
+              className="w-full text-sm rounded-lg border px-3 py-2 outline-none"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+              {sessions.map(s => (
+                <option key={s.id} value={s.id}>
+                  {new Date(s.startedAt).toLocaleDateString()} · {s.mode.replace(/_/g, ' ')} · {s.iterations.toLocaleString()} eps · {s.status}
+                </option>
+              ))}
+            </select>
+            {(() => {
+              const sel = sessions.find(s => s.id === selectedSession)
+              if (!sel) return null
+              const dur = sel.startedAt && sel.completedAt
+                ? (() => { const ms = new Date(sel.completedAt) - new Date(sel.startedAt); const m = Math.floor(ms / 60000); const s2 = Math.floor((ms % 60000) / 1000); return m > 0 ? `${m}m ${s2}s` : `${s2}s` })()
+                : '—'
+              return (
+                <div className="rounded-lg border px-4 py-3 space-y-2"
+                  style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span style={{ color: 'var(--text-muted)' }}>Mode: </span><span className="font-medium">{sel.mode.replace(/_/g, ' ')}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Status: </span><span className="font-medium">{sel.status}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Episodes: </span><span className="font-medium">{sel.iterations.toLocaleString()}</span></div>
+                    <div><span style={{ color: 'var(--text-muted)' }}>Duration: </span><span className="font-medium">{dur}</span></div>
+                    {sel.summary?.winRate != null && <div><span style={{ color: 'var(--text-muted)' }}>Win rate: </span><span className="font-medium">{(sel.summary.winRate * 100).toFixed(1)}%</span></div>}
+                    {sel.summary?.finalEpsilon != null && <div><span style={{ color: 'var(--text-muted)' }}>Final ε: </span><span className="font-medium">{sel.summary.finalEpsilon.toFixed(4)}</span></div>}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </section>
       )}

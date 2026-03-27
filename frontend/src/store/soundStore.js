@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Howl } from 'howler'
+import { Howl, Howler } from 'howler'
 
 export const SOUND_PACKS = [
   { id: 'default', label: 'Default', description: 'Clean classic sounds' },
@@ -13,7 +13,10 @@ const howlCache = {}
 
 function getHowl(key) {
   if (!howlCache[key]) {
-    howlCache[key] = new Howl({ src: [`/sounds/${key}.wav`], volume: 0.5 })
+    // html5: true uses HTMLAudioElement instead of Web Audio API.
+    // This avoids the AudioContext suspended-state problem in Chrome where
+    // newly created AudioContexts start suspended even inside click handlers.
+    howlCache[key] = new Howl({ src: [`/sounds/${key}.wav`], html5: true })
   }
   return howlCache[key]
 }

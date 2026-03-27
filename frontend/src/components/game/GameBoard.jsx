@@ -182,6 +182,12 @@ export default function GameBoard({ roomName }) {
     }
   }, [status])
 
+  // ── Play win / draw sounds ───────────────────────────────────────────────
+  useEffect(() => {
+    if (status === 'won') play('win')
+    else if (status === 'draw') play('draw')
+  }, [status])
+
   // ── Track last placed cell for animation ────────────────────────────────
   useEffect(() => {
     if (moveHistory.length === 0) { setLastPlacedCell(null); return }
@@ -373,7 +379,8 @@ export default function GameBoard({ roomName }) {
     if (board[i] !== null) return
     lastHumanMoveRef.current = i
     makeMove(i)
-  }, [isPlayerTurn, board, makeMove])
+    play('move')
+  }, [isPlayerTurn, board, makeMove, play])
 
   const handleForfeit = () => {
     forfeit()

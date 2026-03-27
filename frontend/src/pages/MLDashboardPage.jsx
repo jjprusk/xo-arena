@@ -226,7 +226,7 @@ export default function GymPage() {
 
                 {/* Tabs */}
                 <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-default)' }}>
-                  {['train', 'analytics', 'evaluation', 'explainability', 'checkpoints', 'export', 'rules'].map(tab => (
+                  {['train', 'analytics', 'evaluation', 'explainability', 'checkpoints', 'sessions', 'export', 'rules'].map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
                       className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
                       style={{ color: activeTab === tab ? undefined : 'var(--text-secondary)' }}>
@@ -240,6 +240,7 @@ export default function GymPage() {
                 {activeTab === 'evaluation'     && <EvaluationTab model={selectedModel} models={allLoadedModels} domainUserId={domainUserId} currentUserName={currentUserName} />}
                 {activeTab === 'explainability' && <ExplainabilityTab model={selectedModel} domainUserId={domainUserId} currentUserName={currentUserName} />}
                 {activeTab === 'checkpoints'    && <CheckpointsTab model={selectedModel} onRestore={() => refreshModel(selectedBotId, selectedModel.id)} />}
+                {activeTab === 'sessions'       && <SessionsTab model={selectedModel} />}
                 {activeTab === 'export'         && <ExportTab model={selectedModel} />}
                 {activeTab === 'rules'          && <RulesTab model={selectedModel} models={allLoadedModels} />}
               </div>
@@ -1940,10 +1941,15 @@ function OpeningResponseGrid({ responses }) {
 
 function CheckpointsTab({ model, onRestore }) {
   const [checkpoints, setCheckpoints] = useState([])
+  const [selected, setSelected] = useState('')
   const [saving, setSaving] = useState(false)
+  const [restoring, setRestoring] = useState(false)
 
   useEffect(() => {
-    api.ml.getCheckpoints(model.id).then(r => setCheckpoints(r.checkpoints))
+    api.ml.getCheckpoints(model.id).then(r => {
+      setCheckpoints(r.checkpoints)
+      if (r.checkpoints.length > 0) setSelected(r.checkpoints[0].id)
+    })
   }, [model.id])
 
   async function handleSave() {
@@ -1952,17 +1958,26 @@ function CheckpointsTab({ model, onRestore }) {
       const token = await getToken()
       const { checkpoint } = await api.ml.saveCheckpoint(model.id, token)
       setCheckpoints(prev => [checkpoint, ...prev])
+      setSelected(checkpoint.id)
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleRestore(cpId) {
+  async function handleRestore() {
+    if (!selected) return
     if (!confirm('Restore this checkpoint? Current Q-table will be replaced.')) return
-    const token = await getToken()
-    await api.ml.restoreCheckpoint(model.id, cpId, token)
-    onRestore()
+    setRestoring(true)
+    try {
+      const token = await getToken()
+      await api.ml.restoreCheckpoint(model.id, selected, token)
+      onRestore()
+    } finally {
+      setRestoring(false)
+    }
   }
+
+  const selectedCp = checkpoints.find(cp => cp.id === selected) ?? null
 
   return (
     <Card>
@@ -1972,28 +1987,125 @@ function CheckpointsTab({ model, onRestore }) {
           {saving ? 'Saving…' : '+ Save now'}
         </Btn>
       </div>
-      <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
         Auto-saved every 1,000 episodes. Restore any checkpoint to roll back the model.
       </p>
       {checkpoints.length === 0 ? (
         <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No checkpoints yet.</p>
       ) : (
-        <div className="space-y-2">
-          {checkpoints.map(cp => (
-            <div key={cp.id} className="flex items-center justify-between rounded-lg border px-4 py-3"
+        <div className="space-y-3">
+          <select value={selected} onChange={e => setSelected(e.target.value)}
+            className="w-full text-sm rounded-lg border px-3 py-2 outline-none"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+            {checkpoints.map(cp => (
+              <option key={cp.id} value={cp.id}>
+                Episode {cp.episodeNum.toLocaleString()} · ε={cp.epsilon.toFixed(4)} · ELO {Math.round(cp.eloRating)} · {new Date(cp.createdAt).toLocaleDateString()}
+              </option>
+            ))}
+          </select>
+          {selectedCp && (
+            <div className="rounded-lg border px-4 py-3 flex items-center justify-between"
               style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
-              <div>
-                <p className="text-sm font-semibold">Episode {cp.episodeNum.toLocaleString()}</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  ε={cp.epsilon.toFixed(4)} · ELO {Math.round(cp.eloRating)} · {new Date(cp.createdAt).toLocaleString()}
-                </p>
+              <div className="text-xs space-y-0.5" style={{ color: 'var(--text-muted)' }}>
+                <p><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Episode {selectedCp.episodeNum.toLocaleString()}</span></p>
+                <p>ε = {selectedCp.epsilon.toFixed(4)} · ELO {Math.round(selectedCp.eloRating)}</p>
+                <p>{new Date(selectedCp.createdAt).toLocaleString()}</p>
               </div>
-              <Btn onClick={() => handleRestore(cp.id)} variant="ghost">Restore</Btn>
+              <Btn onClick={handleRestore} disabled={restoring} variant="ghost">
+                {restoring ? 'Restoring…' : 'Restore'}
+              </Btn>
             </div>
-          ))}
+          )}
         </div>
       )}
     </Card>
+  )
+}
+
+// ─── Sessions Tab ─────────────────────────────────────────────────────────────
+
+function SessionsTab({ model }) {
+  const [sessions, setSessions] = useState([])
+  const [selected, setSelected] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    api.ml.getSessions(model.id).then(r => {
+      setSessions(r.sessions || [])
+      if (r.sessions?.length > 0) setSelected(r.sessions[0].id)
+    }).finally(() => setLoading(false))
+  }, [model.id])
+
+  const sel = sessions.find(s => s.id === selected) ?? null
+
+  function fmtDuration(s) {
+    if (!s.startedAt || !s.completedAt) return '—'
+    const ms = new Date(s.completedAt) - new Date(s.startedAt)
+    const mins = Math.floor(ms / 60000)
+    const secs = Math.floor((ms % 60000) / 1000)
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
+  }
+
+  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>
+
+  return (
+    <Card>
+      <SectionLabel>Training Sessions</SectionLabel>
+      <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+        History of all training runs for this model.
+      </p>
+      {sessions.length === 0 ? (
+        <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No training sessions yet.</p>
+      ) : (
+        <div className="space-y-3">
+          <select value={selected} onChange={e => setSelected(e.target.value)}
+            className="w-full text-sm rounded-lg border px-3 py-2 outline-none"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+            {sessions.map(s => (
+              <option key={s.id} value={s.id}>
+                {new Date(s.startedAt).toLocaleDateString()} · {s.mode.replace(/_/g, ' ')} · {s.iterations.toLocaleString()} eps · {s.status}
+              </option>
+            ))}
+          </select>
+          {sel && (
+            <div className="rounded-lg border px-4 py-4 space-y-3"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">{sel.mode.replace(/_/g, ' ')}</span>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full`}
+                  style={{
+                    backgroundColor: `var(--color-${SESSION_COLOR[sel.status] || 'gray'}-100)`,
+                    color: `var(--color-${SESSION_COLOR[sel.status] || 'gray'}-700)`,
+                  }}>{sel.status}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <StatCell label="Episodes" value={sel.iterations.toLocaleString()} />
+                <StatCell label="Duration" value={fmtDuration(sel)} />
+                <StatCell label="Started" value={new Date(sel.startedAt).toLocaleString()} />
+                {sel.summary && <>
+                  <StatCell label="Win rate" value={sel.summary.winRate != null ? `${(sel.summary.winRate * 100).toFixed(1)}%` : '—'} />
+                  <StatCell label="Wins" value={sel.summary.wins ?? '—'} />
+                  <StatCell label="Losses" value={sel.summary.losses ?? '—'} />
+                  <StatCell label="Draws" value={sel.summary.draws ?? '—'} />
+                  <StatCell label="Final ε" value={sel.summary.finalEpsilon != null ? sel.summary.finalEpsilon.toFixed(4) : '—'} />
+                  {sel.summary.avgQDelta != null && <StatCell label="Avg Q-Δ" value={sel.summary.avgQDelta.toFixed(4)} />}
+                </>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function StatCell({ label, value }) {
+  return (
+    <div className="rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border-default)' }}>
+      <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-sm font-semibold mt-0.5">{value}</p>
+    </div>
   )
 }
 
