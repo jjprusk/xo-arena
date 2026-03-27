@@ -27,6 +27,13 @@ const RULE_LABELS = Object.fromEntries(
   MINIMAX_RULES.map(r => [r.id, { short: r.label, desc: r.desc }])
 )
 
+const MINIMAX_PERSONAS = {
+  novice:       { name: 'Rusty',    elo: 800  },
+  intermediate: { name: 'Copper',   elo: 1200 },
+  advanced:     { name: 'Sterling', elo: 1500 },
+  master:       { name: 'Magnus',   elo: 1800 },
+}
+
 const THEME_MARKS = {
   default: { X: 'var(--color-blue-600)',   O: 'var(--color-teal-600)' },
   neon:    { X: 'var(--color-neon-x)',     O: 'var(--color-neon-o)' },
@@ -583,7 +590,15 @@ export default function GameBoard({ roomName }) {
       {/* Minimax last-move rule badge */}
       {aiImplementation === 'minimax' && aiReason && !analyzeMode && (
         <div className="w-full flex items-center gap-2">
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>AI played:</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {(() => {
+              const diff = difficulty?.toLowerCase()
+              const persona = MINIMAX_PERSONAS[diff]
+              return persona
+                ? `${persona.name} (ELO ${persona.elo}) played:`
+                : 'AI played:'
+            })()}
+          </span>
           <span
             className="text-xs font-semibold px-2 py-0.5 rounded-full"
             style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
