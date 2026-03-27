@@ -33,8 +33,10 @@ async function resolveSocketUser(token) {
  * @returns {import('socket.io').Server}
  */
 export async function attachSocketIO(httpServer) {
+  const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',').map(o => o.trim()).filter(Boolean)
   const io = new Server(httpServer, {
-    cors: { origin: process.env.FRONTEND_URL || 'http://localhost:5173', methods: ['GET', 'POST'] },
+    cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
   })
 
   // Redis adapter for horizontal scaling

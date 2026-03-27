@@ -1,5 +1,5 @@
 # Build stage
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 COPY package.json ./
 RUN npm install
@@ -13,7 +13,7 @@ ENV VITE_ENV=$VITE_ENV
 RUN npm run build
 
 # Runtime stage
-FROM node:22-alpine
+FROM node:22-slim
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY server.js package.json ./

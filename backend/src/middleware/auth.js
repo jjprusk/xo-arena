@@ -7,27 +7,37 @@
  * isAdmin          — helper; returns boolean
  */
 
-import { auth } from '../lib/auth.js'
 import logger from '../logger.js'
 import db from '../lib/db.js'
+import { jwtVerify, importJWK } from 'jose'
 
 /**
- * Extracts and verifies the Bearer JWT from the Authorization header via
- * the Better Auth JWT plugin's verifyJWT endpoint.
+ * Verifies a Better Auth JWT by looking up the signing key from the JWKS table.
+ * Mirrors what Better Auth's verifyJWT plugin does internally.
  *
- * Returns { userId } on success, or null if the token is absent/invalid.
+ * Returns { userId } on success, or null if absent/invalid.
  */
 async function verifyToken(req) {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) return null
-
   const token = header.slice(7)
+
   try {
-    // Better Auth JWT plugin: auth.api.verifyJWT({ body: { token } })
-    // Returns { payload } where payload.sub is the BA user ID
-    const result = await auth.api.verifyJWT({ body: { token } })
-    if (!result?.payload?.sub) return null
-    return { userId: result.payload.sub }
+    // Parse kid from JWT header to find the right key
+    const [rawHeader] = token.split('.')
+    const { kid } = JSON.parse(Buffer.from(rawHeader, 'base64url').toString())
+    if (!kid) return null
+
+    const jwk = await db.jwks.findUnique({ where: { id: kid } })
+    if (!jwk) return null
+
+    const cryptoKey = await importJWK(JSON.parse(jwk.publicKey), 'EdDSA')
+    // No issuer/audience check — BA's JWT plugin doesn't set those claims;
+    // verifying against the correct public key from the DB is sufficient.
+    const { payload } = await jwtVerify(token, cryptoKey)
+
+    if (!payload?.sub) return null
+    return { userId: payload.sub }
   } catch (err) {
     logger.warn({ err: err.message }, 'JWT verification failed')
     return null
