@@ -225,15 +225,15 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
               <div className="px-4 py-6 text-center">
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No active bots available yet.</p>
               </div>
-            ) : (
-              <div className="divide-y" style={{ divideColor: 'var(--border-default)' }}>
-                {bots.map((bot) => {
+            ) : (() => {
+                const builtIn = bots.filter(b => !b.botOwnerId)
+                const community = bots.filter(b => b.botOwnerId)
+                const renderBot = (bot) => {
                   const initial = (bot.displayName?.[0] || '?').toUpperCase()
                   const algoLabel = ALGO_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'
                   const elo = Math.round(bot.eloRating ?? 1200)
                   return (
                     <div key={bot.id} className="flex items-center gap-3 px-4 py-3">
-                      {/* Avatar */}
                       <div
                         className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
                         style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
@@ -242,8 +242,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                           ? <img src={bot.avatarUrl} alt={bot.displayName} className="w-full h-full object-cover" />
                           : initial}
                       </div>
-
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-semibold truncate">{bot.displayName}</span>
@@ -267,8 +265,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                           )}
                         </div>
                       </div>
-
-                      {/* Challenge button */}
                       {isSignedIn ? (
                         <button
                           onClick={() => handleChallengeBot(bot)}
@@ -281,16 +277,38 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                         <a
                           href="/sign-in"
                           className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
-                          style={{ backgroundColor: 'var(--bg-page)', borderColor: 'var(--border-default)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
+                          style={{ backgroundColor: 'var(--bg-page)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
                         >
                           Sign in
                         </a>
                       )}
                     </div>
                   )
-                })}
-              </div>
-            )}
+                }
+                return (
+                  <div>
+                    {/* Built-in bots */}
+                    <div className="px-4 pt-3 pb-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Built-in</span>
+                    </div>
+                    <div className="divide-y" style={{ borderTop: '1px solid var(--border-default)' }}>
+                      {builtIn.map(renderBot)}
+                    </div>
+
+                    {/* Community bots */}
+                    {community.length > 0 && (
+                      <>
+                        <div className="px-4 pt-4 pb-1" style={{ borderTop: '1px solid var(--border-default)' }}>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Community</span>
+                        </div>
+                        <div className="divide-y" style={{ borderTop: '1px solid var(--border-default)' }}>
+                          {community.map(renderBot)}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
 
             {/* Play as + options — shown for signed-in users */}
             {isSignedIn && bots.length > 0 && (
