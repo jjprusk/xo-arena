@@ -23,8 +23,16 @@ function getHowl(key) {
 
 // ── Retro / Nature packs — Web Audio synthesis ───────────────────────────────
 let _audioCtx = null
+let _masterGain = null
+let _synthVolume = 0.5 // mirrors store volume; updated by setVolume and onRehydrateStorage
+
 function ctx() {
-  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    _masterGain = _audioCtx.createGain()
+    _masterGain.gain.value = _synthVolume
+    _masterGain.connect(_audioCtx.destination)
+  }
   // Resume if suspended (browser autoplay policy)
   if (_audioCtx.state === 'suspended') _audioCtx.resume()
   return _audioCtx
@@ -39,7 +47,7 @@ function tone(type, freq, startTime, duration, gain = 0.18, fadeOut = true) {
   env.gain.setValueAtTime(gain, startTime)
   if (fadeOut) env.gain.exponentialRampToValueAtTime(0.001, startTime + duration)
   osc.connect(env)
-  env.connect(ac.destination)
+  env.connect(_masterGain)
   osc.start(startTime)
   osc.stop(startTime + duration + 0.02)
 }
@@ -97,7 +105,7 @@ const SYNTH = {
       osc.frequency.exponentialRampToValueAtTime(165, t + 0.5)
       env.gain.setValueAtTime(0.14, t)
       env.gain.exponentialRampToValueAtTime(0.001, t + 0.5)
-      osc.connect(env); env.connect(ac.destination)
+      osc.connect(env); env.connect(_masterGain)
       osc.start(t); osc.stop(t + 0.55)
     },
   },
@@ -118,6 +126,8 @@ export const useSoundStore = create(
       },
 
       setVolume(v) {
+        _synthVolume = v
+        if (_masterGain) _masterGain.gain.value = v
         set({ volume: v })
         Howler.volume(v)
       },
@@ -136,6 +146,11 @@ export const useSoundStore = create(
         }
       },
     }),
-    { name: 'xo-sound' },
+    {
+      name: 'xo-sound',
+      onRehydrateStorage: () => (state) => {
+        if (state?.volume != null) _synthVolume = state.volume
+      },
+    },
   ),
 )

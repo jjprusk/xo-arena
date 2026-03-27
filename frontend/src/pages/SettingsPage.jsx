@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { useThemeStore } from '../store/themeStore.js'
 import { useSoundStore, SOUND_PACKS } from '../store/soundStore.js'
 
@@ -8,50 +8,10 @@ const THEMES = [
   { value: 'system', label: 'System', preview: '⊙' },
 ]
 
-async function audioTest() {
-  const results = []
-
-  // Test 1: HTML5 audio with actual file
-  try {
-    const audio = new Audio('/sounds/move.wav')
-    audio.volume = 1.0
-    await audio.play()
-    results.push('HTML5: OK')
-  } catch (e) {
-    results.push(`HTML5: ${e.name} — ${e.message}`)
-  }
-
-  // Test 2: Web Audio API synthesis (no file needed)
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) throw new Error('AudioContext not supported')
-    const ac = new Ctx()
-    const stateOnCreate = ac.state
-    if (ac.state !== 'running') await ac.resume()
-    const stateAfterResume = ac.state
-    const osc = ac.createOscillator()
-    const gain = ac.createGain()
-    osc.type = 'sine'
-    osc.frequency.value = 660
-    gain.gain.value = 0.3
-    osc.connect(gain)
-    gain.connect(ac.destination)
-    osc.start()
-    await new Promise(r => setTimeout(r, 400))
-    osc.stop()
-    setTimeout(() => ac.close(), 100)
-    results.push(`WebAudio: OK (was ${stateOnCreate}, resumed to ${stateAfterResume})`)
-  } catch (e) {
-    results.push(`WebAudio: ${e.name} — ${e.message}`)
-  }
-
-  return results.join(' | ')
-}
 
 export default function SettingsPage() {
   const { theme, setTheme } = useThemeStore()
   const { muted, toggleMute, volume, setVolume, soundPack, setSoundPack, play } = useSoundStore()
-  const [audioStatus, setAudioStatus] = useState(null)
 
   return (
     <div className="max-w-lg mx-auto space-y-8">
@@ -138,25 +98,14 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">Sound pack</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={async () => {
-                    setAudioStatus('Testing…')
-                    const result = await audioTest()
-                    setAudioStatus(result)
-                  }}
-                  className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
-                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-                >
-                  ▶ Diagnose
-                </button>
-              </div>
+              <button
+                onClick={() => play('move')}
+                className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              >
+                ▶ Test sound
+              </button>
             </div>
-            {audioStatus && (
-              <p className="text-xs mb-2 font-mono break-all" style={{ color: 'var(--text-secondary)' }}>
-                {audioStatus}
-              </p>
-            )}
             <select
               value={soundPack}
               onChange={e => setSoundPack(e.target.value)}
