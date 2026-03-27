@@ -96,7 +96,7 @@ export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
 
     await db.$transaction([
       db.user.update({ where: { id: humanId }, data: { eloRating: humanNewElo } }),
-      db.user.update({ where: { id: botId }, data: { eloRating: botNewElo } }),
+      db.user.update({ where: { id: botId }, data: { eloRating: botNewElo, botCalibrating: false } }),
       db.userEloHistory.create({
         data: {
           userId: humanId,
