@@ -226,6 +226,10 @@ export default function GameBoard({ roomName }) {
           durationMs,
           startedAt,
         }, token).catch(() => {})
+
+        if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
+          api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+        }
       } else {
         // Record as PVAI (ML or rule-based)
         let outcome = 'DRAW'
