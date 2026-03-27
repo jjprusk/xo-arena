@@ -228,8 +228,10 @@ export async function getUserStats(userId) {
 export async function getBotStats(botId) {
   const games = await db.game.findMany({
     where: { player2Id: botId, mode: 'PVBOT' },
-    select: { outcome: true, winnerId: true, player1Id: true },
-    include: { player1: { select: { isBot: true } } },
+    select: {
+      outcome: true, winnerId: true, player1Id: true,
+      player1: { select: { isBot: true } },
+    },
   })
 
   const vsHumans = games.filter((g) => !g.player1?.isBot)
