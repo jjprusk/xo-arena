@@ -231,6 +231,21 @@ router.get('/games', async (req, res, next) => {
     const where = {}
     if (req.query.mode) where.mode = req.query.mode.toUpperCase()
     if (req.query.outcome) where.outcome = req.query.outcome.toUpperCase()
+    if (req.query.player) {
+      where.OR = [
+        { player1: { displayName: { contains: req.query.player, mode: 'insensitive' } } },
+        { player2: { displayName: { contains: req.query.player, mode: 'insensitive' } } },
+      ]
+    }
+    if (req.query.dateFrom || req.query.dateTo) {
+      where.endedAt = {}
+      if (req.query.dateFrom) where.endedAt.gte = new Date(req.query.dateFrom)
+      if (req.query.dateTo) {
+        const to = new Date(req.query.dateTo)
+        to.setDate(to.getDate() + 1)
+        where.endedAt.lt = to
+      }
+    }
 
     const [games, total] = await Promise.all([
       db.game.findMany({

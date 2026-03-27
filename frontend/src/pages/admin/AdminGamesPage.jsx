@@ -3,7 +3,7 @@ import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
 import { getToken } from '../../lib/getToken.js'
 import {
-  ListTable, ListTh, ListTd, ListTr, ListPagination,
+  ListTable, ListTh, ListTd, ListTr, ListPagination, SearchBar,
 } from '../../components/ui/ListTable.jsx'
 
 const LIMIT = 25
@@ -27,20 +27,26 @@ export default function AdminGamesPage() {
   const [page, setPage]       = useState(1)
   const [modeFilter, setModeFilter]       = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
+  const [playerFilter, setPlayerFilter]   = useState('')
+  const [dateFrom, setDateFrom]           = useState('')
+  const [dateTo, setDateTo]               = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [actionError, setActionError] = useState(null)
 
   const totalPages = Math.ceil(total / LIMIT)
 
-  const load = useCallback(async (p, mode, outcome) => {
+  const load = useCallback(async (p, mode, outcome, player, from, to) => {
     setLoading(true)
     setError(null)
     try {
       const token = await getToken()
       const filters = {}
-      if (mode) filters.mode = mode
-      if (outcome) filters.outcome = outcome
+      if (mode)    filters.mode     = mode
+      if (outcome) filters.outcome  = outcome
+      if (player)  filters.player   = player
+      if (from)    filters.dateFrom = from
+      if (to)      filters.dateTo   = to
       const { games: g, total: t } = await api.admin.games(token, p, LIMIT, filters)
       setGames(g)
       setTotal(t)
@@ -51,9 +57,19 @@ export default function AdminGamesPage() {
     }
   }, [])
 
-  useEffect(() => { load(page, modeFilter, outcomeFilter) }, [page, modeFilter, outcomeFilter, load])
+  // debounce player search
+  const [debouncedPlayer, setDebouncedPlayer] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedPlayer(playerFilter), 300)
+    return () => clearTimeout(id)
+  }, [playerFilter])
 
-  function handleFilterChange(setter) {
+  useEffect(() => { setPage(1) }, [modeFilter, outcomeFilter, debouncedPlayer, dateFrom, dateTo])
+  useEffect(() => {
+    load(page, modeFilter, outcomeFilter, debouncedPlayer, dateFrom, dateTo)
+  }, [page, modeFilter, outcomeFilter, debouncedPlayer, dateFrom, dateTo, load])
+
+  function handleSelectChange(setter) {
     return (e) => { setter(e.target.value); setPage(1) }
   }
 
@@ -75,10 +91,16 @@ export default function AdminGamesPage() {
       <AdminHeader title="Games" subtitle={`${total} total`} />
 
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
+        <SearchBar
+          value={playerFilter}
+          onChange={setPlayerFilter}
+          placeholder="Search player…"
+          className="w-48"
+        />
         <select
           value={modeFilter}
-          onChange={handleFilterChange(setModeFilter)}
+          onChange={handleSelectChange(setModeFilter)}
           className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
         >
@@ -88,7 +110,7 @@ export default function AdminGamesPage() {
         </select>
         <select
           value={outcomeFilter}
-          onChange={handleFilterChange(setOutcomeFilter)}
+          onChange={handleSelectChange(setOutcomeFilter)}
           className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
         >
@@ -97,6 +119,32 @@ export default function AdminGamesPage() {
           <option value="ai_win">AI Win</option>
           <option value="draw">Draw</option>
         </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+          className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          title="From date"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+          min={dateFrom || undefined}
+          className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          title="To date"
+        />
+        {(playerFilter || modeFilter || outcomeFilter || dateFrom || dateTo) && (
+          <button
+            onClick={() => { setPlayerFilter(''); setModeFilter(''); setOutcomeFilter(''); setDateFrom(''); setDateTo('') }}
+            className="px-3 py-2 rounded-lg border text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {actionError && <ErrorMsg>{actionError}</ErrorMsg>}

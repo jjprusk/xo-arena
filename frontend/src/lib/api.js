@@ -117,8 +117,11 @@ export const api = {
       const p = new URLSearchParams()
       if (page)            p.set('page', page)
       if (limit)           p.set('limit', limit)
-      if (filters?.mode)   p.set('mode', filters.mode)
-      if (filters?.outcome) p.set('outcome', filters.outcome)
+      if (filters?.mode)     p.set('mode', filters.mode)
+      if (filters?.outcome)  p.set('outcome', filters.outcome)
+      if (filters?.player)   p.set('player', filters.player)
+      if (filters?.dateFrom) p.set('dateFrom', filters.dateFrom)
+      if (filters?.dateTo)   p.set('dateTo', filters.dateTo)
       const qs = p.toString()
       return api.get(`/admin/games${qs ? `?${qs}` : ''}`, token)
     },
