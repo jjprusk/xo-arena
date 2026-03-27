@@ -4,6 +4,13 @@ import { useSession } from '../lib/auth-client.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 
+const AI_NAMES = {
+  novice:       'Rusty',
+  intermediate: 'Blaze',
+  advanced:     'Cipher',
+  master:       'Titan',
+}
+
 const OUTCOME_COLOR = {
   win: 'var(--color-teal-600)',
   loss: 'var(--color-red-600)',
@@ -132,10 +139,14 @@ export default function StatsPage() {
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
               >
                 <WinRateBar label="PvP" rate={stats.pvp.rate} color="var(--color-blue-600)" />
-                <WinRateBar label="Novice AI" rate={stats.pvai.novice.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Intermediate AI" rate={stats.pvai.intermediate.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Advanced AI" rate={stats.pvai.advanced.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Master AI" rate={stats.pvai.master.rate} color="var(--color-teal-600)" />
+                {['novice', 'intermediate', 'advanced', 'master'].map(d => (
+                  <WinRateBar
+                    key={d}
+                    label={`${AI_NAMES[d]} (${d.charAt(0).toUpperCase() + d.slice(1)})`}
+                    rate={stats.pvai[d].rate}
+                    color="var(--color-teal-600)"
+                  />
+                ))}
                 {stats.pvbot?.played > 0 && (
                   <WinRateBar label="vs Bots" rate={stats.pvbot.rate} color="#9333ea" />
                 )}
