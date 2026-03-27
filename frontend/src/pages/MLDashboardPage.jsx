@@ -34,8 +34,8 @@ const SESSION_COLOR = { COMPLETED: 'teal', RUNNING: 'blue', FAILED: 'red', CANCE
 
 // Returns the display name for a player profile, substituting the logged-in
 // user's current name when the profile belongs to them.
-function playerLabel(profile, currentUserId, currentUserName) {
-  if (currentUserId && profile.userId === currentUserId) {
+function playerLabel(profile, domainUserId, currentUserName) {
+  if (domainUserId && profile.userId === domainUserId) {
     return currentUserName || profile.displayName || profile.username || 'You'
   }
   return profile.displayName || profile.username || `${profile.userId.slice(0, 12)}…`
@@ -44,9 +44,9 @@ function playerLabel(profile, currentUserId, currentUserName) {
 export default function GymPage() {
   const { data: session } = useSession()
   const user = session?.user ?? null
-  const currentUserId   = user?.id ?? null
   const currentUserName = user?.name || user?.username || null
 
+  const [domainUserId, setDomainUserId]   = useState(null)
   const [bots, setBots]                   = useState([])
   const [selectedBotId, setSelectedBotId] = useState(null)
   const [botModels, setBotModels]         = useState({})   // { botId: mlModel }
@@ -61,12 +61,18 @@ export default function GymPage() {
   const isMinimaxBot   = selectedBot?.botModelType === 'minimax' || selectedBot?.botModelType === 'mcts'
   const allLoadedModels = Object.values(botModels)
 
+  // Resolve the domain User.id (different from Better Auth session user.id)
+  useEffect(() => {
+    if (!user) return
+    getToken().then(token => api.users.sync(token)).then(({ user: u }) => setDomainUserId(u.id)).catch(() => {})
+  }, [user?.id])
+
   const loadBots = useCallback(async () => {
-    if (!currentUserId) return
+    if (!domainUserId) return
     const token = await getToken()
-    const { bots: bs } = await api.bots.list({ ownerId: currentUserId, token })
+    const { bots: bs } = await api.bots.list({ ownerId: domainUserId, token })
     setBots(bs || [])
-  }, [currentUserId])
+  }, [domainUserId])
 
   useEffect(() => { loadBots() }, [loadBots])
 
@@ -130,7 +136,7 @@ export default function GymPage() {
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Train and evaluate your bots. Create bots in your profile settings.</p>
       </div>
 
-      {!currentUserId ? (
+      {!domainUserId ? (
         <Card>
           <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>Sign in to access the Gym.</p>
         </Card>
@@ -231,8 +237,8 @@ export default function GymPage() {
 
                 {activeTab === 'train'          && <TrainTab model={selectedModel} onComplete={() => refreshModel(selectedBotId, selectedModel.id)} />}
                 {activeTab === 'analytics'      && <AnalyticsTab model={selectedModel} />}
-                {activeTab === 'evaluation'     && <EvaluationTab model={selectedModel} models={allLoadedModels} currentUserId={currentUserId} currentUserName={currentUserName} />}
-                {activeTab === 'explainability' && <ExplainabilityTab model={selectedModel} currentUserId={currentUserId} currentUserName={currentUserName} />}
+                {activeTab === 'evaluation'     && <EvaluationTab model={selectedModel} models={allLoadedModels} domainUserId={domainUserId} currentUserName={currentUserName} />}
+                {activeTab === 'explainability' && <ExplainabilityTab model={selectedModel} domainUserId={domainUserId} currentUserName={currentUserName} />}
                 {activeTab === 'checkpoints'    && <CheckpointsTab model={selectedModel} onRestore={() => refreshModel(selectedBotId, selectedModel.id)} />}
                 {activeTab === 'export'         && <ExportTab model={selectedModel} />}
                 {activeTab === 'rules'          && <RulesTab model={selectedModel} models={allLoadedModels} />}
@@ -1093,7 +1099,7 @@ function AnalyticsTab({ model }) {
 
 const EMPTY_BOARD = Array(9).fill(null)
 
-function ExplainabilityTab({ model, currentUserId, currentUserName }) {
+function ExplainabilityTab({ model, domainUserId, currentUserName }) {
   const [board, setBoard]           = useState([...EMPTY_BOARD])
   const [qValues, setQValues]       = useState(null)
   const [bestCell, setBestCell]     = useState(null)
@@ -1279,7 +1285,7 @@ function ExplainabilityTab({ model, currentUserId, currentUserName }) {
 
       {activeSection === 'diff' && <VersionDiffViewer model={model} />}
       {activeSection === 'hypersearch' && <HyperparamSearchPanel model={model} />}
-      {activeSection === 'opponent' && <OpponentModelPanel model={model} board={board} qValues={qValues} currentUserId={currentUserId} currentUserName={currentUserName} />}
+      {activeSection === 'opponent' && <OpponentModelPanel model={model} board={board} qValues={qValues} domainUserId={domainUserId} currentUserName={currentUserName} />}
       {activeSection === 'activations' && isNeuralNet && <NetworkActivationsPanel model={model} />}
     </div>
   )
@@ -1287,7 +1293,7 @@ function ExplainabilityTab({ model, currentUserId, currentUserName }) {
 
 // ─── Opponent Model Panel ─────────────────────────────────────────────────────
 
-function OpponentModelPanel({ model, board, qValues, currentUserId, currentUserName }) {
+function OpponentModelPanel({ model, board, qValues, domainUserId, currentUserName }) {
   const [profiles, setProfiles]         = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [profile, setProfile]           = useState(null)
@@ -1388,7 +1394,7 @@ function OpponentModelPanel({ model, board, qValues, currentUserId, currentUserN
           >
             {profiles.map(p => (
               <option key={p.userId} value={p.userId}>
-                {playerLabel(p, currentUserId, currentUserName)} ({p.gamesRecorded} games)
+                {playerLabel(p, domainUserId, currentUserName)} ({p.gamesRecorded} games)
               </option>
             ))}
           </select>
@@ -2301,7 +2307,7 @@ function CreateModelModal({ onClose, onCreate }) {
 
 // ─── Evaluation Tab ───────────────────────────────────────────────────────────
 
-function EvaluationTab({ model, models, currentUserId, currentUserName }) {
+function EvaluationTab({ model, models, domainUserId, currentUserName }) {
   const [section, setSection] = useState('benchmark') // 'benchmark' | 'elo' | 'versus' | 'tournament' | 'profiles'
 
   return (
@@ -2325,7 +2331,7 @@ function EvaluationTab({ model, models, currentUserId, currentUserName }) {
       {section === 'elo'        && <EloPanel model={model} />}
       {section === 'versus'     && <VersusPanel model={model} models={models} />}
       {section === 'tournament' && <TournamentPanel models={models} />}
-      {section === 'profiles'   && <PlayerProfilesPanel model={model} currentUserId={currentUserId} currentUserName={currentUserName} />}
+      {section === 'profiles'   && <PlayerProfilesPanel model={model} domainUserId={domainUserId} currentUserName={currentUserName} />}
     </div>
   )
 }
@@ -2640,7 +2646,7 @@ function TendencyBar({ label, value }) {
   )
 }
 
-function PlayerProfilesPanel({ model, currentUserId, currentUserName }) {
+function PlayerProfilesPanel({ model, domainUserId, currentUserName }) {
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
@@ -2695,8 +2701,8 @@ function PlayerProfilesPanel({ model, currentUserId, currentUserName }) {
                   className="w-full grid gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
                   style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', backgroundColor: 'var(--bg-base)' }}
                 >
-                  <span className="text-xs truncate font-medium" style={{ color: 'var(--text-secondary)' }} title={playerLabel(p, currentUserId, currentUserName)}>
-                    {playerLabel(p, currentUserId, currentUserName)}
+                  <span className="text-xs truncate font-medium" style={{ color: 'var(--text-secondary)' }} title={playerLabel(p, domainUserId, currentUserName)}>
+                    {playerLabel(p, domainUserId, currentUserName)}
                   </span>
                   <span className="font-bold" style={{ color: 'var(--color-blue-600)' }}>{p.gamesRecorded}</span>
                   <span style={{ color: 'var(--text-secondary)' }}>{Math.round((tendencies.centerRate || 0) * 100)}%</span>
