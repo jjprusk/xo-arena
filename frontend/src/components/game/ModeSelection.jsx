@@ -33,7 +33,6 @@ function getBotPlayConfig(bot) {
   return { implementation: 'ml', difficulty: 'intermediate', mlModelId: id }
 }
 
-const DIFFICULTIES = ['novice', 'intermediate', 'advanced', 'master']
 const BEST_OF_OPTIONS = [{ label: 'Single', value: 1 }, { label: 'Best of 3', value: 3 }, { label: 'Best of 5', value: 5 }, { label: 'Best of 7', value: 7 }, { label: 'Unlimited', value: null }]
 const TIMER_PRESETS = [15, 30, 60]
 const BOARD_THEMES = [
@@ -70,14 +69,9 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   const [bots, setBots] = useState([])
   const [botsLoading, setBotsLoading] = useState(false)
 
-  // AI vs AI config
-  const [ai1Impl, setAi1Impl] = useState('minimax')
-  const [ai1Diff, setAi1Diff] = useState('master')
-  const [ai1ModelId, setAi1ModelId] = useState(null)
-  const [ai2Impl, setAi2Impl] = useState('minimax')
-  const [ai2Diff, setAi2Diff] = useState('intermediate')
-  const [ai2ModelId, setAi2ModelId] = useState(null)
-  const [aivaiModels, setAivaiModels] = useState([])
+  // Bot vs Bot config
+  const [aivaiBot1Id, setAivaiBot1Id] = useState(null)
+  const [aivaiBot2Id, setAivaiBot2Id] = useState(null)
 
   // Local timer/options state mirrors store
   const [localTimerEnabled, setLocalTimerEnabled] = useState(timerEnabled)
@@ -118,30 +112,18 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   }
 
   useEffect(() => {
-    if (!botExpanded) return
+    if (!botExpanded && !aivaiExpanded) return
     setBotsLoading(true)
     api.bots.list()
       .then((res) => {
         const sorted = (res.bots || []).sort((a, b) => (b.eloRating ?? 1200) - (a.eloRating ?? 1200))
         setBots(sorted)
+        if (sorted.length >= 1) setAivaiBot1Id(prev => prev ?? sorted[0].id)
+        if (sorted.length >= 2) setAivaiBot2Id(prev => prev ?? sorted[1].id)
       })
       .catch(() => setBots([]))
       .finally(() => setBotsLoading(false))
-  }, [botExpanded])
-
-  useEffect(() => {
-    if (!aivaiExpanded) return
-    api.ml.listModels()
-      .then((res) => {
-        const models = res.models || []
-        setAivaiModels(models)
-        if (models.length > 0) {
-          setAi1ModelId(prev => prev ?? models[0].id)
-          setAi2ModelId(prev => prev ?? models[0].id)
-        }
-      })
-      .catch(() => setAivaiModels([]))
-  }, [aivaiExpanded])
+  }, [botExpanded, aivaiExpanded])
 
   // Apply options to store
   function applyOptions() {
@@ -168,15 +150,20 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     onStart?.()
   }
 
-  function handleWatchAIvsAI() {
+  function handleWatchBotVsBot() {
+    const bot1 = bots.find(b => b.id === aivaiBot1Id)
+    const bot2 = bots.find(b => b.id === aivaiBot2Id)
+    if (!bot1 || !bot2) return
     applyOptions()
+    const cfg1 = getBotPlayConfig(bot1)
+    const cfg2 = getBotPlayConfig(bot2)
     setMode('aivai')
-    setAIImplementation(ai1Impl)
-    setDifficulty(ai1Diff)
-    setMLModelId(ai1Impl === 'ml' ? ai1ModelId : null)
-    setAI2Implementation(ai2Impl)
-    setAI2Difficulty(ai2Diff)
-    setAI2ModelId(ai2Impl === 'ml' ? ai2ModelId : null)
+    setAIImplementation(cfg1.implementation)
+    setDifficulty(cfg1.difficulty)
+    setMLModelId(cfg1.mlModelId)
+    setAI2Implementation(cfg2.implementation)
+    setAI2Difficulty(cfg2.difficulty)
+    setAI2ModelId(cfg2.mlModelId)
     startGame()
     onStart?.()
   }
@@ -431,7 +418,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         )}
       </div>
 
-      {/* ── AI vs AI Spectator ──────────────────────────────── */}
+      {/* ── Watch Bot vs Bot ────────────────────────────────── */}
       <div
         className="rounded-xl border-2 overflow-hidden transition-colors"
         style={{
@@ -446,9 +433,9 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         >
           <span className="text-3xl">👁</span>
           <div className="flex-1">
-            <div className="font-semibold">Watch AI vs AI</div>
+            <div className="font-semibold">Watch Bot vs Bot</div>
             <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Spectate two AI engines battle it out
+              Spectate two bots battle it out
             </div>
           </div>
           <span className="text-lg" style={{ color: 'var(--text-muted)' }}>
@@ -458,112 +445,72 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
         {aivaiExpanded && (
           <div className="border-t px-4 pb-4 pt-4 space-y-4" style={{ borderColor: 'var(--border-default)' }}>
-            {/* AI 1 (plays X) */}
-            <div>
-              <label className="text-sm font-medium block mb-2" style={{ color: 'var(--color-blue-600)' }}>X — First AI</label>
-              <div className="flex gap-2 mb-2">
-                {['minimax', 'ml'].map(impl => (
-                  <button
-                    key={impl}
-                    onClick={() => setAi1Impl(impl)}
-                    className="flex-1 py-1.5 rounded-lg text-sm font-medium border-2 capitalize transition-colors"
-                    style={{
-                      borderColor: ai1Impl === impl ? 'var(--color-blue-600)' : 'var(--border-default)',
-                      backgroundColor: ai1Impl === impl ? 'var(--color-blue-50)' : 'var(--bg-surface)',
-                      color: ai1Impl === impl ? 'var(--color-blue-600)' : 'var(--text-secondary)',
-                    }}
-                  >
-                    {impl === 'minimax' ? 'Minimax' : 'ML'}
-                  </button>
-                ))}
+            {botsLoading ? (
+              <div className="flex items-center justify-center py-6 gap-2">
+                <div className="w-4 h-4 border-2 border-[var(--color-teal-600)] border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading bots…</span>
               </div>
-              {ai1Impl === 'minimax' && (
-                <select
-                  value={ai1Diff}
-                  onChange={e => setAi1Diff(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
-                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                >
-                  {DIFFICULTIES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
-                </select>
-              )}
-              {ai1Impl === 'ml' && (
-                aivaiModels.length === 0
-                  ? <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No models available.</p>
-                  : <select
-                      value={ai1ModelId ?? aivaiModels[0]?.id ?? ''}
-                      onChange={e => setAi1ModelId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                    >
-                      {aivaiModels.map(m => <option key={m.id} value={m.id} title={m.creatorName ? `by ${m.creatorName}` : undefined}>{m.name}</option>)}
-                    </select>
-              )}
-            </div>
-
-            {/* AI 2 (plays O) */}
-            <div>
-              <label className="text-sm font-medium block mb-2" style={{ color: 'var(--color-teal-600)' }}>O — Second AI</label>
-              <div className="flex gap-2 mb-2">
-                {['minimax', 'ml'].map(impl => (
-                  <button
-                    key={impl}
-                    onClick={() => setAi2Impl(impl)}
-                    className="flex-1 py-1.5 rounded-lg text-sm font-medium border-2 capitalize transition-colors"
-                    style={{
-                      borderColor: ai2Impl === impl ? 'var(--color-teal-600)' : 'var(--border-default)',
-                      backgroundColor: ai2Impl === impl ? 'var(--color-teal-50)' : 'var(--bg-surface)',
-                      color: ai2Impl === impl ? 'var(--color-teal-600)' : 'var(--text-secondary)',
-                    }}
+            ) : bots.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: 'var(--text-muted)' }}>No active bots available yet.</p>
+            ) : (
+              <>
+                {/* Bot 1 (plays X) */}
+                <div>
+                  <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--color-blue-600)' }}>X — Bot 1</label>
+                  <select
+                    value={aivaiBot1Id ?? ''}
+                    onChange={e => setAivaiBot1Id(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg border text-sm outline-none transition-colors"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                   >
-                    {impl === 'minimax' ? 'Minimax' : 'ML'}
-                  </button>
-                ))}
-              </div>
-              {ai2Impl === 'minimax' && (
-                <select
-                  value={ai2Diff}
-                  onChange={e => setAi2Diff(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
-                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    {bots.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.displayName} (ELO {Math.round(b.eloRating ?? 1200)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Bot 2 (plays O) */}
+                <div>
+                  <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--color-teal-600)' }}>O — Bot 2</label>
+                  <select
+                    value={aivaiBot2Id ?? ''}
+                    onChange={e => setAivaiBot2Id(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg border text-sm outline-none transition-colors"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    {bots.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.displayName} (ELO {Math.round(b.eloRating ?? 1200)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Series */}
+                <div>
+                  <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Series</label>
+                  <select
+                    value={localBestOf ?? ''}
+                    onChange={e => setLocalBestOf(e.target.value === '' ? null : Number(e.target.value))}
+                    className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    {BEST_OF_OPTIONS.map(opt => <option key={opt.label} value={opt.value ?? ''}>{opt.label}</option>)}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleWatchBotVsBot}
+                  disabled={!aivaiBot1Id || !aivaiBot2Id}
+                  className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))', boxShadow: 'var(--shadow-md)' }}
                 >
-                  {DIFFICULTIES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
-                </select>
-              )}
-              {ai2Impl === 'ml' && (
-                aivaiModels.length === 0
-                  ? <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No models available.</p>
-                  : <select
-                      value={ai2ModelId ?? aivaiModels[0]?.id ?? ''}
-                      onChange={e => setAi2ModelId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                    >
-                      {aivaiModels.map(m => <option key={m.id} value={m.id} title={m.creatorName ? `by ${m.creatorName}` : undefined}>{m.name}</option>)}
-                    </select>
-              )}
-            </div>
-
-            {/* Best of N for spectator */}
-            <div>
-              <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Series</label>
-              <select
-                value={localBestOf ?? ''}
-                onChange={e => setLocalBestOf(e.target.value === '' ? null : Number(e.target.value))}
-                className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors"
-                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              >
-                {BEST_OF_OPTIONS.map(opt => <option key={opt.label} value={opt.value ?? ''}>{opt.label}</option>)}
-              </select>
-            </div>
-
-            <button
-              onClick={handleWatchAIvsAI}
-              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
-              style={{ background: 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))', boxShadow: 'var(--shadow-md)' }}
-            >
-              Watch AI vs AI
-            </button>
+                  Watch
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

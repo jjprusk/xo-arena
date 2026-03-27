@@ -39,7 +39,7 @@ describe('ModeSelection', () => {
   it('renders main action sections', () => {
     render(<ModeSelection />)
     expect(screen.getByText('Challenge a Bot')).toBeTruthy()
-    expect(screen.getByText('Watch AI vs AI')).toBeTruthy()
+    expect(screen.getByText('Watch Bot vs Bot')).toBeTruthy()
     expect(screen.getByText('Invite a Friend')).toBeTruthy()
     expect(screen.getByText('Join a Room')).toBeTruthy()
   })
