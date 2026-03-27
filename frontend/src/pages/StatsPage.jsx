@@ -138,7 +138,7 @@ export default function StatsPage() {
                 className="rounded-xl border p-4 space-y-3"
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
               >
-                <WinRateBar label="PvP" rate={stats.pvp.rate} color="var(--color-blue-600)" />
+                <WinRateBar label="vs Humans" rate={stats.pvp.rate} color="var(--color-blue-600)" />
                 {['novice', 'intermediate', 'advanced', 'master'].map(d => (
                   <WinRateBar
                     key={d}
