@@ -9,17 +9,19 @@ export const SOUND_PACKS = [
 ]
 
 // ── Default pack — file-based via Howler ─────────────────────────────────────
+const SOUND_KEYS = ['move', 'win', 'draw', 'forfeit']
 const howlCache = {}
 
 function getHowl(key) {
   if (!howlCache[key]) {
-    // html5: true uses HTMLAudioElement instead of Web Audio API.
-    // This avoids the AudioContext suspended-state problem in Chrome where
-    // newly created AudioContexts start suspended even inside click handlers.
-    howlCache[key] = new Howl({ src: [`/sounds/${key}.wav`], html5: true })
+    howlCache[key] = new Howl({ src: [`/sounds/${key}.wav`], preload: true })
   }
   return howlCache[key]
 }
+
+// Preload all sounds immediately so they're buffered before first play.
+// Howler (2.x) auto-resumes its AudioContext on first user gesture.
+SOUND_KEYS.forEach(getHowl)
 
 // ── Retro / Nature packs — Web Audio synthesis ───────────────────────────────
 let _audioCtx = null
