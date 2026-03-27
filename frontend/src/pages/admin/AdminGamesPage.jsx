@@ -2,6 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
 import { getToken } from '../../lib/getToken.js'
+import {
+  ListTable, ListTh, ListTd, ListTr, ListPagination, SearchBar,
+} from '../../components/ui/ListTable.jsx'
+
+const LIMIT = 25
 
 const OUTCOME_LABEL = {
   PLAYER1_WIN: 'P1 Win',
@@ -22,21 +27,26 @@ export default function AdminGamesPage() {
   const [page, setPage]       = useState(1)
   const [modeFilter, setModeFilter]       = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
+  const [playerFilter, setPlayerFilter]   = useState('')
+  const [dateFrom, setDateFrom]           = useState('')
+  const [dateTo, setDateTo]               = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [actionError, setActionError] = useState(null)
 
-  const LIMIT = 25
   const totalPages = Math.ceil(total / LIMIT)
 
-  const load = useCallback(async (p, mode, outcome) => {
+  const load = useCallback(async (p, mode, outcome, player, from, to) => {
     setLoading(true)
     setError(null)
     try {
       const token = await getToken()
       const filters = {}
-      if (mode) filters.mode = mode
-      if (outcome) filters.outcome = outcome
+      if (mode)    filters.mode     = mode
+      if (outcome) filters.outcome  = outcome
+      if (player)  filters.player   = player
+      if (from)    filters.dateFrom = from
+      if (to)      filters.dateTo   = to
       const { games: g, total: t } = await api.admin.games(token, p, LIMIT, filters)
       setGames(g)
       setTotal(t)
@@ -47,9 +57,19 @@ export default function AdminGamesPage() {
     }
   }, [])
 
-  useEffect(() => { load(page, modeFilter, outcomeFilter) }, [page, modeFilter, outcomeFilter, load])
+  // debounce player search
+  const [debouncedPlayer, setDebouncedPlayer] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedPlayer(playerFilter), 300)
+    return () => clearTimeout(id)
+  }, [playerFilter])
 
-  function handleFilterChange(setter) {
+  useEffect(() => { setPage(1) }, [modeFilter, outcomeFilter, debouncedPlayer, dateFrom, dateTo])
+  useEffect(() => {
+    load(page, modeFilter, outcomeFilter, debouncedPlayer, dateFrom, dateTo)
+  }, [page, modeFilter, outcomeFilter, debouncedPlayer, dateFrom, dateTo, load])
+
+  function handleSelectChange(setter) {
     return (e) => { setter(e.target.value); setPage(1) }
   }
 
@@ -71,10 +91,16 @@ export default function AdminGamesPage() {
       <AdminHeader title="Games" subtitle={`${total} total`} />
 
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
+        <SearchBar
+          value={playerFilter}
+          onChange={setPlayerFilter}
+          placeholder="Search player…"
+          className="w-48"
+        />
         <select
           value={modeFilter}
-          onChange={handleFilterChange(setModeFilter)}
+          onChange={handleSelectChange(setModeFilter)}
           className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
         >
@@ -84,7 +110,7 @@ export default function AdminGamesPage() {
         </select>
         <select
           value={outcomeFilter}
-          onChange={handleFilterChange(setOutcomeFilter)}
+          onChange={handleSelectChange(setOutcomeFilter)}
           className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
         >
@@ -93,115 +119,122 @@ export default function AdminGamesPage() {
           <option value="ai_win">AI Win</option>
           <option value="draw">Draw</option>
         </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+          className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          title="From date"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+          min={dateFrom || undefined}
+          className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          title="To date"
+        />
+        {(playerFilter || modeFilter || outcomeFilter || dateFrom || dateTo) && (
+          <button
+            onClick={() => { setPlayerFilter(''); setModeFilter(''); setOutcomeFilter(''); setDateFrom(''); setDateTo('') }}
+            className="px-3 py-2 rounded-lg border text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {actionError && <ErrorMsg>{actionError}</ErrorMsg>}
       {loading && <Spinner />}
       {error && <ErrorMsg>{error}</ErrorMsg>}
 
-      {!loading && games.length > 0 && (
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid var(--border-default)' }}>
-                {['Player(s)', 'Mode', 'Outcome', 'Moves', 'Duration', 'Date', ''].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide first:table-cell" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {games.map((g, i) => (
-                <tr
-                  key={g.id}
-                  style={{
-                    backgroundColor: i % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-base)',
-                    borderBottom: '1px solid var(--border-default)',
-                  }}
-                >
-                  <td className="px-4 py-2.5">
-                    <div className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {g.player1?.displayName ?? '—'}
+      {!loading && (
+        <ListTable maxHeight="65vh">
+          <thead>
+            <tr>
+              <ListTh>Player(s)</ListTh>
+              <ListTh>Mode</ListTh>
+              <ListTh>Outcome</ListTh>
+              <ListTh align="right" className="hidden sm:table-cell">Moves</ListTh>
+              <ListTh align="right" className="hidden sm:table-cell">Duration</ListTh>
+              <ListTh className="hidden md:table-cell">Date</ListTh>
+              <ListTh />
+            </tr>
+          </thead>
+          <tbody>
+            {games.map((g, i) => (
+              <ListTr key={g.id} last={i === games.length - 1}>
+                <ListTd>
+                  <div className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
+                    {g.player1?.displayName ?? '—'}
+                  </div>
+                  {g.player2 && (
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      vs {g.player2.displayName}
                     </div>
-                    {g.player2 && (
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        vs {g.player2.displayName}
-                      </div>
-                    )}
-                    {!g.player2 && g.mode === 'PVAI' && (
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        vs AI {g.difficulty ? `(${g.difficulty.toLowerCase()})` : ''}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                      {g.mode === 'PVAI' ? 'PvAI' : 'PvP'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className="text-xs font-semibold px-1.5 py-0.5 rounded"
-                      style={{
-                        backgroundColor: `color-mix(in srgb, ${OUTCOME_COLOR[g.outcome]} 12%, transparent)`,
-                        color: OUTCOME_COLOR[g.outcome],
-                      }}
-                    >
-                      {OUTCOME_LABEL[g.outcome] ?? g.outcome}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                    {g.totalMoves}
-                  </td>
-                  <td className="px-4 py-2.5 tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                    {(g.durationMs / 1000).toFixed(1)}s
-                  </td>
-                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(g.endedAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => deleteGame(g.id)}
-                      className="text-xs px-2 py-0.5 rounded border hover:bg-[var(--color-red-50)] transition-colors"
-                      style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
-                      title="Delete game"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                  {!g.player2 && g.mode === 'PVAI' && (
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      vs AI {g.difficulty ? `(${g.difficulty.toLowerCase()})` : ''}
+                    </div>
+                  )}
+                </ListTd>
+                <ListTd>
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    {g.mode === 'PVAI' ? 'PvAI' : 'PvP'}
+                  </span>
+                </ListTd>
+                <ListTd>
+                  <span
+                    className="text-xs font-semibold px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, ${OUTCOME_COLOR[g.outcome]} 12%, transparent)`,
+                      color: OUTCOME_COLOR[g.outcome],
+                    }}
+                  >
+                    {OUTCOME_LABEL[g.outcome] ?? g.outcome}
+                  </span>
+                </ListTd>
+                <ListTd align="right" className="hidden sm:table-cell">
+                  <span className="tabular-nums">{g.totalMoves}</span>
+                </ListTd>
+                <ListTd align="right" className="hidden sm:table-cell">
+                  <span className="tabular-nums">{(g.durationMs / 1000).toFixed(1)}s</span>
+                </ListTd>
+                <ListTd className="hidden md:table-cell">
+                  <span className="text-xs">{new Date(g.endedAt).toLocaleDateString()}</span>
+                </ListTd>
+                <ListTd align="right">
+                  <button
+                    onClick={() => deleteGame(g.id)}
+                    className="text-xs px-2 py-0.5 rounded border hover:bg-[var(--color-red-50)] hover:text-[var(--color-red-600)] hover:border-[var(--color-red-300)] transition-colors"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                    title="Delete game"
+                  >
+                    ✕
+                  </button>
+                </ListTd>
+              </ListTr>
+            ))}
+          </tbody>
+        </ListTable>
       )}
 
       {!loading && games.length === 0 && !error && (
         <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No games found.</p>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage(p => p - 1)}
-            className="px-3 py-1.5 rounded border text-sm disabled:opacity-40 hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-          >
-            ← Prev
-          </button>
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Page {page} of {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => p + 1)}
-            className="px-3 py-1.5 rounded border text-sm disabled:opacity-40 hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-          >
-            Next →
-          </button>
-        </div>
-      )}
+      <ListPagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        limit={LIMIT}
+        onPageChange={setPage}
+        noun="games"
+      />
     </div>
   )
 }

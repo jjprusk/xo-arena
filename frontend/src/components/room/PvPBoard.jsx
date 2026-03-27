@@ -12,6 +12,7 @@ export default function PvPBoard() {
   const {
     board, currentTurn, status, winner, winLine, scores, round,
     myMark, role, displayName, spectatorCount, error, incomingReaction,
+    opponentName, opponentElo,
     move, rematch, forfeit, reset, sendReaction,
   } = usePvpStore()
 
@@ -34,6 +35,19 @@ export default function PvPBoard() {
           </span>
         )}
       </div>
+
+      {/* Opponent chip */}
+      {opponentName && role !== 'spectator' && (
+        <div className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          <span style={{ color: 'var(--text-muted)' }}>vs</span>
+          <span className="font-medium">{opponentName}</span>
+          {opponentElo != null && (
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              (ELO {Math.round(opponentElo)})
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Score strip */}
       <div className="w-full flex items-center justify-between px-2">

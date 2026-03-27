@@ -1,8 +1,43 @@
 import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
-import { getUserById, updateUser, getUserStats, syncUser } from '../services/userService.js'
+import { getUserById, updateUser, getUserStats, getBotStats, syncUser } from '../services/userService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
+
+/**
+ * Fetch bot-specific profile fields for a bot User row.
+ * Returns null if the user is not a bot.
+ */
+async function getBotProfileData(user) {
+  if (!user.isBot) return null
+
+  const [owner, mlModel] = await Promise.all([
+    user.botOwnerId
+      ? db.user.findUnique({ where: { id: user.botOwnerId }, select: { id: true, displayName: true, betterAuthId: true } })
+      : null,
+    user.botModelId && user.botModelId.startsWith('builtin:') === false
+      ? db.mLModel.findUnique({
+          where: { id: user.botModelId },
+          select: { id: true, name: true, algorithm: true, updatedAt: true, totalEpisodes: true },
+        }).catch(() => null)
+      : null,
+  ])
+
+  return {
+    isBot: true,
+    botModelType: user.botModelType,
+    botModelId: user.botModelId,
+    botActive: user.botActive,
+    botAvailable: user.botAvailable,
+    botInTournament: user.botInTournament,
+    botCompetitive: user.botCompetitive,
+    botProvisional: user.botProvisional,
+    botEloResetAt: user.botEloResetAt,
+    ownerBetterAuthId: owner?.betterAuthId ?? null,
+    owner: owner ? { id: owner.id, displayName: owner.displayName } : null,
+    mlModel: mlModel ? { id: mlModel.id, name: mlModel.name, algorithm: mlModel.algorithm, updatedAt: mlModel.updatedAt, totalEpisodes: mlModel.totalEpisodes } : null,
+  }
+}
 
 const router = Router()
 
@@ -43,12 +78,15 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
 
     // Only return full data to the user themselves; otherwise public view
     const isSelf = req.auth?.userId && user.betterAuthId === req.auth.userId
+    const botData = user.isBot ? await getBotProfileData(user) : null
+
     const data = {
       id: user.id,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       eloRating: user.eloRating,
       createdAt: user.createdAt,
+      ...(botData ?? {}),
       ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider }),
     }
 
@@ -144,6 +182,24 @@ router.get('/:id/ml-profiles', requireAuth, async (req, res, next) => {
     })
 
     res.json({ profiles })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/users/:id/bot-stats
+ * Returns win-rate breakdown for a bot (vs humans / vs bots).
+ * Public endpoint — no auth required.
+ */
+router.get('/:id/bot-stats', async (req, res, next) => {
+  try {
+    const user = await getUserById(req.params.id)
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (!user.isBot) return res.status(400).json({ error: 'Not a bot' })
+
+    const stats = await getBotStats(user.id)
+    res.json({ stats })
   } catch (err) {
     next(err)
   }

@@ -13,6 +13,8 @@ import { attachSocketIO } from './realtime/socketHandler.js'
 import mlRouter from './routes/ml.js'
 import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
+import botsRouter from './routes/bots.js'
+import botGamesRouter from './routes/botGames.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
 
@@ -29,6 +31,8 @@ registerRoutes(app, {
   '/ml': mlRouter,
   '/puzzles': puzzlesRouter,
   '/admin': adminRouter,
+  '/bots': botsRouter,
+  '/bot-games': botGamesRouter,
 })
 
 const server = http.createServer(app)

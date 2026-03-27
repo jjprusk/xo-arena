@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useSession } from '../lib/auth-client.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
+
+const AI_NAMES = {
+  novice:       'Rusty',
+  intermediate: 'Copper',
+  advanced:     'Sterling',
+  master:       'Magnus',
+}
 
 const OUTCOME_COLOR = {
   win: 'var(--color-teal-600)',
@@ -10,6 +18,7 @@ const OUTCOME_COLOR = {
 }
 
 export default function StatsPage() {
+  const location = useLocation()
   const { data: session, isPending } = useSession()
   const isLoaded = !isPending
   const isSignedIn = !!session?.user
@@ -54,7 +63,7 @@ export default function StatsPage() {
     }
 
     load()
-  }, [isSignedIn, isLoaded])
+  }, [isSignedIn, isLoaded, location.key])
 
   if (!isLoaded || loading) {
     return (
@@ -129,11 +138,18 @@ export default function StatsPage() {
                 className="rounded-xl border p-4 space-y-3"
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
               >
-                <WinRateBar label="PvP" rate={stats.pvp.rate} color="var(--color-blue-600)" />
-                <WinRateBar label="Novice" rate={stats.pvai.novice.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Intermediate" rate={stats.pvai.intermediate.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Advanced" rate={stats.pvai.advanced.rate} color="var(--color-teal-600)" />
-                <WinRateBar label="Master" rate={stats.pvai.master.rate} color="var(--color-teal-600)" />
+                <WinRateBar label="vs Humans" rate={stats.pvp.rate} color="var(--color-blue-600)" />
+                {['novice', 'intermediate', 'advanced', 'master'].map(d => (
+                  <WinRateBar
+                    key={d}
+                    label={`${AI_NAMES[d]} (${d.charAt(0).toUpperCase() + d.slice(1)})`}
+                    rate={stats.pvai[d].rate}
+                    color="var(--color-teal-600)"
+                  />
+                ))}
+                {stats.pvbot?.played > 0 && (
+                  <WinRateBar label="vs Bots" rate={stats.pvbot.rate} color="#9333ea" />
+                )}
               </div>
             </section>
 
@@ -151,7 +167,7 @@ export default function StatsPage() {
                       return (
                         <div
                           key={i}
-                          title={`${result} · ${g.mode === 'PVP' ? 'PvP' : `vs AI (${g.difficulty?.toLowerCase()})`}`}
+                          title={`${result} · ${g.mode === 'PVP' ? 'PvP' : g.mode === 'PVBOT' ? `vs ${g.player2?.displayName ?? 'Bot'}` : `vs AI (${g.difficulty?.toLowerCase()})`}`}
                           className="w-4 h-4 rounded-sm"
                           style={{ backgroundColor: OUTCOME_COLOR[result] }}
                         />
@@ -170,6 +186,34 @@ export default function StatsPage() {
               </section>
             )}
           </div>
+
+          {/* PvBot breakdown */}
+          {stats.pvbot?.played > 0 && (
+            <section className="space-y-2">
+              <SectionLabel>Bot Challenges</SectionLabel>
+              <div
+                className="rounded-xl border divide-y"
+                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)', divideColor: 'var(--border-default)' }}
+              >
+                {Object.values(stats.pvbot.byBot).map((entry) => (
+                  <div key={entry.bot.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {entry.bot.avatarUrl && (
+                        <img src={entry.bot.avatarUrl} alt="" className="w-6 h-6 rounded-full" />
+                      )}
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                        {entry.bot.displayName ?? 'Bot'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                      <span>{entry.played} game{entry.played !== 1 ? 's' : ''}</span>
+                      <span style={{ color: '#9333ea', fontWeight: 600 }}>{Math.round(entry.rate * 100)}% win</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* ML behavior profiles */}
           {mlProfiles.length > 0 && (

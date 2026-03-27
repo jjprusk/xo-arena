@@ -7,6 +7,7 @@ import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import Redis from 'ioredis'
 import { roomManager } from './roomManager.js'
+import { botGameRunner } from './botGameRunner.js'
 import { auth } from '../lib/auth.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
@@ -64,6 +65,8 @@ export async function attachSocketIO(httpServer) {
           hostUserId: user?.id || null,
           spectatorAllowed,
         })
+        room.hostUserDisplayName = user?.displayName ?? null
+        room.hostUserElo = user?.eloRating ?? null
         socket.join(room.slug)
         socket.emit('room:created', { slug: room.slug, displayName: room.displayName, mark: 'X' })
       } catch (err) {
@@ -74,17 +77,47 @@ export async function attachSocketIO(httpServer) {
     socket.on('room:join', async ({ slug, role = 'player', authToken = null }) => {
       const user = await resolveSocketUser(authToken)
       if (role === 'spectator') {
-        const result = roomManager.joinAsSpectator({ slug, socketId: socket.id })
-        if (result.error) return socket.emit('error', { message: result.error })
-
-        socket.join(slug)
-        socket.emit('room:joined', { slug, role: 'spectator', room: sanitizeRoom(result.room) })
-        io.to(slug).emit('room:spectatorJoined', { spectatorCount: result.room.spectatorIds.size })
+        // First try PvP rooms, then bot game rooms
+        if (roomManager.getRoom(slug)) {
+          const result = roomManager.joinAsSpectator({ slug, socketId: socket.id })
+          if (result.error) return socket.emit('error', { message: result.error })
+          socket.join(slug)
+          socket.emit('room:joined', { slug, role: 'spectator', room: sanitizeRoom(result.room) })
+          io.to(slug).emit('room:spectatorJoined', { spectatorCount: result.room.spectatorIds.size })
+        } else if (botGameRunner.hasSlug(slug)) {
+          const result = botGameRunner.joinAsSpectator({ slug, socketId: socket.id })
+          if (result.error) return socket.emit('error', { message: result.error })
+          socket.join(slug)
+          const g = result.game
+          socket.emit('room:joined', {
+            slug,
+            role: 'spectator',
+            room: {
+              slug: g.slug,
+              displayName: g.displayName,
+              status: g.status,
+              board: g.board,
+              currentTurn: g.currentTurn,
+              winner: g.winner,
+              winLine: g.winLine,
+              spectatorCount: g.spectatorIds.size,
+              spectatorAllowed: true,
+              isBotGame: true,
+              bot1: { displayName: g.bot1.displayName, mark: 'X' },
+              bot2: { displayName: g.bot2.displayName, mark: 'O' },
+            },
+          })
+          io.to(slug).emit('room:spectatorJoined', { spectatorCount: g.spectatorIds.size })
+        } else {
+          return socket.emit('error', { message: 'Room not found' })
+        }
       } else {
         const result = roomManager.joinRoom({ slug, guestSocketId: socket.id, guestUserId: user?.id || null })
         if (result.error) return socket.emit('error', { message: result.error })
 
         const room = result.room
+        room.guestUserDisplayName = user?.displayName ?? null
+        room.guestUserElo = user?.eloRating ?? null
         socket.join(slug)
         socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeRoom(room) })
         // Notify host
@@ -197,6 +230,9 @@ export async function attachSocketIO(httpServer) {
         },
       })
 
+      // Also clean up bot game spectator
+      botGameRunner.removeSpectator(socket.id)
+
       if (result && !result.wasSpectator) {
         const slug = roomManager._socketToRoom.get(socket.id) ||
           [...roomManager._rooms.entries()].find(([, r]) => r.hostId === socket.id || r.guestId === socket.id)?.[0]
@@ -211,6 +247,7 @@ export async function attachSocketIO(httpServer) {
     })
   })
 
+  botGameRunner.setIO(io)
   return io
 }
 
@@ -277,6 +314,10 @@ function sanitizeRoom(room) {
     winLine: room.winLine,
     spectatorCount: room.spectatorIds?.size ?? 0,
     spectatorAllowed: room.spectatorAllowed,
+    hostUserDisplayName: room.hostUserDisplayName ?? null,
+    hostUserElo: room.hostUserElo ?? null,
+    guestUserDisplayName: room.guestUserDisplayName ?? null,
+    guestUserElo: room.guestUserElo ?? null,
   }
 }
 

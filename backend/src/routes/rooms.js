@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { optionalAuth } from '../middleware/auth.js'
 import { roomManager } from '../realtime/roomManager.js'
 import { MountainNamePool } from '../realtime/mountainNames.js'
+import { botGameRunner } from '../realtime/botGameRunner.js'
 
 const router = Router()
 
@@ -37,17 +38,35 @@ router.post('/', optionalAuth, (req, res) => {
  */
 router.get('/:slug', (req, res) => {
   const room = roomManager.getRoom(req.params.slug)
-  if (!room) return res.status(404).json({ error: 'Room not found' })
+  if (room) {
+    return res.json({
+      room: {
+        slug: room.slug,
+        displayName: room.displayName,
+        status: room.status,
+        spectatorAllowed: room.spectatorAllowed,
+        spectatorCount: room.spectatorIds.size,
+      },
+    })
+  }
 
-  res.json({
-    room: {
-      slug: room.slug,
-      displayName: room.displayName,
-      status: room.status,
-      spectatorAllowed: room.spectatorAllowed,
-      spectatorCount: room.spectatorIds.size,
-    },
-  })
+  const botGame = botGameRunner.getGame(req.params.slug)
+  if (botGame) {
+    return res.json({
+      room: {
+        slug: botGame.slug,
+        displayName: botGame.displayName,
+        status: botGame.status,
+        spectatorAllowed: true,
+        spectatorCount: botGame.spectatorIds.size,
+        isBotGame: true,
+        bot1: { displayName: botGame.bot1.displayName, mark: 'X' },
+        bot2: { displayName: botGame.bot2.displayName, mark: 'O' },
+      },
+    })
+  }
+
+  return res.status(404).json({ error: 'Room not found' })
 })
 
 /**
@@ -55,7 +74,9 @@ router.get('/:slug', (req, res) => {
  * List active rooms (waiting to join or live to spectate).
  */
 router.get('/', (_req, res) => {
-  res.json({ rooms: roomManager.listRooms() })
+  const pvpRooms = roomManager.listRooms()
+  const botGames = botGameRunner.listGames()
+  res.json({ rooms: [...pvpRooms, ...botGames] })
 })
 
 export default router

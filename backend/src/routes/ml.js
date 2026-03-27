@@ -193,6 +193,16 @@ router.post('/models/ensemble', async (req, res, next) => {
 router.post('/models/:id/train', requireAuth, async (req, res, next) => {
   try {
     if (!await assertModelOwner(req, res, req.params.id)) return
+
+    // Block training if this model is linked to a bot currently in a tournament
+    const tournamentBot = await db.user.findFirst({
+      where: { botModelId: req.params.id, isBot: true, botInTournament: true },
+      select: { displayName: true },
+    })
+    if (tournamentBot) {
+      return res.status(409).json({ error: `Cannot train while ${tournamentBot.displayName} is in a tournament`, code: 'BOT_IN_TOURNAMENT' })
+    }
+
     const { mode, iterations, config } = req.body
     const validModes = ['SELF_PLAY', 'VS_MINIMAX', 'VS_HUMAN']
     if (!validModes.includes(mode)) {
@@ -416,6 +426,15 @@ router.get('/models/:id/player-profiles/:userId', async (req, res, next) => {
     const profile = await svc.getPlayerProfile(req.params.id, req.params.userId)
     if (!profile) return res.status(404).json({ error: 'Profile not found' })
     res.json({ profile })
+  } catch (err) { next(err) }
+})
+
+router.post('/models/:id/player-profiles/:userId/human-move', async (req, res, next) => {
+  try {
+    const { board, cellIndex } = req.body
+    if (typeof cellIndex !== 'number') return res.status(400).json({ error: 'cellIndex required' })
+    svc.recordHumanMove(req.params.id, req.params.userId, board || [], cellIndex)
+    res.status(204).end()
   } catch (err) { next(err) }
 })
 

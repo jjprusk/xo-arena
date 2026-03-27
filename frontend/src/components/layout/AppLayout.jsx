@@ -15,7 +15,7 @@ import { usePvpStore } from '../../store/pvpStore.js'
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
-  { to: '/ml', label: 'ML' },
+  { to: '/ml', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
   { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
 ]
@@ -143,7 +143,7 @@ export default function AppLayout() {
               {[
                 { to: '/admin', label: 'Admin' },
                 { to: '/admin/users', label: 'Users' },
-                { to: '/admin/ml-models', label: 'Models' },
+                { to: '/admin/ml-models', label: 'Bots' },
                 { to: '/admin/ai', label: 'AI' },
                 { to: '/admin/logs', label: 'Logs' },
               ].map(({ to, label }) => (

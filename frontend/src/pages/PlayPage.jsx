@@ -10,15 +10,18 @@ import PvPBoard from '../components/room/PvPBoard.jsx'
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
   const joinSlug = searchParams.get('join')
+  const spectateSlug = searchParams.get('spectate')
 
   const { status: pvaiStatus, mode: pvaiMode } = useGameStore()
   const { status: pvpStatus, joinRoom, role, slug, isAutoRoom, displayName } = usePvpStore()
 
   const inviteUrl = slug ? `${window.location.origin}/play?join=${slug}` : ''
 
-  // Auto-create a room on arrival (unless joining via invite link)
+  // Auto-create a room on arrival (unless joining or spectating via link)
   useEffect(() => {
-    if (joinSlug) {
+    if (spectateSlug) {
+      if (pvpStatus === 'idle') joinRoom(spectateSlug, 'spectator')
+    } else if (joinSlug) {
       if (pvpStatus === 'idle') joinRoom(joinSlug, 'player')
     } else if (pvpStatus === 'idle') {
       usePvpStore.getState().createRoom({ auto: true })

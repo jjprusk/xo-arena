@@ -7,6 +7,7 @@
  */
 
 import db from '../lib/db.js'
+import { resetBotElo } from './userService.js'
 import { QLearningEngine, runEpisode, DEFAULT_CONFIG } from '../ai/qLearning.js'
 import { SarsaEngine } from '../ai/sarsa.js'
 import { MonteCarloEngine } from '../ai/monteCarlo.js'
@@ -183,10 +184,20 @@ export async function resetModel(id) {
   const model = await db.mLModel.findUnique({ where: { id } })
   if (!model) throw new Error('Model not found')
   const freshConfig = { ...model.config, currentEpsilon: model.config.epsilonStart ?? DEFAULT_CONFIG.epsilonStart }
-  return db.mLModel.update({
+  const updated = await db.mLModel.update({
     where: { id },
     data: { qtable: {}, totalEpisodes: 0, status: 'IDLE', config: freshConfig },
   })
+
+  // If this model is owned by a bot, reset its ELO and trigger calibration
+  const bot = await db.user.findFirst({ where: { botModelId: id, isBot: true } })
+  if (bot) {
+    resetBotElo(bot.id).catch((err) =>
+      console.error('[mlService] resetBotElo after resetModel failed:', err.message)
+    )
+  }
+
+  return updated
 }
 
 export async function cloneModel(id, { name, description, createdBy = null }) {
@@ -1489,6 +1500,7 @@ export function updatePlayerTendencies(modelId, userId) {
       if (!profile) return
 
       const movePatterns = profile.movePatterns || {}
+
       const CORNERS = [0, 2, 6, 8]
 
       let totalMoves = 0

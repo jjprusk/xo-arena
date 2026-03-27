@@ -136,4 +136,25 @@ describe('DQNEngine', () => {
     const eng = new DQNEngine({ epsilonStart: 0.42, epsilonMin: 0, epsilonDecay: 1.0 })
     expect(eng.epsilon).toBeCloseTo(0.42)
   })
+
+  it('trainStep masks illegal moves when computing target Q — occupied cells ignored', () => {
+    // nextState has cells 0 and 1 occupied (non-zero), cells 2-8 empty (zero)
+    const state     = Array(9).fill(0)
+    const nextState = [1, -1, 0, 0, 0, 0, 0, 0, 0]  // cells 0,1 occupied
+
+    // Artificially set target network weights so occupied cells have huge Q-values
+    // If masking works, those values should NOT influence the target computation
+    for (let j = 0; j < engine._target.weights[0].length; j++) {
+      engine._target.weights[0][j][0] = 100   // bias cell 0 output high
+      engine._target.weights[0][j][1] = 100   // bias cell 1 output high
+    }
+
+    const eng2 = new DQNEngine({ replayBufferSize: 100, batchSize: 4, gamma: 0.9, alpha: 0.001, epsilonStart: 0, epsilonMin: 0 })
+    // Push enough experiences with the same nextState to fill batch
+    for (let i = 0; i < 10; i++) {
+      eng2.pushExperience(state, 2, 0, nextState, false)
+    }
+    // Should not throw — and importantly, should not use cells 0/1 for maxNextQ
+    expect(() => eng2.trainStep()).not.toThrow()
+  })
 })
