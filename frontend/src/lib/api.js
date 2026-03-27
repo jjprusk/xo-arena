@@ -74,6 +74,7 @@ export const api = {
     ensembleMove: (body) => api.post('/ml/models/ensemble', body),
     getPlayerProfiles: (id) => api.get(`/ml/models/${id}/player-profiles`),
     getPlayerProfile: (id, userId) => api.get(`/ml/models/${id}/player-profiles/${userId}`),
+    recordHumanMove: (modelId, userId, board, cellIndex) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/human-move`, { board, cellIndex }),
     recordGameEnd: (modelId, userId) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/game-end`, {}),
 
     listRuleSets:     ()              => api.get('/ml/rulesets'),

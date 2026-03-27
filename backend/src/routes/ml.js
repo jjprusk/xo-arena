@@ -429,6 +429,15 @@ router.get('/models/:id/player-profiles/:userId', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+router.post('/models/:id/player-profiles/:userId/human-move', async (req, res, next) => {
+  try {
+    const { board, cellIndex } = req.body
+    if (typeof cellIndex !== 'number') return res.status(400).json({ error: 'cellIndex required' })
+    svc.recordHumanMove(req.params.id, req.params.userId, board || [], cellIndex)
+    res.status(204).end()
+  } catch (err) { next(err) }
+})
+
 router.post('/models/:id/player-profiles/:userId/game-end', async (req, res, next) => {
   try {
     svc.updatePlayerTendencies(req.params.id, req.params.userId)
