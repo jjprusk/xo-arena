@@ -9,7 +9,7 @@ import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import LogViewerPage from './pages/LogViewerPage.jsx'
 import AIDashboardPage from './pages/AIDashboardPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
-import MLDashboardPage from './pages/MLDashboardPage.jsx'
+import GymPage from './pages/MLDashboardPage.jsx'
 import PuzzlePage from './pages/PuzzlePage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
@@ -39,7 +39,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/bots/:id" element={<BotProfilePage />} />
-          <Route path="/ml" element={<MLDashboardPage />} />
+          <Route path="/ml" element={<GymPage />} />
 
           {/* Admin routes — all guarded by AdminRoute */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

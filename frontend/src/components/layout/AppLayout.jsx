@@ -15,7 +15,7 @@ import { usePvpStore } from '../../store/pvpStore.js'
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
-  { to: '/ml', label: 'ML' },
+  { to: '/ml', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
   { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
 ]

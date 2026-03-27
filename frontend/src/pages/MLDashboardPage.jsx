@@ -41,40 +41,55 @@ function playerLabel(profile, currentUserId, currentUserName) {
   return profile.displayName || profile.username || `${profile.userId.slice(0, 12)}…`
 }
 
-export default function MLDashboardPage() {
+export default function GymPage() {
   const { data: session } = useSession()
   const user = session?.user ?? null
   const currentUserId   = user?.id ?? null
   const currentUserName = user?.name || user?.username || null
-  const isAdmin = user?.role === 'admin'
 
-  const [models, setModels]           = useState([])
-  const [selectedId, setSelectedId]   = useState(null)
-  const [activeTab, setActiveTab]     = useState('train')
-  const [showCreate, setShowCreate]   = useState(false)
-  const [showClone,  setShowClone]    = useState(false)
-  const [showImport, setShowImport]   = useState(false)
-  const [regressions, setRegressions] = useState(new Set())
-  const [toasts, setToasts]           = useState([])
+  const [bots, setBots]                   = useState([])
+  const [selectedBotId, setSelectedBotId] = useState(null)
+  const [botModels, setBotModels]         = useState({})   // { botId: mlModel }
+  const [modelLoading, setModelLoading]   = useState(false)
+  const [activeTab, setActiveTab]         = useState('train')
+  const [regressions, setRegressions]     = useState(new Set())
+  const [toasts, setToasts]               = useState([])
 
-  const selected = models.find(m => m.id === selectedId)
+  const selectedBot    = bots.find(b => b.id === selectedBotId) ?? null
+  const selectedModel  = selectedBot ? botModels[selectedBotId] ?? null : null
+  const isMlBot        = selectedBot?.botModelType === 'ml'
+  const isMinimaxBot   = selectedBot?.botModelType === 'minimax' || selectedBot?.botModelType === 'mcts'
+  const allLoadedModels = Object.values(botModels)
 
-  // Track whether the selected model is in the local inference cache
-  const [isCached, setIsCached] = useState(false)
+  const loadBots = useCallback(async () => {
+    if (!currentUserId) return
+    const token = await getToken()
+    const { bots: bs } = await api.bots.list({ ownerId: currentUserId, token })
+    setBots(bs || [])
+  }, [currentUserId])
+
+  useEffect(() => { loadBots() }, [loadBots])
+
+  // Auto-select first bot
   useEffect(() => {
-    if (!selectedId) { setIsCached(false); return }
-    setIsCached(isModelCached(selectedId))
-    // Re-check after a short delay in case a preload is in flight
-    const t = setTimeout(() => setIsCached(isModelCached(selectedId)), 1500)
-    return () => clearTimeout(t)
-  }, [selectedId])
+    if (bots.length > 0 && !selectedBotId) setSelectedBotId(bots[0].id)
+  }, [bots, selectedBotId])
 
-  const loadModels = useCallback(async () => {
-    const { models: ms } = await api.ml.listModels()
-    setModels(ms)
-  }, [])
-
-  useEffect(() => { loadModels() }, [loadModels])
+  // Load ML model when an ML bot is selected for the first time
+  useEffect(() => {
+    if (!selectedBotId || !selectedBot?.botModelId || botModels[selectedBotId]) {
+      setModelLoading(false)
+      return
+    }
+    setModelLoading(true)
+    const id = selectedBotId
+    api.ml.getModel(selectedBot.botModelId)
+      .then(({ model }) => setBotModels(prev => ({ ...prev, [id]: model })))
+      .catch(() => {})
+      .finally(() => setModelLoading(false))
+    // botModels intentionally omitted — we don't want to re-run after models are added
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBotId, selectedBot?.botModelId])
 
   const addToast = useCallback((msg, color = 'blue') => {
     const id = Date.now()
@@ -101,177 +116,139 @@ export default function MLDashboardPage() {
     }
   }, [addToast])
 
-  // Auto-select first model
-  useEffect(() => {
-    if (models.length > 0 && !selectedId) setSelectedId(models[0].id)
-  }, [models, selectedId])
-
-  // Refresh model in list after training completes
-  const refreshModel = useCallback(async (id) => {
-    const { model } = await api.ml.getModel(id)
-    setModels(ms => ms.map(m => m.id === id ? { ...m, ...model } : m))
-    // Evict stale cached weights so the next game downloads the updated model
-    evictModel(id)
+  const refreshModel = useCallback(async (botId, modelId) => {
+    const { model } = await api.ml.getModel(modelId)
+    setBotModels(prev => ({ ...prev, [botId]: model }))
+    evictModel(modelId)
   }, [])
-
-  async function handleDelete(id) {
-    if (!confirm('Delete this model and all its training history?')) return
-    const token = await getToken()
-    // Admin uses the unrestricted admin endpoint; regular users use the standard one
-    if (isAdmin) {
-      await api.admin.deleteModel(id, token)
-    } else {
-      await api.ml.deleteModel(id, token)
-    }
-    setModels(ms => ms.filter(m => m.id !== id))
-    if (selectedId === id) setSelectedId(models.find(m => m.id !== id)?.id || null)
-  }
-
-  async function handleFeatureToggle(id) {
-    const token = await getToken()
-    const { model: updated } = await api.admin.featureModel(id, token)
-    setModels(ms => {
-      const next = ms.map(m => m.id === id ? { ...m, featured: updated.featured } : m)
-      return [...next.filter(m => m.featured), ...next.filter(m => !m.featured)]
-    })
-  }
-
-  async function handleReset(id) {
-    if (!confirm('Reset this model to untrained baseline? All Q-table data will be lost.')) return
-    const token = await getToken()
-    await api.ml.resetModel(id, token)
-    refreshModel(id)
-  }
-
-  async function handleExport(id) {
-    const data = await api.ml.exportModel(id)
-    const src = models.find(m => m.id === id)
-    downloadJSON(data, `${(src?.name || 'model').replace(/\s+/g, '_')}.ml.json`)
-  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="pb-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-default)' }}>
-        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>ML Dashboard</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-            style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>Admin</span>
-          <Btn onClick={() => setShowImport(true)} variant="ghost">Import</Btn>
-          <button onClick={() => setShowCreate(true)}
-            className="px-3 py-1.5 text-sm font-semibold rounded-lg transition-all hover:brightness-110"
-            style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}>
-            + New Model
-          </button>
-        </div>
+      <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Gym</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Train and evaluate your bots. Create bots in your profile settings.</p>
       </div>
 
-      <div className="grid lg:grid-cols-[280px_1fr] gap-6">
-        {/* Model list + Rule Sets sidebar */}
-        <aside className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>Models</p>
-          {models.length === 0 && (
-            <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No models yet.</p>
-          )}
-          {models.map(m => (
-            <button key={m.id} onClick={() => setSelectedId(m.id)}
-              className={`w-full text-left rounded-xl border p-3 transition-all ${selectedId === m.id ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : 'hover:border-[var(--color-gray-400)]'}`}
-              style={{ borderColor: selectedId === m.id ? undefined : 'var(--border-default)', backgroundColor: selectedId === m.id ? undefined : 'var(--bg-surface)' }}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-sm truncate flex items-center gap-1" title={m.creatorName ? `by ${m.creatorName}` : undefined}>
-                  {m.featured && <span title="Featured">⭐</span>}
-                  {m.name}
-                </span>
-                <div className="flex items-center gap-1">
-                  <StatusBadge status={m.status} />
-                  {regressions.has(m.id) && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--color-amber-100)] text-[var(--color-amber-700)]">⚠ regressed</span>
-                  )}
-                </div>
+      {!currentUserId ? (
+        <Card>
+          <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>Sign in to access the Gym.</p>
+        </Card>
+      ) : (
+        <div className="grid lg:grid-cols-[280px_1fr] gap-6">
+          {/* Bot sidebar */}
+          <aside className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>Your Bots</p>
+            {bots.length === 0 && (
+              <div className="text-center py-6 px-3">
+                <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>No bots yet.</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Go to Profile → Bots to create bots.</p>
               </div>
-              <div className="text-xs mt-1 flex gap-2" style={{ color: 'var(--text-muted)' }}>
-                <span>{m.totalEpisodes.toLocaleString()} eps</span>
-                <span>·</span>
-                <span>ELO {Math.round(m.eloRating)}</span>
-                {isModelCached(m.id) && <span title="Q-table loaded in browser" style={{ color: 'var(--color-teal-600)' }}>⚡</span>}
-              </div>
-            </button>
-          ))}
-          {/* Rule Sets mini-list */}
-          <RuleSetsSidebar />
-        </aside>
-
-        {/* Detail panel */}
-        <div>
-          {!selected ? (
-            <div className="rounded-xl border p-12 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
-              <p className="text-lg font-semibold mb-1">No model selected</p>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Select a model from the list or create a new one.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Model header */}
-              <div className="rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3"
-                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold" title={selected.creatorName ? `by ${selected.creatorName}` : undefined}>{selected.name}</h2>
-                    <StatusBadge status={selected.status} />
+            )}
+            {bots.map(bot => {
+              const typeLabel = bot.botModelType === 'ml' ? 'ML' : bot.botModelType === 'rule_based' ? 'Rules' : bot.botModelType === 'mcts' ? 'MCTS' : 'Minimax'
+              const typeBg    = bot.botModelType === 'ml' ? 'var(--color-blue-100)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-100)' : 'var(--color-gray-100)'
+              const typeColor = bot.botModelType === 'ml' ? 'var(--color-blue-700)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-700)' : 'var(--color-gray-600)'
+              const model = botModels[bot.id]
+              return (
+                <button key={bot.id} onClick={() => { setSelectedBotId(bot.id); setActiveTab('train') }}
+                  className={`w-full text-left rounded-xl border p-3 transition-all ${selectedBotId === bot.id ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : 'hover:border-[var(--color-gray-400)]'}`}
+                  style={{ borderColor: selectedBotId === bot.id ? undefined : 'var(--border-default)', backgroundColor: selectedBotId === bot.id ? undefined : 'var(--bg-surface)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm truncate">{bot.displayName || bot.username}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: typeBg, color: typeColor }}>{typeLabel}</span>
+                      {model && regressions.has(model.id) && (
+                        <span className="text-[9px] font-semibold px-1 py-0.5 rounded-full bg-[var(--color-amber-100)] text-[var(--color-amber-700)]">⚠</span>
+                      )}
+                    </div>
                   </div>
-                  {selected.description && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selected.description}</p>}
-                  <div className="flex gap-4 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>{selected.algorithm?.replace('_', '-')}</span>
-                    <span>{selected.totalEpisodes.toLocaleString()} / {selected.maxEpisodes > 0 ? selected.maxEpisodes.toLocaleString() : '∞'} episodes</span>
-                    {selected.creatorName && <span>by {selected.creatorName}</span>}
-                    <span>ELO {Math.round(selected.eloRating)}</span>
-                    <span title={isCached ? 'Q-table loaded in browser — moves run locally' : 'Not yet cached — first move uses server'} style={{ color: isCached ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>
-                      {isCached ? '⚡ cached' : '○ not cached'}
-                    </span>
+                  <div className="text-xs mt-1 flex gap-2" style={{ color: 'var(--text-muted)' }}>
+                    <span>ELO {Math.round(bot.eloRating || 1200)}</span>
+                    {model && <><span>·</span><span>{model.totalEpisodes.toLocaleString()} eps</span></>}
+                    {model && isModelCached(model.id) && <span title="Q-table loaded in browser" style={{ color: 'var(--color-teal-600)' }}>⚡</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </aside>
+
+          {/* Detail panel */}
+          <div>
+            {!selectedBot ? (
+              <div className="rounded-xl border p-12 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <p className="text-lg font-semibold mb-1">No bot selected</p>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Select a bot from the list.</p>
+              </div>
+            ) : isMinimaxBot ? (
+              <MinimaxBotView bot={selectedBot} />
+            ) : isMlBot && modelLoading ? (
+              <div className="flex justify-center py-16"><Spinner /></div>
+            ) : isMlBot && selectedModel ? (
+              <div className="space-y-4">
+                {/* Bot + model header */}
+                <div className="rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3"
+                  style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold">{selectedBot.displayName || selectedBot.username}</h2>
+                      <StatusBadge status={selectedModel.status} />
+                    </div>
+                    {selectedBot.bio && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selectedBot.bio}</p>}
+                    <div className="flex gap-4 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <span>{selectedModel.algorithm?.replace(/_/g, '-')}</span>
+                      <span>{selectedModel.totalEpisodes.toLocaleString()} / {selectedModel.maxEpisodes > 0 ? selectedModel.maxEpisodes.toLocaleString() : '∞'} episodes</span>
+                      <span>ELO {Math.round(selectedBot.eloRating || 1200)}</span>
+                      <span title={isModelCached(selectedModel.id) ? 'Q-table loaded in browser — moves run locally' : 'Not yet cached'} style={{ color: isModelCached(selectedModel.id) ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>
+                        {isModelCached(selectedModel.id) ? '⚡ cached' : '○ not cached'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Btn onClick={async () => {
+                      const data = await api.ml.exportModel(selectedModel.id)
+                      downloadJSON(data, `${(selectedBot.username || 'bot').replace(/\s+/g, '_')}.ml.json`)
+                    }} variant="ghost">Export</Btn>
+                    <Btn onClick={async () => {
+                      if (!confirm('Reset to untrained baseline? All Q-table data will be lost.')) return
+                      const token = await getToken()
+                      await api.ml.resetModel(selectedModel.id, token)
+                      refreshModel(selectedBotId, selectedModel.id)
+                    }} variant="ghost">Reset</Btn>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {isAdmin && (
-                    <Btn onClick={() => handleFeatureToggle(selected.id)} variant="ghost">
-                      {selected.featured ? '⭐ Unfeature' : '☆ Feature'}
-                    </Btn>
-                  )}
-                  <Btn onClick={() => handleExport(selected.id)} variant="ghost">Export</Btn>
-                  <Btn onClick={() => setShowClone(true)} variant="ghost">Clone</Btn>
-                  {(isAdmin || selected.createdBy === currentUserId) && (
-                    <Btn onClick={() => handleReset(selected.id)} variant="ghost">Reset</Btn>
-                  )}
-                  {(isAdmin || selected.createdBy === currentUserId) && (
-                    <Btn onClick={() => handleDelete(selected.id)} variant="danger">Delete</Btn>
-                  )}
+
+                {/* Tabs */}
+                <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                  {['train', 'analytics', 'evaluation', 'explainability', 'checkpoints', 'export', 'rules'].map(tab => (
+                    <button key={tab} onClick={() => setActiveTab(tab)}
+                      className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
+                      style={{ color: activeTab === tab ? undefined : 'var(--text-secondary)' }}>
+                      {tab}
+                    </button>
+                  ))}
                 </div>
-              </div>
 
-              {/* Tabs */}
-              <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-default)' }}>
-                {['train', 'analytics', 'evaluation', 'explainability', 'checkpoints', 'export', 'rules'].map(tab => (
-                  <button key={tab} onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
-                    style={{ color: activeTab === tab ? undefined : 'var(--text-secondary)' }}>
-                    {tab}
-                  </button>
-                ))}
+                {activeTab === 'train'          && <TrainTab model={selectedModel} onComplete={() => refreshModel(selectedBotId, selectedModel.id)} />}
+                {activeTab === 'analytics'      && <AnalyticsTab model={selectedModel} />}
+                {activeTab === 'evaluation'     && <EvaluationTab model={selectedModel} models={allLoadedModels} currentUserId={currentUserId} currentUserName={currentUserName} />}
+                {activeTab === 'explainability' && <ExplainabilityTab model={selectedModel} currentUserId={currentUserId} currentUserName={currentUserName} />}
+                {activeTab === 'checkpoints'    && <CheckpointsTab model={selectedModel} onRestore={() => refreshModel(selectedBotId, selectedModel.id)} />}
+                {activeTab === 'export'         && <ExportTab model={selectedModel} />}
+                {activeTab === 'rules'          && <RulesTab model={selectedModel} models={allLoadedModels} />}
               </div>
-
-              {activeTab === 'train'          && <TrainTab model={selected} onComplete={() => { refreshModel(selected.id) }} />}
-              {activeTab === 'analytics'     && <AnalyticsTab model={selected} />}
-              {activeTab === 'evaluation'    && <EvaluationTab model={selected} models={models} currentUserId={currentUserId} currentUserName={currentUserName} />}
-              {activeTab === 'explainability'&& <ExplainabilityTab model={selected} currentUserId={currentUserId} currentUserName={currentUserName} />}
-              {activeTab === 'checkpoints'   && <CheckpointsTab model={selected} onRestore={() => refreshModel(selected.id)} />}
-              {activeTab === 'export'        && <ExportTab model={selected} />}
-              {activeTab === 'rules'         && <RulesTab model={selected} models={models} />}
-            </div>
-          )}
+            ) : isMlBot ? (
+              <div className="rounded-xl border p-8 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Could not load model for this bot.</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border p-8 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>This bot type doesn't have training options in the Gym.</p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      {showCreate && <CreateModelModal onClose={() => setShowCreate(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowCreate(false) }} />}
-      {showClone  && selected && <CloneModelModal src={selected} onClose={() => setShowClone(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowClone(false) }} />}
-      {showImport && <ImportModelModal onClose={() => setShowImport(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowImport(false) }} />}
+      )}
 
       {/* Toast notifications */}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
@@ -286,6 +263,33 @@ export default function MLDashboardPage() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ─── Minimax / MCTS Bot Read-Only View ────────────────────────────────────────
+
+function MinimaxBotView({ bot }) {
+  const typeLabel = bot.botModelType === 'mcts' ? 'MCTS' : 'Minimax'
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-xl font-bold">{bot.displayName || bot.username}</h2>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--color-gray-600)' }}>
+            {typeLabel}
+          </span>
+        </div>
+        {bot.bio && <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{bot.bio}</p>}
+        <div className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>ELO {Math.round(bot.eloRating || 1200)}</div>
+      </div>
+      <Card>
+        <SectionLabel>About</SectionLabel>
+        <p className="mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+          {typeLabel} bots use a deterministic algorithm and cannot be trained. Their play strength
+          is fixed. Challenge this bot in the Play area to test it.
+        </p>
+      </Card>
     </div>
   )
 }
