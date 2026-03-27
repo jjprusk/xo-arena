@@ -72,6 +72,7 @@ export default function GameBoard({ roomName }) {
   const gameStartRef = useRef(null)
   const lastHumanMoveRef = useRef(null)
   const aivaiMoveActiveRef = useRef(false)
+  const [aivaiRetry, setAivaiRetry] = useState(0)
   const gameRecordedRef = useRef(false)
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
@@ -303,6 +304,7 @@ export default function GameBoard({ roomName }) {
 
     async function fetchAIVsAIMove() {
       setAIThinking(true)
+      setAIError(null)
       const moveStart = Date.now()
 
       // X always uses the first AI config, O uses the second
@@ -311,12 +313,27 @@ export default function GameBoard({ roomName }) {
       const diff  = isXTurn ? difficulty        : ai2Difficulty
       const model = isXTurn ? mlModelId         : ai2ModelId
 
-      try {
-        const localMove = impl === 'ml' && model ? getLocalMove(model, board, currentTurn) : null
-        const move = localMove !== null
-          ? localMove
-          : (await api.ai.move(board, diff, currentTurn, impl, model, false)).move
-        if (!cancelled) {
+      let move = null
+      let failed = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (cancelled) break
+        try {
+          const localMove = impl === 'ml' && model ? getLocalMove(model, board, currentTurn) : null
+          move = localMove !== null
+            ? localMove
+            : (await api.ai.move(board, diff, currentTurn, impl, model, false)).move
+          failed = false
+          break
+        } catch {
+          failed = true
+          if (attempt < 2 && !cancelled) await new Promise(r => setTimeout(r, 1500))
+        }
+      }
+
+      if (!cancelled) {
+        if (failed) {
+          setAIError('AI failed to respond.')
+        } else {
           // Enforce minimum delay for spectator pacing
           const elapsed = Date.now() - moveStart
           const delay = Math.max(0, AIVAI_MOVE_DELAY_MS - elapsed)
@@ -326,13 +343,8 @@ export default function GameBoard({ roomName }) {
             play('move')
           }
         }
-      } catch {
-        if (!cancelled) setAIError('AI failed to respond.')
-      } finally {
-        if (!cancelled) {
-          setAIThinking(false)
-          aivaiMoveActiveRef.current = false
-        }
+        setAIThinking(false)
+        aivaiMoveActiveRef.current = false
       }
     }
 
@@ -341,7 +353,7 @@ export default function GameBoard({ roomName }) {
       cancelled = true
       aivaiMoveActiveRef.current = false
     }
-  }, [currentTurn, status, isAivai])
+  }, [currentTurn, status, isAivai, aivaiRetry])
 
   // ── Hint ─────────────────────────────────────────────────────────────────
   async function handleHint() {
@@ -672,7 +684,18 @@ export default function GameBoard({ roomName }) {
 
       {/* AI error */}
       {aiError && (
-        <p className="text-sm text-[var(--color-red-600)]">{aiError}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-[var(--color-red-600)]">{aiError}</p>
+          {isAivai && (
+            <button
+              onClick={() => { setAIError(null); setAivaiRetry(n => n + 1) }}
+              className="text-xs px-2 py-1 rounded border font-medium transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
       {/* Hint + Undo row (during play, pvai only) */}

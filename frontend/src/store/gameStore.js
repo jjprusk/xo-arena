@@ -21,7 +21,7 @@ export const useGameStore = create((set, get) => ({
   // Game options
   timerEnabled: false,
   timerSeconds: 30,
-  bestOf: null,       // 3 | 5 | 7 | null (unlimited)
+  bestOf: 7,          // 3 | 5 | 7 | null (unlimited)
   misereMode: false,  // completing 3-in-a-row means you LOSE
   boardTheme: 'default',
 
