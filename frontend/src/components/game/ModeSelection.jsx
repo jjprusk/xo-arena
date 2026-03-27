@@ -3,6 +3,164 @@ import { useState, useEffect } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSession } from '../../lib/auth-client.js'
 import { api } from '../../lib/api.js'
+import { ListTr, ListTd, SearchBar } from '../ui/ListTable.jsx'
+
+// ── BotAccordion ─────────────────────────────────────────────────────────────
+// Two-section accordion (Built-in / Community) using ListTr/ListTd for rows.
+// Only one section open at a time; built-in is open by default.
+// Community section includes a live search bar and a scrollable list.
+
+function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch }) {
+  const builtIn   = bots.filter(b => !b.botOwnerId)
+  const community = bots.filter(b => b.botOwnerId)
+  const filteredCommunity = communitySearch
+    ? community.filter(b => b.displayName.toLowerCase().includes(communitySearch.toLowerCase()))
+    : community
+
+  function toggle(section) {
+    setOpenSection(s => s === section ? null : section)
+  }
+
+  return (
+    <div>
+      {/* ── Built-in section ── */}
+      <SectionHeader
+        label="Built-in"
+        count={builtIn.length}
+        open={openSection === 'builtin'}
+        onToggle={() => toggle('builtin')}
+      />
+      {openSection === 'builtin' && (
+        <table className="w-full">
+          <tbody>
+            {builtIn.map((bot, i) => (
+              <ListTr key={bot.id} last={i === builtIn.length - 1}>
+                <ListTd>
+                  <BotRow bot={bot} isSignedIn={isSignedIn} onChallenge={onChallenge} />
+                </ListTd>
+              </ListTr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* ── Community section ── */}
+      <SectionHeader
+        label="Community"
+        count={community.length}
+        open={openSection === 'community'}
+        onToggle={() => toggle('community')}
+      />
+      {openSection === 'community' && (
+        <>
+          <div className="px-4 py-2" style={{ borderBottom: '1px solid var(--border-default)' }}>
+            <SearchBar
+              value={communitySearch}
+              onChange={setCommunitySearch}
+              placeholder="Search community bots…"
+            />
+          </div>
+          {filteredCommunity.length === 0 ? (
+            <p className="px-4 py-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+              {communitySearch
+                ? 'No bots match your search.'
+                : 'No community bots yet. Users can create bots in their profile settings.'}
+            </p>
+          ) : (
+            <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+              <table className="w-full">
+                <tbody>
+                  {filteredCommunity.map((bot, i) => (
+                    <ListTr key={bot.id} last={i === filteredCommunity.length - 1}>
+                      <ListTd>
+                        <BotRow bot={bot} isSignedIn={isSignedIn} onChallenge={onChallenge} />
+                      </ListTd>
+                    </ListTr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function SectionHeader({ label, count, open, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-[var(--bg-surface-hover)]"
+      style={{ borderTop: '1px solid var(--border-default)' }}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+        {label} <span className="font-normal">({count})</span>
+      </span>
+      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+        {open ? '▼' : '▶'}
+      </span>
+    </button>
+  )
+}
+
+function BotRow({ bot, isSignedIn, onChallenge }) {
+  const initial   = (bot.displayName?.[0] || '?').toUpperCase()
+  const algoLabel = ALGO_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'
+  const elo       = Math.round(bot.eloRating ?? 1200)
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
+        style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
+      >
+        {bot.avatarUrl
+          ? <img src={bot.avatarUrl} alt={bot.displayName} className="w-full h-full object-cover" />
+          : initial}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm font-semibold truncate">{bot.displayName}</span>
+          {bot.botProvisional && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
+              Calibrating
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>
+            ELO {elo}{bot.botProvisional && <span style={{ color: 'var(--color-amber-600)' }}> (provisional)</span>}
+          </span>
+          <span className="text-[10px]" style={{ color: 'var(--border-default)' }}>·</span>
+          <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{algoLabel}</span>
+          {bot.botCompetitive && (
+            <>
+              <span className="text-[10px]" style={{ color: 'var(--border-default)' }}>·</span>
+              <span className="text-[10px] font-semibold" style={{ color: '#0d9488' }}>Competitive</span>
+            </>
+          )}
+        </div>
+      </div>
+      {isSignedIn ? (
+        <button
+          onClick={() => onChallenge(bot)}
+          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
+          style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)' }}
+        >
+          Challenge
+        </button>
+      ) : (
+        <a
+          href="/sign-in"
+          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
+          style={{ backgroundColor: 'var(--bg-page)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
+        >
+          Sign in
+        </a>
+      )}
+    </div>
+  )
+}
 
 const ALGO_LABELS = {
   minimax: 'Minimax',
@@ -68,6 +226,8 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   // Challenge a bot state
   const [bots, setBots] = useState([])
   const [botsLoading, setBotsLoading] = useState(false)
+  const [openSection, setOpenSection] = useState('builtin') // 'builtin' | 'community' | null
+  const [communitySearch, setCommunitySearch] = useState('')
 
   // Bot vs Bot config
   const [aivaiBot1Id, setAivaiBot1Id] = useState(null)
@@ -225,94 +385,17 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
               <div className="px-4 py-6 text-center">
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No active bots available yet.</p>
               </div>
-            ) : (() => {
-                const builtIn = bots.filter(b => !b.botOwnerId)
-                const community = bots.filter(b => b.botOwnerId)
-                const renderBot = (bot) => {
-                  const initial = (bot.displayName?.[0] || '?').toUpperCase()
-                  const algoLabel = ALGO_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'
-                  const elo = Math.round(bot.eloRating ?? 1200)
-                  return (
-                    <div key={bot.id} className="flex items-center gap-3 px-4 py-3">
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
-                        style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
-                      >
-                        {bot.avatarUrl
-                          ? <img src={bot.avatarUrl} alt={bot.displayName} className="w-full h-full object-cover" />
-                          : initial}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm font-semibold truncate">{bot.displayName}</span>
-                          {bot.botProvisional && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
-                              Calibrating
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                            ELO {elo}{bot.botProvisional && <span style={{ color: 'var(--color-amber-600)' }}> (provisional)</span>}
-                          </span>
-                          <span className="text-[10px]" style={{ color: 'var(--border-default)' }}>·</span>
-                          <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{algoLabel}</span>
-                          {bot.botCompetitive && (
-                            <>
-                              <span className="text-[10px]" style={{ color: 'var(--border-default)' }}>·</span>
-                              <span className="text-[10px] font-semibold" style={{ color: '#0d9488' }}>Competitive</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      {isSignedIn ? (
-                        <button
-                          onClick={() => handleChallengeBot(bot)}
-                          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
-                          style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)' }}
-                        >
-                          Challenge
-                        </button>
-                      ) : (
-                        <a
-                          href="/sign-in"
-                          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
-                          style={{ backgroundColor: 'var(--bg-page)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
-                        >
-                          Sign in
-                        </a>
-                      )}
-                    </div>
-                  )
-                }
-                return (
-                  <div>
-                    {/* Built-in bots */}
-                    <div className="px-4 pt-3 pb-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Built-in</span>
-                    </div>
-                    <div className="divide-y" style={{ borderTop: '1px solid var(--border-default)' }}>
-                      {builtIn.map(renderBot)}
-                    </div>
-
-                    {/* Community bots */}
-                    <div className="px-4 pt-4 pb-1" style={{ borderTop: '1px solid var(--border-default)' }}>
-                      <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Community</span>
-                    </div>
-                    {community.length > 0 ? (
-                      <div className="divide-y" style={{ borderTop: '1px solid var(--border-default)' }}>
-                        {community.map(renderBot)}
-                      </div>
-                    ) : (
-                      <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border-default)' }}>
-                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          No community bots yet. Users can create bots in their profile settings.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
+            ) : (
+              <BotAccordion
+                bots={bots}
+                isSignedIn={isSignedIn}
+                onChallenge={handleChallengeBot}
+                openSection={openSection}
+                setOpenSection={setOpenSection}
+                communitySearch={communitySearch}
+                setCommunitySearch={setCommunitySearch}
+              />
+            )}
 
             {/* Play as + options — shown for signed-in users */}
             {isSignedIn && bots.length > 0 && (
