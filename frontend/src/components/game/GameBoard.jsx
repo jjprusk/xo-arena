@@ -448,6 +448,20 @@ export default function GameBoard({ roomName }) {
         </div>
       )}
 
+      {/* Opponent chip — pvai / pvbot */}
+      {(mode === 'pvai' || mode === 'pvbot') && (() => {
+        const diff = difficulty?.toLowerCase()
+        const persona = MINIMAX_PERSONAS[diff]
+        if (!persona) return null
+        return (
+          <div className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>vs</span>
+            <span className="font-medium">{persona.name}</span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(ELO {persona.elo})</span>
+          </div>
+        )
+      })()}
+
       {/* AI vs AI matchup strip */}
       {isAivai && (
         <div className="w-full flex items-center gap-2">

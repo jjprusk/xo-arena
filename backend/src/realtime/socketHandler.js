@@ -63,6 +63,8 @@ export async function attachSocketIO(httpServer) {
           hostUserId: user?.id || null,
           spectatorAllowed,
         })
+        room.hostUserDisplayName = user?.displayName ?? null
+        room.hostUserElo = user?.eloRating ?? null
         socket.join(room.slug)
         socket.emit('room:created', { slug: room.slug, displayName: room.displayName, mark: 'X' })
       } catch (err) {
@@ -112,6 +114,8 @@ export async function attachSocketIO(httpServer) {
         if (result.error) return socket.emit('error', { message: result.error })
 
         const room = result.room
+        room.guestUserDisplayName = user?.displayName ?? null
+        room.guestUserElo = user?.eloRating ?? null
         socket.join(slug)
         socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeRoom(room) })
         // Notify host
@@ -308,6 +312,10 @@ function sanitizeRoom(room) {
     winLine: room.winLine,
     spectatorCount: room.spectatorIds?.size ?? 0,
     spectatorAllowed: room.spectatorAllowed,
+    hostUserDisplayName: room.hostUserDisplayName ?? null,
+    hostUserElo: room.hostUserElo ?? null,
+    guestUserDisplayName: room.guestUserDisplayName ?? null,
+    guestUserElo: room.guestUserElo ?? null,
   }
 }
 
