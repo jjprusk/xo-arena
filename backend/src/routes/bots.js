@@ -82,9 +82,9 @@ router.post('/', requireAuth, async (req, res, next) => {
  * Returns { bot, caller } or sends an error response.
  */
 async function loadBotAndAuthorize(req, res) {
-  const callerId = req.auth.userId
+  const baId = req.auth.userId
   const caller = await db.user.findUnique({
-    where: { id: callerId },
+    where: { betterAuthId: baId },
     include: { userRoles: { select: { role: true } } },
   })
   if (!caller) { res.status(401).json({ error: 'Unauthorized' }); return null }
@@ -98,7 +98,7 @@ async function loadBotAndAuthorize(req, res) {
   })
   if (!bot || !bot.isBot) { res.status(404).json({ error: 'Bot not found' }); return null }
 
-  if (bot.botOwnerId !== callerId && !hasRole(caller, 'BOT_ADMIN')) {
+  if (bot.botOwnerId !== caller.id && !hasRole(caller, 'BOT_ADMIN')) {
     res.status(403).json({ error: 'Forbidden' }); return null
   }
 
