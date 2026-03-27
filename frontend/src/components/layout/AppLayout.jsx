@@ -143,7 +143,7 @@ export default function AppLayout() {
               {[
                 { to: '/admin', label: 'Admin' },
                 { to: '/admin/users', label: 'Users' },
-                { to: '/admin/ml-models', label: 'Models' },
+                { to: '/admin/ml-models', label: 'Bots' },
                 { to: '/admin/ai', label: 'AI' },
                 { to: '/admin/logs', label: 'Logs' },
               ].map(({ to, label }) => (
