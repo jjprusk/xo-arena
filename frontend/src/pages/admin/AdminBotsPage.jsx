@@ -3,12 +3,18 @@ import { Link } from 'react-router-dom'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
 import { getToken } from '../../lib/getToken.js'
+import {
+  ListTable, ListTh, ListTd, ListTr,
+  SearchBar, ListPagination,
+} from '../../components/ui/ListTable.jsx'
+
+const LIMIT = 25
 
 const ALGO_COLORS = {
-  minimax: { bg: 'var(--color-blue-50)', text: 'var(--color-blue-700)' },
-  ml: { bg: 'var(--color-teal-50)', text: 'var(--color-teal-700)' },
-  mcts: { bg: 'var(--color-purple-50)', text: 'var(--color-purple-700)' },
-  rule_based: { bg: 'var(--color-amber-50)', text: 'var(--color-amber-700)' },
+  minimax:    { bg: 'var(--color-blue-50)',   text: 'var(--color-blue-700)'   },
+  ml:         { bg: 'var(--color-teal-50)',   text: 'var(--color-teal-700)'   },
+  mcts:       { bg: 'var(--color-purple-50)', text: 'var(--color-purple-700)' },
+  rule_based: { bg: 'var(--color-amber-50)',  text: 'var(--color-amber-700)'  },
 }
 
 export default function AdminBotsPage() {
@@ -16,7 +22,6 @@ export default function AdminBotsPage() {
   const [total, setTotal]     = useState(0)
   const [page, setPage]       = useState(1)
   const [search, setSearch]   = useState('')
-  const [query, setQuery]     = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [actionError, setActionError] = useState(null)
@@ -28,7 +33,6 @@ export default function AdminBotsPage() {
   const [sgResult, setSgResult] = useState(null)
   const [sgError, setSgError] = useState(null)
 
-  const LIMIT = 25
   const totalPages = Math.ceil(total / LIMIT)
 
   const load = useCallback(async (q, p) => {
@@ -46,13 +50,13 @@ export default function AdminBotsPage() {
     }
   }, [])
 
-  useEffect(() => { load(query, page) }, [query, page, load])
-
-  function handleSearch(e) {
-    e.preventDefault()
-    setPage(1)
-    setQuery(search)
-  }
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(id)
+  }, [search])
+  useEffect(() => { setPage(1) }, [debouncedSearch])
+  useEffect(() => { load(debouncedSearch, page) }, [debouncedSearch, page, load])
 
   async function toggleActive(bot) {
     setActionError(null)
@@ -172,209 +176,162 @@ export default function AdminBotsPage() {
       </div>
 
       {/* Search */}
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name…"
-          className="flex-1 px-3 py-2 rounded-lg border text-sm focus:outline-none"
-          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 rounded-lg text-sm font-medium text-white"
-          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
-        >
-          Search
-        </button>
-        {query && (
-          <button
-            type="button"
-            onClick={() => { setSearch(''); setQuery(''); setPage(1) }}
-            className="px-3 py-2 rounded-lg text-sm border hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-          >
-            Clear
-          </button>
-        )}
-      </form>
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search by name…"
+      />
 
       {actionError && <ErrorMsg>{actionError}</ErrorMsg>}
       {loading && <Spinner />}
       {error && <ErrorMsg>{error}</ErrorMsg>}
 
-      {!loading && bots.length > 0 && (
-        <div
-          className="rounded-xl border overflow-x-auto overflow-y-auto max-h-[60vh]"
-          style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-        >
-          <table className="w-full text-sm">
-            <thead>
-              <tr
-                className="sticky top-0 z-10"
-                style={{ backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid var(--border-default)' }}
-              >
-                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Name</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Owner</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>Algorithm</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>ELO</th>
-                <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Status</th>
-                <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wide hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Available</th>
-                <th className="px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {bots.map((bot, i) => {
-                const algoStyle = ALGO_COLORS[bot.botModelType] ?? { bg: 'var(--bg-surface-hover)', text: 'var(--text-secondary)' }
-                return (
-                  <tr
-                    key={bot.id}
-                    style={{
-                      backgroundColor: i % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-base)',
-                      borderBottom: '1px solid var(--border-default)',
-                      opacity: bot.botActive ? 1 : 0.6,
-                    }}
-                  >
-                    {/* Name */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold overflow-hidden"
-                          style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}
-                        >
-                          {bot.avatarUrl
-                            ? <img src={bot.avatarUrl} alt="" className="w-full h-full object-cover" />
-                            : '🤖'
-                          }
-                        </div>
-                        <div>
-                          <Link
-                            to={`/bots/${bot.id}`}
-                            className="font-medium hover:underline"
-                            style={{ color: 'var(--text-primary)' }}
-                          >
-                            {bot.displayName}
-                          </Link>
-                          {bot.botProvisional && (
-                            <span className="ml-1.5 text-xs px-1 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>calibrating</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
+      {!loading && (
+        <ListTable maxHeight="60vh">
+          <thead>
+            <tr>
+              <ListTh>Name</ListTh>
+              <ListTh className="hidden sm:table-cell">Owner</ListTh>
+              <ListTh className="hidden md:table-cell">Algorithm</ListTh>
+              <ListTh align="right">ELO</ListTh>
+              <ListTh align="center">Status</ListTh>
+              <ListTh align="center" className="hidden lg:table-cell">Available</ListTh>
+              <ListTh />
+            </tr>
+          </thead>
+          <tbody>
+            {bots.map((bot, i) => {
+              const algoStyle = ALGO_COLORS[bot.botModelType] ?? { bg: 'var(--color-gray-100)', text: 'var(--text-muted)' }
+              return (
+                <ListTr key={bot.id} dimmed={!bot.botActive} last={i === bots.length - 1}>
 
-                    {/* Owner */}
-                    <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'var(--text-secondary)' }}>
-                      {bot.owner ? (
-                        <span className="text-sm">{bot.owner.displayName || bot.owner.username}</span>
-                      ) : (
-                        <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>built-in</span>
-                      )}
-                    </td>
-
-                    {/* Algorithm */}
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span
-                        className="text-xs font-medium px-1.5 py-0.5 rounded-full"
-                        style={{ backgroundColor: algoStyle.bg, color: algoStyle.text }}
+                  {/* Name */}
+                  <ListTd>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold overflow-hidden"
+                        style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}
                       >
-                        {bot.botModelType}
-                      </span>
-                    </td>
+                        {bot.avatarUrl
+                          ? <img src={bot.avatarUrl} alt="" className="w-full h-full object-cover" />
+                          : '🤖'
+                        }
+                      </div>
+                      <div>
+                        <Link
+                          to={`/bots/${bot.id}`}
+                          className="font-medium text-sm hover:underline"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {bot.displayName}
+                        </Link>
+                        {bot.botProvisional && (
+                          <span className="ml-1.5 text-[10px] px-1 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>
+                            calibrating
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </ListTd>
 
-                    {/* ELO */}
-                    <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: 'var(--color-blue-600)' }}>
+                  {/* Owner */}
+                  <ListTd className="hidden sm:table-cell">
+                    {bot.owner ? (
+                      <span className="text-xs">{bot.owner.displayName || bot.owner.username}</span>
+                    ) : (
+                      <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>built-in</span>
+                    )}
+                  </ListTd>
+
+                  {/* Algorithm */}
+                  <ListTd className="hidden md:table-cell">
+                    <span
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: algoStyle.bg, color: algoStyle.text }}
+                    >
+                      {bot.botModelType}
+                    </span>
+                  </ListTd>
+
+                  {/* ELO */}
+                  <ListTd align="right">
+                    <span className="font-mono font-semibold text-xs tabular-nums" style={{ color: 'var(--color-blue-600)' }}>
                       {Math.round(bot.eloRating)}
-                    </td>
+                    </span>
+                  </ListTd>
 
-                    {/* Status */}
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                        style={{
-                          backgroundColor: bot.botActive ? 'var(--color-teal-50)' : 'var(--color-gray-100)',
-                          color: bot.botActive ? 'var(--color-teal-600)' : 'var(--text-muted)',
-                        }}
-                      >
-                        {bot.botActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
+                  {/* Status */}
+                  <ListTd align="center">
+                    <span
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: bot.botActive ? 'var(--color-teal-50)' : 'var(--color-gray-100)',
+                        color: bot.botActive ? 'var(--color-teal-600)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {bot.botActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </ListTd>
 
-                    {/* Available (tournament eligibility) */}
-                    <td className="px-4 py-3 text-center hidden lg:table-cell">
+                  {/* Available (tournament eligibility) */}
+                  <ListTd align="center" className="hidden lg:table-cell">
+                    <button
+                      onClick={() => toggleAvailable(bot)}
+                      disabled={bot.botInTournament}
+                      className="text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        backgroundColor: bot.botAvailable ? 'var(--color-blue-50)' : 'var(--color-gray-100)',
+                        color: bot.botAvailable ? 'var(--color-blue-600)' : 'var(--text-muted)',
+                        borderColor: bot.botAvailable ? 'var(--color-blue-200)' : 'var(--border-default)',
+                      }}
+                      title={bot.botInTournament ? 'In tournament — cannot change' : 'Toggle tournament availability'}
+                    >
+                      {bot.botAvailable ? 'Yes' : 'No'}
+                    </button>
+                  </ListTd>
+
+                  {/* Actions */}
+                  <ListTd align="right">
+                    <div className="flex items-center gap-1.5 justify-end">
                       <button
-                        onClick={() => toggleAvailable(bot)}
-                        disabled={bot.botInTournament}
-                        className="text-xs px-2 py-0.5 rounded-full font-semibold border transition-colors hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={() => toggleActive(bot)}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
                         style={{
-                          backgroundColor: bot.botAvailable ? 'var(--color-blue-50)' : 'var(--color-gray-100)',
-                          color: bot.botAvailable ? 'var(--color-blue-600)' : 'var(--text-muted)',
-                          borderColor: bot.botAvailable ? 'var(--color-blue-200)' : 'var(--border-default)',
+                          borderColor: bot.botActive ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
+                          color: bot.botActive ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
                         }}
-                        title={bot.botInTournament ? 'In tournament — cannot change' : 'Toggle tournament availability'}
                       >
-                        {bot.botAvailable ? 'Yes' : 'No'}
+                        {bot.botActive ? 'Disable' : 'Enable'}
                       </button>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <button
-                          onClick={() => toggleActive(bot)}
-                          className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
-                          style={{
-                            borderColor: bot.botActive ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
-                            color: bot.botActive ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
-                          }}
-                        >
-                          {bot.botActive ? 'Disable' : 'Enable'}
-                        </button>
-                        <button
-                          onClick={() => deleteBot(bot)}
-                          className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)]"
-                          style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
-                          title="Delete bot"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <button
+                        onClick={() => deleteBot(bot)}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)] hover:text-[var(--color-red-600)]"
+                        style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                        title="Delete bot"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </ListTd>
+                </ListTr>
+              )
+            })}
+          </tbody>
+        </ListTable>
       )}
 
       {!loading && bots.length === 0 && !error && (
         <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No bots found.</p>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage(p => p - 1)}
-            className="px-3 py-1.5 rounded border text-sm disabled:opacity-40 hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-          >
-            ← Prev
-          </button>
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Page {page} of {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => p + 1)}
-            className="px-3 py-1.5 rounded border text-sm disabled:opacity-40 hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-          >
-            Next →
-          </button>
-        </div>
-      )}
+      <ListPagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        limit={LIMIT}
+        onPageChange={setPage}
+        noun="bots"
+      />
     </div>
   )
 }

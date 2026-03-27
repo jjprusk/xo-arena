@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
+import {
+  ListTable, ListTh, ListTd, ListTr,
+  UserAvatar, SearchBar,
+} from '../components/ui/ListTable.jsx'
 
 const PODIUM_COLORS = {
   0: { bg: 'var(--color-amber-100)', border: 'var(--color-amber-500)', label: '👑' },
@@ -48,18 +52,11 @@ export default function LeaderboardPage() {
       <div className="flex flex-wrap gap-3 items-center">
         <FilterGroup label="Period" options={FILTERS_PERIOD} value={period} onChange={setPeriod} />
         <FilterGroup label="Mode" options={FILTERS_MODE} value={mode} onChange={setMode} />
-        <input
-          type="search"
+        <SearchBar
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
           placeholder="Search player…"
-          className="px-3 py-1.5 rounded-lg border text-sm outline-none focus:border-[var(--color-blue-600)] transition-colors"
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            borderColor: 'var(--border-default)',
-            color: 'var(--text-primary)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
+          className="w-44"
         />
         {/* Show bots toggle */}
         <label className="flex items-center gap-2 cursor-pointer select-none ml-auto">
@@ -108,7 +105,7 @@ export default function LeaderboardPage() {
                     }}
                   >
                     <span className="text-2xl">{PODIUM_COLORS[rank]?.label}</span>
-                    <Avatar user={entry.user} size={isFirst ? 'lg' : 'md'} />
+                    <UserAvatar user={entry.user} size={isFirst ? 'lg' : 'md'} />
                     <div className="flex items-center gap-1">
                       {entry.user.isBot && <span title="Bot">🤖</span>}
                       <span className="text-sm font-semibold text-center max-w-[90px] truncate">
@@ -125,89 +122,66 @@ export default function LeaderboardPage() {
           )}
 
           {/* Table */}
-          <div
-            className="rounded-xl border overflow-hidden"
-            style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-          >
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ backgroundColor: 'var(--bg-surface-hover)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>#</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Player</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Games</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Wins</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Win Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((entry) => (
-                  <tr
-                    key={entry.user.id}
-                    className="border-t transition-colors hover:bg-[var(--bg-surface-hover)]"
-                    style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
-                  >
-                    <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+          <ListTable>
+            <thead>
+              <tr>
+                <ListTh>#</ListTh>
+                <ListTh>Player</ListTh>
+                <ListTh align="right" className="hidden sm:table-cell">Games</ListTh>
+                <ListTh align="right" className="hidden sm:table-cell">Wins</ListTh>
+                <ListTh>Win Rate</ListTh>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((entry, i) => (
+                <ListTr key={entry.user.id} last={i === filtered.length - 1}>
+                  <ListTd>
+                    <span className="font-mono text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
                       {entry.rank}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar user={entry.user} size="sm" />
-                        {entry.user.isBot ? (
-                          <Link
-                            to={`/bots/${entry.user.id}`}
-                            className="flex items-center gap-1 font-medium truncate max-w-[120px] hover:underline"
-                            style={{ color: 'var(--text-primary)' }}
-                          >
-                            <span title="Bot">🤖</span>
-                            {entry.user.displayName}
-                          </Link>
-                        ) : (
-                          <span className="font-medium truncate max-w-[120px]">{entry.user.displayName}</span>
-                        )}
+                    </span>
+                  </ListTd>
+                  <ListTd>
+                    <div className="flex items-center gap-2.5">
+                      <UserAvatar user={entry.user} size="sm" />
+                      {entry.user.isBot ? (
+                        <Link
+                          to={`/bots/${entry.user.id}`}
+                          className="flex items-center gap-1 font-medium truncate max-w-[120px] hover:underline"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          <span title="Bot">🤖</span>
+                          {entry.user.displayName}
+                        </Link>
+                      ) : (
+                        <span className="font-medium truncate max-w-[120px]">{entry.user.displayName}</span>
+                      )}
+                    </div>
+                  </ListTd>
+                  <ListTd align="right" className="hidden sm:table-cell">
+                    <span className="tabular-nums">{entry.total}</span>
+                  </ListTd>
+                  <ListTd align="right" className="hidden sm:table-cell">
+                    <span className="tabular-nums">{entry.wins}</span>
+                  </ListTd>
+                  <ListTd>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full max-w-[80px]" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${Math.round(entry.winRate * 100)}%`, backgroundColor: 'var(--color-teal-600)' }}
+                        />
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-right hidden sm:table-cell tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                      {entry.total}
-                    </td>
-                    <td className="px-4 py-3 text-right hidden sm:table-cell tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                      {entry.wins}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full max-w-[80px]" style={{ backgroundColor: 'var(--color-gray-200)' }}>
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${Math.round(entry.winRate * 100)}%`, backgroundColor: 'var(--color-teal-600)' }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--color-teal-600)' }}>
-                          {Math.round(entry.winRate * 100)}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--color-teal-600)' }}>
+                        {Math.round(entry.winRate * 100)}%
+                      </span>
+                    </div>
+                  </ListTd>
+                </ListTr>
+              ))}
+            </tbody>
+          </ListTable>
         </>
       )}
-    </div>
-  )
-}
-
-function Avatar({ user, size = 'md' }) {
-  const dim = size === 'lg' ? 48 : size === 'md' ? 36 : 24
-  const textSize = size === 'lg' ? 'text-xl' : size === 'md' ? 'text-sm' : 'text-xs'
-  return (
-    <div
-      className={`rounded-full flex items-center justify-center font-bold ${textSize} flex-shrink-0`}
-      style={{ width: dim, height: dim, backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
-    >
-      {user.avatarUrl
-        ? <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full rounded-full object-cover" />
-        : user.displayName?.[0]?.toUpperCase() || '?'
-      }
     </div>
   )
 }
