@@ -135,8 +135,10 @@ export async function getUserStats(userId) {
     }),
     db.game.findMany({
       where: { mode: 'PVBOT', player1Id: userId },
-      select: { outcome: true, winnerId: true, player2Id: true },
-      include: { player2: { select: { id: true, displayName: true, avatarUrl: true } } },
+      select: {
+        outcome: true, winnerId: true, player2Id: true,
+        player2: { select: { id: true, displayName: true, avatarUrl: true } },
+      },
     }),
   ])
 
