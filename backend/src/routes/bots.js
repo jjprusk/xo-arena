@@ -68,8 +68,8 @@ router.post('/', requireAuth, async (req, res, next) => {
       }
     }
 
-    const { name, algorithm, difficulty, modelType, competitive, avatarUrl } = req.body
-    const bot = await createBot(userId, { name, algorithm, difficulty, modelType, competitive, avatarUrl })
+    const { name, modelType, competitive, avatarUrl } = req.body
+    const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl })
     res.status(201).json({ bot })
   } catch (err) {
     if (err.code === 'RESERVED_NAME') return res.status(400).json({ error: err.message, code: err.code })

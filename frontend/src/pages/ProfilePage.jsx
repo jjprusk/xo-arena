@@ -28,7 +28,7 @@ export default function ProfilePage() {
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null) // { id, value }
-  const [createForm, setCreateForm] = useState({ name: '', algorithm: 'minimax', difficulty: 'novice', modelType: 'DQN', competitive: false })
+  const [createForm, setCreateForm] = useState({ name: '', modelType: 'DQN', competitive: false })
 
   useEffect(() => {
     if (!isLoaded) return
@@ -171,14 +171,14 @@ export default function ProfilePage() {
       const token = await getToken()
       const payload = {
         name: createForm.name,
-        algorithm: createForm.algorithm,
-        ...(createForm.algorithm === 'minimax' || createForm.algorithm === 'mcts' ? { difficulty: createForm.difficulty } : {}),
-        ...(createForm.algorithm === 'ml' ? { modelType: createForm.modelType, competitive: createForm.competitive } : {}),
+        algorithm: 'ml',
+        modelType: createForm.modelType,
+        competitive: createForm.competitive,
       }
       const { bot: newBot } = await api.bots.create(payload, token)
       setBots(prev => [newBot, ...prev])
       setLimitInfo(prev => prev ? { ...prev, count: prev.count + 1 } : prev)
-      setCreateForm({ name: '', algorithm: 'minimax', difficulty: 'novice', modelType: 'DQN', competitive: false })
+      setCreateForm({ name: '', modelType: 'DQN', competitive: false })
       setShowCreateBot(false)
     } catch (err) {
       setBotActionError(err.message || 'Create failed.')
@@ -461,81 +461,45 @@ export default function ProfilePage() {
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
           >
             <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>New bot</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="space-y-1">
-                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Name</span>
-                <input
-                  type="text"
-                  required
-                  maxLength={40}
-                  value={createForm.name}
-                  onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Algorithm</span>
-                <select
-                  value={createForm.algorithm}
-                  onChange={e => setCreateForm(f => ({ ...f, algorithm: e.target.value, modelId: '', competitive: false }))}
-                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                >
-                  <option value="minimax">Minimax</option>
-                  <option value="ml">ML model</option>
-                </select>
-              </label>
-            </div>
-
-            {(createForm.algorithm === 'minimax' || createForm.algorithm === 'mcts') && (
-              <label className="space-y-1 block">
-                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Difficulty</span>
-                <select
-                  value={createForm.difficulty}
-                  onChange={e => setCreateForm(f => ({ ...f, difficulty: e.target.value }))}
-                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                >
-                  <option value="novice">Novice</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                  <option value="master">Master</option>
-                </select>
-              </label>
-            )}
-
-            {createForm.algorithm === 'ml' && (
-              <div className="space-y-3">
-                <label className="space-y-1 block">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
-                  <select
-                    value={createForm.modelType}
-                    onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
-                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="DQN">DQN (Deep Q-Network)</option>
-                    <option value="ALPHA_ZERO">AlphaZero</option>
-                    <option value="POLICY_GRADIENT">Policy Gradient</option>
-                    <option value="Q_LEARNING">Q-Learning</option>
-                    <option value="SARSA">SARSA</option>
-                    <option value="MONTE_CARLO">Monte Carlo</option>
-                  </select>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    A fresh untrained brain of this type will be created. Train it in the Gym.
-                  </p>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={createForm.competitive}
-                    onChange={e => setCreateForm(f => ({ ...f, competitive: e.target.checked }))}
-                  />
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Competitive (eligible for leaderboard & tournaments)</span>
-                </label>
-              </div>
-            )}
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Name</span>
+              <input
+                type="text"
+                required
+                maxLength={40}
+                value={createForm.name}
+                onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
+              <select
+                value={createForm.modelType}
+                onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              >
+                <option value="DQN">DQN (Deep Q-Network)</option>
+                <option value="ALPHA_ZERO">AlphaZero</option>
+                <option value="POLICY_GRADIENT">Policy Gradient</option>
+                <option value="Q_LEARNING">Q-Learning</option>
+                <option value="SARSA">SARSA</option>
+                <option value="MONTE_CARLO">Monte Carlo</option>
+              </select>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                A fresh untrained brain of this type will be created. Train it in the Gym.
+              </p>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createForm.competitive}
+                onChange={e => setCreateForm(f => ({ ...f, competitive: e.target.checked }))}
+              />
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Competitive (eligible for leaderboard & tournaments)</span>
+            </label>
 
             <div className="flex gap-2 pt-1">
               <button
