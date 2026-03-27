@@ -132,7 +132,7 @@ export default function BotProfilePage() {
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}>
                 🤖 Bot
               </span>
-              {bot.botCalibrating && (
+              {bot.botProvisional && (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
                   Calibrating
                 </span>
@@ -158,7 +158,7 @@ export default function BotProfilePage() {
           <Row label="ELO" value={
             <span className="tabular-nums font-bold" style={{ color: 'var(--color-blue-600)' }}>
               {Math.round(eloData?.currentElo ?? bot.eloRating ?? 1200)}
-              {bot.botCalibrating && <span className="text-xs font-normal ml-1" style={{ color: 'var(--text-muted)' }}>(provisional)</span>}
+              {bot.botProvisional && <span className="text-xs font-normal ml-1" style={{ color: 'var(--text-muted)' }}>(provisional)</span>}
             </span>
           } />
           <Row label="Powered by" value={poweredBy} />

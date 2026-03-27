@@ -23,6 +23,7 @@ export default function ProfilePage() {
   // My Bots
   const [bots, setBots] = useState([])
   const [limitInfo, setLimitInfo] = useState(null)
+  const [provisionalThreshold, setProvisionalThreshold] = useState(5)
   const [botsLoading, setBotsLoading] = useState(false)
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
@@ -45,9 +46,10 @@ export default function ProfilePage() {
         // Load bots
         setBotsLoading(true)
         try {
-          const { bots: b, limitInfo: li } = await api.bots.list({ ownerId: user.id, includeInactive: true })
+          const { bots: b, limitInfo: li, provisionalThreshold: pt } = await api.bots.list({ ownerId: user.id, includeInactive: true })
           setBots(b)
           setLimitInfo(li)
+          if (pt != null) setProvisionalThreshold(pt)
         } catch { /* non-fatal */ } finally {
           setBotsLoading(false)
         }
@@ -138,12 +140,12 @@ export default function ProfilePage() {
   }
 
   async function handleResetElo(bot) {
-    if (!confirm(`Reset ELO for "${bot.displayName}"? This will wipe the bot's rating to 1200 and queue calibration games. This cannot be undone.`)) return
+    if (!confirm(`Reset ELO for "${bot.displayName}"? This will wipe the bot's rating to 1200 and mark it provisional again. This cannot be undone.`)) return
     setBotActionError(null)
     try {
       const token = await getToken()
       await api.bots.resetElo(bot.id, token)
-      setBots(prev => prev.map(b => b.id === bot.id ? { ...b, eloRating: 1200, botCalibrating: true } : b))
+      setBots(prev => prev.map(b => b.id === bot.id ? { ...b, eloRating: 1200, botProvisional: true, botGamesPlayed: 0 } : b))
     } catch (err) {
       setBotActionError(err.message || 'Reset failed.')
     }
@@ -389,8 +391,8 @@ export default function ProfilePage() {
                       >
                         {bot.botModelType}
                       </span>
-                      {bot.botCalibrating && (
-                        <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>calibrating</span>
+                      {bot.botProvisional && (
+                        <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>provisional</span>
                       )}
                       {!bot.botActive && (
                         <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
@@ -399,6 +401,11 @@ export default function ProfilePage() {
                   )}
                   <div className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>
                     ELO {Math.round(bot.eloRating)}
+                    {bot.botProvisional && (
+                      <span className="ml-1 font-sans not-italic" style={{ color: 'var(--color-amber-600)' }}>
+                        · {Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0))} game{Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0)) !== 1 ? 's' : ''} to establish rating
+                      </span>
+                    )}
                   </div>
                 </div>
 

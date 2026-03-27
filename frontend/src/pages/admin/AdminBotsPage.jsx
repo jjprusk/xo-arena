@@ -255,7 +255,7 @@ export default function AdminBotsPage() {
                           >
                             {bot.displayName}
                           </Link>
-                          {bot.botCalibrating && (
+                          {bot.botProvisional && (
                             <span className="ml-1.5 text-xs px-1 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>calibrating</span>
                           )}
                         </div>

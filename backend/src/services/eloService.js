@@ -7,8 +7,10 @@
  */
 
 import db from '../lib/db.js'
+import { getSystemConfig } from './mlService.js'
 
 const K_FACTOR = 32
+const DEFAULT_PROVISIONAL_THRESHOLD = 5
 
 // Fixed ELO ratings for AI opponents (used for expected-score computation)
 const AI_ELO = {
@@ -79,9 +81,10 @@ export async function updatePlayerEloAfterPvAI(userId, outcome, difficulty) {
  */
 export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
   try {
-    const [human, bot] = await Promise.all([
+    const [human, bot, threshold] = await Promise.all([
       db.user.findUnique({ where: { id: humanId }, select: { eloRating: true } }),
-      db.user.findUnique({ where: { id: botId }, select: { eloRating: true } }),
+      db.user.findUnique({ where: { id: botId }, select: { eloRating: true, botGamesPlayed: true, botProvisional: true } }),
+      getSystemConfig('bots.provisionalGames', DEFAULT_PROVISIONAL_THRESHOLD),
     ])
     if (!human || !bot) return
 
@@ -94,9 +97,12 @@ export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
     const humanOutcome = humanScore === 1 ? 'win' : humanScore === 0 ? 'loss' : 'draw'
     const botOutcome = botScore === 1 ? 'win' : botScore === 0 ? 'loss' : 'draw'
 
+    const newGamesPlayed = (bot.botGamesPlayed ?? 0) + 1
+    const nowProvisional = bot.botProvisional && newGamesPlayed < threshold
+
     await db.$transaction([
       db.user.update({ where: { id: humanId }, data: { eloRating: humanNewElo } }),
-      db.user.update({ where: { id: botId }, data: { eloRating: botNewElo, botCalibrating: false } }),
+      db.user.update({ where: { id: botId }, data: { eloRating: botNewElo, botGamesPlayed: newGamesPlayed, botProvisional: nowProvisional } }),
       db.userEloHistory.create({
         data: {
           userId: humanId,
@@ -134,9 +140,10 @@ export async function updateBothElosAfterPvBot(humanId, botId, outcome) {
  */
 export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome) {
   try {
-    const [bot1, bot2] = await Promise.all([
-      db.user.findUnique({ where: { id: bot1Id }, select: { eloRating: true, botCalibrating: true } }),
-      db.user.findUnique({ where: { id: bot2Id }, select: { eloRating: true, botCalibrating: true } }),
+    const [bot1, bot2, threshold] = await Promise.all([
+      db.user.findUnique({ where: { id: bot1Id }, select: { eloRating: true, botGamesPlayed: true, botProvisional: true } }),
+      db.user.findUnique({ where: { id: bot2Id }, select: { eloRating: true, botGamesPlayed: true, botProvisional: true } }),
+      getSystemConfig('bots.provisionalGames', DEFAULT_PROVISIONAL_THRESHOLD),
     ])
     if (!bot1 || !bot2) return
 
@@ -155,12 +162,16 @@ export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome) {
     const newR1 = Math.max(100, Math.round(r1 + K_FACTOR * (score1 - exp1)))
     const newR2 = Math.max(100, Math.round(r2 + K_FACTOR * (score2 - exp2)))
 
+    const newGames1 = (bot1.botGamesPlayed ?? 0) + 1
+    const newGames2 = (bot2.botGamesPlayed ?? 0) + 1
+
     await Promise.all([
       db.user.update({
         where: { id: bot1Id },
         data: {
           eloRating: newR1,
-          botCalibrating: false,
+          botGamesPlayed: newGames1,
+          botProvisional: bot1.botProvisional && newGames1 < threshold,
           userEloHistory: {
             create: {
               eloRating: newR1,
@@ -175,7 +186,8 @@ export async function updateBothElosAfterBotVsBot(bot1Id, bot2Id, outcome) {
         where: { id: bot2Id },
         data: {
           eloRating: newR2,
-          botCalibrating: false,
+          botGamesPlayed: newGames2,
+          botProvisional: bot2.botProvisional && newGames2 < threshold,
           userEloHistory: {
             create: {
               eloRating: newR2,

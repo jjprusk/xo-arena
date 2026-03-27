@@ -116,15 +116,15 @@ describe('getBotByModelId', () => {
 })
 
 describe('resetBotElo', () => {
-  it('resets ELO to 1200 and sets botCalibrating + botEloResetAt', async () => {
-    const updated = { ...mockBot, eloRating: 1200, botCalibrating: true, botEloResetAt: new Date() }
+  it('resets ELO to 1200 and sets botProvisional + botEloResetAt', async () => {
+    const updated = { ...mockBot, eloRating: 1200, botProvisional: true, botEloResetAt: new Date() }
     db.user.update.mockResolvedValue(updated)
 
     const result = await resetBotElo('bot_1')
     const call = db.user.update.mock.calls.at(-1)[0]
     expect(call.where).toEqual({ id: 'bot_1' })
     expect(call.data.eloRating).toBe(1200)
-    expect(call.data.botCalibrating).toBe(true)
+    expect(call.data.botProvisional).toBe(true)
     expect(call.data.botEloResetAt).toBeInstanceOf(Date)
     expect(result.eloRating).toBe(1200)
   })

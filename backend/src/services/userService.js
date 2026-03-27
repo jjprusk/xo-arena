@@ -100,7 +100,7 @@ export async function getBotByModelId(botModelId) {
 export async function resetBotElo(botId) {
   return db.user.update({
     where: { id: botId },
-    data: { eloRating: 1200, botEloResetAt: new Date(), botCalibrating: true },
+    data: { eloRating: 1200, botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
   })
 }
 
@@ -420,7 +420,7 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
           botOwnerId: ownerId,
           botActive: true,
           botCompetitive,
-          botCalibrating: true,
+          botProvisional: true,
         },
       })
     })
@@ -444,7 +444,7 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
       botOwnerId: ownerId,
       botActive: true,
       botCompetitive,
-      botCalibrating: true,
+      botProvisional: true,
     },
   })
 }
@@ -470,7 +470,8 @@ export async function listBots({ ownerId, includeInactive = false } = {}) {
       botModelId: true,
       botActive: true,
       botCompetitive: true,
-      botCalibrating: true,
+      botProvisional: true,
+      botGamesPlayed: true,
       botInTournament: true,
       botOwnerId: true,
       createdAt: true,

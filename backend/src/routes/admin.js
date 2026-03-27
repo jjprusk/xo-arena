@@ -557,7 +557,7 @@ router.get('/bots', async (req, res, next) => {
           botActive: true,
           botAvailable: true,
           botCompetitive: true,
-          botCalibrating: true,
+          botProvisional: true,
           botInTournament: true,
           botOwnerId: true,
           createdAt: true,

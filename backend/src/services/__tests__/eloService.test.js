@@ -13,6 +13,10 @@ vi.mock('../../lib/db.js', () => ({
   },
 }))
 
+vi.mock('../mlService.js', () => ({
+  getSystemConfig: vi.fn().mockResolvedValue(5),
+}))
+
 const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot, updatePlayersEloAfterPvP } =
   await import('../eloService.js')
 const db = (await import('../../lib/db.js')).default
@@ -59,10 +63,12 @@ describe('updatePlayerEloAfterPvAI', () => {
 })
 
 describe('updateBothElosAfterPvBot', () => {
+  const mockBot = { eloRating: 1200, botGamesPlayed: 0, botProvisional: true }
+
   it('updates both human and bot ELO on human win', async () => {
     db.user.findUnique
       .mockResolvedValueOnce({ eloRating: 1200 }) // human
-      .mockResolvedValueOnce({ eloRating: 1200 }) // bot
+      .mockResolvedValueOnce(mockBot)              // bot
 
     const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN')
     expect(result.human.delta).toBeGreaterThan(0)
@@ -72,7 +78,7 @@ describe('updateBothElosAfterPvBot', () => {
   it('updates both ELO on bot win', async () => {
     db.user.findUnique
       .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce({ eloRating: 1200 })
+      .mockResolvedValueOnce(mockBot)
 
     const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER2_WIN')
     expect(result.human.delta).toBeLessThan(0)
@@ -82,7 +88,7 @@ describe('updateBothElosAfterPvBot', () => {
   it('writes history for both sides', async () => {
     db.user.findUnique
       .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce({ eloRating: 1200 })
+      .mockResolvedValueOnce(mockBot)
 
     await updateBothElosAfterPvBot('usr_1', 'bot_1', 'DRAW')
     expect(db.userEloHistory.create).toHaveBeenCalledTimes(2)
@@ -115,7 +121,7 @@ describe('updateBothElosAfterPvBot', () => {
   it('ELO delta magnitude is symmetric for equal-rated players', async () => {
     db.user.findUnique
       .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce({ eloRating: 1200 })
+      .mockResolvedValueOnce(mockBot)
 
     const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN')
     expect(Math.abs(result.human.delta)).toBeCloseTo(Math.abs(result.bot.delta), 1)

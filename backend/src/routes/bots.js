@@ -27,11 +27,14 @@ router.get('/', async (req, res, next) => {
         include: { userRoles: { select: { role: true } } },
       })
       const isExempt = owner ? hasRole(owner, 'BOT_ADMIN') : false
-      const defaultLimit = await getSystemConfig('bots.defaultBotLimit', 5)
+      const [defaultLimit, provisionalThreshold] = await Promise.all([
+        getSystemConfig('bots.defaultBotLimit', 5),
+        getSystemConfig('bots.provisionalGames', 5),
+      ])
       const limit = isExempt ? null : (owner?.botLimit ?? defaultLimit)
       // Count all bots (including inactive) for limit purposes
       const count = await db.user.count({ where: { botOwnerId: ownerId, isBot: true } })
-      return res.json({ bots, limitInfo: { count, limit, isExempt } })
+      return res.json({ bots, limitInfo: { count, limit, isExempt }, provisionalThreshold })
     }
 
     res.json({ bots })
@@ -160,7 +163,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
 /**
  * POST /api/v1/bots/:id/reset-elo
- * Reset bot ELO to 1200, clear UserEloHistory, set botCalibrating=true.
+ * Reset bot ELO to 1200, clear UserEloHistory, set botProvisional=true.
  * Blocked if botInTournament=true.
  */
 router.post('/:id/reset-elo', requireAuth, async (req, res, next) => {
@@ -178,7 +181,7 @@ router.post('/:id/reset-elo', requireAuth, async (req, res, next) => {
       db.userEloHistory.deleteMany({ where: { userId: bot.id } }),
       db.user.update({
         where: { id: bot.id },
-        data: { eloRating: 1200, botEloResetAt: new Date(), botCalibrating: true },
+        data: { eloRating: 1200, botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
       }),
     ])
 

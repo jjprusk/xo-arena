@@ -31,7 +31,7 @@ async function getBotProfileData(user) {
     botAvailable: user.botAvailable,
     botInTournament: user.botInTournament,
     botCompetitive: user.botCompetitive,
-    botCalibrating: user.botCalibrating,
+    botProvisional: user.botProvisional,
     botEloResetAt: user.botEloResetAt,
     ownerBetterAuthId: owner?.betterAuthId ?? null,
     owner: owner ? { id: owner.id, displayName: owner.displayName } : null,
