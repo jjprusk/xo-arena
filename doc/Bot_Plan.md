@@ -287,8 +287,8 @@ When a user deletes their account, all their bots are deleted with them (cascade
 | B-14a | Add `calibrationGamesTotal` to system config (default: 12 — 3 rounds vs each of the 4 built-in bots) | ✅ |
 | B-14b | Add `botCalibrating` boolean to `User` — set `true` when calibration is queued or in progress, cleared when all calibration games complete | ✅ |
 | B-14c | Calibration scheduler: on trigger (first creation, ELO reset, scratch retrain), enqueue `calibrationGamesTotal` games against built-in bots in round-robin order (Rusty → Copper → Sterling → Magnus → repeat) | ✅ (trigger wired; actual game execution deferred to Phase 6) |
-| B-14d | Bot picker: show a "Calibrating" badge on bots with `botCalibrating = true` — bot remains challengeable but ELO is marked as provisional | |
-| B-14e | Tournament eligibility check (`botMinGamesPlayed`) counts calibration games — a freshly calibrated bot satisfies the threshold automatically if `calibrationGamesTotal >= botMinGamesPlayed` | |
+| B-14d | Bot picker: show a "Calibrating" badge on bots with `botCalibrating = true` — bot remains challengeable but ELO is marked as provisional | ✅ |
+| B-14e | Tournament eligibility check (`botMinGamesPlayed`) counts calibration games — a freshly calibrated bot satisfies the threshold automatically if `calibrationGamesTotal >= botMinGamesPlayed` | ✅ |
 
 ### Phase 2b — Stats & game history UI
 | # | Task | Done |
@@ -297,8 +297,8 @@ When a user deletes their account, all their bots are deleted with them (cascade
 | B-15b | Stats page: within `PVBOT`, show per-bot breakdown — wins/losses/draws against each named bot opponent | ✅ |
 | B-15c | Stats page: `PVAI` (quick game) and `PVBOT` (named bot challenge) display separately — a user can see how they perform against abstract difficulty vs named opponents | ✅ |
 | B-15d | Game history list: label each row clearly — `PVP` shows opponent username, `PVAI` shows difficulty level, `PVBOT` shows bot name with link to bot profile | ✅ (recent games tooltip updated; full history list deferred to Phase 3) |
-| B-15e | Profile win/loss summary: display three separate counts — vs humans, vs quick AI, vs bots — so bot farming doesn't inflate a player's apparent competitive record | |
-| B-15f | Bot profile game history: mirrors the above — shows each game played, opponent type (human or bot), result, and ELO change | |
+| B-15e | Profile win/loss summary: display three separate counts — vs humans, vs quick AI, vs bots — so bot farming doesn't inflate a player's apparent competitive record | ✅ |
+| B-15f | Bot profile game history: mirrors the above — shows each game played, opponent type (human or bot), result, and ELO change | ✅ |
 
 ### Phase 3 — Leaderboard & profiles
 | # | Task | Done |

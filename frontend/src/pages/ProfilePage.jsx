@@ -294,6 +294,31 @@ export default function ProfilePage() {
             <StatCard label="Wins" value={stats.wins} color="var(--color-teal-600)" />
             <StatCard label="Win Rate" value={`${Math.round(stats.winRate * 100)}%`} color="var(--color-teal-600)" />
           </div>
+          {/* Win breakdown by opponent type (B-15e) */}
+          {stats.totalGames > 0 && (() => {
+            const pvaiWins = Object.values(stats.pvai).reduce((s, v) => s + v.wins, 0)
+            const pvbotWins = stats.pvbot?.wins ?? 0
+            const pvpWins = stats.pvp?.wins ?? 0
+            return (
+              <div
+                className="rounded-lg border px-4 py-2.5 grid grid-cols-3 divide-x text-center"
+                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)', divideColor: 'var(--border-default)' }}
+              >
+                {[
+                  { label: 'vs Humans', wins: pvpWins, played: stats.pvp?.played ?? 0 },
+                  { label: 'vs Quick AI', wins: pvaiWins, played: Object.values(stats.pvai).reduce((s, v) => s + v.played, 0) },
+                  { label: 'vs Bots', wins: pvbotWins, played: stats.pvbot?.played ?? 0 },
+                ].map(({ label, wins, played }) => (
+                  <div key={label} className="px-2">
+                    <div className="text-sm font-bold" style={{ color: played > 0 ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>
+                      {played > 0 ? `${wins}W` : '—'}
+                    </div>
+                    <div className="text-[10px] mt-0.5 font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
           <Link
             to="/stats"
             className="text-sm font-medium transition-colors"

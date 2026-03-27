@@ -599,12 +599,14 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                           <span className="text-sm font-semibold truncate">{bot.displayName}</span>
                           {bot.botCalibrating && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
-                              ~
+                              Calibrating
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>ELO {elo}</span>
+                          <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                            ELO {elo}{bot.botCalibrating && <span style={{ color: 'var(--color-amber-600)' }}> (provisional)</span>}
+                          </span>
                           <span className="text-[10px]" style={{ color: 'var(--border-default)' }}>·</span>
                           <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{algoLabel}</span>
                           {bot.botCompetitive && (
