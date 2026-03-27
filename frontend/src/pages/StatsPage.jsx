@@ -6,9 +6,9 @@ import { api } from '../lib/api.js'
 
 const AI_NAMES = {
   novice:       'Rusty',
-  intermediate: 'Blaze',
-  advanced:     'Cipher',
-  master:       'Titan',
+  intermediate: 'Copper',
+  advanced:     'Sterling',
+  master:       'Magnus',
 }
 
 const OUTCOME_COLOR = {
