@@ -44,15 +44,18 @@ router.get('/users', async (req, res, next) => {
     const limit = Math.min(100, parseInt(req.query.limit) || 25)
     const skip = (page - 1) * limit
 
-    const where = search
-      ? {
-          OR: [
-            { displayName: { contains: search, mode: 'insensitive' } },
-            { email: { contains: search, mode: 'insensitive' } },
-            { username: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {}
+    const where = {
+      isBot: false,
+      ...(search
+        ? {
+            OR: [
+              { displayName: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+              { username: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    }
 
     const [rawUsers, total] = await Promise.all([
       db.user.findMany({
