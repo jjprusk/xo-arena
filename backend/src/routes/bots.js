@@ -46,9 +46,9 @@ router.get('/', async (req, res, next) => {
  */
 router.get('/ml-models', requireAuth, async (req, res, next) => {
   try {
-    const userId = req.auth.userId
+    const baId = req.auth.userId
     // ML models are keyed by createdBy = betterAuthId
-    const user = await db.user.findUnique({ where: { id: userId }, select: { betterAuthId: true } })
+    const user = await db.user.findUnique({ where: { betterAuthId: baId }, select: { betterAuthId: true } })
     if (!user?.betterAuthId) return res.json({ models: [] })
 
     const models = await db.mLModel.findMany({
@@ -68,12 +68,14 @@ router.get('/ml-models', requireAuth, async (req, res, next) => {
  */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const userId = req.auth.userId
+    const baId = req.auth.userId
     const user = await db.user.findUnique({
-      where: { id: userId },
+      where: { betterAuthId: baId },
       include: { userRoles: { select: { role: true } } },
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const userId = user.id
 
     // Enforce bot limit
     if (!hasRole(user, 'BOT_ADMIN')) {
