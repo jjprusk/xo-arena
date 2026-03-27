@@ -1450,7 +1450,6 @@ export function recordHumanMove(modelId, userId, board, cellIndex) {
   // Run async without blocking caller
   ;(async () => {
     try {
-      logger.info({ modelId, userId, cellIndex, boardLen: board?.length }, 'recordHumanMove: called')
       const stateKey = board.join(',')
       const occupiedCount = board.filter(Boolean).length
 
@@ -1495,18 +1494,12 @@ export function recordHumanMove(modelId, userId, board, cellIndex) {
 export function updatePlayerTendencies(modelId, userId) {
   ;(async () => {
     try {
-      logger.info({ modelId, userId }, 'updatePlayerTendencies: called')
       const profile = await db.mLPlayerProfile.findUnique({
         where: { modelId_userId: { modelId, userId } },
       })
-      if (!profile) {
-        logger.warn({ modelId, userId }, 'updatePlayerTendencies: profile not found')
-        return
-      }
+      if (!profile) return
 
       const movePatterns = profile.movePatterns || {}
-      const patternKeys = Object.keys(movePatterns)
-      logger.info({ modelId, userId, patternKeys: patternKeys.length, gamesRecorded: profile.gamesRecorded }, 'updatePlayerTendencies: profile found')
 
       const CORNERS = [0, 2, 6, 8]
 
@@ -1529,8 +1522,6 @@ export function updatePlayerTendencies(modelId, userId) {
         cornerRate: totalMoves > 0 ? parseFloat((cornerMoves / totalMoves).toFixed(4)) : 0,
       }
 
-      logger.info({ modelId, userId, totalMoves, tendencies }, 'updatePlayerTendencies: computed')
-
       await db.mLPlayerProfile.update({
         where: { modelId_userId: { modelId, userId } },
         data: {
@@ -1538,7 +1529,6 @@ export function updatePlayerTendencies(modelId, userId) {
           gamesRecorded: { increment: 1 },
         },
       })
-      logger.info({ modelId, userId }, 'updatePlayerTendencies: saved')
     } catch (err) {
       logger.error({ err, modelId, userId }, 'updatePlayerTendencies failed')
     }

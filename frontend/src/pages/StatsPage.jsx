@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useSession } from '../lib/auth-client.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
@@ -10,6 +11,7 @@ const OUTCOME_COLOR = {
 }
 
 export default function StatsPage() {
+  const location = useLocation()
   const { data: session, isPending } = useSession()
   const isLoaded = !isPending
   const isSignedIn = !!session?.user
@@ -54,7 +56,7 @@ export default function StatsPage() {
     }
 
     load()
-  }, [isSignedIn, isLoaded])
+  }, [isSignedIn, isLoaded, location.key])
 
   if (!isLoaded || loading) {
     return (
