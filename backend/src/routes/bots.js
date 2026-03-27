@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
-import { createBot, listBots, getUserById, resetBotElo } from '../services/userService.js'
+import { createBot, listBots } from '../services/userService.js'
 import { getSystemConfig } from '../services/mlService.js'
 import { hasRole } from '../utils/roles.js'
 
@@ -41,28 +41,6 @@ router.get('/', async (req, res, next) => {
 })
 
 /**
- * GET /api/v1/bots/ml-models
- * Return current user's ML models for the create form.
- */
-router.get('/ml-models', requireAuth, async (req, res, next) => {
-  try {
-    const baId = req.auth.userId
-    // ML models are keyed by createdBy = betterAuthId
-    const user = await db.user.findUnique({ where: { betterAuthId: baId }, select: { betterAuthId: true } })
-    if (!user?.betterAuthId) return res.json({ models: [] })
-
-    const models = await db.mLModel.findMany({
-      where: { createdBy: user.betterAuthId },
-      select: { id: true, name: true, algorithm: true, totalEpisodes: true, eloRating: true },
-      orderBy: { createdAt: 'desc' },
-    })
-    res.json({ models })
-  } catch (err) {
-    next(err)
-  }
-})
-
-/**
  * POST /api/v1/bots
  * Create a new bot. Auth required. Enforces bot limit for non-admin/bot_admin users.
  */
@@ -87,17 +65,14 @@ router.post('/', requireAuth, async (req, res, next) => {
       }
     }
 
-    const { name, algorithm, difficulty, modelId, competitive, avatarUrl } = req.body
-    const bot = await createBot(userId, { name, algorithm, difficulty, modelId, competitive, avatarUrl })
+    const { name, algorithm, difficulty, modelType, competitive, avatarUrl } = req.body
+    const bot = await createBot(userId, { name, algorithm, difficulty, modelType, competitive, avatarUrl })
     res.status(201).json({ bot })
   } catch (err) {
     if (err.code === 'RESERVED_NAME') return res.status(400).json({ error: err.message, code: err.code })
     if (err.code === 'PROFANITY') return res.status(400).json({ error: err.message, code: err.code })
     if (err.code === 'INVALID_NAME') return res.status(400).json({ error: err.message, code: err.code })
-    if (err.code === 'INVALID_MODEL') return res.status(400).json({ error: err.message, code: err.code })
     if (err.code === 'INVALID_ALGORITHM') return res.status(400).json({ error: err.message, code: err.code })
-    // Prisma unique constraint (duplicate botModelId)
-    if (err.code === 'P2002') return res.status(409).json({ error: 'A bot already uses this model', code: 'DUPLICATE_MODEL' })
     next(err)
   }
 })

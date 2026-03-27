@@ -2,6 +2,7 @@
  * User service — account management and stats.
  */
 import db from '../lib/db.js'
+import { DEFAULT_CONFIG as ML_DEFAULT_CONFIG } from '../ai/qLearning.js'
 
 const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
 
@@ -320,7 +321,9 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
  * Create a bot user row owned by the given user.
  * Enforces reserved name, profanity, and deduplication rules.
  */
-export async function createBot(ownerId, { name, algorithm, difficulty, modelId, competitive, avatarUrl } = {}) {
+const VALID_ML_ALGORITHMS = ['Q_LEARNING', 'SARSA', 'MONTE_CARLO', 'POLICY_GRADIENT', 'DQN', 'ALPHA_ZERO']
+
+export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
   const trimmedName = name.trim()
 
@@ -356,19 +359,18 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelId,
     finalName = `${trimmedName}${suffix}`
   }
 
-  // 4. Determine botModelId
-  let botModelId
+  // 4. Validate algorithm and resolve ML algo
   const alg = algorithm || 'minimax'
   const diff = difficulty || 'novice'
-  if (alg === 'minimax') {
-    botModelId = `user:${ownerId}:minimax:${diff}`
-  } else if (alg === 'mcts') {
-    botModelId = `user:${ownerId}:mcts:${diff}`
+  let mlAlgo = null
+
+  if (alg === 'minimax' || alg === 'mcts' || alg === 'rule_based') {
+    // handled below
   } else if (alg === 'ml') {
-    if (!modelId) throw Object.assign(new Error('modelId is required for ML bots'), { code: 'INVALID_MODEL' })
-    botModelId = modelId
-  } else if (alg === 'rule_based') {
-    botModelId = `user:${ownerId}:rule_based:${modelId || 'default'}`
+    mlAlgo = (modelType || 'DQN').toUpperCase().replace(/-/g, '_')
+    if (!VALID_ML_ALGORITHMS.includes(mlAlgo)) {
+      throw Object.assign(new Error(`Unknown ML algorithm: ${modelType}`), { code: 'INVALID_ALGORITHM' })
+    }
   } else {
     throw Object.assign(new Error(`Unknown algorithm: ${alg}`), { code: 'INVALID_ALGORITHM' })
   }
@@ -391,7 +393,45 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelId,
   }
   const email = `${username}@xo-arena.internal`
 
-  // 7. Create the bot user row
+  // 7. Resolve botModelId (synthetic for minimax/mcts, real FK for ml)
+  // For ML bots, create the model and bot atomically so we never orphan a model.
+  if (alg === 'ml') {
+    const maxEpisodes = await _getSystemConfig('ml.maxEpisodesPerModel', 100_000)
+    return db.$transaction(async (tx) => {
+      const model = await tx.mLModel.create({
+        data: {
+          name: finalName,
+          algorithm: mlAlgo,
+          qtable: {},
+          config: { ...ML_DEFAULT_CONFIG },
+          createdBy: ownerId,
+          maxEpisodes,
+        },
+      })
+      return tx.user.create({
+        data: {
+          username,
+          email,
+          displayName: finalName,
+          avatarUrl: avatarUrl ?? null,
+          isBot: true,
+          botModelType: alg,
+          botModelId: model.id,
+          botOwnerId: ownerId,
+          botActive: true,
+          botCompetitive,
+          botCalibrating: true,
+        },
+      })
+    })
+  }
+
+  const botModelId =
+    alg === 'minimax' ? `user:${ownerId}:minimax:${diff}` :
+    alg === 'mcts'    ? `user:${ownerId}:mcts:${diff}` :
+    /* rule_based */    `user:${ownerId}:rule_based:default`
+
+  // 8. Create the bot user row
   return db.user.create({
     data: {
       username,

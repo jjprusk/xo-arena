@@ -168,7 +168,6 @@ export const api = {
       const qs = p.toString()
       return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
     },
-    myMlModels: (token) => request('GET', '/bots/ml-models', null, token),
     create: (body, token) => request('POST', '/bots', body, token),
     update: (id, body, token) => request('PATCH', `/bots/${id}`, body, token),
     resetElo: (id, token) => request('POST', `/bots/${id}/reset-elo`, {}, token),

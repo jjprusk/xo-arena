@@ -27,8 +27,7 @@ export default function ProfilePage() {
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null) // { id, value }
-  const [mlModels, setMlModels] = useState([])
-  const [createForm, setCreateForm] = useState({ name: '', algorithm: 'minimax', difficulty: 'novice', modelId: '', competitive: false })
+  const [createForm, setCreateForm] = useState({ name: '', algorithm: 'minimax', difficulty: 'novice', modelType: 'DQN', competitive: false })
 
   useEffect(() => {
     if (!isLoaded) return
@@ -114,14 +113,6 @@ export default function ProfilePage() {
     )
   }
 
-  async function loadMlModels() {
-    try {
-      const token = await getToken()
-      const { models } = await api.bots.myMlModels(token)
-      setMlModels(models)
-    } catch { /* non-fatal */ }
-  }
-
   async function handleToggleBotActive(bot) {
     setBotActionError(null)
     try {
@@ -180,12 +171,12 @@ export default function ProfilePage() {
         name: createForm.name,
         algorithm: createForm.algorithm,
         ...(createForm.algorithm === 'minimax' || createForm.algorithm === 'mcts' ? { difficulty: createForm.difficulty } : {}),
-        ...(createForm.algorithm === 'ml' ? { modelId: createForm.modelId, competitive: createForm.competitive } : {}),
+        ...(createForm.algorithm === 'ml' ? { modelType: createForm.modelType, competitive: createForm.competitive } : {}),
       }
       const { bot: newBot } = await api.bots.create(payload, token)
       setBots(prev => [newBot, ...prev])
       setLimitInfo(prev => prev ? { ...prev, count: prev.count + 1 } : prev)
-      setCreateForm({ name: '', algorithm: 'minimax', difficulty: 'novice', modelId: '', competitive: false })
+      setCreateForm({ name: '', algorithm: 'minimax', difficulty: 'novice', modelType: 'DQN', competitive: false })
       setShowCreateBot(false)
     } catch (err) {
       setBotActionError(err.message || 'Create failed.')
@@ -510,30 +501,23 @@ export default function ProfilePage() {
             {createForm.algorithm === 'ml' && (
               <div className="space-y-3">
                 <label className="space-y-1 block">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>ML Model</span>
-                  {mlModels.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={loadMlModels}
-                      className="text-xs underline"
-                      style={{ color: 'var(--color-blue-600)' }}
-                    >
-                      Load my models
-                    </button>
-                  ) : (
-                    <select
-                      required
-                      value={createForm.modelId}
-                      onChange={e => setCreateForm(f => ({ ...f, modelId: e.target.value }))}
-                      className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                    >
-                      <option value="">Select a model…</option>
-                      {mlModels.map(m => (
-                        <option key={m.id} value={m.id}>{m.name} ({m.algorithm}, {m.totalEpisodes?.toLocaleString()} ep)</option>
-                      ))}
-                    </select>
-                  )}
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
+                  <select
+                    value={createForm.modelType}
+                    onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
+                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="DQN">DQN (Deep Q-Network)</option>
+                    <option value="ALPHA_ZERO">AlphaZero</option>
+                    <option value="POLICY_GRADIENT">Policy Gradient</option>
+                    <option value="Q_LEARNING">Q-Learning</option>
+                    <option value="SARSA">SARSA</option>
+                    <option value="MONTE_CARLO">Monte Carlo</option>
+                  </select>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    A fresh untrained brain of this type will be created. Train it in the Gym.
+                  </p>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
