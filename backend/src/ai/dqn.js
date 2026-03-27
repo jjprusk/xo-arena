@@ -95,13 +95,14 @@ export class DQNEngine {
       const fwdOnline   = this._online.forward(state)
       const qOnline     = fwdOnline.output.slice()
 
-      // Compute target Q-value
+      // Compute target Q-value — mask illegal moves (encoded as non-zero)
       let targetQ
       if (done) {
         targetQ = reward
       } else {
         const { output: qNext } = this._target.forward(nextState)
-        const maxNextQ = Math.max(...qNext)
+        const legalIndices = nextState.reduce((acc, v, i) => { if (v === 0) acc.push(i); return acc }, [])
+        const maxNextQ = legalIndices.length > 0 ? Math.max(...legalIndices.map(i => qNext[i])) : 0
         targetQ = reward + this.gamma * maxNextQ
       }
 
