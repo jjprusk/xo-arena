@@ -10,7 +10,6 @@ export default function AdminUsersPage() {
   const [total, setTotal]     = useState(0)
   const [page, setPage]       = useState(1)
   const [search, setSearch]   = useState('')
-  const [query, setQuery]     = useState('')   // committed search
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [editingElo, setEditingElo]         = useState(null) // { id, value }
@@ -35,13 +34,19 @@ export default function AdminUsersPage() {
     }
   }, [])
 
-  useEffect(() => { load(query, page) }, [query, page, load])
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  function handleSearch(e) {
-    e.preventDefault()
-    setPage(1)
-    setQuery(search)
-  }
+  // Debounce the raw search input by 300ms
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(id)
+  }, [search])
+
+  // Reset to page 1 when the debounced search term changes
+  useEffect(() => { setPage(1) }, [debouncedSearch])
+
+  // Load whenever the committed search or page changes (pagination is immediate)
+  useEffect(() => { load(debouncedSearch, page) }, [debouncedSearch, page, load])
 
   async function toggleBan(user) {
     setActionError(null)
@@ -124,7 +129,7 @@ export default function AdminUsersPage() {
       <AdminHeader title="Users" subtitle={`${total} total`} />
 
       {/* Search */}
-      <form onSubmit={handleSearch} className="flex gap-2">
+      <div className="flex gap-2">
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -132,22 +137,15 @@ export default function AdminUsersPage() {
           className="flex-1 px-3 py-2 rounded-lg border text-sm focus:outline-none"
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
         />
-        <button
-          type="submit"
-          className="px-4 py-2 rounded-lg text-sm font-medium text-white"
-          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
-        >
-          Search
-        </button>
-        {query && (
-          <button type="button" onClick={() => { setSearch(''); setQuery(''); setPage(1) }}
+        {search && (
+          <button type="button" onClick={() => setSearch('')}
             className="px-3 py-2 rounded-lg text-sm border hover:bg-[var(--bg-surface-hover)]"
             style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
           >
             Clear
           </button>
         )}
-      </form>
+      </div>
 
       {actionError && <ErrorMsg>{actionError}</ErrorMsg>}
       {loading && <Spinner />}
