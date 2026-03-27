@@ -179,6 +179,12 @@ class RoomManager {
       return { room, wasPlayer: true, roomClosed: true }
     }
 
+    if (room.status === 'finished') {
+      // Game is over — no reconnect needed, close immediately
+      this.closeRoom(slug)
+      return { room, wasPlayer: true, roomClosed: true }
+    }
+
     if (room.status === 'playing') {
       const timer = setTimeout(() => {
         if (this._rooms.has(slug)) {
@@ -294,13 +300,15 @@ class RoomManager {
 
   /** Get all active rooms (waiting or playing) for the active rooms list. */
   listRooms() {
-    return [...this._rooms.values()].map((r) => ({
-      slug: r.slug,
-      displayName: r.displayName,
-      status: r.status,
-      spectatorCount: r.spectatorIds.size,
-      spectatorAllowed: r.spectatorAllowed,
-    }))
+    return [...this._rooms.values()]
+      .filter((r) => r.status === 'waiting' || r.status === 'playing')
+      .map((r) => ({
+        slug: r.slug,
+        displayName: r.displayName,
+        status: r.status,
+        spectatorCount: r.spectatorIds.size,
+        spectatorAllowed: r.spectatorAllowed,
+      }))
   }
 
   get roomCount() { return this._rooms.size }
