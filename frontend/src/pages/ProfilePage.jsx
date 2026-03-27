@@ -11,6 +11,7 @@ export default function ProfilePage() {
   const clerkUser = session?.user ?? null
   const [dbUser, setDbUser] = useState(null)
   const [stats, setStats] = useState(null)
+  const [eloData, setEloData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -41,8 +42,12 @@ export default function ProfilePage() {
         const { user } = await api.users.sync(token)
         setDbUser(user)
         setNameInput(user.displayName)
-        const { stats: s } = await api.users.stats(user.id)
+        const [{ stats: s }, eloRes] = await Promise.all([
+          api.users.stats(user.id),
+          api.users.eloHistory(user.id).catch(() => null),
+        ])
         setStats(s)
+        if (eloRes) setEloData(eloRes)
         // Load bots
         setBotsLoading(true)
         try {
@@ -275,6 +280,26 @@ export default function ProfilePage() {
           <Row label="Email" value={dbUser.email || clerkUser?.email || '—'} />
           <Row label="Sign-in method" value={dbUser.oauthProvider ? capitalize(dbUser.oauthProvider) : 'Email'} />
           <Row label="Member since" value={memberSince} />
+          {eloData && (
+            <Row
+              label="ELO"
+              value={
+                <span className="flex items-center gap-1.5">
+                  <span className="font-bold tabular-nums" style={{ color: 'var(--color-blue-600)' }}>
+                    {Math.round(eloData.currentElo)}
+                  </span>
+                  {eloData.eloHistory?.[0]?.delta != null && (
+                    <span
+                      className="text-xs font-semibold tabular-nums"
+                      style={{ color: eloData.eloHistory[0].delta >= 0 ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}
+                    >
+                      {eloData.eloHistory[0].delta >= 0 ? '+' : ''}{Math.round(eloData.eloHistory[0].delta)}
+                    </span>
+                  )}
+                </span>
+              }
+            />
+          )}
         </dl>
       </div>
 
