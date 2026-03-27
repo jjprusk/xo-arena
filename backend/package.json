@@ -14,9 +14,6 @@
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js"
   },
-  "prisma": {
-    "seed": "node prisma/seed.js"
-  },
   "dependencies": {
     "@prisma/client": "^6.3.0",
     "@socket.io/redis-adapter": "^8.3.0",
