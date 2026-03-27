@@ -296,15 +296,19 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                     </div>
 
                     {/* Community bots */}
-                    {community.length > 0 && (
-                      <>
-                        <div className="px-4 pt-4 pb-1" style={{ borderTop: '1px solid var(--border-default)' }}>
-                          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Community</span>
-                        </div>
-                        <div className="divide-y" style={{ borderTop: '1px solid var(--border-default)' }}>
-                          {community.map(renderBot)}
-                        </div>
-                      </>
+                    <div className="px-4 pt-4 pb-1" style={{ borderTop: '1px solid var(--border-default)' }}>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Community</span>
+                    </div>
+                    {community.length > 0 ? (
+                      <div className="divide-y" style={{ borderTop: '1px solid var(--border-default)' }}>
+                        {community.map(renderBot)}
+                      </div>
+                    ) : (
+                      <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border-default)' }}>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          No community bots yet. Users can create bots in their profile settings.
+                        </p>
+                      </div>
                     )}
                   </div>
                 )
