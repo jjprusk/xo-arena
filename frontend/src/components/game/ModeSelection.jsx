@@ -1,7 +1,7 @@
 import React from 'react'
 import { useState, useEffect } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { api, cachedFetch } from '../../lib/api.js'
 import { ListTr, ListTd, SearchBar } from '../ui/ListTable.jsx'
 
@@ -209,7 +209,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     timerEnabled, timerSeconds, bestOf, misereMode, boardTheme,
   } = useGameStore()
 
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const isSignedIn = !!session?.user
 
   const [aivaiExpanded, setAivaiExpanded] = useState(false)

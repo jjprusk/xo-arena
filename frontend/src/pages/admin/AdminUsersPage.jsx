@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
 import { getToken } from '../../lib/getToken.js'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import {
   ListTable, ListTh, ListTd, ListTr,
   UserAvatar, SearchBar, ListPagination,
@@ -11,7 +11,7 @@ import {
 const LIMIT = 25
 
 export default function AdminUsersPage() {
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const [users, setUsers]     = useState([])
   const [total, setTotal]     = useState(0)
   const [page, setPage]       = useState(1)

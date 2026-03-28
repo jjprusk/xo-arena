@@ -311,7 +311,7 @@ Currently the browser makes auth (and API) requests to a separate Railway backen
 Even within Railway, cross-service calls add a DNS lookup + TCP handshake to a different
 host — roughly 20–40ms per request on top of the base network latency.
 
-Fix: have the Express backend serve the Vite-built static files directly. One Railway
+Fix: have th the Vite-e Express backend servebuilt static files directly. One Railway
 service instead of two. Auth and API calls go to the same host the HTML came from,
 eliminating the cross-service hop.
 
@@ -331,9 +331,9 @@ all users, cold and warm.
 `get-session` DB lookup itself, improving the baseline that Phase 6 builds on.
 
 **Checklist:**
-- [ ] Implement `useOptimisticSession()` hook with localStorage cache (6a)
-- [ ] Replace `useSession` with `useOptimisticSession` in `AppLayout`, `SignedIn`, `SignedOut`, `UserButton`
-- [ ] Clear session cache on `signOut`
+- [x] Implement `useOptimisticSession()` hook with localStorage cache (6a)
+- [x] Replace `useSession` with `useOptimisticSession` across all consumers (AppLayout, SignedIn, SignedOut, UserButton, AdminRoute, GameBoard, ModeSelection, StatsPage, ProfilePage, MLDashboardPage, AdminUsersPage, BotProfilePage) (6a)
+- [x] Clear session cache on `signOut` (6a)
 - [ ] Parallelize data fetches in `StatsPage`, `ProfilePage`, `MLDashboardPage` (6b)
 - [ ] Consolidate frontend + backend into one Railway service (6c)
 - [ ] Run perf benchmark — cold anonymous (measures 6c), warm returning-user (measures 6a+6b)
@@ -356,38 +356,38 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 ### Ready time (ms) — navigation start → spinner gone
 
-| Page        | Baseline¹ | After Ph.1¹ | After Ph.2¹ | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6 |
-|-------------|-----------|-------------|-------------|------------|------------|------------|------------|
-| Play        | 638       | 638         | 643         | 345        | 353        | 340        |            |
-| Leaderboard | 638       | 639         | 636         | 339        | 333        | 338        |            |
-| Puzzles     | 637       | 634         | 638         | 323        | 343        | 332        |            |
-| Stats       | 644       | 634         | 642         | 334        | 338        | 339        |            |
-| Settings    | 623       | 637         | 634         | 335        | 346        | 336        |            |
-| ML Gym      | 636       | 630         | 625         | 335        | 338        | 340        |            |
+| Page        | Baseline¹ | After Ph.1¹ | After Ph.2¹ | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6a | After Ph.6b | After Ph.6c |
+|-------------|-----------|-------------|-------------|------------|------------|------------|-------------|-------------|-------------|
+| Play        | 638       | 638         | 643         | 345        | 353        | 340        |             |             |             |
+| Leaderboard | 638       | 639         | 636         | 339        | 333        | 338        |             |             |             |
+| Puzzles     | 637       | 634         | 638         | 323        | 343        | 332        |             |             |             |
+| Stats       | 644       | 634         | 642         | 334        | 338        | 339        |             |             |             |
+| Settings    | 623       | 637         | 634         | 335        | 346        | 336        |             |             |             |
+| ML Gym      | 636       | 630         | 625         | 335        | 338        | 340        |             |             |             |
 
 ¹ _Measured with broken `networkidle` script — inflated by ~300ms vs real user experience._
 
 ### TTFB (ms) — time to first byte
 
-| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6 |
-|-------------|----------|------------|------------|------------|------------|------------|------------|
-| Play        | 60       | 67         | 64         | 66         | 66         | 64         |            |
-| Leaderboard | 58       | 63         | 63         | 63         | 63         | 61         |            |
-| Puzzles     | 57       | 60         | 60         | 56         | 60         | 62         |            |
-| Stats       | 59       | 61         | 61         | 55         | 62         | 67         |            |
-| Settings    | 57       | 59         | 64         | 61         | 68         | 61         |            |
-| ML Gym      | 62       | 59         | 58         | 61         | 61         | 60         |            |
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6a | After Ph.6b | After Ph.6c |
+|-------------|----------|------------|------------|------------|------------|------------|-------------|-------------|-------------|
+| Play        | 60       | 67         | 64         | 66         | 66         | 64         |             |             |             |
+| Leaderboard | 58       | 63         | 63         | 63         | 63         | 61         |             |             |             |
+| Puzzles     | 57       | 60         | 60         | 56         | 60         | 62         |             |             |             |
+| Stats       | 59       | 61         | 61         | 55         | 62         | 67         |             |             |             |
+| Settings    | 57       | 59         | 64         | 61         | 68         | 61         |             |             |             |
+| ML Gym      | 62       | 59         | 58         | 61         | 61         | 60         |             |             |             |
 
 ### FCP (ms) — first contentful paint
 
-| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6 |
-|-------------|----------|------------|------------|------------|------------|------------|------------|
-| Play        | 132      | 136        | 140        | 144        | 144        | 132        |            |
-| Leaderboard | 124      | 136        | 132        | 136        | 128        | 136        |            |
-| Puzzles     | 132      | 124        | 124        | 120        | 136        | 128        |            |
-| Stats       | 136      | 132        | 132        | 128        | 136        | 132        |            |
-| Settings    | 120      | 128        | 128        | 128        | 140        | 128        |            |
-| ML Gym      | 124      | 128        | 124        | 132        | 132        | 136        |            |
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6a | After Ph.6b | After Ph.6c |
+|-------------|----------|------------|------------|------------|------------|------------|-------------|-------------|-------------|
+| Play        | 132      | 136        | 140        | 144        | 144        | 132        |             |             |             |
+| Leaderboard | 124      | 136        | 132        | 136        | 128        | 136        |             |             |             |
+| Puzzles     | 132      | 124        | 124        | 120        | 136        | 128        |             |             |             |
+| Stats       | 136      | 132        | 132        | 128        | 136        | 132        |             |             |             |
+| Settings    | 120      | 128        | 128        | 128        | 140        | 128        |             |             |             |
+| ML Gym      | 124      | 128        | 124        | 132        | 132        | 136        |             |             |             |
 
 _All on staging, 5 cold anonymous runs, median._
 

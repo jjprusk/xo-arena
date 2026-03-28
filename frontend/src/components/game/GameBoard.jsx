@@ -1,6 +1,6 @@
 import React from 'react'
 import { useEffect, useCallback, useState, useRef } from 'react'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
@@ -61,7 +61,7 @@ export default function GameBoard({ roomName }) {
     makeMove, setAIThinking, rematch, newGame, forfeit, undoMove, setHintCell,
   } = useGameStore()
 
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
   const isSignedIn = !!session?.user
   const { play } = useSoundStore()
