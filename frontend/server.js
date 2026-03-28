@@ -1,4 +1,5 @@
 import express from 'express'
+import compression from 'compression'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -8,6 +9,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const dist = join(__dirname, 'dist')
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
+
+// Gzip all responses
+app.use(compression())
 
 // Proxy /api/* and /socket.io/* to the backend, preserving the full path.
 // pathFilter keeps the prefix intact (unlike app.use('/api', proxy) which strips it).
@@ -20,8 +24,17 @@ const backendProxy = createProxyMiddleware({
 
 app.use(backendProxy)
 
-// Serve static frontend files
-app.use(express.static(dist))
+// Serve static frontend files.
+// Hashed assets (dist/assets/*) are cached for 1 year; index.html is never cached
+// so users always get the latest entry point.
+app.use(express.static(dist, {
+  maxAge: '1y',
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache')
+    }
+  },
+}))
 app.get('*', (_req, res) => res.sendFile(join(dist, 'index.html')))
 
 const server = app.listen(process.env.PORT || 4173, () => {
