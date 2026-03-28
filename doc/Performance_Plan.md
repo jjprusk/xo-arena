@@ -256,6 +256,20 @@ resolves in ~0ms instead of ~130ms. The auth spinner is gone at FCP (~130ms) rat
 FCP + auth round trip (~260ms). This is the single most impactful change for logged-in users
 and cannot be captured by the cold anonymous benchmark.
 
+### Phase 6b findings
+
+Phase 6b cold anonymous numbers are within noise of Phase 6a (~±10ms). Expected —
+the benchmark always runs as an anonymous first-time visitor, so there is no cached
+session and no user data to speculatively fetch. The `isLoaded` guard was never the
+bottleneck for this benchmark path.
+
+**The benefit of Phase 6b is for cold first-visit signed-in users.** Previously the
+auth check (~130ms) and the data fetch (~130ms) ran sequentially. Now the data fetch
+fires as soon as `session?.user` is available — for returning users this is immediate
+(6a cache), and for first-visit signed-in users the fetch starts the moment auth
+resolves rather than waiting for a second render cycle. Combined with 6a, returning
+signed-in users see their stats/profile data without any auth-gating delay at all.
+
 ---
 
 ### Phase 6 — Eliminate the Better Auth Round-Trip Bottleneck
@@ -373,12 +387,12 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline¹ | After Ph.1¹ | After Ph.2¹ | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6a | After Ph.6b | After Ph.6c |
 |-------------|-----------|-------------|-------------|------------|------------|------------|-------------|-------------|-------------|
-| Play        | 638       | 638         | 643         | 345        | 353        | 340        | 347         |             |             |
-| Leaderboard | 638       | 639         | 636         | 339        | 333        | 338        | 339         |             |             |
-| Puzzles     | 637       | 634         | 638         | 323        | 343        | 332        | 340         |             |             |
-| Stats       | 644       | 634         | 642         | 334        | 338        | 339        | 330         |             |             |
-| Settings    | 623       | 637         | 634         | 335        | 346        | 336        | 339         |             |             |
-| ML Gym      | 636       | 630         | 625         | 335        | 338        | 340        | 332         |             |             |
+| Play        | 638       | 638         | 643         | 345        | 353        | 340        | 347         | 332         |             |
+| Leaderboard | 638       | 639         | 636         | 339        | 333        | 338        | 339         | 327         |             |
+| Puzzles     | 637       | 634         | 638         | 323        | 343        | 332        | 340         | 345         |             |
+| Stats       | 644       | 634         | 642         | 334        | 338        | 339        | 330         | 338         |             |
+| Settings    | 623       | 637         | 634         | 335        | 346        | 336        | 339         | 345         |             |
+| ML Gym      | 636       | 630         | 625         | 335        | 338        | 340        | 332         | 341         |             |
 
 ¹ _Measured with broken `networkidle` script — inflated by ~300ms vs real user experience._
 
@@ -386,23 +400,23 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6a | After Ph.6b | After Ph.6c |
 |-------------|----------|------------|------------|------------|------------|------------|-------------|-------------|-------------|
-| Play        | 60       | 67         | 64         | 66         | 66         | 64         | 67          |             |             |
-| Leaderboard | 58       | 63         | 63         | 63         | 63         | 61         | 68          |             |             |
-| Puzzles     | 57       | 60         | 60         | 56         | 60         | 62         | 65          |             |             |
-| Stats       | 59       | 61         | 61         | 55         | 62         | 67         | 61          |             |             |
-| Settings    | 57       | 59         | 64         | 61         | 68         | 61         | 66          |             |             |
-| ML Gym      | 62       | 59         | 58         | 61         | 61         | 60         | 61          |             |             |
+| Play        | 60       | 67         | 64         | 66         | 66         | 64         | 67          | 60          |             |
+| Leaderboard | 58       | 63         | 63         | 63         | 63         | 61         | 68          | 59          |             |
+| Puzzles     | 57       | 60         | 60         | 56         | 60         | 62         | 65          | 64          |             |
+| Stats       | 59       | 61         | 61         | 55         | 62         | 67         | 61          | 63          |             |
+| Settings    | 57       | 59         | 64         | 61         | 68         | 61         | 66          | 66          |             |
+| ML Gym      | 62       | 59         | 58         | 61         | 61         | 60         | 61          | 61          |             |
 
 ### FCP (ms) — first contentful paint
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6a | After Ph.6b | After Ph.6c |
 |-------------|----------|------------|------------|------------|------------|------------|-------------|-------------|-------------|
-| Play        | 132      | 136        | 140        | 144        | 144        | 132        | 136         |             |             |
-| Leaderboard | 124      | 136        | 132        | 136        | 128        | 136        | 136         |             |             |
-| Puzzles     | 132      | 124        | 124        | 120        | 136        | 128        | 132         |             |             |
-| Stats       | 136      | 132        | 132        | 128        | 136        | 132        | 124         |             |             |
-| Settings    | 120      | 128        | 128        | 128        | 140        | 128        | 136         |             |             |
-| ML Gym      | 124      | 128        | 124        | 132        | 132        | 136        | 128         |             |             |
+| Play        | 132      | 136        | 140        | 144        | 144        | 132        | 136         | 124         |             |
+| Leaderboard | 124      | 136        | 132        | 136        | 128        | 136        | 136         | 124         |             |
+| Puzzles     | 132      | 124        | 124        | 120        | 136        | 128        | 132         | 140         |             |
+| Stats       | 136      | 132        | 132        | 128        | 136        | 132        | 124         | 132         |             |
+| Settings    | 120      | 128        | 128        | 128        | 140        | 128        | 136         | 136         |             |
+| ML Gym      | 124      | 128        | 124        | 132        | 132        | 136        | 128         | 132         |             |
 
 _All on staging, 5 cold anonymous runs, median._
 

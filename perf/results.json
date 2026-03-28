@@ -1,52 +1,52 @@
 {
-  "timestamp": "2026-03-28T16:25:30.298Z",
+  "timestamp": "2026-03-28T16:36:26.416Z",
   "baseUrl": "https://xo-arena-staging.up.railway.app",
   "runs": 5,
   "pages": [
     {
       "name": "Play",
       "path": "/play",
-      "ready": 347,
-      "ttfb": 67,
-      "fcp": 136,
-      "lcp": 136,
-      "staticKb": null,
-      "runs": 5
-    },
-    {
-      "name": "Leaderboard",
-      "path": "/leaderboard",
-      "ready": 339,
-      "ttfb": 68,
-      "fcp": 136,
-      "lcp": 136,
-      "staticKb": null,
-      "runs": 5
-    },
-    {
-      "name": "Puzzles",
-      "path": "/puzzles",
-      "ready": 340,
-      "ttfb": 65,
-      "fcp": 132,
-      "lcp": 132,
-      "staticKb": null,
-      "runs": 5
-    },
-    {
-      "name": "Stats",
-      "path": "/stats",
-      "ready": 330,
-      "ttfb": 61,
+      "ready": 332,
+      "ttfb": 60,
       "fcp": 124,
       "lcp": 124,
       "staticKb": null,
       "runs": 5
     },
     {
+      "name": "Leaderboard",
+      "path": "/leaderboard",
+      "ready": 327,
+      "ttfb": 59,
+      "fcp": 124,
+      "lcp": 124,
+      "staticKb": null,
+      "runs": 5
+    },
+    {
+      "name": "Puzzles",
+      "path": "/puzzles",
+      "ready": 345,
+      "ttfb": 64,
+      "fcp": 140,
+      "lcp": 140,
+      "staticKb": null,
+      "runs": 5
+    },
+    {
+      "name": "Stats",
+      "path": "/stats",
+      "ready": 338,
+      "ttfb": 63,
+      "fcp": 132,
+      "lcp": 132,
+      "staticKb": null,
+      "runs": 5
+    },
+    {
       "name": "Settings",
       "path": "/settings",
-      "ready": 339,
+      "ready": 345,
       "ttfb": 66,
       "fcp": 136,
       "lcp": 136,
@@ -56,10 +56,10 @@
     {
       "name": "ML Gym",
       "path": "/ml",
-      "ready": 332,
+      "ready": 341,
       "ttfb": 61,
-      "fcp": 128,
-      "lcp": 128,
+      "fcp": 132,
+      "lcp": 132,
       "staticKb": null,
       "runs": 5
     }
