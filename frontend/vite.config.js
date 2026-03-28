@@ -15,6 +15,17 @@ export default defineConfig({
     }),
     tailwindcss(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':    ['react', 'react-dom', 'react-router-dom'],
+          'vendor-charts':   ['recharts'],
+          'vendor-realtime': ['socket.io-client'],
+        },
+      },
+    },
+  },
   server: {
     host: true,
     watch: {
