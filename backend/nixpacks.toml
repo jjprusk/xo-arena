@@ -1,5 +1,6 @@
 [variables]
 NIXPACKS_NODE_VERSION = "22"
+NODE_OPTIONS = "--experimental-transform-types"
 
 [phases.install]
 cmds = ["npm install --ignore-scripts=false"]

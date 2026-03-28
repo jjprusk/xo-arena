@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src --watch prisma/schema.prisma --ext js,mjs,ts,prisma --exec 'npx prisma generate && node --experimental-transform-types src/index.js'",
+    "dev": "nodemon --watch src --ignore src/generated --watch prisma/schema.prisma --ext js,mjs,ts,prisma --exec 'npx prisma generate && node --experimental-transform-types src/index.js'",
     "start": "node --experimental-transform-types src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
