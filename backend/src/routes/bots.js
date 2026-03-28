@@ -4,6 +4,10 @@ import db from '../lib/db.js'
 import { createBot, listBots } from '../services/userService.js'
 import { getSystemConfig } from '../services/mlService.js'
 import { hasRole } from '../utils/roles.js'
+import cache from '../utils/cache.js'
+
+const BOTS_CACHE_KEY = 'bots:public'
+const BOTS_TTL_MS    = 60_000  // 60 seconds
 
 const router = Router()
 
@@ -15,13 +19,10 @@ const router = Router()
 router.get('/', async (req, res, next) => {
   try {
     const { ownerId, includeInactive } = req.query
-    const bots = await listBots({
-      ownerId: ownerId || undefined,
-      includeInactive: includeInactive === 'true',
-    })
 
+    // Owner-specific requests are user-scoped — never cache them.
     if (ownerId) {
-      // Fetch the owner to determine limit info
+      const bots = await listBots({ ownerId, includeInactive: includeInactive === 'true' })
       const owner = await db.user.findUnique({
         where: { id: ownerId },
         include: { userRoles: { select: { role: true } } },
@@ -32,11 +33,21 @@ router.get('/', async (req, res, next) => {
         getSystemConfig('bots.provisionalGames', 5),
       ])
       const limit = isExempt ? null : (owner?.botLimit ?? defaultLimit)
-      // Count all bots (including inactive) for limit purposes
       const count = await db.user.count({ where: { botOwnerId: ownerId, isBot: true } })
       return res.json({ bots, limitInfo: { count, limit, isExempt }, provisionalThreshold })
     }
 
+    // Public active bot list — cacheable.
+    const cached = cache.get(BOTS_CACHE_KEY)
+    if (cached) {
+      res.setHeader('X-Cache', 'HIT')
+      return res.json({ bots: cached })
+    }
+
+    const bots = await listBots({ includeInactive: includeInactive === 'true' })
+    cache.set(BOTS_CACHE_KEY, bots, BOTS_TTL_MS)
+
+    res.setHeader('X-Cache', 'MISS')
     res.json({ bots })
   } catch (err) {
     next(err)
@@ -70,6 +81,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const { name, modelType, competitive, avatarUrl } = req.body
     const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl })
+    cache.invalidate(BOTS_CACHE_KEY)
     res.status(201).json({ bot })
   } catch (err) {
     if (err.code === 'RESERVED_NAME') return res.status(400).json({ error: err.message, code: err.code })
@@ -155,6 +167,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
 
     const updated = await db.user.update({ where: { id: req.params.id }, data })
+    cache.invalidate(BOTS_CACHE_KEY)
     res.json({ bot: updated })
   } catch (err) {
     next(err)
@@ -201,6 +214,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!result) return
 
     await db.user.delete({ where: { id: req.params.id } })
+    cache.invalidate(BOTS_CACHE_KEY)
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bot not found' })

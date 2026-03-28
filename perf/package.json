@@ -1,0 +1,16 @@
+{
+  "name": "xo-arena-perf",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "playwright install chromium",
+    "local":   "node perf.js http://localhost:4173",
+    "staging": "node perf.js https://xo-arena-staging.up.railway.app",
+    "prod":    "node perf.js https://xo-arena.up.railway.app",
+    "baseline": "node perf.js --runs=5 --json"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  }
+}
