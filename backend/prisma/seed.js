@@ -62,59 +62,63 @@ async function main() {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
   const db = new PrismaClient({ adapter })
 
-  // 1. System config defaults — only set if not already present
-  for (const { key, value } of CONFIG_DEFAULTS) {
-    await db.systemConfig.upsert({
-      where:  { key },
-      update: {},  // never overwrite — admin changes should persist across re-seeds
-      create: { key, value },
-    })
-  }
-  console.log('✓ System config defaults')
+  try {
+    // 1. System config defaults — only set if not already present
+    for (const { key, value } of CONFIG_DEFAULTS) {
+      await db.systemConfig.upsert({
+        where:  { key },
+        update: {},  // never overwrite — admin changes should persist across re-seeds
+        create: { key, value },
+      })
+    }
+    console.log('✓ System config defaults')
 
-  // 2. System account — the owner of all built-in bots
-  const systemAccount = await db.user.upsert({
-    where:  { username: 'system' },
-    update: {},
-    create: {
-      username:    'system',
-      email:       'system@xo-arena.internal',
-      displayName: 'System',
-      eloRating:   1200,
-    },
-  })
-  console.log('✓ System account:', systemAccount.id)
-
-  // 3. Built-in bots
-  for (const bot of BUILT_IN_BOTS) {
-    await db.user.upsert({
-      where:  { username: bot.username },
-      update: {
-        // Keep competitive flag and model type in sync with seed definition
-        botCompetitive: bot.botCompetitive,
-        botModelType:   bot.botModelType,
-      },
+    // 2. System account — the owner of all built-in bots
+    const systemAccount = await db.user.upsert({
+      where:  { username: 'system' },
+      update: {},
       create: {
-        username:       bot.username,
-        email:          bot.email,
-        displayName:    bot.displayName,
-        isBot:          true,
-        botModelType:   bot.botModelType,
-        botModelId:     bot.botModelId,
-        botOwnerId:     null,  // owned by system (no user FK — system account is separate)
-        botActive:      true,
-        botCompetitive: bot.botCompetitive,
-        botAvailable:   true,
-        eloRating:      1200,
+        username:    'system',
+        email:       'system@xo-arena.internal',
+        displayName: 'System',
+        eloRating:   1200,
       },
     })
-    console.log('✓ Bot:', bot.displayName)
+    console.log('✓ System account:', systemAccount.id)
+
+    // 3. Built-in bots
+    for (const bot of BUILT_IN_BOTS) {
+      await db.user.upsert({
+        where:  { username: bot.username },
+        update: {
+          // Keep competitive flag and model type in sync with seed definition
+          botCompetitive: bot.botCompetitive,
+          botModelType:   bot.botModelType,
+        },
+        create: {
+          username:       bot.username,
+          email:          bot.email,
+          displayName:    bot.displayName,
+          isBot:          true,
+          botModelType:   bot.botModelType,
+          botModelId:     bot.botModelId,
+          botOwnerId:     null,  // owned by system (no user FK — system account is separate)
+          botActive:      true,
+          botCompetitive: bot.botCompetitive,
+          botAvailable:   true,
+          eloRating:      1200,
+        },
+      })
+      console.log('✓ Bot:', bot.displayName)
+    }
+  } finally {
+    await db.$disconnect()
   }
 }
 
 // Only execute when run directly (not when imported by tests)
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main()
+    .then(() => process.exit(0))
     .catch(e => { console.error(e); process.exit(1) })
-    .finally(async () => { try { await db.$disconnect() } catch {} })
 }
