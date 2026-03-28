@@ -2,7 +2,7 @@ import React from 'react'
 import { useState, useEffect } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSession } from '../../lib/auth-client.js'
-import { api } from '../../lib/api.js'
+import { api, cachedFetch } from '../../lib/api.js'
 import { ListTr, ListTd, SearchBar } from '../ui/ListTable.jsx'
 
 // ── BotAccordion ─────────────────────────────────────────────────────────────
@@ -273,16 +273,27 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
   useEffect(() => {
     if (!botExpanded && !aivaiExpanded) return
-    setBotsLoading(true)
-    api.bots.list()
-      .then((res) => {
-        const sorted = (res.bots || []).sort((a, b) => (b.eloRating ?? 1200) - (a.eloRating ?? 1200))
-        setBots(sorted)
-        if (sorted.length >= 1) setAivaiBot1Id(prev => prev ?? sorted[0].id)
-        if (sorted.length >= 2) setAivaiBot2Id(prev => prev ?? sorted[1].id)
-      })
-      .catch(() => setBots([]))
-      .finally(() => setBotsLoading(false))
+    let cancelled = false
+
+    function applyBots(res) {
+      const sorted = (res.bots || []).sort((a, b) => (b.eloRating ?? 1200) - (a.eloRating ?? 1200))
+      setBots(sorted)
+      if (sorted.length >= 1) setAivaiBot1Id(prev => prev ?? sorted[0].id)
+      if (sorted.length >= 2) setAivaiBot2Id(prev => prev ?? sorted[1].id)
+    }
+
+    const { immediate, refresh } = cachedFetch('/bots', 5 * 60_000)
+    if (immediate) {
+      applyBots(immediate)
+      setBotsLoading(false)
+    } else {
+      setBotsLoading(true)
+    }
+    refresh
+      .then(res => { if (!cancelled) applyBots(res) })
+      .catch(() => { if (!cancelled && !immediate) setBots([]) })
+      .finally(() => { if (!cancelled) setBotsLoading(false) })
+    return () => { cancelled = true }
   }, [botExpanded, aivaiExpanded])
 
   // Apply options to store

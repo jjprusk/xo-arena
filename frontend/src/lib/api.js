@@ -4,6 +4,38 @@
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
+/**
+ * Stale-while-revalidate fetch.
+ * Returns { immediate, refresh } where:
+ *   immediate — cached data from localStorage if within maxAgeMs (or null)
+ *   refresh   — Promise that resolves with fresh data and updates the cache
+ *
+ * Usage: show `immediate` right away (no spinner), update when `refresh` resolves.
+ */
+export function cachedFetch(path, maxAgeMs = 5 * 60_000) {
+  const key = 'xo_swr_' + path
+  let immediate = null
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) {
+      const entry = JSON.parse(raw)
+      if (Date.now() - entry.ts < maxAgeMs) immediate = entry.data
+    }
+  } catch {}
+
+  const refresh = fetch(`${BASE}/api/v1${path}`)
+    .then(r => {
+      if (!r.ok) return Promise.reject(new Error(r.statusText))
+      return r.json()
+    })
+    .then(data => {
+      try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
+      return data
+    })
+
+  return { immediate, refresh }
+}
+
 async function request(method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`

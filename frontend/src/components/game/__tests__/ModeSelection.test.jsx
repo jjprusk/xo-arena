@@ -19,10 +19,11 @@ vi.mock('../../../lib/api.js', () => ({
     rooms: {
       list: vi.fn(() => Promise.resolve({ rooms: [] })),
     },
-    bots: {
-      list: vi.fn(() => Promise.resolve({ bots: mockBots })),
-    },
   },
+  cachedFetch: vi.fn(() => ({
+    immediate: null,
+    refresh: Promise.resolve({ bots: mockBots }),
+  })),
 }))
 
 vi.mock('../../../lib/auth-client.js', () => ({

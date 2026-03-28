@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api.js'
+import { api, cachedFetch } from '../lib/api.js'
 import {
   ListTable, ListTh, ListTd, ListTr,
   UserAvatar, SearchBar,
@@ -31,11 +31,20 @@ export default function LeaderboardPage() {
   }, [showBots])
 
   useEffect(() => {
-    setLoading(true)
-    api.get(`/leaderboard?period=${period}&mode=${mode}&includeBots=${showBots}`)
-      .then((res) => setBoard(res.leaderboard || []))
-      .catch(() => setBoard([]))
-      .finally(() => setLoading(false))
+    let cancelled = false
+    const path = `/leaderboard?period=${period}&mode=${mode}&includeBots=${showBots}`
+    const { immediate, refresh } = cachedFetch(path, 5 * 60_000)
+    if (immediate) {
+      setBoard(immediate.leaderboard || [])
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+    refresh
+      .then(res => { if (!cancelled) setBoard(res.leaderboard || []) })
+      .catch(() => { if (!cancelled && !immediate) setBoard([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [period, mode, showBots])
 
   const filtered = board.filter((e) =>
