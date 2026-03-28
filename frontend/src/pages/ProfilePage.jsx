@@ -6,9 +6,8 @@ import { api } from '../lib/api.js'
 
 export default function ProfilePage() {
   const { data: session, isPending } = useOptimisticSession()
-  const isLoaded = !isPending
-  const isSignedIn = !!session?.user
   const clerkUser = session?.user ?? null
+  const isSignedIn = !!clerkUser
   const [dbUser, setDbUser] = useState(null)
   const [stats, setStats] = useState(null)
   const [eloData, setEloData] = useState(null)
@@ -32,8 +31,7 @@ export default function ProfilePage() {
   const [createForm, setCreateForm] = useState({ name: '', modelType: 'DQN', competitive: false })
 
   useEffect(() => {
-    if (!isLoaded) return
-    if (!isSignedIn) return
+    if (!clerkUser) return
 
     setLoading(true)
     async function load() {
@@ -65,7 +63,7 @@ export default function ProfilePage() {
       }
     }
     load()
-  }, [isSignedIn, isLoaded])
+  }, [clerkUser?.id])
 
   async function handleSaveName() {
     if (!nameInput.trim() || nameInput === dbUser.displayName) {
@@ -86,7 +84,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (!isLoaded || loading) {
+  if (loading || (isPending && !clerkUser)) {
     return (
       <div className="max-w-lg mx-auto flex items-center justify-center py-16">
         <div className="w-8 h-8 border-4 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
@@ -94,7 +92,7 @@ export default function ProfilePage() {
     )
   }
 
-  if (!isSignedIn) {
+  if (!isPending && !isSignedIn) {
     return (
       <div className="max-w-lg mx-auto space-y-8">
         <PageHeader title="Profile" />

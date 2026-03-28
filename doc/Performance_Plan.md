@@ -349,7 +349,7 @@ all users, cold and warm.
 - [x] Implement `useOptimisticSession()` hook with localStorage cache (6a)
 - [x] Replace `useSession` with `useOptimisticSession` across all consumers (AppLayout, SignedIn, SignedOut, UserButton, AdminRoute, GameBoard, ModeSelection, StatsPage, ProfilePage, MLDashboardPage, AdminUsersPage, BotProfilePage) (6a)
 - [x] Clear session cache on `signOut` (6a)
-- [ ] Parallelize data fetches in `StatsPage`, `ProfilePage`, `MLDashboardPage` (6b)
+- [x] Parallelize data fetches in `StatsPage`, `ProfilePage` — fire on `user?.id` instead of `isLoaded`; `MLDashboardPage` already gated on `user` directly (6b)
 - [ ] Consolidate frontend + backend into one Railway service (6c)
 - [ ] Run perf benchmark — cold anonymous (measures 6c), warm returning-user (measures 6a+6b)
 - [ ] Record improvement vs Phase 5 baseline
