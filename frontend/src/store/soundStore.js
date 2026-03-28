@@ -14,13 +14,15 @@ const howlCache = {}
 
 function getHowl(key) {
   if (!howlCache[key]) {
-    howlCache[key] = new Howl({ src: [`/sounds/${key}.wav`], preload: true })
+    // html5: true uses HTMLAudioElement — avoids AudioContext unlock/replay
+    // issues that cause double sounds with Web Audio API.
+    // Eager preloading (SOUND_KEYS.forEach below) reduces first-play delay.
+    howlCache[key] = new Howl({ src: [`/sounds/${key}.wav`], html5: true, preload: true })
   }
   return howlCache[key]
 }
 
-// Preload all sounds immediately so they're buffered before first play.
-// Howler (2.x) auto-resumes its AudioContext on first user gesture.
+// Preload all sounds at module load so audio elements are ready before first play.
 SOUND_KEYS.forEach(getHowl)
 
 // ── Retro / Nature packs — Web Audio synthesis ───────────────────────────────
