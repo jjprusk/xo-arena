@@ -116,6 +116,9 @@ async function main() {
   }
 }
 
+// Export for programmatic use (e.g. server startup)
+export { main as runSeed }
+
 // Only execute when run directly (not when imported by tests)
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main()
