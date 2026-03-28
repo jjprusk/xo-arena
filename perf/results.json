@@ -1,42 +1,42 @@
 {
-  "timestamp": "2026-03-28T13:29:54.969Z",
+  "timestamp": "2026-03-28T13:45:19.063Z",
   "baseUrl": "https://xo-arena-staging.up.railway.app",
   "runs": 5,
   "pages": [
     {
       "name": "Play",
       "path": "/play",
-      "ready": 638,
-      "ttfb": 67,
-      "fcp": 136,
-      "lcp": 136,
+      "ready": 643,
+      "ttfb": 64,
+      "fcp": 140,
+      "lcp": 140,
       "staticKb": null,
       "runs": 5
     },
     {
       "name": "Leaderboard",
       "path": "/leaderboard",
-      "ready": 639,
+      "ready": 636,
       "ttfb": 63,
-      "fcp": 136,
-      "lcp": 136,
+      "fcp": 132,
+      "lcp": 132,
       "staticKb": null,
       "runs": 5
     },
     {
       "name": "Puzzles",
       "path": "/puzzles",
-      "ready": 634,
+      "ready": 638,
       "ttfb": 60,
       "fcp": 124,
-      "lcp": 124,
+      "lcp": 128,
       "staticKb": null,
       "runs": 5
     },
     {
       "name": "Stats",
       "path": "/stats",
-      "ready": 634,
+      "ready": 642,
       "ttfb": 61,
       "fcp": 132,
       "lcp": 132,
@@ -46,8 +46,8 @@
     {
       "name": "Settings",
       "path": "/settings",
-      "ready": 637,
-      "ttfb": 59,
+      "ready": 634,
+      "ttfb": 64,
       "fcp": 128,
       "lcp": 128,
       "staticKb": null,
@@ -56,10 +56,10 @@
     {
       "name": "ML Gym",
       "path": "/ml",
-      "ready": 630,
-      "ttfb": 59,
-      "fcp": 128,
-      "lcp": 128,
+      "ready": 625,
+      "ttfb": 58,
+      "fcp": 124,
+      "lcp": 124,
       "staticKb": null,
       "runs": 5
     }

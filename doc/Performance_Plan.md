@@ -111,36 +111,44 @@ data could be confusing.
 - [ ] ~~Apply to `PuzzlePage` puzzle list fetch~~ — skipped: puzzles are random per request, showing a stale set would replay already-solved puzzles
 - [x] Apply to bot list fetch in `ModeSelection`
 - [x] Verify stale data is never shown on user-specific pages (stats, games, elo-history all use direct `api.get`)
-- [ ] Run perf benchmark (cold + warm) and record new numbers
+- [x] Run perf benchmark (cold + warm) and record new numbers
 
 ---
 
-### Phase 3 — Combine Play Page API Calls
+### Phase 3 — Reduce Per-Page Network Overhead
 
-**Impact: Medium | Effort: Medium**
+**Impact: Medium | Effort: Low**
 
-Play is the slowest page (638ms) because it fires multiple API calls on
-mount: bot list, available rooms, possibly others. Each call is a separate
-round trip. A single `/api/v1/play/init` endpoint returns everything in
-one response, cutting one or more round trips.
+**Audit finding:** Play makes no HTTP API calls on mount — bots and rooms
+are both lazy (fired only when the user expands a section). The original
+plan to create a `/play/init` endpoint is therefore moot.
 
-**Implementation:**
+The real bottleneck for signed-in users is `api.users.sync`, which fires
+on every page navigation from AppLayout. This adds a ~150ms POST request
+after the auth session check resolves — one extra sequential hop per page.
 
-1. Add `GET /api/v1/play/init` to the backend:
-   - Returns `{ bots, rooms, puzzleCount }` (or whatever Play needs)
-   - Runs all sub-queries in parallel with `Promise.all`
-   - Cacheable for 30s (bots and rooms don't change per-second)
-2. Replace the individual fetches in `PlayPage` / `ModeSelection` with
-   a single call to the new endpoint.
+Two targeted fixes:
 
-**Expected outcome:** Play page Ready drops from ~638ms to ~400ms or below.
+1. **Debounce `api.users.sync`** — fire at most once per browser session
+   (tracked in `sessionStorage`). Subsequent navigations skip the sync,
+   removing ~150ms from signed-in user networkidle time per page load.
+
+2. **Eager bot prefetch on Play mount** — warm the `/bots` cache in the
+   background the moment Play renders. When the user clicks "Challenge a
+   Bot", data is already in localStorage and appears instantly (even on a
+   first visit, as long as the section is opened after the prefetch completes,
+   typically within ~150ms).
+
+**Expected outcome:** Signed-in users see ~150ms lower networkidle per page.
+Bot list opens instantly on Play for all users. Cold anonymous benchmark
+numbers unchanged (sync never fires for anonymous users; networkidle remains
+auth-check-time + 500ms).
 
 **Checklist:**
-- [ ] Audit `PlayPage` and `ModeSelection` to list every API call on mount
-- [ ] Create `GET /api/v1/play/init` combining those calls
-- [ ] Apply backend cache (from Phase 1) to the new endpoint
-- [ ] Update frontend to use the single endpoint
-- [ ] Run perf benchmark and record new numbers
+- [x] Audit `PlayPage` and `ModeSelection` — confirm no API calls on mount
+- [x] Debounce `api.users.sync` in `AppLayout` — once per browser session via `sessionStorage`
+- [x] Add eager bot prefetch in `PlayPage` on mount (`cachedFetch` background)
+- [x] Run perf benchmark (cold anonymous — unchanged, as expected; see findings below)
 
 ---
 
@@ -218,36 +226,37 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 638      | 638        |            |            |            |            |
-| Leaderboard | 638      | 639        |            |            |            |            |
-| Puzzles     | 637      | 634        |            |            |            |            |
-| Stats       | 644      | 634        |            |            |            |            |
-| Settings    | 623      | 637        |            |            |            |            |
-| ML Gym      | 636      | 630        |            |            |            |            |
+| Play        | 638      | 638        | 643        | —          |            |            |
+| Leaderboard | 638      | 639        | 636        | —          |            |            |
+| Puzzles     | 637      | 634        | 638        | —          |            |            |
+| Stats       | 644      | 634        | 642        | —          |            |            |
+| Settings    | 623      | 637        | 634        | —          |            |            |
+| ML Gym      | 636      | 630        | 625        | —          |            |            |
 
 ### TTFB (ms) — time to first byte
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 60       | 67         |            |            |            |            |
-| Leaderboard | 58       | 63         |            |            |            |            |
-| Puzzles     | 57       | 60         |            |            |            |            |
-| Stats       | 59       | 61         |            |            |            |            |
-| Settings    | 57       | 59         |            |            |            |            |
-| ML Gym      | 62       | 59         |            |            |            |            |
+| Play        | 60       | 67         | 64         | —          |            |            |
+| Leaderboard | 58       | 63         | 63         | —          |            |            |
+| Puzzles     | 57       | 60         | 60         | —          |            |            |
+| Stats       | 59       | 61         | 61         | —          |            |            |
+| Settings    | 57       | 59         | 64         | —          |            |            |
+| ML Gym      | 62       | 59         | 58         | —          |            |            |
 
 ### FCP (ms) — first contentful paint
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 132      | 136        |            |            |            |            |
-| Leaderboard | 124      | 136        |            |            |            |            |
-| Puzzles     | 132      | 124        |            |            |            |            |
-| Stats       | 136      | 132        |            |            |            |            |
-| Settings    | 120      | 128        |            |            |            |            |
-| ML Gym      | 124      | 128        |            |            |            |            |
+| Play        | 132      | 136        | 140        | —          |            |            |
+| Leaderboard | 124      | 136        | 132        | —          |            |            |
+| Puzzles     | 132      | 124        | 124        | —          |            |            |
+| Stats       | 136      | 132        | 132        | —          |            |            |
+| Settings    | 120      | 128        | 128        | —          |            |            |
+| ML Gym      | 124      | 128        | 124        | —          |            |            |
 
-_Baseline measured 2026-03-28, Phase 1 measured 2026-03-28. Both on staging, 5 cold runs, median._
+_Baseline measured 2026-03-28, Phase 1 measured 2026-03-28, Phase 2 measured 2026-03-28. All on staging, 5 cold runs, median._
+_Phase 3 shows — because its gains are for signed-in users only (sync debounce) and don't appear in anonymous cold runs._
 
 ### Phase 1 findings
 
@@ -273,6 +282,38 @@ The remaining ~150ms is React initialization and scheduling.
 (combine Play API calls) directly attack this sequential-call problem and should
 produce the biggest cold-visit improvement. Phase 1's value is in reducing DB load
 under concurrent traffic, not reducing single-user latency.
+
+### Phase 2 findings
+
+Phase 2 cold numbers are within noise of Phase 1 (~±10ms). This is expected —
+the benchmark always uses a fresh browser context with an empty localStorage cache,
+so `cachedFetch` always misses and falls through to a normal network fetch.
+
+**The benefit of Phase 2 is entirely on warm (repeat) visits.** On a second visit
+to Leaderboard or Play, the page renders the cached data instantly (0ms wait, no
+spinner), then refreshes in the background. The benchmark tool does not measure
+warm visits, so the improvement does not appear in these tables.
+
+**Implication for the plan:** Cold-visit Ready time remains ~635ms across all pages.
+The root cause (sequential auth + data round trips through two Railway hops) still
+needs to be addressed. Phase 3 (combine Play API calls) is the next lever for cold
+performance.
+
+### Phase 3 findings
+
+Phase 3 audit revealed that the original plan (combine Play API calls into `/play/init`)
+was based on incorrect assumptions. Play makes **no HTTP API calls on mount** — bot list
+and room list are both lazy (triggered by user interaction). All pages share the same
+~635ms because the bottleneck is Playwright's 500ms networkidle delay after the Better
+Auth session check (~130ms round trip), not page-specific data fetches.
+
+Phase 3 was revised to two targeted changes:
+- **`api.users.sync` debounce**: eliminates a ~150ms POST per page navigation for
+  signed-in users. Not visible in the anonymous cold benchmark.
+- **Eager bot prefetch on Play mount**: the bot list is fetched in the background when
+  Play renders. By the time the user clicks "Challenge a Bot", data is already cached.
+
+Cold anonymous benchmark numbers are unchanged (—) by design.
 
 ---
 
