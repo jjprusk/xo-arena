@@ -1,5 +1,8 @@
 import 'dotenv/config'
 import http from 'http'
+import path from 'path'
+import fs from 'fs'
+import express from 'express'
 import app, { registerRoutes } from './app.js'
 import logger from './logger.js'
 import db from './lib/db.js'
@@ -36,6 +39,23 @@ registerRoutes(app, {
   '/bots': botsRouter,
   '/bot-games': botGamesRouter,
 })
+
+// Serve built frontend static files (production only — directory absent in local dev)
+const publicDir = path.join(import.meta.dirname, '../public')
+if (fs.existsSync(publicDir)) {
+  // Hashed Vite assets — cache forever
+  app.use('/assets', express.static(path.join(publicDir, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+  }))
+  // Other static files (favicon, .well-known, etc.)
+  app.use(express.static(publicDir))
+  // SPA fallback — serve index.html for all non-API routes
+  app.get(/^(?!\/(api|health))/, (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'))
+  })
+  logger.info('Serving frontend static files')
+}
 
 const server = http.createServer(app)
 
