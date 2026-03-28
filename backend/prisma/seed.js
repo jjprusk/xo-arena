@@ -7,10 +7,9 @@
  *  3. Built-in bot personas: Rusty, Copper, Sterling, Magnus
  */
 
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '../src/generated/prisma/client.ts'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { fileURLToPath } from 'url'
-
-const db = new PrismaClient()
 
 // ─── System config defaults ────────────────────────────────────────────────
 
@@ -60,6 +59,9 @@ export const BUILT_IN_BOTS = [
 export const RESERVED_BOT_NAMES = BUILT_IN_BOTS.map(b => b.displayName.toLowerCase())
 
 async function main() {
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+  const db = new PrismaClient({ adapter })
+
   // 1. System config defaults — only set if not already present
   for (const { key, value } of CONFIG_DEFAULTS) {
     await db.systemConfig.upsert({
@@ -114,5 +116,5 @@ async function main() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main()
     .catch(e => { console.error(e); process.exit(1) })
-    .finally(() => db.$disconnect())
+    .finally(async () => { try { await db.$disconnect() } catch {} })
 }

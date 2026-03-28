@@ -19,7 +19,7 @@ vi.mock('../../lib/db.js', () => ({
   },
 }))
 
-vi.mock('@prisma/client', () => ({
+vi.mock('../../generated/prisma/client.ts', () => ({
   Prisma: {
     sql: (strings, ...values) => ({ strings, values }),
     empty: { strings: [''], values: [] },

@@ -1,5 +1,10 @@
+import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
 
 export default defineConfig({
-  seed: 'node prisma/seed.js',
+  schema: 'prisma/schema.prisma',
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+  seed: 'node --experimental-transform-types prisma/seed.js',
 })

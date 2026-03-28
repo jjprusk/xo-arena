@@ -6,7 +6,7 @@
  * IPC subprocess overhead (~20-50ms per query) that was present in the
  * default Prisma setup.
  */
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '../generated/prisma/client.ts'
 import { PrismaPg } from '@prisma/adapter-pg'
 
 const globalForPrisma = globalThis

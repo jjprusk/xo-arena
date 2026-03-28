@@ -1,5 +1,6 @@
-FROM node:20-alpine
+FROM node:23-alpine
 WORKDIR /app
+ENV NODE_OPTIONS=--experimental-transform-types
 COPY package*.json ./
 RUN npm install
 COPY . .
