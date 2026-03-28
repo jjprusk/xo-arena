@@ -8,6 +8,7 @@
  */
 import { PrismaClient } from '../generated/prisma/client.ts'
 import { PrismaPg } from '@prisma/adapter-pg'
+import logger from '../logger.js'
 
 const globalForPrisma = globalThis
 
@@ -15,7 +16,15 @@ if (!globalForPrisma.prisma) {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
   globalForPrisma.prisma = new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'stdout', level: 'warn' },
+      { emit: 'stdout', level: 'error' },
+    ],
+  })
+  // Log individual query durations to surface DB bottlenecks
+  globalForPrisma.prisma.$on('query', (e) => {
+    logger.info({ query: e.query, ms: e.duration }, 'db query')
   })
 }
 
