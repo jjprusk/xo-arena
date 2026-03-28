@@ -90,9 +90,6 @@ export const auth = betterAuth({
   trustedOrigins: [
     ...(process.env.FRONTEND_URL || 'http://localhost:5173')
       .split(',').map(o => o.trim()).filter(Boolean),
-    ...(process.env.RAILWAY_PUBLIC_DOMAIN
-      ? [`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`]
-      : []),
     'https://appleid.apple.com',
   ],
   advanced: {

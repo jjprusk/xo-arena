@@ -9,12 +9,6 @@ const app = express()
 const allowedOrigins = [
   ...(process.env.FRONTEND_URL || 'http://localhost:5173')
     .split(',').map(o => o.trim()).filter(Boolean),
-  // Allow the service's own public domain (needed when backend serves frontend —
-  // Vite adds crossorigin attributes which cause the browser to send Origin even
-  // for same-domain asset requests)
-  ...(process.env.RAILWAY_PUBLIC_DOMAIN
-    ? [`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`]
-    : []),
   'https://appleid.apple.com',
 ]
 app.use(cors({
