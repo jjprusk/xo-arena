@@ -15,7 +15,9 @@
     "db:seed": "node prisma/seed.js"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^6.3.0",
     "@prisma/client": "^6.3.0",
+    "pg": "^8.14.1",
     "@socket.io/redis-adapter": "^8.3.0",
     "better-auth": "^1.5.5",
     "cors": "^2.8.5",
