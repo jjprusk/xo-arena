@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { getUserByBetterAuthId, getBotByModelId, createGame } from '../services/userService.js'
 import { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot } from '../services/eloService.js'
+import cache from '../utils/cache.js'
 import logger from '../logger.js'
 
 const router = Router()
@@ -59,6 +60,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
       // Update ELO for both sides (fire-and-forget)
       updateBothElosAfterPvBot(user.id, bot.id, outcome).catch(() => {})
+      cache.invalidatePrefix('leaderboard:')
 
       return res.status(201).json({ game: { id: game.id } })
     }
@@ -81,6 +83,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     // Update player ELO (fire-and-forget — non-fatal)
     updatePlayerEloAfterPvAI(user.id, outcome, difficulty).catch(() => {})
+    cache.invalidatePrefix('leaderboard:')
 
     res.status(201).json({ game: { id: game.id } })
   } catch (err) {
