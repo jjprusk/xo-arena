@@ -215,8 +215,8 @@ describe('getUserStats', () => {
 describe('getLeaderboard', () => {
   it('maps raw SQL rows to the expected leaderboard shape', async () => {
     db.$queryRaw.mockResolvedValue([
-      { id: 'u1', display_name: 'Alice', avatar_url: null, is_bot: false, total: 20n, wins: 16n, win_rate: '0.8000' },
-      { id: 'u2', display_name: 'Bob',   avatar_url: null, is_bot: false, total: 15n, wins:  9n, win_rate: '0.6000' },
+      { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false, total: 20n, wins: 16n, win_rate: '0.8000' },
+      { id: 'u2', displayName: 'Bob',   avatarUrl: null, isBot: false, total: 15n, wins:  9n, win_rate: '0.6000' },
     ])
 
     const result = await getLeaderboard()
@@ -235,7 +235,7 @@ describe('getLeaderboard', () => {
 
   it('returns number types (not BigInt) for total, wins, winRate', async () => {
     db.$queryRaw.mockResolvedValue([
-      { id: 'u1', display_name: 'Alice', avatar_url: null, is_bot: false, total: 10n, wins: 5n, win_rate: '0.5000' },
+      { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false, total: 10n, wins: 5n, win_rate: '0.5000' },
     ])
 
     const [entry] = await getLeaderboard()

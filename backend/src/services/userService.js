@@ -260,32 +260,32 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
 
   // Prisma.sql fragments for optional filters — interpolated safely as SQL, not parameters
   const modeFilter = whereMode ? Prisma.sql`AND g.mode = ${whereMode}::"GameMode"` : Prisma.empty
-  const botFilter  = includeBots ? Prisma.empty : Prisma.sql`AND u.is_bot = false`
+  const botFilter  = includeBots ? Prisma.empty : Prisma.sql`AND u."isBot" = false`
 
   const rows = await db.$queryRaw`
     WITH counts AS (
       SELECT player_id, SUM(games) AS total, SUM(wins) AS wins
       FROM (
-        SELECT g.player1_id AS player_id,
+        SELECT g."player1Id" AS player_id,
                COUNT(*)                                                AS games,
-               COUNT(*) FILTER (WHERE g.winner_id = g.player1_id)    AS wins
+               COUNT(*) FILTER (WHERE g."winnerId" = g."player1Id")   AS wins
         FROM games g
         WHERE true ${modeFilter}
-        GROUP BY g.player1_id
+        GROUP BY g."player1Id"
         UNION ALL
-        SELECT g.player2_id AS player_id,
+        SELECT g."player2Id" AS player_id,
                COUNT(*)                                                AS games,
-               COUNT(*) FILTER (WHERE g.winner_id = g.player2_id)    AS wins
+               COUNT(*) FILTER (WHERE g."winnerId" = g."player2Id")   AS wins
         FROM games g
-        WHERE g.player2_id IS NOT NULL ${modeFilter}
-        GROUP BY g.player2_id
+        WHERE g."player2Id" IS NOT NULL ${modeFilter}
+        GROUP BY g."player2Id"
       ) sub
       GROUP BY player_id
     )
     SELECT u.id,
-           u.display_name,
-           u.avatar_url,
-           u.is_bot,
+           u."displayName",
+           u."avatarUrl",
+           u."isBot",
            c.total,
            c.wins,
            ROUND(c.wins::numeric / NULLIF(c.total, 0), 4) AS win_rate
@@ -301,9 +301,9 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
     rank: i + 1,
     user: {
       id: row.id,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-      isBot: row.is_bot,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      isBot: row.isBot,
     },
     total:   Number(row.total),
     wins:    Number(row.wins),
