@@ -182,9 +182,9 @@ LIMIT 50
 ```
 
 **Checklist:**
-- [ ] Rewrite `getLeaderboard()` in `userService.js` using `db.$queryRaw`
-- [ ] Verify output shape matches existing consumers
-- [ ] Add test for the raw query result shape
+- [x] Rewrite `getLeaderboard()` in `userService.js` using `db.$queryRaw`
+- [x] Verify output shape matches existing consumers
+- [x] Add test for the raw query result shape
 - [ ] Run perf benchmark and record new numbers
 
 ---

@@ -2,6 +2,7 @@
  * User service — account management and stats.
  */
 import db from '../lib/db.js'
+import { Prisma } from '@prisma/client'
 import { DEFAULT_CONFIG as ML_DEFAULT_CONFIG } from '../ai/qLearning.js'
 
 const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
@@ -251,67 +252,62 @@ export async function getBotStats(botId) {
 }
 
 /**
- * Get the global leaderboard (top 50 by win rate, minimum 5 games).
+ * Get the global leaderboard (top 50 by win rate, minimum 1 game).
+ * Uses a single CTE query instead of 4 Prisma round trips.
  */
 export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50, includeBots = false } = {}) {
-  const whereMode = mode === 'pvp' ? 'PVP' : mode === 'pvai' ? 'PVAI' : undefined
+  const whereMode = mode === 'pvp' ? 'PVP' : mode === 'pvai' ? 'PVAI' : null
 
-  // Aggregate wins and total games per player
-  const modeWhere = whereMode ? { mode: whereMode } : {}
+  // Prisma.sql fragments for optional filters — interpolated safely as SQL, not parameters
+  const modeFilter = whereMode ? Prisma.sql`AND g.mode = ${whereMode}::"GameMode"` : Prisma.empty
+  const botFilter  = includeBots ? Prisma.empty : Prisma.sql`AND u.is_bot = false`
 
-  const [winners, asPlayer1, asPlayer2] = await Promise.all([
-    db.game.groupBy({
-      by: ['winnerId'],
-      where: { winnerId: { not: null }, ...modeWhere },
-      _count: { id: true },
-    }),
-    db.game.groupBy({
-      by: ['player1Id'],
-      where: modeWhere,
-      _count: { id: true },
-    }),
-    db.game.groupBy({
-      by: ['player2Id'],
-      where: { player2Id: { not: null }, ...modeWhere },
-      _count: { id: true },
-    }),
-  ])
+  const rows = await db.$queryRaw`
+    WITH counts AS (
+      SELECT player_id, SUM(games) AS total, SUM(wins) AS wins
+      FROM (
+        SELECT g.player1_id AS player_id,
+               COUNT(*)                                                AS games,
+               COUNT(*) FILTER (WHERE g.winner_id = g.player1_id)    AS wins
+        FROM games g
+        WHERE true ${modeFilter}
+        GROUP BY g.player1_id
+        UNION ALL
+        SELECT g.player2_id AS player_id,
+               COUNT(*)                                                AS games,
+               COUNT(*) FILTER (WHERE g.winner_id = g.player2_id)    AS wins
+        FROM games g
+        WHERE g.player2_id IS NOT NULL ${modeFilter}
+        GROUP BY g.player2_id
+      ) sub
+      GROUP BY player_id
+    )
+    SELECT u.id,
+           u.display_name,
+           u.avatar_url,
+           u.is_bot,
+           c.total,
+           c.wins,
+           ROUND(c.wins::numeric / NULLIF(c.total, 0), 4) AS win_rate
+    FROM counts c
+    JOIN users u ON u.id = c.player_id
+    WHERE c.total >= 1 ${botFilter}
+    ORDER BY win_rate DESC, c.total DESC
+    LIMIT ${limit}
+  `
 
-  const winMap = new Map(winners.map((w) => [w.winnerId, w._count.id]))
-
-  // Merge player1 and player2 game counts into a single total per user
-  const totalMap = new Map(asPlayer1.map((r) => [r.player1Id, r._count.id]))
-  for (const r of asPlayer2) {
-    totalMap.set(r.player2Id, (totalMap.get(r.player2Id) || 0) + r._count.id)
-  }
-
-  const allUserIds = [...totalMap.keys()]
-  const users = await db.user.findMany({
-    where: {
-      id: { in: allUserIds },
-      ...(includeBots ? {} : { isBot: false }),
-    },
-    select: { id: true, displayName: true, avatarUrl: true, isBot: true },
-  })
-  const userMap = new Map(users.map((u) => [u.id, u]))
-
-  const entries = [...totalMap.entries()]
-    .filter(([userId, total]) => total >= 1 && userMap.has(userId))
-    .map(([userId, total]) => ({
-      userId,
-      total,
-      wins: winMap.get(userId) || 0,
-      winRate: winMap.get(userId) ? winMap.get(userId) / total : 0,
-    }))
-    .sort((a, b) => b.winRate - a.winRate || b.total - a.total)
-    .slice(0, limit)
-
-  return entries.map((e, i) => ({
+  // COUNT/SUM return BigInt from the Postgres driver — coerce to Number for JSON safety.
+  return rows.map((row, i) => ({
     rank: i + 1,
-    user: userMap.get(e.userId) || { id: e.userId, displayName: 'Unknown', avatarUrl: null, isBot: false },
-    total: e.total,
-    wins: e.wins,
-    winRate: e.winRate,
+    user: {
+      id: row.id,
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url,
+      isBot: row.is_bot,
+    },
+    total:   Number(row.total),
+    wins:    Number(row.wins),
+    winRate: Number(row.win_rate),
   }))
 }
 

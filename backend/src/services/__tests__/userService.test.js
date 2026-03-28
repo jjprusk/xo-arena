@@ -15,10 +15,18 @@ vi.mock('../../lib/db.js', () => ({
       count: vi.fn(),
       groupBy: vi.fn(),
     },
+    $queryRaw: vi.fn(),
   },
 }))
 
-const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo } =
+vi.mock('@prisma/client', () => ({
+  Prisma: {
+    sql: (strings, ...values) => ({ strings, values }),
+    empty: { strings: [''], values: [] },
+  },
+}))
+
+const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo, getLeaderboard } =
   await import('../userService.js')
 const db = (await import('../../lib/db.js')).default
 
@@ -201,5 +209,44 @@ describe('getUserStats', () => {
     expect(stats.pvbot.byBot['bot_2'].wins).toBe(1)
     expect(stats.pvbot.byBot['bot_2'].played).toBe(2)
     expect(stats.pvbot.byBot['bot_2'].rate).toBe(0.5)
+  })
+})
+
+describe('getLeaderboard', () => {
+  it('maps raw SQL rows to the expected leaderboard shape', async () => {
+    db.$queryRaw.mockResolvedValue([
+      { id: 'u1', display_name: 'Alice', avatar_url: null, is_bot: false, total: 20n, wins: 16n, win_rate: '0.8000' },
+      { id: 'u2', display_name: 'Bob',   avatar_url: null, is_bot: false, total: 15n, wins:  9n, win_rate: '0.6000' },
+    ])
+
+    const result = await getLeaderboard()
+
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({
+      rank: 1,
+      user: { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false },
+      total: 20,
+      wins: 16,
+      winRate: 0.8,
+    })
+    expect(result[1].rank).toBe(2)
+    expect(result[1].user.displayName).toBe('Bob')
+  })
+
+  it('returns number types (not BigInt) for total, wins, winRate', async () => {
+    db.$queryRaw.mockResolvedValue([
+      { id: 'u1', display_name: 'Alice', avatar_url: null, is_bot: false, total: 10n, wins: 5n, win_rate: '0.5000' },
+    ])
+
+    const [entry] = await getLeaderboard()
+    expect(typeof entry.total).toBe('number')
+    expect(typeof entry.wins).toBe('number')
+    expect(typeof entry.winRate).toBe('number')
+  })
+
+  it('returns empty array when no rows', async () => {
+    db.$queryRaw.mockResolvedValue([])
+    const result = await getLeaderboard()
+    expect(result).toEqual([])
   })
 })
