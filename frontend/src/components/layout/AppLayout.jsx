@@ -34,10 +34,15 @@ export default function AppLayout() {
   const isAdmin = session?.user?.role === 'admin'
   const [authModalOpen, setAuthModalOpen] = useState(false)
 
-  // Sync the signed-in user to our DB on every new session
+  // Sync the signed-in user to our DB — once per browser session to avoid a
+  // round trip on every page navigation (sessionStorage survives nav, not tab close).
   useEffect(() => {
     if (!session?.user?.id) return
-    getToken().then(token => { if (token) api.users.sync(token) }).catch(() => {})
+    if (sessionStorage.getItem('xo_synced') === session.user.id) return
+    getToken()
+      .then(token => { if (token) return api.users.sync(token) })
+      .then(() => { sessionStorage.setItem('xo_synced', session.user.id) })
+      .catch(() => {})
   }, [session?.user?.id])
 
   function handleLogoClick(e) {

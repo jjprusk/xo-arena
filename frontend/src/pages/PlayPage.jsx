@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
 import { usePvpStore } from '../store/pvpStore.js'
+import { cachedFetch } from '../lib/api.js'
 import ModeSelection from '../components/game/ModeSelection.jsx'
 import GameBoard from '../components/game/GameBoard.jsx'
 import RoomLobby from '../components/room/RoomLobby.jsx'
@@ -16,6 +17,9 @@ export default function PlayPage() {
   const { status: pvpStatus, joinRoom, role, slug, isAutoRoom, displayName } = usePvpStore()
 
   const inviteUrl = slug ? `${window.location.origin}/play?join=${slug}` : ''
+
+  // Warm the bot cache in the background so "Challenge a Bot" opens instantly.
+  useEffect(() => { cachedFetch('/bots', 5 * 60_000).refresh.catch(() => {}) }, [])
 
   // Auto-create a room on arrival (unless joining or spectating via link)
   useEffect(() => {
