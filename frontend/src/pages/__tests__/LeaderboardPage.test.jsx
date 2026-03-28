@@ -4,12 +4,11 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../../lib/api.js', () => ({
-  api: {
-    get: vi.fn(),
-  },
+  api: {},
+  cachedFetch: vi.fn(),
 }))
 
-import { api } from '../../lib/api.js'
+import { cachedFetch } from '../../lib/api.js'
 import LeaderboardPage from '../LeaderboardPage.jsx'
 
 const MOCK_LEADERBOARD = [
@@ -37,7 +36,10 @@ const MOCK_LEADERBOARD = [
 ]
 
 beforeEach(() => {
-  api.get.mockResolvedValue({ leaderboard: MOCK_LEADERBOARD })
+  cachedFetch.mockReturnValue({
+    immediate: null,
+    refresh: Promise.resolve({ leaderboard: MOCK_LEADERBOARD }),
+  })
 })
 
 describe('LeaderboardPage', () => {
@@ -99,7 +101,10 @@ describe('LeaderboardPage', () => {
   })
 
   it('shows empty state when no players', async () => {
-    api.get.mockResolvedValueOnce({ leaderboard: [] })
+    cachedFetch.mockReturnValueOnce({
+      immediate: null,
+      refresh: Promise.resolve({ leaderboard: [] }),
+    })
     render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getByText(/no players yet/i)).toBeInTheDocument())
   })
@@ -109,6 +114,9 @@ describe('LeaderboardPage', () => {
     await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0))
 
     fireEvent.click(screen.getByRole('button', { name: 'weekly' }))
-    await waitFor(() => expect(api.get).toHaveBeenCalledWith(expect.stringContaining('period=weekly')))
+    await waitFor(() => expect(cachedFetch).toHaveBeenCalledWith(
+      expect.stringContaining('period=weekly'),
+      expect.any(Number),
+    ))
   })
 })

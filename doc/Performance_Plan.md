@@ -64,13 +64,13 @@ Not suitable (user-specific or must be fresh):
 **Expected outcome:** Leaderboard, Puzzles, Play (bot list) → Ready ≤ 200ms.
 
 **Checklist:**
-- [ ] Create `backend/src/utils/cache.js` with `get`, `set`, `invalidate`
-- [ ] Cache `GET /api/v1/leaderboard` (TTL 60s)
-- [ ] Cache `GET /api/v1/bots` (TTL 60s)
-- [ ] Cache `GET /api/v1/puzzles` (TTL 5 min — changes rarely)
-- [ ] Add `X-Cache` header to cached responses
-- [ ] Invalidate leaderboard cache after a game is recorded (`POST /api/v1/games`)
-- [ ] Invalidate bots cache after a bot is created/updated/deleted
+- [x] Create `backend/src/utils/cache.js` with `get`, `set`, `invalidate`
+- [x] Cache `GET /api/v1/leaderboard` (TTL 60s)
+- [x] Cache `GET /api/v1/bots` (TTL 60s)
+- [ ] ~~Cache `GET /api/v1/puzzles` (TTL 5 min)~~ — puzzles are pure JS computation, no DB call, skipped
+- [x] Add `X-Cache` header to cached responses
+- [x] Invalidate leaderboard cache after a game is recorded (`POST /api/v1/games`)
+- [x] Invalidate bots cache after a bot is created/updated/deleted
 - [ ] Run perf benchmark and record new numbers
 
 ---
@@ -106,11 +106,11 @@ data could be confusing.
 **Expected outcome:** Repeat visits to Leaderboard, Puzzles → Ready < 50ms.
 
 **Checklist:**
-- [ ] Add `cachedFetch(url, options, maxAgeMs)` to `frontend/src/lib/api.js`
-- [ ] Apply to `LeaderboardPage` data fetch
-- [ ] Apply to `PuzzlePage` puzzle list fetch
-- [ ] Apply to bot list fetch in `ModeSelection`
-- [ ] Verify stale data is never shown on user-specific pages
+- [x] Add `cachedFetch(url, maxAgeMs)` to `frontend/src/lib/api.js`
+- [x] Apply to `LeaderboardPage` data fetch
+- [ ] ~~Apply to `PuzzlePage` puzzle list fetch~~ — skipped: puzzles are random per request, showing a stale set would replay already-solved puzzles
+- [x] Apply to bot list fetch in `ModeSelection`
+- [x] Verify stale data is never shown on user-specific pages (stats, games, elo-history all use direct `api.get`)
 - [ ] Run perf benchmark (cold + warm) and record new numbers
 
 ---
@@ -210,6 +210,72 @@ See: https://www.prisma.io/docs/orm/more/upgrade-guides/upgrading-versions/upgra
 
 ---
 
+## Results Tracking
+
+Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in below.
+
+### Ready time (ms) — navigation start → spinner gone
+
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
+|-------------|----------|------------|------------|------------|------------|------------|
+| Play        | 638      | 638        |            |            |            |            |
+| Leaderboard | 638      | 639        |            |            |            |            |
+| Puzzles     | 637      | 634        |            |            |            |            |
+| Stats       | 644      | 634        |            |            |            |            |
+| Settings    | 623      | 637        |            |            |            |            |
+| ML Gym      | 636      | 630        |            |            |            |            |
+
+### TTFB (ms) — time to first byte
+
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
+|-------------|----------|------------|------------|------------|------------|------------|
+| Play        | 60       | 67         |            |            |            |            |
+| Leaderboard | 58       | 63         |            |            |            |            |
+| Puzzles     | 57       | 60         |            |            |            |            |
+| Stats       | 59       | 61         |            |            |            |            |
+| Settings    | 57       | 59         |            |            |            |            |
+| ML Gym      | 62       | 59         |            |            |            |            |
+
+### FCP (ms) — first contentful paint
+
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
+|-------------|----------|------------|------------|------------|------------|------------|
+| Play        | 132      | 136        |            |            |            |            |
+| Leaderboard | 124      | 136        |            |            |            |            |
+| Puzzles     | 132      | 124        |            |            |            |            |
+| Stats       | 136      | 132        |            |            |            |            |
+| Settings    | 120      | 128        |            |            |            |            |
+| ML Gym      | 124      | 128        |            |            |            |            |
+
+_Baseline measured 2026-03-28, Phase 1 measured 2026-03-28. Both on staging, 5 cold runs, median._
+
+### Phase 1 findings
+
+Phase 1 numbers are within noise of baseline (~±5ms). The backend cache **is working** —
+repeat and concurrent requests to `/leaderboard` and `/bots` now return from memory —
+but it does not improve cold first-visit times because the bottleneck is not the DB query.
+
+**Root cause identified:** FCP is ~128ms but Ready is ~635ms on every page — including
+Settings and Puzzles which have **no DB queries**. The ~500ms gap is common to all pages,
+which means something in the shared page-load path is slow, not the page-specific data.
+
+The most likely cause is **sequential API round trips through two Railway hops**
+(browser → frontend server → backend server ≈ 100–150ms each):
+
+1. Better Auth session check fires on mount (~150ms round trip)
+2. Page-specific data fetch starts only after auth resolves (~150ms)
+3. React re-renders content (~few ms)
+
+Two sequential hops at ~150ms each = ~300–350ms of unavoidable wait after FCP.
+The remaining ~150ms is React initialization and scheduling.
+
+**Implication for the plan:** Phase 2 (stale-while-revalidate) and Phase 3
+(combine Play API calls) directly attack this sequential-call problem and should
+produce the biggest cold-visit improvement. Phase 1's value is in reducing DB load
+under concurrent traffic, not reducing single-user latency.
+
+---
+
 ## How to Measure
 
 After each phase, run the benchmark and record results:
@@ -222,7 +288,7 @@ cd perf && node perf.js https://xo-arena-staging.up.railway.app --runs=5 --json
 node perf.js https://xo-arena.up.railway.app --runs=5 --json
 ```
 
-Compare `perf/results.json` against the baseline above.
+Fill in the tables above from the output summary.
 
 ---
 
