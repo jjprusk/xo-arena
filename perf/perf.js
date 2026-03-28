@@ -61,14 +61,28 @@ async function measurePage(browser, url) {
 
   const t0 = Date.now()
 
-  // 1. Wait for all network activity to settle (API calls included)
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 })
+  // 1. Wait for the HTML + JS bundle to load and React to mount.
+  //    'load' fires once the document and all static assets are fetched.
+  //    We do NOT use 'networkidle' — it waits 500ms after the last request,
+  //    creating an artificial ~635ms floor that hides real spinner timing.
+  await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
 
-  // 2. Wait for any spinner still in the DOM to disappear.
-  //    If no spinner is present this resolves immediately.
-  //    If React is still re-rendering after the last API response this catches it.
-  await page.waitForSelector('.animate-spin', { state: 'detached', timeout: 8_000 })
-    .catch(() => { /* page has no spinner or never showed one */ })
+  // 2. Wait for React to mount (header is the first stable landmark).
+  await page.waitForSelector('header', { timeout: 5_000 }).catch(() => {})
+
+  // 3. Try to catch the spinner appearing (it may render before or after 'load').
+  //    Short grace window — if the spinner never shows we skip straight to done.
+  const spinnerAppeared = await page
+    .waitForSelector('.animate-spin', { state: 'attached', timeout: 200 })
+    .then(() => true)
+    .catch(() => false)
+
+  // 4. If a spinner appeared, wait for it to leave the DOM.
+  //    This is the moment the user can actually interact with the page.
+  if (spinnerAppeared) {
+    await page.waitForSelector('.animate-spin', { state: 'detached', timeout: 10_000 })
+      .catch(() => {})
+  }
 
   const readyMs = Date.now() - t0
 

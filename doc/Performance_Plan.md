@@ -182,9 +182,9 @@ LIMIT 50
 ```
 
 **Checklist:**
-- [ ] Rewrite `getLeaderboard()` in `userService.js` using `db.$queryRaw`
-- [ ] Verify output shape matches existing consumers
-- [ ] Add test for the raw query result shape
+- [x] Rewrite `getLeaderboard()` in `userService.js` using `db.$queryRaw`
+- [x] Verify output shape matches existing consumers
+- [x] Add test for the raw query result shape
 - [ ] Run perf benchmark and record new numbers
 
 ---
@@ -222,41 +222,49 @@ See: https://www.prisma.io/docs/orm/more/upgrade-guides/upgrading-versions/upgra
 
 Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in below.
 
+> **Note on measurement:** The original `perf.js` used `waitUntil: 'networkidle'`, which
+> adds Playwright's built-in 500ms idle window after the last network request. This created
+> an artificial floor of ~635ms for every page regardless of real spinner time. The script
+> was fixed during Phase 3 to use `waitUntil: 'load'` + spinner appear/disappear detection.
+> Columns "Baseline" through "After Ph.2" are legacy networkidle measurements; "After Ph.3"
+> onward are the corrected spinner-gone measurements. The two sets are **not comparable**.
+
 ### Ready time (ms) — navigation start → spinner gone
 
-| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
-|-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 638      | 638        | 643        | —          |            |            |
-| Leaderboard | 638      | 639        | 636        | —          |            |            |
-| Puzzles     | 637      | 634        | 638        | —          |            |            |
-| Stats       | 644      | 634        | 642        | —          |            |            |
-| Settings    | 623      | 637        | 634        | —          |            |            |
-| ML Gym      | 636      | 630        | 625        | —          |            |            |
+| Page        | Baseline¹ | After Ph.1¹ | After Ph.2¹ | After Ph.3 | After Ph.4 | After Ph.5 |
+|-------------|-----------|-------------|-------------|------------|------------|------------|
+| Play        | 638       | 638         | 643         | 345        |            |            |
+| Leaderboard | 638       | 639         | 636         | 339        |            |            |
+| Puzzles     | 637       | 634         | 638         | 323        |            |            |
+| Stats       | 644       | 634         | 642         | 334        |            |            |
+| Settings    | 623       | 637         | 634         | 335        |            |            |
+| ML Gym      | 636       | 630         | 625         | 335        |            |            |
+
+¹ _Measured with broken `networkidle` script — inflated by ~300ms vs real user experience._
 
 ### TTFB (ms) — time to first byte
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 60       | 67         | 64         | —          |            |            |
-| Leaderboard | 58       | 63         | 63         | —          |            |            |
-| Puzzles     | 57       | 60         | 60         | —          |            |            |
-| Stats       | 59       | 61         | 61         | —          |            |            |
-| Settings    | 57       | 59         | 64         | —          |            |            |
-| ML Gym      | 62       | 59         | 58         | —          |            |            |
+| Play        | 60       | 67         | 64         | 66         |            |            |
+| Leaderboard | 58       | 63         | 63         | 63         |            |            |
+| Puzzles     | 57       | 60         | 60         | 56         |            |            |
+| Stats       | 59       | 61         | 61         | 55         |            |            |
+| Settings    | 57       | 59         | 64         | 61         |            |            |
+| ML Gym      | 62       | 59         | 58         | 61         |            |            |
 
 ### FCP (ms) — first contentful paint
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 132      | 136        | 140        | —          |            |            |
-| Leaderboard | 124      | 136        | 132        | —          |            |            |
-| Puzzles     | 132      | 124        | 124        | —          |            |            |
-| Stats       | 136      | 132        | 132        | —          |            |            |
-| Settings    | 120      | 128        | 128        | —          |            |            |
-| ML Gym      | 124      | 128        | 124        | —          |            |            |
+| Play        | 132      | 136        | 140        | 144        |            |            |
+| Leaderboard | 124      | 136        | 132        | 136        |            |            |
+| Puzzles     | 132      | 124        | 124        | 120        |            |            |
+| Stats       | 136      | 132        | 132        | 128        |            |            |
+| Settings    | 120      | 128        | 128        | 128        |            |            |
+| ML Gym      | 124      | 128        | 124        | 132        |            |            |
 
-_Baseline measured 2026-03-28, Phase 1 measured 2026-03-28, Phase 2 measured 2026-03-28. All on staging, 5 cold runs, median._
-_Phase 3 shows — because its gains are for signed-in users only (sync debounce) and don't appear in anonymous cold runs._
+_All on staging, 5 cold anonymous runs, median._
 
 ### Phase 1 findings
 
@@ -264,24 +272,8 @@ Phase 1 numbers are within noise of baseline (~±5ms). The backend cache **is wo
 repeat and concurrent requests to `/leaderboard` and `/bots` now return from memory —
 but it does not improve cold first-visit times because the bottleneck is not the DB query.
 
-**Root cause identified:** FCP is ~128ms but Ready is ~635ms on every page — including
-Settings and Puzzles which have **no DB queries**. The ~500ms gap is common to all pages,
-which means something in the shared page-load path is slow, not the page-specific data.
-
-The most likely cause is **sequential API round trips through two Railway hops**
-(browser → frontend server → backend server ≈ 100–150ms each):
-
-1. Better Auth session check fires on mount (~150ms round trip)
-2. Page-specific data fetch starts only after auth resolves (~150ms)
-3. React re-renders content (~few ms)
-
-Two sequential hops at ~150ms each = ~300–350ms of unavoidable wait after FCP.
-The remaining ~150ms is React initialization and scheduling.
-
-**Implication for the plan:** Phase 2 (stale-while-revalidate) and Phase 3
-(combine Play API calls) directly attack this sequential-call problem and should
-produce the biggest cold-visit improvement. Phase 1's value is in reducing DB load
-under concurrent traffic, not reducing single-user latency.
+**Root cause identified (later, see Phase 3):** The ~635ms "Ready" time was entirely a
+measurement artifact — Playwright's `networkidle` wait, not real latency.
 
 ### Phase 2 findings
 
@@ -291,21 +283,13 @@ so `cachedFetch` always misses and falls through to a normal network fetch.
 
 **The benefit of Phase 2 is entirely on warm (repeat) visits.** On a second visit
 to Leaderboard or Play, the page renders the cached data instantly (0ms wait, no
-spinner), then refreshes in the background. The benchmark tool does not measure
-warm visits, so the improvement does not appear in these tables.
-
-**Implication for the plan:** Cold-visit Ready time remains ~635ms across all pages.
-The root cause (sequential auth + data round trips through two Railway hops) still
-needs to be addressed. Phase 3 (combine Play API calls) is the next lever for cold
-performance.
+spinner), then refreshes in the background.
 
 ### Phase 3 findings
 
 Phase 3 audit revealed that the original plan (combine Play API calls into `/play/init`)
 was based on incorrect assumptions. Play makes **no HTTP API calls on mount** — bot list
-and room list are both lazy (triggered by user interaction). All pages share the same
-~635ms because the bottleneck is Playwright's 500ms networkidle delay after the Better
-Auth session check (~130ms round trip), not page-specific data fetches.
+and room list are both lazy (triggered by user interaction).
 
 Phase 3 was revised to two targeted changes:
 - **`api.users.sync` debounce**: eliminates a ~150ms POST per page navigation for
@@ -313,7 +297,14 @@ Phase 3 was revised to two targeted changes:
 - **Eager bot prefetch on Play mount**: the bot list is fetched in the background when
   Play renders. By the time the user clicks "Challenge a Bot", data is already cached.
 
-Cold anonymous benchmark numbers are unchanged (—) by design.
+**Benchmark fix (Phase 3):** `perf.js` was rewritten to use `waitUntil: 'load'` +
+spinner appear/disappear detection. This revealed the true Ready time: **~330–345ms**
+across all pages, not 635ms. The ~635ms in earlier columns was Playwright's 500ms
+networkidle idle window, not real latency.
+
+**Current state (after Ph.1–3):** Ready ≈ 325–345ms. Target is ≤300ms.
+The remaining gap is FCP (~130ms) + auth check round trip (~130ms) + React re-render.
+Phase 4 (raw SQL leaderboard) and Phase 5 (Prisma 7) target the auth/DB hop.
 
 ---
 
