@@ -226,8 +226,20 @@ change. No schema changes needed.
 - [x] Add `@prisma/adapter-pg` and `pg` to `backend/package.json`
 - [x] Update `backend/src/lib/db.js` to use `PrismaPg` adapter
 - [x] Run full test suite — all 262 pass
-- [ ] Deploy to staging and run perf benchmark
-- [ ] Record improvement vs Phase 4 baseline
+- [x] Deploy to staging and run perf benchmark
+- [x] Record improvement vs Phase 4 baseline
+
+### Phase 5 findings
+
+Phase 5 numbers are within noise of Phase 4 (~±10ms). Ready time is flat at
+~332–340ms across all pages.
+
+**Why no improvement:** The PrismaPg driver adapter was already in place since
+Phase 3 (it was added when setting up Prisma 7 support). The upgrade to Prisma
+7 formalised the adapter as the only option (no Rust binary at all), but since
+the IPC overhead was already eliminated in Phase 4, there was nothing left for
+Phase 5 to remove. The ~330ms floor is unchanged: FCP (~130ms) + auth check
+round trip (~130ms) + React re-render. Phase 6 targets that auth hop directly.
 
 ---
 
@@ -346,12 +358,12 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline¹ | After Ph.1¹ | After Ph.2¹ | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6 |
 |-------------|-----------|-------------|-------------|------------|------------|------------|------------|
-| Play        | 638       | 638         | 643         | 345        | 353        |            |            |
-| Leaderboard | 638       | 639         | 636         | 339        | 333        |            |            |
-| Puzzles     | 637       | 634         | 638         | 323        | 343        |            |            |
-| Stats       | 644       | 634         | 642         | 334        | 338        |            |            |
-| Settings    | 623       | 637         | 634         | 335        | 346        |            |            |
-| ML Gym      | 636       | 630         | 625         | 335        | 338        |            |            |
+| Play        | 638       | 638         | 643         | 345        | 353        | 340        |            |
+| Leaderboard | 638       | 639         | 636         | 339        | 333        | 338        |            |
+| Puzzles     | 637       | 634         | 638         | 323        | 343        | 332        |            |
+| Stats       | 644       | 634         | 642         | 334        | 338        | 339        |            |
+| Settings    | 623       | 637         | 634         | 335        | 346        | 336        |            |
+| ML Gym      | 636       | 630         | 625         | 335        | 338        | 340        |            |
 
 ¹ _Measured with broken `networkidle` script — inflated by ~300ms vs real user experience._
 
@@ -359,23 +371,23 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6 |
 |-------------|----------|------------|------------|------------|------------|------------|------------|
-| Play        | 60       | 67         | 64         | 66         | 66         |            |            |
-| Leaderboard | 58       | 63         | 63         | 63         | 63         |            |            |
-| Puzzles     | 57       | 60         | 60         | 56         | 60         |            |            |
-| Stats       | 59       | 61         | 61         | 55         | 62         |            |            |
-| Settings    | 57       | 59         | 64         | 61         | 68         |            |            |
-| ML Gym      | 62       | 59         | 58         | 61         | 61         |            |            |
+| Play        | 60       | 67         | 64         | 66         | 66         | 64         |            |
+| Leaderboard | 58       | 63         | 63         | 63         | 63         | 61         |            |
+| Puzzles     | 57       | 60         | 60         | 56         | 60         | 62         |            |
+| Stats       | 59       | 61         | 61         | 55         | 62         | 67         |            |
+| Settings    | 57       | 59         | 64         | 61         | 68         | 61         |            |
+| ML Gym      | 62       | 59         | 58         | 61         | 61         | 60         |            |
 
 ### FCP (ms) — first contentful paint
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 | After Ph.6 |
 |-------------|----------|------------|------------|------------|------------|------------|------------|
-| Play        | 132      | 136        | 140        | 144        | 144        |            |            |
-| Leaderboard | 124      | 136        | 132        | 136        | 128        |            |            |
-| Puzzles     | 132      | 124        | 124        | 120        | 136        |            |            |
-| Stats       | 136      | 132        | 132        | 128        | 136        |            |            |
-| Settings    | 120      | 128        | 128        | 128        | 140        |            |            |
-| ML Gym      | 124      | 128        | 124        | 132        | 132        |            |            |
+| Play        | 132      | 136        | 140        | 144        | 144        | 132        |            |
+| Leaderboard | 124      | 136        | 132        | 136        | 128        | 136        |            |
+| Puzzles     | 132      | 124        | 124        | 120        | 136        | 128        |            |
+| Stats       | 136      | 132        | 132        | 128        | 136        | 132        |            |
+| Settings    | 120      | 128        | 128        | 128        | 140        | 128        |            |
+| ML Gym      | 124      | 128        | 124        | 132        | 132        | 136        |            |
 
 _All on staging, 5 cold anonymous runs, median._
 
