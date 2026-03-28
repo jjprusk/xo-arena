@@ -3,6 +3,7 @@ import http from 'http'
 import app, { registerRoutes } from './app.js'
 import logger from './logger.js'
 import db from './lib/db.js'
+import { runSeed } from '../prisma/seed.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -37,6 +38,14 @@ registerRoutes(app, {
 })
 
 const server = http.createServer(app)
+
+// Seed DB (idempotent — safe to run on every startup)
+try {
+  await runSeed()
+  logger.info('DB seed complete')
+} catch (err) {
+  logger.warn({ err: err.message }, 'DB seed failed (non-fatal)')
+}
 
 // Pre-warm the DB connection pool so first requests don't pay connection cost
 db.$connect().catch((err) => logger.warn('DB pre-connect failed', { err }))
