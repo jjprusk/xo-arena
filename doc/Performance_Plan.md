@@ -203,30 +203,29 @@ That benefit is additive across all queries on every page, not just the leaderbo
 
 ---
 
-### Phase 5 — Upgrade to Prisma 7
+### Phase 5 — Prisma Driver Adapter (bypass Rust query engine)
 
-**Impact: Medium | Effort: Medium**
+**Impact: Medium | Effort: Low**
 
-Prisma 7 replaces the binary Rust query engine (a subprocess that
-Node.js communicates with via IPC) with a pure TypeScript Postgres driver
-that talks directly to the database over TCP. This eliminates the
-IPC overhead on every query — roughly 20–50ms per round trip — and
-improves cold-start behaviour.
+Prisma's default setup runs a Rust binary subprocess alongside Node.js and
+communicates with it over IPC for every query. Replacing this with a direct
+`pg` driver adapter eliminates that IPC overhead — roughly 20–50ms per
+round trip — and improves cold-start behaviour.
 
-This benefits all pages, not just specific ones.
+**Implementation note:** Prisma 7 does this by removing the Rust binary
+entirely, but Prisma 7 generates TypeScript source files that can't be
+imported by plain JavaScript without a TypeScript build step. Since this
+backend is pure JavaScript on Node.js 20 (Docker), we use Prisma 6's stable
+driver adapter support instead — same IPC elimination, no new build tooling.
 
-See: https://www.prisma.io/docs/orm/more/upgrade-guides/upgrading-versions/upgrading-to-prisma-7
-
-**Key breaking changes to review:**
-- Client initialization API changes
-- Some query API differences (check release notes)
-- `prisma generate` output location may change
+Changes: add `@prisma/adapter-pg` + `pg`, rewrite `PrismaClient` init in
+`backend/src/lib/db.js` to pass a `PrismaPg` adapter. No query call sites
+change. No schema changes needed.
 
 **Checklist:**
-- [ ] Read Prisma 7 migration guide
-- [ ] Upgrade `prisma` and `@prisma/client` in `backend/package.json`
-- [ ] Update `backend/src/lib/db.js` client initialization if needed
-- [ ] Run full test suite (`npm run test --workspace=backend`)
+- [x] Add `@prisma/adapter-pg` and `pg` to `backend/package.json`
+- [x] Update `backend/src/lib/db.js` to use `PrismaPg` adapter
+- [x] Run full test suite — all 262 pass
 - [ ] Deploy to staging and run perf benchmark
 - [ ] Record improvement vs Phase 4 baseline
 

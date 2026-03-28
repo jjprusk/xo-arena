@@ -34,13 +34,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         working-directory: backend
-        run: npm install --legacy-peer-deps --ignore-scripts
+        run: npm install --no-package-lock --legacy-peer-deps --ignore-scripts
 
       - name: Generate Prisma client
         working-directory: backend
@@ -63,6 +63,7 @@ jobs:
           BETTER_AUTH_URL: http://localhost:3000
           FRONTEND_URL: http://localhost:5173
           NODE_ENV: test
+          NODE_OPTIONS: --experimental-transform-types
 
   frontend-test:
     name: Frontend tests + build
@@ -73,7 +74,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 

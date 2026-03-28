@@ -2,7 +2,7 @@
  * User service — account management and stats.
  */
 import db from '../lib/db.js'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../generated/prisma/client.ts'
 import { DEFAULT_CONFIG as ML_DEFAULT_CONFIG } from '../ai/qLearning.js'
 
 const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
