@@ -122,7 +122,7 @@ export async function updateUser(id, { displayName, avatarUrl, preferences }) {
  * Compute per-user stats from the Games table.
  */
 export async function getUserStats(userId) {
-  const [pvpGames, pvaiGames, pvbotGames] = await Promise.all([
+  const [pvpGames, pvaiGames, pvbotGames, recent] = await Promise.all([
     db.game.findMany({
       where: {
         mode: 'PVP',
@@ -139,6 +139,22 @@ export async function getUserStats(userId) {
       select: {
         outcome: true, winnerId: true, player2Id: true,
         player2: { select: { id: true, displayName: true, avatarUrl: true } },
+      },
+    }),
+    db.game.findMany({
+      where: {
+        OR: [{ player1Id: userId }, { player2Id: userId }],
+      },
+      orderBy: { endedAt: 'desc' },
+      take: 20,
+      select: {
+        outcome: true,
+        winnerId: true,
+        mode: true,
+        difficulty: true,
+        endedAt: true,
+        roomName: true,
+        player2: { select: { displayName: true, isBot: true } },
       },
     }),
   ])
@@ -184,24 +200,6 @@ export async function getUserStats(userId) {
   for (const entry of Object.values(pvbotByBot)) {
     entry.rate = entry.played > 0 ? entry.wins / entry.played : 0
   }
-
-  // Last 20 games for streak grid (include bot display name for PVBOT)
-  const recent = await db.game.findMany({
-    where: {
-      OR: [{ player1Id: userId }, { player2Id: userId }],
-    },
-    orderBy: { endedAt: 'desc' },
-    take: 20,
-    select: {
-      outcome: true,
-      winnerId: true,
-      mode: true,
-      difficulty: true,
-      endedAt: true,
-      roomName: true,
-      player2: { select: { displayName: true, isBot: true } },
-    },
-  })
 
   return {
     totalGames,
