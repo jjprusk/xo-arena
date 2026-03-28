@@ -1,8 +1,8 @@
 import React from 'react'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 
 export default function SignedOut({ children }) {
-  const { data: session, isPending } = useSession()
+  const { data: session, isPending } = useOptimisticSession()
   if (isPending || session) return null
   return children
 }

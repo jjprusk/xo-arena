@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
 import { api } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
@@ -30,7 +30,7 @@ const BOTTOM_NAV = [
 
 export default function AppLayout() {
   const navigate = useNavigate()
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
   const [authModalOpen, setAuthModalOpen] = useState(false)
 

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useSession } from '../lib/auth-client.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
 
 export default function ProfilePage() {
-  const { data: session, isPending } = useSession()
+  const { data: session, isPending } = useOptimisticSession()
   const isLoaded = !isPending
   const isSignedIn = !!session?.user
   const clerkUser = session?.user ?? null

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
-import { useSession } from '../lib/auth-client.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 
 const ALGORITHM_LABELS = {
   Q_LEARNING: 'Q-Learning',
@@ -18,7 +18,7 @@ const ALGORITHM_LABELS = {
 
 export default function BotProfilePage() {
   const { id } = useParams()
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const [bot, setBot] = useState(null)
   const [botStats, setBotStats] = useState(null)
   const [eloData, setEloData] = useState(null)

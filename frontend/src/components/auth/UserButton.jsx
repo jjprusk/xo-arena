@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useSession, signOut } from '../../lib/auth-client.js'
+import { signOut } from '../../lib/auth-client.js'
+import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 
 export default function UserButton({ afterSignOutUrl = '/play' }) {
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
   const navigate = useNavigate()
@@ -28,6 +29,7 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
 
   async function handleSignOut() {
     setOpen(false)
+    clearSessionCache()
     await signOut()
     navigate(afterSignOutUrl)
   }

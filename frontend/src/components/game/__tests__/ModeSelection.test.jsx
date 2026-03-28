@@ -26,9 +26,10 @@ vi.mock('../../../lib/api.js', () => ({
   })),
 }))
 
-vi.mock('../../../lib/auth-client.js', () => ({
-  useSession: vi.fn(() => ({
+vi.mock('../../../lib/useOptimisticSession.js', () => ({
+  useOptimisticSession: vi.fn(() => ({
     data: { user: { id: 'u1', name: 'Tester' } },
+    isPending: false,
   })),
 }))
 

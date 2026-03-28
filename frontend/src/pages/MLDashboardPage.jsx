@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { useSession } from '../lib/auth-client.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import {
   LineChart, Line, BarChart, Bar,
@@ -42,7 +42,7 @@ function playerLabel(profile, domainUserId, currentUserName) {
 }
 
 export default function GymPage() {
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
   const currentUserName = user?.name || user?.username || null
 

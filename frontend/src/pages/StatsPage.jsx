@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useSession } from '../lib/auth-client.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 
@@ -19,7 +19,7 @@ const OUTCOME_COLOR = {
 
 export default function StatsPage() {
   const location = useLocation()
-  const { data: session, isPending } = useSession()
+  const { data: session, isPending } = useOptimisticSession()
   const isLoaded = !isPending
   const isSignedIn = !!session?.user
   const user = session?.user ?? null
