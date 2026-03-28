@@ -218,36 +218,61 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 638      |            |            |            |            |            |
-| Leaderboard | 638      |            |            |            |            |            |
-| Puzzles     | 637      |            |            |            |            |            |
-| Stats       | 644      |            |            |            |            |            |
-| Settings    | 623      |            |            |            |            |            |
-| ML Gym      | 636      |            |            |            |            |            |
+| Play        | 638      | 638        |            |            |            |            |
+| Leaderboard | 638      | 639        |            |            |            |            |
+| Puzzles     | 637      | 634        |            |            |            |            |
+| Stats       | 644      | 634        |            |            |            |            |
+| Settings    | 623      | 637        |            |            |            |            |
+| ML Gym      | 636      | 630        |            |            |            |            |
 
 ### TTFB (ms) — time to first byte
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 60       |            |            |            |            |            |
-| Leaderboard | 58       |            |            |            |            |            |
-| Puzzles     | 57       |            |            |            |            |            |
-| Stats       | 59       |            |            |            |            |            |
-| Settings    | 57       |            |            |            |            |            |
-| ML Gym      | 62       |            |            |            |            |            |
+| Play        | 60       | 67         |            |            |            |            |
+| Leaderboard | 58       | 63         |            |            |            |            |
+| Puzzles     | 57       | 60         |            |            |            |            |
+| Stats       | 59       | 61         |            |            |            |            |
+| Settings    | 57       | 59         |            |            |            |            |
+| ML Gym      | 62       | 59         |            |            |            |            |
 
 ### FCP (ms) — first contentful paint
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 132      |            |            |            |            |            |
-| Leaderboard | 124      |            |            |            |            |            |
-| Puzzles     | 132      |            |            |            |            |            |
-| Stats       | 136      |            |            |            |            |            |
-| Settings    | 120      |            |            |            |            |            |
-| ML Gym      | 124      |            |            |            |            |            |
+| Play        | 132      | 136        |            |            |            |            |
+| Leaderboard | 124      | 136        |            |            |            |            |
+| Puzzles     | 132      | 124        |            |            |            |            |
+| Stats       | 136      | 132        |            |            |            |            |
+| Settings    | 120      | 128        |            |            |            |            |
+| ML Gym      | 124      | 128        |            |            |            |            |
 
-_Baseline measured 2026-03-28 on staging, 5 cold runs, median. See `perf/results.json`._
+_Baseline measured 2026-03-28, Phase 1 measured 2026-03-28. Both on staging, 5 cold runs, median._
+
+### Phase 1 findings
+
+Phase 1 numbers are within noise of baseline (~±5ms). The backend cache **is working** —
+repeat and concurrent requests to `/leaderboard` and `/bots` now return from memory —
+but it does not improve cold first-visit times because the bottleneck is not the DB query.
+
+**Root cause identified:** FCP is ~128ms but Ready is ~635ms on every page — including
+Settings and Puzzles which have **no DB queries**. The ~500ms gap is common to all pages,
+which means something in the shared page-load path is slow, not the page-specific data.
+
+The most likely cause is **sequential API round trips through two Railway hops**
+(browser → frontend server → backend server ≈ 100–150ms each):
+
+1. Better Auth session check fires on mount (~150ms round trip)
+2. Page-specific data fetch starts only after auth resolves (~150ms)
+3. React re-renders content (~few ms)
+
+Two sequential hops at ~150ms each = ~300–350ms of unavoidable wait after FCP.
+The remaining ~150ms is React initialization and scheduling.
+
+**Implication for the plan:** Phase 2 (stale-while-revalidate) and Phase 3
+(combine Play API calls) directly attack this sequential-call problem and should
+produce the biggest cold-visit improvement. Phase 1's value is in reducing DB load
+under concurrent traffic, not reducing single-user latency.
 
 ---
 
