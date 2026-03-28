@@ -185,7 +185,21 @@ LIMIT 50
 - [x] Rewrite `getLeaderboard()` in `userService.js` using `db.$queryRaw`
 - [x] Verify output shape matches existing consumers
 - [x] Add test for the raw query result shape
-- [ ] Run perf benchmark and record new numbers
+- [x] Run perf benchmark and record new numbers
+
+### Phase 4 findings
+
+Phase 4 numbers are within noise of Phase 3 (~±10ms). The raw SQL rewrite is a
+genuine improvement in DB efficiency — 4 queries → 1 — which reduces latency under
+concurrent load and cuts database CPU. But cold single-user Ready time barely moved
+because the DB was never the bottleneck: Leaderboard improved by 6ms (339→333ms),
+other pages are flat.
+
+**Root cause unchanged:** The floor is FCP (~130ms) + one auth round trip (~130ms)
++ React re-render, totalling ~330ms irreducible latency for the current architecture.
+Phase 5 (Prisma 7) eliminates the IPC overhead on every Prisma call (~20–50ms) by
+replacing the Rust binary query engine with a direct TypeScript Postgres driver.
+That benefit is additive across all queries on every page, not just the leaderboard.
 
 ---
 
@@ -233,12 +247,12 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline¹ | After Ph.1¹ | After Ph.2¹ | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|-----------|-------------|-------------|------------|------------|------------|
-| Play        | 638       | 638         | 643         | 345        |            |            |
-| Leaderboard | 638       | 639         | 636         | 339        |            |            |
-| Puzzles     | 637       | 634         | 638         | 323        |            |            |
-| Stats       | 644       | 634         | 642         | 334        |            |            |
-| Settings    | 623       | 637         | 634         | 335        |            |            |
-| ML Gym      | 636       | 630         | 625         | 335        |            |            |
+| Play        | 638       | 638         | 643         | 345        | 353        |            |
+| Leaderboard | 638       | 639         | 636         | 339        | 333        |            |
+| Puzzles     | 637       | 634         | 638         | 323        | 343        |            |
+| Stats       | 644       | 634         | 642         | 334        | 338        |            |
+| Settings    | 623       | 637         | 634         | 335        | 346        |            |
+| ML Gym      | 636       | 630         | 625         | 335        | 338        |            |
 
 ¹ _Measured with broken `networkidle` script — inflated by ~300ms vs real user experience._
 
@@ -246,23 +260,23 @@ Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 60       | 67         | 64         | 66         |            |            |
-| Leaderboard | 58       | 63         | 63         | 63         |            |            |
-| Puzzles     | 57       | 60         | 60         | 56         |            |            |
-| Stats       | 59       | 61         | 61         | 55         |            |            |
-| Settings    | 57       | 59         | 64         | 61         |            |            |
-| ML Gym      | 62       | 59         | 58         | 61         |            |            |
+| Play        | 60       | 67         | 64         | 66         | 66         |            |
+| Leaderboard | 58       | 63         | 63         | 63         | 63         |            |
+| Puzzles     | 57       | 60         | 60         | 56         | 60         |            |
+| Stats       | 59       | 61         | 61         | 55         | 62         |            |
+| Settings    | 57       | 59         | 64         | 61         | 68         |            |
+| ML Gym      | 62       | 59         | 58         | 61         | 61         |            |
 
 ### FCP (ms) — first contentful paint
 
 | Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
 |-------------|----------|------------|------------|------------|------------|------------|
-| Play        | 132      | 136        | 140        | 144        |            |            |
-| Leaderboard | 124      | 136        | 132        | 136        |            |            |
-| Puzzles     | 132      | 124        | 124        | 120        |            |            |
-| Stats       | 136      | 132        | 132        | 128        |            |            |
-| Settings    | 120      | 128        | 128        | 128        |            |            |
-| ML Gym      | 124      | 128        | 124        | 132        |            |            |
+| Play        | 132      | 136        | 140        | 144        | 144        |            |
+| Leaderboard | 124      | 136        | 132        | 136        | 128        |            |
+| Puzzles     | 132      | 124        | 124        | 120        | 136        |            |
+| Stats       | 136      | 132        | 132        | 128        | 136        |            |
+| Settings    | 120      | 128        | 128        | 128        | 140        |            |
+| ML Gym      | 124      | 128        | 124        | 132        | 132        |            |
 
 _All on staging, 5 cold anonymous runs, median._
 
