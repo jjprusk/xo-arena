@@ -20,9 +20,8 @@ const OUTCOME_COLOR = {
 export default function StatsPage() {
   const location = useLocation()
   const { data: session, isPending } = useOptimisticSession()
-  const isLoaded = !isPending
-  const isSignedIn = !!session?.user
   const user = session?.user ?? null
+  const isSignedIn = !!user
   const displayName = user?.name || user?.username || 'You'
   const [stats, setStats] = useState(null)
   const [dbUserId, setDbUserId] = useState(null)
@@ -33,8 +32,7 @@ export default function StatsPage() {
   const [expandedProfile, setExpandedProfile] = useState(null)
 
   useEffect(() => {
-    if (!isLoaded) return
-    if (!isSignedIn) {
+    if (!user) {
       setStats(null)
       return
     }
@@ -45,12 +43,12 @@ export default function StatsPage() {
     async function load() {
       try {
         const token = await getToken()
-        const { user } = await api.users.sync(token)
-        setDbUserId(user.id)
+        const { user: dbUser } = await api.users.sync(token)
+        setDbUserId(dbUser.id)
         const [{ stats: s }, eloRes, mlRes] = await Promise.all([
-          api.users.stats(user.id),
-          api.users.eloHistory(user.id).catch(() => null),
-          api.users.mlProfiles(user.id, token).catch(() => null),
+          api.users.stats(dbUser.id),
+          api.users.eloHistory(dbUser.id).catch(() => null),
+          api.users.mlProfiles(dbUser.id, token).catch(() => null),
         ])
         setStats(s)
         if (eloRes) setEloData(eloRes)
@@ -63,9 +61,10 @@ export default function StatsPage() {
     }
 
     load()
-  }, [isSignedIn, isLoaded, location.key])
+  }, [user?.id, location.key])
 
-  if (!isLoaded || loading) {
+  // Show spinner while loading data, or while auth is still resolving with no cache
+  if (loading || (isPending && !user)) {
     return (
       <div className="max-w-lg mx-auto flex items-center justify-center py-16">
         <div className="w-8 h-8 border-4 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
@@ -73,7 +72,8 @@ export default function StatsPage() {
     )
   }
 
-  if (!isSignedIn) {
+  // Auth resolved and not signed in
+  if (!isPending && !isSignedIn) {
     return (
       <div className="max-w-lg mx-auto space-y-6">
         <PageHeader title="Stats" />
