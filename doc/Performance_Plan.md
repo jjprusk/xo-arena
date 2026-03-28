@@ -64,13 +64,13 @@ Not suitable (user-specific or must be fresh):
 **Expected outcome:** Leaderboard, Puzzles, Play (bot list) → Ready ≤ 200ms.
 
 **Checklist:**
-- [ ] Create `backend/src/utils/cache.js` with `get`, `set`, `invalidate`
-- [ ] Cache `GET /api/v1/leaderboard` (TTL 60s)
-- [ ] Cache `GET /api/v1/bots` (TTL 60s)
-- [ ] Cache `GET /api/v1/puzzles` (TTL 5 min — changes rarely)
-- [ ] Add `X-Cache` header to cached responses
-- [ ] Invalidate leaderboard cache after a game is recorded (`POST /api/v1/games`)
-- [ ] Invalidate bots cache after a bot is created/updated/deleted
+- [x] Create `backend/src/utils/cache.js` with `get`, `set`, `invalidate`
+- [x] Cache `GET /api/v1/leaderboard` (TTL 60s)
+- [x] Cache `GET /api/v1/bots` (TTL 60s)
+- [ ] ~~Cache `GET /api/v1/puzzles` (TTL 5 min)~~ — puzzles are pure JS computation, no DB call, skipped
+- [x] Add `X-Cache` header to cached responses
+- [x] Invalidate leaderboard cache after a game is recorded (`POST /api/v1/games`)
+- [x] Invalidate bots cache after a bot is created/updated/deleted
 - [ ] Run perf benchmark and record new numbers
 
 ---
@@ -210,6 +210,47 @@ See: https://www.prisma.io/docs/orm/more/upgrade-guides/upgrading-versions/upgra
 
 ---
 
+## Results Tracking
+
+Run `cd perf && node perf.js <url> --runs=5 --json` after each phase and fill in below.
+
+### Ready time (ms) — navigation start → spinner gone
+
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
+|-------------|----------|------------|------------|------------|------------|------------|
+| Play        | 638      |            |            |            |            |            |
+| Leaderboard | 638      |            |            |            |            |            |
+| Puzzles     | 637      |            |            |            |            |            |
+| Stats       | 644      |            |            |            |            |            |
+| Settings    | 623      |            |            |            |            |            |
+| ML Gym      | 636      |            |            |            |            |            |
+
+### TTFB (ms) — time to first byte
+
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
+|-------------|----------|------------|------------|------------|------------|------------|
+| Play        | 60       |            |            |            |            |            |
+| Leaderboard | 58       |            |            |            |            |            |
+| Puzzles     | 57       |            |            |            |            |            |
+| Stats       | 59       |            |            |            |            |            |
+| Settings    | 57       |            |            |            |            |            |
+| ML Gym      | 62       |            |            |            |            |            |
+
+### FCP (ms) — first contentful paint
+
+| Page        | Baseline | After Ph.1 | After Ph.2 | After Ph.3 | After Ph.4 | After Ph.5 |
+|-------------|----------|------------|------------|------------|------------|------------|
+| Play        | 132      |            |            |            |            |            |
+| Leaderboard | 124      |            |            |            |            |            |
+| Puzzles     | 132      |            |            |            |            |            |
+| Stats       | 136      |            |            |            |            |            |
+| Settings    | 120      |            |            |            |            |            |
+| ML Gym      | 124      |            |            |            |            |            |
+
+_Baseline measured 2026-03-28 on staging, 5 cold runs, median. See `perf/results.json`._
+
+---
+
 ## How to Measure
 
 After each phase, run the benchmark and record results:
@@ -222,7 +263,7 @@ cd perf && node perf.js https://xo-arena-staging.up.railway.app --runs=5 --json
 node perf.js https://xo-arena.up.railway.app --runs=5 --json
 ```
 
-Compare `perf/results.json` against the baseline above.
+Fill in the tables above from the output summary.
 
 ---
 
