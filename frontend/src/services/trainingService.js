@@ -326,6 +326,8 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
 
   let wins = 0, losses = 0, draws = 0, totalQDelta = 0
   let actualEpisodes = 0
+  let batchStartTime = performance.now()
+  let batchEpisodeCount = 0
 
   for (let i = 0; i < iterations; i++) {
     if (cancelRef?.current) {
@@ -340,6 +342,7 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
 
     const result = _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm)
     actualEpisodes++
+    batchEpisodeCount++
     if (mlMarkConfig === 'alternating') mlMark = mlMark === 'X' ? 'O' : 'X'
 
     if (result.outcome === 'WIN')       wins++
@@ -383,11 +386,12 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
         episodesWithoutImprovement += PROGRESS_INTERVAL
       }
       if (episodesWithoutImprovement >= (earlyStop.patience ?? 200)) {
+        const avgGameMs = batchEpisodeCount > 0 ? (performance.now() - batchStartTime) / batchEpisodeCount : 0
         onProgress?.({
           episode: i + 1, totalEpisodes: iterations,
           winRate:  wins / (i + 1), lossRate: losses / (i + 1), drawRate: draws / (i + 1),
           avgQDelta: totalQDelta / (i + 1), epsilon: engine.epsilon,
-          outcomes: { wins, losses, draws }, earlyStop: true,
+          outcomes: { wins, losses, draws }, avgGameMs, earlyStop: true,
         })
         return {
           weights:    engine.toJSON(),
@@ -402,6 +406,7 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
     // Progress update + event-loop yield
     if ((i + 1) % PROGRESS_INTERVAL === 0 || i === iterations - 1) {
       const done = i + 1
+      const avgGameMs = batchEpisodeCount > 0 ? (performance.now() - batchStartTime) / batchEpisodeCount : 0
       onProgress?.({
         episode: done, totalEpisodes: iterations,
         winRate:  done > 0 ? wins   / done : 0,
@@ -410,7 +415,10 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
         avgQDelta: done > 0 ? totalQDelta / done : 0,
         epsilon: engine.epsilon,
         outcomes: { wins, losses, draws },
+        avgGameMs,
       })
+      batchStartTime = performance.now()
+      batchEpisodeCount = 0
       // Yield to the event loop so React can re-render
       await new Promise(r => setTimeout(r, 0))
     }
