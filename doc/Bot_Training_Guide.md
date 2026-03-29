@@ -73,7 +73,7 @@ Controls how much future rewards are valued vs immediate ones.
 
 For tic-tac-toe specifically, γ = 0.9 is ideal since games are at most 9 moves.
 
-> **In the app:** γ is **not exposed in the Train tab** for any algorithm. It is hardcoded at 0.9 (0.99 for AlphaZero). For tabular methods only, γ can be tuned via the **Auto-Tuner** tab.
+> **In the app:** γ is exposed in the **DQN Train tab** as the **"Gamma (γ)"** dropdown (0.85 / 0.90 / 0.95 / 0.99). For all other algorithms it is hardcoded (0.9 for tabular, 0.99 for AlphaZero). For tabular methods only, γ can also be swept via the **Auto-Tuner** tab.
 
 ### Learning Rate (α)
 Controls how aggressively Q-values are updated per step.
@@ -289,29 +289,27 @@ Controls how aggressively Q-values are updated per step.
 | **Batch** | 32 | Samples per gradient step | Yes — Train tab |
 | **Replay buffer** | 10,000 | Experiences stored for random sampling | Yes — Train tab |
 | **Target update** | 100 | Steps between target network syncs | Yes — Train tab |
-| **Hidden size** | 32 | Neurons in the single hidden layer (16/32/64/128) | Yes — Train tab |
+| **Network architecture** | [32] | 1–3 hidden layers, each 8/16/32/64/128 neurons | Yes — Train tab |
+| **Gamma (γ)** | 0.90 | Discount factor (0.85 / 0.90 / 0.95 / 0.99) | Yes — Train tab |
 | Decay schedule | Exponential | Epsilon decay curve | Yes — Train tab |
 | Rate | 0.9999 | Per-episode decay multiplier (Exponential only) | Yes — Train tab |
 | Epsilon min | 0.05 | Minimum epsilon floor | Yes — Train tab |
 | Reset ε to 1.0 at start | checked | Whether to restart exploration | Yes — Train tab |
 | Learning rate (α) | 0.001 | Adam optimizer step size | **Hardcoded** — not exposed |
-| Discount factor (γ) | 0.9 | Future reward weighting | **Hardcoded** — not exposed |
-| Network architecture | set at creation | Full layer shape e.g. [64, 64] | **Creation only** |
 
-> **Important:** The "Hidden size" control in the Train tab sets the width of a **single hidden layer** for that session (e.g., 64 → architecture `[9, 64, 9]`). Multi-layer architectures like `[9, 64, 64, 9]` are only configurable at **bot creation time** using the layer builder. Once created, the architecture is fixed — only the hidden size of the widest layer can be tweaked per-session.
->
-> Learning rate (α=0.001) and discount factor (γ=0.9) are **hardcoded** and cannot be changed from the UI. These defaults are well-tuned for tic-tac-toe with Adam optimizer.
+> **Architecture changes reset weights.** If you change the layer layout (e.g., [32] → [64, 64]) the Train tab will show an amber warning and the existing trained weights will be discarded — training starts fresh with the new shape. The model's stored architecture is updated to match after the session completes.
 
 ### Recommended Settings
 
 | UI Label | Value | Notes |
 |----------|-------|-------|
-| Hidden size | **64** | Better capacity than default 32; 128 has diminishing returns |
+| Network architecture | **[64, 64]** | Two layers; best quality/speed tradeoff for tic-tac-toe |
+| Gamma (γ) | **0.95** | Better than default 0.90 — plans further ahead in 9-move games |
 | Decay schedule | **Linear** | Most predictable for a fixed episode budget |
 | Rate | **0.9999** | Default for DQN; reaches ε≈0.05 by ~29,950 episodes |
 | Epsilon min | **0.05** | |
 | Reset ε to 1.0 at start | **checked** | |
-| Batch | **32** | Default; increase to 64 only for Hidden size=128 |
+| Batch | **32** | Default; increase to 64 for [128, 128] nets |
 | Replay buffer | **10,000** | Good for 30k-episode runs |
 | Target update | **100** | Default; do not lower below 50 |
 
@@ -337,22 +335,23 @@ Controls how aggressively Q-values are updated per step.
 
 ### Network Architecture Guide
 
-Network architecture is set **at bot creation time** and cannot be changed later. The "Hidden size" control in the Train tab only adjusts the width of the first hidden layer for a given session — it does not add layers.
+Network architecture is now configurable **in the Train tab** using the layer builder. You can add 1–3 hidden layers, each with 8, 16, 32, 64, or 128 neurons. Changing the architecture resets the model's weights — the amber warning in the UI will tell you when this will happen.
 
-| Architecture (set at creation) | Per-session "Hidden size" | Parameters | Recommended For |
-|--------------------------------|--------------------------|-----------|-----------------|
-| Single layer `[9, H, 9]` | 16, 32, 64, or 128 | ~200–1,200 | Default; fast to train |
-| Two layers `[9, 64, 64, 9]` | Fixed at creation | ~1,350 | Best quality/speed tradeoff |
-| Two layers `[9, 128, 64, 9]` | Fixed at creation | ~2,700 | Diminishing returns for tic-tac-toe |
+| Architecture | Parameters | Training Speed | Recommended For |
+|-------------|-----------|----------------|-----------------|
+| `[32]` | ~380 | Fastest | Quick experiments |
+| `[64]` | ~700 | Fast | Good single-layer baseline |
+| `[64, 64]` | ~1,350 | Medium | **Best quality/speed tradeoff** |
+| `[128, 64]` | ~2,700 | Slower | Diminishing returns for tic-tac-toe |
 
-For tic-tac-toe, a two-layer `[9, 64, 64, 9]` network (set at creation) is the sweet spot. If you created a single-layer bot, use "Hidden size = 64" in the Train tab.
+For tic-tac-toe, `[64, 64]` is the sweet spot — larger networks don't raise the ceiling but take longer to train.
 
 ### Tips
 - Always use **self-play for sessions 1–2**. The replay buffer fills faster and both X and O perspectives are covered simultaneously.
 - Use **linear decay schedule** so exploration is predictable across the session budget.
 - The minimum viable run is **15,000 episodes** to fill and recycle the replay buffer enough for the Bellman targets to stabilize.
-- If the win rate is flat after 20,000 episodes: (a) increase "Hidden size" to 64 (or create a new two-layer bot), (b) ensure you are using self-play for early sessions.
-- DQN benefits more from a **larger hidden size** than from more episodes, up to 64 neurons.
+- If the win rate is flat after 20,000 episodes: change the architecture to `[64, 64]` in the Train tab (weights reset, but the new capacity helps more than extra episodes on a small net).
+- Use **Gamma = 0.95** — it lets the agent plan further ahead without introducing instability in 9-move games.
 
 ---
 
