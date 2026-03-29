@@ -43,12 +43,26 @@ export default function StatsPage() {
     async function load() {
       try {
         const token = await getToken()
-        const { user: dbUser } = await api.users.sync(token)
-        setDbUserId(dbUser.id)
+
+        // Use cached DB user to skip the sync round-trip on repeat visits.
+        const cacheKey = `xo_dbuser_${user.id}`
+        let dbUserId = null
+        try {
+          const raw = sessionStorage.getItem(cacheKey)
+          if (raw) dbUserId = JSON.parse(raw)?.id ?? null
+        } catch {}
+
+        if (!dbUserId) {
+          const { user: synced } = await api.users.sync(token)
+          dbUserId = synced.id
+          try { sessionStorage.setItem(cacheKey, JSON.stringify(synced)) } catch {}
+        }
+
+        setDbUserId(dbUserId)
         const [{ stats: s }, eloRes, mlRes] = await Promise.all([
-          api.users.stats(dbUser.id),
-          api.users.eloHistory(dbUser.id).catch(() => null),
-          api.users.mlProfiles(dbUser.id, token).catch(() => null),
+          api.users.stats(dbUserId),
+          api.users.eloHistory(dbUserId).catch(() => null),
+          api.users.mlProfiles(dbUserId, token).catch(() => null),
         ])
         setStats(s)
         if (eloRes) setEloData(eloRes)
