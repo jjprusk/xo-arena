@@ -85,9 +85,8 @@ export default function GameBoard({ roomName }) {
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isAivai = mode === 'aivai'
 
-  // ── Fetch ML model names + creator for AI vs AI display ─────────────────
+  // ── Fetch ML model names + creator; preload weights for local inference ──
   useEffect(() => {
-    if (!isAivai) return
     setXModelName(null)
     setOModelName(null)
     setXCreatorName(null)
@@ -97,15 +96,13 @@ export default function GameBoard({ roomName }) {
         setXModelName(d?.model?.name ?? null)
         setXCreatorName(d?.model?.creatorName ?? null)
       }).catch(() => {})
-      // Preload model weights for local inference
       loadModel(mlModelId, api.ml.exportModel).catch(() => {})
     }
-    if (ai2Implementation === 'ml' && ai2ModelId) {
+    if (isAivai && ai2Implementation === 'ml' && ai2ModelId) {
       api.ml.getModel(ai2ModelId).then(d => {
         setOModelName(d?.model?.name ?? null)
         setOCreatorName(d?.model?.creatorName ?? null)
       }).catch(() => {})
-      // Preload model weights for local inference
       loadModel(ai2ModelId, api.ml.exportModel).catch(() => {})
     }
   }, [isAivai, aiImplementation, mlModelId, ai2Implementation, ai2ModelId])
@@ -113,6 +110,11 @@ export default function GameBoard({ roomName }) {
   const isOpponentTurn = !isAivai && status === 'playing' && currentTurn !== playerMark
 
   const themeMarkColor = THEME_MARKS[boardTheme] || THEME_MARKS.default
+
+  // ── Opponent display name (pvai mode) ───────────────────────────────────
+  const aiOpponentName = aiImplementation === 'ml'
+    ? (xModelName ?? 'AI')
+    : (MINIMAX_PERSONAS[difficulty?.toLowerCase()]?.name ?? 'AI')
 
   // ── Auto-rematch for AI vs AI series ────────────────────────────────────
   useEffect(() => {
@@ -441,23 +443,23 @@ export default function GameBoard({ roomName }) {
           }}
         >
           {isAivai
-            ? `${seriesWinner} wins the series! Best of ${bestOf}`
+            ? `${seriesWinner} wins the series! First to ${bestOf}`
             : seriesWinner === playerMark
-              ? `You win the series! Best of ${bestOf}`
-              : `AI wins the series. Best of ${bestOf}`}
+              ? `You win the series! First to ${bestOf}`
+              : `${aiOpponentName} wins the series. First to ${bestOf}`}
         </div>
       )}
 
       {/* Opponent chip — pvai / pvbot */}
       {(mode === 'pvai' || mode === 'pvbot') && (() => {
-        const diff = difficulty?.toLowerCase()
-        const persona = MINIMAX_PERSONAS[diff]
-        if (!persona) return null
+        const persona = MINIMAX_PERSONAS[difficulty?.toLowerCase()]
         return (
           <div className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
             <span style={{ color: 'var(--text-muted)' }}>vs</span>
-            <span className="font-medium">{persona.name}</span>
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(ELO {persona.elo})</span>
+            <span className="font-medium">{aiOpponentName}</span>
+            {persona && aiImplementation === 'minimax' && (
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(ELO {persona.elo})</span>
+            )}
           </div>
         )
       })()}
@@ -492,7 +494,7 @@ export default function GameBoard({ roomName }) {
         <ScorePill mark="X" score={scores.X} />
         <div className="text-center">
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Round {round}{bestOf ? ` / Best of ${bestOf}` : ''}
+            Round {round}{bestOf ? ` / First to ${bestOf}` : ''}
           </span>
           {misereMode && (
             <div className="text-xs font-medium" style={{ color: 'var(--color-amber-600)' }}>Misère mode</div>
@@ -548,7 +550,7 @@ export default function GameBoard({ roomName }) {
             {isOpponentTurn && (
               <>
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  {isAIThinking ? 'AI is thinking…' : (mode === 'pvai' ? "AI's turn" : "Opponent's turn")}
+                  {isAIThinking ? `${mode === 'pvai' ? aiOpponentName : 'AI'} is thinking…` : (mode === 'pvai' ? `${aiOpponentName}'s turn` : "Opponent's turn")}
                 </span>
                 <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
                   {(thinkingMs / 1000).toFixed(2)}s
@@ -567,7 +569,7 @@ export default function GameBoard({ roomName }) {
             <span className="font-bold" style={{ color: winner === playerMark ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
               {isAivai
                 ? `${winner} wins!`
-                : winner === playerMark ? 'You win! 🎉' : (mode === 'pvai' ? 'AI wins!' : `${winner} wins!`)}
+                : winner === playerMark ? 'You win! 🎉' : (mode === 'pvai' ? `${aiOpponentName} wins!` : `${winner} wins!`)}
             </span>
             {isAivai && autoRematchCountdown !== null && (
               <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>· Next in {autoRematchCountdown}…</span>
@@ -904,7 +906,10 @@ export default function GameBoard({ roomName }) {
 
 function implLabel(impl, difficulty, modelName) {
   if (impl === 'ml') return modelName ?? 'ML model'
-  if (impl === 'minimax') return `Minimax · ${difficulty ?? ''}`
+  if (impl === 'minimax') {
+    const persona = MINIMAX_PERSONAS[difficulty?.toLowerCase()]
+    return persona ? persona.name : 'Minimax'
+  }
   if (impl === 'random') return 'Random'
   return impl ?? '—'
 }

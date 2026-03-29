@@ -318,7 +318,7 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
   const CURRICULUM_WINDOW = 100
   const outcomeWindow = []
 
-  const PROGRESS_INTERVAL = Math.max(PROGRESS_BATCH, Math.floor(iterations / 20))
+  const PROGRESS_INTERVAL = Math.max(PROGRESS_BATCH, Math.floor(iterations / 100))
 
   // Collect ~200 sampled episode records for the Analytics tab
   const SAMPLE_STEP = Math.max(1, Math.floor(iterations / 200))
@@ -326,6 +326,10 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
 
   let wins = 0, losses = 0, draws = 0, totalQDelta = 0
   let actualEpisodes = 0
+  let batchStartTime = performance.now()
+  let batchEpisodeCount = 0
+  let batchQDelta = 0
+  let batchWins = 0, batchLosses = 0, batchDraws = 0
 
   for (let i = 0; i < iterations; i++) {
     if (cancelRef?.current) {
@@ -340,12 +344,14 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
 
     const result = _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm)
     actualEpisodes++
+    batchEpisodeCount++
     if (mlMarkConfig === 'alternating') mlMark = mlMark === 'X' ? 'O' : 'X'
 
-    if (result.outcome === 'WIN')       wins++
-    else if (result.outcome === 'LOSS') losses++
-    else                                draws++
+    if (result.outcome === 'WIN')       { wins++; batchWins++ }
+    else if (result.outcome === 'LOSS') { losses++; batchLosses++ }
+    else                                { draws++; batchDraws++ }
     totalQDelta += result.avgQDelta
+    batchQDelta += result.avgQDelta
 
     // Sample this episode for analytics
     if (i % SAMPLE_STEP === 0) {
@@ -383,11 +389,16 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
         episodesWithoutImprovement += PROGRESS_INTERVAL
       }
       if (episodesWithoutImprovement >= (earlyStop.patience ?? 200)) {
+        const avgGameMs = batchEpisodeCount > 0 ? (performance.now() - batchStartTime) / batchEpisodeCount : 0
         onProgress?.({
           episode: i + 1, totalEpisodes: iterations,
           winRate:  wins / (i + 1), lossRate: losses / (i + 1), drawRate: draws / (i + 1),
-          avgQDelta: totalQDelta / (i + 1), epsilon: engine.epsilon,
-          outcomes: { wins, losses, draws }, earlyStop: true,
+          recentWinRate: batchEpisodeCount > 0 ? batchWins / batchEpisodeCount : 0,
+          recentLossRate: batchEpisodeCount > 0 ? batchLosses / batchEpisodeCount : 0,
+          recentDrawRate: batchEpisodeCount > 0 ? batchDraws / batchEpisodeCount : 0,
+          avgQDelta: batchEpisodeCount > 0 ? batchQDelta / batchEpisodeCount : 0,
+          epsilon: engine.epsilon,
+          outcomes: { wins, losses, draws }, avgGameMs, earlyStop: true,
         })
         return {
           weights:    engine.toJSON(),
@@ -402,17 +413,27 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
     // Progress update + event-loop yield
     if ((i + 1) % PROGRESS_INTERVAL === 0 || i === iterations - 1) {
       const done = i + 1
+      const avgGameMs = batchEpisodeCount > 0 ? (performance.now() - batchStartTime) / batchEpisodeCount : 0
       onProgress?.({
         episode: done, totalEpisodes: iterations,
         winRate:  done > 0 ? wins   / done : 0,
         lossRate: done > 0 ? losses / done : 0,
         drawRate: done > 0 ? draws  / done : 0,
-        avgQDelta: done > 0 ? totalQDelta / done : 0,
+        recentWinRate: batchEpisodeCount > 0 ? batchWins   / batchEpisodeCount : 0,
+        recentLossRate: batchEpisodeCount > 0 ? batchLosses / batchEpisodeCount : 0,
+        recentDrawRate: batchEpisodeCount > 0 ? batchDraws  / batchEpisodeCount : 0,
+        avgQDelta: batchEpisodeCount > 0 ? batchQDelta / batchEpisodeCount : 0,
         epsilon: engine.epsilon,
         outcomes: { wins, losses, draws },
+        avgGameMs,
       })
-      // Yield to the event loop so React can re-render
-      await new Promise(r => setTimeout(r, 0))
+      const batchDuration = performance.now() - batchStartTime
+      batchStartTime = performance.now()
+      batchEpisodeCount = 0
+      batchQDelta = 0
+      batchWins = 0; batchLosses = 0; batchDraws = 0
+      // Yield with enough delay for the browser to paint (~30fps minimum)
+      await new Promise(r => setTimeout(r, Math.max(0, 33 - batchDuration)))
     }
   }
 

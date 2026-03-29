@@ -21,7 +21,7 @@ export const useGameStore = create((set, get) => ({
   // Game options
   timerEnabled: false,
   timerSeconds: 30,
-  bestOf: 7,          // 3 | 5 | 7 | null (unlimited)
+  bestOf: 3,          // target wins: 1 | 2 | 3 | null (unlimited)
   misereMode: false,  // completing 3-in-a-row means you LOSE
   boardTheme: 'default',
 
@@ -93,8 +93,8 @@ export const useGameStore = create((set, get) => ({
       ? { ...scores, [winner]: scores[winner] + 1 }
       : scores
 
-    // Check best-of-N series completion
-    const targetWins = bestOf ? Math.ceil(bestOf / 2) : null
+    // Check first-to-N series completion
+    const targetWins = bestOf ?? null
     const seriesWinner = targetWins
       ? (newScores.X >= targetWins ? 'X' : newScores.O >= targetWins ? 'O' : null)
       : null
@@ -176,7 +176,7 @@ export const useGameStore = create((set, get) => ({
     const { currentTurn, scores, bestOf } = get()
     const opp = currentTurn === 'X' ? 'O' : 'X'
     const newScores = { ...scores, [opp]: scores[opp] + 1 }
-    const targetWins = bestOf ? Math.ceil(bestOf / 2) : null
+    const targetWins = bestOf ?? null
     const seriesWinner = targetWins
       ? (newScores.X >= targetWins ? 'X' : newScores.O >= targetWins ? 'O' : null)
       : null

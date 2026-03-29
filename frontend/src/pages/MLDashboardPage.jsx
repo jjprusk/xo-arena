@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import {
@@ -438,7 +439,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
           lossRate: Math.round(data.lossRate * 100),
           drawRate: Math.round(data.drawRate * 100),
           epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-          qDelta: parseFloat(data.avgQDelta.toFixed(4)),
+          qDelta: data.avgQDelta,
         }])
       }
 
@@ -478,6 +479,14 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
     cleanupRef.current = null
     cancelRef.current = false
 
+    // Show the progress panel immediately before the API call
+    flushSync(() => {
+      setRunning(true)
+      setProgress(null)
+      setChartData([])
+      setCurriculumDifficulty(null)
+    })
+
     const token = await getToken()
     const cfg = {
       ...(mode === 'VS_MINIMAX' ? { difficulty: curriculum ? 'novice' : difficulty, mlMark: mlMark === 'alternating' ? undefined : mlMark } : {}),
@@ -492,12 +501,11 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
       // Create session on backend and get current model weights for engine init
       const { session, model: modelState } = await api.ml.train(model.id, { mode, iterations, config: cfg, frontend: true }, token)
 
-      onSessionsChange(prev => [session, ...prev])
-      setSessionId(session.id)
-      setRunning(true)
-      setProgress(null)
-      setChartData([])
-      setCurriculumDifficulty(curriculum && mode === 'VS_MINIMAX' ? 'novice' : null)
+      flushSync(() => {
+        onSessionsChange(prev => [session, ...prev])
+        setSessionId(session.id)
+        if (curriculum && mode === 'VS_MINIMAX') setCurriculumDifficulty('novice')
+      })
 
       // Run all episodes locally in the browser
       const result = await runTrainingSession({
@@ -505,17 +513,27 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
         session: { ...session, config: cfg },
         cancelRef,
         onProgress: (data) => {
-          setProgress({ ...data, sessionId: session.id })
-          setChartData(prev => [...prev, {
-            ep: data.episode,
-            winRate:  Math.round(data.winRate  * 100),
-            lossRate: Math.round(data.lossRate * 100),
-            drawRate: Math.round(data.drawRate * 100),
-            epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-            qDelta: parseFloat(data.avgQDelta.toFixed(4)),
-          }])
+          flushSync(() => {
+            setProgress({ ...data, sessionId: session.id })
+            setChartData(prev => [...prev, {
+              ep: data.episode,
+              winRate:  Math.round(data.winRate  * 100),
+              lossRate: Math.round(data.lossRate * 100),
+              drawRate: Math.round(data.drawRate * 100),
+              recentWinRate:  Math.round((data.recentWinRate  ?? data.winRate)  * 100),
+              recentLossRate: Math.round((data.recentLossRate ?? data.lossRate) * 100),
+              recentDrawRate: Math.round((data.recentDrawRate ?? data.drawRate) * 100),
+              epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
+              qDelta: data.avgQDelta,
+            }])
+          })
         },
         onCurriculumAdvance: ({ difficulty: newDiff }) => setCurriculumDifficulty(newDiff),
+      })
+
+      // Show 100% while finishSession uploads weights (covers early-stop and normal completion)
+      flushSync(() => {
+        setProgress(prev => prev ? { ...prev, episode: prev.totalEpisodes } : prev)
       })
 
       // Persist weights + stats to backend; it handles ELO calibration async
@@ -841,14 +859,26 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
               return (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                      Iterations: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{displayIterations.toLocaleString()}</span>
-                    </label>
-                    {model.maxEpisodes > 0 && (
-                      <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
-                        {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
-                      </span>
-                    )}
+                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Iterations</label>
+                    <div className="flex items-center gap-2">
+                      {model.maxEpisodes > 0 && (
+                        <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
+                          {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
+                        </span>
+                      )}
+                      <input
+                        type="number"
+                        min={ITERATIONS_MIN} max={sliderMax} step={ITERATIONS_STEP}
+                        value={displayIterations}
+                        disabled={atLimit}
+                        onChange={e => {
+                          const v = Number(e.target.value)
+                          if (!isNaN(v)) setIterations(Math.max(ITERATIONS_MIN, Math.min(sliderMax, v)))
+                        }}
+                        className="w-24 px-2 py-0.5 rounded text-sm font-bold tabular-nums text-right disabled:opacity-40"
+                        style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-surface-hover)', border: '1px solid var(--border-default)' }}
+                      />
+                    </div>
                   </div>
                   <input type="range" min={ITERATIONS_MIN} max={sliderMax} step={ITERATIONS_STEP} value={displayIterations}
                     onChange={e => setIterations(Number(e.target.value))}
@@ -902,7 +932,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <SectionLabel>Training in Progress</SectionLabel>
+              <SectionLabel>{sessionId ? 'Training in Progress' : 'Starting…'}</SectionLabel>
               {curriculumDifficulty && (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize"
                   style={{
@@ -917,16 +947,18 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
           </div>
 
           {/* Progress bar */}
-          <div className="h-2 rounded-full overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-gray-200)' }}>
-            <div className="h-full rounded-full transition-all duration-300"
-              style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-600)' }} />
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-600)' }} />
+            </div>
+            <span className="text-xs font-mono font-semibold tabular-nums w-9 text-right" style={{ color: 'var(--text-secondary)' }}>{pct}%</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <MiniStat label="Episode" value={progress ? `${progress.episode.toLocaleString()} / ${progress.totalEpisodes.toLocaleString()}` : `0 / ${iterations.toLocaleString()}`} />
             <MiniStat label="Win Rate" value={progress ? `${Math.round(progress.winRate * 100)}%` : '—'} color="var(--color-teal-600)" />
             <MiniStat label="Epsilon ε" value={progress ? progress.epsilon.toFixed(4) : '1.0000'} color="var(--color-amber-600)" />
-            <MiniStat label="Avg ΔQ" value={progress ? progress.avgQDelta.toFixed(5) : '—'} />
+            <MiniStat label="Avg ΔQ" value={progress ? (progress.avgQDelta === 0 ? '0 ✓' : progress.avgQDelta < 0.0001 ? progress.avgQDelta.toExponential(2) : progress.avgQDelta.toFixed(5)) : '—'} />
             <MiniStat label="Avg game" value={progress?.avgGameMs != null ? `${progress.avgGameMs.toFixed(1)}ms` : '—'} />
           </div>
           <div className="flex gap-4 text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
@@ -950,9 +982,12 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %"  strokeWidth={2} />
-                  <Line type="monotone" dataKey="lossRate" stroke="var(--color-blue-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
-                  <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentWinRate"  stroke="var(--color-teal-600)"  dot={false} name="Win % (recent)"  strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentDrawRate" stroke="var(--color-amber-600)" dot={false} name="Draw % (recent)" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentLossRate" stroke="var(--color-red-500)"   dot={false} name="Loss % (recent)" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win % (avg)"  strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw % (avg)" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="lossRate" stroke="var(--color-red-500)"   dot={false} name="Loss % (avg)" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
                 </LineChart>
               </ChartPanel>
               <ChartPanel label="Exploration Rate (ε) Decay">
@@ -961,7 +996,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
                   <XAxis dataKey="ep" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
-                  <Line type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
                 </LineChart>
               </ChartPanel>
             </div>
@@ -1002,7 +1037,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
                 <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
               </LineChart>
             </ChartPanel>
-            <ChartPanel label="Q-delta Convergence">
+            <ChartPanel label="Q-delta Convergence (→ 0 = converged)">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
                 <XAxis dataKey="ep" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />

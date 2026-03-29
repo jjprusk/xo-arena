@@ -184,14 +184,15 @@ function getBotPlayConfig(bot) {
     const parts = id.split(':')
     const algo = parts[2] || 'minimax'
     const diff = parts[3] || 'intermediate'
-    const impl = algo === 'rule_based' ? 'rule_based' : 'minimax'
+    const ML_ALGOS = new Set(['q_learning', 'dqn', 'sarsa', 'monte_carlo', 'policy_gradient', 'alpha_zero'])
+    const impl = algo === 'rule_based' ? 'rule_based' : ML_ALGOS.has(algo) ? 'ml' : 'minimax'
     return { implementation: impl, difficulty: diff, mlModelId: bot.mlModel?.id || null }
   }
   // ML model ID direct
   return { implementation: 'ml', difficulty: 'intermediate', mlModelId: id }
 }
 
-const BEST_OF_OPTIONS = [{ label: 'Single', value: 1 }, { label: 'Best of 3', value: 3 }, { label: 'Best of 5', value: 5 }, { label: 'Best of 7', value: 7 }, { label: 'Unlimited', value: null }]
+const BEST_OF_OPTIONS = [{ label: 'First to 1', value: 1 }, { label: 'First to 2', value: 2 }, { label: 'First to 3', value: 3 }, { label: 'Unlimited', value: null }]
 const TIMER_PRESETS = [15, 30, 60]
 const BOARD_THEMES = [
   { id: 'default', label: 'Default' },
