@@ -341,6 +341,42 @@ The **ε start → end** column shows predicted values based on Exponential 0.99
 | 25,000   | 82–90%    | 65–78%  | 35–50%  |
 | 35,000+  | 88–93%    | 75–85%  | 50–65%  |
 
+### Understanding the Replay Buffer
+
+The replay buffer is a **circular memory** that stores past game experiences as `(board_state, action, reward, next_board_state, done)` tuples. During each training step the DQN samples a random mini-batch from this buffer — it does *not* train on the episode it just played.
+
+**Why this matters:**
+- **Breaks temporal correlation** — consecutive episodes are highly correlated (same opening, similar board patterns). Random mini-batch sampling produces more diverse batches, which stabilises gradient descent and prevents catastrophic forgetting.
+- **Reuses rare experiences** — important board positions (e.g. fork threats, game-ending states) can be revisited many times even if they are infrequently encountered. Without the buffer each experience is used exactly once and then discarded.
+
+**Buffer size relative to episode count:**
+
+| Episodes trained | Buffer = 10,000 | Buffer = 20,000 |
+|-----------------|-----------------|-----------------|
+| 5,000 | Buffer is half full; all experiences available | Buffer is quarter full |
+| 10,000 | Buffer exactly full; oldest evicted as new arrive | Still holds all 10k experiences |
+| 30,000 | Only the most recent 10k episodes are kept | Keeps the most recent 20k |
+
+A buffer that is **too small** for long runs means the network only learns from recent play — it can forget earlier lessons and oscillate. Increase to 20,000–50,000 for sessions over 20,000 episodes.
+
+A buffer that is **too large** simply has empty slots early in training; this is harmless — the network trains on what is available.
+
+**When to tune the replay buffer:**
+- Win rate oscillates wildly → buffer too small (increase it)
+- Bot forgets good moves it knew earlier → buffer too small relative to total episodes trained
+- Training speed feels slow on a powerful machine → batch size is the knob to increase, not buffer size
+
+### Understanding the Training Charts
+
+The live training panel shows two sets of lines for win/draw/loss rates:
+
+- **Thick solid lines** — the *recent* rate for the current batch of episodes only (resets each update interval)
+- **Thin dashed lines** — the *cumulative* average since the session started
+
+The recent lines are the most informative signal for whether the model is actively learning. If a bot is genuinely improving — for example, drawing more in the last 100 episodes than it did in the first 1,000 — the recent draw rate line will climb while the cumulative line rises slowly (weighted down by early losses).
+
+**If both lines are flat**, the model is not converging in this session.
+
 ### Network Architecture Guide
 
 Network architecture is now configurable **in the Train tab** using the layer builder. You can add 1–3 hidden layers, each with 8, 16, 32, 64, or 128 neurons. Changing the architecture resets the model's weights — the amber warning in the UI will tell you when this will happen.

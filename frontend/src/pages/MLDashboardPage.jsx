@@ -439,7 +439,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
           lossRate: Math.round(data.lossRate * 100),
           drawRate: Math.round(data.drawRate * 100),
           epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-          qDelta: parseFloat(data.avgQDelta.toFixed(4)),
+          qDelta: data.avgQDelta,
         }])
       }
 
@@ -520,12 +520,20 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
               winRate:  Math.round(data.winRate  * 100),
               lossRate: Math.round(data.lossRate * 100),
               drawRate: Math.round(data.drawRate * 100),
+              recentWinRate:  Math.round((data.recentWinRate  ?? data.winRate)  * 100),
+              recentLossRate: Math.round((data.recentLossRate ?? data.lossRate) * 100),
+              recentDrawRate: Math.round((data.recentDrawRate ?? data.drawRate) * 100),
               epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-              qDelta: parseFloat(data.avgQDelta.toFixed(4)),
+              qDelta: data.avgQDelta,
             }])
           })
         },
         onCurriculumAdvance: ({ difficulty: newDiff }) => setCurriculumDifficulty(newDiff),
+      })
+
+      // Show 100% while finishSession uploads weights (covers early-stop and normal completion)
+      flushSync(() => {
+        setProgress(prev => prev ? { ...prev, episode: prev.totalEpisodes } : prev)
       })
 
       // Persist weights + stats to backend; it handles ELO calibration async
@@ -939,16 +947,18 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
           </div>
 
           {/* Progress bar */}
-          <div className="h-2 rounded-full overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-gray-200)' }}>
-            <div className="h-full rounded-full transition-all duration-300"
-              style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-600)' }} />
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-600)' }} />
+            </div>
+            <span className="text-xs font-mono font-semibold tabular-nums w-9 text-right" style={{ color: 'var(--text-secondary)' }}>{pct}%</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <MiniStat label="Episode" value={progress ? `${progress.episode.toLocaleString()} / ${progress.totalEpisodes.toLocaleString()}` : `0 / ${iterations.toLocaleString()}`} />
             <MiniStat label="Win Rate" value={progress ? `${Math.round(progress.winRate * 100)}%` : '—'} color="var(--color-teal-600)" />
             <MiniStat label="Epsilon ε" value={progress ? progress.epsilon.toFixed(4) : '1.0000'} color="var(--color-amber-600)" />
-            <MiniStat label="Avg ΔQ" value={progress ? progress.avgQDelta.toFixed(5) : '—'} />
+            <MiniStat label="Avg ΔQ" value={progress ? (progress.avgQDelta === 0 ? '0 ✓' : progress.avgQDelta < 0.0001 ? progress.avgQDelta.toExponential(2) : progress.avgQDelta.toFixed(5)) : '—'} />
             <MiniStat label="Avg game" value={progress?.avgGameMs != null ? `${progress.avgGameMs.toFixed(1)}ms` : '—'} />
           </div>
           <div className="flex gap-4 text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
@@ -972,9 +982,12 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %"  strokeWidth={2} />
-                  <Line type="monotone" dataKey="lossRate" stroke="var(--color-blue-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
-                  <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentWinRate"  stroke="var(--color-teal-600)"  dot={false} name="Win % (recent)"  strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentDrawRate" stroke="var(--color-amber-600)" dot={false} name="Draw % (recent)" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentLossRate" stroke="var(--color-red-500)"   dot={false} name="Loss % (recent)" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win % (avg)"  strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw % (avg)" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="lossRate" stroke="var(--color-red-500)"   dot={false} name="Loss % (avg)" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
                 </LineChart>
               </ChartPanel>
               <ChartPanel label="Exploration Rate (ε) Decay">
@@ -983,7 +996,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
                   <XAxis dataKey="ep" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
-                  <Line type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
                 </LineChart>
               </ChartPanel>
             </div>
@@ -1024,7 +1037,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
                 <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
               </LineChart>
             </ChartPanel>
-            <ChartPanel label="Q-delta Convergence">
+            <ChartPanel label="Q-delta Convergence (→ 0 = converged)">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
                 <XAxis dataKey="ep" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
