@@ -9,6 +9,7 @@ import {
 import { api } from '../lib/api.js'
 import { evictModel, isModelCached } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
+import { runTrainingSession } from '../services/trainingService.js'
 import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
 
 // Module-level ML model cache — keyed by modelId, survives component unmount/navigation
@@ -384,25 +385,38 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
   const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
-  const socketRef  = useRef(null)
-  const cleanupRef = useRef(null)
+  const socketRef   = useRef(null)
+  const cleanupRef  = useRef(null)
+  const cancelRef   = useRef(false)
 
-  // Only clean up on unmount — never on sessionId change
+  // Clean up on unmount: tear down socket listeners and stop any running frontend loop
   useEffect(() => {
-    return () => cleanupRef.current?.()
+    return () => {
+      cleanupRef.current?.()
+      cancelRef.current = true
+    }
   }, [])
 
-  // Re-attach to in-progress training when navigating back to the page
+  // Re-attach to in-progress training when navigating back to the page.
+  // Frontend sessions can't resume after navigation — auto-cancel them.
   useEffect(() => {
     if (model.status !== 'TRAINING' || running) return
     let cancelled = false
 
-    api.ml.getSessions(model.id).then(r => {
+    api.ml.getSessions(model.id).then(async r => {
       if (cancelled) return
       const runningSession = r.sessions.find(s => s.status === 'RUNNING')
       if (!runningSession) return
 
       onSessionsChange(r.sessions)
+
+      // Frontend session left running after navigation — clean it up
+      if (runningSession.config?.frontend) {
+        const tok = await getToken().catch(() => null)
+        if (tok) api.ml.cancelSession(runningSession.id, tok).catch(() => {})
+        return
+      }
+
       setSessionId(runningSession.id)
       setIterations(runningSession.iterations)
       setRunning(true)
@@ -435,11 +449,11 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
 
       const teardown = () => {
         socket.emit('ml:unwatch', { sessionId: runningSession.id })
-        socket.off('ml:progress',          onProgress)
-        socket.off('ml:curriculum_advance', onCurriculumAdvance)
-        socket.off('ml:complete',          onComplete_)
-        socket.off('ml:cancelled',         onCancelled)
-        socket.off('ml:error',             onError)
+        socket.off('ml:progress',           onProgress)
+        socket.off('ml:curriculum_advance',  onCurriculumAdvance)
+        socket.off('ml:complete',           onComplete_)
+        socket.off('ml:cancelled',          onCancelled)
+        socket.off('ml:error',              onError)
         cleanupRef.current = null
       }
 
@@ -447,11 +461,11 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
       const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
       const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
 
-      socket.on('ml:progress',          onProgress)
-      socket.on('ml:curriculum_advance', onCurriculumAdvance)
-      socket.once('ml:complete',          onComplete_)
-      socket.once('ml:cancelled',         onCancelled)
-      socket.once('ml:error',             onError)
+      socket.on('ml:progress',           onProgress)
+      socket.on('ml:curriculum_advance',  onCurriculumAdvance)
+      socket.once('ml:complete',           onComplete_)
+      socket.once('ml:cancelled',          onCancelled)
+      socket.once('ml:error',              onError)
 
       cleanupRef.current = teardown
     }).catch(() => {})
@@ -460,9 +474,9 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
   }, [model.id, model.status, running, onComplete])
 
   async function handleStart() {
-    // Clean up any lingering listeners from a previous session before starting a new one
     cleanupRef.current?.()
     cleanupRef.current = null
+    cancelRef.current = false
 
     const token = await getToken()
     const cfg = {
@@ -475,7 +489,9 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
       ...(algorithm === 'ALPHA_ZERO' ? { numSimulations: azSimulations, cPuct: azCPuct, temperature: azTemperature } : {}),
     }
     try {
-      const { session } = await api.ml.train(model.id, { mode, iterations, config: cfg }, token)
+      // Create session on backend and get current model weights for engine init
+      const { session, model: modelState } = await api.ml.train(model.id, { mode, iterations, config: cfg, frontend: true }, token)
+
       onSessionsChange(prev => [session, ...prev])
       setSessionId(session.id)
       setRunning(true)
@@ -483,60 +499,44 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
       setChartData([])
       setCurriculumDifficulty(curriculum && mode === 'VS_MINIMAX' ? 'novice' : null)
 
-      const socket = getSocket()
-      if (!socket.connected) socket.connect()
-      socketRef.current = socket
-      socket.emit('ml:watch', { sessionId: session.id })
+      // Run all episodes locally in the browser
+      const result = await runTrainingSession({
+        model: modelState,
+        session: { ...session, config: cfg },
+        cancelRef,
+        onProgress: (data) => {
+          setProgress({ ...data, sessionId: session.id })
+          setChartData(prev => [...prev, {
+            ep: data.episode,
+            winRate:  Math.round(data.winRate  * 100),
+            lossRate: Math.round(data.lossRate * 100),
+            drawRate: Math.round(data.drawRate * 100),
+            epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
+            qDelta: parseFloat(data.avgQDelta.toFixed(4)),
+          }])
+        },
+        onCurriculumAdvance: ({ difficulty: newDiff }) => setCurriculumDifficulty(newDiff),
+      })
 
-      // Named handler so we can remove exactly this session's listener later
-      const onProgress = (data) => {
-        if (data.sessionId !== session.id) return
-        setProgress(data)
-        setChartData(prev => [...prev, {
-          ep: data.episode,
-          winRate:  Math.round(data.winRate  * 100),
-          lossRate: Math.round(data.lossRate * 100),
-          drawRate: Math.round(data.drawRate * 100),
-          epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-          qDelta: parseFloat(data.avgQDelta.toFixed(4)),
-        }])
-      }
+      // Persist weights + stats to backend; it handles ELO calibration async
+      await api.ml.finishSession(session.id, {
+        weights:    result.weights,
+        stats:      result.stats,
+        iterations: result.iterations,
+        status:     result.status,
+      }, token)
 
-      const onCurriculumAdvance_ = (data) => {
-        if (data.sessionId !== session.id) return
-        setCurriculumDifficulty(data.difficulty)
-      }
-
-      const teardown = () => {
-        socket.emit('ml:unwatch', { sessionId: session.id })
-        socket.off('ml:progress',          onProgress)
-        socket.off('ml:curriculum_advance', onCurriculumAdvance_)
-        socket.off('ml:complete',          onComplete_)
-        socket.off('ml:cancelled',         onCancelled)
-        socket.off('ml:error',             onError)
-        cleanupRef.current = null
-      }
-
-      const onComplete_  = () => { setRunning(false); teardown(); onComplete() }
-      const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
-      const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
-
-      socket.on('ml:progress',          onProgress)
-      socket.on('ml:curriculum_advance', onCurriculumAdvance_)
-      socket.once('ml:complete',          onComplete_)
-      socket.once('ml:cancelled',         onCancelled)
-      socket.once('ml:error',             onError)
-
-      cleanupRef.current = teardown
+      setRunning(false)
+      onComplete()
     } catch (err) {
+      setRunning(false)
       alert(err.message)
     }
   }
 
   async function handleCancel() {
-    if (!sessionId) return
-    const token = await getToken()
-    await api.ml.cancelSession(sessionId, token)
+    // Signal the training loop to stop; handleStart will call finishSession with CANCELLED
+    cancelRef.current = true
   }
 
   const pct = progress ? Math.round((progress.episode / progress.totalEpisodes) * 100) : 0

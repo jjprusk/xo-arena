@@ -725,7 +725,141 @@ export async function cancelSession(sessionId) {
       where: { id: sessionId },
       data: { status: 'CANCELLED', completedAt: new Date() },
     })
+    await db.mLModel.update({ where: { id: s.modelId }, data: { status: 'IDLE' } })
   }
+}
+
+/**
+ * Create a training session for a frontend-driven training run.
+ * Returns the session + current model weights so the frontend can initialise the engine.
+ * The frontend calls finishTrainingFromFrontend() when done.
+ */
+export async function startFrontendSession(modelId, { mode, iterations, config = {} }) {
+  const model = await getModel(modelId)
+  if (!model) throw new Error('Model not found')
+  if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
+
+  const [maxEpisodes, maxConcurrent] = await Promise.all([
+    getSystemConfig('ml.maxEpisodesPerSession', 100_000),
+    getSystemConfig('ml.maxConcurrentSessions', 0),
+  ])
+  if (maxEpisodes > 0 && iterations > maxEpisodes) {
+    throw new Error(`Training limit: max ${maxEpisodes.toLocaleString()} episodes per session`)
+  }
+  if (maxConcurrent > 0) {
+    const runningCount = await db.mLModel.count({ where: { status: 'TRAINING' } })
+    if (runningCount >= maxConcurrent) {
+      throw new Error(`Training limit: max ${maxConcurrent} concurrent session${maxConcurrent !== 1 ? 's' : ''}`)
+    }
+  }
+  if (model.maxEpisodes > 0) {
+    const remaining = model.maxEpisodes - model.totalEpisodes
+    if (remaining <= 0) {
+      throw new Error(`Training limit: this model has reached its ${model.maxEpisodes.toLocaleString()} episode maximum`)
+    }
+    if (iterations > remaining) {
+      throw new Error(`Training limit: only ${remaining.toLocaleString()} episodes remain (limit: ${model.maxEpisodes.toLocaleString()}, used: ${model.totalEpisodes.toLocaleString()})`)
+    }
+  }
+  if (model.status === 'TRAINING') throw new Error('Model is already training')
+
+  const session = await db.trainingSession.create({
+    data: { modelId, mode, iterations, status: 'RUNNING', config: { ...config, frontend: true } },
+  })
+  await db.mLModel.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
+  logger.info({ modelId, sessionId: session.id }, 'Frontend training session started')
+
+  return {
+    session,
+    model: {
+      config: model.config,
+      qtable: model.qtable,
+      algorithm: model.algorithm,
+      eloRating: model.eloRating,
+    },
+  }
+}
+
+/**
+ * Called by the frontend after it finishes (or cancels) a training run.
+ * Persists the weights, updates the session, triggers ELO calibration in the background.
+ */
+export async function finishTrainingFromFrontend(sessionId, { weights, stats, iterations, status = 'COMPLETED' }) {
+  const session = await db.trainingSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error('Session not found')
+  const modelId = session.modelId
+
+  const { wins = 0, losses = 0, draws = 0, totalQDelta = 0, finalEpsilon = 0, stateCount = 0 } = stats || {}
+  const safeIterations = iterations || 0
+
+  const summary = {
+    wins, losses, draws,
+    winRate:   safeIterations > 0 ? wins  / safeIterations : 0,
+    avgQDelta: safeIterations > 0 ? totalQDelta / safeIterations : 0,
+    finalEpsilon,
+    stateCount,
+  }
+
+  const currentModel = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
+
+  // Sync DQN architecture if it changed during training
+  const configOverride = {}
+  const sessionConfig = session.config || {}
+  if (sessionConfig.networkShape) {
+    const ls = [9, ...sessionConfig.networkShape.map(Number), 9]
+    configOverride.layerSizes   = ls
+    configOverride.networkShape = sessionConfig.networkShape.map(Number)
+  }
+
+  await db.$transaction([
+    db.mLModel.update({
+      where: { id: modelId },
+      data: {
+        qtable: weights || {},
+        status: 'IDLE',
+        totalEpisodes: { increment: safeIterations },
+        config: { ...currentModel.config, ...configOverride, currentEpsilon: finalEpsilon },
+      },
+    }),
+    db.trainingSession.update({
+      where: { id: sessionId },
+      data: { status, completedAt: new Date(), summary },
+    }),
+  ])
+
+  engineCache.delete(modelId)
+  logger.info({ sessionId, modelId, status, ...summary }, 'Frontend training finished')
+
+  // ELO calibration — non-blocking background task
+  setImmediate(async () => {
+    try {
+      const calibModel  = await db.mLModel.findUnique({ where: { id: modelId }, select: { eloRating: true } })
+      const freshModel  = await db.mLModel.findUnique({ where: { id: modelId } })
+      const calibEngine = _greedyEngine(freshModel)
+      const CALIBRATION_OPPONENTS = [
+        { difficulty: 'novice',       fixedElo: 800  },
+        { difficulty: 'intermediate', fixedElo: 1200 },
+        { difficulty: 'advanced',     fixedElo: 1500 },
+        { difficulty: 'master',       fixedElo: 1800 },
+      ]
+      const CALIB_GAMES = 100
+      let currentElo = calibModel.eloRating
+      for (const { difficulty, fixedElo } of CALIBRATION_OPPONENTS) {
+        const r = _runGames(calibEngine, (b, p) => minimaxMove(b, difficulty, p), CALIB_GAMES)
+        const actual   = (r.wins + r.draws * 0.5) / CALIB_GAMES
+        const expected = _expectedScore(currentElo, fixedElo)
+        currentElo = parseFloat((currentElo + ELO_K * (actual - expected)).toFixed(2))
+        await new Promise(res => setImmediate(res))
+      }
+      const delta = parseFloat((currentElo - calibModel.eloRating).toFixed(2))
+      const outcome = delta > 0 ? 'WIN' : delta < 0 ? 'LOSS' : 'DRAW'
+      await db.mLModel.update({ where: { id: modelId }, data: { eloRating: currentElo } })
+      await db.mLEloHistory.create({ data: { modelId, eloRating: currentElo, delta, opponentType: 'MINIMAX', outcome } })
+      logger.info({ modelId, newElo: currentElo, delta }, 'ELO calibrated after frontend training')
+    } catch (eloErr) {
+      logger.warn({ eloErr }, 'ELO calibration after frontend training failed (non-fatal)')
+    }
+  })
 }
 
 // ─── Training loop (private) ─────────────────────────────────────────────────
