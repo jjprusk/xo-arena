@@ -149,6 +149,25 @@
   box-shadow: 3px 3px 0 rgba(0,0,0,0.4) !important;
 }
 
+/* ── Gym Guide prose styles ──────────────────────────────────────── */
+.prose-guide h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary); }
+.prose-guide h2 { font-size: 1.25rem; font-weight: 700; margin-top: 2rem; margin-bottom: 0.5rem; color: var(--text-primary); padding-bottom: 0.25rem; border-bottom: 1px solid var(--border-default); }
+.prose-guide h3 { font-size: 1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.375rem; color: var(--text-primary); }
+.prose-guide h4 { font-size: 0.9375rem; font-weight: 600; margin-top: 1.25rem; margin-bottom: 0.25rem; color: var(--text-secondary); }
+.prose-guide p  { margin-bottom: 0.875rem; color: var(--text-secondary); line-height: 1.7; }
+.prose-guide ul, .prose-guide ol { margin: 0.5rem 0 0.875rem 1.5rem; color: var(--text-secondary); line-height: 1.7; }
+.prose-guide li { margin-bottom: 0.25rem; }
+.prose-guide strong { font-weight: 600; color: var(--text-primary); }
+.prose-guide code { font-family: var(--font-mono, monospace); font-size: 0.85em; padding: 0.15em 0.35em; border-radius: 4px; background: var(--bg-muted, var(--color-gray-100)); color: var(--text-primary); }
+.prose-guide pre  { background: var(--bg-muted, var(--color-gray-100)); border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 0.75rem 0 1rem; }
+.prose-guide pre code { background: none; padding: 0; font-size: 0.8125rem; }
+.prose-guide table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1rem; font-size: 0.875rem; }
+.prose-guide th { text-align: left; font-weight: 600; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border-default); color: var(--text-primary); }
+.prose-guide td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-default); color: var(--text-secondary); }
+.prose-guide tr:last-child td { border-bottom: none; }
+.prose-guide blockquote { border-left: 3px solid var(--color-blue-500); margin: 0.75rem 0; padding: 0.25rem 0 0.25rem 1rem; color: var(--text-muted); }
+.prose-guide hr { border: none; border-top: 1px solid var(--border-default); margin: 1.5rem 0; }
+
 @layer base {
   *,
   *::before,

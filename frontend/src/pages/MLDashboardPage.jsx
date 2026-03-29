@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { flushSync } from 'react-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
@@ -185,8 +186,19 @@ export default function GymPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Gym</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Train and evaluate your bots. Create bots in your profile settings.</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Gym</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Train and evaluate your bots. Create bots in your profile settings.</p>
+          </div>
+          <Link
+            to="/gym/guide"
+            className="text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors mt-1"
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
+          >
+            Training Guide
+          </Link>
+        </div>
       </div>
 
       {!domainUserId ? (
