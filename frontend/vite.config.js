@@ -15,6 +15,17 @@ export default defineConfig({
     }),
     tailwindcss(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('react-dom') || id.includes('react-router-dom') || /\/react\//.test(id)) return 'vendor-react'
+          if (id.includes('recharts')) return 'vendor-charts'
+          if (id.includes('socket.io-client')) return 'vendor-realtime'
+        },
+      },
+    },
+  },
   server: {
     host: true,
     watch: {

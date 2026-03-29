@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { useSession } from '../lib/auth-client.js'
+import { Link } from 'react-router-dom'
+import { flushSync } from 'react-dom'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import {
   LineChart, Line, BarChart, Bar,
@@ -9,7 +11,11 @@ import {
 import { api } from '../lib/api.js'
 import { evictModel, isModelCached } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
+import { runTrainingSession } from '../services/trainingService.js'
 import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
+
+// Module-level ML model cache — keyed by modelId, survives component unmount/navigation
+const _mlModelCache = new Map()
 
 const ITERATIONS_MIN = 100
 const ITERATIONS_MAX = 100_000
@@ -34,47 +40,115 @@ const SESSION_COLOR = { COMPLETED: 'teal', RUNNING: 'blue', FAILED: 'red', CANCE
 
 // Returns the display name for a player profile, substituting the logged-in
 // user's current name when the profile belongs to them.
-function playerLabel(profile, currentUserId, currentUserName) {
-  if (currentUserId && profile.userId === currentUserId) {
+function playerLabel(profile, domainUserId, currentUserName) {
+  if (domainUserId && profile.userId === domainUserId) {
     return currentUserName || profile.displayName || profile.username || 'You'
   }
   return profile.displayName || profile.username || `${profile.userId.slice(0, 12)}…`
 }
 
-export default function MLDashboardPage() {
-  const { data: session } = useSession()
+export default function GymPage() {
+  const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
-  const currentUserId   = user?.id ?? null
   const currentUserName = user?.name || user?.username || null
-  const isAdmin = user?.role === 'admin'
 
-  const [models, setModels]           = useState([])
-  const [selectedId, setSelectedId]   = useState(null)
-  const [activeTab, setActiveTab]     = useState('train')
-  const [showCreate, setShowCreate]   = useState(false)
-  const [showClone,  setShowClone]    = useState(false)
-  const [showImport, setShowImport]   = useState(false)
-  const [regressions, setRegressions] = useState(new Set())
-  const [toasts, setToasts]           = useState([])
+  const [domainUserId, setDomainUserId]   = useState(null)
+  const [bots, setBots]                   = useState([])
+  const [selectedBotId, setSelectedBotId] = useState(null)
+  const [botModels, setBotModels]         = useState({})   // { botId: mlModel }
+  const [modelLoading, setModelLoading]   = useState(false)
+  const [activeTab, setActiveTab]         = useState('train')
+  const [regressions, setRegressions]     = useState(new Set())
+  const [toasts, setToasts]               = useState([])
+  const [sessions, setSessions]           = useState([])    // shared across tabs
 
-  const selected = models.find(m => m.id === selectedId)
+  const selectedBot    = bots.find(b => b.id === selectedBotId) ?? null
+  const selectedModel  = selectedBot ? botModels[selectedBotId] ?? null : null
+  const isMlBot        = selectedBot?.botModelType === 'ml'
+  const isMinimaxBot   = selectedBot?.botModelType === 'minimax' || selectedBot?.botModelType === 'mcts'
+  const allLoadedModels = Object.values(botModels)
 
-  // Track whether the selected model is in the local inference cache
-  const [isCached, setIsCached] = useState(false)
+  // Resolve the domain User.id (different from Better Auth session user.id)
   useEffect(() => {
-    if (!selectedId) { setIsCached(false); return }
-    setIsCached(isModelCached(selectedId))
-    // Re-check after a short delay in case a preload is in flight
-    const t = setTimeout(() => setIsCached(isModelCached(selectedId)), 1500)
-    return () => clearTimeout(t)
-  }, [selectedId])
+    if (!user) return
+    // Use cached DB user to skip the sync round-trip on repeat visits.
+    async function resolveUserId() {
+      try {
+        const cacheKey = `xo_dbuser_${user.id}`
+        let domainId = null
+        try {
+          const raw = sessionStorage.getItem(cacheKey)
+          if (raw) domainId = JSON.parse(raw)?.id ?? null
+        } catch {}
+        if (domainId) { setDomainUserId(domainId); return }
+        const token = await getToken()
+        const { user: u } = await api.users.sync(token)
+        setDomainUserId(u.id)
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(u)) } catch {}
+      } catch {}
+    }
+    resolveUserId()
+  }, [user?.id])
 
-  const loadModels = useCallback(async () => {
-    const { models: ms } = await api.ml.listModels()
-    setModels(ms)
-  }, [])
+  const loadBots = useCallback(async () => {
+    if (!domainUserId) return
+    // Show stale bots immediately so the sidebar isn't blank while fetching
+    const cacheKey = `xo_bots_${domainUserId}`
+    try {
+      const raw = sessionStorage.getItem(cacheKey)
+      if (raw) setBots(JSON.parse(raw))
+    } catch {}
+    const token = await getToken()
+    const { bots: bs } = await api.bots.list({ ownerId: domainUserId, token })
+    setBots(bs || [])
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(bs || [])) } catch {}
+  }, [domainUserId])
 
-  useEffect(() => { loadModels() }, [loadModels])
+  useEffect(() => { loadBots() }, [loadBots])
+
+  // Fetch sessions once when model is selected — shared across all tabs
+  useEffect(() => {
+    if (!selectedModel?.id) { setSessions([]); return }
+    api.ml.getSessions(selectedModel.id)
+      .then(r => setSessions(r.sessions || []))
+      .catch(() => {})
+  }, [selectedModel?.id])
+
+  // Auto-select first bot
+  useEffect(() => {
+    if (bots.length > 0 && !selectedBotId) setSelectedBotId(bots[0].id)
+  }, [bots, selectedBotId])
+
+  // Load ML model when an ML bot is selected for the first time
+  useEffect(() => {
+    if (!selectedBotId || !selectedBot?.botModelId) {
+      setModelLoading(false)
+      return
+    }
+    // Check React state first (in-session bot switches)
+    if (botModels[selectedBotId]) {
+      setModelLoading(false)
+      return
+    }
+    // Check module-level cache (survives navigation/unmount)
+    const cached = _mlModelCache.get(selectedBot.botModelId)
+    if (cached) {
+      setBotModels(prev => ({ ...prev, [selectedBotId]: cached }))
+      setModelLoading(false)
+      return
+    }
+    setModelLoading(true)
+    const id = selectedBotId
+    api.ml.getModel(selectedBot.botModelId)
+      .then(({ model }) => {
+        _mlModelCache.set(model.id, model)
+        setBotModels(prev => ({ ...prev, [id]: model }))
+      })
+      .catch(() => {})
+      .finally(() => setModelLoading(false))
+    // botModels intentionally omitted — we don't want to re-run after models are added
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBotId, selectedBot?.botModelId])
 
   const addToast = useCallback((msg, color = 'blue') => {
     const id = Date.now()
@@ -101,177 +175,152 @@ export default function MLDashboardPage() {
     }
   }, [addToast])
 
-  // Auto-select first model
-  useEffect(() => {
-    if (models.length > 0 && !selectedId) setSelectedId(models[0].id)
-  }, [models, selectedId])
-
-  // Refresh model in list after training completes
-  const refreshModel = useCallback(async (id) => {
-    const { model } = await api.ml.getModel(id)
-    setModels(ms => ms.map(m => m.id === id ? { ...m, ...model } : m))
-    // Evict stale cached weights so the next game downloads the updated model
-    evictModel(id)
+  const refreshModel = useCallback(async (botId, modelId) => {
+    const { model } = await api.ml.getModel(modelId)
+    _mlModelCache.set(model.id, model)
+    setBotModels(prev => ({ ...prev, [botId]: model }))
+    evictModel(modelId)
   }, [])
-
-  async function handleDelete(id) {
-    if (!confirm('Delete this model and all its training history?')) return
-    const token = await getToken()
-    // Admin uses the unrestricted admin endpoint; regular users use the standard one
-    if (isAdmin) {
-      await api.admin.deleteModel(id, token)
-    } else {
-      await api.ml.deleteModel(id, token)
-    }
-    setModels(ms => ms.filter(m => m.id !== id))
-    if (selectedId === id) setSelectedId(models.find(m => m.id !== id)?.id || null)
-  }
-
-  async function handleFeatureToggle(id) {
-    const token = await getToken()
-    const { model: updated } = await api.admin.featureModel(id, token)
-    setModels(ms => {
-      const next = ms.map(m => m.id === id ? { ...m, featured: updated.featured } : m)
-      return [...next.filter(m => m.featured), ...next.filter(m => !m.featured)]
-    })
-  }
-
-  async function handleReset(id) {
-    if (!confirm('Reset this model to untrained baseline? All Q-table data will be lost.')) return
-    const token = await getToken()
-    await api.ml.resetModel(id, token)
-    refreshModel(id)
-  }
-
-  async function handleExport(id) {
-    const data = await api.ml.exportModel(id)
-    const src = models.find(m => m.id === id)
-    downloadJSON(data, `${(src?.name || 'model').replace(/\s+/g, '_')}.ml.json`)
-  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="pb-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-default)' }}>
-        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>ML Dashboard</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-            style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>Admin</span>
-          <Btn onClick={() => setShowImport(true)} variant="ghost">Import</Btn>
-          <button onClick={() => setShowCreate(true)}
-            className="px-3 py-1.5 text-sm font-semibold rounded-lg transition-all hover:brightness-110"
-            style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}>
-            + New Model
-          </button>
+      <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Gym</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Train and evaluate your bots. Create bots in your profile settings.</p>
+          </div>
+          <Link
+            to="/gym/guide"
+            className="text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors mt-1"
+            style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
+          >
+            Training Guide
+          </Link>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[280px_1fr] gap-6">
-        {/* Model list + Rule Sets sidebar */}
-        <aside className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>Models</p>
-          {models.length === 0 && (
-            <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No models yet.</p>
-          )}
-          {models.map(m => (
-            <button key={m.id} onClick={() => setSelectedId(m.id)}
-              className={`w-full text-left rounded-xl border p-3 transition-all ${selectedId === m.id ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : 'hover:border-[var(--color-gray-400)]'}`}
-              style={{ borderColor: selectedId === m.id ? undefined : 'var(--border-default)', backgroundColor: selectedId === m.id ? undefined : 'var(--bg-surface)' }}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-sm truncate flex items-center gap-1" title={m.creatorName ? `by ${m.creatorName}` : undefined}>
-                  {m.featured && <span title="Featured">⭐</span>}
-                  {m.name}
-                </span>
-                <div className="flex items-center gap-1">
-                  <StatusBadge status={m.status} />
-                  {regressions.has(m.id) && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--color-amber-100)] text-[var(--color-amber-700)]">⚠ regressed</span>
-                  )}
-                </div>
+      {!domainUserId ? (
+        <Card>
+          <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>Sign in to access the Gym.</p>
+        </Card>
+      ) : (
+        <div className="grid lg:grid-cols-[280px_1fr] gap-6">
+          {/* Bot sidebar */}
+          <aside className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>Your Bots</p>
+            {bots.length === 0 && (
+              <div className="text-center py-6 px-3">
+                <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>No bots yet.</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Go to Profile → Bots to create bots.</p>
               </div>
-              <div className="text-xs mt-1 flex gap-2" style={{ color: 'var(--text-muted)' }}>
-                <span>{m.totalEpisodes.toLocaleString()} eps</span>
-                <span>·</span>
-                <span>ELO {Math.round(m.eloRating)}</span>
-                {isModelCached(m.id) && <span title="Q-table loaded in browser" style={{ color: 'var(--color-teal-600)' }}>⚡</span>}
-              </div>
-            </button>
-          ))}
-          {/* Rule Sets mini-list */}
-          <RuleSetsSidebar />
-        </aside>
-
-        {/* Detail panel */}
-        <div>
-          {!selected ? (
-            <div className="rounded-xl border p-12 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
-              <p className="text-lg font-semibold mb-1">No model selected</p>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Select a model from the list or create a new one.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Model header */}
-              <div className="rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3"
-                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold" title={selected.creatorName ? `by ${selected.creatorName}` : undefined}>{selected.name}</h2>
-                    <StatusBadge status={selected.status} />
+            )}
+            {bots.map(bot => {
+              const typeLabel = bot.botModelType === 'ml' ? 'ML' : bot.botModelType === 'rule_based' ? 'Rules' : bot.botModelType === 'mcts' ? 'MCTS' : 'Minimax'
+              const typeBg    = bot.botModelType === 'ml' ? 'var(--color-blue-100)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-100)' : 'var(--color-gray-100)'
+              const typeColor = bot.botModelType === 'ml' ? 'var(--color-blue-700)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-700)' : 'var(--color-gray-600)'
+              const model = botModels[bot.id]
+              return (
+                <button key={bot.id} onClick={() => { setSelectedBotId(bot.id); setActiveTab('train') }}
+                  className={`w-full text-left rounded-xl border p-3 transition-all ${selectedBotId === bot.id ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : 'hover:border-[var(--color-gray-400)]'}`}
+                  style={{ borderColor: selectedBotId === bot.id ? undefined : 'var(--border-default)', backgroundColor: selectedBotId === bot.id ? undefined : 'var(--bg-surface)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm truncate">{bot.displayName || bot.username}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: typeBg, color: typeColor }}>{typeLabel}</span>
+                      {model && regressions.has(model.id) && (
+                        <span className="text-[9px] font-semibold px-1 py-0.5 rounded-full bg-[var(--color-amber-100)] text-[var(--color-amber-700)]">⚠</span>
+                      )}
+                    </div>
                   </div>
-                  {selected.description && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selected.description}</p>}
-                  <div className="flex gap-4 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>{selected.algorithm?.replace('_', '-')}</span>
-                    <span>{selected.totalEpisodes.toLocaleString()} / {selected.maxEpisodes > 0 ? selected.maxEpisodes.toLocaleString() : '∞'} episodes</span>
-                    {selected.creatorName && <span>by {selected.creatorName}</span>}
-                    <span>ELO {Math.round(selected.eloRating)}</span>
-                    <span title={isCached ? 'Q-table loaded in browser — moves run locally' : 'Not yet cached — first move uses server'} style={{ color: isCached ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>
-                      {isCached ? '⚡ cached' : '○ not cached'}
-                    </span>
+                  <div className="text-xs mt-1 flex gap-2" style={{ color: 'var(--text-muted)' }}>
+                    <span>ELO {Math.round(bot.eloRating || 1200)}</span>
+                    {model && <><span>·</span><span>{model.totalEpisodes.toLocaleString()} eps</span></>}
+                    {model && isModelCached(model.id) && <span title="Q-table loaded in browser" style={{ color: 'var(--color-teal-600)' }}>⚡</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </aside>
+
+          {/* Detail panel */}
+          <div>
+            {!selectedBot ? (
+              <div className="rounded-xl border p-12 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <p className="text-lg font-semibold mb-1">No bot selected</p>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Select a bot from the list.</p>
+              </div>
+            ) : isMinimaxBot ? (
+              <MinimaxBotView bot={selectedBot} />
+            ) : isMlBot && modelLoading ? (
+              <div className="flex justify-center py-16"><Spinner /></div>
+            ) : isMlBot && selectedModel ? (
+              <div className="space-y-4">
+                {/* Bot + model header */}
+                <div className="rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3"
+                  style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold">{selectedBot.displayName || selectedBot.username}</h2>
+                      <StatusBadge status={selectedModel.status} />
+                    </div>
+                    {selectedBot.bio && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selectedBot.bio}</p>}
+                    <div className="flex gap-4 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <span>{selectedModel.algorithm?.replace(/_/g, '-')}</span>
+                      <span>{selectedModel.totalEpisodes.toLocaleString()} / {selectedModel.maxEpisodes > 0 ? selectedModel.maxEpisodes.toLocaleString() : '∞'} episodes</span>
+                      <span>ELO {Math.round(selectedBot.eloRating || 1200)}</span>
+                      <span title={isModelCached(selectedModel.id) ? 'Q-table loaded in browser — moves run locally' : 'Not yet cached'} style={{ color: isModelCached(selectedModel.id) ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>
+                        {isModelCached(selectedModel.id) ? '⚡ cached' : '○ not cached'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Btn onClick={async () => {
+                      const data = await api.ml.exportModel(selectedModel.id)
+                      downloadJSON(data, `${(selectedBot.username || 'bot').replace(/\s+/g, '_')}.ml.json`)
+                    }} variant="ghost">Export</Btn>
+                    <Btn onClick={async () => {
+                      if (!confirm('Reset to untrained baseline? All Q-table data will be lost.')) return
+                      const token = await getToken()
+                      await api.ml.resetModel(selectedModel.id, token)
+                      refreshModel(selectedBotId, selectedModel.id)
+                    }} variant="ghost">Reset</Btn>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {isAdmin && (
-                    <Btn onClick={() => handleFeatureToggle(selected.id)} variant="ghost">
-                      {selected.featured ? '⭐ Unfeature' : '☆ Feature'}
-                    </Btn>
-                  )}
-                  <Btn onClick={() => handleExport(selected.id)} variant="ghost">Export</Btn>
-                  <Btn onClick={() => setShowClone(true)} variant="ghost">Clone</Btn>
-                  {(isAdmin || selected.createdBy === currentUserId) && (
-                    <Btn onClick={() => handleReset(selected.id)} variant="ghost">Reset</Btn>
-                  )}
-                  {(isAdmin || selected.createdBy === currentUserId) && (
-                    <Btn onClick={() => handleDelete(selected.id)} variant="danger">Delete</Btn>
-                  )}
+
+                {/* Tabs */}
+                <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                  {['train', 'analytics', 'evaluation', 'explainability', 'checkpoints', 'sessions', 'export', 'rules'].map(tab => (
+                    <button key={tab} onClick={() => setActiveTab(tab)}
+                      className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
+                      style={{ color: activeTab === tab ? undefined : 'var(--text-secondary)' }}>
+                      {tab}
+                    </button>
+                  ))}
                 </div>
-              </div>
 
-              {/* Tabs */}
-              <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-default)' }}>
-                {['train', 'analytics', 'evaluation', 'explainability', 'checkpoints', 'export', 'rules'].map(tab => (
-                  <button key={tab} onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
-                    style={{ color: activeTab === tab ? undefined : 'var(--text-secondary)' }}>
-                    {tab}
-                  </button>
-                ))}
+                {activeTab === 'train'          && <TrainTab model={selectedModel} sessions={sessions} onSessionsChange={setSessions} onComplete={() => refreshModel(selectedBotId, selectedModel.id)} />}
+                {activeTab === 'analytics'      && <AnalyticsTab model={selectedModel} sessions={sessions} />}
+                {activeTab === 'evaluation'     && <EvaluationTab model={selectedModel} models={allLoadedModels} domainUserId={domainUserId} currentUserName={currentUserName} />}
+                {activeTab === 'explainability' && <ExplainabilityTab model={selectedModel} domainUserId={domainUserId} currentUserName={currentUserName} />}
+                {activeTab === 'checkpoints'    && <CheckpointsTab model={selectedModel} onRestore={() => refreshModel(selectedBotId, selectedModel.id)} />}
+                {activeTab === 'sessions'       && <SessionsTab model={selectedModel} sessions={sessions} />}
+                {activeTab === 'export'         && <ExportTab model={selectedModel} sessions={sessions} />}
+                {activeTab === 'rules'          && <RulesTab model={selectedModel} models={allLoadedModels} />}
               </div>
-
-              {activeTab === 'train'          && <TrainTab model={selected} onComplete={() => { refreshModel(selected.id) }} />}
-              {activeTab === 'analytics'     && <AnalyticsTab model={selected} />}
-              {activeTab === 'evaluation'    && <EvaluationTab model={selected} models={models} currentUserId={currentUserId} currentUserName={currentUserName} />}
-              {activeTab === 'explainability'&& <ExplainabilityTab model={selected} currentUserId={currentUserId} currentUserName={currentUserName} />}
-              {activeTab === 'checkpoints'   && <CheckpointsTab model={selected} onRestore={() => refreshModel(selected.id)} />}
-              {activeTab === 'export'        && <ExportTab model={selected} />}
-              {activeTab === 'rules'         && <RulesTab model={selected} models={models} />}
-            </div>
-          )}
+            ) : isMlBot ? (
+              <div className="rounded-xl border p-8 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Could not load model for this bot.</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border p-8 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>This bot type doesn't have training options in the Gym.</p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      {showCreate && <CreateModelModal onClose={() => setShowCreate(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowCreate(false) }} />}
-      {showClone  && selected && <CloneModelModal src={selected} onClose={() => setShowClone(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowClone(false) }} />}
-      {showImport && <ImportModelModal onClose={() => setShowImport(false)} onCreate={m => { setModels(ms => [m, ...ms]); setSelectedId(m.id); setShowImport(false) }} />}
+      )}
 
       {/* Toast notifications */}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
@@ -290,9 +339,36 @@ export default function MLDashboardPage() {
   )
 }
 
+// ─── Minimax / MCTS Bot Read-Only View ────────────────────────────────────────
+
+function MinimaxBotView({ bot }) {
+  const typeLabel = bot.botModelType === 'mcts' ? 'MCTS' : 'Minimax'
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-xl font-bold">{bot.displayName || bot.username}</h2>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--color-gray-600)' }}>
+            {typeLabel}
+          </span>
+        </div>
+        {bot.bio && <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{bot.bio}</p>}
+        <div className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>ELO {Math.round(bot.eloRating || 1200)}</div>
+      </div>
+      <Card>
+        <SectionLabel>About</SectionLabel>
+        <p className="mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+          {typeLabel} bots use a deterministic algorithm and cannot be trained. Their play strength
+          is fixed. Challenge this bot in the Play area to test it.
+        </p>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Train Tab ───────────────────────────────────────────────────────────────
 
-function TrainTab({ model, onComplete }) {
+function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
   const [mode, setMode]                     = useState('SELF_PLAY')
   const [iterations, setIterations]         = useState(1000)
   const [difficulty, setDifficulty]         = useState('intermediate')
@@ -311,41 +387,49 @@ function TrainTab({ model, onComplete }) {
   const [dqnBatchSize, setDqnBatchSize]           = useState(32)
   const [dqnReplayBuffer, setDqnReplayBuffer]     = useState(10000)
   const [dqnTargetUpdate, setDqnTargetUpdate]     = useState(100)
-  const [dqnHiddenSize, setDqnHiddenSize]         = useState(32)
+  const [dqnLayers, setDqnLayers]                 = useState(() => model.config?.networkShape ?? [32])
+  const [dqnGamma, setDqnGamma]                   = useState(0.9)
   // AlphaZero-specific config
   const [azSimulations, setAzSimulations]   = useState(50)
   const [azCPuct, setAzCPuct]               = useState(1.5)
   const [azTemperature, setAzTemperature]   = useState(1.0)
-  const [sessions, setSessions]             = useState([])
   const [running, setRunning]               = useState(false)
   const [sessionId, setSessionId]           = useState(null)
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
   const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
-  const socketRef  = useRef(null)
-  const cleanupRef = useRef(null)
+  const socketRef   = useRef(null)
+  const cleanupRef  = useRef(null)
+  const cancelRef   = useRef(false)
 
-  // Load sessions to show queue status
+  // Clean up on unmount: tear down socket listeners and stop any running frontend loop
   useEffect(() => {
-    api.ml.getSessions(model.id).then(r => setSessions(r.sessions)).catch(() => {})
-  }, [model.id])
-
-  // Only clean up on unmount — never on sessionId change
-  useEffect(() => {
-    return () => cleanupRef.current?.()
+    return () => {
+      cleanupRef.current?.()
+      cancelRef.current = true
+    }
   }, [])
 
-  // Re-attach to in-progress training when navigating back to the page
+  // Re-attach to in-progress training when navigating back to the page.
+  // Frontend sessions can't resume after navigation — auto-cancel them.
   useEffect(() => {
     if (model.status !== 'TRAINING' || running) return
     let cancelled = false
 
-    api.ml.getSessions(model.id).then(r => {
+    api.ml.getSessions(model.id).then(async r => {
       if (cancelled) return
       const runningSession = r.sessions.find(s => s.status === 'RUNNING')
       if (!runningSession) return
 
-      setSessions(r.sessions)
+      onSessionsChange(r.sessions)
+
+      // Frontend session left running after navigation — clean it up
+      if (runningSession.config?.frontend) {
+        const tok = await getToken().catch(() => null)
+        if (tok) api.ml.cancelSession(runningSession.id, tok).catch(() => {})
+        return
+      }
+
       setSessionId(runningSession.id)
       setIterations(runningSession.iterations)
       setRunning(true)
@@ -367,7 +451,7 @@ function TrainTab({ model, onComplete }) {
           lossRate: Math.round(data.lossRate * 100),
           drawRate: Math.round(data.drawRate * 100),
           epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-          qDelta: parseFloat(data.avgQDelta.toFixed(4)),
+          qDelta: data.avgQDelta,
         }])
       }
 
@@ -378,11 +462,11 @@ function TrainTab({ model, onComplete }) {
 
       const teardown = () => {
         socket.emit('ml:unwatch', { sessionId: runningSession.id })
-        socket.off('ml:progress',          onProgress)
-        socket.off('ml:curriculum_advance', onCurriculumAdvance)
-        socket.off('ml:complete',          onComplete_)
-        socket.off('ml:cancelled',         onCancelled)
-        socket.off('ml:error',             onError)
+        socket.off('ml:progress',           onProgress)
+        socket.off('ml:curriculum_advance',  onCurriculumAdvance)
+        socket.off('ml:complete',           onComplete_)
+        socket.off('ml:cancelled',          onCancelled)
+        socket.off('ml:error',              onError)
         cleanupRef.current = null
       }
 
@@ -390,11 +474,11 @@ function TrainTab({ model, onComplete }) {
       const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
       const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
 
-      socket.on('ml:progress',          onProgress)
-      socket.on('ml:curriculum_advance', onCurriculumAdvance)
-      socket.once('ml:complete',          onComplete_)
-      socket.once('ml:cancelled',         onCancelled)
-      socket.once('ml:error',             onError)
+      socket.on('ml:progress',           onProgress)
+      socket.on('ml:curriculum_advance',  onCurriculumAdvance)
+      socket.once('ml:complete',           onComplete_)
+      socket.once('ml:cancelled',          onCancelled)
+      socket.once('ml:error',              onError)
 
       cleanupRef.current = teardown
     }).catch(() => {})
@@ -403,9 +487,17 @@ function TrainTab({ model, onComplete }) {
   }, [model.id, model.status, running, onComplete])
 
   async function handleStart() {
-    // Clean up any lingering listeners from a previous session before starting a new one
     cleanupRef.current?.()
     cleanupRef.current = null
+    cancelRef.current = false
+
+    // Show the progress panel immediately before the API call
+    flushSync(() => {
+      setRunning(true)
+      setProgress(null)
+      setChartData([])
+      setCurriculumDifficulty(null)
+    })
 
     const token = await getToken()
     const cfg = {
@@ -414,72 +506,68 @@ function TrainTab({ model, onComplete }) {
       ...(curriculum ? { curriculum: true } : {}),
       ...(earlyStopEnabled ? { earlyStop: { patience, minDelta } } : {}),
       ...(algorithm !== 'ALPHA_ZERO' ? { epsilonDecay, epsilonMin, decayMethod, ...(resetEpsilon ? { currentEpsilon: 1.0 } : {}) } : {}),
-      ...(algorithm === 'DQN' ? { batchSize: dqnBatchSize, replayBufferSize: dqnReplayBuffer, targetUpdateFreq: dqnTargetUpdate, hiddenSize: dqnHiddenSize } : {}),
+      ...(algorithm === 'DQN' ? { batchSize: dqnBatchSize, replayBufferSize: dqnReplayBuffer, targetUpdateFreq: dqnTargetUpdate, networkShape: dqnLayers, gamma: dqnGamma } : {}),
       ...(algorithm === 'ALPHA_ZERO' ? { numSimulations: azSimulations, cPuct: azCPuct, temperature: azTemperature } : {}),
     }
     try {
-      const { session } = await api.ml.train(model.id, { mode, iterations, config: cfg }, token)
-      setSessions(prev => [session, ...prev])
-      setSessionId(session.id)
-      setRunning(true)
-      setProgress(null)
-      setChartData([])
-      setCurriculumDifficulty(curriculum && mode === 'VS_MINIMAX' ? 'novice' : null)
+      // Create session on backend and get current model weights for engine init
+      const { session, model: modelState } = await api.ml.train(model.id, { mode, iterations, config: cfg, frontend: true }, token)
 
-      const socket = getSocket()
-      if (!socket.connected) socket.connect()
-      socketRef.current = socket
-      socket.emit('ml:watch', { sessionId: session.id })
+      flushSync(() => {
+        onSessionsChange(prev => [session, ...prev])
+        setSessionId(session.id)
+        if (curriculum && mode === 'VS_MINIMAX') setCurriculumDifficulty('novice')
+      })
 
-      // Named handler so we can remove exactly this session's listener later
-      const onProgress = (data) => {
-        if (data.sessionId !== session.id) return
-        setProgress(data)
-        setChartData(prev => [...prev, {
-          ep: data.episode,
-          winRate:  Math.round(data.winRate  * 100),
-          lossRate: Math.round(data.lossRate * 100),
-          drawRate: Math.round(data.drawRate * 100),
-          epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-          qDelta: parseFloat(data.avgQDelta.toFixed(4)),
-        }])
-      }
+      // Run all episodes locally in the browser
+      const result = await runTrainingSession({
+        model: modelState,
+        session: { ...session, config: cfg },
+        cancelRef,
+        onProgress: (data) => {
+          flushSync(() => {
+            setProgress({ ...data, sessionId: session.id })
+            setChartData(prev => [...prev, {
+              ep: data.episode,
+              winRate:  Math.round(data.winRate  * 100),
+              lossRate: Math.round(data.lossRate * 100),
+              drawRate: Math.round(data.drawRate * 100),
+              recentWinRate:  Math.round((data.recentWinRate  ?? data.winRate)  * 100),
+              recentLossRate: Math.round((data.recentLossRate ?? data.lossRate) * 100),
+              recentDrawRate: Math.round((data.recentDrawRate ?? data.drawRate) * 100),
+              epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
+              qDelta: data.avgQDelta,
+            }])
+          })
+        },
+        onCurriculumAdvance: ({ difficulty: newDiff }) => setCurriculumDifficulty(newDiff),
+      })
 
-      const onCurriculumAdvance_ = (data) => {
-        if (data.sessionId !== session.id) return
-        setCurriculumDifficulty(data.difficulty)
-      }
+      // Show 100% while finishSession uploads weights (covers early-stop and normal completion)
+      flushSync(() => {
+        setProgress(prev => prev ? { ...prev, episode: prev.totalEpisodes } : prev)
+      })
 
-      const teardown = () => {
-        socket.emit('ml:unwatch', { sessionId: session.id })
-        socket.off('ml:progress',          onProgress)
-        socket.off('ml:curriculum_advance', onCurriculumAdvance_)
-        socket.off('ml:complete',          onComplete_)
-        socket.off('ml:cancelled',         onCancelled)
-        socket.off('ml:error',             onError)
-        cleanupRef.current = null
-      }
+      // Persist weights + stats to backend; it handles ELO calibration async
+      await api.ml.finishSession(session.id, {
+        weights:    result.weights,
+        stats:      result.stats,
+        iterations: result.iterations,
+        status:     result.status,
+        samples:    result.samples,
+      }, token)
 
-      const onComplete_  = () => { setRunning(false); teardown(); onComplete() }
-      const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
-      const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
-
-      socket.on('ml:progress',          onProgress)
-      socket.on('ml:curriculum_advance', onCurriculumAdvance_)
-      socket.once('ml:complete',          onComplete_)
-      socket.once('ml:cancelled',         onCancelled)
-      socket.once('ml:error',             onError)
-
-      cleanupRef.current = teardown
+      setRunning(false)
+      onComplete()
     } catch (err) {
+      setRunning(false)
       alert(err.message)
     }
   }
 
   async function handleCancel() {
-    if (!sessionId) return
-    const token = await getToken()
-    await api.ml.cancelSession(sessionId, token)
+    // Signal the training loop to stop; handleStart will call finishSession with CANCELLED
+    cancelRef.current = true
   }
 
   const pct = progress ? Math.round((progress.episode / progress.totalEpisodes) * 100) : 0
@@ -549,48 +637,103 @@ function TrainTab({ model, onComplete }) {
               )})()}</div>
 
             {/* DQN config fields */}
-            {algorithm === 'DQN' && (
-              <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>DQN Configuration</p>
-                <div className="flex flex-wrap gap-4">
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Batch</label>
-                    <input type="number" min="8" max="256" step="8" value={dqnBatchSize}
-                      onChange={e => setDqnBatchSize(Number(e.target.value))}
-                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+            {algorithm === 'DQN' && (() => {
+              const storedShape = model.config?.networkShape ?? [32]
+              const archChanged = JSON.stringify(dqnLayers) !== JSON.stringify(storedShape)
+              const LAYER_SIZES = [8, 16, 32, 64, 128]
+              return (
+                <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>DQN Configuration</p>
+
+                  {/* Numeric controls row */}
+                  <div className="flex flex-wrap gap-4">
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Batch</label>
+                      <input type="number" min="8" max="256" step="8" value={dqnBatchSize}
+                        onChange={e => setDqnBatchSize(Number(e.target.value))}
+                        className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Replay buffer</label>
+                      <input type="number" min="1000" max="100000" step="1000" value={dqnReplayBuffer}
+                        onChange={e => setDqnReplayBuffer(Number(e.target.value))}
+                        className="w-28 text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Target update</label>
+                      <input type="number" min="10" max="1000" step="10" value={dqnTargetUpdate}
+                        onChange={e => setDqnTargetUpdate(Number(e.target.value))}
+                        className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Gamma (γ)
+                        <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(discount)</span>
+                      </label>
+                      <select value={dqnGamma} onChange={e => setDqnGamma(Number(e.target.value))}
+                        className="text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+                        <option value={0.85}>0.85</option>
+                        <option value={0.90}>0.90 — default</option>
+                        <option value={0.95}>0.95 — recommended</option>
+                        <option value={0.99}>0.99</option>
+                      </select>
+                    </div>
                   </div>
+
+                  {/* Network architecture layer builder */}
                   <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Replay buffer</label>
-                    <input type="number" min="1000" max="100000" step="1000" value={dqnReplayBuffer}
-                      onChange={e => setDqnReplayBuffer(Number(e.target.value))}
-                      className="w-28 text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    <div className="flex items-center gap-2 mb-1">
+                      <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Network architecture
+                        <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(input:9 → hidden → output:9)</span>
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {dqnLayers.map((size, i) => (
+                        <div key={i} className="flex items-center gap-1">
+                          <select value={size}
+                            onChange={e => setDqnLayers(prev => prev.map((v, j) => j === i ? Number(e.target.value) : v))}
+                            className="text-sm rounded-lg border px-2 py-1 outline-none"
+                            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+                            {LAYER_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                          {dqnLayers.length > 1 && (
+                            <button onClick={() => setDqnLayers(prev => prev.filter((_, j) => j !== i))}
+                              className="text-xs px-1.5 py-1 rounded border"
+                              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                              title="Remove layer">×</button>
+                          )}
+                          {i < dqnLayers.length - 1 && (
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>→</span>
+                          )}
+                        </div>
+                      ))}
+                      {dqnLayers.length < 3 && (
+                        <button onClick={() => setDqnLayers(prev => [...prev, 32])}
+                          className="text-xs px-2 py-1 rounded border font-medium"
+                          style={{ borderColor: 'var(--color-blue-600)', color: 'var(--color-blue-600)' }}>
+                          + Add layer
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                      Current: [9 → {dqnLayers.join(' → ')} → 9]
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Target update</label>
-                    <input type="number" min="10" max="1000" step="10" value={dqnTargetUpdate}
-                      onChange={e => setDqnTargetUpdate(Number(e.target.value))}
-                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      Hidden size
-                      <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(neurons)</span>
-                    </label>
-                    <select value={dqnHiddenSize} onChange={e => setDqnHiddenSize(Number(e.target.value))}
-                      className="text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
-                      <option value={16}>16 — fastest</option>
-                      <option value={32}>32 — default</option>
-                      <option value={64}>64 — slower</option>
-                      <option value={128}>128 — slowest</option>
-                    </select>
-                  </div>
+
+                  {/* Architecture changed warning */}
+                  {archChanged && (
+                    <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)', border: '1px solid var(--color-amber-300)' }}>
+                      Architecture changed from [{storedShape.join(', ')}] → [{dqnLayers.join(', ')}] — existing weights will be reset and training starts fresh.
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* AlphaZero config fields */}
             {algorithm === 'ALPHA_ZERO' && (
@@ -728,14 +871,26 @@ function TrainTab({ model, onComplete }) {
               return (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                      Iterations: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{displayIterations.toLocaleString()}</span>
-                    </label>
-                    {model.maxEpisodes > 0 && (
-                      <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
-                        {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
-                      </span>
-                    )}
+                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Iterations</label>
+                    <div className="flex items-center gap-2">
+                      {model.maxEpisodes > 0 && (
+                        <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
+                          {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
+                        </span>
+                      )}
+                      <input
+                        type="number"
+                        min={ITERATIONS_MIN} max={sliderMax} step={ITERATIONS_STEP}
+                        value={displayIterations}
+                        disabled={atLimit}
+                        onChange={e => {
+                          const v = Number(e.target.value)
+                          if (!isNaN(v)) setIterations(Math.max(ITERATIONS_MIN, Math.min(sliderMax, v)))
+                        }}
+                        className="w-24 px-2 py-0.5 rounded text-sm font-bold tabular-nums text-right disabled:opacity-40"
+                        style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-surface-hover)', border: '1px solid var(--border-default)' }}
+                      />
+                    </div>
                   </div>
                   <input type="range" min={ITERATIONS_MIN} max={sliderMax} step={ITERATIONS_STEP} value={displayIterations}
                     onChange={e => setIterations(Number(e.target.value))}
@@ -789,7 +944,7 @@ function TrainTab({ model, onComplete }) {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <SectionLabel>Training in Progress</SectionLabel>
+              <SectionLabel>{sessionId ? 'Training in Progress' : 'Starting…'}</SectionLabel>
               {curriculumDifficulty && (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize"
                   style={{
@@ -804,16 +959,18 @@ function TrainTab({ model, onComplete }) {
           </div>
 
           {/* Progress bar */}
-          <div className="h-2 rounded-full overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-gray-200)' }}>
-            <div className="h-full rounded-full transition-all duration-300"
-              style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-600)' }} />
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-gray-200)' }}>
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'var(--color-blue-600)' }} />
+            </div>
+            <span className="text-xs font-mono font-semibold tabular-nums w-9 text-right" style={{ color: 'var(--text-secondary)' }}>{pct}%</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <MiniStat label="Episode" value={progress ? `${progress.episode.toLocaleString()} / ${progress.totalEpisodes.toLocaleString()}` : `0 / ${iterations.toLocaleString()}`} />
             <MiniStat label="Win Rate" value={progress ? `${Math.round(progress.winRate * 100)}%` : '—'} color="var(--color-teal-600)" />
             <MiniStat label="Epsilon ε" value={progress ? progress.epsilon.toFixed(4) : '1.0000'} color="var(--color-amber-600)" />
-            <MiniStat label="Avg ΔQ" value={progress ? progress.avgQDelta.toFixed(5) : '—'} />
+            <MiniStat label="Avg ΔQ" value={progress ? (progress.avgQDelta === 0 ? '0 ✓' : progress.avgQDelta < 0.0001 ? progress.avgQDelta.toExponential(2) : progress.avgQDelta.toFixed(5)) : '—'} />
             <MiniStat label="Avg game" value={progress?.avgGameMs != null ? `${progress.avgGameMs.toFixed(1)}ms` : '—'} />
           </div>
           <div className="flex gap-4 text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
@@ -837,9 +994,12 @@ function TrainTab({ model, onComplete }) {
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win %"  strokeWidth={2} />
-                  <Line type="monotone" dataKey="lossRate" stroke="var(--color-blue-500)"   dot={false} name="Loss %" strokeWidth={1} strokeDasharray="4 2" />
-                  <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentWinRate"  stroke="var(--color-teal-600)"  dot={false} name="Win % (recent)"  strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentDrawRate" stroke="var(--color-amber-600)" dot={false} name="Draw % (recent)" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="recentLossRate" stroke="var(--color-red-500)"   dot={false} name="Loss % (recent)" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="winRate"  stroke="var(--color-teal-600)"  dot={false} name="Win % (avg)"  strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw % (avg)" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="lossRate" stroke="var(--color-red-500)"   dot={false} name="Loss % (avg)" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.45} />
                 </LineChart>
               </ChartPanel>
               <ChartPanel label="Exploration Rate (ε) Decay">
@@ -848,7 +1008,7 @@ function TrainTab({ model, onComplete }) {
                   <XAxis dataKey="ep" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="%" />
                   <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v}%`]} />
-                  <Line type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="epsilon" stroke="var(--color-blue-600)" dot={false} name="ε %" strokeWidth={2} />
                 </LineChart>
               </ChartPanel>
             </div>
@@ -889,7 +1049,7 @@ function TrainTab({ model, onComplete }) {
                 <Line type="monotone" dataKey="drawRate" stroke="var(--color-amber-600)" dot={false} name="Draw %" strokeWidth={1} strokeDasharray="2 3" />
               </LineChart>
             </ChartPanel>
-            <ChartPanel label="Q-delta Convergence">
+            <ChartPanel label="Q-delta Convergence (→ 0 = converged)">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
                 <XAxis dataKey="ep" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
@@ -938,8 +1098,7 @@ function buildChartData(episodes) {
   }))
 }
 
-function AnalyticsTab({ model }) {
-  const [sessions, setSessions]       = useState([])
+function AnalyticsTab({ model, sessions }) {
   const [selSession, setSelSession]   = useState(null)
   const [cmpSession, setCmpSession]   = useState(null)   // comparison session
   const [episodes, setEpisodes]       = useState([])
@@ -947,12 +1106,10 @@ function AnalyticsTab({ model }) {
   const [window, setWindow]           = useState(50)
   const [loading, setLoading]         = useState(false)
 
+  // Set initial session when sessions become available from parent
   useEffect(() => {
-    api.ml.getSessions(model.id).then(r => {
-      setSessions(r.sessions)
-      if (r.sessions.length > 0) setSelSession(r.sessions[0])
-    })
-  }, [model.id])
+    if (sessions.length > 0 && !selSession) setSelSession(sessions[0])
+  }, [sessions])
 
   useEffect(() => {
     if (!selSession) return
@@ -1089,7 +1246,7 @@ function AnalyticsTab({ model }) {
 
 const EMPTY_BOARD = Array(9).fill(null)
 
-function ExplainabilityTab({ model, currentUserId, currentUserName }) {
+function ExplainabilityTab({ model, domainUserId, currentUserName }) {
   const [board, setBoard]           = useState([...EMPTY_BOARD])
   const [qValues, setQValues]       = useState(null)
   const [bestCell, setBestCell]     = useState(null)
@@ -1275,7 +1432,7 @@ function ExplainabilityTab({ model, currentUserId, currentUserName }) {
 
       {activeSection === 'diff' && <VersionDiffViewer model={model} />}
       {activeSection === 'hypersearch' && <HyperparamSearchPanel model={model} />}
-      {activeSection === 'opponent' && <OpponentModelPanel model={model} board={board} qValues={qValues} currentUserId={currentUserId} currentUserName={currentUserName} />}
+      {activeSection === 'opponent' && <OpponentModelPanel model={model} board={board} qValues={qValues} domainUserId={domainUserId} currentUserName={currentUserName} />}
       {activeSection === 'activations' && isNeuralNet && <NetworkActivationsPanel model={model} />}
     </div>
   )
@@ -1283,7 +1440,7 @@ function ExplainabilityTab({ model, currentUserId, currentUserName }) {
 
 // ─── Opponent Model Panel ─────────────────────────────────────────────────────
 
-function OpponentModelPanel({ model, board, qValues, currentUserId, currentUserName }) {
+function OpponentModelPanel({ model, board, qValues, domainUserId, currentUserName }) {
   const [profiles, setProfiles]         = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [profile, setProfile]           = useState(null)
@@ -1384,7 +1541,7 @@ function OpponentModelPanel({ model, board, qValues, currentUserId, currentUserN
           >
             {profiles.map(p => (
               <option key={p.userId} value={p.userId}>
-                {playerLabel(p, currentUserId, currentUserName)} ({p.gamesRecorded} games)
+                {playerLabel(p, domainUserId, currentUserName)} ({p.gamesRecorded} games)
               </option>
             ))}
           </select>
@@ -1930,10 +2087,15 @@ function OpeningResponseGrid({ responses }) {
 
 function CheckpointsTab({ model, onRestore }) {
   const [checkpoints, setCheckpoints] = useState([])
+  const [selected, setSelected] = useState('')
   const [saving, setSaving] = useState(false)
+  const [restoring, setRestoring] = useState(false)
 
   useEffect(() => {
-    api.ml.getCheckpoints(model.id).then(r => setCheckpoints(r.checkpoints))
+    api.ml.getCheckpoints(model.id).then(r => {
+      setCheckpoints(r.checkpoints)
+      if (r.checkpoints.length > 0) setSelected(r.checkpoints[0].id)
+    })
   }, [model.id])
 
   async function handleSave() {
@@ -1942,17 +2104,26 @@ function CheckpointsTab({ model, onRestore }) {
       const token = await getToken()
       const { checkpoint } = await api.ml.saveCheckpoint(model.id, token)
       setCheckpoints(prev => [checkpoint, ...prev])
+      setSelected(checkpoint.id)
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleRestore(cpId) {
+  async function handleRestore() {
+    if (!selected) return
     if (!confirm('Restore this checkpoint? Current Q-table will be replaced.')) return
-    const token = await getToken()
-    await api.ml.restoreCheckpoint(model.id, cpId, token)
-    onRestore()
+    setRestoring(true)
+    try {
+      const token = await getToken()
+      await api.ml.restoreCheckpoint(model.id, selected, token)
+      onRestore()
+    } finally {
+      setRestoring(false)
+    }
   }
+
+  const selectedCp = checkpoints.find(cp => cp.id === selected) ?? null
 
   return (
     <Card>
@@ -1962,43 +2133,125 @@ function CheckpointsTab({ model, onRestore }) {
           {saving ? 'Saving…' : '+ Save now'}
         </Btn>
       </div>
-      <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
         Auto-saved every 1,000 episodes. Restore any checkpoint to roll back the model.
       </p>
       {checkpoints.length === 0 ? (
         <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No checkpoints yet.</p>
       ) : (
-        <div className="space-y-2">
-          {checkpoints.map(cp => (
-            <div key={cp.id} className="flex items-center justify-between rounded-lg border px-4 py-3"
+        <div className="space-y-3">
+          <select value={selected} onChange={e => setSelected(e.target.value)}
+            className="w-full text-sm rounded-lg border px-3 py-2 outline-none"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+            {checkpoints.map(cp => (
+              <option key={cp.id} value={cp.id}>
+                Episode {cp.episodeNum.toLocaleString()} · ε={cp.epsilon.toFixed(4)} · ELO {Math.round(cp.eloRating)} · {new Date(cp.createdAt).toLocaleDateString()}
+              </option>
+            ))}
+          </select>
+          {selectedCp && (
+            <div className="rounded-lg border px-4 py-3 flex items-center justify-between"
               style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
-              <div>
-                <p className="text-sm font-semibold">Episode {cp.episodeNum.toLocaleString()}</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  ε={cp.epsilon.toFixed(4)} · ELO {Math.round(cp.eloRating)} · {new Date(cp.createdAt).toLocaleString()}
-                </p>
+              <div className="text-xs space-y-0.5" style={{ color: 'var(--text-muted)' }}>
+                <p><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Episode {selectedCp.episodeNum.toLocaleString()}</span></p>
+                <p>ε = {selectedCp.epsilon.toFixed(4)} · ELO {Math.round(selectedCp.eloRating)}</p>
+                <p>{new Date(selectedCp.createdAt).toLocaleString()}</p>
               </div>
-              <Btn onClick={() => handleRestore(cp.id)} variant="ghost">Restore</Btn>
+              <Btn onClick={handleRestore} disabled={restoring} variant="ghost">
+                {restoring ? 'Restoring…' : 'Restore'}
+              </Btn>
             </div>
-          ))}
+          )}
         </div>
       )}
     </Card>
   )
 }
 
+// ─── Sessions Tab ─────────────────────────────────────────────────────────────
+
+function SessionsTab({ model, sessions }) {
+  const [selected, setSelected] = useState(() => sessions[0]?.id ?? '')
+
+  // Keep selection valid when sessions list changes
+  useEffect(() => {
+    if (sessions.length > 0 && !selected) setSelected(sessions[0].id)
+  }, [sessions])
+
+  const sel = sessions.find(s => s.id === selected) ?? null
+
+  function fmtDuration(s) {
+    if (!s.startedAt || !s.completedAt) return '—'
+    const ms = new Date(s.completedAt) - new Date(s.startedAt)
+    const mins = Math.floor(ms / 60000)
+    const secs = Math.floor((ms % 60000) / 1000)
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
+  }
+
+  return (
+    <Card>
+      <SectionLabel>Training Sessions</SectionLabel>
+      <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-muted)' }}>
+        History of all training runs for this model.
+      </p>
+      {sessions.length === 0 ? (
+        <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No training sessions yet.</p>
+      ) : (
+        <div className="space-y-3">
+          <select value={selected} onChange={e => setSelected(e.target.value)}
+            className="w-full text-sm rounded-lg border px-3 py-2 outline-none"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+            {sessions.map(s => (
+              <option key={s.id} value={s.id}>
+                {new Date(s.startedAt).toLocaleDateString()} · {s.mode.replace(/_/g, ' ')} · {s.iterations.toLocaleString()} eps · {s.status}
+              </option>
+            ))}
+          </select>
+          {sel && (
+            <div className="rounded-lg border px-4 py-4 space-y-3"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">{sel.mode.replace(/_/g, ' ')}</span>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full`}
+                  style={{
+                    backgroundColor: `var(--color-${SESSION_COLOR[sel.status] || 'gray'}-100)`,
+                    color: `var(--color-${SESSION_COLOR[sel.status] || 'gray'}-700)`,
+                  }}>{sel.status}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <StatCell label="Episodes" value={sel.iterations.toLocaleString()} />
+                <StatCell label="Duration" value={fmtDuration(sel)} />
+                <StatCell label="Started" value={new Date(sel.startedAt).toLocaleString()} />
+                {sel.summary && <>
+                  <StatCell label="Win rate" value={sel.summary.winRate != null ? `${(sel.summary.winRate * 100).toFixed(1)}%` : '—'} />
+                  <StatCell label="Wins" value={sel.summary.wins ?? '—'} />
+                  <StatCell label="Losses" value={sel.summary.losses ?? '—'} />
+                  <StatCell label="Draws" value={sel.summary.draws ?? '—'} />
+                  <StatCell label="Final ε" value={sel.summary.finalEpsilon != null ? sel.summary.finalEpsilon.toFixed(4) : '—'} />
+                  {sel.summary.avgQDelta != null && <StatCell label="Avg Q-Δ" value={sel.summary.avgQDelta.toFixed(4)} />}
+                </>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function StatCell({ label, value }) {
+  return (
+    <div className="rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border-default)' }}>
+      <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-sm font-semibold mt-0.5">{value}</p>
+    </div>
+  )
+}
+
 // ─── Export Tab ───────────────────────────────────────────────────────────────
 
-function ExportTab({ model }) {
-  const [sessions, setSessions]   = useState([])
-  const [selSession, setSelSession] = useState(null)
-
-  useEffect(() => {
-    api.ml.getSessions(model.id).then(r => {
-      setSessions(r.sessions)
-      if (r.sessions.length > 0) setSelSession(r.sessions[0].id)
-    })
-  }, [model.id])
+function ExportTab({ model, sessions }) {
+  const [selSession, setSelSession] = useState(() => sessions[0]?.id ?? null)
 
   async function exportQTable() {
     const data = await api.ml.getQTable(model.id)
@@ -2297,7 +2550,7 @@ function CreateModelModal({ onClose, onCreate }) {
 
 // ─── Evaluation Tab ───────────────────────────────────────────────────────────
 
-function EvaluationTab({ model, models, currentUserId, currentUserName }) {
+function EvaluationTab({ model, models, domainUserId, currentUserName }) {
   const [section, setSection] = useState('benchmark') // 'benchmark' | 'elo' | 'versus' | 'tournament' | 'profiles'
 
   return (
@@ -2321,7 +2574,7 @@ function EvaluationTab({ model, models, currentUserId, currentUserName }) {
       {section === 'elo'        && <EloPanel model={model} />}
       {section === 'versus'     && <VersusPanel model={model} models={models} />}
       {section === 'tournament' && <TournamentPanel models={models} />}
-      {section === 'profiles'   && <PlayerProfilesPanel model={model} currentUserId={currentUserId} currentUserName={currentUserName} />}
+      {section === 'profiles'   && <PlayerProfilesPanel model={model} domainUserId={domainUserId} currentUserName={currentUserName} />}
     </div>
   )
 }
@@ -2636,7 +2889,7 @@ function TendencyBar({ label, value }) {
   )
 }
 
-function PlayerProfilesPanel({ model, currentUserId, currentUserName }) {
+function PlayerProfilesPanel({ model, domainUserId, currentUserName }) {
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
@@ -2691,8 +2944,8 @@ function PlayerProfilesPanel({ model, currentUserId, currentUserName }) {
                   className="w-full grid gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
                   style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', backgroundColor: 'var(--bg-base)' }}
                 >
-                  <span className="text-xs truncate font-medium" style={{ color: 'var(--text-secondary)' }} title={playerLabel(p, currentUserId, currentUserName)}>
-                    {playerLabel(p, currentUserId, currentUserName)}
+                  <span className="text-xs truncate font-medium" style={{ color: 'var(--text-secondary)' }} title={playerLabel(p, domainUserId, currentUserName)}>
+                    {playerLabel(p, domainUserId, currentUserName)}
                   </span>
                   <span className="font-bold" style={{ color: 'var(--color-blue-600)' }}>{p.gamesRecorded}</span>
                   <span style={{ color: 'var(--text-secondary)' }}>{Math.round((tendencies.centerRate || 0) * 100)}%</span>

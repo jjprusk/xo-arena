@@ -8,9 +8,10 @@ const THEMES = [
   { value: 'system', label: 'System', preview: '⊙' },
 ]
 
+
 export default function SettingsPage() {
   const { theme, setTheme } = useThemeStore()
-  const { muted, toggleMute, volume, setVolume, soundPack, setSoundPack } = useSoundStore()
+  const { muted, toggleMute, volume, setVolume, soundPack, setSoundPack, play } = useSoundStore()
 
   return (
     <div className="max-w-lg mx-auto space-y-8">
@@ -95,7 +96,16 @@ export default function SettingsPage() {
           </div>
           <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
           <div>
-            <span className="text-sm font-medium block mb-2">Sound pack</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Sound pack</span>
+              <button
+                onClick={() => play('move')}
+                className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              >
+                ▶ Test sound
+              </button>
+            </div>
             <select
               value={soundPack}
               onChange={e => setSoundPack(e.target.value)}

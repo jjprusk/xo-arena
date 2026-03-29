@@ -1,11 +1,12 @@
 {
   "name": "xo-arena",
-  "version": "2.1.0",
+  "version": "1.0.0",
   "private": true,
   "workspaces": [
     "frontend",
     "backend",
-    "e2e"
+    "e2e",
+    "packages/*"
   ],
   "scripts": {
     "dev:all": "concurrently \"npm run dev --workspace=frontend\" \"npm run dev --workspace=backend\"",

@@ -2,7 +2,7 @@
 FROM node:22-slim AS builder
 WORKDIR /app
 COPY package.json ./
-RUN npm install
+RUN npm install --no-package-lock --ignore-scripts
 COPY . .
 ARG VITE_API_URL
 ARG VITE_SOCKET_URL
@@ -12,11 +12,11 @@ ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 ENV VITE_ENV=$VITE_ENV
 RUN npm run build
 
-# Runtime stage
+# Runtime stage — only needs the static server
 FROM node:22-slim
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
-COPY server.js package.json ./
-RUN npm install --omit=dev
+COPY --from=builder /app/server.js /app/package.json ./
+RUN npm install --omit=dev --no-package-lock --ignore-scripts
 EXPOSE 3000
 CMD ["node", "server.js"]

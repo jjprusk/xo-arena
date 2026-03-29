@@ -22,11 +22,19 @@ app.use(cors({
 // Better Auth handler — must be mounted BEFORE express.json()
 app.all('/api/auth/*', toNodeHandler(auth))
 
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 
-// Request logger middleware
-app.use((req, _res, next) => {
-  logger.info({ method: req.method, url: req.url }, 'request')
+// Request timing middleware
+app.use((req, res, next) => {
+  const start = Date.now()
+  res.on('finish', () => {
+    logger.info({
+      method: req.method,
+      url: req.url,
+      status: res.statusCode,
+      ms: Date.now() - start,
+    }, 'request')
+  })
   next()
 })
 

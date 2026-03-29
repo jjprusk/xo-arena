@@ -24,6 +24,10 @@ export const usePvpStore = create((set, get) => ({
   winLine: null,
   spectatorCount: 0,
 
+  // Opponent info (populated once both players are in the room)
+  opponentName: null,
+  opponentElo: null,
+
   // Connection
   connected: false,
   error: null,
@@ -112,7 +116,7 @@ export const usePvpStore = create((set, get) => ({
       status: 'idle', board: Array(9).fill(null), currentTurn: 'X',
       scores: { X: 0, O: 0 }, round: 1, winner: null, winLine: null,
       spectatorCount: 0, connected: false, error: null, isAutoRoom: false,
-      incomingReaction: null,
+      incomingReaction: null, opponentName: null, opponentElo: null,
     })
   },
 
@@ -136,6 +140,9 @@ export const usePvpStore = create((set, get) => ({
     })
 
     socket.on('room:joined', ({ slug, role, mark, room }) => {
+      // Guest (mark=O) → opponent is the host
+      const opponentName = mark === 'O' ? (room?.hostUserDisplayName ?? null) : null
+      const opponentElo  = mark === 'O' ? (room?.hostUserElo ?? null) : null
       set({
         slug,
         role,
@@ -146,11 +153,18 @@ export const usePvpStore = create((set, get) => ({
         currentTurn: room?.currentTurn || 'X',
         scores: room?.scores || { X: 0, O: 0 },
         spectatorCount: room?.spectatorCount ?? 0,
+        opponentName,
+        opponentElo,
       })
     })
 
     socket.on('room:guestJoined', ({ room }) => {
-      set({ displayName: room.displayName })
+      // Host (mark=X) → opponent is the guest who just joined
+      set({
+        displayName: room.displayName,
+        opponentName: room.guestUserDisplayName ?? null,
+        opponentElo: room.guestUserElo ?? null,
+      })
     })
 
     socket.on('room:spectatorJoined', ({ spectatorCount }) => {

@@ -7,15 +7,18 @@
  */
 
 import db from '../lib/db.js'
-import { QLearningEngine, runEpisode, DEFAULT_CONFIG } from '../ai/qLearning.js'
-import { SarsaEngine } from '../ai/sarsa.js'
-import { MonteCarloEngine } from '../ai/monteCarlo.js'
-import { PolicyGradientEngine } from '../ai/policyGradient.js'
-import { DQNEngine } from '../ai/dqn.js'
-import { AlphaZeroEngine } from '../ai/alphaZero.js'
-import { minimaxMove } from '../ai/minimax.js'
-import { getWinner, isBoardFull, getEmptyCells, opponent } from '../ai/gameLogic.js'
-import { proportionPValue, twoProportionPValue } from '../ai/stats.js'
+import { resetBotElo } from './userService.js'
+import {
+  QLearningEngine, runEpisode, DEFAULT_CONFIG,
+  SarsaEngine,
+  MonteCarloEngine,
+  PolicyGradientEngine,
+  DQNEngine,
+  AlphaZeroEngine,
+  minimaxMove,
+  getWinner, isBoardFull, getEmptyCells, opponent,
+  proportionPValue, twoProportionPValue,
+} from '@xo-arena/ai'
 import logger from '../logger.js'
 
 // ─── Socket.io reference ────────────────────────────────────────────────────
@@ -183,10 +186,20 @@ export async function resetModel(id) {
   const model = await db.mLModel.findUnique({ where: { id } })
   if (!model) throw new Error('Model not found')
   const freshConfig = { ...model.config, currentEpsilon: model.config.epsilonStart ?? DEFAULT_CONFIG.epsilonStart }
-  return db.mLModel.update({
+  const updated = await db.mLModel.update({
     where: { id },
     data: { qtable: {}, totalEpisodes: 0, status: 'IDLE', config: freshConfig },
   })
+
+  // If this model is owned by a bot, reset its ELO and trigger calibration
+  const bot = await db.user.findFirst({ where: { botModelId: id, isBot: true } })
+  if (bot) {
+    resetBotElo(bot.id).catch((err) =>
+      console.error('[mlService] resetBotElo after resetModel failed:', err.message)
+    )
+  }
+
+  return updated
 }
 
 export async function cloneModel(id, { name, description, createdBy = null }) {
@@ -712,7 +725,153 @@ export async function cancelSession(sessionId) {
       where: { id: sessionId },
       data: { status: 'CANCELLED', completedAt: new Date() },
     })
+    await db.mLModel.update({ where: { id: s.modelId }, data: { status: 'IDLE' } })
   }
+}
+
+/**
+ * Create a training session for a frontend-driven training run.
+ * Returns the session + current model weights so the frontend can initialise the engine.
+ * The frontend calls finishTrainingFromFrontend() when done.
+ */
+export async function startFrontendSession(modelId, { mode, iterations, config = {} }) {
+  const model = await getModel(modelId)
+  if (!model) throw new Error('Model not found')
+  if (iterations < 1 || iterations > 100_000) throw new Error('iterations must be 1–100,000')
+
+  const [maxEpisodes, maxConcurrent] = await Promise.all([
+    getSystemConfig('ml.maxEpisodesPerSession', 100_000),
+    getSystemConfig('ml.maxConcurrentSessions', 0),
+  ])
+  if (maxEpisodes > 0 && iterations > maxEpisodes) {
+    throw new Error(`Training limit: max ${maxEpisodes.toLocaleString()} episodes per session`)
+  }
+  if (maxConcurrent > 0) {
+    const runningCount = await db.mLModel.count({ where: { status: 'TRAINING' } })
+    if (runningCount >= maxConcurrent) {
+      throw new Error(`Training limit: max ${maxConcurrent} concurrent session${maxConcurrent !== 1 ? 's' : ''}`)
+    }
+  }
+  if (model.maxEpisodes > 0) {
+    const remaining = model.maxEpisodes - model.totalEpisodes
+    if (remaining <= 0) {
+      throw new Error(`Training limit: this model has reached its ${model.maxEpisodes.toLocaleString()} episode maximum`)
+    }
+    if (iterations > remaining) {
+      throw new Error(`Training limit: only ${remaining.toLocaleString()} episodes remain (limit: ${model.maxEpisodes.toLocaleString()}, used: ${model.totalEpisodes.toLocaleString()})`)
+    }
+  }
+  if (model.status === 'TRAINING') throw new Error('Model is already training')
+
+  const session = await db.trainingSession.create({
+    data: { modelId, mode, iterations, status: 'RUNNING', config: { ...config, frontend: true } },
+  })
+  await db.mLModel.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
+  logger.info({ modelId, sessionId: session.id }, 'Frontend training session started')
+
+  return {
+    session,
+    model: {
+      config: model.config,
+      qtable: model.qtable,
+      algorithm: model.algorithm,
+      eloRating: model.eloRating,
+    },
+  }
+}
+
+/**
+ * Called by the frontend after it finishes (or cancels) a training run.
+ * Persists the weights, updates the session, triggers ELO calibration in the background.
+ */
+export async function finishTrainingFromFrontend(sessionId, { weights, stats, iterations, status = 'COMPLETED', samples }) {
+  const session = await db.trainingSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error('Session not found')
+  const modelId = session.modelId
+
+  const { wins = 0, losses = 0, draws = 0, totalQDelta = 0, finalEpsilon = 0, stateCount = 0 } = stats || {}
+  const safeIterations = iterations || 0
+
+  const summary = {
+    wins, losses, draws,
+    winRate:   safeIterations > 0 ? wins  / safeIterations : 0,
+    avgQDelta: safeIterations > 0 ? totalQDelta / safeIterations : 0,
+    finalEpsilon,
+    stateCount,
+  }
+
+  const currentModel = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
+
+  // Sync DQN architecture if it changed during training
+  const configOverride = {}
+  const sessionConfig = session.config || {}
+  if (sessionConfig.networkShape) {
+    const ls = [9, ...sessionConfig.networkShape.map(Number), 9]
+    configOverride.layerSizes   = ls
+    configOverride.networkShape = sessionConfig.networkShape.map(Number)
+  }
+
+  // Build episode records from sampled data sent by the browser
+  const episodeRecords = Array.isArray(samples) ? samples.map(s => ({
+    sessionId,
+    episodeNum: s.episodeNum,
+    outcome:    s.outcome,
+    totalMoves: s.totalMoves ?? 5,
+    avgQDelta:  s.avgQDelta  ?? 0,
+    epsilon:    s.epsilon    ?? 0,
+    durationMs: 0,
+  })) : []
+
+  await db.$transaction([
+    db.mLModel.update({
+      where: { id: modelId },
+      data: {
+        qtable: weights || {},
+        status: 'IDLE',
+        totalEpisodes: { increment: safeIterations },
+        config: { ...currentModel.config, ...configOverride, currentEpsilon: finalEpsilon },
+      },
+    }),
+    db.trainingSession.update({
+      where: { id: sessionId },
+      data: { status, completedAt: new Date(), summary },
+    }),
+    ...(episodeRecords.length > 0 ? [db.trainingEpisode.createMany({ data: episodeRecords })] : []),
+  ])
+
+  engineCache.delete(modelId)
+  logger.info({ sessionId, modelId, status, samples: episodeRecords.length, ...summary }, 'Frontend training finished')
+
+  // ELO calibration — non-blocking background task
+  setImmediate(async () => {
+    try {
+      const calibModel  = await db.mLModel.findUnique({ where: { id: modelId }, select: { eloRating: true } })
+      const freshModel  = await db.mLModel.findUnique({ where: { id: modelId } })
+      const calibEngine = _greedyEngine(freshModel)
+      const CALIBRATION_OPPONENTS = [
+        { difficulty: 'novice',       fixedElo: 800  },
+        { difficulty: 'intermediate', fixedElo: 1200 },
+        { difficulty: 'advanced',     fixedElo: 1500 },
+        { difficulty: 'master',       fixedElo: 1800 },
+      ]
+      const CALIB_GAMES = 100
+      let currentElo = calibModel.eloRating
+      for (const { difficulty, fixedElo } of CALIBRATION_OPPONENTS) {
+        const r = _runGames(calibEngine, (b, p) => minimaxMove(b, difficulty, p), CALIB_GAMES)
+        const actual   = (r.wins + r.draws * 0.5) / CALIB_GAMES
+        const expected = _expectedScore(currentElo, fixedElo)
+        currentElo = parseFloat((currentElo + ELO_K * (actual - expected)).toFixed(2))
+        await new Promise(res => setImmediate(res))
+      }
+      const delta = parseFloat((currentElo - calibModel.eloRating).toFixed(2))
+      const outcome = delta > 0 ? 'WIN' : delta < 0 ? 'LOSS' : 'DRAW'
+      await db.mLModel.update({ where: { id: modelId }, data: { eloRating: currentElo } })
+      await db.mLEloHistory.create({ data: { modelId, eloRating: currentElo, delta, opponentType: 'MINIMAX', outcome } })
+      logger.info({ modelId, newElo: currentElo, delta }, 'ELO calibrated after frontend training')
+    } catch (eloErr) {
+      logger.warn({ eloErr }, 'ELO calibration after frontend training failed (non-fatal)')
+    }
+  })
 }
 
 // ─── Training loop (private) ─────────────────────────────────────────────────
@@ -741,6 +900,11 @@ function _runDQNEpisode(engine, opponentFn, mlMark) {
   let currentPlayer = 'X'
   let totalMoves = 0
 
+  // Track each ML player's last pushed experience so we can retroactively push a
+  // terminal -1 when the *opponent* makes the final winning move (in that case
+  // isML=false and nothing gets pushed for the losing player's last move).
+  const lastMLExp = {}  // mark → { encodedPrev, action, encodedNext }
+
   while (true) {
     const isML = mlMark === 'both' || currentPlayer === mlMark
     const prevBoard = [...board]
@@ -762,16 +926,34 @@ function _runDQNEpisode(engine, opponentFn, mlMark) {
       } else {
         reward = 0.5  // draw
       }
+    } else if (isML) {
+      // Intermediate reward shaping — only for non-terminal ML moves
+      reward = _dqnShapeReward(prevBoard, board, action, currentPlayer)
     }
 
     if (isML) {
       const encodedPrev = _encodeStateForDQN(prevBoard, currentPlayer)
       const encodedNext = _encodeStateForDQN(board, opponent(currentPlayer))
+      lastMLExp[currentPlayer] = { encodedPrev, action, encodedNext }
       engine.pushExperience(encodedPrev, action, reward, encodedNext, done)
       engine.trainStep()
     }
 
     if (done) {
+      // Retroactive terminal push for the loser's last experience.
+      // When the opponent wins on their turn (isML=false), the losing ML player's
+      // most recent push had reward=0/done=false — it saw no penalty for the position
+      // that allowed the loss. Push a terminal -1 now so the network gets that signal.
+      if (winner) {
+        const loser = winner === 'X' ? 'O' : 'X'
+        const loserIsML = mlMark === 'both' || loser === mlMark
+        if (loserIsML && lastMLExp[loser]) {
+          const { encodedPrev, action: loserAction, encodedNext } = lastMLExp[loser]
+          engine.pushExperience(encodedPrev, loserAction, -1.0, encodedNext, true)
+          engine.trainStep()
+        }
+      }
+
       engine.decayEpsilon()
       let outcome
       if (isDraw) {
@@ -791,6 +973,35 @@ function _runDQNEpisode(engine, opponentFn, mlMark) {
 function _encodeStateForDQN(board, mark) {
   const opp = mark === 'X' ? 'O' : 'X'
   return board.map(c => c === mark ? 1 : c === opp ? -1 : 0)
+}
+
+/**
+ * Intermediate reward shaping for non-terminal DQN moves.
+ * Provides small signals to guide learning without changing the optimal policy:
+ *  +0.3  blocking the opponent's immediate winning threat
+ *  +0.1  creating a winning threat (ML can win next opportunity)
+ */
+function _dqnShapeReward(prevBoard, board, action, mark) {
+  let bonus = 0
+  const opp = mark === 'X' ? 'O' : 'X'
+
+  // Blocking bonus: was `action` the move that stopped an opponent immediate win?
+  for (let i = 0; i < 9; i++) {
+    if (prevBoard[i] !== null) continue
+    const test = [...prevBoard]; test[i] = opp
+    if (getWinner(test) === opp) {
+      if (i === action) { bonus += 0.3; break }
+    }
+  }
+
+  // Winning-threat bonus: after this move, ML has at least one immediate winning move
+  for (let i = 0; i < 9; i++) {
+    if (board[i] !== null) continue
+    const test = [...board]; test[i] = mark
+    if (getWinner(test) === mark) { bonus += 0.1; break }
+  }
+
+  return bonus
 }
 
 /**
@@ -1005,9 +1216,28 @@ async function _runTraining(model, session, { mode, iterations, config }) {
   // Build engine from current model state, merging per-session overrides
   // (epsilonDecay, epsilonMin, decayMethod, batchSize, etc. from the UI) into the stored model config.
   // Include totalEpisodes so linear/cosine schedules know the full run length.
-  const sessionEngineConfig = { ...model.config, ...config, totalEpisodes: iterations }
+  let sessionEngineConfig = { ...model.config, ...config, totalEpisodes: iterations }
+
+  // DQN: handle per-session architecture override (networkShape or hiddenSize from the Train tab).
+  // If the requested architecture differs from the stored one, reset weights — you can't continue
+  // training a [9,32,9] network with [9,64,64,9] weights.
+  let sessionQtable = model.qtable
+  if (algorithm === 'DQN') {
+    const requestedShape = config.networkShape ?? (config.hiddenSize != null ? [config.hiddenSize] : null)
+    if (requestedShape) {
+      const requestedLayerSizes = [9, ...requestedShape.map(Number), 9]
+      sessionEngineConfig = { ...sessionEngineConfig, layerSizes: requestedLayerSizes, networkShape: requestedShape.map(Number) }
+      const storedLayerSizes = model.config.layerSizes ?? [9, 32, 9]
+      if (JSON.stringify(requestedLayerSizes) !== JSON.stringify(storedLayerSizes)) {
+        // Architecture changed — start with a fresh network (no weights to reuse)
+        sessionQtable = {}
+        logger.info({ sessionId, modelId, storedLayerSizes, requestedLayerSizes }, 'DQN architecture changed — resetting weights')
+      }
+    }
+  }
+
   const engine = _buildEngine(sessionEngineConfig, algorithm)
-  engine.loadQTable(model.qtable)
+  engine.loadQTable(sessionQtable)
 
   // Build opponent function
   let difficulty = config.difficulty || 'novice'
@@ -1152,6 +1382,15 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
     ...extraMeta,
   }
   const updatedConfig = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
+  // For DQN: keep model.config.layerSizes / networkShape in sync with what was actually trained.
+  // This matters when the user changed the architecture via the Train tab — future sessions and
+  // inference must use the updated architecture, not the stale creation-time shape.
+  const configArchOverride = {}
+  if (engine._online?.layerSizes) {
+    const ls = engine._online.layerSizes
+    configArchOverride.layerSizes   = ls
+    configArchOverride.networkShape = ls.slice(1, -1)
+  }
   await db.$transaction([
     db.mLModel.update({
       where: { id: modelId },
@@ -1159,7 +1398,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
         qtable: engine.toJSON(),
         status: 'IDLE',
         totalEpisodes: { increment: iterations },
-        config: { ...updatedConfig.config, currentEpsilon: engine.epsilon },
+        config: { ...updatedConfig.config, ...configArchOverride, currentEpsilon: engine.epsilon },
       },
     }),
     db.trainingSession.update({
@@ -1489,6 +1728,7 @@ export function updatePlayerTendencies(modelId, userId) {
       if (!profile) return
 
       const movePatterns = profile.movePatterns || {}
+
       const CORNERS = [0, 2, 6, 8]
 
       let totalMoves = 0

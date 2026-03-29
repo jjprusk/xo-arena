@@ -8,8 +8,7 @@
  *   survive — only move(s) that avoid a forced loss
  */
 
-import { getWinner, isBoardFull, getEmptyCells, opponent } from '../ai/gameLogic.js'
-import { createsFork } from '../ai/ruleLogic.js'
+import { getWinner, isBoardFull, getEmptyCells, opponent, createsFork } from '@xo-arena/ai'
 
 // ─── Internal minimax (not exported from minimax.js) ─────────────────────────
 

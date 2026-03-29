@@ -1,38 +1,59 @@
-// This is your Prisma schema file.
-// Docs: https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String   @id @default(cuid())
-  clerkId       String?  @unique
-  betterAuthId  String?  @unique
-  username      String   @unique
-  email         String   @unique
-  displayName   String
-  avatarUrl     String?
-  oauthProvider String? // "google" | "apple" | "email"
-  preferences   Json     @default("{}")
-  eloRating     Float    @default(1200)
-  banned        Boolean  @default(false)
-  roles         String[] @default([])  // extra roles e.g. ['tournament']
-  mlModelLimit  Int?     // null = use system default (ml.maxModelsPerUser)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  gamesAsPlayer1 Game[]           @relation("Player1Games")
-  gamesAsPlayer2 Game[]           @relation("Player2Games")
-  gamesWon       Game[]           @relation("WinnerGames")
-  eloHistory     UserEloHistory[]
+  id              String           @id @default(cuid())
+  clerkId         String?          @unique
+  username        String           @unique
+  email           String           @unique
+  displayName     String
+  avatarUrl       String?
+  oauthProvider   String?
+  preferences     Json             @default("{}")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  eloRating       Float            @default(1200)
+  banned          Boolean          @default(false)
+  mlModelLimit    Int?
+  betterAuthId    String?          @unique
+  botActive       Boolean          @default(true)
+  botAvailable    Boolean          @default(false)
+  botProvisional  Boolean          @default(false)
+  botCompetitive  Boolean          @default(false)
+  botInTournament Boolean          @default(false)
+  botLimit        Int?
+  botModelId      String?          @unique
+  botModelType    String?
+  botOwnerId      String?
+  isBot           Boolean          @default(false)
+  botEloResetAt   DateTime?
+  botGamesPlayed  Int              @default(0)
+  gamesAsPlayer1  Game[]           @relation("Player1Games")
+  gamesAsPlayer2  Game[]           @relation("Player2Games")
+  gamesWon        Game[]           @relation("WinnerGames")
+  eloHistory      UserEloHistory[]
+  userRoles       UserRole[]
 
   @@map("users")
+}
+
+model UserRole {
+  id          String   @id @default(cuid())
+  userId      String
+  role        Role
+  grantedById String
+  grantedAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("user_roles")
 }
 
 model UserEloHistory {
@@ -40,36 +61,34 @@ model UserEloHistory {
   userId       String
   eloRating    Float
   delta        Float
-  opponentType String   // 'ai_novice' | 'ai_intermediate' | 'ai_advanced' | 'ai_master' | 'human'
-  outcome      String   // 'win' | 'loss' | 'draw'
+  opponentType String
+  outcome      String
   recordedAt   DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("user_elo_history")
 }
 
 model Game {
-  id               String    @id @default(cuid())
-  player1Id        String
-  player2Id        String?   // null for AI games
-  winnerId         String?   // null for draw
-  mode             GameMode
-  aiImplementationId String? // if PvAI
-  difficulty       Difficulty?
-  outcome          Outcome
-  totalMoves       Int
-  durationMs       Int
-  startedAt        DateTime
-  endedAt          DateTime  @default(now())
-  roomName         String?   // mountain name for PvP
-
-  player1  User   @relation("Player1Games", fields: [player1Id], references: [id])
-  player2  User?  @relation("Player2Games", fields: [player2Id], references: [id])
-  winner   User?  @relation("WinnerGames", fields: [winnerId], references: [id])
-  moves    Move[]
-  aiErrors AIError[]
+  id                 String      @id @default(cuid())
+  player1Id          String
+  player2Id          String?
+  winnerId           String?
+  mode               GameMode
+  aiImplementationId String?
+  difficulty         Difficulty?
+  outcome            Outcome
+  totalMoves         Int
+  durationMs         Int
+  startedAt          DateTime
+  endedAt            DateTime    @default(now())
+  roomName           String?
+  aiErrors           AIError[]
+  player1            User        @relation("Player1Games", fields: [player1Id], references: [id])
+  player2            User?       @relation("Player2Games", fields: [player2Id], references: [id])
+  winner             User?       @relation("WinnerGames", fields: [winnerId], references: [id])
+  moves              Move[]
 
   @@index([outcome])
   @@index([aiImplementationId])
@@ -81,16 +100,15 @@ model Game {
 }
 
 model Move {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   gameId        String
   moveNumber    Int
   player        MovePlayer
-  boardState    Json     // 9-element array snapshot before the move
+  boardState    Json
   cellIndex     Int
-  computationMs Int?     // AI moves only
-  timestamp     DateTime @default(now())
-
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  computationMs Int?
+  timestamp     DateTime   @default(now())
+  game          Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   @@index([gameId])
   @@map("moves")
@@ -105,61 +123,33 @@ model AIError {
   message          String
   stackTrace       String?
   timestamp        DateTime @default(now())
-
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game             Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   @@index([gameId])
   @@index([implementationId])
   @@map("ai_errors")
 }
 
-enum GameMode {
-  PVP
-  PVAI
-}
-
-enum Difficulty {
-  NOVICE
-  INTERMEDIATE
-  ADVANCED
-  MASTER
-}
-
-enum Outcome {
-  PLAYER1_WIN
-  PLAYER2_WIN
-  AI_WIN
-  DRAW
-}
-
-enum MovePlayer {
-  HUMAN
-  AI
-}
-
-// ─── Machine Learning ────────────────────────────────────────────────────────
-
 model MLModel {
-  id            String        @id @default(cuid())
-  name          String
-  description   String?
-  algorithm     MLAlgorithm   @default(Q_LEARNING)
-  qtable        Json          @default("{}")
-  config        Json
-  status        MLModelStatus @default(IDLE)
-  featured      Boolean       @default(false)
-  createdBy     String?       // Clerk user ID of the model's creator
-  totalEpisodes Int           @default(0)
-  maxEpisodes   Int           @default(100000) // lifetime training cap; 0 = unlimited
-  eloRating     Float         @default(1000)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  sessions       TrainingSession[]
-  checkpoints    MLCheckpoint[]
+  id             String              @id @default(cuid())
+  name           String
+  description    String?
+  algorithm      MLAlgorithm         @default(Q_LEARNING)
+  qtable         Json                @default("{}")
+  config         Json
+  status         MLModelStatus       @default(IDLE)
+  totalEpisodes  Int                 @default(0)
+  eloRating      Float               @default(1000)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  featured       Boolean             @default(false)
+  createdBy      String?
+  maxEpisodes    Int                 @default(100000)
   benchmarks     MLBenchmarkResult[]
+  checkpoints    MLCheckpoint[]
   eloHistory     MLEloHistory[]
   playerProfiles MLPlayerProfile[]
+  sessions       TrainingSession[]
 
   @@map("ml_models")
 }
@@ -169,38 +159,36 @@ model MLPlayerProfile {
   modelId            String
   userId             String
   gamesRecorded      Int      @default(0)
-  movePatterns       Json     @default("{}")   // { stateKey: { cellIndex: count } }
-  openingPreferences Json     @default("{}")   // { cellIndex: count } (first moves)
-  tendencies         Json     @default("{}")   // { centerRate, cornerRate, blockingRate }
+  movePatterns       Json     @default("{}")
+  openingPreferences Json     @default("{}")
+  tendencies         Json     @default("{}")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-
-  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model              MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@unique([modelId, userId])
   @@map("ml_player_profiles")
 }
 
 model TrainingSession {
-  id          String        @id @default(cuid())
+  id          String            @id @default(cuid())
   modelId     String
   mode        TrainingMode
   iterations  Int
-  status      SessionStatus @default(PENDING)
+  status      SessionStatus     @default(PENDING)
   config      Json
   summary     Json?
-  startedAt   DateTime      @default(now())
+  startedAt   DateTime          @default(now())
   completedAt DateTime?
-
-  model    MLModel           @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  episodes TrainingEpisode[]
+  episodes    TrainingEpisode[]
+  model       MLModel           @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("training_sessions")
 }
 
 model TrainingEpisode {
-  id         String         @id @default(cuid())
+  id         String          @id @default(cuid())
   sessionId  String
   episodeNum Int
   outcome    EpisodeOutcome
@@ -208,8 +196,7 @@ model TrainingEpisode {
   avgQDelta  Float
   epsilon    Float
   durationMs Int
-
-  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session    TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@map("training_episodes")
@@ -223,8 +210,7 @@ model MLCheckpoint {
   epsilon    Float
   eloRating  Float
   createdAt  DateTime @default(now())
-
-  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model      MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_checkpoints")
@@ -237,11 +223,10 @@ model MLBenchmarkResult {
   vsRandom Json
   vsEasy   Json
   vsMedium Json
-  vsTough  Json
   vsHard   Json
   summary  Json
-
-  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  vsTough  Json?
+  model    MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_benchmark_results")
@@ -256,8 +241,7 @@ model MLEloHistory {
   opponentType String
   outcome      EpisodeOutcome
   recordedAt   DateTime       @default(now())
-
-  model MLModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model        MLModel        @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_elo_history")
@@ -289,8 +273,8 @@ model MLTournament {
 
 model Log {
   id        String   @id @default(cuid())
-  level     String   // DEBUG | INFO | WARN | ERROR | FATAL
-  source    String   // frontend | api | realtime | ai
+  level     String
+  source    String
   message   String
   userId    String?
   sessionId String?
@@ -310,6 +294,114 @@ model SystemConfig {
   updatedAt DateTime @updatedAt
 
   @@map("system_config")
+}
+
+model BaUser {
+  id            String      @id
+  name          String
+  email         String      @unique
+  emailVerified Boolean     @default(false)
+  image         String?
+  role          String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now())
+  banned        Boolean?
+  banReason     String?
+  banExpires    DateTime?
+  accounts      BaAccount[]
+  sessions      BaSession[]
+
+  @@map("ba_users")
+}
+
+model BaSession {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      BaUser   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([token])
+  @@map("ba_sessions")
+}
+
+model BaAccount {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now())
+  user                  BaUser    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId])
+  @@map("ba_accounts")
+}
+
+model Jwks {
+  id         String   @id
+  publicKey  String
+  privateKey String
+  createdAt  DateTime @default(now())
+
+  @@map("ba_jwks")
+}
+
+model BaVerification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("ba_verifications")
+}
+
+enum Role {
+  ADMIN
+  BOT_ADMIN
+  TOURNAMENT_ADMIN
+}
+
+enum GameMode {
+  PVP
+  PVAI
+  PVBOT
+  BOTVBOT
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  NOVICE
+  INTERMEDIATE
+  ADVANCED
+  MASTER
+}
+
+enum Outcome {
+  PLAYER1_WIN
+  PLAYER2_WIN
+  AI_WIN
+  DRAW
+}
+
+enum MovePlayer {
+  HUMAN
+  AI
 }
 
 enum MLAlgorithm {
@@ -344,78 +436,4 @@ enum EpisodeOutcome {
   WIN
   LOSS
   DRAW
-}
-
-// ─── Better Auth tables ───────────────────────────────────────────────────────
-
-model BaUser {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean
-  image         String?
-  role          String?
-  banned        Boolean?
-  banReason     String?
-  banExpires    DateTime?
-  createdAt     DateTime
-  updatedAt     DateTime
-
-  sessions  BaSession[]
-  accounts  BaAccount[]
-
-  @@map("ba_users")
-}
-
-model BaSession {
-  id        String   @id
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime
-  updatedAt DateTime
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      BaUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("ba_sessions")
-}
-
-model BaAccount {
-  id                    String    @id
-  accountId             String
-  providerId            String
-  userId                String
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime
-  updatedAt             DateTime
-  user                  BaUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("ba_accounts")
-}
-
-model Jwks {
-  id         String   @id
-  publicKey  String
-  privateKey String
-  createdAt  DateTime
-
-  @@map("ba_jwks")
-}
-
-model BaVerification {
-  id         String    @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime?
-  updatedAt  DateTime?
-
-  @@map("ba_verifications")
 }

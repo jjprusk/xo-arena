@@ -2,20 +2,46 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
 import { getToken } from '../../lib/getToken.js'
+import {
+  ListTable, ListTh, ListTd, ListTr,
+  SearchBar, ListPagination,
+} from '../../components/ui/ListTable.jsx'
 
-const STATUS_OPTIONS = ['', 'IDLE', 'TRAINING']
-const STATUS_COLOR = {
-  IDLE:     { bg: 'var(--color-gray-100)', text: 'var(--text-muted)' },
-  TRAINING: { bg: 'var(--color-blue-50)',  text: 'var(--color-blue-700)' },
+const LIMIT = 25
+
+const ALGO_COLOR = {
+  dqn:              { bg: 'var(--color-blue-50)',   text: 'var(--color-blue-700)'  },
+  policy_gradient:  { bg: 'var(--color-teal-50)',   text: 'var(--color-teal-700)'  },
+  alpha_zero:       { bg: 'var(--color-amber-50)',  text: 'var(--color-amber-700)' },
+  q_learning:       { bg: 'var(--color-purple-50)', text: 'var(--color-purple-700)'},
+  sarsa:            { bg: 'var(--color-orange-50)', text: 'var(--color-orange-700)'},
+  monte_carlo:      { bg: 'var(--color-red-50)',    text: 'var(--color-red-700)'   },
 }
 
-function StatusBadge({ status }) {
-  const colors = STATUS_COLOR[status] || STATUS_COLOR.IDLE
+function AlgoBadge({ algorithm }) {
+  const key = algorithm?.toLowerCase()
+  const c   = ALGO_COLOR[key] ?? { bg: 'var(--color-gray-100)', text: 'var(--text-muted)' }
   return (
     <span
-      className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
-      style={{ backgroundColor: colors.bg, color: colors.text }}
+      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+      style={{ backgroundColor: c.bg, color: c.text }}
     >
+      {algorithm?.replace(/_/g, '-') ?? '—'}
+    </span>
+  )
+}
+
+function TrainingBadge({ status }) {
+  const training = status === 'TRAINING'
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+      style={{
+        backgroundColor: training ? 'var(--color-blue-50)'  : 'var(--color-gray-100)',
+        color:           training ? 'var(--color-blue-700)' : 'var(--text-muted)',
+      }}
+    >
+      {training && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-blue-500)' }} />}
       {status}
     </span>
   )
@@ -29,30 +55,29 @@ export default function AdminMLPage() {
   const [status, setStatus]     = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
-  const [deleting, setDeleting] = useState(null)
-  const [confirming, setConfirming] = useState(null)  // model id pending delete confirm
-  // Per-model max-episodes inline edit
-  const [editingMax, setEditingMax]   = useState(null)  // model id being edited
-  const [maxInput, setMaxInput]       = useState('')
-  const [savingMax, setSavingMax]     = useState(null)
+  const [confirming, setConfirming] = useState(null) // model id pending delete confirm
+  const [deleting, setDeleting]     = useState(null)
+  const [editingMax, setEditingMax] = useState(null)
+  const [maxInput, setMaxInput]     = useState('')
+  const [savingMax, setSavingMax]   = useState(null)
 
-  const limit = 25
+  const totalPages = Math.ceil(total / LIMIT)
 
-  const load = useCallback(async (p = page) => {
+  const load = useCallback(async (p = 1) => {
     setLoading(true)
     setError(null)
     try {
       const token = await getToken()
-      const res = await api.admin.listModels(token, search, status, p, limit)
+      const res   = await api.admin.listModels(token, search, status, p, LIMIT)
       setModels(res.models)
       setTotal(res.total)
       setPage(p)
     } catch {
-      setError('Failed to load models.')
+      setError('Failed to load bots.')
     } finally {
       setLoading(false)
     }
-  }, [search, status, page])
+  }, [search, status])
 
   useEffect(() => { load(1) }, [search, status])
 
@@ -93,217 +118,200 @@ export default function AdminMLPage() {
     }
   }
 
-  const totalPages = Math.ceil(total / limit)
-
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      <AdminHeader title="ML Models" subtitle={`${total} model${total !== 1 ? 's' : ''} total`} />
+      <AdminHeader title="Bots" subtitle={`${total} bot${total !== 1 ? 's' : ''} total`} />
 
-      {/* Filters */}
+      {/* Search + status filter */}
       <div className="flex flex-wrap gap-2">
-        <input
-          type="search"
-          placeholder="Search by name…"
+        <SearchBar
           value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          onChange={setSearch}
+          placeholder="Search by name…"
+          className="flex-1 min-w-[180px]"
         />
         <select
           value={status}
           onChange={e => setStatus(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+          className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
         >
-          {STATUS_OPTIONS.map(s => (
-            <option key={s} value={s}>{s || 'All statuses'}</option>
-          ))}
+          <option value="">All statuses</option>
+          <option value="IDLE">Idle</option>
+          <option value="TRAINING">Training</option>
         </select>
       </div>
 
       {loading && <Spinner />}
-      {error && <ErrorMsg>{error}</ErrorMsg>}
+      {error   && <ErrorMsg>{error}</ErrorMsg>}
+
+      {!loading && (
+        <ListTable maxHeight="65vh">
+          <thead>
+            <tr>
+              <ListTh>Bot</ListTh>
+              <ListTh className="hidden sm:table-cell">Owner</ListTh>
+              <ListTh className="hidden md:table-cell">Algorithm</ListTh>
+              <ListTh>Status</ListTh>
+              <ListTh align="right" className="hidden lg:table-cell">Episodes / Limit</ListTh>
+              <ListTh align="right">ELO</ListTh>
+              <ListTh align="right">Actions</ListTh>
+            </tr>
+          </thead>
+          <tbody>
+            {models.map((m, i) => {
+              const pct     = m.maxEpisodes > 0 ? Math.min(100, Math.round((m.totalEpisodes / m.maxEpisodes) * 100)) : null
+              const atLimit = m.maxEpisodes > 0 && m.totalEpisodes >= m.maxEpisodes
+              return (
+                <ListTr key={m.id} last={i === models.length - 1}>
+
+                  {/* Name */}
+                  <ListTd>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {m.featured && <span className="text-xs shrink-0" title="Featured">⭐</span>}
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                          {m.name}
+                        </div>
+                        <div className="text-[10px] tabular-nums mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                          {m.id.slice(-8)} · {m._count?.sessions ?? 0} session{m._count?.sessions !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </div>
+                  </ListTd>
+
+                  {/* Owner */}
+                  <ListTd className="hidden sm:table-cell">
+                    <span className="text-xs truncate block max-w-[120px]">
+                      {m.creatorName ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </span>
+                  </ListTd>
+
+                  {/* Algorithm */}
+                  <ListTd className="hidden md:table-cell">
+                    <AlgoBadge algorithm={m.algorithm} />
+                  </ListTd>
+
+                  {/* Status */}
+                  <ListTd>
+                    <TrainingBadge status={m.status} />
+                  </ListTd>
+
+                  {/* Episodes / Limit */}
+                  <ListTd align="right" className="hidden lg:table-cell">
+                    {editingMax === m.id ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <input
+                          type="number"
+                          min={m.maxEpisodes}
+                          value={maxInput}
+                          onChange={e => setMaxInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSaveMax(m.id); if (e.key === 'Escape') setEditingMax(null) }}
+                          autoFocus
+                          className="w-20 text-xs rounded border px-1 py-0.5 outline-none tabular-nums text-right"
+                          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--color-blue-400)', color: 'var(--text-primary)' }}
+                        />
+                        <button
+                          onClick={() => handleSaveMax(m.id)}
+                          disabled={savingMax === m.id}
+                          className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white"
+                          style={{ backgroundColor: 'var(--color-blue-600)' }}
+                        >
+                          {savingMax === m.id ? '…' : 'OK'}
+                        </button>
+                        <button
+                          onClick={() => setEditingMax(null)}
+                          className="text-[10px] px-1 py-0.5 rounded"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditingMax(m.id); setMaxInput(m.maxEpisodes) }}
+                        className="text-xs tabular-nums hover:underline"
+                        title="Click to change episode limit"
+                        style={{ color: atLimit ? 'var(--color-red-600)' : 'var(--text-secondary)' }}
+                      >
+                        {m.totalEpisodes.toLocaleString()} / {m.maxEpisodes > 0 ? m.maxEpisodes.toLocaleString() : '∞'}
+                        {pct !== null && (
+                          <span className="ml-1 text-[10px]" style={{ color: atLimit ? 'var(--color-red-500)' : 'var(--text-muted)' }}>
+                            ({pct}%)
+                          </span>
+                        )}
+                      </button>
+                    )}
+                  </ListTd>
+
+                  {/* ELO */}
+                  <ListTd align="right">
+                    <span className="text-xs tabular-nums font-semibold" style={{ color: 'var(--color-blue-600)' }}>
+                      {Math.round(m.eloRating)}
+                    </span>
+                  </ListTd>
+
+                  {/* Actions */}
+                  <ListTd align="right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleFeature(m)}
+                        title={m.featured ? 'Unfeature' : 'Feature'}
+                        className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
+                        style={{ color: m.featured ? 'var(--color-amber-600)' : 'var(--text-muted)' }}
+                      >
+                        {m.featured ? '⭐' : '☆'}
+                      </button>
+                      {confirming === m.id ? (
+                        <>
+                          <button
+                            onClick={() => handleDelete(m.id)}
+                            disabled={deleting === m.id}
+                            className="px-2 py-1 rounded text-xs font-semibold text-white"
+                            style={{ backgroundColor: 'var(--color-red-600)' }}
+                          >
+                            {deleting === m.id ? '…' : 'Confirm'}
+                          </button>
+                          <button
+                            onClick={() => setConfirming(null)}
+                            className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setConfirming(m.id)}
+                          className="px-2 py-1 rounded text-xs transition-colors hover:text-[var(--color-red-600)] hover:bg-[var(--color-red-50)]"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </ListTd>
+                </ListTr>
+              )
+            })}
+          </tbody>
+        </ListTable>
+      )}
 
       {!loading && models.length === 0 && !error && (
-        <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No models found.</p>
+        <p className="text-sm text-center py-10" style={{ color: 'var(--text-muted)' }}>
+          No bots found.
+        </p>
       )}
 
-      {models.length > 0 && (
-        <div
-          className="rounded-xl border overflow-hidden"
-          style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-        >
-          {/* Table header */}
-          <div
-            className="grid gap-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest border-b"
-            style={{
-              gridTemplateColumns: '1fr 110px 80px 70px 140px 55px 160px',
-              backgroundColor: 'var(--bg-base)',
-              borderColor: 'var(--border-default)',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <span>Model</span>
-            <span>Owner</span>
-            <span>Algorithm</span>
-            <span>Status</span>
-            <span className="text-right">Episodes / Limit</span>
-            <span className="text-right">ELO</span>
-            <span className="text-right">Actions</span>
-          </div>
-
-          {models.map(m => {
-            const pct = m.maxEpisodes > 0 ? Math.min(100, Math.round((m.totalEpisodes / m.maxEpisodes) * 100)) : null
-            const atLimit = m.maxEpisodes > 0 && m.totalEpisodes >= m.maxEpisodes
-            return (
-              <div
-                key={m.id}
-                className="grid gap-2 px-4 py-3 items-center border-b last:border-0 transition-colors hover:bg-[var(--bg-surface-hover)]"
-                style={{
-                  gridTemplateColumns: '1fr 110px 80px 70px 140px 55px 160px',
-                  borderColor: 'var(--border-default)',
-                  backgroundColor: 'var(--bg-surface)',
-                }}
-              >
-                {/* Name */}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 truncate">
-                    {m.featured && <span className="text-xs shrink-0" title="Featured">⭐</span>}
-                    <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                      {m.name}
-                    </span>
-                  </div>
-                  <div className="text-[10px] tabular-nums mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
-                    {m.id.slice(-8)} · {m._count?.sessions ?? 0} session{m._count?.sessions !== 1 ? 's' : ''}
-                  </div>
-                </div>
-
-                {/* Owner */}
-                <div className="truncate text-xs" style={{ color: m.creatorName ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
-                  {m.creatorName ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                </div>
-
-                {/* Algorithm */}
-                <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
-                  {m.algorithm?.replace(/_/g, '-')}
-                </div>
-
-                {/* Status */}
-                <div><StatusBadge status={m.status} /></div>
-
-                {/* Episodes / Limit */}
-                <div className="text-right">
-                  {editingMax === m.id ? (
-                    <div className="flex items-center justify-end gap-1">
-                      <input
-                        type="number"
-                        min={m.maxEpisodes}
-                        value={maxInput}
-                        onChange={e => setMaxInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSaveMax(m.id); if (e.key === 'Escape') setEditingMax(null) }}
-                        autoFocus
-                        className="w-20 text-xs rounded border px-1 py-0.5 outline-none tabular-nums"
-                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--color-blue-400)', color: 'var(--text-primary)' }}
-                      />
-                      <button onClick={() => handleSaveMax(m.id)} disabled={savingMax === m.id}
-                        className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white"
-                        style={{ background: 'var(--color-blue-600)' }}>
-                        {savingMax === m.id ? '…' : 'OK'}
-                      </button>
-                      <button onClick={() => setEditingMax(null)}
-                        className="text-[10px] px-1 py-0.5 rounded"
-                        style={{ color: 'var(--text-muted)' }}>✕</button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => { setEditingMax(m.id); setMaxInput(m.maxEpisodes) }}
-                      className="text-xs tabular-nums text-right w-full hover:underline"
-                      title="Click to change limit"
-                      style={{ color: atLimit ? 'var(--color-red-600)' : 'var(--text-secondary)' }}
-                    >
-                      {m.totalEpisodes.toLocaleString()} / {m.maxEpisodes > 0 ? m.maxEpisodes.toLocaleString() : '∞'}
-                      {pct !== null && <span className="ml-1 text-[10px]" style={{ color: atLimit ? 'var(--color-red-500)' : 'var(--text-muted)' }}>({pct}%)</span>}
-                    </button>
-                  )}
-                </div>
-
-                {/* ELO */}
-                <div className="text-xs text-right tabular-nums font-semibold" style={{ color: 'var(--color-blue-600)' }}>
-                  {Math.round(m.eloRating)}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    onClick={() => handleFeature(m)}
-                    title={m.featured ? 'Unfeature' : 'Feature'}
-                    className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
-                    style={{ color: m.featured ? 'var(--color-amber-600)' : 'var(--text-muted)' }}
-                  >
-                    {m.featured ? '⭐' : '☆'}
-                  </button>
-
-                  {confirming === m.id ? (
-                    <>
-                      <button
-                        onClick={() => handleDelete(m.id)}
-                        disabled={deleting === m.id}
-                        className="px-2 py-1 rounded text-xs font-semibold transition-colors"
-                        style={{ backgroundColor: 'var(--color-red-600)', color: 'white' }}
-                      >
-                        {deleting === m.id ? '…' : 'Confirm'}
-                      </button>
-                      <button
-                        onClick={() => setConfirming(null)}
-                        className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-surface-hover)]"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setConfirming(m.id)}
-                      title="Delete model"
-                      className="px-2 py-1 rounded text-xs transition-colors hover:text-[var(--color-red-600)] hover:bg-[var(--color-red-50)]"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span style={{ color: 'var(--text-muted)' }}>
-            Page {page} of {totalPages} · {total} models
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => load(page - 1)}
-              disabled={page <= 1}
-              className="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-40 transition-colors hover:bg-[var(--bg-surface-hover)]"
-              style={{ borderColor: 'var(--border-default)' }}
-            >
-              ← Prev
-            </button>
-            <button
-              onClick={() => load(page + 1)}
-              disabled={page >= totalPages}
-              className="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-40 transition-colors hover:bg-[var(--bg-surface-hover)]"
-              style={{ borderColor: 'var(--border-default)' }}
-            >
-              Next →
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        limit={LIMIT}
+        onPageChange={load}
+        noun="bots"
+      />
     </div>
   )
 }

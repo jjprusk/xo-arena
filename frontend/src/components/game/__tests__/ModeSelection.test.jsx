@@ -4,20 +4,33 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ModeSelection from '../ModeSelection.jsx'
 import { useGameStore } from '../../../store/gameStore.js'
 
+const mockBots = [
+  { id: 'bot1', username: 'Rusty', displayName: 'Rusty', eloRating: 800, botModelType: 'minimax' },
+  { id: 'bot2', username: 'Magnus', displayName: 'Magnus', eloRating: 1400, botModelType: 'minimax' },
+]
+
 // Mock api so tests don't hit the network
 vi.mock('../../../lib/api.js', () => ({
   api: {
-    ai: {
-      implementations: vi.fn(() =>
-        Promise.resolve({
-          implementations: [
-            { id: 'minimax', name: 'Minimax', description: 'Classic', supportedDifficulties: ['novice', 'intermediate', 'advanced', 'master'] },
-            { id: 'random', name: 'Random', description: 'Random moves', supportedDifficulties: ['novice'] },
-          ],
-        })
-      ),
+    ml: {
+      listModels: vi.fn(() => Promise.resolve({ models: [] })),
+      listRuleSets: vi.fn(() => Promise.resolve({ ruleSets: [] })),
+    },
+    rooms: {
+      list: vi.fn(() => Promise.resolve({ rooms: [] })),
     },
   },
+  cachedFetch: vi.fn(() => ({
+    immediate: null,
+    refresh: Promise.resolve({ bots: mockBots }),
+  })),
+}))
+
+vi.mock('../../../lib/useOptimisticSession.js', () => ({
+  useOptimisticSession: vi.fn(() => ({
+    data: { user: { id: 'u1', name: 'Tester' } },
+    isPending: false,
+  })),
 }))
 
 describe('ModeSelection', () => {
@@ -25,48 +38,37 @@ describe('ModeSelection', () => {
     useGameStore.getState().newGame()
   })
 
-  it('renders three action sections', () => {
+  it('renders main action sections', () => {
     render(<ModeSelection />)
-    expect(screen.getByText('Play vs AI')).toBeTruthy()
+    expect(screen.getByText('Challenge a Bot')).toBeTruthy()
+    expect(screen.getByText('Watch Bot vs Bot')).toBeTruthy()
     expect(screen.getByText('Invite a Friend')).toBeTruthy()
     expect(screen.getByText('Join a Room')).toBeTruthy()
   })
 
-  it('shows difficulty options after expanding Play vs AI', async () => {
+  it('shows bot list after expanding Challenge a Bot', async () => {
     render(<ModeSelection />)
-    fireEvent.click(screen.getByText('Play vs AI'))
+    fireEvent.click(screen.getByText('Challenge a Bot'))
     await waitFor(() => {
-      const select = screen.getByDisplayValue('Intermediate')
-      expect(select).toBeTruthy()
-      expect(select.tagName).toBe('SELECT')
+      expect(screen.getByText('Rusty')).toBeTruthy()
+      expect(screen.getByText('Magnus')).toBeTruthy()
     })
   })
 
-  it('shows AI implementation list after expanding Play vs AI', async () => {
+  it('shows Challenge buttons for each bot when signed in', async () => {
     render(<ModeSelection />)
-    fireEvent.click(screen.getByText('Play vs AI'))
-    await waitFor(() => {
-      expect(screen.getByText('Minimax')).toBeTruthy()
-    })
+    fireEvent.click(screen.getByText('Challenge a Bot'))
+    await waitFor(() => screen.getByText('Rusty'))
+    const challengeButtons = screen.getAllByText('Challenge')
+    expect(challengeButtons.length).toBe(mockBots.length)
   })
 
-  it('shows Play vs AI submit button inside expanded panel', async () => {
-    render(<ModeSelection />)
-    fireEvent.click(screen.getByText('Play vs AI'))
-    await waitFor(() => {
-      const buttons = screen.getAllByText('Play vs AI')
-      expect(buttons.length).toBeGreaterThanOrEqual(2)
-    })
-  })
-
-  it('calls onStart when Play vs AI submit button is clicked', async () => {
+  it('calls onStart when Challenge button is clicked', async () => {
     const onStart = vi.fn()
     render(<ModeSelection onStart={onStart} />)
-    fireEvent.click(screen.getByText('Play vs AI'))
-    await waitFor(() => screen.getAllByText('Play vs AI').length >= 2)
-    // Last match is the submit button inside the expanded panel
-    const buttons = screen.getAllByText('Play vs AI')
-    fireEvent.click(buttons[buttons.length - 1])
+    fireEvent.click(screen.getByText('Challenge a Bot'))
+    await waitFor(() => screen.getByText('Rusty'))
+    fireEvent.click(screen.getAllByText('Challenge')[0])
     expect(onStart).toHaveBeenCalled()
   })
 })

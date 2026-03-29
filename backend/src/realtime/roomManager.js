@@ -14,7 +14,7 @@
  */
 
 import { mountainPool, MountainNamePool } from './mountainNames.js'
-import { getWinner, isBoardFull, WIN_LINES } from '../ai/gameLogic.js'
+import { getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 
 const RECONNECT_WINDOW_MS = 60_000
 const STALE_WAITING_MS = 30 * 60 * 1000   // 30 min — waiting room with no guest
@@ -179,6 +179,12 @@ class RoomManager {
       return { room, wasPlayer: true, roomClosed: true }
     }
 
+    if (room.status === 'finished') {
+      // Game is over — no reconnect needed, close immediately
+      this.closeRoom(slug)
+      return { room, wasPlayer: true, roomClosed: true }
+    }
+
     if (room.status === 'playing') {
       const timer = setTimeout(() => {
         if (this._rooms.has(slug)) {
@@ -294,13 +300,15 @@ class RoomManager {
 
   /** Get all active rooms (waiting or playing) for the active rooms list. */
   listRooms() {
-    return [...this._rooms.values()].map((r) => ({
-      slug: r.slug,
-      displayName: r.displayName,
-      status: r.status,
-      spectatorCount: r.spectatorIds.size,
-      spectatorAllowed: r.spectatorAllowed,
-    }))
+    return [...this._rooms.values()]
+      .filter((r) => r.status === 'waiting' || r.status === 'playing')
+      .map((r) => ({
+        slug: r.slug,
+        displayName: r.displayName,
+        status: r.status,
+        spectatorCount: r.spectatorIds.size,
+        spectatorAllowed: r.spectatorAllowed,
+      }))
   }
 
   get roomCount() { return this._rooms.size }

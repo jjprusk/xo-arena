@@ -8,6 +8,7 @@ export const useGameStore = create((set, get) => ({
   difficulty: 'intermediate',
   aiImplementation: 'minimax',
   mlModelId: null,    // modelId when aiImplementation === 'ml' or ruleSetId for 'rule_based'
+  pvbotModelId: null, // when set, game records as PVBOT with this botModelId string
   playerMark: 'X',   // which mark the human plays
   alternating: false, // swap playerMark on each rematch
   playerName: '',
@@ -20,7 +21,7 @@ export const useGameStore = create((set, get) => ({
   // Game options
   timerEnabled: false,
   timerSeconds: 30,
-  bestOf: null,       // 3 | 5 | 7 | null (unlimited)
+  bestOf: 3,          // target wins: 1 | 2 | 3 | null (unlimited)
   misereMode: false,  // completing 3-in-a-row means you LOSE
   boardTheme: 'default',
 
@@ -42,6 +43,7 @@ export const useGameStore = create((set, get) => ({
   setDifficulty(d) { set({ difficulty: d }) },
   setAIImplementation(id) { set({ aiImplementation: id }) },
   setMLModelId(id) { set({ mlModelId: id }) },
+  setPvbotModelId(id) { set({ pvbotModelId: id }) },
   setAI2Implementation(id) { set({ ai2Implementation: id }) },
   setAI2Difficulty(d) { set({ ai2Difficulty: d }) },
   setAI2ModelId(id) { set({ ai2ModelId: id }) },
@@ -91,8 +93,8 @@ export const useGameStore = create((set, get) => ({
       ? { ...scores, [winner]: scores[winner] + 1 }
       : scores
 
-    // Check best-of-N series completion
-    const targetWins = bestOf ? Math.ceil(bestOf / 2) : null
+    // Check first-to-N series completion
+    const targetWins = bestOf ?? null
     const seriesWinner = targetWins
       ? (newScores.X >= targetWins ? 'X' : newScores.O >= targetWins ? 'O' : null)
       : null
@@ -162,6 +164,7 @@ export const useGameStore = create((set, get) => ({
       winLine: null,
       isAIThinking: false,
       mode: null,
+      pvbotModelId: null,
       alternating: false,
       seriesWinner: null,
       moveHistory: [],
@@ -173,7 +176,7 @@ export const useGameStore = create((set, get) => ({
     const { currentTurn, scores, bestOf } = get()
     const opp = currentTurn === 'X' ? 'O' : 'X'
     const newScores = { ...scores, [opp]: scores[opp] + 1 }
-    const targetWins = bestOf ? Math.ceil(bestOf / 2) : null
+    const targetWins = bestOf ?? null
     const seriesWinner = targetWins
       ? (newScores.X >= targetWins ? 'X' : newScores.O >= targetWins ? 'O' : null)
       : null

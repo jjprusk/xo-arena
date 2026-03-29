@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
 import { api } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
@@ -15,7 +15,7 @@ import { usePvpStore } from '../../store/pvpStore.js'
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
-  { to: '/ml', label: 'ML' },
+  { to: '/ml', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
   { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
 ]
@@ -30,14 +30,19 @@ const BOTTOM_NAV = [
 
 export default function AppLayout() {
   const navigate = useNavigate()
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
   const [authModalOpen, setAuthModalOpen] = useState(false)
 
-  // Sync the signed-in user to our DB on every new session
+  // Sync the signed-in user to our DB — once per browser session to avoid a
+  // round trip on every page navigation (sessionStorage survives nav, not tab close).
   useEffect(() => {
     if (!session?.user?.id) return
-    getToken().then(token => { if (token) api.users.sync(token) }).catch(() => {})
+    if (sessionStorage.getItem('xo_synced') === session.user.id) return
+    getToken()
+      .then(token => { if (token) return api.users.sync(token) })
+      .then(() => { sessionStorage.setItem('xo_synced', session.user.id) })
+      .catch(() => {})
   }, [session?.user?.id])
 
   function handleLogoClick(e) {
@@ -143,7 +148,7 @@ export default function AppLayout() {
               {[
                 { to: '/admin', label: 'Admin' },
                 { to: '/admin/users', label: 'Users' },
-                { to: '/admin/ml-models', label: 'Models' },
+                { to: '/admin/ml-models', label: 'Bots' },
                 { to: '/admin/ai', label: 'AI' },
                 { to: '/admin/logs', label: 'Logs' },
               ].map(({ to, label }) => (

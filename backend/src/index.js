@@ -2,6 +2,8 @@ import 'dotenv/config'
 import http from 'http'
 import app, { registerRoutes } from './app.js'
 import logger from './logger.js'
+import db from './lib/db.js'
+import { runSeed } from '../prisma/seed.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -13,6 +15,8 @@ import { attachSocketIO } from './realtime/socketHandler.js'
 import mlRouter from './routes/ml.js'
 import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
+import botsRouter from './routes/bots.js'
+import botGamesRouter from './routes/botGames.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
 
@@ -29,9 +33,22 @@ registerRoutes(app, {
   '/ml': mlRouter,
   '/puzzles': puzzlesRouter,
   '/admin': adminRouter,
+  '/bots': botsRouter,
+  '/bot-games': botGamesRouter,
 })
 
 const server = http.createServer(app)
+
+// Seed DB (idempotent — safe to run on every startup)
+try {
+  await runSeed()
+  logger.info('DB seed complete')
+} catch (err) {
+  logger.warn({ err: err.message }, 'DB seed failed (non-fatal)')
+}
+
+// Pre-warm the DB connection pool so first requests don't pay connection cost
+db.$connect().catch((err) => logger.warn('DB pre-connect failed', { err }))
 
 attachSocketIO(server).then((io) => {
   mlSetIO(io)

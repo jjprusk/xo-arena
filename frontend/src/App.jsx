@@ -9,13 +9,16 @@ import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import LogViewerPage from './pages/LogViewerPage.jsx'
 import AIDashboardPage from './pages/AIDashboardPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
-import MLDashboardPage from './pages/MLDashboardPage.jsx'
+import GymPage from './pages/MLDashboardPage.jsx'
+import GymGuidePage from './pages/GymGuidePage.jsx'
 import PuzzlePage from './pages/PuzzlePage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
 import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
 import AdminMLPage from './pages/admin/AdminMLPage.jsx'
+import AdminBotsPage from './pages/admin/AdminBotsPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+import BotProfilePage from './pages/BotProfilePage.jsx'
 
 const isStaging = import.meta.env.VITE_ENV === 'staging'
 
@@ -36,7 +39,9 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/ml" element={<MLDashboardPage />} />
+          <Route path="/bots/:id" element={<BotProfilePage />} />
+          <Route path="/ml" element={<GymPage />} />
+          <Route path="/gym/guide" element={<GymGuidePage />} />
 
           {/* Admin routes — all guarded by AdminRoute */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
@@ -45,6 +50,7 @@ export default function App() {
           <Route path="/admin/logs" element={<AdminRoute><LogViewerPage /></AdminRoute>} />
           <Route path="/admin/ai" element={<AdminRoute><AIDashboardPage /></AdminRoute>} />
           <Route path="/admin/ml-models" element={<AdminRoute><AdminMLPage /></AdminRoute>} />
+          <Route path="/admin/bots" element={<AdminRoute><AdminBotsPage /></AdminRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>

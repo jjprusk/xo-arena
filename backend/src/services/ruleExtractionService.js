@@ -19,14 +19,16 @@
  */
 
 import db from '../lib/db.js'
-import { QLearningEngine } from '../ai/qLearning.js'
-import { SarsaEngine } from '../ai/sarsa.js'
-import { MonteCarloEngine } from '../ai/monteCarlo.js'
-import { PolicyGradientEngine } from '../ai/policyGradient.js'
-import { DQNEngine } from '../ai/dqn.js'
-import { AlphaZeroEngine } from '../ai/alphaZero.js'
-import { getWinner, isBoardFull, getEmptyCells } from '../ai/gameLogic.js'
-import { RULE_IDS, RULE_META, applyRule } from '../ai/ruleLogic.js'
+import {
+  QLearningEngine,
+  SarsaEngine,
+  MonteCarloEngine,
+  PolicyGradientEngine,
+  DQNEngine,
+  AlphaZeroEngine,
+  getWinner, isBoardFull, getEmptyCells,
+  RULE_IDS, RULE_META, applyRule,
+} from '@xo-arena/ai'
 
 // ─── Engine helpers ───────────────────────────────────────────────────────────
 

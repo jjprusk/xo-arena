@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
 import { usePvpStore } from '../store/pvpStore.js'
+import { cachedFetch } from '../lib/api.js'
 import ModeSelection from '../components/game/ModeSelection.jsx'
 import GameBoard from '../components/game/GameBoard.jsx'
 import RoomLobby from '../components/room/RoomLobby.jsx'
@@ -10,15 +11,21 @@ import PvPBoard from '../components/room/PvPBoard.jsx'
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
   const joinSlug = searchParams.get('join')
+  const spectateSlug = searchParams.get('spectate')
 
   const { status: pvaiStatus, mode: pvaiMode } = useGameStore()
   const { status: pvpStatus, joinRoom, role, slug, isAutoRoom, displayName } = usePvpStore()
 
   const inviteUrl = slug ? `${window.location.origin}/play?join=${slug}` : ''
 
-  // Auto-create a room on arrival (unless joining via invite link)
+  // Warm the bot cache in the background so "Challenge a Bot" opens instantly.
+  useEffect(() => { cachedFetch('/bots', 5 * 60_000).refresh.catch(() => {}) }, [])
+
+  // Auto-create a room on arrival (unless joining or spectating via link)
   useEffect(() => {
-    if (joinSlug) {
+    if (spectateSlug) {
+      if (pvpStatus === 'idle') joinRoom(spectateSlug, 'spectator')
+    } else if (joinSlug) {
       if (pvpStatus === 'idle') joinRoom(joinSlug, 'player')
     } else if (pvpStatus === 'idle') {
       usePvpStore.getState().createRoom({ auto: true })

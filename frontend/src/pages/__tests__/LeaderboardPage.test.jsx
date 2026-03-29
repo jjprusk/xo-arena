@@ -1,14 +1,14 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../../lib/api.js', () => ({
-  api: {
-    get: vi.fn(),
-  },
+  api: {},
+  cachedFetch: vi.fn(),
 }))
 
-import { api } from '../../lib/api.js'
+import { cachedFetch } from '../../lib/api.js'
 import LeaderboardPage from '../LeaderboardPage.jsx'
 
 const MOCK_LEADERBOARD = [
@@ -36,17 +36,20 @@ const MOCK_LEADERBOARD = [
 ]
 
 beforeEach(() => {
-  api.get.mockResolvedValue({ leaderboard: MOCK_LEADERBOARD })
+  cachedFetch.mockReturnValue({
+    immediate: null,
+    refresh: Promise.resolve({ leaderboard: MOCK_LEADERBOARD }),
+  })
 })
 
 describe('LeaderboardPage', () => {
   it('renders heading', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: /leaderboard/i })).toBeInTheDocument()
   })
 
   it('shows period and mode filter buttons', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     // "all" appears in both period and mode filters — use getAllByRole
     expect(screen.getAllByRole('button', { name: /^all$/i }).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByRole('button', { name: /monthly/i })).toBeInTheDocument()
@@ -56,7 +59,7 @@ describe('LeaderboardPage', () => {
   })
 
   it('fetches and displays player names', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     // Names appear in both podium and table — use getAllByText
     await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0))
     expect(screen.getAllByText('Bob').length).toBeGreaterThan(0)
@@ -64,14 +67,14 @@ describe('LeaderboardPage', () => {
   })
 
   it('displays win rates', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0))
     expect(screen.getAllByText('80%').length).toBeGreaterThan(0)
     expect(screen.getAllByText('60%').length).toBeGreaterThan(0)
   })
 
   it('renders podium for top 3', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0))
     expect(screen.getByText('👑')).toBeInTheDocument()
     expect(screen.getByText('🥈')).toBeInTheDocument()
@@ -79,7 +82,7 @@ describe('LeaderboardPage', () => {
   })
 
   it('shows rank numbers in table', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0))
     expect(screen.getByText('1')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
@@ -87,7 +90,7 @@ describe('LeaderboardPage', () => {
   })
 
   it('filters players by search input', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0))
 
     const search = screen.getByPlaceholderText(/search player/i)
@@ -98,16 +101,22 @@ describe('LeaderboardPage', () => {
   })
 
   it('shows empty state when no players', async () => {
-    api.get.mockResolvedValueOnce({ leaderboard: [] })
-    render(<LeaderboardPage />)
+    cachedFetch.mockReturnValueOnce({
+      immediate: null,
+      refresh: Promise.resolve({ leaderboard: [] }),
+    })
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getByText(/no players yet/i)).toBeInTheDocument())
   })
 
   it('refetches when period filter changes', async () => {
-    render(<LeaderboardPage />)
+    render(<MemoryRouter><LeaderboardPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0))
 
     fireEvent.click(screen.getByRole('button', { name: 'weekly' }))
-    await waitFor(() => expect(api.get).toHaveBeenCalledWith(expect.stringContaining('period=weekly')))
+    await waitFor(() => expect(cachedFetch).toHaveBeenCalledWith(
+      expect.stringContaining('period=weekly'),
+      expect.any(Number),
+    ))
   })
 })

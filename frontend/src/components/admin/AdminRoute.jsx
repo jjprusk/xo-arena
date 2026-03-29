@@ -1,9 +1,9 @@
 import React from 'react'
 import { Navigate } from 'react-router-dom'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 
 export default function AdminRoute({ children }) {
-  const { data: session, isPending } = useSession()
+  const { data: session, isPending } = useOptimisticSession()
 
   if (isPending) {
     return (

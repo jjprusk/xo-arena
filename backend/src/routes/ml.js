@@ -193,7 +193,17 @@ router.post('/models/ensemble', async (req, res, next) => {
 router.post('/models/:id/train', requireAuth, async (req, res, next) => {
   try {
     if (!await assertModelOwner(req, res, req.params.id)) return
-    const { mode, iterations, config } = req.body
+
+    // Block training if this model is linked to a bot currently in a tournament
+    const tournamentBot = await db.user.findFirst({
+      where: { botModelId: req.params.id, isBot: true, botInTournament: true },
+      select: { displayName: true },
+    })
+    if (tournamentBot) {
+      return res.status(409).json({ error: `Cannot train while ${tournamentBot.displayName} is in a tournament`, code: 'BOT_IN_TOURNAMENT' })
+    }
+
+    const { mode, iterations, config, frontend } = req.body
     const validModes = ['SELF_PLAY', 'VS_MINIMAX', 'VS_HUMAN']
     if (!validModes.includes(mode)) {
       return res.status(400).json({ error: `mode must be one of: ${validModes.join(', ')}` })
@@ -201,6 +211,13 @@ router.post('/models/:id/train', requireAuth, async (req, res, next) => {
     if (!iterations || iterations < 1 || iterations > 100_000) {
       return res.status(400).json({ error: 'iterations must be 1–100,000' })
     }
+
+    if (frontend) {
+      // Frontend-driven training: create session + return current weights so browser can run the loop
+      const result = await svc.startFrontendSession(req.params.id, { mode, iterations, config })
+      return res.status(201).json(result)
+    }
+
     const session = await svc.startTraining(req.params.id, { mode, iterations, config })
     res.status(201).json({ session })
   } catch (err) {
@@ -252,6 +269,24 @@ router.get('/sessions/:id/episodes', async (req, res, next) => {
     }
 
     res.json(data)
+  } catch (err) { next(err) }
+})
+
+router.post('/sessions/:id/finish', requireAuth, async (req, res, next) => {
+  try {
+    const session = await svc.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    if (session.modelId) {
+      const model = await db.mLModel.findUnique({ where: { id: session.modelId }, select: { createdBy: true } })
+      if (model?.createdBy && model.createdBy !== req.auth.userId) {
+        if (!await isAdmin(req.auth.userId)) {
+          return res.status(403).json({ error: 'You do not own this model' })
+        }
+      }
+    }
+    const { weights, stats, iterations, status, samples } = req.body
+    await svc.finishTrainingFromFrontend(req.params.id, { weights, stats, iterations, status, samples })
+    res.json({ ok: true })
   } catch (err) { next(err) }
 })
 
@@ -416,6 +451,15 @@ router.get('/models/:id/player-profiles/:userId', async (req, res, next) => {
     const profile = await svc.getPlayerProfile(req.params.id, req.params.userId)
     if (!profile) return res.status(404).json({ error: 'Profile not found' })
     res.json({ profile })
+  } catch (err) { next(err) }
+})
+
+router.post('/models/:id/player-profiles/:userId/human-move', async (req, res, next) => {
+  try {
+    const { board, cellIndex } = req.body
+    if (typeof cellIndex !== 'number') return res.status(400).json({ error: 'cellIndex required' })
+    svc.recordHumanMove(req.params.id, req.params.userId, board || [], cellIndex)
+    res.status(204).end()
   } catch (err) { next(err) }
 })
 

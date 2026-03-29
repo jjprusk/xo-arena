@@ -4,6 +4,38 @@
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
+/**
+ * Stale-while-revalidate fetch.
+ * Returns { immediate, refresh } where:
+ *   immediate — cached data from localStorage if within maxAgeMs (or null)
+ *   refresh   — Promise that resolves with fresh data and updates the cache
+ *
+ * Usage: show `immediate` right away (no spinner), update when `refresh` resolves.
+ */
+export function cachedFetch(path, maxAgeMs = 5 * 60_000) {
+  const key = 'xo_swr_' + path
+  let immediate = null
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) {
+      const entry = JSON.parse(raw)
+      if (Date.now() - entry.ts < maxAgeMs) immediate = entry.data
+    }
+  } catch {}
+
+  const refresh = fetch(`${BASE}/api/v1${path}`)
+    .then(r => {
+      if (!r.ok) return Promise.reject(new Error(r.statusText))
+      return r.json()
+    })
+    .then(data => {
+      try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
+      return data
+    })
+
+  return { immediate, refresh }
+}
+
 async function request(method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
@@ -50,6 +82,7 @@ export const api = {
     getQTable:        (id)         => api.get(`/ml/models/${id}/qtable`),
     explainMove:      (id, board)  => api.post(`/ml/models/${id}/explain`, { board }),
     train:            (id, b, tok) => api.post(`/ml/models/${id}/train`, b, tok),
+    finishSession:    (id, b, tok) => api.post(`/ml/sessions/${id}/finish`, b, tok),
     getSessions:      (id)         => api.get(`/ml/models/${id}/sessions`),
     getSession:       (id)         => api.get(`/ml/sessions/${id}`),
     getEpisodes:      (id, page)   => api.get(`/ml/sessions/${id}/episodes?page=${page}&limit=500`),
@@ -74,6 +107,7 @@ export const api = {
     ensembleMove: (body) => api.post('/ml/models/ensemble', body),
     getPlayerProfiles: (id) => api.get(`/ml/models/${id}/player-profiles`),
     getPlayerProfile: (id, userId) => api.get(`/ml/models/${id}/player-profiles/${userId}`),
+    recordHumanMove: (modelId, userId, board, cellIndex) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/human-move`, { board, cellIndex }),
     recordGameEnd: (modelId, userId) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/game-end`, {}),
 
     listRuleSets:     ()              => api.get('/ml/rulesets'),
@@ -116,8 +150,11 @@ export const api = {
       const p = new URLSearchParams()
       if (page)            p.set('page', page)
       if (limit)           p.set('limit', limit)
-      if (filters?.mode)   p.set('mode', filters.mode)
-      if (filters?.outcome) p.set('outcome', filters.outcome)
+      if (filters?.mode)     p.set('mode', filters.mode)
+      if (filters?.outcome)  p.set('outcome', filters.outcome)
+      if (filters?.player)   p.set('player', filters.player)
+      if (filters?.dateFrom) p.set('dateFrom', filters.dateFrom)
+      if (filters?.dateTo)   p.set('dateTo', filters.dateTo)
       const qs = p.toString()
       return api.get(`/admin/games${qs ? `?${qs}` : ''}`, token)
     },
@@ -139,6 +176,39 @@ export const api = {
     setMLLimits:   (body, token) => api.patch('/admin/ml/limits', body, token),
     getLogLimit:   (token)       => api.get('/admin/logs/limit', token),
     setLogLimit:   (body, token) => api.patch('/admin/logs/limit', body, token),
+
+    listBots: (token, search, page, limit) => {
+      const p = new URLSearchParams()
+      if (search) p.set('search', search)
+      if (page)   p.set('page', page)
+      if (limit)  p.set('limit', limit)
+      const qs = p.toString()
+      return api.get(`/admin/bots${qs ? `?${qs}` : ''}`, token)
+    },
+    updateBot: (id, body, token) => api.patch(`/admin/bots/${id}`, body, token),
+    deleteBot: (id, token) => request('DELETE', `/admin/bots/${id}`, null, token),
+    getBotLimits: (token) => api.get('/admin/bot-limits', token),
+    setBotLimits: (body, token) => api.patch('/admin/bot-limits', body, token),
+  },
+
+  botGames: {
+    start: (body, token) => request('POST', '/bot-games', body, token),
+    list: () => api.get('/bot-games'),
+    get: (slug) => api.get(`/bot-games/${slug}`),
+  },
+
+  bots: {
+    list: (params = {}) => {
+      const p = new URLSearchParams()
+      if (params.ownerId) p.set('ownerId', params.ownerId)
+      if (params.includeInactive) p.set('includeInactive', 'true')
+      const qs = p.toString()
+      return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
+    },
+    create: (body, token) => request('POST', '/bots', body, token),
+    update: (id, body, token) => request('PATCH', `/bots/${id}`, body, token),
+    resetElo: (id, token) => request('POST', `/bots/${id}/reset-elo`, {}, token),
+    delete: (id, token) => request('DELETE', `/bots/${id}`, null, token),
   },
 
   puzzles: {

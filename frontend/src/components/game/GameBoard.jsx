@@ -1,6 +1,6 @@
 import React from 'react'
 import { useEffect, useCallback, useState, useRef } from 'react'
-import { useSession } from '../../lib/auth-client.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
@@ -27,6 +27,13 @@ const RULE_LABELS = Object.fromEntries(
   MINIMAX_RULES.map(r => [r.id, { short: r.label, desc: r.desc }])
 )
 
+const MINIMAX_PERSONAS = {
+  novice:       { name: 'Rusty',    elo: 800  },
+  intermediate: { name: 'Copper',   elo: 1200 },
+  advanced:     { name: 'Sterling', elo: 1500 },
+  master:       { name: 'Magnus',   elo: 1800 },
+}
+
 const THEME_MARKS = {
   default: { X: 'var(--color-blue-600)',   O: 'var(--color-teal-600)' },
   neon:    { X: 'var(--color-neon-x)',     O: 'var(--color-neon-o)' },
@@ -46,7 +53,7 @@ export default function GameBoard({ roomName }) {
 
   const {
     board, currentTurn, status, winner, winLine, scores, round,
-    playerMark, mode, difficulty, aiImplementation, mlModelId, isAIThinking,
+    playerMark, mode, difficulty, aiImplementation, mlModelId, pvbotModelId, isAIThinking,
     timerEnabled, timerSeconds, bestOf, seriesWinner, moveHistory, hintCell, misereMode,
     boardTheme,
     // AI vs AI
@@ -54,7 +61,7 @@ export default function GameBoard({ roomName }) {
     makeMove, setAIThinking, rematch, newGame, forfeit, undoMove, setHintCell,
   } = useGameStore()
 
-  const { data: session } = useSession()
+  const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
   const isSignedIn = !!session?.user
   const { play } = useSoundStore()
@@ -72,14 +79,14 @@ export default function GameBoard({ roomName }) {
   const gameStartRef = useRef(null)
   const lastHumanMoveRef = useRef(null)
   const aivaiMoveActiveRef = useRef(false)
+  const [aivaiRetry, setAivaiRetry] = useState(0)
   const gameRecordedRef = useRef(false)
 
   const aiMark = playerMark === 'X' ? 'O' : 'X'
   const isAivai = mode === 'aivai'
 
-  // ── Fetch ML model names + creator for AI vs AI display ─────────────────
+  // ── Fetch ML model names + creator; preload weights for local inference ──
   useEffect(() => {
-    if (!isAivai) return
     setXModelName(null)
     setOModelName(null)
     setXCreatorName(null)
@@ -89,15 +96,13 @@ export default function GameBoard({ roomName }) {
         setXModelName(d?.model?.name ?? null)
         setXCreatorName(d?.model?.creatorName ?? null)
       }).catch(() => {})
-      // Preload model weights for local inference
       loadModel(mlModelId, api.ml.exportModel).catch(() => {})
     }
-    if (ai2Implementation === 'ml' && ai2ModelId) {
+    if (isAivai && ai2Implementation === 'ml' && ai2ModelId) {
       api.ml.getModel(ai2ModelId).then(d => {
         setOModelName(d?.model?.name ?? null)
         setOCreatorName(d?.model?.creatorName ?? null)
       }).catch(() => {})
-      // Preload model weights for local inference
       loadModel(ai2ModelId, api.ml.exportModel).catch(() => {})
     }
   }, [isAivai, aiImplementation, mlModelId, ai2Implementation, ai2ModelId])
@@ -105,6 +110,11 @@ export default function GameBoard({ roomName }) {
   const isOpponentTurn = !isAivai && status === 'playing' && currentTurn !== playerMark
 
   const themeMarkColor = THEME_MARKS[boardTheme] || THEME_MARKS.default
+
+  // ── Opponent display name (pvai mode) ───────────────────────────────────
+  const aiOpponentName = aiImplementation === 'ml'
+    ? (xModelName ?? 'AI')
+    : (MINIMAX_PERSONAS[difficulty?.toLowerCase()]?.name ?? 'AI')
 
   // ── Auto-rematch for AI vs AI series ────────────────────────────────────
   useEffect(() => {
@@ -181,6 +191,12 @@ export default function GameBoard({ roomName }) {
     }
   }, [status])
 
+  // ── Play win / draw sounds ───────────────────────────────────────────────
+  useEffect(() => {
+    if (status === 'won') play('win')
+    else if (status === 'draw') play('draw')
+  }, [status])
+
   // ── Track last placed cell for animation ────────────────────────────────
   useEffect(() => {
     if (moveHistory.length === 0) { setLastPlacedCell(null); return }
@@ -205,22 +221,42 @@ export default function GameBoard({ roomName }) {
       const startedAt = gameStartRef.current || Date.now()
       const durationMs = Date.now() - startedAt
 
-      let outcome = 'DRAW'
-      if (status === 'won' || status === 'forfeit') {
-        outcome = winner === playerMark ? 'PLAYER1_WIN' : 'AI_WIN'
-      }
+      if (pvbotModelId) {
+        // Record as PVBOT — named bot challenge or quick minimax game
+        let outcome = 'DRAW'
+        if (status === 'won' || status === 'forfeit') {
+          outcome = winner === playerMark ? 'PLAYER1_WIN' : 'PLAYER2_WIN'
+        }
+        api.games.record({
+          mode: 'PVBOT',
+          outcome,
+          botModelId: pvbotModelId,
+          totalMoves,
+          durationMs,
+          startedAt,
+        }, token).catch(() => {})
 
-      api.games.record({
-        outcome,
-        difficulty,
-        aiImplementationId: aiImplementation,
-        totalMoves,
-        durationMs,
-        startedAt,
-      }, token).catch(() => {})
+        if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
+          api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+        }
+      } else {
+        // Record as PVAI (ML or rule-based)
+        let outcome = 'DRAW'
+        if (status === 'won' || status === 'forfeit') {
+          outcome = winner === playerMark ? 'PLAYER1_WIN' : 'AI_WIN'
+        }
+        api.games.record({
+          outcome,
+          difficulty,
+          aiImplementationId: aiImplementation,
+          totalMoves,
+          durationMs,
+          startedAt,
+        }, token).catch(() => {})
 
-      if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
-        api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+        if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
+          api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
+        }
       }
     }
 
@@ -245,6 +281,12 @@ export default function GameBoard({ roomName }) {
         // Use local Q-table inference if model is already cached (zero latency)
         const localMove = isML && mlModelId ? getLocalMove(mlModelId, board, aiMark) : null
         if (localMove !== null) {
+          // Still record the human's move for the player profile even when AI is local
+          if (profileUserId && humanLastMove !== null) {
+            const boardBeforeHuman = [...board]
+            boardBeforeHuman[humanLastMove] = null
+            api.ml.recordHumanMove(mlModelId, profileUserId, boardBeforeHuman, humanLastMove).catch(() => {})
+          }
           if (!cancelled) {
             makeMove(localMove)
             play('move')
@@ -287,6 +329,7 @@ export default function GameBoard({ roomName }) {
 
     async function fetchAIVsAIMove() {
       setAIThinking(true)
+      setAIError(null)
       const moveStart = Date.now()
 
       // X always uses the first AI config, O uses the second
@@ -295,12 +338,27 @@ export default function GameBoard({ roomName }) {
       const diff  = isXTurn ? difficulty        : ai2Difficulty
       const model = isXTurn ? mlModelId         : ai2ModelId
 
-      try {
-        const localMove = impl === 'ml' && model ? getLocalMove(model, board, currentTurn) : null
-        const move = localMove !== null
-          ? localMove
-          : (await api.ai.move(board, diff, currentTurn, impl, model, false)).move
-        if (!cancelled) {
+      let move = null
+      let failed = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (cancelled) break
+        try {
+          const localMove = impl === 'ml' && model ? getLocalMove(model, board, currentTurn) : null
+          move = localMove !== null
+            ? localMove
+            : (await api.ai.move(board, diff, currentTurn, impl, model, false)).move
+          failed = false
+          break
+        } catch {
+          failed = true
+          if (attempt < 2 && !cancelled) await new Promise(r => setTimeout(r, 1500))
+        }
+      }
+
+      if (!cancelled) {
+        if (failed) {
+          setAIError('AI failed to respond.')
+        } else {
           // Enforce minimum delay for spectator pacing
           const elapsed = Date.now() - moveStart
           const delay = Math.max(0, AIVAI_MOVE_DELAY_MS - elapsed)
@@ -310,13 +368,8 @@ export default function GameBoard({ roomName }) {
             play('move')
           }
         }
-      } catch {
-        if (!cancelled) setAIError('AI failed to respond.')
-      } finally {
-        if (!cancelled) {
-          setAIThinking(false)
-          aivaiMoveActiveRef.current = false
-        }
+        setAIThinking(false)
+        aivaiMoveActiveRef.current = false
       }
     }
 
@@ -325,7 +378,7 @@ export default function GameBoard({ roomName }) {
       cancelled = true
       aivaiMoveActiveRef.current = false
     }
-  }, [currentTurn, status, isAivai])
+  }, [currentTurn, status, isAivai, aivaiRetry])
 
   // ── Hint ─────────────────────────────────────────────────────────────────
   async function handleHint() {
@@ -345,7 +398,8 @@ export default function GameBoard({ roomName }) {
     if (board[i] !== null) return
     lastHumanMoveRef.current = i
     makeMove(i)
-  }, [isPlayerTurn, board, makeMove])
+    play('move')
+  }, [isPlayerTurn, board, makeMove, play])
 
   const handleForfeit = () => {
     forfeit()
@@ -389,12 +443,26 @@ export default function GameBoard({ roomName }) {
           }}
         >
           {isAivai
-            ? `${seriesWinner} wins the series! Best of ${bestOf}`
+            ? `${seriesWinner} wins the series! First to ${bestOf}`
             : seriesWinner === playerMark
-              ? `You win the series! Best of ${bestOf}`
-              : `AI wins the series. Best of ${bestOf}`}
+              ? `You win the series! First to ${bestOf}`
+              : `${aiOpponentName} wins the series. First to ${bestOf}`}
         </div>
       )}
+
+      {/* Opponent chip — pvai / pvbot */}
+      {(mode === 'pvai' || mode === 'pvbot') && (() => {
+        const persona = MINIMAX_PERSONAS[difficulty?.toLowerCase()]
+        return (
+          <div className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>vs</span>
+            <span className="font-medium">{aiOpponentName}</span>
+            {persona && aiImplementation === 'minimax' && (
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(ELO {persona.elo})</span>
+            )}
+          </div>
+        )
+      })()}
 
       {/* AI vs AI matchup strip */}
       {isAivai && (
@@ -426,7 +494,7 @@ export default function GameBoard({ roomName }) {
         <ScorePill mark="X" score={scores.X} />
         <div className="text-center">
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Round {round}{bestOf ? ` / Best of ${bestOf}` : ''}
+            Round {round}{bestOf ? ` / First to ${bestOf}` : ''}
           </span>
           {misereMode && (
             <div className="text-xs font-medium" style={{ color: 'var(--color-amber-600)' }}>Misère mode</div>
@@ -482,7 +550,7 @@ export default function GameBoard({ roomName }) {
             {isOpponentTurn && (
               <>
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  {isAIThinking ? 'AI is thinking…' : (mode === 'pvai' ? "AI's turn" : "Opponent's turn")}
+                  {isAIThinking ? `${mode === 'pvai' ? aiOpponentName : 'AI'} is thinking…` : (mode === 'pvai' ? `${aiOpponentName}'s turn` : "Opponent's turn")}
                 </span>
                 <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
                   {(thinkingMs / 1000).toFixed(2)}s
@@ -501,7 +569,7 @@ export default function GameBoard({ roomName }) {
             <span className="font-bold" style={{ color: winner === playerMark ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
               {isAivai
                 ? `${winner} wins!`
-                : winner === playerMark ? 'You win! 🎉' : (mode === 'pvai' ? 'AI wins!' : `${winner} wins!`)}
+                : winner === playerMark ? 'You win! 🎉' : (mode === 'pvai' ? `${aiOpponentName} wins!` : `${winner} wins!`)}
             </span>
             {isAivai && autoRematchCountdown !== null && (
               <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>· Next in {autoRematchCountdown}…</span>
@@ -538,7 +606,15 @@ export default function GameBoard({ roomName }) {
       {/* Minimax last-move rule badge */}
       {aiImplementation === 'minimax' && aiReason && !analyzeMode && (
         <div className="w-full flex items-center gap-2">
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>AI played:</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {(() => {
+              const diff = difficulty?.toLowerCase()
+              const persona = MINIMAX_PERSONAS[diff]
+              return persona
+                ? `${persona.name} (ELO ${persona.elo}) played:`
+                : 'AI played:'
+            })()}
+          </span>
           <span
             className="text-xs font-semibold px-2 py-0.5 rounded-full"
             style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
@@ -656,7 +732,18 @@ export default function GameBoard({ roomName }) {
 
       {/* AI error */}
       {aiError && (
-        <p className="text-sm text-[var(--color-red-600)]">{aiError}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-[var(--color-red-600)]">{aiError}</p>
+          {isAivai && (
+            <button
+              onClick={() => { setAIError(null); setAivaiRetry(n => n + 1) }}
+              className="text-xs px-2 py-1 rounded border font-medium transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
       {/* Hint + Undo row (during play, pvai only) */}
@@ -819,7 +906,10 @@ export default function GameBoard({ roomName }) {
 
 function implLabel(impl, difficulty, modelName) {
   if (impl === 'ml') return modelName ?? 'ML model'
-  if (impl === 'minimax') return `Minimax · ${difficulty ?? ''}`
+  if (impl === 'minimax') {
+    const persona = MINIMAX_PERSONAS[difficulty?.toLowerCase()]
+    return persona ? persona.name : 'Minimax'
+  }
   if (impl === 'random') return 'Random'
   return impl ?? '—'
 }
