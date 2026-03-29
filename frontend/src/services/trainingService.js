@@ -320,6 +320,10 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
 
   const PROGRESS_INTERVAL = Math.max(PROGRESS_BATCH, Math.floor(iterations / 20))
 
+  // Collect ~200 sampled episode records for the Analytics tab
+  const SAMPLE_STEP = Math.max(1, Math.floor(iterations / 200))
+  const samples = []
+
   let wins = 0, losses = 0, draws = 0, totalQDelta = 0
   let actualEpisodes = 0
 
@@ -329,6 +333,7 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
         weights:    engine.toJSON(),
         stats:      { wins, losses, draws, totalQDelta, finalEpsilon: engine.epsilon, stateCount: engine.stateCount },
         iterations: actualEpisodes,
+        samples,
         status:     'CANCELLED',
       }
     }
@@ -341,6 +346,17 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
     else if (result.outcome === 'LOSS') losses++
     else                                draws++
     totalQDelta += result.avgQDelta
+
+    // Sample this episode for analytics
+    if (i % SAMPLE_STEP === 0) {
+      samples.push({
+        episodeNum: i + 1,
+        outcome:    result.outcome,
+        totalMoves: result.totalMoves,
+        avgQDelta:  result.avgQDelta,
+        epsilon:    engine.epsilon,
+      })
+    }
 
     // Curriculum learning
     if (config.curriculum && mode === 'VS_MINIMAX') {
@@ -377,6 +393,7 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
           weights:    engine.toJSON(),
           stats:      { wins, losses, draws, totalQDelta, finalEpsilon: engine.epsilon, stateCount: engine.stateCount },
           iterations: actualEpisodes,
+          samples,
           status:     'COMPLETED',
         }
       }
@@ -403,6 +420,7 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
     weights:    engine.toJSON(),
     stats:      { wins, losses, draws, totalQDelta, finalEpsilon: engine.epsilon, stateCount: engine.stateCount },
     iterations: actualEpisodes,
+    samples,
     status:     'COMPLETED',
   }
 }

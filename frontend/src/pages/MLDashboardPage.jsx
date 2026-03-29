@@ -524,6 +524,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
         stats:      result.stats,
         iterations: result.iterations,
         status:     result.status,
+        samples:    result.samples,
       }, token)
 
       setRunning(false)

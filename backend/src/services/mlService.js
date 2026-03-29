@@ -784,7 +784,7 @@ export async function startFrontendSession(modelId, { mode, iterations, config =
  * Called by the frontend after it finishes (or cancels) a training run.
  * Persists the weights, updates the session, triggers ELO calibration in the background.
  */
-export async function finishTrainingFromFrontend(sessionId, { weights, stats, iterations, status = 'COMPLETED' }) {
+export async function finishTrainingFromFrontend(sessionId, { weights, stats, iterations, status = 'COMPLETED', samples }) {
   const session = await db.trainingSession.findUnique({ where: { id: sessionId } })
   if (!session) throw new Error('Session not found')
   const modelId = session.modelId
@@ -811,6 +811,17 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
     configOverride.networkShape = sessionConfig.networkShape.map(Number)
   }
 
+  // Build episode records from sampled data sent by the browser
+  const episodeRecords = Array.isArray(samples) ? samples.map(s => ({
+    sessionId,
+    episodeNum: s.episodeNum,
+    outcome:    s.outcome,
+    totalMoves: s.totalMoves ?? 5,
+    avgQDelta:  s.avgQDelta  ?? 0,
+    epsilon:    s.epsilon    ?? 0,
+    durationMs: 0,
+  })) : []
+
   await db.$transaction([
     db.mLModel.update({
       where: { id: modelId },
@@ -825,10 +836,11 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
       where: { id: sessionId },
       data: { status, completedAt: new Date(), summary },
     }),
+    ...(episodeRecords.length > 0 ? [db.trainingEpisode.createMany({ data: episodeRecords })] : []),
   ])
 
   engineCache.delete(modelId)
-  logger.info({ sessionId, modelId, status, ...summary }, 'Frontend training finished')
+  logger.info({ sessionId, modelId, status, samples: episodeRecords.length, ...summary }, 'Frontend training finished')
 
   // ELO calibration — non-blocking background task
   setImmediate(async () => {
