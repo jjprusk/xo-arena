@@ -5,7 +5,7 @@ ENV NODE_OPTIONS=--experimental-transform-types
 COPY package.json ./
 COPY packages/ai/package.json ./packages/ai/
 COPY backend/package.json ./backend/
-RUN npm install --workspace=backend --no-package-lock --omit=dev
+RUN npm install --workspace=backend --no-package-lock --omit=dev --ignore-scripts
 # Copy source
 COPY packages/ai/ ./packages/ai/
 COPY backend/ ./backend/
