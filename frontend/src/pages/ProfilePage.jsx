@@ -507,6 +507,7 @@ export default function ProfilePage() {
               <input
                 type="text"
                 required
+                autoFocus
                 maxLength={40}
                 value={createForm.name}
                 onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
