@@ -1068,9 +1068,28 @@ async function _runTraining(model, session, { mode, iterations, config }) {
   // Build engine from current model state, merging per-session overrides
   // (epsilonDecay, epsilonMin, decayMethod, batchSize, etc. from the UI) into the stored model config.
   // Include totalEpisodes so linear/cosine schedules know the full run length.
-  const sessionEngineConfig = { ...model.config, ...config, totalEpisodes: iterations }
+  let sessionEngineConfig = { ...model.config, ...config, totalEpisodes: iterations }
+
+  // DQN: handle per-session architecture override (networkShape or hiddenSize from the Train tab).
+  // If the requested architecture differs from the stored one, reset weights — you can't continue
+  // training a [9,32,9] network with [9,64,64,9] weights.
+  let sessionQtable = model.qtable
+  if (algorithm === 'DQN') {
+    const requestedShape = config.networkShape ?? (config.hiddenSize != null ? [config.hiddenSize] : null)
+    if (requestedShape) {
+      const requestedLayerSizes = [9, ...requestedShape.map(Number), 9]
+      sessionEngineConfig = { ...sessionEngineConfig, layerSizes: requestedLayerSizes, networkShape: requestedShape.map(Number) }
+      const storedLayerSizes = model.config.layerSizes ?? [9, 32, 9]
+      if (JSON.stringify(requestedLayerSizes) !== JSON.stringify(storedLayerSizes)) {
+        // Architecture changed — start with a fresh network (no weights to reuse)
+        sessionQtable = {}
+        logger.info({ sessionId, modelId, storedLayerSizes, requestedLayerSizes }, 'DQN architecture changed — resetting weights')
+      }
+    }
+  }
+
   const engine = _buildEngine(sessionEngineConfig, algorithm)
-  engine.loadQTable(model.qtable)
+  engine.loadQTable(sessionQtable)
 
   // Build opponent function
   let difficulty = config.difficulty || 'novice'
@@ -1215,6 +1234,15 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
     ...extraMeta,
   }
   const updatedConfig = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
+  // For DQN: keep model.config.layerSizes / networkShape in sync with what was actually trained.
+  // This matters when the user changed the architecture via the Train tab — future sessions and
+  // inference must use the updated architecture, not the stale creation-time shape.
+  const configArchOverride = {}
+  if (engine._online?.layerSizes) {
+    const ls = engine._online.layerSizes
+    configArchOverride.layerSizes   = ls
+    configArchOverride.networkShape = ls.slice(1, -1)
+  }
   await db.$transaction([
     db.mLModel.update({
       where: { id: modelId },
@@ -1222,7 +1250,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
         qtable: engine.toJSON(),
         status: 'IDLE',
         totalEpisodes: { increment: iterations },
-        config: { ...updatedConfig.config, currentEpsilon: engine.epsilon },
+        config: { ...updatedConfig.config, ...configArchOverride, currentEpsilon: engine.epsilon },
       },
     }),
     db.trainingSession.update({
