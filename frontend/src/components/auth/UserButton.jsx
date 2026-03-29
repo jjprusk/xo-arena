@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from '../../lib/auth-client.js'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
+import { clearTokenCache } from '../../lib/getToken.js'
 
 export default function UserButton({ afterSignOutUrl = '/play' }) {
   const { data: session } = useOptimisticSession()
@@ -30,6 +31,11 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
   async function handleSignOut() {
     setOpen(false)
     clearSessionCache()
+    clearTokenCache()
+    // Clear cached DB user for all users in sessionStorage
+    Object.keys(sessionStorage)
+      .filter(k => k.startsWith('xo_dbuser_'))
+      .forEach(k => sessionStorage.removeItem(k))
     await signOut()
     navigate(afterSignOutUrl)
   }

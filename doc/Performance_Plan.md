@@ -478,6 +478,126 @@ Fill in the tables above from the output summary.
 
 ---
 
+---
+
+## Addendum — k6 Load Test (2026-03-28, staging)
+
+Run after leaderboard SQL bug fix (Phase 4 raw SQL column name correction).
+30 concurrent VUs, 2m40s sustained load.
+
+| Scenario | p(95) | p(90) | avg | Error rate |
+|---|---|---|---|---|
+| Public Read (leaderboard, puzzles, rooms, AI list) | 154ms | 143ms | 133ms | 0% |
+| AI Moves | 165ms | 148ms | 137ms | 0% |
+| ML Export | 383ms | — | 383ms | 0% |
+| Auth Sync (unauthenticated — 401s expected) | 190ms | 155ms | 137ms | 0%* |
+| WebSocket PvP (connect + session) | 404ms | 369ms | 333ms | 0% |
+
+*Auth sync reports 100% HTTP failure rate by design — the test verifies unauthenticated requests return 401.
+
+**All 5 scenarios passed.** Previous run (before leaderboard fix) had 25% failure rate on leaderboard with `column g.player1_id does not exist` errors. That is now resolved.
+
+**Observations:**
+- Median read latency ~128ms under 30 VUs — no DB bottleneck visible at this concurrency level
+- WebSocket connect at 333ms avg is the highest-latency operation (connection setup overhead, not query time)
+- ML Export had only 1 request (no authenticated ML models available) — not a meaningful sample
+- System is healthy and meeting all thresholds at 30 concurrent users
+
+---
+
+## Perceived Performance Phases
+
+The actual Ready time floor is ~330ms, constrained by FCP (~130ms) + auth round trip (~130ms) + re-render. Rather than trying to push that floor lower, these phases attack *perceived* latency — what the user sees and feels.
+
+---
+
+### Phase 7 — Fix stale-while-revalidate on Leaderboard
+
+**Impact: High for returning users | Effort: Low**
+
+Phase 2 writes leaderboard data to `localStorage`, but the page still blocks on the fresh fetch before rendering. The cache is written but never used for the initial render. This is a bug — the stale-while-revalidate pattern is half-implemented.
+
+Fix: on mount, read from `localStorage` immediately and render with that data. Fire the background re-fetch in parallel. Swap in the fresh data when it arrives (in-place update, no spinner). Add a subtle "Refreshing…" badge while the background fetch is in flight.
+
+**Expected outcome:** Returning users see the leaderboard in ~0ms. Spinner never appears on repeat visits.
+
+**Checklist:**
+- [ ] Audit `cachedFetch` in `frontend/src/lib/api.js` — confirm stale data is returned synchronously on cache hit
+- [ ] Update `LeaderboardPage` to render immediately from cache, refresh in background
+- [ ] Add subtle "Refreshing…" / "Updated just now" indicator during background fetch
+- [ ] Verify no regression on cold first-visit (cache miss path unchanged)
+
+---
+
+### Phase 8 — Skeleton screens
+
+**Impact: High | Effort: Medium**
+
+Every page currently shows a centered spinner while loading. A spinner gives no structural information — the page feels blank. Replacing it with a content-shaped skeleton (grey placeholder rows, card outlines, avatar circles matching the real layout) makes the page feel almost complete from first render.
+
+Best candidates:
+- **Leaderboard** — podium (3 blocks) + table rows (10 rows) are structurally known before data arrives
+- **Stats** — stat cards and win-rate chart area can be outlined immediately
+- **Play** — mode cards are static; only the bot list section needs a skeleton
+
+**Expected outcome:** Pages feel ~50% faster subjectively even with identical actual latency. The "blank then content" flash is replaced by "almost-there then content".
+
+**Checklist:**
+- [ ] Create reusable `<Skeleton>` component (animated shimmer, configurable width/height/shape)
+- [ ] Leaderboard skeleton: 3 podium blocks + 10 table row skeletons
+- [ ] Stats skeleton: stat cards (wins, losses, draws, win rate) + recent games list
+- [ ] Play skeleton: mode selection cards (static content, no data needed — may already render instantly)
+- [ ] Verify skeletons match real layout dimensions to avoid layout shift on data arrival
+
+---
+
+### Phase 9 — Hover-intent prefetch on nav links
+
+**Impact: High for navigation | Effort: Low**
+
+When a user moves their mouse toward a nav link, the page's data fetch can fire ~100–150ms before the click registers. By the time the component mounts, data is already in cache and the spinner never appears.
+
+Implementation: attach `onMouseEnter` handlers to nav links that call the same `cachedFetch` used on mount. The fetch is a no-op if cache is fresh. Works for any public endpoint (leaderboard, puzzles, bots).
+
+**Expected outcome:** Normal navigation between pages feels instant for logged-in users on warm visits.
+
+**Checklist:**
+- [ ] Add `prefetch(url)` helper that calls `cachedFetch` with a short max-age (30s)
+- [ ] Wire `onMouseEnter` on Leaderboard, Puzzles, and Play nav links
+- [ ] Confirm no excess requests on rapid mouse movement (debounce 80ms)
+
+---
+
+### Phase 10 — Optimistic game moves
+
+**Impact: High for game feel | Effort: Low**
+
+In PvP, the board waits for server confirmation before rendering a placed piece. Render it immediately on click, then reconcile with the server response. Roll back only on rejection (rare: race condition or illegal move). The game feel becomes instant.
+
+**Expected outcome:** Game moves feel instantaneous. The ~130ms round-trip to the server becomes invisible.
+
+**Checklist:**
+- [ ] Apply optimistic update in `GameBoard` / PvP move handler — render piece on click
+- [ ] Handle rollback on server rejection (show brief "invalid move" indicator)
+- [ ] Verify AI move response still waits for server (AI moves are computed server-side)
+
+---
+
+### Phase 11 — Page transition animations
+
+**Impact: Medium | Effort: Low**
+
+A 120–150ms fade or slide transition on route change occupies the eye during the time the new page is loading. With ~330ms actual load time, data is ready before the animation completes on typical connections. The wait reads as intentional polish rather than lag.
+
+**Expected outcome:** Navigation feels smoother and more responsive even with identical load times.
+
+**Checklist:**
+- [ ] Add CSS transition on route change (fade via opacity, or slide via transform)
+- [ ] Keep transition ≤ 150ms — longer feels sluggish
+- [ ] Ensure transition does not delay rendering of cached/instant pages
+
+---
+
 ## Not Doing (and Why)
 
 | Option | Reason skipped |

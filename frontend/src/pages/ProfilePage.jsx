@@ -37,29 +37,46 @@ export default function ProfilePage() {
     async function load() {
       try {
         const token = await getToken()
-        const { user } = await api.users.sync(token)
+
+        // Use cached DB user to skip the sync round-trip on repeat visits.
+        // AppLayout already syncs once per browser session; this avoids a
+        // duplicate call every time the user navigates to /profile.
+        const cacheKey = `xo_dbuser_${clerkUser.id}`
+        let user = null
+        try {
+          const raw = sessionStorage.getItem(cacheKey)
+          if (raw) user = JSON.parse(raw)
+        } catch {}
+
+        if (!user) {
+          const { user: synced } = await api.users.sync(token)
+          user = synced
+          try { sessionStorage.setItem(cacheKey, JSON.stringify(user)) } catch {}
+        }
+
         setDbUser(user)
         setNameInput(user.displayName)
-        const [{ stats: s }, eloRes] = await Promise.all([
+
+        // All three fetches in parallel — nothing depends on the others.
+        const [statsRes, eloRes, botsRes] = await Promise.allSettled([
           api.users.stats(user.id),
-          api.users.eloHistory(user.id).catch(() => null),
+          api.users.eloHistory(user.id),
+          api.bots.list({ ownerId: user.id, includeInactive: true }),
         ])
-        setStats(s)
-        if (eloRes) setEloData(eloRes)
-        // Load bots
-        setBotsLoading(true)
-        try {
-          const { bots: b, limitInfo: li, provisionalThreshold: pt } = await api.bots.list({ ownerId: user.id, includeInactive: true })
-          setBots(b)
-          setLimitInfo(li)
+
+        if (statsRes.status === 'fulfilled') setStats(statsRes.value.stats)
+        if (eloRes.status === 'fulfilled') setEloData(eloRes.value)
+        if (botsRes.status === 'fulfilled') {
+          const { bots: b, limitInfo: li, provisionalThreshold: pt } = botsRes.value
+          setBots(b ?? [])
+          if (li) setLimitInfo(li)
           if (pt != null) setProvisionalThreshold(pt)
-        } catch { /* non-fatal */ } finally {
-          setBotsLoading(false)
         }
       } catch {
         setError('Failed to load profile.')
       } finally {
         setLoading(false)
+        setBotsLoading(false)
       }
     }
     load()
@@ -76,6 +93,7 @@ export default function ProfilePage() {
       const token = await getToken()
       const { user: updated } = await api.patch(`/users/${dbUser.id}`, { displayName: nameInput.trim() }, token)
       setDbUser(updated)
+      try { sessionStorage.setItem(`xo_dbuser_${clerkUser.id}`, JSON.stringify(updated)) } catch {}
       setEditing(false)
     } catch {
       setSaveError('Could not save. Try again.')
