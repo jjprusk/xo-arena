@@ -64,7 +64,23 @@ export default function GymPage() {
   // Resolve the domain User.id (different from Better Auth session user.id)
   useEffect(() => {
     if (!user) return
-    getToken().then(token => api.users.sync(token)).then(({ user: u }) => setDomainUserId(u.id)).catch(() => {})
+    // Use cached DB user to skip the sync round-trip on repeat visits.
+    async function resolveUserId() {
+      try {
+        const cacheKey = `xo_dbuser_${user.id}`
+        let domainId = null
+        try {
+          const raw = sessionStorage.getItem(cacheKey)
+          if (raw) domainId = JSON.parse(raw)?.id ?? null
+        } catch {}
+        if (domainId) { setDomainUserId(domainId); return }
+        const token = await getToken()
+        const { user: u } = await api.users.sync(token)
+        setDomainUserId(u.id)
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(u)) } catch {}
+      } catch {}
+    }
+    resolveUserId()
   }, [user?.id])
 
   const loadBots = useCallback(async () => {
