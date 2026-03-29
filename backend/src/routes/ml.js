@@ -284,8 +284,8 @@ router.post('/sessions/:id/finish', requireAuth, async (req, res, next) => {
         }
       }
     }
-    const { weights, stats, iterations, status } = req.body
-    await svc.finishTrainingFromFrontend(req.params.id, { weights, stats, iterations, status })
+    const { weights, stats, iterations, status, samples } = req.body
+    await svc.finishTrainingFromFrontend(req.params.id, { weights, stats, iterations, status, samples })
     res.json({ ok: true })
   } catch (err) { next(err) }
 })

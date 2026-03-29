@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import {
@@ -492,12 +493,15 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
       // Create session on backend and get current model weights for engine init
       const { session, model: modelState } = await api.ml.train(model.id, { mode, iterations, config: cfg, frontend: true }, token)
 
-      onSessionsChange(prev => [session, ...prev])
-      setSessionId(session.id)
-      setRunning(true)
-      setProgress(null)
-      setChartData([])
-      setCurriculumDifficulty(curriculum && mode === 'VS_MINIMAX' ? 'novice' : null)
+      // Flush these state updates to DOM before starting the blocking training loop
+      flushSync(() => {
+        onSessionsChange(prev => [session, ...prev])
+        setSessionId(session.id)
+        setRunning(true)
+        setProgress(null)
+        setChartData([])
+        setCurriculumDifficulty(curriculum && mode === 'VS_MINIMAX' ? 'novice' : null)
+      })
 
       // Run all episodes locally in the browser
       const result = await runTrainingSession({
@@ -505,15 +509,17 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
         session: { ...session, config: cfg },
         cancelRef,
         onProgress: (data) => {
-          setProgress({ ...data, sessionId: session.id })
-          setChartData(prev => [...prev, {
-            ep: data.episode,
-            winRate:  Math.round(data.winRate  * 100),
-            lossRate: Math.round(data.lossRate * 100),
-            drawRate: Math.round(data.drawRate * 100),
-            epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
-            qDelta: parseFloat(data.avgQDelta.toFixed(4)),
-          }])
+          flushSync(() => {
+            setProgress({ ...data, sessionId: session.id })
+            setChartData(prev => [...prev, {
+              ep: data.episode,
+              winRate:  Math.round(data.winRate  * 100),
+              lossRate: Math.round(data.lossRate * 100),
+              drawRate: Math.round(data.drawRate * 100),
+              epsilon: parseFloat((data.epsilon * 100).toFixed(1)),
+              qDelta: parseFloat(data.avgQDelta.toFixed(4)),
+            }])
+          })
         },
         onCurriculumAdvance: ({ difficulty: newDiff }) => setCurriculumDifficulty(newDiff),
       })
@@ -841,14 +847,26 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
               return (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                      Iterations: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{displayIterations.toLocaleString()}</span>
-                    </label>
-                    {model.maxEpisodes > 0 && (
-                      <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
-                        {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
-                      </span>
-                    )}
+                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Iterations</label>
+                    <div className="flex items-center gap-2">
+                      {model.maxEpisodes > 0 && (
+                        <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
+                          {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
+                        </span>
+                      )}
+                      <input
+                        type="number"
+                        min={ITERATIONS_MIN} max={sliderMax} step={ITERATIONS_STEP}
+                        value={displayIterations}
+                        disabled={atLimit}
+                        onChange={e => {
+                          const v = Number(e.target.value)
+                          if (!isNaN(v)) setIterations(Math.max(ITERATIONS_MIN, Math.min(sliderMax, v)))
+                        }}
+                        className="w-24 px-2 py-0.5 rounded text-sm font-bold tabular-nums text-right disabled:opacity-40"
+                        style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-surface-hover)', border: '1px solid var(--border-default)' }}
+                      />
+                    </div>
                   </div>
                   <input type="range" min={ITERATIONS_MIN} max={sliderMax} step={ITERATIONS_STEP} value={displayIterations}
                     onChange={e => setIterations(Number(e.target.value))}
