@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { minimaxMove } from '../minimax.js'
-import { getWinner, getEmptyCells } from '../gameLogic.js'
+import { minimaxMove, getWinner, getEmptyCells } from '@xo-arena/ai'
 
 // --- Correctness fixtures (Master must always return the known optimal move) ---
 

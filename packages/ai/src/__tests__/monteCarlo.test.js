@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { MonteCarloEngine } from '../monteCarlo.js'
+import { MonteCarloEngine } from '@xo-arena/ai'
 
 describe('MonteCarloEngine', () => {
   let engine

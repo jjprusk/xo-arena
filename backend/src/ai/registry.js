@@ -6,7 +6,7 @@
  *   { id, name, description, supportedDifficulties, move(board, difficulty, player) => index }
  */
 
-import { minimaxImplementation } from './minimax.js'
+import { minimaxImplementation } from '@xo-arena/ai'
 import { mlImplementation } from './mlImplementation.js'
 import { ruleBasedImplementation } from './ruleBased.js'
 

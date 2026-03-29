@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { NeuralNet } from '../neuralNet.js'
+import { NeuralNet } from '@xo-arena/ai'
 
 describe('NeuralNet', () => {
   it('forward pass produces correct output shape', () => {

@@ -9,8 +9,7 @@
  */
 
 import db from '../lib/db.js'
-import { getEmptyCells } from './gameLogic.js'
-import { applyRule } from './ruleLogic.js'
+import { getEmptyCells, applyRule } from '@xo-arena/ai'
 
 /** In-memory cache: ruleSetId → rules array (sorted by priority, enabled only) */
 const ruleSetCache = new Map()

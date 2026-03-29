@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { DQNEngine } from '../dqn.js'
+import { DQNEngine } from '@xo-arena/ai'
 
 const EMPTY_BOARD = Array(9).fill(null)
 const MARK = 'X'

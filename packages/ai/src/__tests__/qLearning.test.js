@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { QLearningEngine, runEpisode } from '../qLearning.js'
+import { QLearningEngine, runEpisode, getEmptyCells } from '@xo-arena/ai'
 
 describe('QLearningEngine', () => {
   let engine
@@ -109,7 +109,6 @@ describe('runEpisode', () => {
 
   it('works vs a random opponent', () => {
     const engine = new QLearningEngine()
-    const { getEmptyCells } = require('../gameLogic.js')
     const randomOpp = (board) => {
       const empty = getEmptyCells(board)
       return empty[Math.floor(Math.random() * empty.length)]

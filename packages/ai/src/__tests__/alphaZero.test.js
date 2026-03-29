@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AlphaZeroEngine } from '../alphaZero.js'
+import { AlphaZeroEngine } from '@xo-arena/ai'
 
 const EMPTY_BOARD = Array(9).fill(null)
 

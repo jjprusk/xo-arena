@@ -7,7 +7,7 @@
  */
 
 import { mountainPool, MountainNamePool } from './mountainNames.js'
-import { getWinner, isBoardFull, getEmptyCells, WIN_LINES } from '../ai/gameLogic.js'
+import { getWinner, isBoardFull, getEmptyCells, WIN_LINES } from '@xo-arena/ai'
 import registry from '../ai/registry.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
