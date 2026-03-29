@@ -14,7 +14,7 @@
  */
 
 import { mountainPool, MountainNamePool } from './mountainNames.js'
-import { getWinner, isBoardFull, WIN_LINES } from '../ai/gameLogic.js'
+import { getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 
 const RECONNECT_WINDOW_MS = 60_000
 const STALE_WAITING_MS = 30 * 60 * 1000   // 30 min — waiting room with no guest

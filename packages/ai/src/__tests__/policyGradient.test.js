@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { PolicyGradientEngine } from '../policyGradient.js'
+import { PolicyGradientEngine } from '@xo-arena/ai'
 
 describe('PolicyGradientEngine', () => {
   let engine

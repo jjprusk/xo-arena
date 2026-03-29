@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getWinner, isBoardFull, getEmptyCells, opponent } from '../gameLogic.js'
+import { getWinner, isBoardFull, getEmptyCells, opponent } from '@xo-arena/ai'
 
 describe('getWinner', () => {
   it('returns X when X wins top row', () => {

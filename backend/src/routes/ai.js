@@ -1,9 +1,8 @@
 import { Router } from 'express'
 import registry from '../ai/registry.js'
-import { getEmptyCells } from '../ai/gameLogic.js'
+import { getEmptyCells, classifyMinimaxMove } from '@xo-arena/ai'
 import { recordMove } from '../services/aiMetrics.js'
 import { explainMove, getAdaptedMoveForModel, recordHumanMove } from '../services/mlService.js'
-import { classifyMinimaxMove } from '../ai/minimax.js'
 
 const router = Router()
 

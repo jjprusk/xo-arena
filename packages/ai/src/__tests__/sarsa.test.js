@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { SarsaEngine } from '../sarsa.js'
+import { SarsaEngine } from '@xo-arena/ai'
 
 describe('SarsaEngine', () => {
   let engine

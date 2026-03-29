@@ -7,7 +7,7 @@
  */
 
 import { getMoveForModel } from '../services/mlService.js'
-import { getEmptyCells } from './gameLogic.js'
+import { getEmptyCells } from '@xo-arena/ai'
 
 export const mlImplementation = {
   id: 'ml',

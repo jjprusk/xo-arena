@@ -8,15 +8,17 @@
 
 import db from '../lib/db.js'
 import { resetBotElo } from './userService.js'
-import { QLearningEngine, runEpisode, DEFAULT_CONFIG } from '../ai/qLearning.js'
-import { SarsaEngine } from '../ai/sarsa.js'
-import { MonteCarloEngine } from '../ai/monteCarlo.js'
-import { PolicyGradientEngine } from '../ai/policyGradient.js'
-import { DQNEngine } from '../ai/dqn.js'
-import { AlphaZeroEngine } from '../ai/alphaZero.js'
-import { minimaxMove } from '../ai/minimax.js'
-import { getWinner, isBoardFull, getEmptyCells, opponent } from '../ai/gameLogic.js'
-import { proportionPValue, twoProportionPValue } from '../ai/stats.js'
+import {
+  QLearningEngine, runEpisode, DEFAULT_CONFIG,
+  SarsaEngine,
+  MonteCarloEngine,
+  PolicyGradientEngine,
+  DQNEngine,
+  AlphaZeroEngine,
+  minimaxMove,
+  getWinner, isBoardFull, getEmptyCells, opponent,
+  proportionPValue, twoProportionPValue,
+} from '@xo-arena/ai'
 import logger from '../logger.js'
 
 // ─── Socket.io reference ────────────────────────────────────────────────────
