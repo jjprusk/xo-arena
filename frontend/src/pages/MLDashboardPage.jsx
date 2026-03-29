@@ -479,6 +479,14 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
     cleanupRef.current = null
     cancelRef.current = false
 
+    // Show the progress panel immediately before the API call
+    flushSync(() => {
+      setRunning(true)
+      setProgress(null)
+      setChartData([])
+      setCurriculumDifficulty(null)
+    })
+
     const token = await getToken()
     const cfg = {
       ...(mode === 'VS_MINIMAX' ? { difficulty: curriculum ? 'novice' : difficulty, mlMark: mlMark === 'alternating' ? undefined : mlMark } : {}),
@@ -493,14 +501,10 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
       // Create session on backend and get current model weights for engine init
       const { session, model: modelState } = await api.ml.train(model.id, { mode, iterations, config: cfg, frontend: true }, token)
 
-      // Flush these state updates to DOM before starting the blocking training loop
       flushSync(() => {
         onSessionsChange(prev => [session, ...prev])
         setSessionId(session.id)
-        setRunning(true)
-        setProgress(null)
-        setChartData([])
-        setCurriculumDifficulty(curriculum && mode === 'VS_MINIMAX' ? 'novice' : null)
+        if (curriculum && mode === 'VS_MINIMAX') setCurriculumDifficulty('novice')
       })
 
       // Run all episodes locally in the browser
@@ -920,7 +924,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <SectionLabel>Training in Progress</SectionLabel>
+              <SectionLabel>{sessionId ? 'Training in Progress' : 'Starting…'}</SectionLabel>
               {curriculumDifficulty && (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize"
                   style={{
