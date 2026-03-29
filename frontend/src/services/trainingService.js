@@ -324,10 +324,6 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
   const SAMPLE_STEP = Math.max(1, Math.floor(iterations / 200))
   const samples = []
 
-  // Collect ~200 sampled episode records for the Analytics tab
-  const SAMPLE_STEP = Math.max(1, Math.floor(iterations / 200))
-  const samples = []
-
   let wins = 0, losses = 0, draws = 0, totalQDelta = 0
   let actualEpisodes = 0
   let batchStartTime = performance.now()
@@ -356,17 +352,6 @@ export async function runTrainingSession({ model, session, onProgress, onCurricu
     else                                { draws++; batchDraws++ }
     totalQDelta += result.avgQDelta
     batchQDelta += result.avgQDelta
-
-    // Sample this episode for analytics
-    if (i % SAMPLE_STEP === 0) {
-      samples.push({
-        episodeNum: i + 1,
-        outcome:    result.outcome,
-        totalMoves: result.totalMoves,
-        avgQDelta:  result.avgQDelta,
-        epsilon:    engine.epsilon,
-      })
-    }
 
     // Sample this episode for analytics
     if (i % SAMPLE_STEP === 0) {
