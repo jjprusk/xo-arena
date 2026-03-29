@@ -598,6 +598,129 @@ A 120–150ms fade or slide transition on route change occupies the eye during t
 
 ---
 
+### Phase 12 — React.lazy() tab splitting for Gym
+
+**Impact: Medium | Effort: Low**
+
+`MLDashboardPage.jsx` contains 8 tab components (Train, Analytics, Evaluation, Explainability, Checkpoints, Sessions, Export, Rules) defined inline in the same file. All 8 are parsed and executed when the Gym route loads, even though the user typically visits only 1–2 tabs per session. The Gym is also the only page that imports `recharts` (already split into `vendor-charts`), but the tab component code itself still adds to the initial parse cost.
+
+Fix: extract each tab into its own file and import them with `React.lazy()`. Webpack/Vite will create a separate async chunk per tab. The chunk loads on first click, cached on all subsequent visits.
+
+**Expected outcome:** Gym initial JS parse time reduced. Tab first-click adds ~50ms on first visit (chunk load); subsequent visits are cached and instant.
+
+**Checklist:**
+- [ ] Extract each of the 8 Gym tabs into `frontend/src/components/gym/` files
+- [ ] Import with `React.lazy()` + wrap in `<Suspense fallback={<spinner>}>`
+- [ ] Verify recharts is not double-bundled (should remain in `vendor-charts` chunk)
+- [ ] Confirm tab navigation still works correctly after code split
+
+---
+
+### Phase 13 — Persistent tab mounting (keep-alive)
+
+**Impact: Medium | Effort: Low**
+
+Gym tabs are conditionally rendered: `{activeTab === 'train' && <TrainTab />}`. Every tab switch unmounts the old tab and mounts the new one, discarding all local state (selected session, chart zoom, pagination) and forcing a re-render. Sessions state was lifted in a prior fix, but other per-tab state is still lost.
+
+Fix: render all tabs simultaneously but toggle visibility with `display: none` (or a CSS class). React never unmounts them — DOM state, scroll position, and derived state survive tab switches.
+
+**Expected outcome:** Tab switches are instantaneous after first visit. No re-render cost, no state loss.
+
+**Checklist:**
+- [ ] Replace `{activeTab === 'x' && <XTab />}` with `<XTab style={{ display: activeTab === 'x' ? '' : 'none' }} />`
+- [ ] Confirm data that was already fetched (e.g. episode details) does not re-fetch on re-show
+- [ ] Verify Phase 12 (lazy loading) still works — lazy tabs can be persisted once loaded
+- [ ] Check for any tab that must reset on bot change (e.g. train tab progress bar)
+
+---
+
+### Phase 14 — Progressive Gym load (sidebar-first rendering)
+
+**Impact: Medium | Effort: Low**
+
+The Gym currently renders a full-page spinner until both the bot list and the selected model are loaded. The bot sidebar could render immediately from the sessionStorage cache (`xo_bots_<userId>`) — the list was cached in a prior fix — while the model detail panel shows a content-shaped skeleton.
+
+Fix: remove the top-level loading guard; let the sidebar render from cache instantly. Show a skeleton in the detail panel while `getModel` is in flight. The user can click a different bot or read the sidebar without waiting for the model.
+
+**Expected outcome:** Gym sidebar appears in ~0ms on return visits. Model detail area shows skeleton (~130ms) rather than a blank page.
+
+**Checklist:**
+- [ ] Remove or narrow the `if (loading) return <spinner>` guard in `MLDashboardPage`
+- [ ] Render bot sidebar from cache immediately (already cached from prior work)
+- [ ] Show a `<Skeleton>` in the detail panel while `modelLoading` is true
+- [ ] Verify that clicking a different bot while the first is loading cancels the stale request
+
+---
+
+### Phase 15 — Optimistic UI for writes
+
+**Impact: Medium | Effort: Low**
+
+Several user-initiated writes (bot rename, bot availability toggle, profile display name save) wait for server confirmation before updating the UI. The writes almost never fail — the wait just feels slow.
+
+Fix: apply the new value to local state immediately on click, fire the request in the background, and roll back (with a toast) only on error.
+
+Good candidates:
+- Bot availability toggle (`BotProfilePage`) — flips a boolean, rollback is rare
+- Bot display name save (`BotProfilePage`) — user typed the value, rollback only on validation error
+- Profile display name save (`ProfilePage`) — same pattern
+- Stats favourite-game toggle (if one exists)
+
+**Expected outcome:** All of these writes feel instant. Error rollback is handled gracefully with a toast.
+
+**Checklist:**
+- [ ] Optimistic toggle for bot availability in `BotProfilePage`
+- [ ] Optimistic name save in `BotProfilePage`
+- [ ] Optimistic name save in `ProfilePage`
+- [ ] Add error toast + rollback for each (use existing toast/notification system if present)
+
+---
+
+### Phase 16 — Virtual scrolling for long lists
+
+**Impact: Low-Medium | Effort: Medium**
+
+Several views can grow to hundreds of rows: ELO history chart data, training sessions list, leaderboard table, and game history. React renders all rows into the DOM even when only ~10 are visible. Above ~200 rows, scroll performance degrades noticeably on mobile.
+
+Fix: replace long lists with a virtual list that renders only the visible window of rows (e.g. `react-window` or `@tanstack/react-virtual`). The DOM stays small regardless of data size.
+
+Good candidates (in order of impact):
+1. Training sessions list in Gym (`SessionsTab`) — can grow to thousands
+2. Game history in `StatsPage` — unbounded
+3. Leaderboard table — capped at 50, borderline; skip unless performance degrades
+
+**Expected outcome:** Smooth scrolling and constant DOM size regardless of row count. Measurable on mobile; negligible on desktop at current data sizes.
+
+**Checklist:**
+- [ ] Add `@tanstack/react-virtual` (zero-dep, tree-shakeable) to `frontend/package.json`
+- [ ] Apply to `SessionsTab` session list
+- [ ] Apply to game history list in `StatsPage`
+- [ ] Verify keyboard navigation and accessibility are not broken
+
+---
+
+### Phase 17 — Resource hints for cross-page prefetch
+
+**Impact: Low | Effort: Low**
+
+The `vendor-charts` chunk (~200KB) is only needed on the Gym page. Users who navigate Play → Gym pay a cold chunk-load cost right as the page opens. A `<link rel="prefetch">` on the Play page can pre-load the chunk during idle time so it's already in the browser cache when the user clicks "Gym".
+
+Similarly, auth-related chunks could be prefetched on the anonymous landing page.
+
+**Implementation:**
+1. After Vite build, the `vendor-charts` chunk has a hashed filename (e.g. `vendor-charts-abc123.js`). Inject a `<link rel="prefetch" href="/assets/vendor-charts-abc123.js">` into the Play page's rendered HTML — either via a Vite plugin or by reading the manifest at runtime.
+2. Alternatively, use `import(/* webpackPrefetch: true */ './vendor-charts')` (Vite supports this hint).
+
+**Expected outcome:** Gym first load is ~50–100ms faster for users who came from Play. Zero cost for users who navigate directly to Gym.
+
+**Checklist:**
+- [ ] Identify hashed filename of `vendor-charts` chunk from Vite manifest
+- [ ] Add `<link rel="prefetch">` for this chunk to `PlayPage` (or `AppLayout` for logged-in users)
+- [ ] Confirm prefetch does not interfere with code splitting (chunk still lazy)
+- [ ] Measure Gym cold load time from Play vs direct navigation
+
+---
+
 ## Not Doing (and Why)
 
 | Option | Reason skipped |

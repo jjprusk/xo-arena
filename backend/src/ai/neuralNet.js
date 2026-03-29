@@ -8,14 +8,17 @@
  *   - Output activation: linear (for Q-value output)
  *
  * Supports mini-batch training via gradient accumulation.
+ * Optimizer: Adam (opt-in via { useAdam: true }) or plain SGD.
  */
 
 export class NeuralNet {
   /**
    * @param {number[]} layerSizes  e.g. [9, 64, 64, 9]
+   * @param {{ useAdam?: boolean }} options
    */
-  constructor(layerSizes) {
+  constructor(layerSizes, { useAdam = false } = {}) {
     this.layerSizes = layerSizes
+    this._useAdam   = useAdam
     const L = layerSizes.length
 
     // weights[l] is matrix [layerSizes[l+1]][layerSizes[l]]  (row = output neuron)
@@ -39,6 +42,8 @@ export class NeuralNet {
 
     this._resetGradients()
     this._batchCount = 0
+
+    if (this._useAdam) this._initAdamState()
   }
 
   // ─── Forward ────────────────────────────────────────────────────────────────
@@ -122,20 +127,50 @@ export class NeuralNet {
   // ─── Update ─────────────────────────────────────────────────────────────────
 
   /**
-   * Apply SGD: weight -= lr * grad / batchCount; reset gradients.
+   * Apply optimizer step (Adam or SGD): update weights, reset gradients.
+   * Adam: β1=0.9, β2=0.999, ε=1e-8. Bias-corrected per standard paper.
+   * SGD: weight -= lr * grad / batchCount.
    * @param {number} lr  learning rate
    */
   update(lr) {
     const n = Math.max(1, this._batchCount)
     const L = this.layerSizes.length
 
-    for (let l = 0; l < L - 1; l++) {
-      const fanOut = this.layerSizes[l + 1]
-      const fanIn  = this.layerSizes[l]
-      for (let j = 0; j < fanOut; j++) {
-        this.biases[l][j] -= lr * this._gradBiases[l][j] / n
-        for (let i = 0; i < fanIn; i++) {
-          this.weights[l][j][i] -= lr * this._gradWeights[l][j][i] / n
+    if (this._useAdam) {
+      this._adamT++
+      // Bias-correction factors (computed once per step)
+      const bc1 = 1 - Math.pow(0.9,   this._adamT)
+      const bc2 = 1 - Math.pow(0.999, this._adamT)
+      const corrLr = lr * Math.sqrt(bc2) / bc1
+
+      for (let l = 0; l < L - 1; l++) {
+        const fanOut = this.layerSizes[l + 1]
+        const fanIn  = this.layerSizes[l]
+        for (let j = 0; j < fanOut; j++) {
+          // Bias
+          const gb = this._gradBiases[l][j] / n
+          this._adamBiasM[l][j] = 0.9   * this._adamBiasM[l][j] + 0.1   * gb
+          this._adamBiasV[l][j] = 0.999 * this._adamBiasV[l][j] + 0.001 * gb * gb
+          this.biases[l][j] -= corrLr * this._adamBiasM[l][j] / (Math.sqrt(this._adamBiasV[l][j]) + 1e-8)
+          // Weights
+          for (let i = 0; i < fanIn; i++) {
+            const gw = this._gradWeights[l][j][i] / n
+            this._adamM[l][j][i] = 0.9   * this._adamM[l][j][i] + 0.1   * gw
+            this._adamV[l][j][i] = 0.999 * this._adamV[l][j][i] + 0.001 * gw * gw
+            this.weights[l][j][i] -= corrLr * this._adamM[l][j][i] / (Math.sqrt(this._adamV[l][j][i]) + 1e-8)
+          }
+        }
+      }
+    } else {
+      // Plain SGD
+      for (let l = 0; l < L - 1; l++) {
+        const fanOut = this.layerSizes[l + 1]
+        const fanIn  = this.layerSizes[l]
+        for (let j = 0; j < fanOut; j++) {
+          this.biases[l][j] -= lr * this._gradBiases[l][j] / n
+          for (let i = 0; i < fanIn; i++) {
+            this.weights[l][j][i] -= lr * this._gradWeights[l][j][i] / n
+          }
         }
       }
     }
@@ -159,11 +194,13 @@ export class NeuralNet {
 
   /**
    * Restore a NeuralNet from a serialized object produced by serialize().
+   * Adam moment state is NOT serialized — it resets on load (weights/biases are authoritative).
    * @param {{ layerSizes: number[], weights: number[][], biases: number[][] }} data
+   * @param {{ useAdam?: boolean }} options  passed through to constructor
    * @returns {NeuralNet}
    */
-  static fromJSON(data) {
-    const net = new NeuralNet(data.layerSizes)
+  static fromJSON(data, options = {}) {
+    const net = new NeuralNet(data.layerSizes, options)
     const L   = data.layerSizes.length
     for (let l = 0; l < L - 1; l++) {
       const fanIn  = data.layerSizes[l]
@@ -191,6 +228,15 @@ export class NeuralNet {
       for (const layer of this._gradBiases) layer.fill(0)
     }
     this._batchCount = 0
+  }
+
+  /** Allocate Adam first/second moment accumulators (zeroed). */
+  _initAdamState() {
+    this._adamT     = 0
+    this._adamM     = this.weights.map(W => W.map(row => new Float64Array(row.length)))
+    this._adamV     = this.weights.map(W => W.map(row => new Float64Array(row.length)))
+    this._adamBiasM = this.biases.map(b => new Float64Array(b.length))
+    this._adamBiasV = this.biases.map(b => new Float64Array(b.length))
   }
 }
 

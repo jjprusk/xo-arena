@@ -25,14 +25,15 @@ export class DQNEngine {
     const layerSizes = config.layerSizes ?? [9, hiddenSize, 9]
     this._epsilon          = config.currentEpsilon ?? config.epsilonStart ?? 1.0
     this.epsilonMin        = config.epsilonMin     ?? DEFAULT_CONFIG.epsilonMin
-    this.epsilonDecay      = config.epsilonDecay   ?? DEFAULT_CONFIG.epsilonDecay
+    // DQN needs slower decay than tabular Q-learning; use 0.9999 as DQN-specific default
+    this.epsilonDecay      = config.epsilonDecay   ?? 0.9999
     this.decayMethod       = config.decayMethod    ?? DEFAULT_CONFIG.decayMethod
     this._epsilonSessionStart = this._epsilon
     this._decayEpisode        = 0
     this._decayTotal          = config.totalEpisodes ?? null
 
-    // Networks
-    this._online = new NeuralNet(layerSizes)
+    // Networks — online uses Adam for fast convergence; target is inference-only
+    this._online = new NeuralNet(layerSizes, { useAdam: true })
     this._target = new NeuralNet(layerSizes)
     this.syncTargetNetwork() // start in sync
 
@@ -95,7 +96,11 @@ export class DQNEngine {
       const fwdOnline   = this._online.forward(state)
       const qOnline     = fwdOnline.output.slice()
 
-      // Compute target Q-value — mask illegal moves (encoded as non-zero)
+      // Compute target Q-value using the adversarial (minimax) Bellman equation.
+      // nextState is encoded from the *opponent's* perspective (opp=+1), so maxNextQ is
+      // the opponent's best expected value. In a zero-sum game this must be subtracted:
+      //   Q(s,a) = r − γ · max_a' Q_opp(s')
+      // Using + would teach the agent to maximise the opponent's advantage — wrong.
       let targetQ
       if (done) {
         targetQ = reward
@@ -103,7 +108,7 @@ export class DQNEngine {
         const { output: qNext } = this._target.forward(nextState)
         const legalIndices = nextState.reduce((acc, v, i) => { if (v === 0) acc.push(i); return acc }, [])
         const maxNextQ = legalIndices.length > 0 ? Math.max(...legalIndices.map(i => qNext[i])) : 0
-        targetQ = reward + this.gamma * maxNextQ
+        targetQ = reward - this.gamma * maxNextQ  // adversarial negation
       }
 
       // MSE loss grad: 2*(Q - target) / batchSize for the action, 0 for others
@@ -157,7 +162,8 @@ export class DQNEngine {
     if (!data || typeof data !== 'object') return
     try {
       if (data.online) {
-        this._online = NeuralNet.fromJSON(data.online)
+        // Online network restores with Adam enabled; Adam moment state resets (fresh warmup).
+        this._online = NeuralNet.fromJSON(data.online, { useAdam: true })
         this._target = data.target ? NeuralNet.fromJSON(data.target) : NeuralNet.fromJSON(data.online)
       }
       if (typeof data.epsilon === 'number') this._epsilon = data.epsilon
