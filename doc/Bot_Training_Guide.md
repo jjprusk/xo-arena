@@ -305,13 +305,15 @@ Controls how aggressively Q-values are updated per step.
 |----------|-------|-------|
 | Network architecture | **[64, 64]** | Two layers; best quality/speed tradeoff for tic-tac-toe |
 | Gamma (γ) | **0.95** | Better than default 0.90 — plans further ahead in 9-move games |
-| Decay schedule | **Linear** | Most predictable for a fixed episode budget |
-| Rate | **0.9999** | Default for DQN; reaches ε≈0.05 by ~29,950 episodes |
+| Decay schedule | **Exponential** | Required for multi-session training — see note below |
+| Rate | **0.9999** | Reaches ε≈0.05 by ~29,950 episodes across all sessions |
 | Epsilon min | **0.05** | |
 | Reset ε to 1.0 at start | **checked** | |
 | Batch | **32** | Default; increase to 64 for [128, 128] nets |
 | Replay buffer | **10,000** | Good for 30k-episode runs |
 | Target update | **100** | Default; do not lower below 50 |
+
+> **Why Exponential for DQN?** Linear and Cosine decay spread ε from its current value to Epsilon min evenly across one session's episodes — the Rate field is hidden because it isn't used. For a 10k-episode session starting at ε=1.0 with Epsilon min=0.05, Linear would reach the floor at episode 10,000, leaving sessions 2–4 with no exploration. Exponential at Rate 0.9999 carries exploration smoothly across 30,000+ episodes, matching the ε estimates in the session recipe below. Use Linear/Cosine only for a single all-in-one session.
 
 ### Session Recipe
 
@@ -348,7 +350,7 @@ For tic-tac-toe, `[64, 64]` is the sweet spot — larger networks don't raise th
 
 ### Tips
 - Always use **self-play for sessions 1–2**. The replay buffer fills faster and both X and O perspectives are covered simultaneously.
-- Use **linear decay schedule** so exploration is predictable across the session budget.
+- Use **Exponential decay with Rate 0.9999**. Linear/Cosine decay from ε=1.0 to 0.05 within a single 10k-episode session — leaving nothing for future sessions. Exponential at 0.9999 spreads exploration gradually across all sessions.
 - The minimum viable run is **15,000 episodes** to fill and recycle the replay buffer enough for the Bellman targets to stabilize.
 - If the win rate is flat after 20,000 episodes: change the architecture to `[64, 64]` in the Train tab (weights reset, but the new capacity helps more than extra episodes on a small net).
 - Use **Gamma = 0.95** — it lets the agent plan further ahead without introducing instability in 9-move games.
