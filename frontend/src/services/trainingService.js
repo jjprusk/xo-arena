@@ -15,7 +15,7 @@ import {
   AlphaZeroEngine,
   minimaxMove,
   getWinner, isBoardFull, opponent,
-} from '@xo-arena/ai'
+} from '../vendor/ai/index.js'
 
 // ─── Engine builder ──────────────────────────────────────────────────────────
 
