@@ -317,12 +317,18 @@ Controls how aggressively Q-values are updated per step.
 
 ### Session Recipe
 
-| Session | Episodes | Mode | Opponent | ε start → end | Purpose |
-|---------|----------|------|----------|---------------|---------|
-| 1 | 10,000 | Self-play | — | 1.0 → ~0.37 | Warm up replay buffer, learn basic move validity |
-| 2 | 10,000 | Self-play | — | 0.37 → ~0.14 | Core policy learning |
-| 3 | 10,000 | vs Minimax | Curriculum (novice→advanced) | 0.14 → ~0.05 | Strategic refinement |
-| 4 | 5,000 | vs Minimax | Master | 0.05 → 0.05 | Final hardening |
+The **ε start → end** column shows predicted values based on Exponential 0.9999 decay — these are not inputs you configure. ε start is determined by the previous session's stored end state. The only epsilon control in the Train tab is the **"Reset ε to 1.0"** checkbox:
+- **Session 1** — check it (start fresh at 1.0)
+- **Sessions 2–4** — uncheck it (continue from the stored value left by the previous session)
+
+ε end is likewise not settable; it is simply where epsilon lands after N episodes of decay at your chosen Rate.
+
+| Session | Episodes | Mode | Opponent | ε start → end (predicted) | Reset ε to 1.0 | Purpose |
+|---------|----------|------|----------|---------------------------|----------------|---------|
+| 1 | 10,000 | Self-play | — | 1.0 → ~0.37 | **checked** | Warm up replay buffer, learn basic move validity |
+| 2 | 10,000 | Self-play | — | ~0.37 → ~0.14 | unchecked | Core policy learning |
+| 3 | 10,000 | vs Minimax | Curriculum (novice→advanced) | ~0.14 → ~0.05 | unchecked | Strategic refinement |
+| 4 | 5,000 | vs Minimax | Master | ~0.05 → ~0.05 | unchecked | Final hardening |
 
 **Total: ~35,000 episodes**
 
