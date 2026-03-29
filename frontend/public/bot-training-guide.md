@@ -83,6 +83,8 @@ Controls how aggressively Q-values are updated per step.
 
 > **In the app:** α is **not exposed in the Train tab** for any algorithm. It is hardcoded at 0.3 (tabular) and 0.001 (neural net). For tabular methods only, α can be swept via the **Auto-Tuner** tab.
 
+[↑ Back to top](#xo-arena--bot-training-guide)
+
 ---
 
 ## Algorithm Overview
@@ -98,6 +100,8 @@ Controls how aggressively Q-values are updated per step.
 
 **If you want the strongest bot:** AlphaZero > DQN > Q-Learning.
 **If you want the fastest to train:** Q-Learning > SARSA > Monte Carlo.
+
+[↑ Back to top](#xo-arena--bot-training-guide)
 
 ---
 
@@ -145,6 +149,8 @@ Controls how aggressively Q-values are updated per step.
 - Once the bot reaches ~80% vs random, switch to curriculum minimax to sharpen strategy.
 - If the Q-table stalls (win rate plateaus for 2,000+ episodes), lower α to 0.1 and run 2,000 more episodes — aggressive learning rates overwrite good values at low epsilon.
 
+[↑ Back to top](#xo-arena--bot-training-guide)
+
 ---
 
 ## SARSA
@@ -187,6 +193,8 @@ Controls how aggressively Q-values are updated per step.
 - The gap between the two narrows as epsilon decays to 0 — at inference time (ε=0) both become identical greedy agents.
 - Prefer SARSA if you want a bot that draws rather than gambles; prefer Q-Learning if you want raw win rate.
 
+[↑ Back to top](#xo-arena--bot-training-guide)
+
 ---
 
 ## Monte Carlo
@@ -227,6 +235,8 @@ Controls how aggressively Q-values are updated per step.
 - Use **linear decay** — Monte Carlo benefits from staying exploratory longer because each episode covers a unique trajectory. Exponential decay collapses exploration too early.
 - MC is the most data-hungry algorithm but has the cleanest credit assignment: every move in a winning game is credited, every move in a losing game is penalized.
 - The final policy quality is often comparable to Q-Learning at 1.5–2x the episode count.
+
+[↑ Back to top](#xo-arena--bot-training-guide)
 
 ---
 
@@ -270,6 +280,8 @@ Controls how aggressively Q-values are updated per step.
 - The learning rate is critical: α > 0.05 causes oscillation. If the win rate bounces wildly between sessions, halve α.
 - The cosine decay schedule works particularly well here — it mirrors the natural "explore then refine" lifecycle of REINFORCE.
 - PG bots make better opponents for human players because they are not fully deterministic.
+
+[↑ Back to top](#xo-arena--bot-training-guide)
 
 ---
 
@@ -397,6 +409,8 @@ For tic-tac-toe, `[64, 64]` is the sweet spot — larger networks don't raise th
 - If the win rate is flat after 20,000 episodes: change the architecture to `[64, 64]` in the Train tab (weights reset, but the new capacity helps more than extra episodes on a small net).
 - Use **Gamma = 0.95** — it lets the agent plan further ahead without introducing instability in 9-move games.
 
+[↑ Back to top](#xo-arena--bot-training-guide)
+
 ---
 
 ## AlphaZero
@@ -460,6 +474,8 @@ AlphaZero reaches competency **much faster per-episode** than other algorithms b
 - **PUCT=1.5** balances exploitation vs exploration in the tree. If the bot gets stuck in repetitive patterns early, try PUCT=2.0.
 - AlphaZero's policy net outputs are probabilities, not Q-values. The Explainability tab shows these as move probabilities — a strong AZ bot will show clear high-probability cells for center and corner openings.
 
+[↑ Back to top](#xo-arena--bot-training-guide)
+
 ---
 
 ## Benchmarking & Evaluation
@@ -497,6 +513,8 @@ Every benchmark result includes a p-value testing whether win rate > 50%.
 - **p < 0.05** — the result is statistically significant (bot is genuinely performing above chance)
 - **p > 0.10** — sample size too small or the bot is near 50% — run more games or more training
 
+[↑ Back to top](#xo-arena--bot-training-guide)
+
 ---
 
 ## Troubleshooting
@@ -529,3 +547,5 @@ The bot was trained asymmetrically. Run 2,000–3,000 additional self-play episo
 ### DQN wins a lot during training but benchmarks poorly
 
 Training win rate is measured with exploration active (ε > 0). Benchmark uses pure exploitation (ε = 0). If the bot's greedy policy is weak, more training with a lower epsilon floor is needed. Set **"Epsilon min" to 0.01** and run 5,000 more episodes.
+
+[↑ Back to top](#xo-arena--bot-training-guide)
