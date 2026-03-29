@@ -31,8 +31,8 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: backend/Dockerfile.dev
     restart: unless-stopped
     env_file:
       - ./backend/.env
@@ -44,7 +44,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
+      - ./packages/ai:/app/packages/ai
       - /app/node_modules
     depends_on:
       postgres:
