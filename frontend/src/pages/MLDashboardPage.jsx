@@ -11,6 +11,9 @@ import { evictModel, isModelCached } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
 import QValueHeatmap from '../components/ml/QValueHeatmap.jsx'
 
+// Module-level ML model cache — keyed by modelId, survives component unmount/navigation
+const _mlModelCache = new Map()
+
 const ITERATIONS_MIN = 100
 const ITERATIONS_MAX = 100_000
 const ITERATIONS_STEP = 100
@@ -54,6 +57,7 @@ export default function GymPage() {
   const [activeTab, setActiveTab]         = useState('train')
   const [regressions, setRegressions]     = useState(new Set())
   const [toasts, setToasts]               = useState([])
+  const [sessions, setSessions]           = useState([])    // shared across tabs
 
   const selectedBot    = bots.find(b => b.id === selectedBotId) ?? null
   const selectedModel  = selectedBot ? botModels[selectedBotId] ?? null : null
@@ -85,12 +89,27 @@ export default function GymPage() {
 
   const loadBots = useCallback(async () => {
     if (!domainUserId) return
+    // Show stale bots immediately so the sidebar isn't blank while fetching
+    const cacheKey = `xo_bots_${domainUserId}`
+    try {
+      const raw = sessionStorage.getItem(cacheKey)
+      if (raw) setBots(JSON.parse(raw))
+    } catch {}
     const token = await getToken()
     const { bots: bs } = await api.bots.list({ ownerId: domainUserId, token })
     setBots(bs || [])
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(bs || [])) } catch {}
   }, [domainUserId])
 
   useEffect(() => { loadBots() }, [loadBots])
+
+  // Fetch sessions once when model is selected — shared across all tabs
+  useEffect(() => {
+    if (!selectedModel?.id) { setSessions([]); return }
+    api.ml.getSessions(selectedModel.id)
+      .then(r => setSessions(r.sessions || []))
+      .catch(() => {})
+  }, [selectedModel?.id])
 
   // Auto-select first bot
   useEffect(() => {
@@ -99,14 +118,29 @@ export default function GymPage() {
 
   // Load ML model when an ML bot is selected for the first time
   useEffect(() => {
-    if (!selectedBotId || !selectedBot?.botModelId || botModels[selectedBotId]) {
+    if (!selectedBotId || !selectedBot?.botModelId) {
+      setModelLoading(false)
+      return
+    }
+    // Check React state first (in-session bot switches)
+    if (botModels[selectedBotId]) {
+      setModelLoading(false)
+      return
+    }
+    // Check module-level cache (survives navigation/unmount)
+    const cached = _mlModelCache.get(selectedBot.botModelId)
+    if (cached) {
+      setBotModels(prev => ({ ...prev, [selectedBotId]: cached }))
       setModelLoading(false)
       return
     }
     setModelLoading(true)
     const id = selectedBotId
     api.ml.getModel(selectedBot.botModelId)
-      .then(({ model }) => setBotModels(prev => ({ ...prev, [id]: model })))
+      .then(({ model }) => {
+        _mlModelCache.set(model.id, model)
+        setBotModels(prev => ({ ...prev, [id]: model }))
+      })
       .catch(() => {})
       .finally(() => setModelLoading(false))
     // botModels intentionally omitted — we don't want to re-run after models are added
@@ -140,6 +174,7 @@ export default function GymPage() {
 
   const refreshModel = useCallback(async (botId, modelId) => {
     const { model } = await api.ml.getModel(modelId)
+    _mlModelCache.set(model.id, model)
     setBotModels(prev => ({ ...prev, [botId]: model }))
     evictModel(modelId)
   }, [])
@@ -251,13 +286,13 @@ export default function GymPage() {
                   ))}
                 </div>
 
-                {activeTab === 'train'          && <TrainTab model={selectedModel} onComplete={() => refreshModel(selectedBotId, selectedModel.id)} />}
-                {activeTab === 'analytics'      && <AnalyticsTab model={selectedModel} />}
+                {activeTab === 'train'          && <TrainTab model={selectedModel} sessions={sessions} onSessionsChange={setSessions} onComplete={() => refreshModel(selectedBotId, selectedModel.id)} />}
+                {activeTab === 'analytics'      && <AnalyticsTab model={selectedModel} sessions={sessions} />}
                 {activeTab === 'evaluation'     && <EvaluationTab model={selectedModel} models={allLoadedModels} domainUserId={domainUserId} currentUserName={currentUserName} />}
                 {activeTab === 'explainability' && <ExplainabilityTab model={selectedModel} domainUserId={domainUserId} currentUserName={currentUserName} />}
                 {activeTab === 'checkpoints'    && <CheckpointsTab model={selectedModel} onRestore={() => refreshModel(selectedBotId, selectedModel.id)} />}
-                {activeTab === 'sessions'       && <SessionsTab model={selectedModel} />}
-                {activeTab === 'export'         && <ExportTab model={selectedModel} />}
+                {activeTab === 'sessions'       && <SessionsTab model={selectedModel} sessions={sessions} />}
+                {activeTab === 'export'         && <ExportTab model={selectedModel} sessions={sessions} />}
                 {activeTab === 'rules'          && <RulesTab model={selectedModel} models={allLoadedModels} />}
               </div>
             ) : isMlBot ? (
@@ -319,7 +354,7 @@ function MinimaxBotView({ bot }) {
 
 // ─── Train Tab ───────────────────────────────────────────────────────────────
 
-function TrainTab({ model, onComplete }) {
+function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
   const [mode, setMode]                     = useState('SELF_PLAY')
   const [iterations, setIterations]         = useState(1000)
   const [difficulty, setDifficulty]         = useState('intermediate')
@@ -343,7 +378,6 @@ function TrainTab({ model, onComplete }) {
   const [azSimulations, setAzSimulations]   = useState(50)
   const [azCPuct, setAzCPuct]               = useState(1.5)
   const [azTemperature, setAzTemperature]   = useState(1.0)
-  const [sessions, setSessions]             = useState([])
   const [running, setRunning]               = useState(false)
   const [sessionId, setSessionId]           = useState(null)
   const [progress, setProgress]             = useState(null)
@@ -351,11 +385,6 @@ function TrainTab({ model, onComplete }) {
   const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
   const socketRef  = useRef(null)
   const cleanupRef = useRef(null)
-
-  // Load sessions to show queue status
-  useEffect(() => {
-    api.ml.getSessions(model.id).then(r => setSessions(r.sessions)).catch(() => {})
-  }, [model.id])
 
   // Only clean up on unmount — never on sessionId change
   useEffect(() => {
@@ -372,7 +401,7 @@ function TrainTab({ model, onComplete }) {
       const runningSession = r.sessions.find(s => s.status === 'RUNNING')
       if (!runningSession) return
 
-      setSessions(r.sessions)
+      onSessionsChange(r.sessions)
       setSessionId(runningSession.id)
       setIterations(runningSession.iterations)
       setRunning(true)
@@ -446,7 +475,7 @@ function TrainTab({ model, onComplete }) {
     }
     try {
       const { session } = await api.ml.train(model.id, { mode, iterations, config: cfg }, token)
-      setSessions(prev => [session, ...prev])
+      onSessionsChange(prev => [session, ...prev])
       setSessionId(session.id)
       setRunning(true)
       setProgress(null)
@@ -965,8 +994,7 @@ function buildChartData(episodes) {
   }))
 }
 
-function AnalyticsTab({ model }) {
-  const [sessions, setSessions]       = useState([])
+function AnalyticsTab({ model, sessions }) {
   const [selSession, setSelSession]   = useState(null)
   const [cmpSession, setCmpSession]   = useState(null)   // comparison session
   const [episodes, setEpisodes]       = useState([])
@@ -974,12 +1002,10 @@ function AnalyticsTab({ model }) {
   const [window, setWindow]           = useState(50)
   const [loading, setLoading]         = useState(false)
 
+  // Set initial session when sessions become available from parent
   useEffect(() => {
-    api.ml.getSessions(model.id).then(r => {
-      setSessions(r.sessions)
-      if (r.sessions.length > 0) setSelSession(r.sessions[0])
-    })
-  }, [model.id])
+    if (sessions.length > 0 && !selSession) setSelSession(sessions[0])
+  }, [sessions])
 
   useEffect(() => {
     if (!selSession) return
@@ -2040,18 +2066,13 @@ function CheckpointsTab({ model, onRestore }) {
 
 // ─── Sessions Tab ─────────────────────────────────────────────────────────────
 
-function SessionsTab({ model }) {
-  const [sessions, setSessions] = useState([])
-  const [selected, setSelected] = useState('')
-  const [loading, setLoading] = useState(true)
+function SessionsTab({ model, sessions }) {
+  const [selected, setSelected] = useState(() => sessions[0]?.id ?? '')
 
+  // Keep selection valid when sessions list changes
   useEffect(() => {
-    setLoading(true)
-    api.ml.getSessions(model.id).then(r => {
-      setSessions(r.sessions || [])
-      if (r.sessions?.length > 0) setSelected(r.sessions[0].id)
-    }).finally(() => setLoading(false))
-  }, [model.id])
+    if (sessions.length > 0 && !selected) setSelected(sessions[0].id)
+  }, [sessions])
 
   const sel = sessions.find(s => s.id === selected) ?? null
 
@@ -2062,8 +2083,6 @@ function SessionsTab({ model }) {
     const secs = Math.floor((ms % 60000) / 1000)
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
   }
-
-  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>
 
   return (
     <Card>
@@ -2127,16 +2146,8 @@ function StatCell({ label, value }) {
 
 // ─── Export Tab ───────────────────────────────────────────────────────────────
 
-function ExportTab({ model }) {
-  const [sessions, setSessions]   = useState([])
-  const [selSession, setSelSession] = useState(null)
-
-  useEffect(() => {
-    api.ml.getSessions(model.id).then(r => {
-      setSessions(r.sessions)
-      if (r.sessions.length > 0) setSelSession(r.sessions[0].id)
-    })
-  }, [model.id])
+function ExportTab({ model, sessions }) {
+  const [selSession, setSelSession] = useState(() => sessions[0]?.id ?? null)
 
   async function exportQTable() {
     const data = await api.ml.getQTable(model.id)
