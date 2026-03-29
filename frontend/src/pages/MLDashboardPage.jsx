@@ -373,7 +373,8 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
   const [dqnBatchSize, setDqnBatchSize]           = useState(32)
   const [dqnReplayBuffer, setDqnReplayBuffer]     = useState(10000)
   const [dqnTargetUpdate, setDqnTargetUpdate]     = useState(100)
-  const [dqnHiddenSize, setDqnHiddenSize]         = useState(32)
+  const [dqnLayers, setDqnLayers]                 = useState(() => model.config?.networkShape ?? [32])
+  const [dqnGamma, setDqnGamma]                   = useState(0.9)
   // AlphaZero-specific config
   const [azSimulations, setAzSimulations]   = useState(50)
   const [azCPuct, setAzCPuct]               = useState(1.5)
@@ -470,7 +471,7 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
       ...(curriculum ? { curriculum: true } : {}),
       ...(earlyStopEnabled ? { earlyStop: { patience, minDelta } } : {}),
       ...(algorithm !== 'ALPHA_ZERO' ? { epsilonDecay, epsilonMin, decayMethod, ...(resetEpsilon ? { currentEpsilon: 1.0 } : {}) } : {}),
-      ...(algorithm === 'DQN' ? { batchSize: dqnBatchSize, replayBufferSize: dqnReplayBuffer, targetUpdateFreq: dqnTargetUpdate, hiddenSize: dqnHiddenSize } : {}),
+      ...(algorithm === 'DQN' ? { batchSize: dqnBatchSize, replayBufferSize: dqnReplayBuffer, targetUpdateFreq: dqnTargetUpdate, networkShape: dqnLayers, gamma: dqnGamma } : {}),
       ...(algorithm === 'ALPHA_ZERO' ? { numSimulations: azSimulations, cPuct: azCPuct, temperature: azTemperature } : {}),
     }
     try {
@@ -605,48 +606,103 @@ function TrainTab({ model, sessions, onSessionsChange, onComplete }) {
               )})()}</div>
 
             {/* DQN config fields */}
-            {algorithm === 'DQN' && (
-              <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>DQN Configuration</p>
-                <div className="flex flex-wrap gap-4">
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Batch</label>
-                    <input type="number" min="8" max="256" step="8" value={dqnBatchSize}
-                      onChange={e => setDqnBatchSize(Number(e.target.value))}
-                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+            {algorithm === 'DQN' && (() => {
+              const storedShape = model.config?.networkShape ?? [32]
+              const archChanged = JSON.stringify(dqnLayers) !== JSON.stringify(storedShape)
+              const LAYER_SIZES = [8, 16, 32, 64, 128]
+              return (
+                <div className="space-y-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>DQN Configuration</p>
+
+                  {/* Numeric controls row */}
+                  <div className="flex flex-wrap gap-4">
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Batch</label>
+                      <input type="number" min="8" max="256" step="8" value={dqnBatchSize}
+                        onChange={e => setDqnBatchSize(Number(e.target.value))}
+                        className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Replay buffer</label>
+                      <input type="number" min="1000" max="100000" step="1000" value={dqnReplayBuffer}
+                        onChange={e => setDqnReplayBuffer(Number(e.target.value))}
+                        className="w-28 text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Target update</label>
+                      <input type="number" min="10" max="1000" step="10" value={dqnTargetUpdate}
+                        onChange={e => setDqnTargetUpdate(Number(e.target.value))}
+                        className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Gamma (γ)
+                        <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(discount)</span>
+                      </label>
+                      <select value={dqnGamma} onChange={e => setDqnGamma(Number(e.target.value))}
+                        className="text-sm rounded-lg border px-2 py-1 outline-none"
+                        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+                        <option value={0.85}>0.85</option>
+                        <option value={0.90}>0.90 — default</option>
+                        <option value={0.95}>0.95 — recommended</option>
+                        <option value={0.99}>0.99</option>
+                      </select>
+                    </div>
                   </div>
+
+                  {/* Network architecture layer builder */}
                   <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Replay buffer</label>
-                    <input type="number" min="1000" max="100000" step="1000" value={dqnReplayBuffer}
-                      onChange={e => setDqnReplayBuffer(Number(e.target.value))}
-                      className="w-28 text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    <div className="flex items-center gap-2 mb-1">
+                      <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Network architecture
+                        <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(input:9 → hidden → output:9)</span>
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {dqnLayers.map((size, i) => (
+                        <div key={i} className="flex items-center gap-1">
+                          <select value={size}
+                            onChange={e => setDqnLayers(prev => prev.map((v, j) => j === i ? Number(e.target.value) : v))}
+                            className="text-sm rounded-lg border px-2 py-1 outline-none"
+                            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+                            {LAYER_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                          {dqnLayers.length > 1 && (
+                            <button onClick={() => setDqnLayers(prev => prev.filter((_, j) => j !== i))}
+                              className="text-xs px-1.5 py-1 rounded border"
+                              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                              title="Remove layer">×</button>
+                          )}
+                          {i < dqnLayers.length - 1 && (
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>→</span>
+                          )}
+                        </div>
+                      ))}
+                      {dqnLayers.length < 3 && (
+                        <button onClick={() => setDqnLayers(prev => [...prev, 32])}
+                          className="text-xs px-2 py-1 rounded border font-medium"
+                          style={{ borderColor: 'var(--color-blue-600)', color: 'var(--color-blue-600)' }}>
+                          + Add layer
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                      Current: [9 → {dqnLayers.join(' → ')} → 9]
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>Target update</label>
-                    <input type="number" min="10" max="1000" step="10" value={dqnTargetUpdate}
-                      onChange={e => setDqnTargetUpdate(Number(e.target.value))}
-                      className="w-24 text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      Hidden size
-                      <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>(neurons)</span>
-                    </label>
-                    <select value={dqnHiddenSize} onChange={e => setDqnHiddenSize(Number(e.target.value))}
-                      className="text-sm rounded-lg border px-2 py-1 outline-none"
-                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
-                      <option value={16}>16 — fastest</option>
-                      <option value={32}>32 — default</option>
-                      <option value={64}>64 — slower</option>
-                      <option value={128}>128 — slowest</option>
-                    </select>
-                  </div>
+
+                  {/* Architecture changed warning */}
+                  {archChanged && (
+                    <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)', border: '1px solid var(--color-amber-300)' }}>
+                      Architecture changed from [{storedShape.join(', ')}] → [{dqnLayers.join(', ')}] — existing weights will be reset and training starts fresh.
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* AlphaZero config fields */}
             {algorithm === 'ALPHA_ZERO' && (
