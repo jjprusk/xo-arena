@@ -27,7 +27,6 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@xo-arena/ai": "*",
     "@rollup/rollup-linux-x64-gnu": "*",
     "lightningcss-linux-x64-gnu": "*",
     "@eslint/js": "^9.39.4",
