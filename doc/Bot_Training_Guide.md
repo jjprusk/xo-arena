@@ -43,8 +43,10 @@ Epsilon starts high and decays over time. Decaying too fast locks in a bad polic
 
 ### Epsilon Decay Rate Quick Reference
 
-| Decay Rate | Episodes to reach ε=0.05 (starting at ε=1.0) |
-|-----------|-----------------------------------------------|
+> In the app, this is the **"Rate"** field (visible when "Decay schedule" = Exponential).
+
+| Rate | Episodes to reach ε=0.05 (starting at ε=1.0) |
+|------|-----------------------------------------------|
 | 0.995     | ~590                                          |
 | 0.999     | ~2,990                                        |
 | 0.9995    | ~5,990                                        |
@@ -66,16 +68,20 @@ Available in vs-Minimax mode. The system automatically advances difficulty (novi
 Controls how much future rewards are valued vs immediate ones.
 
 - **γ = 0.9** — standard, good for tic-tac-toe (short games)
-- **γ = 0.99** — near-sighted future; use for AlphaZero
+- **γ = 0.99** — near-sighted future; used for AlphaZero
 - Lower γ → agent plays for quick wins; higher γ → agent plans further ahead
 
 For tic-tac-toe specifically, γ = 0.9 is ideal since games are at most 9 moves.
+
+> **In the app:** γ is **not exposed in the Train tab** for any algorithm. It is hardcoded at 0.9 (0.99 for AlphaZero). For tabular methods only, γ can be tuned via the **Auto-Tuner** tab.
 
 ### Learning Rate (α)
 Controls how aggressively Q-values are updated per step.
 
 - **Tabular methods (Q-Learning, SARSA, MC):** α = 0.3–0.5 is safe. Higher is faster but noisier.
-- **Neural net methods (DQN, PG):** α = 0.001–0.003. Too high causes divergence.
+- **Neural net methods (DQN, AlphaZero):** α = 0.001. Too high causes divergence.
+
+> **In the app:** α is **not exposed in the Train tab** for any algorithm. It is hardcoded at 0.3 (tabular) and 0.001 (neural net). For tabular methods only, α can be swept via the **Auto-Tuner** tab.
 
 ---
 
@@ -103,14 +109,16 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| `learningRate` (α) | **0.3** | Default; reliable |
-| `discountFactor` (γ) | **0.9** | Good for short games |
-| `epsilonStart` | **1.0** | Always start fully random |
-| `epsilonDecay` | **0.995** | Reaches ε≈0.05 by ~590 episodes |
-| `epsilonMin` | **0.05** | 5% residual exploration |
-| `decayMethod` | **exponential** | |
+| UI Label | Value | Notes |
+|----------|-------|-------|
+| Learning rate (α) | **0.3** | Default; reliable — set via Auto-Tuner only |
+| Discount factor (γ) | **0.9** | Good for short games — set via Auto-Tuner only |
+| Reset ε to 1.0 at start | **checked** | Always start fully random |
+| Decay schedule | **Exponential** | |
+| Rate | **0.995** | Reaches ε≈0.05 by ~590 episodes |
+| Epsilon min | **0.05** | 5% residual exploration |
+
+> **Note:** Learning rate and discount factor are only configurable in the **Auto-Tuner** tab, not the main Train tab. The defaults (α=0.3, γ=0.9) are good for most runs.
 
 ### Session Recipe
 
@@ -147,14 +155,14 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| `learningRate` (α) | **0.3** | Same as Q-Learning |
-| `discountFactor` (γ) | **0.9** | |
-| `epsilonStart` | **1.0** | |
-| `epsilonDecay` | **0.995** | |
-| `epsilonMin` | **0.05** | Keep slightly higher than Q-Learning |
-| `decayMethod` | **exponential** | |
+| UI Label | Value | Notes |
+|----------|-------|-------|
+| Learning rate (α) | **0.3** | Auto-Tuner only |
+| Discount factor (γ) | **0.9** | Auto-Tuner only |
+| Reset ε to 1.0 at start | **checked** | |
+| Decay schedule | **Exponential** | |
+| Rate | **0.995** | |
+| Epsilon min | **0.05** | Keep slightly higher than Q-Learning |
 
 ### Session Recipe
 
@@ -189,14 +197,13 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| `learningRate` (α) | **0.2** | Lower than TD; MC updates are noisier |
-| `discountFactor` (γ) | **0.9** | |
-| `epsilonStart` | **1.0** | |
-| `epsilonDecay` | **0.997** | Decay slower — MC needs more exploration time |
-| `epsilonMin` | **0.05** | |
-| `decayMethod` | **linear** | Linear works well for MC; more even coverage |
+| UI Label | Value | Notes |
+|----------|-------|-------|
+| Learning rate (α) | **0.2** | Lower than TD; MC updates are noisier — Auto-Tuner only |
+| Discount factor (γ) | **0.9** | Auto-Tuner only |
+| Reset ε to 1.0 at start | **checked** | |
+| Decay schedule | **Linear** | Linear works well for MC; more even coverage |
+| Epsilon min | **0.05** | |
 
 ### Session Recipe
 
@@ -231,14 +238,13 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| `alpha` (learning rate) | **0.01** | PG is sensitive; keep low |
-| `gamma` (γ) | **0.9** | |
-| `epsilonStart` | **1.0** | Controls fallback to random; PG uses softmax sampling internally |
-| `epsilonDecay` | **0.997** | Slow decay — PG policy warms up gradually |
-| `epsilonMin` | **0.05** | |
-| `decayMethod` | **cosine** | Smooth schedule suits PG's gradient updates |
+| UI Label | Value | Notes |
+|----------|-------|-------|
+| Learning rate (α) | **0.01** | PG is sensitive; keep low — Auto-Tuner only |
+| Discount factor (γ) | **0.9** | Auto-Tuner only |
+| Reset ε to 1.0 at start | **checked** | Controls fallback to random; PG uses softmax sampling internally |
+| Decay schedule | **Cosine** | Smooth schedule suits PG's gradient updates |
+| Epsilon min | **0.05** | |
 
 ### Session Recipe
 
@@ -276,30 +282,38 @@ Controls how aggressively Q-values are updated per step.
 - No state table — model size stays fixed regardless of states visited.
 - With Adam optimizer and the corrected adversarial Bellman equation, converges reliably.
 
-**Key parameters unique to DQN:**
+**DQN Train tab controls:**
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `replayBufferSize` | 10,000 | Experiences stored for sampling |
-| `batchSize` | 32 | Samples per gradient step |
-| `targetUpdateFreq` | 100 | Steps between target network syncs |
-| `networkShape` | `[32]` | Hidden layer sizes (e.g., `[64, 64]` for larger net) |
-| `alpha` | 0.001 | Learning rate (Adam) |
-| `gamma` | 0.9 | Discount factor |
+| UI Label | Default | Description | Configurable? |
+|----------|---------|-------------|---------------|
+| **Batch** | 32 | Samples per gradient step | Yes — Train tab |
+| **Replay buffer** | 10,000 | Experiences stored for random sampling | Yes — Train tab |
+| **Target update** | 100 | Steps between target network syncs | Yes — Train tab |
+| **Hidden size** | 32 | Neurons in the single hidden layer (16/32/64/128) | Yes — Train tab |
+| Decay schedule | Exponential | Epsilon decay curve | Yes — Train tab |
+| Rate | 0.9999 | Per-episode decay multiplier (Exponential only) | Yes — Train tab |
+| Epsilon min | 0.05 | Minimum epsilon floor | Yes — Train tab |
+| Reset ε to 1.0 at start | checked | Whether to restart exploration | Yes — Train tab |
+| Learning rate (α) | 0.001 | Adam optimizer step size | **Hardcoded** — not exposed |
+| Discount factor (γ) | 0.9 | Future reward weighting | **Hardcoded** — not exposed |
+| Network architecture | set at creation | Full layer shape e.g. [64, 64] | **Creation only** |
+
+> **Important:** The "Hidden size" control in the Train tab sets the width of a **single hidden layer** for that session (e.g., 64 → architecture `[9, 64, 9]`). Multi-layer architectures like `[9, 64, 64, 9]` are only configurable at **bot creation time** using the layer builder. Once created, the architecture is fixed — only the hidden size of the widest layer can be tweaked per-session.
+>
+> Learning rate (α=0.001) and discount factor (γ=0.9) are **hardcoded** and cannot be changed from the UI. These defaults are well-tuned for tic-tac-toe with Adam optimizer.
 
 ### Recommended Settings
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| `networkShape` | **[64, 64]** | Two hidden layers; better capacity than default [32] |
-| `alpha` | **0.001** | Adam handles this well — do not increase |
-| `gamma` | **0.9** | |
-| `epsilonStart` | **1.0** | |
-| `epsilonDecay` | **0.9999** | New default; reaches ε≈0.05 by ~29,950 episodes |
-| `epsilonMin` | **0.05** | |
-| `decayMethod` | **linear** | Most predictable for a fixed episode budget |
-| `replayBufferSize` | **10,000** | Good for 30k-episode runs |
-| `batchSize` | **32** | Default; increase to 64 for larger networks |
+| UI Label | Value | Notes |
+|----------|-------|-------|
+| Hidden size | **64** | Better capacity than default 32; 128 has diminishing returns |
+| Decay schedule | **Linear** | Most predictable for a fixed episode budget |
+| Rate | **0.9999** | Default for DQN; reaches ε≈0.05 by ~29,950 episodes |
+| Epsilon min | **0.05** | |
+| Reset ε to 1.0 at start | **checked** | |
+| Batch | **32** | Default; increase to 64 only for Hidden size=128 |
+| Replay buffer | **10,000** | Good for 30k-episode runs |
+| Target update | **100** | Default; do not lower below 50 |
 
 ### Session Recipe
 
@@ -323,20 +337,22 @@ Controls how aggressively Q-values are updated per step.
 
 ### Network Architecture Guide
 
-| `networkShape` | Parameters | Training Speed | Recommended For |
-|---------------|-----------|----------------|-----------------|
-| `[32]` | ~380 | Fastest | Quick experiments |
-| `[64, 64]` | ~1,350 | Medium | Best quality/speed tradeoff |
-| `[128, 64]` | ~2,700 | Slower | Diminishing returns for tic-tac-toe |
+Network architecture is set **at bot creation time** and cannot be changed later. The "Hidden size" control in the Train tab only adjusts the width of the first hidden layer for a given session — it does not add layers.
 
-For tic-tac-toe, `[64, 64]` is the sweet spot — larger networks don't improve the ceiling but take longer to train.
+| Architecture (set at creation) | Per-session "Hidden size" | Parameters | Recommended For |
+|--------------------------------|--------------------------|-----------|-----------------|
+| Single layer `[9, H, 9]` | 16, 32, 64, or 128 | ~200–1,200 | Default; fast to train |
+| Two layers `[9, 64, 64, 9]` | Fixed at creation | ~1,350 | Best quality/speed tradeoff |
+| Two layers `[9, 128, 64, 9]` | Fixed at creation | ~2,700 | Diminishing returns for tic-tac-toe |
+
+For tic-tac-toe, a two-layer `[9, 64, 64, 9]` network (set at creation) is the sweet spot. If you created a single-layer bot, use "Hidden size = 64" in the Train tab.
 
 ### Tips
 - Always use **self-play for sessions 1–2**. The replay buffer fills faster and both X and O perspectives are covered simultaneously.
-- Use **linear epsilon decay** so exploration is predictable across the session budget.
+- Use **linear decay schedule** so exploration is predictable across the session budget.
 - The minimum viable run is **15,000 episodes** to fill and recycle the replay buffer enough for the Bellman targets to stabilize.
-- If the win rate is flat after 20,000 episodes: (a) increase network size to [64,64], (b) lower α to 0.0003, (c) ensure you are using self-play for early sessions.
-- DQN benefits more from a **larger network** than from more episodes, up to [64,64].
+- If the win rate is flat after 20,000 episodes: (a) increase "Hidden size" to 64 (or create a new two-layer bot), (b) ensure you are using self-play for early sessions.
+- DQN benefits more from a **larger hidden size** than from more episodes, up to 64 neurons.
 
 ---
 
@@ -350,30 +366,30 @@ For tic-tac-toe, `[64, 64]` is the sweet spot — larger networks don't improve 
 - No epsilon — exploration is naturally built into the PUCT tree search.
 - Consistently produces the strongest policy of all algorithms given sufficient episodes.
 
-**Key parameters unique to AlphaZero:**
+**AlphaZero Train tab controls:**
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `numSimulations` | 50 | MCTS rollouts per move. Higher = stronger but slower. |
-| `cPuct` | 1.5 | Exploration constant in PUCT formula. Higher = more exploration. |
-| `temperature` | 1.0 | Controls action selection randomness from visit counts. |
-| `alpha` | 0.001 | Learning rate for both networks |
-| `gamma` | 0.99 | Discount factor |
+| UI Label | Default | Description | Configurable? |
+|----------|---------|-------------|---------------|
+| **Simulations** | 50 | MCTS rollouts per move. Higher = stronger but slower. | Yes — Train tab |
+| **PUCT** | 1.5 | Exploration constant in tree search. Higher = more exploration. | Yes — Train tab |
+| **Temperature** | 1.0 | Randomness in move selection from visit counts. | Yes — Train tab |
+| Learning rate (α) | 0.001 | Shared learning rate for policy + value nets | **Hardcoded** |
+| Discount factor (γ) | 0.99 | Future reward weighting | **Hardcoded** |
+
+> AlphaZero has **no epsilon** — exploration is naturally built into the PUCT tree search. There is no "Exploration" section for AlphaZero in the Train tab.
 
 ### Recommended Settings
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| `numSimulations` | **100** | Double the default for much stronger search |
-| `cPuct` | **1.5** | Default is good; increase to 2.0 for more exploration early |
-| `temperature` | **1.0** | Reduce to 0.5 after first 5,000 episodes for more decisive play |
-| `alpha` | **0.001** | |
-| `gamma` | **0.99** | AZ benefits from slightly higher gamma than tabular methods |
+| UI Label | Value | Notes |
+|----------|-------|-------|
+| Simulations | **100** | Double the default for much stronger search |
+| PUCT | **1.5** | Default is good; increase to 2.0 for more exploration early |
+| Temperature | **1.0** | Reduce to 0.5 after first 5,000 episodes for more decisive play |
 
 ### Session Recipe
 
-| Session | Episodes | `numSimulations` | `temperature` | Purpose |
-|---------|----------|-----------------|---------------|---------|
+| Session | Episodes | Simulations | Temperature | Purpose |
+|---------|----------|-------------|-------------|---------|
 | 1 | 3,000 | 50 | 1.0 | Fast bootstrap — build initial policy/value estimates |
 | 2 | 5,000 | 100 | 1.0 | Deeper search, refine both nets |
 | 3 | 5,000 | 100 | 0.5 | More decisive play, sharpen value net |
@@ -396,9 +412,9 @@ AlphaZero reaches competency **much faster per-episode** than other algorithms b
 
 ### Tips
 - **Self-play only** — AlphaZero is designed exclusively for self-play. It has no concept of an external opponent function.
-- Start with `numSimulations=50` to fill the experience buffer quickly, then increase to 100+ as the networks gain accuracy.
-- `temperature` controls how the final move is sampled from MCTS visit counts. At temperature=1.0, proportional sampling adds diversity. At temperature=0.1, the most-visited child is almost always chosen. Reduce temperature over training for a sharper policy.
-- `cPuct=1.5` balances exploitation vs exploration in the tree. If the bot gets stuck in repetitive patterns early, try `cPuct=2.0`.
+- Start with **Simulations=50** to fill the experience buffer quickly, then increase to 100+ as the networks gain accuracy.
+- **Temperature** controls how the final move is sampled from MCTS visit counts. At 1.0, proportional sampling adds diversity. At 0.1, the most-visited child is almost always chosen. Reduce Temperature over training for a sharper policy.
+- **PUCT=1.5** balances exploitation vs exploration in the tree. If the bot gets stuck in repetitive patterns early, try PUCT=2.0.
 - AlphaZero's policy net outputs are probabilities, not Q-values. The Explainability tab shows these as move probabilities — a strong AZ bot will show clear high-probability cells for center and corner openings.
 
 ---
@@ -444,16 +460,16 @@ Every benchmark result includes a p-value testing whether win rate > 50%.
 
 ### Win rate is flat / not improving
 
-1. **Epsilon is too low too fast** — check what epsilon is at the stall point. If ε < 0.1 and the bot hasn't converged, restart with a slower decay rate.
-2. **Learning rate too high** — for tabular methods: try α = 0.1. For DQN: try α = 0.0003.
+1. **Rate (epsilon decay) too fast** — check what epsilon is at the stall point. If ε < 0.1 and the bot hasn't converged, restart with a slower Rate (e.g. 0.999 → 0.9999).
+2. **Learning rate too high** — for tabular methods: use the Auto-Tuner to find a better α. For DQN: α is hardcoded at 0.001 (well-tuned, not the issue).
 3. **Opponent mismatch** — don't train vs Hard minimax until the bot reliably beats Easy. Use curriculum.
 4. **Too few episodes before vs-minimax** — always do self-play first to bootstrap all states/weights before switching to a fixed opponent.
 
 ### Win rate is oscillating wildly
 
-1. **Learning rate too high** — drop α by 50%.
-2. **DQN only: replay buffer too small** — if `replayBufferSize` < 5,000 and you're doing 10k+ episodes, old experiences are evicted before they can be replayed enough. Increase to 20,000.
-3. **DQN only: targetUpdateFreq too low** — syncing the target network every 10 steps instead of 100 causes instability. Keep at 100+.
+1. **Learning rate too high** — for tabular methods: use the Auto-Tuner to sweep α. For DQN: α is fixed at 0.001 (this isn't the cause).
+2. **DQN only: Replay buffer too small** — if "Replay buffer" < 5,000 and you're doing 10k+ episodes, old experiences are evicted before they can be replayed enough. Increase to 20,000.
+3. **DQN only: Target update too low** — syncing the target network every 10 steps instead of 100 causes instability. Keep "Target update" at 100+.
 
 ### Q-Learning / SARSA / MC win rate hits 80% then never improves
 
@@ -461,7 +477,7 @@ The tabular Q-table is fully converged. Switching algorithms (to DQN or AlphaZer
 
 ### AlphaZero is very slow
 
-Each episode runs `numSimulations` MCTS passes, each a full tree traversal. At `numSimulations=200` this is ~200× slower than a Q-Learning episode. Start with 50, confirm the bot is learning (rising win rate on the analytics tab), then increase.
+Each episode runs "Simulations" MCTS passes, each a full tree traversal. At Simulations=200 this is ~200× slower than a Q-Learning episode. Start with 50, confirm the bot is learning (rising win rate on the analytics tab), then increase.
 
 ### Bot plays well as X but poorly as O (or vice versa)
 
@@ -469,4 +485,4 @@ The bot was trained asymmetrically. Run 2,000–3,000 additional self-play episo
 
 ### DQN wins a lot during training but benchmarks poorly
 
-Training win rate is measured with exploration active (ε > 0). Benchmark uses pure exploitation (ε = 0). If the bot's greedy policy is weak, more training with a lower epsilon floor is needed. Set `epsilonMin = 0.01` and run 5,000 more episodes.
+Training win rate is measured with exploration active (ε > 0). Benchmark uses pure exploitation (ε = 0). If the bot's greedy policy is weak, more training with a lower epsilon floor is needed. Set **"Epsilon min" to 0.01** and run 5,000 more episodes.
