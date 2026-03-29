@@ -752,6 +752,11 @@ function _runDQNEpisode(engine, opponentFn, mlMark) {
   let currentPlayer = 'X'
   let totalMoves = 0
 
+  // Track each ML player's last pushed experience so we can retroactively push a
+  // terminal -1 when the *opponent* makes the final winning move (in that case
+  // isML=false and nothing gets pushed for the losing player's last move).
+  const lastMLExp = {}  // mark → { encodedPrev, action, encodedNext }
+
   while (true) {
     const isML = mlMark === 'both' || currentPlayer === mlMark
     const prevBoard = [...board]
@@ -773,16 +778,34 @@ function _runDQNEpisode(engine, opponentFn, mlMark) {
       } else {
         reward = 0.5  // draw
       }
+    } else if (isML) {
+      // Intermediate reward shaping — only for non-terminal ML moves
+      reward = _dqnShapeReward(prevBoard, board, action, currentPlayer)
     }
 
     if (isML) {
       const encodedPrev = _encodeStateForDQN(prevBoard, currentPlayer)
       const encodedNext = _encodeStateForDQN(board, opponent(currentPlayer))
+      lastMLExp[currentPlayer] = { encodedPrev, action, encodedNext }
       engine.pushExperience(encodedPrev, action, reward, encodedNext, done)
       engine.trainStep()
     }
 
     if (done) {
+      // Retroactive terminal push for the loser's last experience.
+      // When the opponent wins on their turn (isML=false), the losing ML player's
+      // most recent push had reward=0/done=false — it saw no penalty for the position
+      // that allowed the loss. Push a terminal -1 now so the network gets that signal.
+      if (winner) {
+        const loser = winner === 'X' ? 'O' : 'X'
+        const loserIsML = mlMark === 'both' || loser === mlMark
+        if (loserIsML && lastMLExp[loser]) {
+          const { encodedPrev, action: loserAction, encodedNext } = lastMLExp[loser]
+          engine.pushExperience(encodedPrev, loserAction, -1.0, encodedNext, true)
+          engine.trainStep()
+        }
+      }
+
       engine.decayEpsilon()
       let outcome
       if (isDraw) {
@@ -802,6 +825,35 @@ function _runDQNEpisode(engine, opponentFn, mlMark) {
 function _encodeStateForDQN(board, mark) {
   const opp = mark === 'X' ? 'O' : 'X'
   return board.map(c => c === mark ? 1 : c === opp ? -1 : 0)
+}
+
+/**
+ * Intermediate reward shaping for non-terminal DQN moves.
+ * Provides small signals to guide learning without changing the optimal policy:
+ *  +0.3  blocking the opponent's immediate winning threat
+ *  +0.1  creating a winning threat (ML can win next opportunity)
+ */
+function _dqnShapeReward(prevBoard, board, action, mark) {
+  let bonus = 0
+  const opp = mark === 'X' ? 'O' : 'X'
+
+  // Blocking bonus: was `action` the move that stopped an opponent immediate win?
+  for (let i = 0; i < 9; i++) {
+    if (prevBoard[i] !== null) continue
+    const test = [...prevBoard]; test[i] = opp
+    if (getWinner(test) === opp) {
+      if (i === action) { bonus += 0.3; break }
+    }
+  }
+
+  // Winning-threat bonus: after this move, ML has at least one immediate winning move
+  for (let i = 0; i < 9; i++) {
+    if (board[i] !== null) continue
+    const test = [...board]; test[i] = mark
+    if (getWinner(test) === mark) { bonus += 0.1; break }
+  }
+
+  return bonus
 }
 
 /**
