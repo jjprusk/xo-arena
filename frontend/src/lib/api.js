@@ -82,6 +82,7 @@ export const api = {
     getQTable:        (id)         => api.get(`/ml/models/${id}/qtable`),
     explainMove:      (id, board)  => api.post(`/ml/models/${id}/explain`, { board }),
     train:            (id, b, tok) => api.post(`/ml/models/${id}/train`, b, tok),
+    finishSession:    (id, b, tok) => api.post(`/ml/sessions/${id}/finish`, b, tok),
     getSessions:      (id)         => api.get(`/ml/models/${id}/sessions`),
     getSession:       (id)         => api.get(`/ml/sessions/${id}`),
     getEpisodes:      (id, page)   => api.get(`/ml/sessions/${id}/episodes?page=${page}&limit=500`),
