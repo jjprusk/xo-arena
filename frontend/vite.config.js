@@ -18,10 +18,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react':    ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts':   ['recharts'],
-          'vendor-realtime': ['socket.io-client'],
+        manualChunks(id) {
+          if (id.includes('react-dom') || id.includes('react-router-dom') || /\/react\//.test(id)) return 'vendor-react'
+          if (id.includes('recharts')) return 'vendor-charts'
+          if (id.includes('socket.io-client')) return 'vendor-realtime'
         },
       },
     },
