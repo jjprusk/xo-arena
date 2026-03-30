@@ -36,6 +36,22 @@ export function cachedFetch(path, maxAgeMs = 5 * 60_000) {
   return { immediate, refresh }
 }
 
+/**
+ * Fire-and-forget prefetch. Calls cachedFetch only if the cache is missing or stale.
+ * Safe to call on mouseenter — no-op when data is already fresh.
+ */
+export function prefetch(path, maxAgeMs = 30_000) {
+  const key = 'xo_swr_' + path
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) {
+      const entry = JSON.parse(raw)
+      if (Date.now() - entry.ts < maxAgeMs) return // still fresh
+    }
+  } catch {}
+  cachedFetch(path, maxAgeMs).refresh.catch(() => {})
+}
+
 async function request(method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`

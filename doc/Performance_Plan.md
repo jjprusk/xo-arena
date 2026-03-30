@@ -562,9 +562,9 @@ Implementation: attach `onMouseEnter` handlers to nav links that call the same `
 **Expected outcome:** Normal navigation between pages feels instant for logged-in users on warm visits.
 
 **Checklist:**
-- [ ] Add `prefetch(url)` helper that calls `cachedFetch` with a short max-age (30s)
-- [ ] Wire `onMouseEnter` on Leaderboard, Puzzles, and Play nav links
-- [ ] Confirm no excess requests on rapid mouse movement (debounce 80ms)
+- [x] Add `prefetch(url)` helper that calls `cachedFetch` with a short max-age (30s)
+- [x] Wire `onMouseEnter` on Leaderboard, Puzzles, and Play nav links
+- [x] Confirm no excess requests on rapid mouse movement (debounce 80ms)
 
 ---
 

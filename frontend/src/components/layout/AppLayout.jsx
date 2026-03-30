@@ -3,7 +3,7 @@ const isStaging = import.meta.env.VITE_ENV === 'staging'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
-import { api } from '../../lib/api.js'
+import { api, prefetch } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
 import AuthModal from '../auth/AuthModal.jsx'
@@ -27,6 +27,22 @@ const BOTTOM_NAV = [
   { to: '/stats', label: 'Stats', icon: '◎' },
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
+
+// Endpoints to prefetch when hovering the corresponding nav link.
+const PREFETCH_MAP = {
+  '/play':        () => prefetch('/bots'),
+  '/leaderboard': () => prefetch('/leaderboard?period=all&mode=all&includeBots=false'),
+}
+
+function usePrefetchHandler(to) {
+  const timerRef = React.useRef(null)
+  const handler = PREFETCH_MAP[to]
+  if (!handler) return {}
+  return {
+    onMouseEnter: () => { timerRef.current = setTimeout(handler, 80) },
+    onMouseLeave: () => { clearTimeout(timerRef.current) },
+  }
+}
 
 export default function AppLayout() {
   const navigate = useNavigate()
@@ -100,6 +116,7 @@ export default function AppLayout() {
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`
               }
+              {...usePrefetchHandler(to)}
             >
               {label}
             </NavLink>
@@ -212,6 +229,7 @@ export default function AppLayout() {
                   : 'text-[var(--text-secondary)]'
               }`
             }
+            {...usePrefetchHandler(to)}
           >
             <span className="text-lg leading-none">{icon}</span>
             {label}
