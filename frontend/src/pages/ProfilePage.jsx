@@ -1,10 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import { getToken } from '../lib/getToken.js'
-import { Link } from 'react-router-dom'
+import { useOptimisticSession, clearSessionCache } from '../lib/useOptimisticSession.js'
+import { getToken, clearTokenCache } from '../lib/getToken.js'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
+import { signOut } from '../lib/auth-client.js'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 export default function ProfilePage() {
+  const navigate = useNavigate()
   const { data: session, isPending } = useOptimisticSession()
   const clerkUser = session?.user ?? null
   const isSignedIn = !!clerkUser
@@ -29,6 +32,11 @@ export default function ProfilePage() {
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null) // { id, value }
   const [createForm, setCreateForm] = useState({ name: '', modelType: 'DQN', competitive: false })
+
+  // Account deletion
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   useEffect(() => {
     if (!clerkUser) return
@@ -83,22 +91,25 @@ export default function ProfilePage() {
   }, [clerkUser?.id])
 
   async function handleSaveName() {
-    if (!nameInput.trim() || nameInput === dbUser.displayName) {
+    const trimmed = nameInput.trim()
+    if (!trimmed || trimmed === dbUser.displayName) {
       setEditing(false)
       return
     }
-    setSaving(true)
+    const previous = dbUser.displayName
+    setDbUser(prev => ({ ...prev, displayName: trimmed }))  // optimistic
+    setEditing(false)
     setSaveError(null)
     try {
       const token = await getToken()
-      const { user: updated } = await api.patch(`/users/${dbUser.id}`, { displayName: nameInput.trim() }, token)
+      const { user: updated } = await api.patch(`/users/${dbUser.id}`, { displayName: trimmed }, token)
       setDbUser(updated)
       try { sessionStorage.setItem(`xo_dbuser_${clerkUser.id}`, JSON.stringify(updated)) } catch {}
-      setEditing(false)
     } catch {
+      setDbUser(prev => ({ ...prev, displayName: previous }))  // roll back
+      setNameInput(previous)
       setSaveError('Could not save. Try again.')
-    } finally {
-      setSaving(false)
+      setEditing(true)
     }
   }
 
@@ -149,13 +160,17 @@ export default function ProfilePage() {
 
   async function handleRenameBot(id) {
     if (!renamingBot || renamingBot.id !== id) return
+    const newName = renamingBot.value
+    const previous = bots.find(b => b.id === id)?.displayName
+    setBots(prev => prev.map(b => b.id === id ? { ...b, displayName: newName } : b))  // optimistic
+    setRenamingBot(null)
     setBotActionError(null)
     try {
       const token = await getToken()
-      const { bot: updated } = await api.bots.update(id, { displayName: renamingBot.value }, token)
+      const { bot: updated } = await api.bots.update(id, { displayName: newName }, token)
       setBots(prev => prev.map(b => b.id === id ? { ...b, displayName: updated.displayName } : b))
-      setRenamingBot(null)
     } catch (err) {
+      setBots(prev => prev.map(b => b.id === id ? { ...b, displayName: previous } : b))  // roll back
       setBotActionError(err.message || 'Rename failed.')
     }
   }
@@ -203,6 +218,26 @@ export default function ProfilePage() {
       setShowCreateBot(false)
     } catch (err) {
       setBotActionError(err.message || 'Create failed.')
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const token = await getToken()
+      await api.delete('/users/me', token)
+      // Clear all local caches before signing out
+      Object.keys(sessionStorage)
+        .filter(k => k.startsWith('xo_'))
+        .forEach(k => sessionStorage.removeItem(k))
+      clearSessionCache()
+      clearTokenCache()
+      await signOut()
+      navigate('/play')
+    } catch (err) {
+      setDeleteError(err.message || 'Could not delete account. Try again.')
+      setDeleting(false)
     }
   }
 
@@ -391,107 +426,107 @@ export default function ProfilePage() {
         )}
 
         {!botsLoading && bots.length > 0 && (
-          <div
-            className="rounded-xl border divide-y overflow-hidden"
-            style={{ borderColor: 'var(--border-default)', borderWidth: '1px' }}
-          >
-            {bots.map(bot => (
-              <div
-                key={bot.id}
-                className="flex items-center gap-3 px-4 py-3"
-                style={{ backgroundColor: 'var(--bg-surface)' }}
-              >
-                {/* Name + badges */}
-                <div className="flex-1 min-w-0">
-                  {renamingBot?.id === bot.id ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        autoFocus
-                        value={renamingBot.value}
-                        onChange={e => setRenamingBot({ id: bot.id, value: e.target.value })}
-                        onKeyDown={e => { if (e.key === 'Enter') handleRenameBot(bot.id); if (e.key === 'Escape') setRenamingBot(null) }}
-                        maxLength={40}
-                        className="px-2 py-0.5 rounded border text-sm focus:outline-none"
-                        style={{ borderColor: 'var(--color-blue-400)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', width: '140px' }}
-                      />
-                      <button onClick={() => handleRenameBot(bot.id)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>✓</button>
-                      <button onClick={() => setRenamingBot(null)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>✕</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Link
-                        to={`/bots/${bot.id}`}
-                        className="text-sm font-semibold hover:underline"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {bot.displayName}
-                      </Link>
-                      <span
-                        className="text-xs px-1.5 py-0 rounded-full font-medium"
-                        style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
-                      >
-                        {bot.botModelType}
-                      </span>
-                      {bot.botProvisional && (
-                        <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>provisional</span>
-                      )}
-                      {!bot.botActive && (
-                        <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>
-                    ELO {Math.round(bot.eloRating)}
-                    {bot.botProvisional && (
-                      <span className="ml-1 font-sans not-italic" style={{ color: 'var(--color-amber-600)' }}>
-                        · {Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0))} game{Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0)) !== 1 ? 's' : ''} to establish rating
-                      </span>
+          <ListTable fitViewport>
+            <thead>
+              <tr>
+                <ListTh>Bot</ListTh>
+                <ListTh>Type</ListTh>
+                <ListTh align="right">ELO</ListTh>
+                <ListTh align="right">Actions</ListTh>
+              </tr>
+            </thead>
+            <tbody>
+              {bots.map((bot, i) => (
+                <ListTr key={bot.id} dimmed={!bot.botActive} last={i === bots.length - 1}>
+                  {/* Name */}
+                  <ListTd>
+                    {renamingBot?.id === bot.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          value={renamingBot.value}
+                          onChange={e => setRenamingBot({ id: bot.id, value: e.target.value })}
+                          onKeyDown={e => { if (e.key === 'Enter') handleRenameBot(bot.id); if (e.key === 'Escape') setRenamingBot(null) }}
+                          maxLength={40}
+                          className="px-2 py-0.5 rounded border text-sm focus:outline-none"
+                          style={{ borderColor: 'var(--color-blue-400)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', width: '140px' }}
+                        />
+                        <button onClick={() => handleRenameBot(bot.id)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>✓</button>
+                        <button onClick={() => setRenamingBot(null)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          to={`/bots/${bot.id}`}
+                          className="font-semibold hover:underline"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {bot.displayName}
+                        </Link>
+                        {bot.botProvisional && (
+                          <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>provisional</span>
+                        )}
+                        {!bot.botActive && (
+                          <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
+                        )}
+                      </div>
                     )}
-                  </div>
-                </div>
+                    {bot.botProvisional && (
+                      <div className="text-xs mt-0.5" style={{ color: 'var(--color-amber-600)' }}>
+                        {Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0))} game{Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0)) !== 1 ? 's' : ''} to establish rating
+                      </div>
+                    )}
+                  </ListTd>
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => setRenamingBot({ id: bot.id, value: bot.displayName })}
-                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
-                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-                    title="Rename"
-                  >
-                    ✎
-                  </button>
-                  <button
-                    onClick={() => handleToggleBotActive(bot)}
-                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
-                    style={{
-                      borderColor: bot.botActive ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
-                      color: bot.botActive ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
-                    }}
-                    title={bot.botActive ? 'Disable bot' : 'Enable bot'}
-                  >
-                    {bot.botActive ? 'Disable' : 'Enable'}
-                  </button>
-                  <button
-                    onClick={() => handleResetElo(bot)}
-                    disabled={bot.botInTournament}
-                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ borderColor: 'var(--color-purple-300)', color: 'var(--color-purple-600)' }}
-                    title={bot.botInTournament ? 'Cannot reset ELO while in tournament' : 'Reset ELO to 1200'}
-                  >
-                    Reset ELO
-                  </button>
-                  <button
-                    onClick={() => handleDeleteBot(bot)}
-                    className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)]"
-                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
-                    title="Delete bot"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                  {/* Type */}
+                  <ListTd>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}>
+                      {bot.botModelType}
+                    </span>
+                  </ListTd>
+
+                  {/* ELO */}
+                  <ListTd align="right">
+                    <span className="font-mono tabular-nums">{Math.round(bot.eloRating)}</span>
+                  </ListTd>
+
+                  {/* Actions */}
+                  <ListTd align="right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => setRenamingBot({ id: bot.id, value: bot.displayName })}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                        style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                        title="Rename"
+                      >✎</button>
+                      <button
+                        onClick={() => handleToggleBotActive(bot)}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                        style={{
+                          borderColor: bot.botActive ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
+                          color: bot.botActive ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
+                        }}
+                        title={bot.botActive ? 'Disable bot' : 'Enable bot'}
+                      >{bot.botActive ? 'Disable' : 'Enable'}</button>
+                      <button
+                        onClick={() => handleResetElo(bot)}
+                        disabled={bot.botInTournament}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{ borderColor: 'var(--color-purple-300)', color: 'var(--color-purple-600)' }}
+                        title={bot.botInTournament ? 'Cannot reset ELO while in tournament' : 'Reset ELO to 1200'}
+                      >Reset ELO</button>
+                      <button
+                        onClick={() => handleDeleteBot(bot)}
+                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)]"
+                        style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                        title="Delete bot"
+                      >✕</button>
+                    </div>
+                  </ListTd>
+                </ListTr>
+              ))}
+            </tbody>
+          </ListTable>
         )}
 
         {/* Create bot form */}
@@ -570,7 +605,6 @@ export default function ProfilePage() {
               }
               setBotActionError(null)
               setShowCreateBot(true)
-              setMlModels([])
             }}
             className="text-sm font-medium transition-colors"
             style={{ color: 'var(--color-blue-600)' }}
@@ -579,6 +613,62 @@ export default function ProfilePage() {
           </button>
         )}
       </section>
+
+      {/* Danger Zone — hidden for admins */}
+      {dbUser.baRole !== 'admin' && (
+        <section className="space-y-3">
+          <SectionLabel>Danger Zone</SectionLabel>
+          <div
+            className="rounded-xl border p-5 space-y-3"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--color-red-200)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Delete account</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Permanently removes your account, all your bots, stats, and game history. This cannot be undone.
+              </p>
+            </div>
+
+            {deleteError && (
+              <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{deleteError}</p>
+            )}
+
+            {!deleteConfirm ? (
+              <button
+                onClick={() => setDeleteConfirm(true)}
+                className="text-sm font-medium px-4 py-1.5 rounded-lg border transition-colors hover:bg-[var(--color-red-50)]"
+                style={{ borderColor: 'var(--color-red-300)', color: 'var(--color-red-600)' }}
+              >
+                Delete my account…
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-red-600)' }}>
+                  Are you sure? This is permanent and cannot be undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleting}
+                    className="text-sm font-semibold px-4 py-1.5 rounded-lg transition-all hover:brightness-110 disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-red-600)', color: 'white' }}
+                  >
+                    {deleting ? 'Deleting…' : 'Yes, delete my account'}
+                  </button>
+                  <button
+                    onClick={() => { setDeleteConfirm(false); setDeleteError(null) }}
+                    disabled={deleting}
+                    className="text-sm font-medium px-4 py-1.5 rounded-lg border transition-colors"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   )
 }

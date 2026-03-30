@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
+import { StatsSkeleton } from '../components/ui/Skeleton.jsx'
 
 const AI_NAMES = {
   novice:       'Rusty',
@@ -77,13 +78,9 @@ export default function StatsPage() {
     load()
   }, [user?.id, location.key])
 
-  // Show spinner while loading data, or while auth is still resolving with no cache
+  // Show skeleton while loading data, or while auth is still resolving with no cache
   if (loading || (isPending && !user)) {
-    return (
-      <div className="max-w-lg mx-auto flex items-center justify-center py-16">
-        <div className="w-8 h-8 border-4 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <StatsSkeleton />
   }
 
   // Auth resolved and not signed in

@@ -21,6 +21,21 @@ export default function PlayPage() {
   // Warm the bot cache in the background so "Challenge a Bot" opens instantly.
   useEffect(() => { cachedFetch('/bots', 5 * 60_000).refresh.catch(() => {}) }, [])
 
+  // Prefetch Gym chunks during idle time so navigating Play → Gym is instant.
+  // Importing TrainTab also pulls in the recharts vendor-charts chunk as a dep.
+  useEffect(() => {
+    const fire = () => {
+      import('../components/gym/gymShared.jsx').catch(() => {})
+      import('../components/gym/TrainTab.jsx').catch(() => {})
+    }
+    if (typeof requestIdleCallback !== 'undefined') {
+      const id = requestIdleCallback(fire)
+      return () => cancelIdleCallback(id)
+    }
+    const id = setTimeout(fire, 2000)
+    return () => clearTimeout(id)
+  }, [])
+
   // Auto-create a room on arrival (unless joining or spectating via link)
   useEffect(() => {
     if (spectateSlug) {

@@ -113,6 +113,54 @@ describe('pvpStore — socket events', () => {
     expect(usePvpStore.getState().error).toBe('Not your turn')
   })
 
+  it('move() optimistically places mark and flips turn', () => {
+    usePvpStore.getState().createRoom()
+    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
+    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
+    usePvpStore.setState({ status: 'playing' })
+
+    usePvpStore.getState().move(4)
+
+    const state = usePvpStore.getState()
+    expect(state.board[4]).toBe('X')
+    expect(state.currentTurn).toBe('O')
+    expect(state._optimisticSnapshot).not.toBeNull()
+  })
+
+  it('game:moved clears optimistic snapshot', () => {
+    usePvpStore.getState().createRoom()
+    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
+    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
+    usePvpStore.setState({ status: 'playing' })
+    usePvpStore.getState().move(4)
+
+    const nextBoard = Array(9).fill(null)
+    nextBoard[4] = 'X'
+    socket._trigger('game:moved', {
+      cellIndex: 4, board: nextBoard, currentTurn: 'O',
+      status: 'playing', winner: null, winLine: null, scores: { X: 0, O: 0 },
+    })
+
+    expect(usePvpStore.getState()._optimisticSnapshot).toBeNull()
+    expect(usePvpStore.getState().board[4]).toBe('X')
+  })
+
+  it('error rolls back optimistic move', () => {
+    usePvpStore.getState().createRoom()
+    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
+    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
+    usePvpStore.setState({ status: 'playing' })
+    usePvpStore.getState().move(4)
+
+    socket._trigger('error', { message: 'Not your turn' })
+
+    const state = usePvpStore.getState()
+    expect(state.board[4]).toBeNull()
+    expect(state.currentTurn).toBe('X')
+    expect(state._optimisticSnapshot).toBeNull()
+    expect(state.error).toBe('Not your turn')
+  })
+
   it('reset clears all state', () => {
     usePvpStore.getState().createRoom()
     socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })

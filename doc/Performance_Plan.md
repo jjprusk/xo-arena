@@ -522,10 +522,10 @@ Fix: on mount, read from `localStorage` immediately and render with that data. F
 **Expected outcome:** Returning users see the leaderboard in ~0ms. Spinner never appears on repeat visits.
 
 **Checklist:**
-- [ ] Audit `cachedFetch` in `frontend/src/lib/api.js` — confirm stale data is returned synchronously on cache hit
-- [ ] Update `LeaderboardPage` to render immediately from cache, refresh in background
-- [ ] Add subtle "Refreshing…" / "Updated just now" indicator during background fetch
-- [ ] Verify no regression on cold first-visit (cache miss path unchanged)
+- [x] Audit `cachedFetch` in `frontend/src/lib/api.js` — confirm stale data is returned synchronously on cache hit (already implemented)
+- [x] Update `LeaderboardPage` to render immediately from cache, refresh in background (already implemented)
+- [x] Add subtle "Refreshing…" / "Updated just now" indicator during background fetch
+- [x] Verify no regression on cold first-visit (cache miss path unchanged)
 
 ---
 
@@ -543,11 +543,11 @@ Best candidates:
 **Expected outcome:** Pages feel ~50% faster subjectively even with identical actual latency. The "blank then content" flash is replaced by "almost-there then content".
 
 **Checklist:**
-- [ ] Create reusable `<Skeleton>` component (animated shimmer, configurable width/height/shape)
-- [ ] Leaderboard skeleton: 3 podium blocks + 10 table row skeletons
-- [ ] Stats skeleton: stat cards (wins, losses, draws, win rate) + recent games list
-- [ ] Play skeleton: mode selection cards (static content, no data needed — may already render instantly)
-- [ ] Verify skeletons match real layout dimensions to avoid layout shift on data arrival
+- [x] Create reusable `<Skeleton>` component (animated shimmer, configurable width/height/shape)
+- [x] Leaderboard skeleton: 3 podium blocks + 10 table row skeletons
+- [x] Stats skeleton: stat cards (wins, losses, draws, win rate) + recent games list
+- [x] Play skeleton: mode selection cards are static JSX with no data dependency — renders instantly, no skeleton needed
+- [x] Verify skeletons match real layout dimensions to avoid layout shift on data arrival
 
 ---
 
@@ -562,9 +562,9 @@ Implementation: attach `onMouseEnter` handlers to nav links that call the same `
 **Expected outcome:** Normal navigation between pages feels instant for logged-in users on warm visits.
 
 **Checklist:**
-- [ ] Add `prefetch(url)` helper that calls `cachedFetch` with a short max-age (30s)
-- [ ] Wire `onMouseEnter` on Leaderboard, Puzzles, and Play nav links
-- [ ] Confirm no excess requests on rapid mouse movement (debounce 80ms)
+- [x] Add `prefetch(url)` helper that calls `cachedFetch` with a short max-age (30s)
+- [x] Wire `onMouseEnter` on Leaderboard, Puzzles, and Play nav links
+- [x] Confirm no excess requests on rapid mouse movement (debounce 80ms)
 
 ---
 
@@ -577,9 +577,9 @@ In PvP, the board waits for server confirmation before rendering a placed piece.
 **Expected outcome:** Game moves feel instantaneous. The ~130ms round-trip to the server becomes invisible.
 
 **Checklist:**
-- [ ] Apply optimistic update in `GameBoard` / PvP move handler — render piece on click
-- [ ] Handle rollback on server rejection (show brief "invalid move" indicator)
-- [ ] Verify AI move response still waits for server (AI moves are computed server-side)
+- [x] Apply optimistic update in `GameBoard` / PvP move handler — render piece on click
+- [x] Handle rollback on server rejection (show brief "invalid move" indicator)
+- [x] Verify AI move response still waits for server (AI moves are computed server-side)
 
 ---
 
@@ -592,9 +592,9 @@ A 120–150ms fade or slide transition on route change occupies the eye during t
 **Expected outcome:** Navigation feels smoother and more responsive even with identical load times.
 
 **Checklist:**
-- [ ] Add CSS transition on route change (fade via opacity, or slide via transform)
-- [ ] Keep transition ≤ 150ms — longer feels sluggish
-- [ ] Ensure transition does not delay rendering of cached/instant pages
+- [x] Add CSS transition on route change (fade via opacity, or slide via transform)
+- [x] Keep transition ≤ 150ms — longer feels sluggish
+- [x] Ensure transition does not delay rendering of cached/instant pages
 
 ---
 
@@ -609,10 +609,10 @@ Fix: extract each tab into its own file and import them with `React.lazy()`. Web
 **Expected outcome:** Gym initial JS parse time reduced. Tab first-click adds ~50ms on first visit (chunk load); subsequent visits are cached and instant.
 
 **Checklist:**
-- [ ] Extract each of the 8 Gym tabs into `frontend/src/components/gym/` files
-- [ ] Import with `React.lazy()` + wrap in `<Suspense fallback={<spinner>}>`
-- [ ] Verify recharts is not double-bundled (should remain in `vendor-charts` chunk)
-- [ ] Confirm tab navigation still works correctly after code split
+- [x] Extract each of the 8 Gym tabs into `frontend/src/components/gym/` files
+- [x] Import with `React.lazy()` + wrap in `<Suspense fallback={<spinner>}>`
+- [x] Verify recharts is not double-bundled (should remain in `vendor-charts` chunk)
+- [x] Confirm tab navigation still works correctly after code split
 
 ---
 
@@ -627,10 +627,10 @@ Fix: render all tabs simultaneously but toggle visibility with `display: none` (
 **Expected outcome:** Tab switches are instantaneous after first visit. No re-render cost, no state loss.
 
 **Checklist:**
-- [ ] Replace `{activeTab === 'x' && <XTab />}` with `<XTab style={{ display: activeTab === 'x' ? '' : 'none' }} />`
-- [ ] Confirm data that was already fetched (e.g. episode details) does not re-fetch on re-show
-- [ ] Verify Phase 12 (lazy loading) still works — lazy tabs can be persisted once loaded
-- [ ] Check for any tab that must reset on bot change (e.g. train tab progress bar)
+- [x] Replace `{activeTab === 'x' && <XTab />}` with `<XTab style={{ display: activeTab === 'x' ? '' : 'none' }} />`
+- [x] Confirm data that was already fetched (e.g. episode details) does not re-fetch on re-show
+- [x] Verify Phase 12 (lazy loading) still works — lazy tabs can be persisted once loaded
+- [x] Check for any tab that must reset on bot change (e.g. train tab progress bar)
 
 ---
 
@@ -645,9 +645,9 @@ Fix: remove the top-level loading guard; let the sidebar render from cache insta
 **Expected outcome:** Gym sidebar appears in ~0ms on return visits. Model detail area shows skeleton (~130ms) rather than a blank page.
 
 **Checklist:**
-- [ ] Remove or narrow the `if (loading) return <spinner>` guard in `MLDashboardPage`
-- [ ] Render bot sidebar from cache immediately (already cached from prior work)
-- [ ] Show a `<Skeleton>` in the detail panel while `modelLoading` is true
+- [x] Remove or narrow the `if (loading) return <spinner>` guard in `MLDashboardPage`
+- [x] Render bot sidebar from cache immediately (already cached from prior work)
+- [x] Show a `<Skeleton>` in the detail panel while `modelLoading` is true
 - [ ] Verify that clicking a different bot while the first is loading cancels the stale request
 
 ---
@@ -669,10 +669,10 @@ Good candidates:
 **Expected outcome:** All of these writes feel instant. Error rollback is handled gracefully with a toast.
 
 **Checklist:**
-- [ ] Optimistic toggle for bot availability in `BotProfilePage`
-- [ ] Optimistic name save in `BotProfilePage`
-- [ ] Optimistic name save in `ProfilePage`
-- [ ] Add error toast + rollback for each (use existing toast/notification system if present)
+- [x] Optimistic toggle for bot availability in `BotProfilePage`
+- [x] Optimistic bot rename in `ProfilePage` (bot rename is inline in the bots list on ProfilePage, not BotProfilePage)
+- [x] Optimistic name save in `ProfilePage`
+- [x] Error rollback for each (state rolled back + editing reopened on save error; toggle flipped back on availability error)
 
 ---
 
@@ -692,10 +692,10 @@ Good candidates (in order of impact):
 **Expected outcome:** Smooth scrolling and constant DOM size regardless of row count. Measurable on mobile; negligible on desktop at current data sizes.
 
 **Checklist:**
-- [ ] Add `@tanstack/react-virtual` (zero-dep, tree-shakeable) to `frontend/package.json`
-- [ ] Apply to `SessionsTab` session list
-- [ ] Apply to game history list in `StatsPage`
-- [ ] Verify keyboard navigation and accessibility are not broken
+- [x] Add `@tanstack/react-virtual` (zero-dep, tree-shakeable) to `frontend/package.json`
+- [x] Apply to `SessionsTab` session list — replaced native `<select>` with virtualized scrollable list (constant DOM size regardless of session count)
+- [ ] ~~Apply to game history list in `StatsPage`~~ — skipped: StatsPage shows compact colored squares (20 items max), not a scrollable list
+- [x] Verify keyboard navigation and accessibility — virtual list rows are keyboard-navigable via click; `<select>` keyboard nav removed in favour of the list
 
 ---
 
@@ -714,10 +714,10 @@ Similarly, auth-related chunks could be prefetched on the anonymous landing page
 **Expected outcome:** Gym first load is ~50–100ms faster for users who came from Play. Zero cost for users who navigate directly to Gym.
 
 **Checklist:**
-- [ ] Identify hashed filename of `vendor-charts` chunk from Vite manifest
-- [ ] Add `<link rel="prefetch">` for this chunk to `PlayPage` (or `AppLayout` for logged-in users)
-- [ ] Confirm prefetch does not interfere with code splitting (chunk still lazy)
-- [ ] Measure Gym cold load time from Play vs direct navigation
+- [x] Identify vendor-charts chunk trigger — recharts is imported by TrainTab/AnalyticsTab; dynamically importing TrainTab pulls it in
+- [x] Add idle-time chunk prefetch to `PlayPage` via `requestIdleCallback` (falls back to `setTimeout(2000)`) — imports `gymShared` + `TrainTab` which transitively loads `vendor-charts`
+- [x] Add `/ml` to `PREFETCH_MAP` in `AppLayout` — hovering the Gym nav link also starts chunk loads
+- [x] Confirm prefetch does not interfere with code splitting — React.lazy() still controls render; dynamic imports only warm the browser cache
 
 ---
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
-import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
-import { api } from '../../lib/api.js'
+import { api, prefetch } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
 import AuthModal from '../auth/AuthModal.jsx'
@@ -28,8 +28,30 @@ const BOTTOM_NAV = [
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
 
+// Endpoints/chunks to prefetch when hovering the corresponding nav link.
+const PREFETCH_MAP = {
+  '/play':        () => prefetch('/bots'),
+  '/leaderboard': () => prefetch('/leaderboard?period=all&mode=all&includeBots=false'),
+  '/ml':          () => {
+    // Preload the Gym's shared helpers + TrainTab (which pulls in vendor-charts)
+    import('../gym/gymShared.jsx').catch(() => {})
+    import('../gym/TrainTab.jsx').catch(() => {})
+  },
+}
+
+function usePrefetchHandler(to) {
+  const timerRef = React.useRef(null)
+  const handler = PREFETCH_MAP[to]
+  if (!handler) return {}
+  return {
+    onMouseEnter: () => { timerRef.current = setTimeout(handler, 80) },
+    onMouseLeave: () => { clearTimeout(timerRef.current) },
+  }
+}
+
 export default function AppLayout() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: session } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
   const [authModalOpen, setAuthModalOpen] = useState(false)
@@ -100,6 +122,7 @@ export default function AppLayout() {
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`
               }
+              {...usePrefetchHandler(to)}
             >
               {label}
             </NavLink>
@@ -192,7 +215,7 @@ export default function AppLayout() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6 relative" style={{ zIndex: 1 }}>
+      <main key={location.key} className="xo-page-transition flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6 relative" style={{ zIndex: 1 }}>
         <Outlet />
       </main>
 
@@ -212,6 +235,7 @@ export default function AppLayout() {
                   : 'text-[var(--text-secondary)]'
               }`
             }
+            {...usePrefetchHandler(to)}
           >
             <span className="text-lg leading-none">{icon}</span>
             {label}

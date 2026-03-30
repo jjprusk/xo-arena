@@ -75,8 +75,8 @@ export default function BotProfilePage() {
           {error || 'Bot not found.'}
         </p>
         <div className="text-center">
-          <Link to="/leaderboard" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
-            ← Back to leaderboard
+          <Link to="/profile" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
+            ← Back to profile
           </Link>
         </div>
       </div>
@@ -86,13 +86,16 @@ export default function BotProfilePage() {
   const isOwner = session?.user?.id && bot.ownerBetterAuthId && session.user.id === bot.ownerBetterAuthId
 
   async function toggleAvailability() {
-    setAvailToggling(true)
+    const next = !bot.botAvailable
+    setBot(prev => ({ ...prev, botAvailable: next }))  // optimistic
     setAvailError(null)
+    setAvailToggling(true)
     try {
       const token = await getToken()
-      const { bot: updated } = await api.bots.update(id, { botAvailable: !bot.botAvailable }, token)
+      const { bot: updated } = await api.bots.update(id, { botAvailable: next }, token)
       setBot(prev => ({ ...prev, botAvailable: updated.botAvailable }))
     } catch (err) {
+      setBot(prev => ({ ...prev, botAvailable: !next }))  // roll back
       setAvailError(err.message || 'Failed to update availability.')
     } finally {
       setAvailToggling(false)
@@ -117,8 +120,8 @@ export default function BotProfilePage() {
   return (
     <div className="max-w-lg mx-auto space-y-6">
       {/* Back link */}
-      <Link to="/leaderboard" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
-        ← Back to leaderboard
+      <Link to="/profile" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
+        ← Back to profile
       </Link>
 
       {/* Identity card */}
