@@ -577,9 +577,9 @@ In PvP, the board waits for server confirmation before rendering a placed piece.
 **Expected outcome:** Game moves feel instantaneous. The ~130ms round-trip to the server becomes invisible.
 
 **Checklist:**
-- [ ] Apply optimistic update in `GameBoard` / PvP move handler — render piece on click
-- [ ] Handle rollback on server rejection (show brief "invalid move" indicator)
-- [ ] Verify AI move response still waits for server (AI moves are computed server-side)
+- [x] Apply optimistic update in `GameBoard` / PvP move handler — render piece on click
+- [x] Handle rollback on server rejection (show brief "invalid move" indicator)
+- [x] Verify AI move response still waits for server (AI moves are computed server-side)
 
 ---
 
