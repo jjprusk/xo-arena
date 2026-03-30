@@ -522,10 +522,10 @@ Fix: on mount, read from `localStorage` immediately and render with that data. F
 **Expected outcome:** Returning users see the leaderboard in ~0ms. Spinner never appears on repeat visits.
 
 **Checklist:**
-- [ ] Audit `cachedFetch` in `frontend/src/lib/api.js` — confirm stale data is returned synchronously on cache hit
-- [ ] Update `LeaderboardPage` to render immediately from cache, refresh in background
-- [ ] Add subtle "Refreshing…" / "Updated just now" indicator during background fetch
-- [ ] Verify no regression on cold first-visit (cache miss path unchanged)
+- [x] Audit `cachedFetch` in `frontend/src/lib/api.js` — confirm stale data is returned synchronously on cache hit (already implemented)
+- [x] Update `LeaderboardPage` to render immediately from cache, refresh in background (already implemented)
+- [x] Add subtle "Refreshing…" / "Updated just now" indicator during background fetch
+- [x] Verify no regression on cold first-visit (cache miss path unchanged)
 
 ---
 

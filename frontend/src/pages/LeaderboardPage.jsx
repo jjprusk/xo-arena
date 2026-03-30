@@ -19,6 +19,8 @@ const LS_SHOW_BOTS = 'xo-leaderboard-show-bots'
 export default function LeaderboardPage() {
   const [board, setBoard] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [justUpdated, setJustUpdated] = useState(false)
   const [period, setPeriod] = useState('all')
   const [mode, setMode] = useState('all')
   const [search, setSearch] = useState('')
@@ -37,13 +39,22 @@ export default function LeaderboardPage() {
     if (immediate) {
       setBoard(immediate.leaderboard || [])
       setLoading(false)
+      setRefreshing(true)
     } else {
       setLoading(true)
     }
     refresh
-      .then(res => { if (!cancelled) setBoard(res.leaderboard || []) })
+      .then(res => {
+        if (!cancelled) {
+          setBoard(res.leaderboard || [])
+          if (immediate) {
+            setJustUpdated(true)
+            setTimeout(() => { if (!cancelled) setJustUpdated(false) }, 2000)
+          }
+        }
+      })
       .catch(() => { if (!cancelled && !immediate) setBoard([]) })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .finally(() => { if (!cancelled) { setLoading(false); setRefreshing(false) } })
     return () => { cancelled = true }
   }, [period, mode, showBots])
 
@@ -55,7 +66,15 @@ export default function LeaderboardPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
-      <PageHeader title="Leaderboard" />
+      <div className="flex items-center gap-3">
+        <PageHeader title="Leaderboard" />
+        {refreshing && !justUpdated && (
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Refreshing…</span>
+        )}
+        {justUpdated && (
+          <span className="text-xs" style={{ color: 'var(--color-teal-600)' }}>Updated</span>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
