@@ -5,6 +5,7 @@ import {
   ListTable, ListTh, ListTd, ListTr,
   UserAvatar, SearchBar,
 } from '../components/ui/ListTable.jsx'
+import { LeaderboardSkeleton } from '../components/ui/Skeleton.jsx'
 
 const PODIUM_COLORS = {
   0: { bg: 'var(--color-amber-100)', border: 'var(--color-amber-500)', label: '👑' },
@@ -105,9 +106,7 @@ export default function LeaderboardPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-4 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
-        </div>
+        <LeaderboardSkeleton />
       ) : filtered.length === 0 ? (
         <p className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
           No players yet. Play some games!

@@ -543,11 +543,11 @@ Best candidates:
 **Expected outcome:** Pages feel ~50% faster subjectively even with identical actual latency. The "blank then content" flash is replaced by "almost-there then content".
 
 **Checklist:**
-- [ ] Create reusable `<Skeleton>` component (animated shimmer, configurable width/height/shape)
-- [ ] Leaderboard skeleton: 3 podium blocks + 10 table row skeletons
-- [ ] Stats skeleton: stat cards (wins, losses, draws, win rate) + recent games list
-- [ ] Play skeleton: mode selection cards (static content, no data needed — may already render instantly)
-- [ ] Verify skeletons match real layout dimensions to avoid layout shift on data arrival
+- [x] Create reusable `<Skeleton>` component (animated shimmer, configurable width/height/shape)
+- [x] Leaderboard skeleton: 3 podium blocks + 10 table row skeletons
+- [x] Stats skeleton: stat cards (wins, losses, draws, win rate) + recent games list
+- [x] Play skeleton: mode selection cards are static JSX with no data dependency — renders instantly, no skeleton needed
+- [x] Verify skeletons match real layout dimensions to avoid layout shift on data arrival
 
 ---
 
