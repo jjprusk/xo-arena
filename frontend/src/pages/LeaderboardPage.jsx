@@ -149,7 +149,7 @@ export default function LeaderboardPage() {
           )}
 
           {/* Table */}
-          <ListTable>
+          <ListTable fitViewport>
             <thead>
               <tr>
                 <ListTh>#</ListTh>
