@@ -217,7 +217,7 @@ export default function GymPage() {
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Go to Profile → Bots to create bots.</p>
               </div>
             ) : (
-              <ListTable>
+              <ListTable maxHeight="70vh">
                 <thead>
                   <tr>
                     <ListTh>Bot</ListTh>

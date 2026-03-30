@@ -392,7 +392,7 @@ export default function ProfilePage() {
         )}
 
         {!botsLoading && bots.length > 0 && (
-          <ListTable>
+          <ListTable maxHeight="60vh">
             <thead>
               <tr>
                 <ListTh>Bot</ListTh>
