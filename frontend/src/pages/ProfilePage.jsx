@@ -84,22 +84,25 @@ export default function ProfilePage() {
   }, [clerkUser?.id])
 
   async function handleSaveName() {
-    if (!nameInput.trim() || nameInput === dbUser.displayName) {
+    const trimmed = nameInput.trim()
+    if (!trimmed || trimmed === dbUser.displayName) {
       setEditing(false)
       return
     }
-    setSaving(true)
+    const previous = dbUser.displayName
+    setDbUser(prev => ({ ...prev, displayName: trimmed }))  // optimistic
+    setEditing(false)
     setSaveError(null)
     try {
       const token = await getToken()
-      const { user: updated } = await api.patch(`/users/${dbUser.id}`, { displayName: nameInput.trim() }, token)
+      const { user: updated } = await api.patch(`/users/${dbUser.id}`, { displayName: trimmed }, token)
       setDbUser(updated)
       try { sessionStorage.setItem(`xo_dbuser_${clerkUser.id}`, JSON.stringify(updated)) } catch {}
-      setEditing(false)
     } catch {
+      setDbUser(prev => ({ ...prev, displayName: previous }))  // roll back
+      setNameInput(previous)
       setSaveError('Could not save. Try again.')
-    } finally {
-      setSaving(false)
+      setEditing(true)
     }
   }
 
@@ -150,13 +153,17 @@ export default function ProfilePage() {
 
   async function handleRenameBot(id) {
     if (!renamingBot || renamingBot.id !== id) return
+    const newName = renamingBot.value
+    const previous = bots.find(b => b.id === id)?.displayName
+    setBots(prev => prev.map(b => b.id === id ? { ...b, displayName: newName } : b))  // optimistic
+    setRenamingBot(null)
     setBotActionError(null)
     try {
       const token = await getToken()
-      const { bot: updated } = await api.bots.update(id, { displayName: renamingBot.value }, token)
+      const { bot: updated } = await api.bots.update(id, { displayName: newName }, token)
       setBots(prev => prev.map(b => b.id === id ? { ...b, displayName: updated.displayName } : b))
-      setRenamingBot(null)
     } catch (err) {
+      setBots(prev => prev.map(b => b.id === id ? { ...b, displayName: previous } : b))  // roll back
       setBotActionError(err.message || 'Rename failed.')
     }
   }

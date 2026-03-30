@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
-import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
 import { api, prefetch } from '../../lib/api.js'
@@ -46,6 +46,7 @@ function usePrefetchHandler(to) {
 
 export default function AppLayout() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: session } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
   const [authModalOpen, setAuthModalOpen] = useState(false)
@@ -209,7 +210,7 @@ export default function AppLayout() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6 relative" style={{ zIndex: 1 }}>
+      <main key={location.key} className="xo-page-transition flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6 relative" style={{ zIndex: 1 }}>
         <Outlet />
       </main>
 

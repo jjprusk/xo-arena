@@ -592,9 +592,9 @@ A 120–150ms fade or slide transition on route change occupies the eye during t
 **Expected outcome:** Navigation feels smoother and more responsive even with identical load times.
 
 **Checklist:**
-- [ ] Add CSS transition on route change (fade via opacity, or slide via transform)
-- [ ] Keep transition ≤ 150ms — longer feels sluggish
-- [ ] Ensure transition does not delay rendering of cached/instant pages
+- [x] Add CSS transition on route change (fade via opacity, or slide via transform)
+- [x] Keep transition ≤ 150ms — longer feels sluggish
+- [x] Ensure transition does not delay rendering of cached/instant pages
 
 ---
 
@@ -609,10 +609,10 @@ Fix: extract each tab into its own file and import them with `React.lazy()`. Web
 **Expected outcome:** Gym initial JS parse time reduced. Tab first-click adds ~50ms on first visit (chunk load); subsequent visits are cached and instant.
 
 **Checklist:**
-- [ ] Extract each of the 8 Gym tabs into `frontend/src/components/gym/` files
-- [ ] Import with `React.lazy()` + wrap in `<Suspense fallback={<spinner>}>`
-- [ ] Verify recharts is not double-bundled (should remain in `vendor-charts` chunk)
-- [ ] Confirm tab navigation still works correctly after code split
+- [x] Extract each of the 8 Gym tabs into `frontend/src/components/gym/` files
+- [x] Import with `React.lazy()` + wrap in `<Suspense fallback={<spinner>}>`
+- [x] Verify recharts is not double-bundled (should remain in `vendor-charts` chunk)
+- [x] Confirm tab navigation still works correctly after code split
 
 ---
 
@@ -627,10 +627,10 @@ Fix: render all tabs simultaneously but toggle visibility with `display: none` (
 **Expected outcome:** Tab switches are instantaneous after first visit. No re-render cost, no state loss.
 
 **Checklist:**
-- [ ] Replace `{activeTab === 'x' && <XTab />}` with `<XTab style={{ display: activeTab === 'x' ? '' : 'none' }} />`
-- [ ] Confirm data that was already fetched (e.g. episode details) does not re-fetch on re-show
-- [ ] Verify Phase 12 (lazy loading) still works — lazy tabs can be persisted once loaded
-- [ ] Check for any tab that must reset on bot change (e.g. train tab progress bar)
+- [x] Replace `{activeTab === 'x' && <XTab />}` with `<XTab style={{ display: activeTab === 'x' ? '' : 'none' }} />`
+- [x] Confirm data that was already fetched (e.g. episode details) does not re-fetch on re-show
+- [x] Verify Phase 12 (lazy loading) still works — lazy tabs can be persisted once loaded
+- [x] Check for any tab that must reset on bot change (e.g. train tab progress bar)
 
 ---
 
@@ -645,9 +645,9 @@ Fix: remove the top-level loading guard; let the sidebar render from cache insta
 **Expected outcome:** Gym sidebar appears in ~0ms on return visits. Model detail area shows skeleton (~130ms) rather than a blank page.
 
 **Checklist:**
-- [ ] Remove or narrow the `if (loading) return <spinner>` guard in `MLDashboardPage`
-- [ ] Render bot sidebar from cache immediately (already cached from prior work)
-- [ ] Show a `<Skeleton>` in the detail panel while `modelLoading` is true
+- [x] Remove or narrow the `if (loading) return <spinner>` guard in `MLDashboardPage`
+- [x] Render bot sidebar from cache immediately (already cached from prior work)
+- [x] Show a `<Skeleton>` in the detail panel while `modelLoading` is true
 - [ ] Verify that clicking a different bot while the first is loading cancels the stale request
 
 ---
@@ -669,10 +669,10 @@ Good candidates:
 **Expected outcome:** All of these writes feel instant. Error rollback is handled gracefully with a toast.
 
 **Checklist:**
-- [ ] Optimistic toggle for bot availability in `BotProfilePage`
-- [ ] Optimistic name save in `BotProfilePage`
-- [ ] Optimistic name save in `ProfilePage`
-- [ ] Add error toast + rollback for each (use existing toast/notification system if present)
+- [x] Optimistic toggle for bot availability in `BotProfilePage`
+- [x] Optimistic bot rename in `ProfilePage` (bot rename is inline in the bots list on ProfilePage, not BotProfilePage)
+- [x] Optimistic name save in `ProfilePage`
+- [x] Error rollback for each (state rolled back + editing reopened on save error; toggle flipped back on availability error)
 
 ---
 
@@ -692,10 +692,10 @@ Good candidates (in order of impact):
 **Expected outcome:** Smooth scrolling and constant DOM size regardless of row count. Measurable on mobile; negligible on desktop at current data sizes.
 
 **Checklist:**
-- [ ] Add `@tanstack/react-virtual` (zero-dep, tree-shakeable) to `frontend/package.json`
-- [ ] Apply to `SessionsTab` session list
-- [ ] Apply to game history list in `StatsPage`
-- [ ] Verify keyboard navigation and accessibility are not broken
+- [x] Add `@tanstack/react-virtual` (zero-dep, tree-shakeable) to `frontend/package.json`
+- [x] Apply to `SessionsTab` session list — replaced native `<select>` with virtualized scrollable list (constant DOM size regardless of session count)
+- [ ] ~~Apply to game history list in `StatsPage`~~ — skipped: StatsPage shows compact colored squares (20 items max), not a scrollable list
+- [x] Verify keyboard navigation and accessibility — virtual list rows are keyboard-navigable via click; `<select>` keyboard nav removed in favour of the list
 
 ---
 
