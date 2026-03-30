@@ -188,28 +188,29 @@
     scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
   }
 
-  html::-webkit-scrollbar {
+  ::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
   }
 
-  html::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  html::-webkit-scrollbar-thumb {
+  ::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.25);
     border-radius: 4px;
   }
 
-  html::-webkit-scrollbar-thumb:hover {
+  ::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.4);
   }
 
-  .dark html::-webkit-scrollbar-thumb {
+  .dark ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
   }
 
-  .dark html::-webkit-scrollbar-thumb:hover {
+  .dark ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.35);
   }
 
