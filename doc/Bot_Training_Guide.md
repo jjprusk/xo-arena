@@ -113,16 +113,14 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| UI Label | Value | Notes |
-|----------|-------|-------|
-| Learning rate (α) | **0.3** | Default; reliable — set via Auto-Tuner only |
-| Discount factor (γ) | **0.9** | Good for short games — set via Auto-Tuner only |
-| Reset ε to 1.0 at start | **checked** | Always start fully random |
-| Decay schedule | **Exponential** | |
-| Rate | **0.995** | Reaches ε≈0.05 by ~590 episodes |
-| Epsilon min | **0.05** | 5% residual exploration |
-
-> **Note:** Learning rate and discount factor are only configurable in the **Auto-Tuner** tab, not the main Train tab. The defaults (α=0.3, γ=0.9) are good for most runs.
+| UI Label | Value | Configurable? | Notes |
+|----------|-------|---------------|-------|
+| Decay schedule | **Exponential** | Train tab | |
+| Rate | **0.995** | Train tab (Exponential only) | Reaches ε≈0.05 by ~590 episodes |
+| Epsilon min | **0.05** | Train tab | 5% residual exploration |
+| Reset ε to 1.0 at start | **checked** | Train tab | Always start fully random |
+| Learning rate (α) | 0.3 | **Hardcoded** | Not shown in UI — Auto-Tuner can sweep it |
+| Discount factor (γ) | 0.9 | **Hardcoded** | Not shown in UI — Auto-Tuner can sweep it |
 
 ### Session Recipe
 
@@ -161,14 +159,14 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| UI Label | Value | Notes |
-|----------|-------|-------|
-| Learning rate (α) | **0.3** | Auto-Tuner only |
-| Discount factor (γ) | **0.9** | Auto-Tuner only |
-| Reset ε to 1.0 at start | **checked** | |
-| Decay schedule | **Exponential** | |
-| Rate | **0.995** | |
-| Epsilon min | **0.05** | Keep slightly higher than Q-Learning |
+| UI Label | Value | Configurable? | Notes |
+|----------|-------|---------------|-------|
+| Decay schedule | **Exponential** | Train tab | |
+| Rate | **0.995** | Train tab (Exponential only) | |
+| Epsilon min | **0.05** | Train tab | Keep slightly higher than Q-Learning |
+| Reset ε to 1.0 at start | **checked** | Train tab | |
+| Learning rate (α) | 0.3 | **Hardcoded** | Not shown in UI — Auto-Tuner can sweep it |
+| Discount factor (γ) | 0.9 | **Hardcoded** | Not shown in UI — Auto-Tuner can sweep it |
 
 ### Session Recipe
 
@@ -205,13 +203,15 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| UI Label | Value | Notes |
-|----------|-------|-------|
-| Learning rate (α) | **0.2** | Lower than TD; MC updates are noisier — Auto-Tuner only |
-| Discount factor (γ) | **0.9** | Auto-Tuner only |
-| Reset ε to 1.0 at start | **checked** | |
-| Decay schedule | **Linear** | Linear works well for MC; more even coverage |
-| Epsilon min | **0.05** | |
+| UI Label | Value | Configurable? | Notes |
+|----------|-------|---------------|-------|
+| Decay schedule | **Linear** | Train tab | Linear works well for MC; more even coverage |
+| Epsilon min | **0.05** | Train tab | |
+| Reset ε to 1.0 at start | **checked** | Train tab | |
+| Learning rate (α) | 0.2 | **Hardcoded** | Not shown in UI — lower than TD because MC updates are noisier; Auto-Tuner can sweep it |
+| Discount factor (γ) | 0.9 | **Hardcoded** | Not shown in UI — Auto-Tuner can sweep it |
+
+> **Note:** Monte Carlo does not show a "Rate" field when Linear decay is selected — the decay spreads evenly across the session's episode count automatically.
 
 ### Session Recipe
 
@@ -248,13 +248,15 @@ Controls how aggressively Q-values are updated per step.
 
 ### Recommended Settings
 
-| UI Label | Value | Notes |
-|----------|-------|-------|
-| Learning rate (α) | **0.01** | PG is sensitive; keep low — Auto-Tuner only |
-| Discount factor (γ) | **0.9** | Auto-Tuner only |
-| Reset ε to 1.0 at start | **checked** | Controls fallback to random; PG uses softmax sampling internally |
-| Decay schedule | **Cosine** | Smooth schedule suits PG's gradient updates |
-| Epsilon min | **0.05** | |
+| UI Label | Value | Configurable? | Notes |
+|----------|-------|---------------|-------|
+| Decay schedule | **Cosine** | Train tab | Smooth schedule suits PG's gradient updates |
+| Epsilon min | **0.05** | Train tab | |
+| Reset ε to 1.0 at start | **checked** | Train tab | Controls fallback to random; PG uses softmax sampling internally |
+| Learning rate (α) | 0.01 | **Hardcoded** | Not shown in UI — PG is sensitive; hardcoded lower than tabular default; Auto-Tuner can sweep it |
+| Discount factor (γ) | 0.9 | **Hardcoded** | Not shown in UI — Auto-Tuner can sweep it |
+
+> **Note:** Policy Gradient does not show a "Rate" field when Cosine decay is selected.
 
 ### Session Recipe
 
@@ -437,11 +439,14 @@ For tic-tac-toe, `[64, 64]` is the sweet spot — larger networks don't raise th
 
 ### Recommended Settings
 
-| UI Label | Value | Notes |
-|----------|-------|-------|
-| Simulations | **100** | Double the default for much stronger search |
-| PUCT | **1.5** | Default is good; increase to 2.0 for more exploration early |
-| Temperature | **1.0** | Reduce to 0.5 after first 5,000 episodes for more decisive play |
+| UI Label | Value | Configurable? | Notes |
+|----------|-------|---------------|-------|
+| Simulations | **100** | Train tab | Double the default for much stronger search |
+| PUCT | **1.5** | Train tab | Default is good; increase to 2.0 for more exploration early |
+| Temperature | **1.0** | Train tab | Reduce to 0.5 after first 5,000 episodes for more decisive play |
+| Learning rate (α) | 0.001 | **Hardcoded** | Adam optimizer; not exposed in any tab |
+| Discount factor (γ) | 0.99 | **Hardcoded** | Not exposed; higher than tabular default because AZ plans further ahead |
+| Epsilon / exploration | — | **Not applicable** | AlphaZero has no epsilon — PUCT handles all exploration in the tree |
 
 ### Session Recipe
 
