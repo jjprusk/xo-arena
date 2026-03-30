@@ -9,6 +9,7 @@ import {
   CartesianGrid, Legend,
 } from 'recharts'
 import { api } from '../lib/api.js'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import { evictModel, isModelCached } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
 import { runTrainingSession } from '../services/trainingService.js'
@@ -208,40 +209,59 @@ export default function GymPage() {
       ) : (
         <div className="grid lg:grid-cols-[280px_1fr] gap-6">
           {/* Bot sidebar */}
-          <aside className="space-y-2">
+          <aside>
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>Your Bots</p>
-            {bots.length === 0 && (
+            {bots.length === 0 ? (
               <div className="text-center py-6 px-3">
                 <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>No bots yet.</p>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Go to Profile → Bots to create bots.</p>
               </div>
+            ) : (
+              <ListTable>
+                <thead>
+                  <tr>
+                    <ListTh>Bot</ListTh>
+                    <ListTh align="right">ELO</ListTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bots.map((bot, i) => {
+                    const typeLabel = bot.botModelType === 'ml' ? 'ML' : bot.botModelType === 'rule_based' ? 'Rules' : bot.botModelType === 'mcts' ? 'MCTS' : 'Minimax'
+                    const typeBg    = bot.botModelType === 'ml' ? 'var(--color-blue-100)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-100)' : 'var(--color-gray-100)'
+                    const typeColor = bot.botModelType === 'ml' ? 'var(--color-blue-700)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-700)' : 'var(--color-gray-600)'
+                    const model = botModels[bot.id]
+                    const isSelected = selectedBotId === bot.id
+                    return (
+                      <ListTr
+                        key={bot.id}
+                        last={i === bots.length - 1}
+                        onClick={() => { setSelectedBotId(bot.id); setActiveTab('train') }}
+                        className={isSelected ? 'bg-[var(--color-blue-50)]' : ''}
+                      >
+                        <ListTd style={isSelected ? { color: 'var(--color-blue-700)' } : undefined}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold truncate max-w-[120px]">{bot.displayName || bot.username}</span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: typeBg, color: typeColor }}>{typeLabel}</span>
+                            {model && regressions.has(model.id) && (
+                              <span className="text-[9px] font-semibold px-1 py-0.5 rounded-full bg-[var(--color-amber-100)] text-[var(--color-amber-700)] shrink-0">⚠</span>
+                            )}
+                          </div>
+                          {model && (
+                            <div className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                              <span>{model.totalEpisodes.toLocaleString()} eps</span>
+                              {isModelCached(model.id) && <span title="Q-table loaded in browser" style={{ color: 'var(--color-teal-600)' }}>⚡</span>}
+                            </div>
+                          )}
+                        </ListTd>
+                        <ListTd align="right">
+                          <span className="font-mono tabular-nums">{Math.round(bot.eloRating || 1200)}</span>
+                        </ListTd>
+                      </ListTr>
+                    )
+                  })}
+                </tbody>
+              </ListTable>
             )}
-            {bots.map(bot => {
-              const typeLabel = bot.botModelType === 'ml' ? 'ML' : bot.botModelType === 'rule_based' ? 'Rules' : bot.botModelType === 'mcts' ? 'MCTS' : 'Minimax'
-              const typeBg    = bot.botModelType === 'ml' ? 'var(--color-blue-100)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-100)' : 'var(--color-gray-100)'
-              const typeColor = bot.botModelType === 'ml' ? 'var(--color-blue-700)' : bot.botModelType === 'rule_based' ? 'var(--color-teal-700)' : 'var(--color-gray-600)'
-              const model = botModels[bot.id]
-              return (
-                <button key={bot.id} onClick={() => { setSelectedBotId(bot.id); setActiveTab('train') }}
-                  className={`w-full text-left rounded-xl border p-3 transition-all ${selectedBotId === bot.id ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]' : 'hover:border-[var(--color-gray-400)]'}`}
-                  style={{ borderColor: selectedBotId === bot.id ? undefined : 'var(--border-default)', backgroundColor: selectedBotId === bot.id ? undefined : 'var(--bg-surface)' }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-sm truncate">{bot.displayName || bot.username}</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: typeBg, color: typeColor }}>{typeLabel}</span>
-                      {model && regressions.has(model.id) && (
-                        <span className="text-[9px] font-semibold px-1 py-0.5 rounded-full bg-[var(--color-amber-100)] text-[var(--color-amber-700)]">⚠</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-xs mt-1 flex gap-2" style={{ color: 'var(--text-muted)' }}>
-                    <span>ELO {Math.round(bot.eloRating || 1200)}</span>
-                    {model && <><span>·</span><span>{model.totalEpisodes.toLocaleString()} eps</span></>}
-                    {model && isModelCached(model.id) && <span title="Q-table loaded in browser" style={{ color: 'var(--color-teal-600)' }}>⚡</span>}
-                  </div>
-                </button>
-              )
-            })}
           </aside>
 
           {/* Detail panel */}
