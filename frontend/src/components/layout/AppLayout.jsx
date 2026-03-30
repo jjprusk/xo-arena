@@ -28,10 +28,15 @@ const BOTTOM_NAV = [
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
 
-// Endpoints to prefetch when hovering the corresponding nav link.
+// Endpoints/chunks to prefetch when hovering the corresponding nav link.
 const PREFETCH_MAP = {
   '/play':        () => prefetch('/bots'),
   '/leaderboard': () => prefetch('/leaderboard?period=all&mode=all&includeBots=false'),
+  '/ml':          () => {
+    // Preload the Gym's shared helpers + TrainTab (which pulls in vendor-charts)
+    import('../components/gym/gymShared.jsx').catch(() => {})
+    import('../components/gym/TrainTab.jsx').catch(() => {})
+  },
 }
 
 function usePrefetchHandler(to) {

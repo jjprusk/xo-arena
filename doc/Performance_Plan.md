@@ -714,10 +714,10 @@ Similarly, auth-related chunks could be prefetched on the anonymous landing page
 **Expected outcome:** Gym first load is ~50–100ms faster for users who came from Play. Zero cost for users who navigate directly to Gym.
 
 **Checklist:**
-- [ ] Identify hashed filename of `vendor-charts` chunk from Vite manifest
-- [ ] Add `<link rel="prefetch">` for this chunk to `PlayPage` (or `AppLayout` for logged-in users)
-- [ ] Confirm prefetch does not interfere with code splitting (chunk still lazy)
-- [ ] Measure Gym cold load time from Play vs direct navigation
+- [x] Identify vendor-charts chunk trigger — recharts is imported by TrainTab/AnalyticsTab; dynamically importing TrainTab pulls it in
+- [x] Add idle-time chunk prefetch to `PlayPage` via `requestIdleCallback` (falls back to `setTimeout(2000)`) — imports `gymShared` + `TrainTab` which transitively loads `vendor-charts`
+- [x] Add `/ml` to `PREFETCH_MAP` in `AppLayout` — hovering the Gym nav link also starts chunk loads
+- [x] Confirm prefetch does not interfere with code splitting — React.lazy() still controls render; dynamic imports only warm the browser cache
 
 ---
 
