@@ -178,6 +178,14 @@
     padding: 0;
   }
 
+  html {
+    /* Always allocate scrollbar space so it never appears/disappears mid-navigation.
+       overflow-y: scroll keeps the scrollbar slot permanently reserved — no layout shift.
+       Users with overlay scrollbars (macOS default) won't see anything; users with
+       classic scrollbars see a consistent scrollbar rather than one that jumps in/out. */
+    overflow-y: scroll;
+  }
+
   body {
     font-family: var(--font-body);
     background-color: var(--bg-page);
