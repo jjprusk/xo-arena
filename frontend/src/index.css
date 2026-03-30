@@ -179,11 +179,16 @@
   }
 
   html {
-    /* Always allocate scrollbar space so it never appears/disappears mid-navigation.
-       overflow-y: scroll keeps the scrollbar slot permanently reserved — no layout shift.
-       Users with overlay scrollbars (macOS default) won't see anything; users with
-       classic scrollbars see a consistent scrollbar rather than one that jumps in/out. */
+    /* Keep scrollbar slot permanently allocated to prevent layout shift on navigation,
+       but hide the scrollbar visually. The slot takes 0px so no blank strip appears.
+       Users can still scroll normally via trackpad/wheel/keyboard. */
     overflow-y: scroll;
+    scrollbar-width: none; /* Firefox */
+  }
+
+  html::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
   }
 
   body {
