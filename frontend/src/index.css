@@ -179,16 +179,38 @@
   }
 
   html {
-    /* Keep scrollbar slot permanently allocated to prevent layout shift on navigation,
-       but hide the scrollbar visually. The slot takes 0px so no blank strip appears.
-       Users can still scroll normally via trackpad/wheel/keyboard. */
-    overflow-y: scroll;
-    scrollbar-width: none; /* Firefox */
+    /* Reserve scrollbar gutter permanently → no layout shift when scrollbar appears/disappears.
+       Transparent track means the reserved space is invisible when there is no overflow.
+       The thumb only renders when content actually overflows, so the scrollbar is visible
+       only when needed. */
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
   }
 
   html::-webkit-scrollbar {
-    width: 0;
+    width: 8px;
+  }
+
+  html::-webkit-scrollbar-track {
     background: transparent;
+  }
+
+  html::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+  }
+
+  html::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .dark html::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .dark html::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
   }
 
   body {
