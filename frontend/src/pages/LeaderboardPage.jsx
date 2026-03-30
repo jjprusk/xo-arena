@@ -149,7 +149,7 @@ export default function LeaderboardPage() {
           )}
 
           {/* Table */}
-          <ListTable maxHeight="clamp(200px, calc(100dvh - 500px), 340px)">
+          <ListTable>
             <thead>
               <tr>
                 <ListTh>#</ListTh>
