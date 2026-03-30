@@ -32,6 +32,7 @@ export default function ProfilePage() {
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null) // { id, value }
   const [createForm, setCreateForm] = useState({ name: '', modelType: 'DQN', competitive: false })
+  const [creatingBot, setCreatingBot] = useState(false)
 
   // Account deletion
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -202,6 +203,8 @@ export default function ProfilePage() {
 
   async function handleCreateBot(e) {
     e.preventDefault()
+    if (creatingBot) return
+    setCreatingBot(true)
     setBotActionError(null)
     try {
       const token = await getToken()
@@ -218,6 +221,8 @@ export default function ProfilePage() {
       setShowCreateBot(false)
     } catch (err) {
       setBotActionError(err.message || 'Create failed.')
+    } finally {
+      setCreatingBot(false)
     }
   }
 
@@ -581,10 +586,11 @@ export default function ProfilePage() {
             <div className="flex gap-2 pt-1">
               <button
                 type="submit"
-                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white"
+                disabled={creatingBot}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
                 style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
               >
-                Create
+                {creatingBot ? 'Creating…' : 'Create'}
               </button>
               <button
                 type="button"
