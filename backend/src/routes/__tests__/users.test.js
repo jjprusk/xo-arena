@@ -64,6 +64,10 @@ const mockUser = {
 }
 
 describe('GET /api/v1/users/:id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('returns 404 when user not found', async () => {
     getUserById.mockResolvedValue(null)
     const res = await request(app).get('/api/v1/users/nonexistent')
