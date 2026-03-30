@@ -96,6 +96,15 @@ export default function AdminUsersPage() {
     } catch { setActionError('Model limit update failed.') } finally { setEditingModelLimit(null) }
   }
 
+  async function verifyEmail(user) {
+    setActionError(null)
+    try {
+      const token = await getToken()
+      const updated = await api.admin.updateUser(user.id, { emailVerified: true }, token)
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, emailVerified: updated.user.emailVerified } : u))
+    } catch { setActionError('Verify failed.') }
+  }
+
   async function deleteUser(user) {
     if (!confirm(`Delete ${user.displayName}? This cannot be undone.`)) return
     setActionError(null)
@@ -161,6 +170,11 @@ export default function AdminUsersPage() {
                   {/* Email */}
                   <ListTd className="hidden sm:table-cell max-w-[180px]">
                     <span className="block truncate text-xs">{u.email}</span>
+                    {u.emailVerified === false && (
+                      <span className="text-[10px] font-semibold px-1.5 py-px rounded-full" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>
+                        unverified
+                      </span>
+                    )}
                   </ListTd>
 
                   {/* ELO — inline edit */}
@@ -257,6 +271,14 @@ export default function AdminUsersPage() {
                       >
                         tourn.
                       </RoleButton>
+                      {u.emailVerified === false && (
+                        <ActionButton
+                          title="Mark email as verified so user can sign in"
+                          onClick={() => verifyEmail(u)}
+                        >
+                          Verify
+                        </ActionButton>
+                      )}
                       <ActionButton
                         disabled={isSelf}
                         danger={!u.banned}

@@ -34,8 +34,8 @@ const PREFETCH_MAP = {
   '/leaderboard': () => prefetch('/leaderboard?period=all&mode=all&includeBots=false'),
   '/ml':          () => {
     // Preload the Gym's shared helpers + TrainTab (which pulls in vendor-charts)
-    import('../components/gym/gymShared.jsx').catch(() => {})
-    import('../components/gym/TrainTab.jsx').catch(() => {})
+    import('../gym/gymShared.jsx').catch(() => {})
+    import('../gym/TrainTab.jsx').catch(() => {})
   },
 }
 

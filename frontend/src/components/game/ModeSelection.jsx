@@ -215,7 +215,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
   const [aivaiExpanded, setAivaiExpanded] = useState(false)
   const [botExpanded, setBotExpanded] = useState(false)
-  const [selectedMark, setSelectedMark] = useState('X')
+  const [selectedMark, setSelectedMark] = useState('alternate')
   const [playerName, setPlayerNameLocal] = useState('')
   const [joinInput, setJoinInput] = useState('')
   const [inviteCopied, setInviteCopied] = useState(false)

@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import { getToken } from '../lib/getToken.js'
-import { Link } from 'react-router-dom'
+import { useOptimisticSession, clearSessionCache } from '../lib/useOptimisticSession.js'
+import { getToken, clearTokenCache } from '../lib/getToken.js'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
+import { signOut } from '../lib/auth-client.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 export default function ProfilePage() {
+  const navigate = useNavigate()
   const { data: session, isPending } = useOptimisticSession()
   const clerkUser = session?.user ?? null
   const isSignedIn = !!clerkUser
@@ -30,6 +32,11 @@ export default function ProfilePage() {
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null) // { id, value }
   const [createForm, setCreateForm] = useState({ name: '', modelType: 'DQN', competitive: false })
+
+  // Account deletion
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   useEffect(() => {
     if (!clerkUser) return
@@ -211,6 +218,26 @@ export default function ProfilePage() {
       setShowCreateBot(false)
     } catch (err) {
       setBotActionError(err.message || 'Create failed.')
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const token = await getToken()
+      await api.delete('/users/me', token)
+      // Clear all local caches before signing out
+      Object.keys(sessionStorage)
+        .filter(k => k.startsWith('xo_'))
+        .forEach(k => sessionStorage.removeItem(k))
+      clearSessionCache()
+      clearTokenCache()
+      await signOut()
+      navigate('/play')
+    } catch (err) {
+      setDeleteError(err.message || 'Could not delete account. Try again.')
+      setDeleting(false)
     }
   }
 
@@ -578,7 +605,6 @@ export default function ProfilePage() {
               }
               setBotActionError(null)
               setShowCreateBot(true)
-              setMlModels([])
             }}
             className="text-sm font-medium transition-colors"
             style={{ color: 'var(--color-blue-600)' }}
@@ -587,6 +613,62 @@ export default function ProfilePage() {
           </button>
         )}
       </section>
+
+      {/* Danger Zone — hidden for admins */}
+      {dbUser.baRole !== 'admin' && (
+        <section className="space-y-3">
+          <SectionLabel>Danger Zone</SectionLabel>
+          <div
+            className="rounded-xl border p-5 space-y-3"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--color-red-200)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Delete account</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Permanently removes your account, all your bots, stats, and game history. This cannot be undone.
+              </p>
+            </div>
+
+            {deleteError && (
+              <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{deleteError}</p>
+            )}
+
+            {!deleteConfirm ? (
+              <button
+                onClick={() => setDeleteConfirm(true)}
+                className="text-sm font-medium px-4 py-1.5 rounded-lg border transition-colors hover:bg-[var(--color-red-50)]"
+                style={{ borderColor: 'var(--color-red-300)', color: 'var(--color-red-600)' }}
+              >
+                Delete my account…
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-red-600)' }}>
+                  Are you sure? This is permanent and cannot be undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleting}
+                    className="text-sm font-semibold px-4 py-1.5 rounded-lg transition-all hover:brightness-110 disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-red-600)', color: 'white' }}
+                  >
+                    {deleting ? 'Deleting…' : 'Yes, delete my account'}
+                  </button>
+                  <button
+                    onClick={() => { setDeleteConfirm(false); setDeleteError(null) }}
+                    disabled={deleting}
+                    className="text-sm font-medium px-4 py-1.5 rounded-lg border transition-colors"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
