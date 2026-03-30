@@ -496,6 +496,11 @@ export default function GameBoard({ roomName }) {
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             Round {round}{bestOf ? ` / First to ${bestOf}` : ''}
           </span>
+          {bestOf && (
+            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {(status === 'playing' || status === 'idle' ? round - 1 : round)} played
+            </div>
+          )}
           {misereMode && (
             <div className="text-xs font-medium" style={{ color: 'var(--color-amber-600)' }}>Misère mode</div>
           )}
