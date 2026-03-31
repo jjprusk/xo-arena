@@ -92,6 +92,14 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
               Manage account
               <span style={{ color: 'var(--text-muted)' }}>→</span>
             </button>
+            <button
+              onClick={() => { setOpen(false); navigate('/settings') }}
+              className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Settings
+              <span style={{ color: 'var(--text-muted)' }}>⚙</span>
+            </button>
 
             {isAdmin && (
               <button
