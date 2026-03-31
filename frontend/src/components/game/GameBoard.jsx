@@ -436,7 +436,7 @@ export default function GameBoard({ roomName }) {
     <div className={`flex flex-col items-center ${isAivai ? 'gap-3' : 'gap-4'} w-full max-w-sm mx-auto ${themeClass}`}>
       {/* Room name */}
       {roomName && (
-        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-3xl font-bold -my-1" style={{ fontFamily: 'var(--font-display)' }}>
           {roomName}
         </h1>
       )}
@@ -479,12 +479,24 @@ export default function GameBoard({ roomName }) {
       {/* Opponent chip — pvai / pvbot */}
       {(mode === 'pvai' || mode === 'pvbot') && (() => {
         const persona = MINIMAX_PERSONAS[difficulty?.toLowerCase()]
+        const gameOver = (status === 'won' || status === 'draw' || status === 'forfeit') && moveHistory.length > 0 && !analyzeMode
         return (
-          <div className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            <span style={{ color: 'var(--text-muted)' }}>vs</span>
-            <span className="font-medium">{aiOpponentName}</span>
-            {persona && aiImplementation === 'minimax' && (
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(ELO {persona.elo})</span>
+          <div className="flex items-center justify-between w-full text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <div className="flex items-center gap-1.5">
+              <span style={{ color: 'var(--text-muted)' }}>vs</span>
+              <span className="font-medium">{aiOpponentName}</span>
+              {persona && aiImplementation === 'minimax' && (
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(ELO {persona.elo})</span>
+              )}
+            </div>
+            {gameOver && (
+              <button
+                onClick={() => { setAnalyzeMode(true); setReplayIdx(0) }}
+                className="text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              >
+                Analyze
+              </button>
             )}
           </div>
         )
@@ -556,7 +568,7 @@ export default function GameBoard({ roomName }) {
       )}
 
       {/* Turn indicator */}
-      <div className="flex items-center gap-2 h-8">
+      <div className="flex items-center gap-2 h-6">
         {status === 'playing' && !analyzeMode && (
           <>
             <span className="font-bold" style={{ color: themeMarkColor[currentTurn] ?? MARK_COLOR[currentTurn] }}>{currentTurn}</span>
@@ -796,16 +808,6 @@ export default function GameBoard({ roomName }) {
         </div>
       )}
 
-      {/* Post-game analysis panel */}
-      {(status === 'won' || status === 'draw' || status === 'forfeit') && moveHistory.length > 0 && !analyzeMode && (
-        <button
-          onClick={() => { setAnalyzeMode(true); setReplayIdx(0) }}
-          className="w-full py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--bg-surface-hover)]"
-          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-        >
-          Analyze game
-        </button>
-      )}
 
       {analyzeMode && (
         <div className="w-full space-y-3">
@@ -855,13 +857,13 @@ export default function GameBoard({ roomName }) {
         <div className="flex gap-3 w-full">
           <button
             onClick={() => { rematch(); play('move') }}
-            className="flex-1 py-3 rounded-xl font-semibold border-2 border-[var(--color-blue-600)] text-[var(--color-blue-600)] hover:bg-[var(--color-blue-50)] transition-colors"
+            className="flex-1 py-2 rounded-xl font-semibold border-2 border-[var(--color-blue-600)] text-[var(--color-blue-600)] hover:bg-[var(--color-blue-50)] transition-colors"
           >
             Rematch
           </button>
           <button
             onClick={newGame}
-            className="flex-1 py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
+            className="flex-1 py-2 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
             style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
           >
             New Game
