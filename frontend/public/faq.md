@@ -13,7 +13,7 @@ PvP rooms, the leaderboard, puzzles, and the Gym.
 
 ### How do I create an account?
 Click **Sign in** in the top-right corner. You can register with an email and password
-or sign in with Google.
+or sign in with Google or Apple.
 
 ---
 
