@@ -28,7 +28,7 @@ a WebSocket connection.
 - **PvBot** — play against a built-in bot at Easy, Medium, Hard, or Tough difficulty
 - **PvP** — real-time match against another player in a named room
 - **PvBot (community)** — challenge a trained ML bot owned by another user
-- **Best-of-N** — series format (best of 3, 5, or 7 games)
+- **First to N** — series format (first to win 1, 2, or 3 games, or unlimited)
 
 ### Can I undo a move?
 In solo bot games you can request an undo; the bot will allow it. In PvP and community
