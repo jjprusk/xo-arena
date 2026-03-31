@@ -80,8 +80,14 @@ training episodes, and then deploy the bot to play against others on the leaderb
 or in community bot matches.
 
 ### What algorithms are available?
-Currently **DQN** (Deep Q-Network) and **Q-Learning** are supported. More algorithms
-may be added in future updates.
+Six brain architectures are available when creating a bot:
+
+- **DQN** — Deep Q-Network
+- **AlphaZero** — Monte Carlo Tree Search with neural network guidance
+- **Policy Gradient** — direct policy optimization
+- **Q-Learning** — classic tabular reinforcement learning
+- **SARSA** — on-policy variant of Q-Learning
+- **Monte Carlo** — episode-based value estimation
 
 ### How many bots can I create?
 By default each account can own up to **5 bots**. Accounts with the Bot Admin role
