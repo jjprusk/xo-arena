@@ -147,14 +147,14 @@ export default function AdminBotsPage() {
           <span className="text-lg">⚔️</span>
           <span className="text-sm font-semibold">Start Bot vs Bot Game</span>
         </div>
-        <div className="flex flex-wrap gap-2 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Bot 1 (X)</label>
             <select
               value={sgBot1}
               onChange={e => setSgBot1(e.target.value)}
-              className="px-2 py-1.5 rounded-lg border text-sm"
-              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', minWidth: '160px' }}
+              className="w-full px-2 py-1.5 rounded-lg border text-sm"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
             >
               <option value="">Select bot…</option>
               {bots.filter(b => b.botActive).map(b => (
@@ -167,8 +167,8 @@ export default function AdminBotsPage() {
             <select
               value={sgBot2}
               onChange={e => setSgBot2(e.target.value)}
-              className="px-2 py-1.5 rounded-lg border text-sm"
-              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', minWidth: '160px' }}
+              className="w-full px-2 py-1.5 rounded-lg border text-sm"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
             >
               <option value="">Select bot…</option>
               {bots.filter(b => b.botActive && b.id !== sgBot1).map(b => (
@@ -179,7 +179,7 @@ export default function AdminBotsPage() {
           <button
             onClick={startBotGame}
             disabled={!sgBot1 || !sgBot2 || sgBot1 === sgBot2 || sgStarting}
-            className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
             style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)' }}
           >
             {sgStarting ? 'Starting…' : 'Start Game'}

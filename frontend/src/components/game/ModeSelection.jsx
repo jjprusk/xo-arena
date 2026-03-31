@@ -144,7 +144,7 @@ function BotRow({ bot, isSignedIn, onChallenge }) {
       {isSignedIn ? (
         <button
           onClick={() => onChallenge(bot)}
-          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
+          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
           style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)' }}
         >
           Challenge
@@ -152,7 +152,7 @@ function BotRow({ bot, isSignedIn, onChallenge }) {
       ) : (
         <a
           href="/sign-in"
-          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
+          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
           style={{ backgroundColor: 'var(--bg-page)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
         >
           Sign in
@@ -430,7 +430,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                       <button
                         key={id}
                         onClick={() => setSelectedMark(id)}
-                        className="flex-1 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors"
+                        className="flex-1 py-2.5 rounded-lg text-sm font-bold border-2 transition-colors"
                         style={{
                           borderColor: selectedMark === id ? color : 'var(--border-default)',
                           backgroundColor: selectedMark === id ? bg : 'var(--bg-surface)',
@@ -447,7 +447,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 <div>
                   <button
                     onClick={() => setShowOptions(v => !v)}
-                    className="w-full flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                    className="w-full flex items-center justify-between text-xs px-2 py-2 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
                     style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
                   >
                     <span className="font-medium">Game options</span>
@@ -489,7 +489,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                               <button
                                 key={s}
                                 onClick={() => setLocalTimerSeconds(s)}
-                                className="flex-1 py-1 rounded-lg text-xs font-medium border-2 transition-colors"
+                                className="flex-1 py-2 rounded-lg text-xs font-medium border-2 transition-colors"
                                 style={{
                                   borderColor: localTimerSeconds === s ? 'var(--color-blue-600)' : 'var(--border-default)',
                                   backgroundColor: localTimerSeconds === s ? 'var(--color-blue-50)' : 'var(--bg-surface)',

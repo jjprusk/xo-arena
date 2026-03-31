@@ -25,7 +25,7 @@ export default function SettingsPage() {
             <button
               key={value}
               onClick={() => setTheme(value)}
-              className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all active:scale-[0.97] ${
+              className={`flex-1 flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl border-2 transition-all active:scale-[0.97] ${
                 theme === value
                   ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]'
                   : 'border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--color-gray-400)]'

@@ -739,7 +739,7 @@ export default function GameBoard({ roomName }) {
                 ${isLastPlaced ? 'mark-pop' : ''}
               `}
               style={{
-                minHeight: 88,
+                minHeight: 'clamp(72px, 24vw, 88px)',
                 fontFamily: 'var(--font-display)',
                 color: cell ? (themeMarkColor[cell] ?? MARK_COLOR[cell]) : 'transparent',
                 boxShadow: isWinCell ? 'var(--shadow-cell-win)' : 'var(--shadow-cell)',

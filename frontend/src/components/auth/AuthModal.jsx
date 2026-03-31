@@ -142,7 +142,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
             ✕
           </button>
 
-          <div className="p-8">
+          <div className="p-5 sm:p-8">
             {/* Header */}
             <div className="text-center mb-6">
               <div className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>

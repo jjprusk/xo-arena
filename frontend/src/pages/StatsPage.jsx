@@ -261,7 +261,7 @@ export default function StatsPage() {
                       </button>
 
                       {isExpanded && (
-                        <div className="px-4 py-4 border-t flex flex-wrap gap-8 items-start" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                        <div className="px-3 py-3 sm:px-4 sm:py-4 border-t flex flex-wrap gap-4 items-start" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
                           <div>
                             <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Opening Preferences</p>
                             {Object.keys(p.openingPreferences || {}).length > 0
@@ -291,7 +291,7 @@ export default function StatsPage() {
 function MiniStat({ label, value, color }) {
   return (
     <div className="px-3 text-center first:pl-0 last:pr-0">
-      <div className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', color: color || 'var(--text-primary)' }}>
+      <div className="text-lg sm:text-xl font-bold" style={{ fontFamily: 'var(--font-display)', color: color || 'var(--text-primary)' }}>
         {value}
       </div>
       <div className="text-[10px] mt-0.5 font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</div>
