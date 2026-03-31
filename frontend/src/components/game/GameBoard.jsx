@@ -50,12 +50,13 @@ export default function GameBoard({ roomName }) {
   const [xCreatorName, setXCreatorName] = useState(null)
   const [oCreatorName, setOCreatorName] = useState(null)
   const [autoRematchCountdown, setAutoRematchCountdown] = useState(null)
+  const [aivaiMaxReached, setAivaiMaxReached] = useState(false)
 
   const {
     board, currentTurn, status, winner, winLine, scores, round,
     playerMark, mode, difficulty, aiImplementation, mlModelId, pvbotModelId, isAIThinking,
     timerEnabled, timerSeconds, bestOf, seriesWinner, moveHistory, hintCell, misereMode,
-    boardTheme,
+    boardTheme, aivaiMaxGames,
     // AI vs AI
     ai2Implementation, ai2Difficulty, ai2ModelId,
     makeMove, setAIThinking, rematch, newGame, forfeit, undoMove, setHintCell,
@@ -122,6 +123,13 @@ export default function GameBoard({ roomName }) {
     const gameOver = status === 'won' || status === 'draw'
     if (!gameOver || seriesWinner) { setAutoRematchCountdown(null); return }
 
+    // Stop when max games reached
+    if (round >= aivaiMaxGames) {
+      setAutoRematchCountdown(null)
+      setAivaiMaxReached(true)
+      return
+    }
+
     let seconds = 3
     setAutoRematchCountdown(seconds)
     const interval = setInterval(() => {
@@ -135,7 +143,7 @@ export default function GameBoard({ roomName }) {
       }
     }, 1000)
     return () => { clearInterval(interval); setAutoRematchCountdown(null) }
-  }, [isAivai, status, seriesWinner])
+  }, [isAivai, status, seriesWinner, round, aivaiMaxGames])
 
   // ── Ticking thinking timer for the opponent ──────────────────────────────
   const thinkingStartRef = useRef(null)
@@ -188,6 +196,7 @@ export default function GameBoard({ roomName }) {
     if (status === 'idle') {
       gameStartRef.current = null
       gameRecordedRef.current = false
+      setAivaiMaxReached(false)
     }
   }, [status])
 
@@ -432,6 +441,23 @@ export default function GameBoard({ roomName }) {
         </h1>
       )}
 
+      {/* Aivai max games reached banner */}
+      {aivaiMaxReached && !seriesWinner && (
+        <div
+          className="w-full text-center py-3 px-4 rounded-xl font-semibold text-sm"
+          style={{
+            backgroundColor: 'var(--color-amber-50)',
+            color: 'var(--color-amber-700)',
+            border: '2px solid var(--color-amber-400)',
+          }}
+        >
+          Maximum {aivaiMaxGames} games reached — series ended{' '}
+          {scores.X === scores.O
+            ? `tied ${scores.X}–${scores.O}`
+            : `${scores.X > scores.O ? 'X' : 'O'} leads ${Math.max(scores.X, scores.O)}–${Math.min(scores.X, scores.O)}`}
+        </div>
+      )}
+
       {/* Series winner banner */}
       {seriesWinner && (
         <div
@@ -494,7 +520,9 @@ export default function GameBoard({ roomName }) {
         <ScorePill mark="X" score={scores.X} />
         <div className="text-center">
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Round {round}{bestOf ? ` / First to ${bestOf}` : ''}
+            Round {round}
+            {bestOf ? ` / First to ${bestOf}` : ''}
+            {bestOf ? ` / ${(status === 'playing' || status === 'idle' ? round - 1 : round)} played` : ''}
           </span>
           {misereMode && (
             <div className="text-xs font-medium" style={{ color: 'var(--color-amber-600)' }}>Misère mode</div>
@@ -502,13 +530,6 @@ export default function GameBoard({ roomName }) {
         </div>
         <ScorePill mark="O" score={scores.O} />
       </div>
-
-      {/* Games-played count — only during a best-of series */}
-      {bestOf && (
-        <div className="w-full text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-          {(status === 'playing' || status === 'idle' ? round - 1 : round)} games played
-        </div>
-      )}
 
       {/* Turn timer bar */}
       {timerEnabled && !isAivai && status === 'playing' && timeLeft !== null && (
@@ -718,7 +739,7 @@ export default function GameBoard({ roomName }) {
                 ${isLastPlaced ? 'mark-pop' : ''}
               `}
               style={{
-                minHeight: 88,
+                minHeight: 'clamp(72px, 24vw, 88px)',
                 fontFamily: 'var(--font-display)',
                 color: cell ? (themeMarkColor[cell] ?? MARK_COLOR[cell]) : 'transparent',
                 boxShadow: isWinCell ? 'var(--shadow-cell-win)' : 'var(--shadow-cell)',

@@ -87,7 +87,7 @@ export default function PuzzlePage() {
       </div>
 
       {/* Type filter */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-1.5 flex-wrap">
         {ALL_TYPES.map(t => {
           const meta = TYPE_META[t]
           const active = activeType === t
@@ -225,7 +225,7 @@ export default function PuzzlePage() {
                   disabled={!isClickable}
                   className={`aspect-square flex items-center justify-center rounded-xl text-4xl font-bold border-2 transition-all select-none ${isClickable ? 'hover:bg-[var(--bg-surface-hover)] hover:scale-[1.04] cursor-pointer' : 'cursor-default'}`}
                   style={{
-                    minHeight: 72,
+                    minHeight: 'clamp(56px, 20vw, 72px)',
                     fontFamily: 'var(--font-display)',
                     color: cell ? MARK_COLOR[cell] : 'transparent',
                     borderColor,

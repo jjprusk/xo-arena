@@ -206,6 +206,12 @@ export const api = {
     deleteBot: (id, token) => request('DELETE', `/admin/bots/${id}`, null, token),
     getBotLimits: (token) => api.get('/admin/bot-limits', token),
     setBotLimits: (body, token) => api.patch('/admin/bot-limits', body, token),
+    getAivaiConfig: (token) => api.get('/admin/aivai-config', token),
+    setAivaiConfig: (body, token) => api.patch('/admin/aivai-config', body, token),
+  },
+
+  config: {
+    getAivai: () => api.get('/config/aivai'),
   },
 
   botGames: {

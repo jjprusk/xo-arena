@@ -88,7 +88,7 @@ export default function LeaderboardPage() {
           className="w-44"
         />
         {/* Show bots toggle */}
-        <label className="flex items-center gap-2 cursor-pointer select-none ml-auto">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
           <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Show bots</span>
           <button
             role="switch"
@@ -115,7 +115,7 @@ export default function LeaderboardPage() {
         <>
           {/* Podium */}
           {top3.length > 0 && (
-            <div className="flex items-end justify-center gap-4 py-2">
+            <div className="flex items-end justify-center gap-2 sm:gap-4 py-2">
               {[top3[1], top3[0], top3[2]].filter(Boolean).map((entry) => {
                 const rank = entry.rank - 1
                 const isFirst = rank === 0
@@ -123,12 +123,11 @@ export default function LeaderboardPage() {
                   <Link
                     key={entry.user.id}
                     to={entry.user.isBot ? `/bots/${entry.user.id}` : '#'}
-                    className={`flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-3 transition-transform no-underline ${isFirst ? 'pb-6 scale-105' : ''}`}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 sm:px-4 py-3 transition-transform no-underline flex-1 max-w-[120px] ${isFirst ? 'pb-6 scale-105' : ''}`}
                     style={{
                       backgroundColor: PODIUM_COLORS[rank]?.bg || 'var(--bg-surface)',
                       borderColor: PODIUM_COLORS[rank]?.border || 'var(--border-default)',
                       boxShadow: 'var(--shadow-card)',
-                      minWidth: 100,
                     }}
                   >
                     <span className="text-2xl">{PODIUM_COLORS[rank]?.label}</span>

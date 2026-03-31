@@ -112,7 +112,7 @@ export default function PvPBoard() {
                 ${isPlayable ? 'hover:bg-[var(--bg-surface-hover)] hover:scale-[1.04] active:scale-[0.97] cursor-pointer' : 'cursor-default'}
               `}
               style={{
-                minHeight: 88,
+                minHeight: 'clamp(72px, 24vw, 88px)',
                 fontFamily: 'var(--font-display)',
                 color: cell ? MARK_COLOR[cell] : 'transparent',
                 boxShadow: isWinCell ? 'var(--shadow-cell-win)' : 'var(--shadow-cell)',

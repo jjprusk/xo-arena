@@ -191,7 +191,7 @@ export default function GymPage() {
       ) : (
         <div className="grid lg:grid-cols-[280px_1fr] gap-6">
           {/* Bot sidebar */}
-          <aside>
+          <aside className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>Your Bots</p>
             {bots.length === 0 ? (
               <div className="text-center py-6 px-3">
@@ -199,7 +199,7 @@ export default function GymPage() {
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Go to Profile → Bots to create bots.</p>
               </div>
             ) : (
-              <ListTable maxHeight="clamp(150px, calc(100dvh - 320px), 500px)">
+              <ListTable maxHeight="clamp(120px, calc(100dvh - 520px), 500px)">
                 <thead>
                   <tr>
                     <ListTh>Bot</ListTh>
@@ -251,7 +251,7 @@ export default function GymPage() {
           </aside>
 
           {/* Detail panel */}
-          <div>
+          <div className="min-w-0">
             {!selectedBot ? (
               <div className="rounded-xl border p-12 text-center" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
                 <p className="text-lg font-semibold mb-1">No bot selected</p>
@@ -280,7 +280,7 @@ export default function GymPage() {
                       <StatusBadge status={selectedModel.status} />
                     </div>
                     {selectedBot.bio && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selectedBot.bio}</p>}
-                    <div className="flex gap-4 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                       <span>{selectedModel.algorithm?.replace(/_/g, '-')}</span>
                       <span>{selectedModel.totalEpisodes.toLocaleString()} / {selectedModel.maxEpisodes > 0 ? selectedModel.maxEpisodes.toLocaleString() : '∞'} episodes</span>
                       <span>ELO {Math.round(selectedBot.eloRating || 1200)}</span>
@@ -304,10 +304,10 @@ export default function GymPage() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                <div className="flex gap-1 border-b overflow-x-auto scrollbar-none" style={{ borderColor: 'var(--border-default)' }}>
                   {TAB_IDS.map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
-                      className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
+                      className={`whitespace-nowrap shrink-0 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}
                       style={{ color: activeTab === tab ? undefined : 'var(--text-secondary)' }}>
                       {tab}
                     </button>
