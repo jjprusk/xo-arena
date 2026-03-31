@@ -3,12 +3,12 @@
 ## Getting Started
 
 ### What is XO Arena?
-XO Arena is a competitive Tic-Tac-Toe platform. You can play against AI opponents,
+XO Arena is a competitive Tic-Tac-Toe platform. You can play against built-in bots,
 challenge other players in real-time PvP rooms, solve puzzles, and train your own
 machine-learning bots in the Gym.
 
 ### Do I need an account to play?
-No — you can play against AI opponents without signing in. An account is required for
+No — you can play against bots without signing in. An account is required for
 PvP rooms, the leaderboard, puzzles, and the Gym.
 
 ### How do I create an account?
@@ -25,18 +25,18 @@ opponent — they enter it on their Play page to join. Games are played in real 
 a WebSocket connection.
 
 ### What game modes are available?
-- **PvAI** — play against a built-in AI at Easy, Medium, Hard, or Tough difficulty
+- **PvBot** — play against a built-in bot at Easy, Medium, Hard, or Tough difficulty
 - **PvP** — real-time match against another player in a named room
-- **PvBot** — challenge a trained ML bot owned by another user
+- **PvBot (community)** — challenge a trained ML bot owned by another user
 - **Best-of-N** — series format (best of 3, 5, or 7 games)
 
 ### Can I undo a move?
-In PvAI mode you can request an undo; the AI will allow it. In PvP and PvBot modes
-undos are not permitted.
+In solo bot games you can request an undo; the bot will allow it. In PvP and community
+bot games undos are not permitted.
 
 ### What are hints?
-In PvAI mode, hints highlight the strongest available move according to the current AI.
-Toggle hints from the game controls.
+In solo bot games, hints highlight the strongest available move. Toggle hints from the
+game controls.
 
 ---
 
@@ -47,8 +47,8 @@ XO Arena uses the standard ELO formula. Winning against a higher-rated opponent 
 more points; losing to a lower-rated opponent loses more. Your starting rating is 1200.
 
 ### What counts toward my ELO?
-PvP and PvBot games update both players' ratings. PvAI games against built-in opponents
-do not affect your ELO.
+PvP and community bot games update both players' ratings. Games against the built-in
+bots do not affect your ELO.
 
 ### What is the leaderboard period filter?
 - **All** — lifetime win rate
@@ -77,7 +77,7 @@ does not affect scoring.
 ### What is the Gym?
 The Gym is where you train ML (machine-learning) bots. You configure a model, run
 training episodes, and then deploy the bot to play against others on the leaderboard
-or in PvBot mode.
+or in community bot matches.
 
 ### What algorithms are available?
 Currently **DQN** (Deep Q-Network) and **Q-Learning** are supported. More algorithms
