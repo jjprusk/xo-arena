@@ -140,6 +140,6 @@ ELO updates run after the game is recorded on the server. If the app was offline
 the game the result may not have been saved. Check your Stats page to confirm the game
 appears there.
 
-### I found a bug. How do I report it?
+### I found a bug or have feedback. How do I submit it?
 Use the feedback button (💬) in the bottom-right corner of any page to submit a bug
 report, optionally with a screenshot of the issue.
