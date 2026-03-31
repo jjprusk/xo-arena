@@ -90,8 +90,7 @@ Six brain architectures are available when creating a bot:
 - **Monte Carlo** — episode-based value estimation
 
 ### How many bots can I create?
-By default each account can own up to **5 bots**. Accounts with the Bot Admin role
-have no limit.
+By default each account can own up to **5 bots**.
 
 ### Can I delete a bot?
 Yes — from the Bots page, click **Delete** on any bot you own. Deletion is permanent
