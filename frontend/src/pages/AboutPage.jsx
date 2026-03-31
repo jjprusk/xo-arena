@@ -62,6 +62,18 @@ export default function AboutPage() {
           ))}
         </div>
       </section>
+
+      {/* Help */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Help</h2>
+        <Link
+          to="/faq"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--bg-surface-hover)]"
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-surface)' }}
+        >
+          Frequently Asked Questions →
+        </Link>
+      </section>
     </div>
   )
 }
