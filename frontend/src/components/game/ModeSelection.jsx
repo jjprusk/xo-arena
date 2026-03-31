@@ -192,7 +192,7 @@ function getBotPlayConfig(bot) {
   return { implementation: 'ml', difficulty: 'intermediate', mlModelId: id }
 }
 
-const BEST_OF_OPTIONS = [{ label: 'First to 1', value: 1 }, { label: 'First to 2', value: 2 }, { label: 'First to 3', value: 3 }, { label: 'Unlimited', value: null }]
+const BEST_OF_OPTIONS = [{ label: 'First to 1', value: 1 }, { label: 'First to 2', value: 2 }, { label: 'First to 3', value: 3 }, { label: 'First to 5', value: 5 }]
 const TIMER_PRESETS = [15, 30, 60]
 const BOARD_THEMES = [
   { id: 'default', label: 'Default' },
@@ -207,6 +207,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     setAI2Implementation, setAI2Difficulty, setAI2ModelId,
     setPlayerMark, setAlternating, setPlayerName, startGame,
     setTimerEnabled, setTimerSeconds, setBestOf, setMisereMode, setBoardTheme,
+    setAivaiMaxGames,
     timerEnabled, timerSeconds, bestOf, misereMode, boardTheme,
   } = useGameStore()
 
@@ -322,7 +323,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     onStart?.()
   }
 
-  function handleWatchBotVsBot() {
+  async function handleWatchBotVsBot() {
     const bot1 = bots.find(b => b.id === aivaiBot1Id)
     const bot2 = bots.find(b => b.id === aivaiBot2Id)
     if (!bot1 || !bot2) return
@@ -336,6 +337,12 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     setAI2Implementation(cfg2.implementation)
     setAI2Difficulty(cfg2.difficulty)
     setAI2ModelId(cfg2.mlModelId)
+    try {
+      const { maxGames } = await api.config.getAivai()
+      setAivaiMaxGames(maxGames)
+    } catch {
+      setAivaiMaxGames(5)
+    }
     startGame()
     onStart?.()
   }

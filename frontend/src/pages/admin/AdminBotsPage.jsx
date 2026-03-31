@@ -33,7 +33,32 @@ export default function AdminBotsPage() {
   const [sgResult, setSgResult] = useState(null)
   const [sgError, setSgError] = useState(null)
 
+  // Aivai config
+  const [aivaiMaxGames, setAivaiMaxGamesLocal] = useState(5)
+  const [aivaiSaving, setAivaiSaving] = useState(false)
+  const [aivaiSaved, setAivaiSaved] = useState(false)
+
   const totalPages = Math.ceil(total / LIMIT)
+
+  useEffect(() => {
+    getToken().then(token => api.admin.getAivaiConfig(token).then(d => setAivaiMaxGamesLocal(d.maxGames)).catch(() => {}))
+  }, [])
+
+  async function saveAivaiConfig() {
+    setAivaiSaving(true)
+    setAivaiSaved(false)
+    try {
+      const token = await getToken()
+      const { maxGames } = await api.admin.setAivaiConfig({ maxGames: aivaiMaxGames }, token)
+      setAivaiMaxGamesLocal(maxGames)
+      setAivaiSaved(true)
+      setTimeout(() => setAivaiSaved(false), 2000)
+    } catch {
+      // ignore
+    } finally {
+      setAivaiSaving(false)
+    }
+  }
 
   const load = useCallback(async (q, p) => {
     setLoading(true)
@@ -173,6 +198,44 @@ export default function AdminBotsPage() {
             </a>
           </p>
         )}
+      </div>
+
+      {/* Aivai config */}
+      <div
+        className="rounded-xl border p-4 space-y-3"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚙️</span>
+          <span className="text-sm font-semibold">Bot vs Bot Challenge Settings</span>
+        </div>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Max games per challenge
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={99}
+              value={aivaiMaxGames}
+              onChange={e => setAivaiMaxGamesLocal(Math.max(1, parseInt(e.target.value) || 1))}
+              className="px-2 py-1.5 rounded-lg border text-sm w-24"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <button
+            onClick={saveAivaiConfig}
+            disabled={aivaiSaving}
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
+            style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+          >
+            {aivaiSaving ? 'Saving…' : aivaiSaved ? 'Saved ✓' : 'Save'}
+          </button>
+        </div>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          When this limit is reached without a series winner, the challenge stops automatically.
+        </p>
       </div>
 
       {/* Search */}

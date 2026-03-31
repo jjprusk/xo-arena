@@ -715,4 +715,34 @@ router.patch('/bot-limits', async (req, res, next) => {
   }
 })
 
+/**
+ * GET /api/v1/admin/aivai-config
+ */
+router.get('/aivai-config', async (_req, res, next) => {
+  try {
+    const maxGames = await getSystemConfig('aivai.maxGames', 5)
+    res.json({ maxGames })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/aivai-config
+ */
+router.patch('/aivai-config', async (req, res, next) => {
+  try {
+    const { maxGames } = req.body
+    if (maxGames !== undefined) {
+      const v = parseInt(maxGames)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'maxGames must be a positive integer' })
+      await setSystemConfig('aivai.maxGames', v)
+    }
+    const updated = await getSystemConfig('aivai.maxGames', 5)
+    res.json({ maxGames: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
 export default router
