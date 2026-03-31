@@ -4,8 +4,11 @@ import { Link } from 'react-router-dom'
 export default function AboutPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-8">
-      <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+      <div className="pb-4 border-b flex items-end gap-3" style={{ borderColor: 'var(--border-default)' }}>
         <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>About</h1>
+        <span className="text-sm font-mono pb-1" style={{ color: 'var(--text-secondary)' }}>
+          v{import.meta.env.VITE_APP_VERSION}
+        </span>
       </div>
 
       {/* What is XO Arena */}
