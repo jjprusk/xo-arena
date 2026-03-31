@@ -663,9 +663,21 @@ router.patch('/bots/:id', async (req, res, next) => {
  */
 router.delete('/bots/:id', async (req, res, next) => {
   try {
-    const bot = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true, isBot: true } })
+    const bot = await db.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, isBot: true, botModelId: true },
+    })
     if (!bot || !bot.isBot) return res.status(404).json({ error: 'Bot not found' })
-    await db.user.delete({ where: { id: req.params.id } })
+
+    await db.$transaction(async (tx) => {
+      await tx.game.deleteMany({ where: { player1Id: bot.id } })
+      await tx.user.delete({ where: { id: bot.id } })
+    })
+
+    if (bot.botModelId) {
+      await db.mLModel.delete({ where: { id: bot.botModelId } }).catch(() => {})
+    }
+
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bot not found' })
