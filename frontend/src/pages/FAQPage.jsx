@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 function slugify(text) {
   return String(text)
@@ -128,7 +129,7 @@ export default function FAQPage() {
         : (
           <div className="rounded-xl border p-8" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
             <div className="prose-guide">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{displayContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{displayContent}</ReactMarkdown>
             </div>
           </div>
         )
