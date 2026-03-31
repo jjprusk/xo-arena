@@ -1,136 +1,258 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useGameStore } from '../gameStore.js'
 
-function getState() {
+function s() {
   return useGameStore.getState()
 }
 
 function reset() {
-  useGameStore.getState().newGame()
+  s().newGame()
+}
+
+function startPlaying() {
+  s().startGame()
+}
+
+// Win sequence helper: X wins top row (0,1,2); O plays 3,4
+function playXWinsTopRow() {
+  s().makeMove(0) // X
+  s().makeMove(3) // O
+  s().makeMove(1) // X
+  s().makeMove(4) // O
+  s().makeMove(2) // X wins [0,1,2]
+}
+
+// Draw sequence: fills board with no winner
+// Board result:
+//  X | O | X
+//  X | O | O
+//  O | X | X
+function playDraw() {
+  s().makeMove(0) // X
+  s().makeMove(1) // O
+  s().makeMove(2) // X
+  s().makeMove(4) // O
+  s().makeMove(3) // X
+  s().makeMove(5) // O
+  s().makeMove(7) // X
+  s().makeMove(6) // O
+  s().makeMove(8) // X — board full, no winner
 }
 
 describe('gameStore', () => {
   beforeEach(reset)
 
-  describe('startGame', () => {
-    it('sets status to playing', () => {
-      getState().startGame()
-      expect(getState().status).toBe('playing')
-    })
-
-    it('resets board to empty', () => {
-      getState().startGame()
-      expect(getState().board).toEqual(Array(9).fill(null))
-    })
-
-    it('starts with X turn', () => {
-      getState().startGame()
-      expect(getState().currentTurn).toBe('X')
-    })
-  })
+  // ── makeMove ─────────────────────────────────────────────────────────────
 
   describe('makeMove', () => {
-    beforeEach(() => getState().startGame())
+    beforeEach(startPlaying)
 
-    it('places the current mark', () => {
-      getState().makeMove(4)
-      expect(getState().board[4]).toBe('X')
+    it('places mark on board at the correct index', () => {
+      s().makeMove(4)
+      expect(s().board[4]).toBe('X')
     })
 
-    it('switches turn after move', () => {
-      getState().makeMove(4)
-      expect(getState().currentTurn).toBe('O')
+    it('switches currentTurn from X to O after move', () => {
+      s().makeMove(4)
+      expect(s().currentTurn).toBe('O')
     })
 
-    it('ignores move on occupied cell', () => {
-      getState().makeMove(4)
-      getState().makeMove(4)
-      expect(getState().board[4]).toBe('X')
-      expect(getState().currentTurn).toBe('O')
+    it('does nothing on an occupied cell', () => {
+      s().makeMove(4) // X plays 4
+      s().makeMove(4) // O tries same cell
+      expect(s().board[4]).toBe('X')
+      expect(s().currentTurn).toBe('O') // turn did NOT switch back
     })
 
-    it('ignores move when game not playing', () => {
-      getState().newGame()
-      getState().makeMove(0)
-      expect(getState().board[0]).toBeNull()
+    it('does nothing when status is not playing', () => {
+      s().newGame() // status becomes 'idle'
+      s().makeMove(0)
+      expect(s().board[0]).toBeNull()
+    })
+
+    it('detects win — status becomes "won" and winner is set', () => {
+      playXWinsTopRow()
+      expect(s().status).toBe('won')
+      expect(s().winner).toBe('X')
+      expect(s().winLine).toEqual([0, 1, 2])
+    })
+
+    it('detects draw — status becomes "draw" and winner is null', () => {
+      playDraw()
+      expect(s().status).toBe('draw')
+      expect(s().winner).toBeNull()
+    })
+
+    it('misere mode flips winner (player who completes a line loses)', () => {
+      s().setMisereMode(true)
+      s().startGame()
+      // X completes top row, so in misere X *loses* → winner should be O
+      playXWinsTopRow()
+      expect(s().winner).toBe('O')
+      s().setMisereMode(false) // clean up
+    })
+
+    it('increments score for the winner', () => {
+      playXWinsTopRow()
+      expect(s().scores.X).toBe(1)
+      expect(s().scores.O).toBe(0)
+    })
+
+    it('sets seriesWinner when a player reaches bestOf target wins', () => {
+      s().setBestOf(1) // first win ends the series
+      s().startGame()
+      playXWinsTopRow()
+      expect(s().seriesWinner).toBe('X')
+    })
+
+    it('does not set seriesWinner before target is reached', () => {
+      s().setBestOf(3)
+      s().startGame()
+      playXWinsTopRow()
+      expect(s().seriesWinner).toBeNull()
     })
   })
 
-  describe('win detection', () => {
-    beforeEach(() => getState().startGame())
+  // ── undoMove ─────────────────────────────────────────────────────────────
 
-    it('detects X winning top row', () => {
-      const s = getState()
-      // X: 0, O: 3, X: 1, O: 4, X: 2
-      s.makeMove(0); s.makeMove(3)
-      s.makeMove(1); s.makeMove(4)
-      s.makeMove(2)
-      expect(getState().status).toBe('won')
-      expect(getState().winner).toBe('X')
-      expect(getState().winLine).toEqual([0, 1, 2])
+  describe('undoMove', () => {
+    it('reverts the last 2 moves in pvai mode', () => {
+      s().setMode('pvai')
+      s().startGame()
+      s().makeMove(0) // X (human)
+      s().makeMove(4) // O (AI)
+      const boardBefore = [...s().board]
+      s().makeMove(2) // X again
+      s().makeMove(6) // O again
+      s().undoMove()
+      // Should revert to state before last 2 moves
+      expect(s().board).toEqual(boardBefore)
     })
 
-    it('updates score on win', () => {
-      const s = getState()
-      s.makeMove(0); s.makeMove(3)
-      s.makeMove(1); s.makeMove(4)
-      s.makeMove(2)
-      expect(getState().scores.X).toBe(1)
+    it('undoes only 1 move when only 1 move has been made', () => {
+      s().setMode('pvai')
+      s().startGame()
+      s().makeMove(4) // X
+      s().undoMove()
+      expect(s().board).toEqual(Array(9).fill(null))
+      expect(s().currentTurn).toBe('X')
+    })
+
+    it('does nothing when not in pvai mode', () => {
+      s().setMode('pvp')
+      s().startGame()
+      s().makeMove(0) // X
+      s().makeMove(4) // O
+      s().undoMove()
+      // Board unchanged
+      expect(s().board[0]).toBe('X')
+      expect(s().board[4]).toBe('O')
+    })
+
+    it('does nothing when status is not playing', () => {
+      s().setMode('pvai')
+      s().startGame()
+      s().makeMove(0)
+      // Force game to a non-playing status
+      useGameStore.setState({ status: 'won' })
+      s().undoMove()
+      // Board still has the move
+      expect(s().board[0]).toBe('X')
     })
   })
 
-  describe('draw detection', () => {
-    it('detects draw', () => {
-      getState().startGame()
-      const s = getState()
-      // Draw sequence: X O X O X O O X O — no winner
-      // X:0 O:1 X:2 O:4 X:3 O:5 X:7 O:6 X:8
-      s.makeMove(0); s.makeMove(1)
-      s.makeMove(2); s.makeMove(4)
-      s.makeMove(3); s.makeMove(5)
-      s.makeMove(7); s.makeMove(6)
-      s.makeMove(8)
-      const state = getState()
-      expect(state.status).toBe('draw')
-      expect(state.winner).toBeNull()
-    })
-  })
+  // ── rematch ───────────────────────────────────────────────────────────────
 
   describe('rematch', () => {
-    it('resets board but preserves scores', () => {
-      getState().startGame()
-      const s = getState()
-      // X wins
-      s.makeMove(0); s.makeMove(3)
-      s.makeMove(1); s.makeMove(4)
-      s.makeMove(2)
-      getState().rematch()
-      const state = getState()
-      expect(state.board).toEqual(Array(9).fill(null))
-      expect(state.scores.X).toBe(1)
-      expect(state.status).toBe('playing')
+    beforeEach(startPlaying)
+
+    it('resets board to all-null', () => {
+      s().makeMove(0)
+      s().rematch()
+      expect(s().board).toEqual(Array(9).fill(null))
+    })
+
+    it('preserves scores after rematch', () => {
+      playXWinsTopRow()
+      s().rematch()
+      expect(s().scores.X).toBe(1)
+    })
+
+    it('flips currentTurn', () => {
+      const before = s().currentTurn
+      s().rematch()
+      expect(s().currentTurn).toBe(before === 'X' ? 'O' : 'X')
     })
 
     it('increments round', () => {
-      getState().startGame()
-      const initial = getState().round
-      getState().makeMove(0)
-      // force rematch after a win
-      getState().startGame()
-      getState().rematch()
-      // round should go up by 1 from whatever startGame set
+      const r = s().round
+      s().rematch()
+      expect(s().round).toBe(r + 1)
+    })
+
+    it('does nothing when seriesWinner is already set', () => {
+      useGameStore.setState({ seriesWinner: 'X' })
+      const r = s().round
+      s().rematch()
+      expect(s().round).toBe(r) // no increment
+    })
+
+    it('alternates playerMark when alternating is enabled', () => {
+      s().setAlternating(true)
+      const mark = s().playerMark
+      s().rematch()
+      expect(s().playerMark).toBe(mark === 'X' ? 'O' : 'X')
     })
   })
 
+  // ── forfeit ───────────────────────────────────────────────────────────────
+
+  describe('forfeit', () => {
+    beforeEach(startPlaying)
+
+    it('sets status to "forfeit"', () => {
+      s().forfeit()
+      expect(s().status).toBe('forfeit')
+    })
+
+    it('sets winner to the opponent (non-current-turn player)', () => {
+      // currentTurn starts at X, so forfeiting means O wins
+      expect(s().currentTurn).toBe('X')
+      s().forfeit()
+      expect(s().winner).toBe('O')
+    })
+
+    it('increments the opponent score', () => {
+      s().forfeit()
+      expect(s().scores.O).toBe(1)
+      expect(s().scores.X).toBe(0)
+    })
+
+    it('sets seriesWinner if forfeit win reaches bestOf target', () => {
+      s().setBestOf(1)
+      s().startGame()
+      s().forfeit()
+      expect(s().seriesWinner).toBe('O')
+    })
+  })
+
+  // ── newGame ───────────────────────────────────────────────────────────────
+
   describe('newGame', () => {
     it('resets scores and returns to idle', () => {
-      getState().startGame()
-      getState().makeMove(0)
-      getState().newGame()
-      const state = getState()
-      expect(state.status).toBe('idle')
-      expect(state.scores).toEqual({ X: 0, O: 0 })
-      expect(state.mode).toBeNull()
+      s().startGame()
+      s().makeMove(0)
+      s().newGame()
+      expect(s().status).toBe('idle')
+      expect(s().scores).toEqual({ X: 0, O: 0 })
+      expect(s().mode).toBeNull()
+    })
+
+    it('clears board and round', () => {
+      s().startGame()
+      s().newGame()
+      expect(s().board).toEqual(Array(9).fill(null))
+      expect(s().round).toBe(1)
     })
   })
 })
