@@ -520,7 +520,9 @@ export default function GameBoard({ roomName }) {
         <ScorePill mark="X" score={scores.X} />
         <div className="text-center">
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Round {round}{bestOf ? ` / First to ${bestOf}` : ''}
+            Round {round}
+            {bestOf ? ` / First to ${bestOf}` : ''}
+            {bestOf ? ` / ${(status === 'playing' || status === 'idle' ? round - 1 : round)} played` : ''}
           </span>
           {misereMode && (
             <div className="text-xs font-medium" style={{ color: 'var(--color-amber-600)' }}>Misère mode</div>
@@ -528,13 +530,6 @@ export default function GameBoard({ roomName }) {
         </div>
         <ScorePill mark="O" score={scores.O} />
       </div>
-
-      {/* Games-played count — only during a best-of series */}
-      {bestOf && (
-        <div className="w-full text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-          {(status === 'playing' || status === 'idle' ? round - 1 : round)} games played
-        </div>
-      )}
 
       {/* Turn timer bar */}
       {timerEnabled && !isAivai && status === 'playing' && timeLeft !== null && (

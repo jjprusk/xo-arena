@@ -70,9 +70,9 @@ function MLLimitsPanel() {
           Set to <strong>0</strong> for no limit. Changes take effect on the next training session.
         </p>
         <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
             <label className="space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Default max episodes per model</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Max episodes per model</span>
               <input
                 type="number"
                 min="0"
@@ -106,7 +106,7 @@ function MLLimitsPanel() {
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Default model limit per user</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Max models per user</span>
               <input
                 type="number"
                 min="0"
@@ -120,18 +120,17 @@ function MLLimitsPanel() {
           {/* DQN neural net defaults */}
           <div className="pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
             <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>DQN Neural Network (applies to new models only)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
               <label className="space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Default hidden layers</span>
                 <input
                   type="text"
-                  placeholder="e.g. 32 or 64, 64"
+                  placeholder='e.g. "32" or "64, 64"'
                   value={form.dqnDefaultHiddenLayers}
                   onChange={e => setForm(f => ({ ...f, dqnDefaultHiddenLayers: e.target.value }))}
                   className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none font-mono"
                   style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                 />
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Comma-separated sizes, e.g. "32" or "64, 128"</span>
               </label>
               <label className="space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Max hidden layers</span>
