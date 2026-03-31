@@ -36,6 +36,9 @@ export const usePvpStore = create((set, get) => ({
   // Reactions
   incomingReaction: null,  // { emoji, fromMark, id } — cleared after display
 
+  // Optimistic move — snapshot before the move for rollback on server rejection
+  _optimisticSnapshot: null,  // { board, currentTurn } | null
+
   // ── Actions ──────────────────────────────────────────────────────
 
   /**
@@ -79,9 +82,19 @@ export const usePvpStore = create((set, get) => ({
   },
 
   /**
-   * Make a move (player only).
+   * Make a move (player only) — optimistically applied immediately, rolled
+   * back if the server rejects the move via the `error` event.
    */
   move(cellIndex) {
+    const { board, currentTurn, myMark } = get()
+    const newBoard = [...board]
+    newBoard[cellIndex] = myMark
+    const oppTurn = myMark === 'X' ? 'O' : 'X'
+    set({
+      board: newBoard,
+      currentTurn: oppTurn,
+      _optimisticSnapshot: { board, currentTurn },
+    })
     getSocket().emit('game:move', { cellIndex })
   },
 
@@ -117,6 +130,7 @@ export const usePvpStore = create((set, get) => ({
       scores: { X: 0, O: 0 }, round: 1, winner: null, winLine: null,
       spectatorCount: 0, connected: false, error: null, isAutoRoom: false,
       incomingReaction: null, opponentName: null, opponentElo: null,
+      _optimisticSnapshot: null,
     })
   },
 
@@ -189,7 +203,7 @@ export const usePvpStore = create((set, get) => ({
     })
 
     socket.on('game:moved', ({ board, currentTurn, status, winner, winLine, scores }) => {
-      set({ board, currentTurn, scores })
+      set({ board, currentTurn, scores, _optimisticSnapshot: null })
       if (status === 'finished') {
         set({ status: 'finished', winner, winLine })
         useSoundStore.getState().play(winner ? 'win' : 'draw')
@@ -219,6 +233,17 @@ export const usePvpStore = create((set, get) => ({
       ) {
         getSocket().emit('room:join', { slug: state.slug, role: 'spectator' })
         set({ role: 'spectator' })
+        return
+      }
+      // Roll back an optimistic move if one is pending
+      if (state._optimisticSnapshot) {
+        set({
+          board: state._optimisticSnapshot.board,
+          currentTurn: state._optimisticSnapshot.currentTurn,
+          _optimisticSnapshot: null,
+          error: message,
+        })
+        setTimeout(() => set({ error: null }), 2000)
         return
       }
       set({ error: message })

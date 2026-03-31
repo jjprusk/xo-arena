@@ -34,11 +34,15 @@ model User {
   isBot           Boolean          @default(false)
   botEloResetAt   DateTime?
   botGamesPlayed  Int              @default(0)
+  creditsHpc      Int              @default(0)
+  creditsBpc      Int              @default(0)
+  creditsTc       Int              @default(0)
   gamesAsPlayer1  Game[]           @relation("Player1Games")
   gamesAsPlayer2  Game[]           @relation("Player2Games")
   gamesWon        Game[]           @relation("WinnerGames")
   eloHistory      UserEloHistory[]
   userRoles       UserRole[]
+  notifications   UserNotification[]
 
   @@map("users")
 }
@@ -367,6 +371,19 @@ model BaVerification {
   updatedAt  DateTime?
 
   @@map("ba_verifications")
+}
+
+model UserNotification {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String
+  payload     Json
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, deliveredAt])
+  @@map("user_notifications")
 }
 
 enum Role {

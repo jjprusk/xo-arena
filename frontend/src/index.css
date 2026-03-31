@@ -178,6 +178,46 @@
     padding: 0;
   }
 
+  html {
+    /* Hide the page-level scrollbar completely. A hidden scrollbar takes 0px, so the
+       layout never shifts when content height changes between pages. Scrolling still
+       works via wheel, trackpad, and keyboard. */
+    overflow-y: scroll;
+    scrollbar-width: none; /* Firefox */
+  }
+
+  html::-webkit-scrollbar {
+    display: none; /* Chrome / Safari / Edge */
+  }
+
+  /* Scrollable containers (tables, sidebars, etc.) get a slim styled scrollbar.
+     Transparent track = invisible when content fits; thumb appears on overflow. */
+  *:not(html)::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *:not(html)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *:not(html)::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+  }
+
+  *:not(html)::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .dark *:not(html)::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .dark *:not(html)::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
+
   body {
     font-family: var(--font-body);
     background-color: var(--bg-page);
@@ -193,4 +233,13 @@
     display: flex;
     flex-direction: column;
   }
+}
+
+@keyframes xo-page-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.xo-page-transition {
+  animation: xo-page-in 120ms ease-out both;
 }

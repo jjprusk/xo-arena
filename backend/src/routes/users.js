@@ -68,6 +68,64 @@ router.post('/sync', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * DELETE /api/v1/users/me
+ * Permanently deletes the authenticated user's account.
+ * Blocked for admin accounts.
+ */
+router.delete('/me', requireAuth, async (req, res, next) => {
+  try {
+    const baUser = await db.baUser.findUnique({ where: { id: req.auth.userId } })
+    if (!baUser) return res.status(404).json({ error: 'User not found' })
+
+    if (baUser.role === 'admin') {
+      return res.status(403).json({ error: 'Admin accounts cannot be self-deleted.' })
+    }
+
+    const domainUser = await db.user.findUnique({ where: { betterAuthId: baUser.id } })
+    if (!domainUser) {
+      // No domain record — just delete the auth record
+      await db.baUser.delete({ where: { id: baUser.id } })
+      return res.json({ ok: true })
+    }
+
+    // Collect bot IDs before the transaction so we can clean up their games
+    const bots = await db.user.findMany({
+      where: { botOwnerId: domainUser.id, isBot: true },
+      select: { id: true },
+    })
+    const botIds = bots.map(b => b.id)
+
+    await db.$transaction(async (tx) => {
+      // Delete each bot's games, then the bot itself
+      for (const botId of botIds) {
+        await tx.game.updateMany({ where: { player2Id: botId }, data: { player2Id: null } })
+        await tx.game.updateMany({ where: { winnerId:  botId }, data: { winnerId:  null } })
+        await tx.game.deleteMany({ where: { player1Id: botId } })
+        await tx.user.delete({ where: { id: botId } })
+      }
+
+      // Nullify nullable game references for the owner
+      await tx.game.updateMany({ where: { player2Id: domainUser.id }, data: { player2Id: null } })
+      await tx.game.updateMany({ where: { winnerId:  domainUser.id }, data: { winnerId:  null } })
+
+      // Delete games where user is player1 (NOT NULL — cannot nullify)
+      await tx.game.deleteMany({ where: { player1Id: domainUser.id } })
+
+      // Delete the domain User (cascades UserEloHistory, UserRole)
+      await tx.user.delete({ where: { id: domainUser.id } })
+
+      // Delete the Better Auth user (cascades BaSession, BaAccount)
+      await tx.baUser.delete({ where: { id: baUser.id } })
+    })
+
+    logger.info({ userId: domainUser.id }, 'User self-deleted account')
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/users/:id
  * Public profile (read-only). Returns sanitized user data.
  */

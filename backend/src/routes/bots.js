@@ -151,6 +151,15 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
           }
         }
       }
+      // Uniqueness check (skip if name is unchanged)
+      if (trimmed.toLowerCase() !== result.bot.displayName.toLowerCase()) {
+        const conflict = await db.user.findFirst({
+          where: { isBot: true, displayName: { equals: trimmed, mode: 'insensitive' } },
+        })
+        if (conflict) {
+          return res.status(409).json({ error: `"${trimmed}" is already taken — choose a different name`, code: 'NAME_TAKEN' })
+        }
+      }
       data.displayName = trimmed
     }
 
@@ -212,8 +221,21 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const result = await loadBotAndAuthorize(req, res)
     if (!result) return
+    const { bot } = result
 
-    await db.user.delete({ where: { id: req.params.id } })
+    // Games where this bot was player1 have a required (non-nullable) FK — no
+    // cascade is defined so we must delete them first. Games where it was
+    // player2 or winner use nullable FKs and will be set to null automatically.
+    await db.$transaction(async (tx) => {
+      await tx.game.deleteMany({ where: { player1Id: bot.id } })
+      await tx.user.delete({ where: { id: bot.id } })
+    })
+
+    // Delete the associated ML model (cascades to sessions, episodes, profiles…)
+    if (bot.botModelId) {
+      await db.mLModel.delete({ where: { id: bot.botModelId } }).catch(() => {})
+    }
+
     cache.invalidate(BOTS_CACHE_KEY)
     res.status(204).end()
   } catch (err) {

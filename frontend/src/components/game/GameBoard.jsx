@@ -503,6 +503,13 @@ export default function GameBoard({ roomName }) {
         <ScorePill mark="O" score={scores.O} />
       </div>
 
+      {/* Games-played count — only during a best-of series */}
+      {bestOf && (
+        <div className="w-full text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+          {(status === 'playing' || status === 'idle' ? round - 1 : round)} games played
+        </div>
+      )}
+
       {/* Turn timer bar */}
       {timerEnabled && !isAivai && status === 'playing' && timeLeft !== null && (
         <div className="w-full space-y-1">

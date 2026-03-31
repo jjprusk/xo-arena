@@ -4,14 +4,12 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 
-// Matches GitHub's heading anchor algorithm:
-// lowercase → strip non-alphanumeric/space/hyphen → each space → hyphen
 function slugify(text) {
   return String(text)
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '')  // remove punctuation (leaves spaces intact, including doubles)
-    .replace(/\s/g, '-')       // each space → hyphen (preserves double-hyphens from e.g. "A & B")
-    .replace(/^-+|-+$/g, '')   // trim edges
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 function makeHeading(level) {
@@ -52,21 +50,18 @@ const mdComponents = {
 
 function highlightMarkdown(text, query) {
   if (!query) return text
-  // Escape special regex chars in the query
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const re = new RegExp(escaped, 'gi')
-  // Wrap matches in a marker that survives markdown parsing.
-  // We use an inline HTML <mark> tag — react-markdown renders it as-is.
   return text.replace(re, m => `<mark class="search-highlight">${m}</mark>`)
 }
 
-export default function GymGuidePage() {
-  const [content, setContent]   = useState(null)
-  const [query, setQuery]       = useState('')
+export default function FAQPage() {
+  const [content, setContent] = useState(null)
+  const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
 
   useEffect(() => {
-    fetch('/bot-training-guide.md')
+    fetch('/faq.md')
       .then(r => r.text())
       .then(setContent)
   }, [])
@@ -81,38 +76,17 @@ export default function GymGuidePage() {
     return highlightMarkdown(content, query.trim())
   }, [content, query])
 
-  function handleDownload() {
-    const a = Object.assign(document.createElement('a'), {
-      href: '/bot-training-guide.md',
-      download: 'Bot_Training_Guide.md',
-    })
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-  }
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header bar */}
       <div className="flex items-center justify-between mb-6">
         <Link
-          to="/ml"
+          to="/about"
           className="text-sm font-medium"
           style={{ color: 'var(--color-blue-600)' }}
         >
-          ← Back to Gym
+          ← Back to About
         </Link>
-        <button
-          onClick={handleDownload}
-          className="text-sm font-medium px-4 py-2 rounded-lg border transition-colors"
-          style={{
-            borderColor: 'var(--border-default)',
-            backgroundColor: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
-          }}
-        >
-          Download .md
-        </button>
       </div>
 
       {/* Search bar */}
@@ -121,7 +95,7 @@ export default function GymGuidePage() {
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Search guide…"
+              placeholder="Search FAQ…"
               value={query}
               onChange={e => setQuery(e.target.value)}
               className="w-full text-sm px-4 py-2 rounded-lg border outline-none"

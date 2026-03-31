@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 
 // ── UserAvatar ──────────────────────────────────────────────────────────────
 // Consistent avatar across all user/player lists. Shows photo if available,
@@ -77,17 +77,56 @@ export function SearchBar({ value, onChange, placeholder = 'Search…', classNam
 
 // ── ListTable ───────────────────────────────────────────────────────────────
 // Outer shell. Provides the rounded border, shadow, and horizontal scroll.
-// Pass maxHeight (e.g. "60vh") to enable vertical scroll with a sticky header.
+//
+// maxHeight     — fixed CSS value (e.g. "60vh"); scroll kicks in at that height
+// fitViewport   — dynamically caps height so the table never overflows the
+//                 viewport bottom. Measures the element's top offset on mount,
+//                 on window resize, and on scroll, so it stays correct even
+//                 when the table is initially off-screen and later scrolled into view.
+// bottomPadding — gap to leave between the table bottom and the viewport edge
+//                 when fitViewport is true (default 24px)
 
-export function ListTable({ children, maxHeight, className = '' }) {
+export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, className = '' }) {
+  const outerRef = useRef(null)
+  const [dynamicMax, setDynamicMax] = useState(null)
+
+  useEffect(() => {
+    if (!fitViewport) return
+    let rafId = null
+
+    const update = () => {
+      if (!outerRef.current) return
+      const top = outerRef.current.getBoundingClientRect().top
+      const available = window.innerHeight - top - bottomPadding
+      setDynamicMax(Math.max(120, available) + 'px')
+    }
+
+    const onEvent = () => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => { rafId = null; update() })
+    }
+
+    update()
+    window.addEventListener('resize', onEvent)
+    window.addEventListener('scroll', onEvent, { passive: true })
+    return () => {
+      window.removeEventListener('resize', onEvent)
+      window.removeEventListener('scroll', onEvent)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
+  }, [fitViewport, bottomPadding])
+
+  const effective = fitViewport ? dynamicMax : maxHeight
+
   return (
     <div
+      ref={outerRef}
       className={`rounded-xl border overflow-hidden ${className}`}
       style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
     >
       <div
         className="overflow-x-auto"
-        style={maxHeight ? { overflowY: 'auto', maxHeight } : undefined}
+        style={effective ? { overflowY: 'auto', maxHeight: effective } : undefined}
       >
         <table className="w-full text-sm border-collapse">
           {children}

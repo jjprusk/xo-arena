@@ -19,7 +19,7 @@ router.get('/stats', async (_req, res, next) => {
     todayStart.setHours(0, 0, 0, 0)
 
     const [totalUsers, totalGames, gamesToday, bannedUsers, totalModels] = await Promise.all([
-      db.user.count(),
+      db.user.count({ where: { isBot: false } }),
       db.game.count(),
       db.game.count({ where: { endedAt: { gte: todayStart } } }),
       db.user.count({ where: { banned: true } }),
@@ -81,17 +81,19 @@ router.get('/users', async (req, res, next) => {
       db.user.count({ where }),
     ])
 
-    // Fetch BA roles for all users in one query
+    // Fetch BA roles + emailVerified for all users in one query
     const baIds = rawUsers.map(u => u.betterAuthId).filter(Boolean)
     const baUsers = baIds.length
-      ? await db.baUser.findMany({ where: { id: { in: baIds } }, select: { id: true, role: true } })
+      ? await db.baUser.findMany({ where: { id: { in: baIds } }, select: { id: true, role: true, emailVerified: true } })
       : []
     const baRoleMap = Object.fromEntries(baUsers.map(b => [b.id, b.role]))
+    const baVerifiedMap = Object.fromEntries(baUsers.map(b => [b.id, b.emailVerified]))
 
     const users = rawUsers.map(u => ({
       ...u,
       roles: u.userRoles?.map(r => r.role) ?? [],
       baRole: baRoleMap[u.betterAuthId] ?? null,
+      emailVerified: baVerifiedMap[u.betterAuthId] ?? null,
     }))
 
     res.json({ users, total, page, limit })
@@ -106,7 +108,7 @@ router.get('/users', async (req, res, next) => {
  */
 router.patch('/users/:id', async (req, res, next) => {
   try {
-    const { banned, eloRating, mlModelLimit, roles, baRole } = req.body
+    const { banned, eloRating, mlModelLimit, roles, baRole, emailVerified } = req.body
 
     const data = {}
     if (banned !== undefined) data.banned = Boolean(banned)
@@ -170,25 +172,38 @@ router.patch('/users/:id', async (req, res, next) => {
       user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
     }
 
-    // Update BA role (admin flag) if requested
+    // Update BA fields (role, emailVerified) if requested
     let baRole_ = null
-    if (baRole !== undefined && user.betterAuthId) {
-      const VALID_BA_ROLES = ['admin', null]
-      if (!VALID_BA_ROLES.includes(baRole)) {
-        return res.status(400).json({ error: 'baRole must be "admin" or null' })
+    let emailVerified_ = null
+    if (user.betterAuthId) {
+      const baData = {}
+      if (baRole !== undefined) {
+        const VALID_BA_ROLES = ['admin', null]
+        if (!VALID_BA_ROLES.includes(baRole)) {
+          return res.status(400).json({ error: 'baRole must be "admin" or null' })
+        }
+        baData.role = baRole
       }
-      const updated = await db.baUser.update({
-        where: { id: user.betterAuthId },
-        data: { role: baRole },
-        select: { role: true },
-      })
-      baRole_ = updated.role
-    } else if (user.betterAuthId) {
-      const ba = await db.baUser.findUnique({ where: { id: user.betterAuthId }, select: { role: true } })
-      baRole_ = ba?.role ?? null
+      if (emailVerified !== undefined) {
+        baData.emailVerified = Boolean(emailVerified)
+      }
+
+      if (Object.keys(baData).length > 0) {
+        const updated = await db.baUser.update({
+          where: { id: user.betterAuthId },
+          data: baData,
+          select: { role: true, emailVerified: true },
+        })
+        baRole_ = updated.role
+        emailVerified_ = updated.emailVerified
+      } else {
+        const ba = await db.baUser.findUnique({ where: { id: user.betterAuthId }, select: { role: true, emailVerified: true } })
+        baRole_ = ba?.role ?? null
+        emailVerified_ = ba?.emailVerified ?? null
+      }
     }
 
-    res.json({ user: { ...flattenRoles(user), baRole: baRole_ } })
+    res.json({ user: { ...flattenRoles(user), baRole: baRole_, emailVerified: emailVerified_ } })
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' })
     next(err)
@@ -648,9 +663,21 @@ router.patch('/bots/:id', async (req, res, next) => {
  */
 router.delete('/bots/:id', async (req, res, next) => {
   try {
-    const bot = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true, isBot: true } })
+    const bot = await db.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, isBot: true, botModelId: true },
+    })
     if (!bot || !bot.isBot) return res.status(404).json({ error: 'Bot not found' })
-    await db.user.delete({ where: { id: req.params.id } })
+
+    await db.$transaction(async (tx) => {
+      await tx.game.deleteMany({ where: { player1Id: bot.id } })
+      await tx.user.delete({ where: { id: bot.id } })
+    })
+
+    if (bot.botModelId) {
+      await db.mLModel.delete({ where: { id: bot.botModelId } }).catch(() => {})
+    }
+
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bot not found' })

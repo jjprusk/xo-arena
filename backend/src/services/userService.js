@@ -337,21 +337,18 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
     }
   }
 
-  // 3. Name dedup: find all existing bot display names (case-insensitive)
+  // 3. Name dedup: reject if any bot already has this name (case-insensitive)
   const existingBots = await db.user.findMany({
     where: { isBot: true },
     select: { displayName: true },
   })
   const existingNames = new Set(existingBots.map(b => b.displayName.toLowerCase()))
 
-  let finalName = trimmedName
-  if (existingNames.has(finalName.toLowerCase())) {
-    let suffix = 1
-    while (existingNames.has(`${trimmedName.toLowerCase()}${suffix}`)) {
-      suffix++
-    }
-    finalName = `${trimmedName}${suffix}`
+  if (existingNames.has(trimmedName.toLowerCase())) {
+    throw Object.assign(new Error(`"${trimmedName}" is already taken — choose a different name`), { code: 'NAME_TAKEN' })
   }
+
+  const finalName = trimmedName
 
   // 4. Validate algorithm and resolve ML algo
   const alg = algorithm || 'minimax'
