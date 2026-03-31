@@ -7,6 +7,9 @@ XO Arena is a competitive Tic-Tac-Toe platform. You can play against built-in bo
 challenge other players in real-time PvP rooms, solve puzzles, and train your own
 machine-learning bots in the Gym.
 
+### What's coming soon?
+Tournaments and in-app feedback are currently in development and will be available soon.
+
 ### Do I need an account to play?
 No — you can play against bots without signing in. An account is required for
 PvP rooms, the leaderboard, puzzles, and the Gym.
