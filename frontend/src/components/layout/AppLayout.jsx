@@ -152,7 +152,7 @@ export default function AppLayout() {
             Profile
           </NavLink>
           <NavLink
-            to="/settings"
+            to="/about"
             className={({ isActive }) =>
               `text-sm font-medium transition-colors ${
                 isActive
@@ -161,7 +161,7 @@ export default function AppLayout() {
               }`
             }
           >
-            Settings
+            About
           </NavLink>
 
           {/* Admin section — amber-tinted, desktop-only, admins only */}
