@@ -28,6 +28,26 @@ const BOTTOM_NAV = [
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
 
+const MENU_LINKS = [
+  { to: '/play',        label: 'Play',        icon: '⊞' },
+  { to: '/ml',          label: 'Gym',         icon: '⚡' },
+  { to: '/puzzles',     label: 'Puzzles',      icon: '◈' },
+  { to: '/leaderboard', label: 'Leaderboard',  icon: '★' },
+  { to: '/stats',       label: 'Stats',        icon: '◎' },
+  { to: '/profile',     label: 'Profile',      icon: '◉' },
+  { to: '/about',       label: 'About',        icon: '○' },
+  { to: '/faq',         label: 'FAQ',          icon: '?' },
+  { to: '/settings',    label: 'Settings',     icon: '⚙' },
+]
+
+const ADMIN_MENU_LINKS = [
+  { to: '/admin',           label: 'Dashboard', end: true },
+  { to: '/admin/users',     label: 'Users' },
+  { to: '/admin/ml-models', label: 'Bots' },
+  { to: '/admin/ai',        label: 'AI' },
+  { to: '/admin/logs',      label: 'Logs' },
+]
+
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
 const PREFETCH_MAP = {
   '/play':        () => prefetch('/bots'),
@@ -55,6 +75,10 @@ export default function AppLayout() {
   const { data: session } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // Close the mobile menu whenever the user navigates
+  useEffect(() => { setMenuOpen(false) }, [location.pathname])
 
   // Sync the signed-in user to our DB — once per browser session to avoid a
   // round trip on every page navigation (sessionStorage survives nav, not tab close).
@@ -91,7 +115,7 @@ export default function AppLayout() {
       />
       {/* Top nav bar */}
       <header
-        className="sticky top-0 z-40 flex items-center justify-between px-6 md:px-8 h-14 border-b"
+        className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-6 md:px-8 h-14 border-b"
         style={{ backgroundColor: isStaging ? '#b45309' : 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
         {/* Logo */}
@@ -198,6 +222,23 @@ export default function AppLayout() {
         <div className="flex items-center gap-2">
           <MuteToggle />
           <ThemeToggle />
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            aria-label="Open menu"
+            className="md:hidden p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {menuOpen ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="5" x2="17" y2="5" /><line x1="3" y1="10" x2="17" y2="10" /><line x1="3" y1="15" x2="17" y2="15" />
+              </svg>
+            )}
+          </button>
           <SignedOut>
             <button
               onClick={() => setAuthModalOpen(true)}
@@ -218,6 +259,82 @@ export default function AppLayout() {
       <main key={location.key} className="xo-page-transition flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6 relative" style={{ zIndex: 1 }}>
         <Outlet />
       </main>
+
+      {/* Mobile hamburger menu drawer */}
+      {menuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="flex-1 bg-black/50"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          {/* Panel */}
+          <div
+            className="w-64 h-full flex flex-col overflow-y-auto border-l"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Menu</span>
+              <button
+                onClick={() => setMenuOpen(false)}
+                className="p-1 rounded-lg hover:bg-[var(--bg-surface-hover)]"
+                aria-label="Close menu"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="3" x2="13" y2="13" /><line x1="13" y1="3" x2="3" y2="13" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Nav links */}
+            <nav className="flex-1 px-2 py-3 space-y-0.5">
+              {MENU_LINKS.map(({ to, label, icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-[var(--color-blue-50)] text-[var(--color-blue-600)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]'
+                    }`
+                  }
+                >
+                  <span className="text-base w-5 text-center leading-none">{icon}</span>
+                  {label}
+                </NavLink>
+              ))}
+
+              {/* Admin section */}
+              {isAdmin && (
+                <>
+                  <div className="my-2 h-px mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
+                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-amber-600)' }}>Admin</p>
+                  {ADMIN_MENU_LINKS.map(({ to, label, end }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={end}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
+                            : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
+                        }`
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </>
+              )}
+            </nav>
+          </div>
+        </div>
+      )}
 
       {/* Mobile bottom nav */}
       <nav

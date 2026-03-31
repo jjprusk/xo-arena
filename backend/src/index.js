@@ -19,6 +19,7 @@ import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
+import { getSystemConfig } from './services/mlService.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -35,6 +36,16 @@ registerRoutes(app, {
   '/admin': adminRouter,
   '/bots': botsRouter,
   '/bot-games': botGamesRouter,
+})
+
+// Public config endpoint (no auth required)
+app.get('/api/v1/config/aivai', async (_req, res) => {
+  try {
+    const maxGames = await getSystemConfig('aivai.maxGames', 5)
+    res.json({ maxGames })
+  } catch {
+    res.json({ maxGames: 5 })
+  }
 })
 
 const server = http.createServer(app)

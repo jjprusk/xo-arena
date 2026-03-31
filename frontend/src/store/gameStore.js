@@ -21,7 +21,8 @@ export const useGameStore = create((set, get) => ({
   // Game options
   timerEnabled: false,
   timerSeconds: 30,
-  bestOf: 3,          // target wins: 1 | 2 | 3 | null (unlimited)
+  bestOf: 3,          // target wins: 1 | 2 | 3
+  aivaiMaxGames: 5,   // max total games before auto-stopping aivai series
   misereMode: false,  // completing 3-in-a-row means you LOSE
   boardTheme: 'default',
 
@@ -53,6 +54,7 @@ export const useGameStore = create((set, get) => ({
   setTimerEnabled(val) { set({ timerEnabled: val }) },
   setTimerSeconds(n) { set({ timerSeconds: n }) },
   setBestOf(n) { set({ bestOf: n }) },
+  setAivaiMaxGames(n) { set({ aivaiMaxGames: n }) },
   setMisereMode(val) { set({ misereMode: val }) },
   setBoardTheme(t) { set({ boardTheme: t }) },
   setHintCell(i) { set({ hintCell: i }) },

@@ -127,7 +127,7 @@ export default function FAQPage() {
       {content == null
         ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
         : (
-          <div className="rounded-xl border p-8" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+          <div className="rounded-xl border p-4 sm:p-8" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
             <div className="prose-guide">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{displayContent}</ReactMarkdown>
             </div>

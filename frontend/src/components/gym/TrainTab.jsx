@@ -519,12 +519,12 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               const displayIterations = Math.min(iterations, sliderMax)
               return (
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Iterations</label>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
+                    <label className="text-sm font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>Iterations</label>
                     <div className="flex items-center gap-2">
                       {model.maxEpisodes > 0 && (
                         <span className="text-xs tabular-nums" style={{ color: atLimit ? 'var(--color-red-600)' : remaining < 10_000 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}>
-                          {atLimit ? 'Episode limit reached' : `${remaining.toLocaleString()} remaining`}
+                          {atLimit ? 'Limit reached' : `${remaining.toLocaleString()} left`}
                         </span>
                       )}
                       <input
