@@ -1,5 +1,8 @@
 import 'dotenv/config'
 import http from 'http'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import app, { registerRoutes } from './app.js'
 import logger from './logger.js'
 import db from './lib/db.js'
@@ -40,6 +43,13 @@ registerRoutes(app, {
   '/bot-games': botGamesRouter,
   '/feedback': feedbackRouter,
   '/support': supportRouter,
+})
+
+// Public version endpoint — no auth required
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const { version } = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'))
+app.get('/api/version', (_req, res) => {
+  res.json({ version })
 })
 
 // Public config endpoint (no auth required)
