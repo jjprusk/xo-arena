@@ -2,7 +2,7 @@
 FROM node:22-slim AS builder
 WORKDIR /app
 COPY package.json ./
-RUN npm install --no-package-lock --ignore-scripts
+RUN npm install --no-package-lock
 COPY . .
 ARG VITE_API_URL
 ARG VITE_SOCKET_URL

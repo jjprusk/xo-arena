@@ -1,8 +1,24 @@
 import { Router } from 'express'
+import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
+import logger from '../logger.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/mlService.js'
 import { hasRole } from '../utils/roles.js'
+import {
+  listFeedback,
+  getUnreadCount,
+  markRead,
+  updateStatus,
+  toggleArchive,
+  archiveMany,
+  deleteFeedback,
+  createReply,
+} from '../lib/feedbackHelpers.js'
+import { replyTemplate } from '../lib/emailTemplates.js'
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 
 const router = Router()
 router.use(requireAuth, requireAdmin)
@@ -741,6 +757,152 @@ router.patch('/aivai-config', async (req, res, next) => {
     const updated = await getSystemConfig('aivai.maxGames', 5)
     res.json({ maxGames: updated })
   } catch (err) {
+    next(err)
+  }
+})
+
+// ─── Feedback management (admin mirror) ──────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/feedback
+ */
+router.get('/feedback', async (req, res, next) => {
+  try {
+    const result = await listFeedback(req.query)
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/admin/feedback/unread-count
+ */
+router.get('/feedback/unread-count', async (req, res, next) => {
+  try {
+    const result = await getUnreadCount(req.query)
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/feedback/archive-many
+ * Body: { ids: string[] }
+ */
+router.patch('/feedback/archive-many', async (req, res, next) => {
+  try {
+    const { ids } = req.body
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids must be a non-empty array' })
+    }
+    const result = await archiveMany(ids)
+    res.json({ count: result.count })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/feedback/:id/read
+ */
+router.patch('/feedback/:id/read', async (req, res, next) => {
+  try {
+    const item = await markRead(req.params.id)
+    if (!item) return res.status(404).json({ error: 'Feedback not found' })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/feedback/:id/status
+ * Body: { status, resolutionNote? }
+ */
+router.patch('/feedback/:id/status', async (req, res, next) => {
+  try {
+    const { status, resolutionNote } = req.body
+    if (!status) return res.status(400).json({ error: 'status is required' })
+    const item = await updateStatus(req.params.id, { status, resolutionNote }, req.auth.userId)
+    res.json({ feedback: item })
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/feedback/:id/archive
+ * Toggle archived state.
+ */
+router.patch('/feedback/:id/archive', async (req, res, next) => {
+  try {
+    const item = await toggleArchive(req.params.id)
+    if (!item) return res.status(404).json({ error: 'Feedback not found' })
+    res.json({ archivedAt: item.archivedAt })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * DELETE /api/v1/admin/feedback/:id
+ */
+router.delete('/feedback/:id', async (req, res, next) => {
+  try {
+    await deleteFeedback(req.params.id)
+    res.status(204).end()
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/admin/feedback/:id/reply
+ * Body: { message }
+ */
+router.post('/feedback/:id/reply', async (req, res, next) => {
+  try {
+    const { message } = req.body
+    if (!message?.trim()) return res.status(400).json({ error: 'message is required' })
+
+    const domainUser = await db.user.findUnique({
+      where:  { betterAuthId: req.auth.userId },
+      select: { id: true, displayName: true },
+    })
+    if (!domainUser) return res.status(403).json({ error: 'Forbidden' })
+
+    const result = await createReply(req.params.id, domainUser.id, message.trim())
+    if (!result) return res.status(404).json({ error: 'Feedback not found' })
+
+    // Non-fatal reply email to submitter (verified email only)
+    if (resend && result.feedback.user?.email && result.feedback.user?.betterAuthId) {
+      const baUser = await db.baUser.findUnique({
+        where:  { id: result.feedback.user.betterAuthId },
+        select: { emailVerified: true },
+      }).catch(() => null)
+
+      if (baUser?.emailVerified) {
+        resend.emails.send({
+          from:    FROM,
+          to:      result.feedback.user.email,
+          subject: 'A reply to your XO Arena feedback',
+          html:    replyTemplate({
+            name:            result.feedback.user.displayName ?? 'there',
+            adminName:       domainUser.displayName ?? 'Staff',
+            originalMessage: result.feedback.message,
+            replyMessage:    message.trim(),
+          }),
+        }).catch(err => logger.warn({ err: err.message }, 'Reply email failed (non-fatal)'))
+      }
+    }
+
+    res.status(201).json({ reply: result.reply, replies: result.replies })
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
     next(err)
   }
 })

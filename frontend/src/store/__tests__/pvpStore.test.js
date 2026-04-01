@@ -1,172 +1,315 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { usePvpStore } from '../pvpStore.js'
 
-// Mock socket.io-client
-vi.mock('../../lib/socket.js', () => {
+// Mock sound store — pvpStore calls useSoundStore.getState().play() in event handlers
+vi.mock('../soundStore.js', () => ({
+  useSoundStore: {
+    getState: vi.fn(() => ({ play: vi.fn() })),
+  },
+}))
+
+// Mock getToken — used inside createRoom / joinRoom async calls
+vi.mock('../../lib/getToken.js', () => ({
+  getToken: vi.fn(() => Promise.resolve(null)),
+}))
+
+// Build a fresh mock socket factory so each test can have isolated listeners
+function makeMockSocket() {
   const listeners = {}
-  const mockSocket = {
-    connected: false,
-    emit: vi.fn(),
-    on: (event, cb) => { listeners[event] = cb },
+  return {
+    on: vi.fn((event, cb) => { listeners[event] = cb }),
     off: vi.fn(),
+    emit: vi.fn(),
     connect: vi.fn(),
     disconnect: vi.fn(),
+    id: 'test-socket-id',
     _listeners: listeners,
     _trigger: (event, data) => listeners[event]?.(data),
   }
-  return {
-    getSocket: () => mockSocket,
-    connectSocket: () => mockSocket,
-    disconnectSocket: vi.fn(),
-  }
-})
+}
 
-let socket
+// Module-level socket reference — replaced in beforeEach
+let mockSocket
 
-beforeEach(async () => {
+vi.mock('../../lib/socket.js', () => ({
+  getSocket: vi.fn(() => mockSocket),
+  connectSocket: vi.fn(() => mockSocket),
+  disconnectSocket: vi.fn(),
+}))
+
+import { getSocket, connectSocket } from '../../lib/socket.js'
+import { usePvpStore } from '../pvpStore.js'
+
+function s() {
+  return usePvpStore.getState()
+}
+
+beforeEach(() => {
+  // Build a new socket so listener maps are clean for each test
+  mockSocket = makeMockSocket()
+  getSocket.mockReturnValue(mockSocket)
+  connectSocket.mockReturnValue(mockSocket)
+
+  // Full state reset
   usePvpStore.getState().reset()
-  // Force re-register listeners
+  // reset() calls disconnectSocket and clears state; also clear the listener guard
   usePvpStore.setState({ _listenersRegistered: false })
-  const { connectSocket } = await import('../../lib/socket.js')
-  socket = connectSocket()
 })
 
-describe('pvpStore — socket events', () => {
-  it('starts in idle state', () => {
-    expect(usePvpStore.getState().status).toBe('idle')
+// Helper: call createRoom and register listeners
+function createRoom() {
+  s().createRoom()
+}
+
+// Helper: trigger room:created so slug/mark are set
+function triggerRoomCreated(slug = 'test-room') {
+  mockSocket._trigger('room:created', { slug, displayName: 'Test Room', mark: 'X' })
+}
+
+// Helper: trigger game:start
+function triggerGameStart(board = Array(9).fill(null)) {
+  mockSocket._trigger('game:start', {
+    board,
+    currentTurn: 'X',
+    round: 1,
+    scores: { X: 0, O: 0 },
   })
+}
 
-  it('createRoom sets status to waiting', () => {
-    usePvpStore.getState().createRoom()
-    expect(usePvpStore.getState().status).toBe('waiting')
-    expect(usePvpStore.getState().role).toBe('host')
-  })
+describe('pvpStore', () => {
 
-  it('room:created event sets slug and mark', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    const state = usePvpStore.getState()
-    expect(state.slug).toBe('mt-everest')
-    expect(state.myMark).toBe('X')
-  })
+  // ── createRoom ────────────────────────────────────────────────────────────
 
-  it('room:renamed updates slug', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    socket._trigger('room:renamed', { slug: 'mt-k2', displayName: 'Mt. K2' })
-    expect(usePvpStore.getState().slug).toBe('mt-k2')
-  })
-
-  it('game:start transitions to playing', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    socket._trigger('game:start', {
-      board: Array(9).fill(null),
-      currentTurn: 'X',
-      round: 1,
-      scores: { X: 0, O: 0 },
-    })
-    expect(usePvpStore.getState().status).toBe('playing')
-  })
-
-  it('game:moved updates board', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
-
-    const nextBoard = Array(9).fill(null)
-    nextBoard[4] = 'X'
-    socket._trigger('game:moved', {
-      cellIndex: 4,
-      board: nextBoard,
-      currentTurn: 'O',
-      status: 'playing',
-      winner: null,
-      winLine: null,
-      scores: { X: 0, O: 0 },
-    })
-    expect(usePvpStore.getState().board[4]).toBe('X')
-    expect(usePvpStore.getState().currentTurn).toBe('O')
-  })
-
-  it('game:moved with status finished transitions correctly', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
-
-    socket._trigger('game:moved', {
-      board: ['X', 'X', 'X', null, null, null, null, null, null],
-      currentTurn: 'O',
-      status: 'finished',
-      winner: 'X',
-      winLine: [0, 1, 2],
-      scores: { X: 1, O: 0 },
-    })
-    const state = usePvpStore.getState()
-    expect(state.status).toBe('finished')
-    expect(state.winner).toBe('X')
-  })
-
-  it('error event sets error message', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('error', { message: 'Not your turn' })
-    expect(usePvpStore.getState().error).toBe('Not your turn')
-  })
-
-  it('move() optimistically places mark and flips turn', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
-    usePvpStore.setState({ status: 'playing' })
-
-    usePvpStore.getState().move(4)
-
-    const state = usePvpStore.getState()
-    expect(state.board[4]).toBe('X')
-    expect(state.currentTurn).toBe('O')
-    expect(state._optimisticSnapshot).not.toBeNull()
-  })
-
-  it('game:moved clears optimistic snapshot', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
-    usePvpStore.setState({ status: 'playing' })
-    usePvpStore.getState().move(4)
-
-    const nextBoard = Array(9).fill(null)
-    nextBoard[4] = 'X'
-    socket._trigger('game:moved', {
-      cellIndex: 4, board: nextBoard, currentTurn: 'O',
-      status: 'playing', winner: null, winLine: null, scores: { X: 0, O: 0 },
+  describe('createRoom', () => {
+    it('emits "room:create" on the socket', () => {
+      createRoom()
+      // emit is called asynchronously after getToken resolves; wait a tick
+      return Promise.resolve().then(() => {
+        const calls = mockSocket.emit.mock.calls
+        expect(calls.some(([event]) => event === 'room:create')).toBe(true)
+      })
     })
 
-    expect(usePvpStore.getState()._optimisticSnapshot).toBeNull()
-    expect(usePvpStore.getState().board[4]).toBe('X')
+    it('sets status to "waiting" and role to "host"', () => {
+      createRoom()
+      expect(s().status).toBe('waiting')
+      expect(s().role).toBe('host')
+    })
   })
 
-  it('error rolls back optimistic move', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    socket._trigger('game:start', { board: Array(9).fill(null), currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
-    usePvpStore.setState({ status: 'playing' })
-    usePvpStore.getState().move(4)
+  // ── joinRoom ──────────────────────────────────────────────────────────────
 
-    socket._trigger('error', { message: 'Not your turn' })
+  describe('joinRoom', () => {
+    it('emits "room:join" with the correct slug and role', () => {
+      s().joinRoom('mt-everest', 'player')
+      return Promise.resolve().then(() => {
+        const joinCall = mockSocket.emit.mock.calls.find(([e]) => e === 'room:join')
+        expect(joinCall).toBeDefined()
+        expect(joinCall[1].slug).toBe('mt-everest')
+        expect(joinCall[1].role).toBe('player')
+      })
+    })
 
-    const state = usePvpStore.getState()
-    expect(state.board[4]).toBeNull()
-    expect(state.currentTurn).toBe('X')
-    expect(state._optimisticSnapshot).toBeNull()
-    expect(state.error).toBe('Not your turn')
+    it('sets role to "guest" for a player join', () => {
+      s().joinRoom('mt-everest', 'player')
+      expect(s().role).toBe('guest')
+    })
+
+    it('sets role to "spectator" for a spectator join', () => {
+      s().joinRoom('mt-everest', 'spectator')
+      expect(s().role).toBe('spectator')
+    })
   })
 
-  it('reset clears all state', () => {
-    usePvpStore.getState().createRoom()
-    socket._trigger('room:created', { slug: 'mt-everest', displayName: 'Mt. Everest', mark: 'X' })
-    usePvpStore.getState().reset()
-    const state = usePvpStore.getState()
-    expect(state.status).toBe('idle')
-    expect(state.slug).toBeNull()
+  // ── move ──────────────────────────────────────────────────────────────────
+
+  describe('move', () => {
+    beforeEach(() => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      // myMark was set to 'X' by room:created
+    })
+
+    it('emits "game:move" with the cellIndex', () => {
+      s().move(4)
+      expect(mockSocket.emit).toHaveBeenCalledWith('game:move', { cellIndex: 4 })
+    })
+
+    it('updates the board optimistically before server confirmation', () => {
+      s().move(4)
+      expect(s().board[4]).toBe('X')
+    })
+
+    it('flips currentTurn optimistically', () => {
+      s().move(4)
+      expect(s().currentTurn).toBe('O')
+    })
+
+    it('saves an optimistic snapshot for potential rollback', () => {
+      s().move(4)
+      expect(s()._optimisticSnapshot).not.toBeNull()
+      expect(s()._optimisticSnapshot.board[4]).toBeNull() // snapshot captured board BEFORE move
+      expect(s()._optimisticSnapshot.currentTurn).toBe('X')
+    })
+  })
+
+  // ── socket event: room:created ────────────────────────────────────────────
+
+  describe('room:created event', () => {
+    it('sets slug and displayName in the store', () => {
+      createRoom()
+      mockSocket._trigger('room:created', { slug: 'mt-k2', displayName: 'Mt. K2', mark: 'X' })
+      expect(s().slug).toBe('mt-k2')
+      expect(s().displayName).toBe('Mt. K2')
+    })
+
+    it('sets myMark', () => {
+      createRoom()
+      mockSocket._trigger('room:created', { slug: 'mt-k2', displayName: 'Mt. K2', mark: 'X' })
+      expect(s().myMark).toBe('X')
+    })
+  })
+
+  // ── socket event: game:start ──────────────────────────────────────────────
+
+  describe('game:start event', () => {
+    it('sets board and currentTurn', () => {
+      createRoom()
+      triggerRoomCreated()
+      const board = Array(9).fill(null)
+      board[0] = 'X'
+      triggerGameStart(board)
+      expect(s().board[0]).toBe('X')
+      expect(s().currentTurn).toBe('X')
+    })
+
+    it('transitions status to "playing"', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      expect(s().status).toBe('playing')
+    })
+  })
+
+  // ── socket event: game:moved ──────────────────────────────────────────────
+
+  describe('game:moved event', () => {
+    beforeEach(() => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+    })
+
+    it('updates the board from the server', () => {
+      const nextBoard = Array(9).fill(null)
+      nextBoard[4] = 'X'
+      mockSocket._trigger('game:moved', {
+        board: nextBoard, currentTurn: 'O', status: 'playing',
+        winner: null, winLine: null, scores: { X: 0, O: 0 },
+      })
+      expect(s().board[4]).toBe('X')
+      expect(s().currentTurn).toBe('O')
+    })
+
+    it('clears the optimistic snapshot', () => {
+      s().move(4)
+      const nextBoard = Array(9).fill(null)
+      nextBoard[4] = 'X'
+      mockSocket._trigger('game:moved', {
+        board: nextBoard, currentTurn: 'O', status: 'playing',
+        winner: null, winLine: null, scores: { X: 0, O: 0 },
+      })
+      expect(s()._optimisticSnapshot).toBeNull()
+    })
+
+    it('sets status to "finished" when server reports finished', () => {
+      mockSocket._trigger('game:moved', {
+        board: ['X', 'X', 'X', null, null, null, null, null, null],
+        currentTurn: 'O', status: 'finished', winner: 'X',
+        winLine: [0, 1, 2], scores: { X: 1, O: 0 },
+      })
+      expect(s().status).toBe('finished')
+      expect(s().winner).toBe('X')
+    })
+  })
+
+  // ── socket event: error — auto-retry as spectator ─────────────────────────
+
+  describe('error event — room full auto-retry', () => {
+    it('re-emits room:join as spectator when room is full and role is guest', () => {
+      s().joinRoom('mt-everest', 'player')
+      // status='waiting', role='guest' at this point
+      mockSocket._trigger('error', { message: 'Room is full' })
+      const retryCall = mockSocket.emit.mock.calls.find(
+        ([e, d]) => e === 'room:join' && d.role === 'spectator'
+      )
+      expect(retryCall).toBeDefined()
+      expect(s().role).toBe('spectator')
+    })
+
+    it('auto-retries on "Room is not waiting for a player" message too', () => {
+      s().joinRoom('mt-everest', 'player')
+      mockSocket._trigger('error', { message: 'Room is not waiting for a player' })
+      expect(s().role).toBe('spectator')
+    })
+
+    it('does NOT auto-retry when role is not guest', () => {
+      createRoom() // role = 'host'
+      triggerRoomCreated()
+      mockSocket._trigger('error', { message: 'Room is full' })
+      // Should not change role to spectator
+      expect(s().role).toBe('host')
+      expect(s().error).toBe('Room is full')
+    })
+  })
+
+  // ── socket event: error — optimistic rollback ─────────────────────────────
+
+  describe('error event — optimistic rollback', () => {
+    it('rolls back the board and currentTurn when an optimistic snapshot exists', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      s().move(4)
+
+      mockSocket._trigger('error', { message: 'Not your turn' })
+
+      const state = s()
+      expect(state.board[4]).toBeNull()
+      expect(state.currentTurn).toBe('X')
+      expect(state._optimisticSnapshot).toBeNull()
+      expect(state.error).toBe('Not your turn')
+    })
+  })
+
+  // ── socket event: game:forfeit ────────────────────────────────────────────
+
+  describe('game:forfeit event', () => {
+    it('sets status to "finished" with the winning player', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      mockSocket._trigger('game:forfeit', { winner: 'O', scores: { X: 0, O: 1 } })
+      expect(s().status).toBe('finished')
+      expect(s().winner).toBe('O')
+      expect(s().scores.O).toBe(1)
+    })
+  })
+
+  // ── reset ─────────────────────────────────────────────────────────────────
+
+  describe('reset', () => {
+    it('returns all state to idle defaults', () => {
+      createRoom()
+      triggerRoomCreated()
+      s().reset()
+      const state = s()
+      expect(state.status).toBe('idle')
+      expect(state.slug).toBeNull()
+      expect(state.myMark).toBeNull()
+      expect(state.role).toBeNull()
+      expect(state.board).toEqual(Array(9).fill(null))
+      expect(state._optimisticSnapshot).toBeNull()
+    })
   })
 })

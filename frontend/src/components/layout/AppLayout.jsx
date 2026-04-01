@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
 import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
@@ -12,6 +12,12 @@ import SignedIn from '../auth/SignedIn.jsx'
 import SignedOut from '../auth/SignedOut.jsx'
 import { useGameStore } from '../../store/gameStore.js'
 import { usePvpStore } from '../../store/pvpStore.js'
+import { useRolesStore } from '../../store/rolesStore.js'
+import { useSoundStore } from '../../store/soundStore.js'
+import FeedbackButton from '../feedback/FeedbackButton.jsx'
+import { getSocket } from '../../lib/socket.js'
+
+const BASE = import.meta.env.VITE_API_URL ?? ''
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
@@ -46,6 +52,7 @@ const ADMIN_MENU_LINKS = [
   { to: '/admin/ml-models', label: 'Bots' },
   { to: '/admin/ai',        label: 'AI' },
   { to: '/admin/logs',      label: 'Logs' },
+  { to: '/admin/feedback',  label: 'Feedback', icon: '💬' },
 ]
 
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
@@ -74,11 +81,69 @@ export default function AppLayout() {
   const location = useLocation()
   const { data: session } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
+  const rolesStore = useRolesStore()
+  const isSupport = !isAdmin && rolesStore.hasRole('SUPPORT')
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const prevUserId = useRef(null)
 
   // Close the mobile menu whenever the user navigates
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
+
+  // Fetch roles when user signs in; clear on sign-out
+  useEffect(() => {
+    const userId = session?.user?.id ?? null
+    if (userId && userId !== prevUserId.current) {
+      // User just signed in (or changed)
+      rolesStore.fetch()
+      prevUserId.current = userId
+    } else if (!userId && prevUserId.current) {
+      // User just signed out
+      rolesStore.clear()
+      prevUserId.current = null
+    }
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll unread-count every 60s to seed the badge on sign-in (no chime — only socket chimes)
+  useEffect(() => {
+    if (!isAdmin && !isSupport) return
+    const endpoint = isAdmin
+      ? '/api/v1/admin/feedback/unread-count'
+      : '/api/v1/support/feedback/unread-count'
+    async function poll() {
+      try {
+        const token = await getToken()
+        const headers = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch(`${BASE}${endpoint}`, { headers })
+        if (!res.ok) return
+        const { count = 0 } = await res.json()
+        setUnreadCount(count)
+      } catch {}
+    }
+    poll()
+    const id = setInterval(poll, 60_000)
+    return () => clearInterval(id)
+  }, [isAdmin, isSupport]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Socket.io feedback:new listener — increments badge and plays chime
+  useEffect(() => {
+    if (!isAdmin && !isSupport) return
+    const socket = getSocket()
+    function onFeedbackNew() {
+      useSoundStore.getState().play('win')
+      setUnreadCount(n => n + 1)
+    }
+    socket.on('feedback:new', onFeedbackNew)
+    return () => { socket.off('feedback:new', onFeedbackNew) }
+  }, [isAdmin, isSupport])
+
+  // Clear badge when the user visits their feedback inbox
+  useEffect(() => {
+    if (isAdmin && location.pathname === '/admin/feedback') setUnreadCount(0)
+    if (isSupport && location.pathname === '/support') setUnreadCount(0)
+  }, [location.pathname, isAdmin, isSupport])
 
   // Sync the signed-in user to our DB — once per browser session to avoid a
   // round trip on every page navigation (sessionStorage survives nav, not tab close).
@@ -198,20 +263,27 @@ export default function AppLayout() {
                 { to: '/admin/ml-models', label: 'Bots' },
                 { to: '/admin/ai', label: 'AI' },
                 { to: '/admin/logs', label: 'Logs' },
+                { to: '/admin/feedback', label: 'Feedback' },
               ].map(({ to, label }) => (
                 <NavLink
                   key={to}
                   to={to}
                   end={to === '/admin'}
                   className={({ isActive }) =>
-                    `text-xs font-medium px-2 py-1 rounded-md transition-colors ${
+                    `text-xs font-medium px-2 py-1 rounded-md transition-colors relative ${
                       isActive
                         ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
                         : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
                     }`
                   }
+                  onClick={() => { if (to === '/admin/feedback') setUnreadCount(0) }}
                 >
                   {label}
+                  {to === '/admin/feedback' && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: 'var(--color-red-500)' }}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </>
@@ -319,7 +391,7 @@ export default function AppLayout() {
                       to={to}
                       end={end}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        `relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                           isActive
                             ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
                             : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
@@ -327,6 +399,11 @@ export default function AppLayout() {
                       }
                     >
                       {label}
+                      {to === '/admin/feedback' && unreadCount > 0 && (
+                        <span className="ml-auto min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: 'var(--color-red-500)' }}>
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
                     </NavLink>
                   ))}
                 </>
@@ -359,6 +436,52 @@ export default function AppLayout() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Feedback button — hidden for support users, hidden on mobile during active game */}
+      {!isSupport && (
+        <FeedbackButton appId="xo-arena" apiBase="/api/v1" hideWhenPlaying />
+      )}
+
+      {/* Unread feedback toast for admin/support */}
+      {unreadCount > 0 && (isAdmin || isSupport) && (
+        <FeedbackToast
+          count={unreadCount}
+          inboxPath={isAdmin ? '/admin/feedback' : '/support'}
+          onDismiss={() => setUnreadCount(0)}
+          navigate={navigate}
+        />
+      )}
+    </div>
+  )
+}
+
+function FeedbackToast({ count, inboxPath, onDismiss, navigate }) {
+  return (
+    <div
+      className="fixed bottom-20 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--color-blue-200)', boxShadow: 'var(--shadow-md)' }}
+    >
+      <span className="text-lg">💬</span>
+      <div>
+        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+          {count} new feedback {count === 1 ? 'item' : 'items'}
+        </div>
+        <button
+          onClick={() => { onDismiss(); navigate(inboxPath) }}
+          className="text-xs underline"
+          style={{ color: 'var(--color-blue-600)' }}
+        >
+          View feedback
+        </button>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="ml-1 p-1 rounded hover:bg-[var(--bg-surface-hover)]"
+        style={{ color: 'var(--text-muted)' }}
+        aria-label="Dismiss"
+      >
+        ✕
+      </button>
     </div>
   )
 }

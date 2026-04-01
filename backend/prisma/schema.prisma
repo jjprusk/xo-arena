@@ -43,8 +43,48 @@ model User {
   eloHistory      UserEloHistory[]
   userRoles       UserRole[]
   notifications   UserNotification[]
+  feedback        Feedback[]
 
   @@map("users")
+}
+
+model Feedback {
+  id             String           @id @default(cuid())
+  appId          String           @default("xo-arena")
+  userId         String?
+  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  category       FeedbackCategory @default(OTHER)
+  status         FeedbackStatus   @default(OPEN)
+  message        String
+  pageUrl        String
+  screenshotData String?          @db.Text
+  userAgent      String?
+  resolutionNote String?
+  resolvedAt     DateTime?
+  resolvedById   String?
+  archivedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  readAt         DateTime?
+  replies        FeedbackReply[]
+
+  @@index([appId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([readAt])
+  @@index([archivedAt])
+  @@map("feedback")
+}
+
+model FeedbackReply {
+  id         String   @id @default(cuid())
+  feedbackId String
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  adminId    String
+  message    String
+  createdAt  DateTime @default(now())
+
+  @@index([feedbackId])
+  @@map("feedback_replies")
 }
 
 model UserRole {
@@ -390,6 +430,20 @@ enum Role {
   ADMIN
   BOT_ADMIN
   TOURNAMENT_ADMIN
+  SUPPORT
+}
+
+enum FeedbackCategory {
+  BUG
+  SUGGESTION
+  OTHER
+}
+
+enum FeedbackStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  WONT_FIX
 }
 
 enum GameMode {

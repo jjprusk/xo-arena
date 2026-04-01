@@ -1,7 +1,7 @@
 FROM node:22-alpine
 WORKDIR /app
 COPY package.json ./
-RUN npm install --no-package-lock --ignore-scripts --force
+RUN npm install --no-package-lock --force
 COPY . .
 EXPOSE 5173
 CMD ["npm", "run", "dev"]

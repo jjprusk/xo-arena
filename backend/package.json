@@ -16,19 +16,20 @@
     "db:seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "@xo-arena/ai": "*",
     "@prisma/adapter-pg": "^7.0.0",
     "@prisma/client": "^7.0.0",
-    "prisma": "^7.0.0",
-    "pg": "^8.14.1",
     "@socket.io/redis-adapter": "^8.3.0",
+    "@xo-arena/ai": "*",
     "better-auth": "^1.5.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.3.2",
     "ioredis": "^5.4.2",
+    "pg": "^8.14.1",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
+    "prisma": "^7.0.0",
     "resend": "^6.9.4",
     "socket.io": "^4.8.1"
   },
