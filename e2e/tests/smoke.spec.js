@@ -21,6 +21,7 @@ const { version: EXPECTED_VERSION } = JSON.parse(
 // ── Wait for deploy ───────────────────────────────────────────────────────────
 
 test('wait for deploy — /api/version matches expected version', async ({ request }) => {
+  test.setTimeout(4 * 60 * 1000) // 4 min — overrides global 30s for this polling test
   const deadline = Date.now() + 3 * 60 * 1000 // 3 minutes
   let deployed = null
 
@@ -55,7 +56,7 @@ test.describe('Smoke — frontend', () => {
   test('sign-in modal can be opened', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /sign in/i }).first().click()
-    await expect(page.getByText('Sign in')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
   })
 
   test('leaderboard page loads without auth', async ({ page }) => {
