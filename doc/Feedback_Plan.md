@@ -585,7 +585,7 @@ No other changes to the admin UI — admins continue to access the feedback inbo
 - Poll + badge in `AppLayout` for admin and support users
 - Reuse `play('win')` as notification chime
 
-### Phase 4 — Replies (optional)
+### Phase 4 — Replies ✅
 - Reply thread UI in both admin and support inboxes
 - Trigger Resend email on reply (Resend already integrated)
 
