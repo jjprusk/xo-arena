@@ -122,6 +122,66 @@ function ScreenshotPreview({ src }) {
   )
 }
 
+// ── Reply form ────────────────────────────────────────────────────────────────
+
+function ReplyForm({ item, apiBase, onUpdate }) {
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!text.trim()) return
+    setSending(true)
+    setError(null)
+    try {
+      const token = await getToken()
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`${BASE}${apiBase}/${item.id}/reply`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: text.trim() }),
+      })
+      if (!res.ok) throw new Error('Failed to send reply')
+      const data = await res.json()
+      setText('')
+      onUpdate({ ...item, replies: data.replies })
+    } catch {
+      setError('Failed to send reply.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2" data-testid="reply-form">
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value.slice(0, 1000))}
+        placeholder="Write a reply…"
+        rows={2}
+        className="w-full px-2 py-1.5 rounded border text-xs focus:outline-none resize-none"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--border-default)',
+          color: 'var(--text-primary)',
+        }}
+        data-testid="reply-textarea"
+      />
+      {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+      <button
+        type="submit"
+        disabled={sending || !text.trim()}
+        className="text-xs px-3 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
+        style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+      >
+        {sending ? 'Sending…' : 'Send reply'}
+      </button>
+    </form>
+  )
+}
+
 // ── Expanded row ──────────────────────────────────────────────────────────────
 
 function ExpandedRow({ item, apiBase, onUpdate, onDelete }) {
@@ -275,6 +335,41 @@ function ExpandedRow({ item, apiBase, onUpdate, onDelete }) {
           {savingNote && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Saving…</span>}
         </div>
       )}
+
+      {/* Reply thread */}
+      <div className="space-y-2" data-testid="reply-thread">
+        <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+          {item.replies?.length > 0
+            ? `Replies (${item.replies.length})`
+            : 'Replies'}
+        </p>
+        {item.replies?.length > 0 && (
+          <div className="space-y-2">
+            {item.replies.map(reply => (
+              <div
+                key={reply.id}
+                className="rounded-lg px-3 py-2 text-xs space-y-1 border"
+                style={{
+                  backgroundColor: 'var(--bg-surface)',
+                  borderColor: 'var(--border-default)',
+                }}
+                data-testid="reply-item"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {reply.adminName ?? 'Staff'}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)' }}>{timeAgo(reply.createdAt)}</span>
+                </div>
+                <p className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                  {reply.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        <ReplyForm item={item} apiBase={apiBase} onUpdate={onUpdate} />
+      </div>
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 flex-wrap">

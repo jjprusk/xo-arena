@@ -58,13 +58,30 @@ export async function listFeedback(query) {
       skip,
       take: limitNum,
       include: {
-        user: { select: { id: true, displayName: true, email: true } },
+        user:    { select: { id: true, displayName: true, email: true } },
+        replies: { orderBy: { createdAt: 'asc' } },
       },
     }),
     db.feedback.count({ where }),
   ])
 
-  return { items, total, page: pageNum, limit: limitNum }
+  // Attach admin display names to replies (single extra query for all unique admin IDs)
+  const allAdminIds = [...new Set(items.flatMap(i => i.replies.map(r => r.adminId)))]
+  let adminMap = {}
+  if (allAdminIds.length) {
+    const admins = await db.user.findMany({
+      where: { id: { in: allAdminIds } },
+      select: { id: true, displayName: true },
+    })
+    adminMap = Object.fromEntries(admins.map(a => [a.id, a.displayName ?? 'Staff']))
+  }
+
+  const itemsWithReplies = items.map(item => ({
+    ...item,
+    replies: item.replies.map(r => ({ ...r, adminName: adminMap[r.adminId] ?? 'Staff' })),
+  }))
+
+  return { items: itemsWithReplies, total, page: pageNum, limit: limitNum }
 }
 
 /**
@@ -137,4 +154,44 @@ export async function archiveMany(ids) {
  */
 export async function deleteFeedback(id) {
   return db.feedback.delete({ where: { id } })
+}
+
+/**
+ * Create a reply on a feedback item.
+ * Returns { reply, feedback, replies } or null if the item does not exist.
+ * `replies` is the full ordered reply list for this item, each with an `adminName` field.
+ */
+export async function createReply(feedbackId, adminId, message) {
+  const feedback = await db.feedback.findUnique({
+    where: { id: feedbackId },
+    select: {
+      id:      true,
+      message: true,
+      user: {
+        select: { id: true, displayName: true, email: true, betterAuthId: true },
+      },
+    },
+  })
+  if (!feedback) return null
+
+  const reply = await db.feedbackReply.create({
+    data: { feedbackId, adminId, message },
+  })
+
+  // Fetch all replies for this item (including the new one) with admin names
+  const allReplies = await db.feedbackReply.findMany({
+    where:   { feedbackId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const adminIds = [...new Set(allReplies.map(r => r.adminId))]
+  const admins = adminIds.length
+    ? await db.user.findMany({
+        where:  { id: { in: adminIds } },
+        select: { id: true, displayName: true },
+      })
+    : []
+  const adminMap = Object.fromEntries(admins.map(a => [a.id, a.displayName ?? 'Staff']))
+  const replies = allReplies.map(r => ({ ...r, adminName: adminMap[r.adminId] ?? 'Staff' }))
+
+  return { reply, feedback, replies }
 }

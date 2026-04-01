@@ -25,6 +25,10 @@ vi.mock('../../lib/db.js', () => ({
       count:      vi.fn(),
       groupBy:    vi.fn(),
     },
+    feedbackReply: {
+      create:   vi.fn(),
+      findMany: vi.fn(),
+    },
     user: {
       findUnique: vi.fn(),
       findMany:   vi.fn(),
@@ -46,11 +50,20 @@ vi.mock('../../lib/feedbackHelpers.js', () => ({
   toggleArchive:  vi.fn(),
   archiveMany:    vi.fn(),
   deleteFeedback: vi.fn(),
+  createReply:    vi.fn(),
+}))
+
+vi.mock('resend', () => ({
+  Resend: vi.fn(() => ({
+    emails: { send: vi.fn().mockResolvedValue({ id: 'email_1' }) },
+  })),
 }))
 
 vi.mock('../../logger.js', () => ({
   default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
+
+process.env.RESEND_API_KEY = 'test-key'
 
 const supportRouter = (await import('../support.js')).default
 const db = (await import('../../lib/db.js')).default
@@ -62,7 +75,10 @@ const {
   toggleArchive,
   archiveMany,
   deleteFeedback,
+  createReply,
 } = await import('../../lib/feedbackHelpers.js')
+const { Resend } = await import('resend')
+const emailSend = Resend.mock.results[0]?.value?.emails?.send
 
 const app = express()
 app.use(express.json())
@@ -379,5 +395,122 @@ describe('PATCH /api/v1/support/users/:id/ban', () => {
       .patch('/api/v1/support/users/missing/ban')
       .send({ banned: true })
     expect(res.status).toBe(404)
+  })
+})
+
+// ── POST /feedback/:id/reply ──────────────────────────────────────────────────
+
+const mockReply = {
+  id:         'rpl_1',
+  feedbackId: 'fb_1',
+  adminId:    'usr_admin',
+  adminName:  'Admin Joe',
+  message:    'Thanks for the report!',
+  createdAt:  new Date().toISOString(),
+}
+
+const mockReplyFeedback = {
+  id:      'fb_1',
+  message: 'Something is broken',
+  user: {
+    id:           'usr_2',
+    displayName:  'Alice',
+    email:        'alice@test.com',
+    betterAuthId: 'ba_2',
+  },
+}
+
+describe('POST /api/v1/support/feedback/:id/reply', () => {
+  beforeEach(() => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_admin', displayName: 'Admin Joe' })
+    createReply.mockResolvedValue({
+      reply:    mockReply,
+      feedback: mockReplyFeedback,
+      replies:  [mockReply],
+    })
+    db.baUser.findUnique.mockResolvedValue({ emailVerified: true })
+  })
+
+  it('returns 400 when message is missing', async () => {
+    const res = await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({})
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/message/i)
+  })
+
+  it('returns 400 when message is blank', async () => {
+    const res = await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({ message: '   ' })
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when feedback not found', async () => {
+    createReply.mockResolvedValue(null)
+    const res = await request(app)
+      .post('/api/v1/support/feedback/missing/reply')
+      .send({ message: 'Hello' })
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 403 when domain user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({ message: 'Hello' })
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 201 with reply and replies list', async () => {
+    const res = await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({ message: 'Thanks for the report!' })
+    expect(res.status).toBe(201)
+    expect(res.body.reply.id).toBe('rpl_1')
+    expect(res.body.replies).toHaveLength(1)
+  })
+
+  it('calls createReply with correct args', async () => {
+    await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({ message: 'Nice report' })
+    expect(createReply).toHaveBeenCalledWith('fb_1', 'usr_admin', 'Nice report')
+  })
+
+  it('sends reply email when user has verified email', async () => {
+    await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({ message: 'Hello Alice' })
+    // Allow the non-fatal async email to fire
+    await new Promise(r => setImmediate(r))
+    expect(emailSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to:      'alice@test.com',
+        subject: expect.stringContaining('reply'),
+      })
+    )
+  })
+
+  it('does not send email when user email is unverified', async () => {
+    db.baUser.findUnique.mockResolvedValue({ emailVerified: false })
+    await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({ message: 'Hello' })
+    await new Promise(r => setImmediate(r))
+    expect(emailSend).not.toHaveBeenCalled()
+  })
+
+  it('does not send email for anonymous feedback (no user)', async () => {
+    createReply.mockResolvedValue({
+      reply:    mockReply,
+      feedback: { ...mockReplyFeedback, user: null },
+      replies:  [mockReply],
+    })
+    await request(app)
+      .post('/api/v1/support/feedback/fb_1/reply')
+      .send({ message: 'Hello' })
+    await new Promise(r => setImmediate(r))
+    expect(emailSend).not.toHaveBeenCalled()
   })
 })

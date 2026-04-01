@@ -605,3 +605,166 @@ describe('FeedbackInbox — screenshot preview in expanded row', () => {
     expect(screen.queryByTestId('screenshot-lightbox')).toBeNull()
   })
 })
+
+// ── Phase 4 — Reply thread ────────────────────────────────────────────────────
+
+const ITEM_WITH_REPLIES = {
+  ...ITEM_BUG,
+  id:      'fb_reply_1',
+  message: 'This is a bug report with replies.',
+  replies: [
+    {
+      id:        'rpl_1',
+      adminId:   'usr_admin',
+      adminName: 'Admin Joe',
+      message:   'Thanks for reporting — we will look into this.',
+      createdAt: new Date(Date.now() - 2 * 60000).toISOString(),
+    },
+  ],
+}
+
+const ITEM_NO_REPLIES = {
+  ...ITEM_BUG,
+  id:      'fb_noreply_1',
+  message: 'This is a bug report without replies.',
+  replies: [],
+}
+
+describe('FeedbackInbox — reply thread (expanded row)', () => {
+  it('shows reply-thread section when row is expanded', async () => {
+    stubFetch(makeOkResponse([ITEM_NO_REPLIES]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/without replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/without replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-thread')).toBeDefined())
+  })
+
+  it('shows existing replies in the thread', async () => {
+    stubFetch(makeOkResponse([ITEM_WITH_REPLIES]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/with replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/with replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-thread')).toBeDefined())
+
+    expect(screen.getByTestId('reply-item')).toBeDefined()
+    expect(screen.getByText('Admin Joe')).toBeDefined()
+    expect(screen.getByText(/Thanks for reporting/)).toBeDefined()
+  })
+
+  it('shows reply count when replies exist', async () => {
+    stubFetch(makeOkResponse([ITEM_WITH_REPLIES]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/with replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/with replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-thread')).toBeDefined())
+
+    expect(screen.getByText(/Replies.*1/)).toBeDefined()
+  })
+
+  it('shows reply-form inside the expanded row', async () => {
+    stubFetch(makeOkResponse([ITEM_NO_REPLIES]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/without replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/without replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-form')).toBeDefined())
+  })
+
+  it('send button is disabled when textarea is empty', async () => {
+    stubFetch(makeOkResponse([ITEM_NO_REPLIES]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/without replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/without replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-form')).toBeDefined())
+
+    const btn = screen.getByRole('button', { name: /send reply/i })
+    expect(btn.disabled).toBe(true)
+  })
+
+  it('send button becomes enabled when textarea has text', async () => {
+    stubFetch(makeOkResponse([ITEM_NO_REPLIES]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/without replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/without replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-textarea')).toBeDefined())
+
+    fireEvent.change(screen.getByTestId('reply-textarea'), { target: { value: 'Hello there' } })
+    const btn = screen.getByRole('button', { name: /send reply/i })
+    expect(btn.disabled).toBe(false)
+  })
+
+  it('submitting reply calls the correct API endpoint', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeOkResponse([ITEM_NO_REPLIES]))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ reply: { id: 'rpl_new' }, replies: [] }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/without replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/without replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-textarea')).toBeDefined())
+
+    fireEvent.change(screen.getByTestId('reply-textarea'), { target: { value: 'My reply' } })
+    fireEvent.submit(screen.getByTestId('reply-form'))
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls
+      const replyCall = calls.find(c => c[0]?.includes('/reply'))
+      expect(replyCall).toBeDefined()
+      expect(replyCall[1].method).toBe('POST')
+      expect(JSON.parse(replyCall[1].body).message).toBe('My reply')
+    })
+  })
+
+  it('clears textarea after successful reply', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeOkResponse([ITEM_NO_REPLIES]))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ reply: { id: 'rpl_new' }, replies: [] }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/without replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/without replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-textarea')).toBeDefined())
+
+    fireEvent.change(screen.getByTestId('reply-textarea'), { target: { value: 'My reply' } })
+    fireEvent.submit(screen.getByTestId('reply-form'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reply-textarea').value).toBe('')
+    })
+  })
+
+  it('shows error message when reply request fails', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeOkResponse([ITEM_NO_REPLIES]))
+      .mockResolvedValueOnce({ ok: false })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/without replies/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/without replies/))
+    await waitFor(() => expect(screen.getByTestId('reply-textarea')).toBeDefined())
+
+    fireEvent.change(screen.getByTestId('reply-textarea'), { target: { value: 'My reply' } })
+    fireEvent.submit(screen.getByTestId('reply-form'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to send reply/i)).toBeDefined()
+    })
+  })
+})

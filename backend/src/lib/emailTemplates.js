@@ -28,6 +28,33 @@ export function thankYouTemplate({ name, category, message }) {
 }
 
 /**
+ * Reply notification email sent to the submitter when staff replies to their feedback.
+ * @param {{ name: string, adminName: string, originalMessage: string, replyMessage: string }} params
+ * @returns {string} HTML string
+ */
+export function replyTemplate({ name, adminName, originalMessage, replyMessage }) {
+  const truncatedOriginal = originalMessage.length > 200 ? originalMessage.slice(0, 200) + '…' : originalMessage
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /></head>
+<body style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h2 style="color: #1a1a2e;">A reply to your feedback, ${name}!</h2>
+  <p><strong>${adminName}</strong> from the XO Arena team replied:</p>
+  <blockquote style="border-left: 3px solid #2563eb; margin: 16px 0; padding: 8px 16px; color: #333;">
+    ${replyMessage}
+  </blockquote>
+  <p style="color: #888; font-size: 0.85em;">Your original message:</p>
+  <blockquote style="border-left: 3px solid #ccc; margin: 16px 0; padding: 8px 16px; color: #555;">
+    ${truncatedOriginal}
+  </blockquote>
+  <p style="color: #888; font-size: 0.85em; margin-top: 32px;">— The XO Arena Team</p>
+</body>
+</html>
+  `.trim()
+}
+
+/**
  * Staff alert email sent to admins/support when new feedback arrives.
  * @param {{ category: string, message: string, pageUrl: string, appId: string }} params
  * @returns {string} HTML string

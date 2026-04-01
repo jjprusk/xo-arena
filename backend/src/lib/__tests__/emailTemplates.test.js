@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { thankYouTemplate, staffAlertTemplate } from '../emailTemplates.js'
+import { thankYouTemplate, staffAlertTemplate, replyTemplate } from '../emailTemplates.js'
 
 // ── thankYouTemplate ──────────────────────────────────────────────────────────
 
@@ -108,5 +108,56 @@ describe('staffAlertTemplate', () => {
   it('includes the app name in the heading', () => {
     const html = staffAlertTemplate({ ...BASE, appId: 'my-app' })
     expect(html).toContain('my-app')
+  })
+})
+
+// ── replyTemplate ─────────────────────────────────────────────────────────────
+
+describe('replyTemplate', () => {
+  const BASE = {
+    name:            'Alice',
+    adminName:       'Admin Joe',
+    originalMessage: 'Something is broken on the game page.',
+    replyMessage:    'Thanks for reporting — we will fix this shortly.',
+  }
+
+  it('returns a non-empty HTML string', () => {
+    const html = replyTemplate(BASE)
+    expect(typeof html).toBe('string')
+    expect(html.length).toBeGreaterThan(0)
+    expect(html).toContain('<!DOCTYPE html>')
+  })
+
+  it('includes the user name in greeting', () => {
+    const html = replyTemplate(BASE)
+    expect(html).toContain('Alice')
+  })
+
+  it('includes the admin name', () => {
+    const html = replyTemplate(BASE)
+    expect(html).toContain('Admin Joe')
+  })
+
+  it('includes the reply message', () => {
+    const html = replyTemplate(BASE)
+    expect(html).toContain('Thanks for reporting')
+  })
+
+  it('includes the original message', () => {
+    const html = replyTemplate(BASE)
+    expect(html).toContain('Something is broken')
+  })
+
+  it('truncates original message longer than 200 chars', () => {
+    const long = 'z'.repeat(250)
+    const html = replyTemplate({ ...BASE, originalMessage: long })
+    expect(html).toContain('z'.repeat(200))
+    expect(html).toContain('…')
+  })
+
+  it('does not truncate original message under 200 chars', () => {
+    const html = replyTemplate(BASE)
+    expect(html).toContain(BASE.originalMessage)
+    expect(html).not.toContain('…')
   })
 })

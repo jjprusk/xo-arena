@@ -12,6 +12,10 @@ vi.mock('../db.js', () => ({
       count:      vi.fn(),
       groupBy:    vi.fn(),
     },
+    feedbackReply: {
+      create:   vi.fn(),
+      findMany: vi.fn(),
+    },
     user: {
       findUnique: vi.fn(),
       findMany:   vi.fn(),
@@ -33,6 +37,7 @@ const {
   toggleArchive,
   archiveMany,
   deleteFeedback,
+  createReply,
 } = await import('../feedbackHelpers.js')
 const db = (await import('../db.js')).default
 
@@ -46,6 +51,7 @@ const mockItem = {
   message:    'Bug report',
   pageUrl:    'https://xo-arena.app',
   createdAt:  new Date(),
+  replies:    [],
 }
 
 beforeEach(() => {
@@ -366,5 +372,95 @@ describe('deleteFeedback', () => {
     err.code = 'P2025'
     db.feedback.delete.mockRejectedValue(err)
     await expect(deleteFeedback('missing')).rejects.toMatchObject({ code: 'P2025' })
+  })
+})
+
+// ── createReply ───────────────────────────────────────────────────────────────
+
+const mockFeedbackWithUser = {
+  id:      'fb_1',
+  message: 'Something is broken',
+  user: {
+    id:           'usr_2',
+    displayName:  'Alice',
+    email:        'alice@test.com',
+    betterAuthId: 'ba_2',
+  },
+}
+
+const mockReply = {
+  id:         'rpl_1',
+  feedbackId: 'fb_1',
+  adminId:    'usr_admin',
+  message:    'Thanks for the report!',
+  createdAt:  new Date(),
+}
+
+describe('createReply', () => {
+  beforeEach(() => {
+    db.feedback.findUnique.mockResolvedValue(mockFeedbackWithUser)
+    db.feedbackReply.create.mockResolvedValue(mockReply)
+    db.feedbackReply.findMany.mockResolvedValue([mockReply])
+    db.user.findMany.mockResolvedValue([{ id: 'usr_admin', displayName: 'Admin Joe' }])
+  })
+
+  it('returns null when feedback does not exist', async () => {
+    db.feedback.findUnique.mockResolvedValue(null)
+    const result = await createReply('missing', 'usr_admin', 'Hello')
+    expect(result).toBeNull()
+    expect(db.feedbackReply.create).not.toHaveBeenCalled()
+  })
+
+  it('creates a reply with correct feedbackId, adminId, message', async () => {
+    await createReply('fb_1', 'usr_admin', 'Hello')
+    expect(db.feedbackReply.create).toHaveBeenCalledWith({
+      data: { feedbackId: 'fb_1', adminId: 'usr_admin', message: 'Hello' },
+    })
+  })
+
+  it('returns { reply, feedback, replies }', async () => {
+    const result = await createReply('fb_1', 'usr_admin', 'Hello')
+    expect(result).toHaveProperty('reply')
+    expect(result).toHaveProperty('feedback')
+    expect(result).toHaveProperty('replies')
+  })
+
+  it('replies list includes adminName resolved from user table', async () => {
+    const result = await createReply('fb_1', 'usr_admin', 'Hello')
+    expect(result.replies[0].adminName).toBe('Admin Joe')
+  })
+
+  it('falls back to "Staff" when admin user not found', async () => {
+    db.user.findMany.mockResolvedValue([])
+    const result = await createReply('fb_1', 'usr_admin', 'Hello')
+    expect(result.replies[0].adminName).toBe('Staff')
+  })
+
+  it('replies are ordered by createdAt asc (findMany called with orderBy)', async () => {
+    await createReply('fb_1', 'usr_admin', 'Hello')
+    expect(db.feedbackReply.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where:   { feedbackId: 'fb_1' },
+        orderBy: { createdAt: 'asc' },
+      })
+    )
+  })
+
+  it('includes the feedback object with user field in result', async () => {
+    const result = await createReply('fb_1', 'usr_admin', 'Hello')
+    expect(result.feedback.user.email).toBe('alice@test.com')
+  })
+
+  it('handles multiple replies with mixed admin ids', async () => {
+    const reply2 = { ...mockReply, id: 'rpl_2', adminId: 'usr_admin2' }
+    db.feedbackReply.findMany.mockResolvedValue([mockReply, reply2])
+    db.user.findMany.mockResolvedValue([
+      { id: 'usr_admin',  displayName: 'Admin Joe' },
+      { id: 'usr_admin2', displayName: 'Admin Sam' },
+    ])
+    const result = await createReply('fb_1', 'usr_admin', 'Hello')
+    expect(result.replies).toHaveLength(2)
+    expect(result.replies[0].adminName).toBe('Admin Joe')
+    expect(result.replies[1].adminName).toBe('Admin Sam')
   })
 })

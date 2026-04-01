@@ -647,60 +647,60 @@ fully without this — emails are simply skipped until DNS is verified.
 
 ## 11. Implementation Checklist
 
-### Phase 1 — Core submission
+### Phase 1 — Core submission ✅
 **Backend**
-- [ ] Add `SUPPORT` to `VALID_ROLES` in `backend/src/utils/roles.js`
-- [ ] Add `isSupport()` + `requireSupport()` to `backend/src/middleware/auth.js`
-- [ ] Add `GET /api/v1/me/roles` endpoint
-- [ ] Add `express-rate-limit` to `backend/package.json`
-- [ ] Write DB migration `20260XXX_add_feedback` — add `SUPPORT` to `Role` enum + `Feedback` + `FeedbackReply` + `FeedbackCategory` + `FeedbackStatus` enums
-- [ ] `POST /api/v1/feedback` handler — save row, send thank-you email (verified users only), send staff alert emails, emit `feedback:new` Socket.io event to `support` room
-- [ ] `GET /api/v1/support/feedback` — list with `appId`, `status`, `category`, `archived`, date range filters + sort params
-- [ ] `GET /api/v1/support/feedback/unread-count` — with `?groupByApp=true` support
-- [ ] `PATCH /api/v1/support/feedback/:id/read`
-- [ ] `PATCH /api/v1/support/feedback/:id/status` — updates `status`, `resolutionNote`, sets `resolvedAt`/`resolvedById` on terminal states
-- [ ] `PATCH /api/v1/support/feedback/:id/archive` — toggle `archivedAt`
-- [ ] `PATCH /api/v1/support/feedback/archive-many` — bulk archive by `ids[]`
-- [ ] `DELETE /api/v1/support/feedback/:id`
-- [ ] `GET /api/v1/support/users` — search by name/email
-- [ ] `PATCH /api/v1/support/users/:id/ban`
-- [ ] Admin mirrored endpoints under `/api/v1/admin/feedback` (same logic, `requireAdmin`)
-- [ ] Socket.io: `support:join` event handler — `socket.join('support')`
-- [ ] Resend thank-you email template (`thankYouTemplate`)
-- [ ] Resend staff alert email template (`staffAlertTemplate`)
+- [x] Add `SUPPORT` to `VALID_ROLES` in `backend/src/utils/roles.js`
+- [x] Add `isSupport()` + `requireSupport()` to `backend/src/middleware/auth.js`
+- [x] Add `GET /api/v1/me/roles` endpoint
+- [x] Add `express-rate-limit` to `backend/package.json`
+- [x] Write DB migration `20260XXX_add_feedback` — add `SUPPORT` to `Role` enum + `Feedback` + `FeedbackReply` + `FeedbackCategory` + `FeedbackStatus` enums
+- [x] `POST /api/v1/feedback` handler — save row, send thank-you email (verified users only), send staff alert emails, emit `feedback:new` Socket.io event to `support` room
+- [x] `GET /api/v1/support/feedback` — list with `appId`, `status`, `category`, `archived`, date range filters + sort params
+- [x] `GET /api/v1/support/feedback/unread-count` — with `?groupByApp=true` support
+- [x] `PATCH /api/v1/support/feedback/:id/read`
+- [x] `PATCH /api/v1/support/feedback/:id/status` — updates `status`, `resolutionNote`, sets `resolvedAt`/`resolvedById` on terminal states
+- [x] `PATCH /api/v1/support/feedback/:id/archive` — toggle `archivedAt`
+- [x] `PATCH /api/v1/support/feedback/archive-many` — bulk archive by `ids[]`
+- [x] `DELETE /api/v1/support/feedback/:id`
+- [x] `GET /api/v1/support/users` — search by name/email
+- [x] `PATCH /api/v1/support/users/:id/ban`
+- [x] Admin mirrored endpoints under `/api/v1/admin/feedback` (same logic, `requireAdmin`)
+- [x] Socket.io: `support:join` event handler — `socket.join('support')`
+- [x] Resend thank-you email template (`thankYouTemplate`)
+- [x] Resend staff alert email template (`staffAlertTemplate`)
 
 **Frontend**
-- [ ] `frontend/src/store/rolesStore.js` — Zustand store, `GET /api/v1/me/roles`, `hasRole()`, clear on sign-out
-- [ ] Call `rolesStore.fetch()` in `AppLayout` after session confirms
-- [ ] `SupportRoute` component — allows admin or `hasRole('SUPPORT')`
-- [ ] Stripped support layout in `AppLayout` — minimal header, no nav, redirect to `/support`
-- [ ] `FeedbackButton` component — `appId` + `apiBase` props, `z-40`, hide when playing, hide for support users
-- [ ] `FeedbackModal` component — category pills, textarea, submit to `POST /api/v1/feedback`
-- [ ] `FeedbackInbox` shared component — parameterised by API path; app selector pills, inbox/archive tabs, sort dropdown, filter pills, unread toggle, date range, bulk select, row expand, status selector, resolution note editor, archive/unarchive/delete actions
-- [ ] `AdminFeedbackPage` at `/admin/feedback` — wraps `FeedbackInbox` with admin API path
-- [ ] `SupportPage` at `/support` — app selector + `FeedbackInbox` (support API path) + User Lookup tab
-- [ ] Support toggle button + badge in `AdminUsersPage`
-- [ ] Socket.io `feedback:new` listener in `AppLayout` — increment badge, toast, chime for admin/support users
-- [ ] Routes in `App.jsx` (`/admin/feedback`, `/support`)
-- [ ] Hamburger menu: add Feedback to `ADMIN_MENU_LINKS`
+- [x] `frontend/src/store/rolesStore.js` — Zustand store, `GET /api/v1/me/roles`, `hasRole()`, clear on sign-out
+- [x] Call `rolesStore.fetch()` in `AppLayout` after session confirms
+- [x] `SupportRoute` component — allows admin or `hasRole('SUPPORT')`
+- [x] Stripped support layout in `AppLayout` — minimal header, no nav, redirect to `/support`
+- [x] `FeedbackButton` component — `appId` + `apiBase` props, `z-40`, hide when playing, hide for support users
+- [x] `FeedbackModal` component — category pills, textarea, submit to `POST /api/v1/feedback`
+- [x] `FeedbackInbox` shared component — parameterised by API path; app selector pills, inbox/archive tabs, sort dropdown, filter pills, unread toggle, date range, bulk select, row expand, status selector, resolution note editor, archive/unarchive/delete actions
+- [x] `AdminFeedbackPage` at `/admin/feedback` — wraps `FeedbackInbox` with admin API path
+- [x] `SupportPage` at `/support` — app selector + `FeedbackInbox` (support API path) + User Lookup tab
+- [x] Support toggle button + badge in `AdminUsersPage`
+- [x] Socket.io `feedback:new` listener in `AppLayout` — increment badge, toast, chime for admin/support users
+- [x] Routes in `App.jsx` (`/admin/feedback`, `/support`)
+- [x] Hamburger menu: add Feedback to `ADMIN_MENU_LINKS`
 
-### Phase 2 — Screenshots
-- [ ] Add `html2canvas` to `frontend/package.json`
-- [ ] Desktop: capture-before-open in `FeedbackButton` using `html2canvas`
-- [ ] Mobile (`window.innerWidth < 768`): show `<input type="file" accept="image/*" />` file picker instead
-- [ ] Shared compression helper: resize to max 800px wide at 0.7 JPEG quality — used for both desktop canvas and mobile file input (`FileReader.readAsDataURL` → canvas resize)
-- [ ] Screenshot thumbnail in `FeedbackModal`
-- [ ] Screenshot lightbox in `FeedbackInbox` expanded row
+### Phase 2 — Screenshots ✅
+- [x] Add `html2canvas` to `frontend/package.json`
+- [x] Desktop: capture-before-open in `FeedbackButton` using `html2canvas`
+- [x] Mobile (`window.innerWidth < 768`): show `<input type="file" accept="image/*" />` file picker instead
+- [x] Shared compression helper: resize to max 800px wide at 0.7 JPEG quality — used for both desktop canvas and mobile file input (`FileReader.readAsDataURL` → canvas resize)
+- [x] Screenshot thumbnail in `FeedbackModal`
+- [x] Screenshot lightbox in `FeedbackInbox` expanded row
 
-### Phase 3 — Notifications
-- [ ] Unread count badge polling (60s) in `AppLayout` for admin and support users
+### Phase 3 — Notifications ✅
+- [x] Unread count badge polling (60s) in `AppLayout` for admin and support users
 - [ ] Per-app unread counts (`?groupByApp=true`) populating app selector pills
-- [ ] Chime on new unread (`play('win')`)
+- [x] Chime on new unread (`play('win')`)
 
-### Phase 4 — Replies
-- [ ] `POST /api/v1/support/feedback/:id/reply` + admin equivalent
-- [ ] Reply thread UI in `FeedbackInbox` expanded row
-- [ ] Resend email to submitter on reply (verified email only)
+### Phase 4 — Replies ✅
+- [x] `POST /api/v1/support/feedback/:id/reply` + admin equivalent
+- [x] Reply thread UI in `FeedbackInbox` expanded row
+- [x] Resend email to submitter on reply (verified email only)
 
 ### Phase 5 — Custom sending domain (optional)
 - [ ] Log in to callidity.com DNS registrar

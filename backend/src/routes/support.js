@@ -4,6 +4,7 @@
  */
 
 import { Router } from 'express'
+import { Resend } from 'resend'
 import { requireAuth, requireSupport } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
@@ -15,7 +16,12 @@ import {
   toggleArchive,
   archiveMany,
   deleteFeedback,
+  createReply,
 } from '../lib/feedbackHelpers.js'
+import { replyTemplate } from '../lib/emailTemplates.js'
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 
 const router = Router()
 router.use(requireAuth, requireSupport)
@@ -113,6 +119,53 @@ router.delete('/feedback/:id', async (req, res, next) => {
   try {
     await deleteFeedback(req.params.id)
     res.status(204).end()
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/support/feedback/:id/reply
+ * Body: { message }
+ */
+router.post('/feedback/:id/reply', async (req, res, next) => {
+  try {
+    const { message } = req.body
+    if (!message?.trim()) return res.status(400).json({ error: 'message is required' })
+
+    const domainUser = await db.user.findUnique({
+      where:  { betterAuthId: req.auth.userId },
+      select: { id: true, displayName: true },
+    })
+    if (!domainUser) return res.status(403).json({ error: 'Forbidden' })
+
+    const result = await createReply(req.params.id, domainUser.id, message.trim())
+    if (!result) return res.status(404).json({ error: 'Feedback not found' })
+
+    // Non-fatal reply email to submitter (verified email only)
+    if (resend && result.feedback.user?.email && result.feedback.user?.betterAuthId) {
+      const baUser = await db.baUser.findUnique({
+        where:  { id: result.feedback.user.betterAuthId },
+        select: { emailVerified: true },
+      }).catch(() => null)
+
+      if (baUser?.emailVerified) {
+        resend.emails.send({
+          from:    FROM,
+          to:      result.feedback.user.email,
+          subject: 'A reply to your XO Arena feedback',
+          html:    replyTemplate({
+            name:            result.feedback.user.displayName ?? 'there',
+            adminName:       domainUser.displayName ?? 'Staff',
+            originalMessage: result.feedback.message,
+            replyMessage:    message.trim(),
+          }),
+        }).catch(err => logger.warn({ err: err.message }, 'Reply email failed (non-fatal)'))
+      }
+    }
+
+    res.status(201).json({ reply: result.reply, replies: result.replies })
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
     next(err)
