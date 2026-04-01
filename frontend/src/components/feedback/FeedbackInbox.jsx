@@ -408,7 +408,7 @@ function ExpandedRow({ item, apiBase, onUpdate, onDelete }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback' }) {
+export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback', apps = [] }) {
   const [tab, setTab] = useState('inbox') // 'inbox' | 'archive'
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -419,6 +419,8 @@ export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback' }) {
   const [sort, setSort] = useState('newest')
   const [filter, setFilter] = useState('OPEN')
   const [unreadOnly, setUnreadOnly] = useState(false)
+  const [selectedApp, setSelectedApp] = useState(null)
+  const [appCounts, setAppCounts] = useState({})
 
   const [selected, setSelected] = useState(new Set())
   const [expanded, setExpanded] = useState(null)
@@ -426,6 +428,23 @@ export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback' }) {
 
   const totalPages = Math.ceil(total / LIMIT)
   const archived = tab === 'archive'
+
+  // Fetch per-app unread counts once on mount
+  useEffect(() => {
+    if (!apps.length) return
+    async function fetchAppCounts() {
+      try {
+        const token = await getToken()
+        const headers = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch(`${BASE}${apiBase}/unread-count?groupByApp=true`, { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        setAppCounts(data.counts ?? {})
+      } catch { /* non-fatal */ }
+    }
+    fetchAppCounts()
+  }, [apiBase, apps.length])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -441,6 +460,7 @@ export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback' }) {
       p.set('limit', String(LIMIT))
       if (filter !== 'all') p.set('status', filter)
       if (unreadOnly) p.set('unread', 'true')
+      if (selectedApp) p.set('appId', selectedApp)
       const headers = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
       const res = await fetch(`${BASE}${apiBase}?${p.toString()}`, { headers })
@@ -453,10 +473,10 @@ export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback' }) {
     } finally {
       setLoading(false)
     }
-  }, [apiBase, archived, sort, filter, unreadOnly, page])
+  }, [apiBase, archived, sort, filter, unreadOnly, selectedApp, page])
 
   // Reset page when filters change
-  useEffect(() => { setPage(1) }, [tab, sort, filter, unreadOnly])
+  useEffect(() => { setPage(1) }, [tab, sort, filter, unreadOnly, selectedApp])
   useEffect(() => { load() }, [load])
 
   function handleUpdate(updated) {
@@ -524,6 +544,52 @@ export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback' }) {
           </button>
         ))}
       </div>
+
+      {/* App selector pills */}
+      {apps.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap" data-testid="app-selector">
+          <button
+            onClick={() => setSelectedApp(null)}
+            className="px-3 py-1 rounded-full text-xs font-medium border transition-colors"
+            data-testid="app-pill-all"
+            style={{
+              borderColor: selectedApp === null ? 'var(--color-blue-500)' : 'var(--border-default)',
+              backgroundColor: selectedApp === null ? 'var(--color-blue-50)' : 'transparent',
+              color: selectedApp === null ? 'var(--color-blue-600)' : 'var(--text-muted)',
+            }}
+          >
+            All
+          </button>
+          {apps.map(appId => {
+            const count = appCounts[appId] ?? 0
+            const active = selectedApp === appId
+            return (
+              <button
+                key={appId}
+                onClick={() => setSelectedApp(appId)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors"
+                data-testid={`app-pill-${appId}`}
+                style={{
+                  borderColor: active ? 'var(--color-blue-500)' : 'var(--border-default)',
+                  backgroundColor: active ? 'var(--color-blue-50)' : 'transparent',
+                  color: active ? 'var(--color-blue-600)' : 'var(--text-muted)',
+                }}
+              >
+                {appId}
+                {count > 0 && (
+                  <span
+                    className="min-w-[1.1rem] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white"
+                    data-testid={`app-pill-count-${appId}`}
+                    style={{ backgroundColor: 'var(--color-red-500)' }}
+                  >
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div

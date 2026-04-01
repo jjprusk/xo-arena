@@ -246,7 +246,7 @@ export default function SupportPage() {
 
         {/* Tab content */}
         {tab === 'Inbox' && (
-          <FeedbackInbox apiBase="/api/v1/support/feedback" />
+          <FeedbackInbox apiBase="/api/v1/support/feedback" apps={['xo-arena']} />
         )}
         {tab === 'User Lookup' && (
           <UserLookup />

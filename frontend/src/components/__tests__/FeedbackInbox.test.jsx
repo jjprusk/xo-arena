@@ -768,3 +768,132 @@ describe('FeedbackInbox — reply thread (expanded row)', () => {
     })
   })
 })
+
+// ── Phase 3 — Per-app unread count badges on app selector pills ───────────────
+
+function makeCountsResponse(counts) {
+  return {
+    ok: true,
+    json: () => Promise.resolve({ counts }),
+  }
+}
+
+describe('FeedbackInbox — app selector pills', () => {
+  it('does not render app selector when apps prop is empty', async () => {
+    stubFetch(makeOkResponse([]))
+    renderInbox()
+    await waitFor(() => expect(screen.queryByTestId('app-selector')).toBeNull())
+  })
+
+  it('renders app selector when apps prop is provided', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 0 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-selector')).toBeDefined())
+  })
+
+  it('renders an "All" pill', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 0 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-pill-all')).toBeDefined())
+  })
+
+  it('renders a pill for each app', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 2, 'other-app': 0 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena', 'other-app'] })
+    await waitFor(() => {
+      expect(screen.getByTestId('app-pill-xo-arena')).toBeDefined()
+      expect(screen.getByTestId('app-pill-other-app')).toBeDefined()
+    })
+  })
+
+  it('shows unread count badge when count > 0', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 4 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-pill-count-xo-arena')).toBeDefined())
+    expect(screen.getByTestId('app-pill-count-xo-arena').textContent).toBe('4')
+  })
+
+  it('does not show count badge when count is 0', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 0 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-pill-xo-arena')).toBeDefined())
+    expect(screen.queryByTestId('app-pill-count-xo-arena')).toBeNull()
+  })
+
+  it('caps badge display at 99+', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 150 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-pill-count-xo-arena')).toBeDefined())
+    expect(screen.getByTestId('app-pill-count-xo-arena').textContent).toBe('99+')
+  })
+
+  it('fetches unread-count with groupByApp=true', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 1 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-selector')).toBeDefined())
+    const calls = fetchMock.mock.calls.map(c => c[0])
+    expect(calls.some(url => url.includes('unread-count') && url.includes('groupByApp=true'))).toBe(true)
+  })
+
+  it('clicking an app pill adds appId to the list query', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 2 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-pill-xo-arena')).toBeDefined())
+
+    fireEvent.click(screen.getByTestId('app-pill-xo-arena'))
+
+    await waitFor(() => {
+      const listCalls = fetchMock.mock.calls.filter(c => !c[0].includes('unread-count'))
+      const lastCall = listCalls[listCalls.length - 1][0]
+      expect(lastCall).toContain('appId=xo-arena')
+    })
+  })
+
+  it('clicking "All" pill clears appId from the query', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(makeCountsResponse({ 'xo-arena': 2 }))
+      .mockResolvedValueOnce(makeOkResponse([]))
+      .mockResolvedValueOnce(makeOkResponse([]))
+      .mockResolvedValueOnce(makeOkResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderInbox({ apps: ['xo-arena'] })
+    await waitFor(() => expect(screen.getByTestId('app-pill-xo-arena')).toBeDefined())
+
+    fireEvent.click(screen.getByTestId('app-pill-xo-arena'))
+    await waitFor(() => {
+      const listCalls = fetchMock.mock.calls.filter(c => !c[0].includes('unread-count'))
+      expect(listCalls[listCalls.length - 1][0]).toContain('appId=xo-arena')
+    })
+
+    fireEvent.click(screen.getByTestId('app-pill-all'))
+    await waitFor(() => {
+      const listCalls = fetchMock.mock.calls.filter(c => !c[0].includes('unread-count'))
+      expect(listCalls[listCalls.length - 1][0]).not.toContain('appId')
+    })
+  })
+})

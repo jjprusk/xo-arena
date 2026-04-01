@@ -694,7 +694,7 @@ fully without this — emails are simply skipped until DNS is verified.
 
 ### Phase 3 — Notifications ✅
 - [x] Unread count badge polling (60s) in `AppLayout` for admin and support users
-- [ ] Per-app unread counts (`?groupByApp=true`) populating app selector pills
+- [x] Per-app unread counts (`?groupByApp=true`) populating app selector pills
 - [x] Chime on new unread (`play('win')`)
 
 ### Phase 4 — Replies ✅
