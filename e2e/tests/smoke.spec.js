@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const { version: EXPECTED_VERSION } = JSON.parse(
-  readFileSync(join(__dirname, '../../frontend/package.json'), 'utf-8')
+  readFileSync(join(__dirname, '../../package.json'), 'utf-8')
 )
 
 // ── Wait for deploy ───────────────────────────────────────────────────────────
