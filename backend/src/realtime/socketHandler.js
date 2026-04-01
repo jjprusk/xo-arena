@@ -203,6 +203,12 @@ export async function attachSocketIO(httpServer) {
       socket.to(slug).emit('game:reaction', { emoji, fromMark })
     })
 
+    // ── Support room ─────────────────────────────────────────────────
+
+    socket.on('support:join', () => {
+      socket.join('support')
+    })
+
     // ── ML training progress ─────────────────────────────────────────
 
     socket.on('ml:watch', ({ sessionId }) => {

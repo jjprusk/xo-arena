@@ -17,6 +17,8 @@ import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
+import feedbackRouter from './routes/feedback.js'
+import supportRouter from './routes/support.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
 import { getSystemConfig } from './services/mlService.js'
@@ -36,6 +38,8 @@ registerRoutes(app, {
   '/admin': adminRouter,
   '/bots': botsRouter,
   '/bot-games': botGamesRouter,
+  '/feedback': feedbackRouter,
+  '/support': supportRouter,
 })
 
 // Public config endpoint (no auth required)
@@ -62,6 +66,7 @@ try {
 db.$connect().catch((err) => logger.warn('DB pre-connect failed', { err }))
 
 attachSocketIO(server).then((io) => {
+  app.set('io', io)
   mlSetIO(io)
   logSetIO(io)
   server.listen(PORT, () => {

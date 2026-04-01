@@ -39,6 +39,10 @@ a focused, stripped-down interface — just the tools they need, nothing else.
 
 ## 2. Screenshot Capture
 
+Screenshot capture works differently on desktop vs mobile due to browser limitations.
+
+### Desktop — auto-capture with `html2canvas`
+
 Use **`html2canvas`** (not currently a dependency — add it). Capture happens *before*
 the modal mounts so the feedback UI itself doesn't appear in the image.
 
@@ -46,16 +50,27 @@ the modal mounts so the feedback UI itself doesn't appear in the image.
 quality (`canvas.toDataURL('image/jpeg', 0.7)`). This keeps most screenshots under
 ~80–120KB, making base64-in-DB acceptable for MVP.
 
-**Mobile**: `html2canvas` has known issues on mobile (cross-origin images, CSS
-transforms, fixed positioning). **Skip screenshot capture on mobile** — detect via
-`'ontouchstart' in window` or `window.innerWidth < 768`. Show a note in the modal:
-*"Screenshot not available on mobile."* This is acceptable for MVP; screenshots are a
-nice-to-have, not essential.
+### Mobile — file attachment picker
 
-**Storage**: base64 JPEG stored in DB as `screenshotData Text?` is fine for MVP given
-compressed size and infrequent usage. If the `feedback` table grows large, add a
-separate migration to move `screenshotData` to Railway object storage or S3 — but
-don't over-engineer now.
+`html2canvas` has fundamental issues on mobile (CSS transforms, fixed positioning,
+CORS-blocked resources, memory constraints) that all DOM-to-image libraries share.
+Instead, on mobile show an **"Attach screenshot (optional)"** file input:
+
+```html
+<input type="file" accept="image/*" />
+```
+
+This opens the native photo picker, letting the user attach a screenshot they took
+themselves. Detect mobile via `window.innerWidth < 768`. When a file is selected,
+read it with `FileReader.readAsDataURL()`, resize/compress the same way as desktop
+(max 800px, 0.7 JPEG quality), and send as `screenshotData`. No backend changes needed.
+
+### Storage
+
+base64 JPEG stored in DB as `screenshotData Text?` is fine for MVP given compressed
+size and infrequent usage. If the `feedback` table grows large, add a separate
+migration to move `screenshotData` to Railway object storage or S3 — but don't
+over-engineer now.
 
 ---
 
@@ -121,8 +136,18 @@ enum FeedbackCategory {
 
 Migration name: `20260XXX_add_feedback`
 
-No schema change is needed for the `SUPPORT` role — it uses the existing `UserRole`
-table (same as `BOT_ADMIN`, `TOURNAMENT_ADMIN`).
+**The `SUPPORT` role must also be added to the existing `Role` enum** in the same
+migration. `UserRole.role` is typed to that enum, so `SUPPORT` must be listed there
+alongside `BOT_ADMIN` and `TOURNAMENT_ADMIN` — Prisma will reject it otherwise:
+
+```prisma
+enum Role {
+  ADMIN
+  BOT_ADMIN
+  TOURNAMENT_ADMIN
+  SUPPORT          // add this
+}
+```
 
 ---
 
@@ -211,9 +236,10 @@ submissions and unverified accounts are silently skipped — no error, no retry.
 
 ```js
 // Inside POST /api/v1/feedback handler, after db.feedback.create(...)
+const FROM = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 if (userId && user?.email && user?.emailVerified) {
   await resend.emails.send({
-    from:    'XO Arena <support@aiarena.callidity.com>',
+    from:    `XO Arena <${FROM}>`,
     to:      user.email,
     subject: 'Thanks for your feedback!',
     html:    thankYouTemplate({ name: user.displayName, category, message }),
@@ -231,11 +257,10 @@ expectations ("we review all feedback and will follow up if needed").
 process; outbound HTTPS calls to Resend's API work exactly as they do locally. The
 `RESEND_API_KEY` environment variable is already set in the Railway service.
 
-**Sending domain prerequisite**: `aiarena.callidity.com` must be added as a verified
-sending domain in Resend (SPF + DKIM DNS records on the `callidity.com` registrar)
-before emails from `support@aiarena.callidity.com` will deliver. Verify this is done
-before implementing Phase 1 — it's a DNS propagation step that can take up to 48 hours
-and is not part of the code changes.
+**Sending domain**: DNS verification for `aiarena.callidity.com` is an optional step
+(see Phase 5). Until it's done, thank-you emails and staff alert emails will not be
+sent — the submission itself always succeeds. The code can ship to production without
+verified DNS; emails simply go silent until Phase 5 is completed.
 
 ### Support staff notifications on new submission
 
@@ -282,9 +307,10 @@ const staffEmails = await db.user.findMany({
   select: { email: true, displayName: true },
 })
 
+const FROM = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 await Promise.allSettled(staffEmails.map(staff =>
   resend.emails.send({
-    from:    'XO Arena <support@aiarena.callidity.com>',
+    from:    `XO Arena <${FROM}>`,
     to:      staff.email,
     subject: `New ${category} feedback received`,
     html:    staffAlertTemplate({ category, message, pageUrl, appId }),
@@ -510,17 +536,19 @@ In `AdminUsersPage`, add a **Support** toggle button alongside the existing
 `BOT_ADMIN` / `TOURNAMENT_ADMIN` toggles:
 
 ```jsx
-<RoleToggle
+<RoleButton
   active={(u.roles ?? []).includes('SUPPORT')}
-  label="support"
+  color="blue"
   title={(u.roles ?? []).includes('SUPPORT') ? 'Remove support' : 'Grant support'}
   onClick={() => toggleRole(u, 'SUPPORT')}
-/>
+>
+  support
+</RoleButton>
 ```
 
 Badge display in the users table:
 ```jsx
-{(u.roles ?? []).includes('SUPPORT') && <Badge color="purple">support</Badge>}
+{(u.roles ?? []).includes('SUPPORT') && <Badge color="blue">support</Badge>}
 ```
 
 No other changes to the admin UI — admins continue to access the feedback inbox via
@@ -529,27 +557,6 @@ No other changes to the admin UI — admins continue to access the feedback inbo
 ---
 
 ## 9. Implementation Phases
-
-### Phase 0 — DNS prerequisite (callidity.com)
-
-Must be completed before Phase 1 code ships to production, as outbound emails will
-silently fail or land in spam without verified DNS records.
-
-1. Log in to the **callidity.com** DNS registrar / hosting control panel
-2. In **Resend** (resend.com), go to Domains → Add Domain → enter `aiarena.callidity.com`
-3. Resend will provide a set of DNS records to add — typically:
-   - `TXT` record for SPF (e.g. `v=spf1 include:amazonses.com ~all`)
-   - `CNAME` records for DKIM (two or three `_domainkey` entries)
-   - Optional `MX` record if bounce handling is needed
-4. Add those records at the registrar under the `aiarena.callidity.com` subdomain
-5. Click **Verify** in Resend — DNS propagation can take up to 48 hours but is often
-   minutes if the registrar has low TTLs
-6. Confirm the domain shows **Verified** status in Resend before deploying Phase 1
-7. Update the `RESEND_FROM_DOMAIN` (or equivalent) env var in Railway to
-   `support@aiarena.callidity.com` if not already set
-
-> ⚠️ Phase 1 can be developed and tested locally while DNS propagates, but do not
-> merge to production until Resend shows the domain as verified.
 
 ### Phase 1 — Core submission (backend + basic UI)
 - Add `SUPPORT` to `VALID_ROLES` in `roles.js`
@@ -578,9 +585,25 @@ silently fail or land in spam without verified DNS records.
 - Poll + badge in `AppLayout` for admin and support users
 - Reuse `play('win')` as notification chime
 
-### Phase 4 — Replies (optional)
+### Phase 4 — Replies ✅
 - Reply thread UI in both admin and support inboxes
 - Trigger Resend email on reply (Resend already integrated)
+
+### Phase 5 — Custom sending domain (optional)
+
+Enables thank-you emails to submitters and staff alert emails. The system works
+fully without this — emails are simply skipped until DNS is verified.
+
+1. Log in to the **callidity.com** DNS registrar / hosting control panel
+2. In **Resend** (resend.com), go to Domains → Add Domain → enter `aiarena.callidity.com`
+3. Resend will provide DNS records to add — typically:
+   - `TXT` record for SPF (e.g. `v=spf1 include:amazonses.com ~all`)
+   - `CNAME` records for DKIM (two or three `_domainkey` entries)
+   - Optional `MX` record if bounce handling is needed
+4. Add those records at the registrar under the `aiarena.callidity.com` subdomain
+5. Click **Verify** in Resend — propagation can take up to 48 hours
+6. Confirm the domain shows **Verified** status in Resend
+7. Update `EMAIL_FROM` in Railway to `support@aiarena.callidity.com`
 
 ### Plugging into a future game (no phases needed)
 1. Point the new game's frontend at the same backend (`apiBase`)
@@ -602,7 +625,7 @@ silently fail or land in spam without verified DNS records.
 - **Support scope**: ban/unban + feedback inbox only. No role changes, ELO, ML, bots,
   AI config, or logs.
 - **Screenshot storage**: base64 JPEG (~80–120KB compressed) in DB, fine for MVP.
-- **Screenshot on mobile**: skipped — `html2canvas` unreliable. Note shown in modal.
+- **Screenshot on mobile**: `html2canvas` (and all DOM-to-image libraries) are fundamentally unreliable on mobile. Instead, show a `<input type="file" accept="image/*">` picker — user attaches their own screenshot, read via `FileReader`, compressed the same way as desktop.
 - **Anonymous submissions**: allowed. IP rate limiting (3/hr) is the spam guard.
 - **Rate limiter**: add `express-rate-limit` (in-memory). Redis store available later.
 - **Notification sound**: reuse `play('win')` from existing `soundStore`.
@@ -624,64 +647,65 @@ silently fail or land in spam without verified DNS records.
 
 ## 11. Implementation Checklist
 
-### Phase 0 — DNS
+### Phase 1 — Core submission ✅
+**Backend**
+- [x] Add `SUPPORT` to `VALID_ROLES` in `backend/src/utils/roles.js`
+- [x] Add `isSupport()` + `requireSupport()` to `backend/src/middleware/auth.js`
+- [x] Add `GET /api/v1/me/roles` endpoint
+- [x] Add `express-rate-limit` to `backend/package.json`
+- [x] Write DB migration `20260XXX_add_feedback` — add `SUPPORT` to `Role` enum + `Feedback` + `FeedbackReply` + `FeedbackCategory` + `FeedbackStatus` enums
+- [x] `POST /api/v1/feedback` handler — save row, send thank-you email (verified users only), send staff alert emails, emit `feedback:new` Socket.io event to `support` room
+- [x] `GET /api/v1/support/feedback` — list with `appId`, `status`, `category`, `archived`, date range filters + sort params
+- [x] `GET /api/v1/support/feedback/unread-count` — with `?groupByApp=true` support
+- [x] `PATCH /api/v1/support/feedback/:id/read`
+- [x] `PATCH /api/v1/support/feedback/:id/status` — updates `status`, `resolutionNote`, sets `resolvedAt`/`resolvedById` on terminal states
+- [x] `PATCH /api/v1/support/feedback/:id/archive` — toggle `archivedAt`
+- [x] `PATCH /api/v1/support/feedback/archive-many` — bulk archive by `ids[]`
+- [x] `DELETE /api/v1/support/feedback/:id`
+- [x] `GET /api/v1/support/users` — search by name/email
+- [x] `PATCH /api/v1/support/users/:id/ban`
+- [x] Admin mirrored endpoints under `/api/v1/admin/feedback` (same logic, `requireAdmin`)
+- [x] Socket.io: `support:join` event handler — `socket.join('support')`
+- [x] Resend thank-you email template (`thankYouTemplate`)
+- [x] Resend staff alert email template (`staffAlertTemplate`)
+
+**Frontend**
+- [x] `frontend/src/store/rolesStore.js` — Zustand store, `GET /api/v1/me/roles`, `hasRole()`, clear on sign-out
+- [x] Call `rolesStore.fetch()` in `AppLayout` after session confirms
+- [x] `SupportRoute` component — allows admin or `hasRole('SUPPORT')`
+- [x] Stripped support layout in `AppLayout` — minimal header, no nav, redirect to `/support`
+- [x] `FeedbackButton` component — `appId` + `apiBase` props, `z-40`, hide when playing, hide for support users
+- [x] `FeedbackModal` component — category pills, textarea, submit to `POST /api/v1/feedback`
+- [x] `FeedbackInbox` shared component — parameterised by API path; app selector pills, inbox/archive tabs, sort dropdown, filter pills, unread toggle, date range, bulk select, row expand, status selector, resolution note editor, archive/unarchive/delete actions
+- [x] `AdminFeedbackPage` at `/admin/feedback` — wraps `FeedbackInbox` with admin API path
+- [x] `SupportPage` at `/support` — app selector + `FeedbackInbox` (support API path) + User Lookup tab
+- [x] Support toggle button + badge in `AdminUsersPage`
+- [x] Socket.io `feedback:new` listener in `AppLayout` — increment badge, toast, chime for admin/support users
+- [x] Routes in `App.jsx` (`/admin/feedback`, `/support`)
+- [x] Hamburger menu: add Feedback to `ADMIN_MENU_LINKS`
+
+### Phase 2 — Screenshots ✅
+- [x] Add `html2canvas` to `frontend/package.json`
+- [x] Desktop: capture-before-open in `FeedbackButton` using `html2canvas`
+- [x] Mobile (`window.innerWidth < 768`): show `<input type="file" accept="image/*" />` file picker instead
+- [x] Shared compression helper: resize to max 800px wide at 0.7 JPEG quality — used for both desktop canvas and mobile file input (`FileReader.readAsDataURL` → canvas resize)
+- [x] Screenshot thumbnail in `FeedbackModal`
+- [x] Screenshot lightbox in `FeedbackInbox` expanded row
+
+### Phase 3 — Notifications ✅
+- [x] Unread count badge polling (60s) in `AppLayout` for admin and support users
+- [x] Per-app unread counts (`?groupByApp=true`) populating app selector pills
+- [x] Chime on new unread (`play('win')`)
+
+### Phase 4 — Replies ✅
+- [x] `POST /api/v1/support/feedback/:id/reply` + admin equivalent
+- [x] Reply thread UI in `FeedbackInbox` expanded row
+- [x] Resend email to submitter on reply (verified email only)
+
+### Phase 5 — Custom sending domain (optional)
 - [ ] Log in to callidity.com DNS registrar
 - [ ] Add `aiarena.callidity.com` as a sending domain in Resend
 - [ ] Copy SPF `TXT` record into DNS
 - [ ] Copy DKIM `CNAME` records into DNS
 - [ ] Wait for propagation and confirm **Verified** status in Resend
-- [ ] Set `support@aiarena.callidity.com` as the from address in Railway env vars
-
-### Phase 1 — Core submission
-**Backend**
-- [ ] Add `SUPPORT` to `VALID_ROLES` in `backend/src/utils/roles.js`
-- [ ] Add `isSupport()` + `requireSupport()` to `backend/src/middleware/auth.js`
-- [ ] Add `GET /api/v1/me/roles` endpoint
-- [ ] Add `express-rate-limit` to `backend/package.json`
-- [ ] Write DB migration `20260XXX_add_feedback` — `Feedback` + `FeedbackReply` + `FeedbackCategory` + `FeedbackStatus` enums
-- [ ] `POST /api/v1/feedback` handler — save row, send thank-you email (verified users only), send staff alert emails, emit `feedback:new` Socket.io event to `support` room
-- [ ] `GET /api/v1/support/feedback` — list with `appId`, `status`, `category`, `archived`, date range filters + sort params
-- [ ] `GET /api/v1/support/feedback/unread-count` — with `?groupByApp=true` support
-- [ ] `PATCH /api/v1/support/feedback/:id/read`
-- [ ] `PATCH /api/v1/support/feedback/:id/status` — updates `status`, `resolutionNote`, sets `resolvedAt`/`resolvedById` on terminal states
-- [ ] `PATCH /api/v1/support/feedback/:id/archive` — toggle `archivedAt`
-- [ ] `PATCH /api/v1/support/feedback/archive-many` — bulk archive by `ids[]`
-- [ ] `DELETE /api/v1/support/feedback/:id`
-- [ ] `GET /api/v1/support/users` — search by name/email
-- [ ] `PATCH /api/v1/support/users/:id/ban`
-- [ ] Admin mirrored endpoints under `/api/v1/admin/feedback` (same logic, `requireAdmin`)
-- [ ] Socket.io: `support:join` event handler — `socket.join('support')`
-- [ ] Resend thank-you email template (`thankYouTemplate`)
-- [ ] Resend staff alert email template (`staffAlertTemplate`)
-
-**Frontend**
-- [ ] `frontend/src/store/rolesStore.js` — Zustand store, `GET /api/v1/me/roles`, `hasRole()`, clear on sign-out
-- [ ] Call `rolesStore.fetch()` in `AppLayout` after session confirms
-- [ ] `SupportRoute` component — allows admin or `hasRole('SUPPORT')`
-- [ ] Stripped support layout in `AppLayout` — minimal header, no nav, redirect to `/support`
-- [ ] `FeedbackButton` component — `appId` + `apiBase` props, `z-40`, hide when playing, hide for support users
-- [ ] `FeedbackModal` component — category pills, textarea, submit to `POST /api/v1/feedback`
-- [ ] `FeedbackInbox` shared component — parameterised by API path; app selector pills, inbox/archive tabs, sort dropdown, filter pills, unread toggle, date range, bulk select, row expand, status selector, resolution note editor, archive/unarchive/delete actions
-- [ ] `AdminFeedbackPage` at `/admin/feedback` — wraps `FeedbackInbox` with admin API path
-- [ ] `SupportPage` at `/support` — app selector + `FeedbackInbox` (support API path) + User Lookup tab
-- [ ] Support toggle button + badge in `AdminUsersPage`
-- [ ] Socket.io `feedback:new` listener in `AppLayout` — increment badge, toast, chime for admin/support users
-- [ ] Routes in `App.jsx` (`/admin/feedback`, `/support`)
-- [ ] Hamburger menu: add Feedback to `ADMIN_MENU_LINKS`
-
-### Phase 2 — Screenshots
-- [ ] Add `html2canvas` to `frontend/package.json`
-- [ ] Capture-before-open in `FeedbackButton` — skip on mobile (`ontouchstart` detect)
-- [ ] JPEG compression (max 800px wide, quality 0.7) before sending
-- [ ] Screenshot thumbnail in `FeedbackModal`
-- [ ] Screenshot lightbox in `FeedbackInbox` expanded row
-
-### Phase 3 — Notifications
-- [ ] Unread count badge polling (60s) in `AppLayout` for admin and support users
-- [ ] Per-app unread counts (`?groupByApp=true`) populating app selector pills
-- [ ] Chime on new unread (`play('win')`)
-
-### Phase 4 — Replies
-- [ ] `POST /api/v1/support/feedback/:id/reply` + admin equivalent
-- [ ] Reply thread UI in `FeedbackInbox` expanded row
-- [ ] Resend email to submitter on reply (verified email only)
+- [ ] Update `EMAIL_FROM` env var in Railway to `support@aiarena.callidity.com`

@@ -162,6 +162,7 @@ export default function AdminUsersPage() {
                           {u.baRole === 'admin' && <Badge color="purple">admin</Badge>}
                           {(u.roles ?? []).includes('TOURNAMENT_ADMIN') && <Badge color="orange">tournament</Badge>}
                           {(u.roles ?? []).includes('BOT_ADMIN')        && <Badge color="teal">bot admin</Badge>}
+                          {(u.roles ?? []).includes('SUPPORT')          && <Badge color="blue">support</Badge>}
                         </div>
                       </div>
                     </div>
@@ -271,6 +272,14 @@ export default function AdminUsersPage() {
                       >
                         tourn.
                       </RoleButton>
+                      <RoleButton
+                        active={(u.roles ?? []).includes('SUPPORT')}
+                        color="blue"
+                        title={(u.roles ?? []).includes('SUPPORT') ? 'Remove support' : 'Grant support'}
+                        onClick={() => toggleRole(u, 'SUPPORT')}
+                      >
+                        support
+                      </RoleButton>
                       {u.emailVerified === false && (
                         <ActionButton
                           title="Mark email as verified so user can sign in"
@@ -327,6 +336,7 @@ const COLOR_MAP = {
   purple: { bg: 'var(--color-purple-100)', text: 'var(--color-purple-700)', border: 'var(--color-purple-300)' },
   teal:   { bg: 'var(--color-teal-100)',   text: 'var(--color-teal-700)',   border: 'var(--color-teal-300)'   },
   orange: { bg: 'var(--color-orange-100)', text: 'var(--color-orange-700)', border: 'var(--color-orange-300)' },
+  blue:   { bg: 'var(--color-blue-100)',   text: 'var(--color-blue-700)',   border: 'var(--color-blue-300)'   },
 }
 
 function Badge({ color, children }) {

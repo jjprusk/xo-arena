@@ -162,3 +162,45 @@ export async function requireTournament(req, res, next) {
     res.status(500).json({ error: 'Authorization check failed' })
   }
 }
+
+/**
+ * Returns true if the given Better Auth user ID has the SUPPORT role (or ADMIN).
+ * Safe to call without an active request/response — never throws.
+ */
+export async function isSupport(userId) {
+  try {
+    const [baUser, domainUser] = await Promise.all([
+      db.baUser.findUnique({ where: { id: userId }, select: { role: true } }),
+      db.user.findUnique({
+        where: { betterAuthId: userId },
+        select: { userRoles: { select: { role: true } } },
+      }),
+    ])
+    const roles = domainUser?.userRoles?.map(r => r.role) ?? []
+    return (
+      baUser?.role === 'admin' ||
+      roles.includes('ADMIN') ||
+      roles.includes('SUPPORT')
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Middleware: requires auth AND support (or admin) role.
+ */
+export async function requireSupport(req, res, next) {
+  if (!req.auth) return res.status(401).json({ error: 'Authentication required' })
+
+  try {
+    const ok = await isSupport(req.auth.userId)
+    if (!ok) {
+      return res.status(403).json({ error: 'Support access required' })
+    }
+    next()
+  } catch (err) {
+    logger.error({ err }, 'Support role check failed')
+    res.status(500).json({ error: 'Authorization check failed' })
+  }
+}

@@ -42,6 +42,23 @@ async function getBotProfileData(user) {
 const router = Router()
 
 /**
+ * GET /api/v1/me/roles
+ * Returns the domain roles for the authenticated user.
+ */
+router.get('/me/roles', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { userRoles: { select: { role: true } } },
+    })
+    const roles = user?.userRoles?.map(r => r.role) ?? []
+    res.json({ roles })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * POST /api/v1/users/sync
  * Called by the frontend after login to ensure the user exists in our DB.
  * Requires auth.
