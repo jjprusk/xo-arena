@@ -512,3 +512,96 @@ describe('FeedbackInbox — RESOLVED/WONT_FIX items', () => {
     })
   })
 })
+
+describe('FeedbackInbox — screenshot preview in expanded row', () => {
+  const SCREENSHOT_DATA = 'data:image/jpeg;base64,screenshotpayload'
+  const ITEM_WITH_SCREENSHOT = {
+    ...ITEM_BUG,
+    id: 'fb_ss',
+    screenshotData: SCREENSHOT_DATA,
+  }
+  const ITEM_WITHOUT_SCREENSHOT = {
+    ...ITEM_BUG,
+    id: 'fb_noss',
+    screenshotData: null,
+  }
+
+  it('does NOT show screenshot thumbnail when item has no screenshotData', async () => {
+    stubFetch(makeOkResponse([ITEM_WITHOUT_SCREENSHOT]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/This is a bug report/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/This is a bug report/))
+
+    await waitFor(() => expect(screen.getByText('Status:')).toBeDefined())
+    expect(screen.queryByTestId('screenshot-thumbnail')).toBeNull()
+  })
+
+  it('shows screenshot thumbnail in expanded row when screenshotData is present', async () => {
+    stubFetch(makeOkResponse([ITEM_WITH_SCREENSHOT]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/This is a bug report/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/This is a bug report/))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screenshot-thumbnail')).toBeDefined()
+    })
+  })
+
+  it('thumbnail src matches screenshotData', async () => {
+    stubFetch(makeOkResponse([ITEM_WITH_SCREENSHOT]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/This is a bug report/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/This is a bug report/))
+
+    await waitFor(() => {
+      const img = screen.getByTestId('screenshot-thumbnail')
+      expect(img.getAttribute('src')).toBe(SCREENSHOT_DATA)
+    })
+  })
+
+  it('clicking thumbnail opens the lightbox', async () => {
+    stubFetch(makeOkResponse([ITEM_WITH_SCREENSHOT]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/This is a bug report/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/This is a bug report/))
+    await waitFor(() => expect(screen.getByTestId('screenshot-thumbnail')).toBeDefined())
+
+    fireEvent.click(screen.getByTestId('screenshot-thumbnail'))
+
+    expect(screen.getByTestId('screenshot-lightbox')).toBeDefined()
+  })
+
+  it('clicking the lightbox backdrop closes it', async () => {
+    stubFetch(makeOkResponse([ITEM_WITH_SCREENSHOT]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/This is a bug report/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/This is a bug report/))
+    await waitFor(() => expect(screen.getByTestId('screenshot-thumbnail')).toBeDefined())
+
+    fireEvent.click(screen.getByTestId('screenshot-thumbnail'))
+    expect(screen.getByTestId('screenshot-lightbox')).toBeDefined()
+
+    fireEvent.click(screen.getByTestId('screenshot-lightbox'))
+    expect(screen.queryByTestId('screenshot-lightbox')).toBeNull()
+  })
+
+  it('clicking the close button inside the lightbox closes it', async () => {
+    stubFetch(makeOkResponse([ITEM_WITH_SCREENSHOT]))
+    renderInbox()
+    await waitFor(() => expect(screen.getByText(/This is a bug report/)).toBeDefined())
+
+    fireEvent.click(screen.getByText(/This is a bug report/))
+    await waitFor(() => expect(screen.getByTestId('screenshot-thumbnail')).toBeDefined())
+
+    fireEvent.click(screen.getByTestId('screenshot-thumbnail'))
+    expect(screen.getByTestId('screenshot-lightbox')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /close screenshot/i }))
+    expect(screen.queryByTestId('screenshot-lightbox')).toBeNull()
+  })
+})

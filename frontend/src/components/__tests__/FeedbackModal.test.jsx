@@ -9,6 +9,12 @@ vi.mock('../../lib/getToken.js', () => ({
   getToken: () => Promise.resolve('test-token'),
 }))
 
+vi.mock('../../lib/screenshotUtils.js', () => ({
+  isMobile: vi.fn(() => false),
+  compressImage: vi.fn((url) => Promise.resolve(url + '_compressed')),
+}))
+
+import { isMobile, compressImage } from '../../lib/screenshotUtils.js'
 import FeedbackModal from '../feedback/FeedbackModal.jsx'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -47,6 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
   vi.useRealTimers()
+  isMobile.mockReturnValue(false)
 })
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -333,5 +340,201 @@ describe('FeedbackModal — close behavior', () => {
     )
     const freshTextarea = screen.getByPlaceholderText('Describe the issue or feedback...')
     expect(freshTextarea.value).toBe('')
+  })
+})
+
+// ── Phase 2 — Screenshot thumbnail (desktop capture) ─────────────────────────
+
+describe('FeedbackModal — screenshot thumbnail (desktop prop)', () => {
+  const FAKE_SHOT = 'data:image/jpeg;base64,desktopshot'
+
+  it('shows screenshot thumbnail when screenshotData prop is provided', () => {
+    renderModal({ screenshotData: FAKE_SHOT })
+    expect(screen.getByAltText(/screenshot preview/i)).toBeDefined()
+  })
+
+  it('thumbnail src matches the screenshotData prop', () => {
+    renderModal({ screenshotData: FAKE_SHOT })
+    const img = screen.getByAltText(/screenshot preview/i)
+    expect(img.src).toContain('desktopshot')
+  })
+
+  it('does NOT show thumbnail when screenshotData is null', () => {
+    renderModal({ screenshotData: null })
+    expect(screen.queryByAltText(/screenshot preview/i)).toBeNull()
+  })
+
+  it('shows a "Remove screenshot" button when screenshot is present', () => {
+    renderModal({ screenshotData: FAKE_SHOT })
+    expect(screen.getByRole('button', { name: /remove screenshot/i })).toBeDefined()
+  })
+
+  it('clicking Remove screenshot removes the thumbnail', () => {
+    renderModal({ screenshotData: FAKE_SHOT })
+    fireEvent.click(screen.getByRole('button', { name: /remove screenshot/i }))
+    expect(screen.queryByAltText(/screenshot preview/i)).toBeNull()
+  })
+
+  it('removed screenshot is NOT sent in the submission payload', async () => {
+    makeFetchOk()
+    renderModal({ screenshotData: FAKE_SHOT })
+    // Remove the screenshot
+    fireEvent.click(screen.getByRole('button', { name: /remove screenshot/i }))
+    // Submit
+    const textarea = screen.getByPlaceholderText('Describe the issue or feedback...')
+    fireEvent.change(textarea, { target: { value: 'Feedback without screenshot' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit feedback/i }))
+    })
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(body.screenshotData).toBeUndefined()
+  })
+
+  it('screenshotData is included in payload when thumbnail is present', async () => {
+    makeFetchOk()
+    renderModal({ screenshotData: FAKE_SHOT })
+    const textarea = screen.getByPlaceholderText('Describe the issue or feedback...')
+    fireEvent.change(textarea, { target: { value: 'With screenshot' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit feedback/i }))
+    })
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(body.screenshotData).toBe(FAKE_SHOT)
+  })
+
+  it('resets screenshot state when modal is reopened with new screenshotData', () => {
+    const { rerender } = renderModal({ open: true, screenshotData: FAKE_SHOT })
+    expect(screen.getByAltText(/screenshot preview/i)).toBeDefined()
+
+    // Close then reopen with no screenshot
+    rerender(
+      <MemoryRouter>
+        <FeedbackModal appId="xo-arena" apiBase="/api/v1" open={false} onClose={vi.fn()} screenshotData={null} />
+      </MemoryRouter>
+    )
+    rerender(
+      <MemoryRouter>
+        <FeedbackModal appId="xo-arena" apiBase="/api/v1" open={true} onClose={vi.fn()} screenshotData={null} />
+      </MemoryRouter>
+    )
+    expect(screen.queryByAltText(/screenshot preview/i)).toBeNull()
+  })
+})
+
+// ── Phase 2 — Mobile file picker ──────────────────────────────────────────────
+
+describe('FeedbackModal — mobile file picker', () => {
+  beforeEach(() => {
+    isMobile.mockReturnValue(true)
+  })
+
+  it('shows "Attach screenshot" file input on mobile when no screenshot', () => {
+    renderModal({ screenshotData: null })
+    expect(screen.getByTestId('screenshot-file-input')).toBeDefined()
+  })
+
+  it('does NOT show file input on desktop', () => {
+    isMobile.mockReturnValue(false)
+    renderModal({ screenshotData: null })
+    expect(screen.queryByTestId('screenshot-file-input')).toBeNull()
+  })
+
+  it('hides file input once a screenshot is attached', async () => {
+    // FileReader mock: resolves with fake data url
+    vi.stubGlobal('FileReader', class {
+      readAsDataURL() {
+        Promise.resolve().then(() => {
+          this.result = 'data:image/png;base64,mobileshot'
+          this.onload?.({ target: this })
+        })
+      }
+    })
+    compressImage.mockResolvedValue('data:image/jpeg;base64,mobilecompressed')
+
+    renderModal({ screenshotData: null })
+    const fileInput = screen.getByTestId('screenshot-file-input')
+    const file = new File(['fake'], 'shot.png', { type: 'image/png' })
+
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } })
+    })
+
+    expect(screen.queryByTestId('screenshot-file-input')).toBeNull()
+    vi.unstubAllGlobals()
+  })
+
+  it('shows thumbnail after file is selected and compressed', async () => {
+    vi.stubGlobal('FileReader', class {
+      readAsDataURL() {
+        Promise.resolve().then(() => {
+          this.result = 'data:image/png;base64,mobileshot'
+          this.onload?.({ target: this })
+        })
+      }
+    })
+    compressImage.mockResolvedValue('data:image/jpeg;base64,mobilecompressed')
+
+    renderModal({ screenshotData: null })
+    const file = new File(['fake'], 'shot.png', { type: 'image/png' })
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('screenshot-file-input'), { target: { files: [file] } })
+    })
+
+    const img = screen.getByAltText(/screenshot preview/i)
+    expect(img.src).toContain('mobilecompressed')
+    vi.unstubAllGlobals()
+  })
+
+  it('calls compressImage with the FileReader result', async () => {
+    vi.stubGlobal('FileReader', class {
+      readAsDataURL() {
+        Promise.resolve().then(() => {
+          this.result = 'data:image/png;base64,rawmobile'
+          this.onload?.({ target: this })
+        })
+      }
+    })
+
+    renderModal({ screenshotData: null })
+    const file = new File(['fake'], 'shot.png', { type: 'image/png' })
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('screenshot-file-input'), { target: { files: [file] } })
+    })
+
+    expect(compressImage).toHaveBeenCalledWith('data:image/png;base64,rawmobile')
+    vi.unstubAllGlobals()
+  })
+
+  it('mobile screenshot is included in submission payload', async () => {
+    vi.stubGlobal('FileReader', class {
+      readAsDataURL() {
+        Promise.resolve().then(() => {
+          this.result = 'data:image/png;base64,rawmobile'
+          this.onload?.({ target: this })
+        })
+      }
+    })
+    compressImage.mockResolvedValue('data:image/jpeg;base64,mobilecompressed')
+    makeFetchOk()
+
+    renderModal({ screenshotData: null })
+    const file = new File(['fake'], 'shot.png', { type: 'image/png' })
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('screenshot-file-input'), { target: { files: [file] } })
+    })
+
+    const textarea = screen.getByPlaceholderText('Describe the issue or feedback...')
+    fireEvent.change(textarea, { target: { value: 'Mobile feedback with screenshot' } })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit feedback/i }))
+    })
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(body.screenshotData).toBe('data:image/jpeg;base64,mobilecompressed')
+    vi.unstubAllGlobals()
   })
 })

@@ -79,6 +79,49 @@ function StatusBadge({ status }) {
   )
 }
 
+// ── Screenshot preview + lightbox ────────────────────────────────────────────
+
+function ScreenshotPreview({ src }) {
+  const [lightbox, setLightbox] = useState(false)
+  return (
+    <>
+      <div>
+        <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Screenshot</p>
+        <img
+          src={src}
+          alt="Screenshot thumbnail"
+          onClick={() => setLightbox(true)}
+          className="cursor-pointer max-h-32 rounded border object-contain"
+          style={{ borderColor: 'var(--border-default)' }}
+          data-testid="screenshot-thumbnail"
+        />
+      </div>
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightbox(false)}
+          data-testid="screenshot-lightbox"
+        >
+          <img
+            src={src}
+            alt="Screenshot full size"
+            className="max-w-full max-h-full rounded object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightbox(false)}
+            aria-label="Close screenshot"
+            className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-sm"
+            style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
+
 // ── Expanded row ──────────────────────────────────────────────────────────────
 
 function ExpandedRow({ item, apiBase, onUpdate, onDelete }) {
@@ -182,6 +225,11 @@ function ExpandedRow({ item, apiBase, onUpdate, onDelete }) {
             {item.pageUrl}
           </a>
         </div>
+      )}
+
+      {/* Screenshot thumbnail */}
+      {item.screenshotData && (
+        <ScreenshotPreview src={item.screenshotData} />
       )}
 
       {/* Status selector */}
