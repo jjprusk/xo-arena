@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout.jsx'
 import AdminRoute from './components/admin/AdminRoute.jsx'
+import SupportRoute from './components/admin/SupportRoute.jsx'
 import PlayPage from './pages/PlayPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
@@ -17,6 +18,8 @@ import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
 import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
 import AdminMLPage from './pages/admin/AdminMLPage.jsx'
 import AdminBotsPage from './pages/admin/AdminBotsPage.jsx'
+import AdminFeedbackPage from './pages/admin/AdminFeedbackPage.jsx'
+import SupportPage from './pages/SupportPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
 import AboutPage from './pages/AboutPage.jsx'
@@ -55,6 +58,10 @@ export default function App() {
           <Route path="/admin/ai" element={<AdminRoute><AIDashboardPage /></AdminRoute>} />
           <Route path="/admin/ml-models" element={<AdminRoute><AdminMLPage /></AdminRoute>} />
           <Route path="/admin/bots" element={<AdminRoute><AdminBotsPage /></AdminRoute>} />
+          <Route path="/admin/feedback" element={<AdminRoute><AdminFeedbackPage /></AdminRoute>} />
+
+          {/* Support route — accessible to admin and SUPPORT role users */}
+          <Route path="/support" element={<SupportRoute><SupportPage /></SupportRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>

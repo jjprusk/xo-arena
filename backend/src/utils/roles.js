@@ -5,7 +5,7 @@
  * ADMIN implicitly satisfies any role check.
  */
 
-export const VALID_ROLES = ['ADMIN', 'BOT_ADMIN', 'TOURNAMENT_ADMIN']
+export const VALID_ROLES = ['ADMIN', 'BOT_ADMIN', 'TOURNAMENT_ADMIN', 'SUPPORT']
 
 /**
  * Returns true if the user holds the given role.
