@@ -47,7 +47,7 @@ registerRoutes(app, {
 
 // Public version endpoint — no auth required
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const { version } = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'))
+const { version } = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
 app.get('/api/version', (_req, res) => {
   res.json({ version })
 })
