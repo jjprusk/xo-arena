@@ -56,7 +56,7 @@ test.describe('Smoke — frontend', () => {
   test('sign-in modal can be opened', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /sign in/i }).first().click()
-    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
+    await expect(page.locator('input[type="email"]')).toBeVisible()
   })
 
   test('leaderboard page loads without auth', async ({ page }) => {
