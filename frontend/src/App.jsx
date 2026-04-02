@@ -19,6 +19,7 @@ import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
 import AdminMLPage from './pages/admin/AdminMLPage.jsx'
 import AdminBotsPage from './pages/admin/AdminBotsPage.jsx'
 import AdminFeedbackPage from './pages/admin/AdminFeedbackPage.jsx'
+import AdminUserProfilePage from './pages/admin/AdminUserProfilePage.jsx'
 import SupportPage from './pages/SupportPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
@@ -53,6 +54,7 @@ export default function App() {
           {/* Admin routes — all guarded by AdminRoute */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
+          <Route path="/admin/users/:id" element={<AdminRoute><AdminUserProfilePage /></AdminRoute>} />
           <Route path="/admin/games" element={<AdminRoute><AdminGamesPage /></AdminRoute>} />
           <Route path="/admin/logs" element={<AdminRoute><LogViewerPage /></AdminRoute>} />
           <Route path="/admin/ai" element={<AdminRoute><AIDashboardPage /></AdminRoute>} />

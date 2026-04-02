@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
 import { getToken } from '../../lib/getToken.js'
@@ -11,11 +12,13 @@ import {
 const LIMIT = 25
 
 export default function AdminUsersPage() {
+  const navigate = useNavigate()
   const { data: session } = useOptimisticSession()
   const [users, setUsers]     = useState([])
   const [total, setTotal]     = useState(0)
   const [page, setPage]       = useState(1)
   const [search, setSearch]   = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [editingElo, setEditingElo]   = useState(null) // { id, value }
@@ -23,12 +26,12 @@ export default function AdminUsersPage() {
 
   const totalPages = Math.ceil(total / LIMIT)
 
-  const load = useCallback(async (q, p) => {
+  const load = useCallback(async (q, p, s) => {
     setLoading(true)
     setError(null)
     try {
       const token = await getToken()
-      const { users: u, total: t } = await api.admin.users(token, q, p, LIMIT)
+      const { users: u, total: t } = await api.admin.users(token, q, p, LIMIT, s)
       setUsers(u)
       setTotal(t)
     } catch {
@@ -43,8 +46,8 @@ export default function AdminUsersPage() {
     const id = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(id)
   }, [search])
-  useEffect(() => { setPage(1) }, [debouncedSearch])
-  useEffect(() => { load(debouncedSearch, page) }, [debouncedSearch, page, load])
+  useEffect(() => { setPage(1) }, [debouncedSearch, statusFilter])
+  useEffect(() => { load(debouncedSearch, page, statusFilter) }, [debouncedSearch, page, statusFilter, load])
 
   async function toggleBan(user) {
     setActionError(null)
@@ -107,11 +110,25 @@ export default function AdminUsersPage() {
     <div className="max-w-6xl mx-auto space-y-5">
       <AdminHeader title="Users" subtitle={`${total} total`} />
 
-      <SearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="Search name, email or username…"
-      />
+      <div className="flex gap-2 flex-wrap items-center">
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search name, email or username…"
+          className="flex-1 min-w-[200px]"
+        />
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+        >
+          <option value="">All users</option>
+          <option value="online">Online</option>
+          <option value="active">Active</option>
+          <option value="banned">Banned</option>
+        </select>
+      </div>
 
       {actionError && <ErrorMsg>{actionError}</ErrorMsg>}
       {loading && <Spinner />}
@@ -133,7 +150,7 @@ export default function AdminUsersPage() {
             {users.map((u, i) => {
               const isSelf = u.betterAuthId === session?.user?.id
               return (
-                <ListTr key={u.id} dimmed={u.banned} last={i === users.length - 1}>
+                <ListTr key={u.id} dimmed={u.banned} last={i === users.length - 1} onClick={() => navigate(`/admin/users/${u.id}`)}>
 
                   {/* Identity */}
                   <ListTd>
@@ -199,12 +216,29 @@ export default function AdminUsersPage() {
 
                   {/* Status badge */}
                   <ListTd align="center">
-                    <StatusBadge active={!u.banned} />
+                    <div className="flex flex-col items-center gap-1">
+                      <StatusBadge active={!u.banned} />
+                      {u.online && (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span
+                            data-testid="online-badge"
+                            className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: 'var(--color-teal-50)', color: 'var(--color-teal-600)' }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-teal-500)' }} />
+                            Online
+                          </span>
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                            {formatSignedIn(u.signedInAt)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </ListTd>
 
                   {/* Actions */}
                   <ListTd>
-                    <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                    <div className="flex items-center gap-1.5 justify-end flex-wrap" onClick={e => e.stopPropagation()}>
                       <RoleButton
                         active={u.baRole === 'admin'}
                         disabled={isSelf}
@@ -289,6 +323,18 @@ export default function AdminUsersPage() {
 }
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
+
+function formatSignedIn(isoString) {
+  if (!isoString) return ''
+  const d = new Date(isoString)
+  const diffMs = Date.now() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1)  return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24)   return `${diffH}h ago`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
 
 const COLOR_MAP = {
   purple: { bg: 'var(--color-purple-100)', text: 'var(--color-purple-700)', border: 'var(--color-purple-300)' },
