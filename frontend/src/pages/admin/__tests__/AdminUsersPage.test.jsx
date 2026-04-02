@@ -66,10 +66,13 @@ const MOCK_USER = {
   baRole: null,
   roles: [],
   mlModelLimit: null,
+  online: false,
+  signedInAt: null,
   _count: { gamesAsPlayer1: 10 },
 }
 
 const BANNED_USER = { ...MOCK_USER, id: 'usr_2', betterAuthId: 'ba_banned', banned: true }
+const ONLINE_USER = { ...MOCK_USER, id: 'usr_3', betterAuthId: 'ba_online', online: true, signedInAt: new Date(Date.now() - 5 * 60_000).toISOString() }
 
 // Session signed in as admin — different betterAuthId so isSelf is false
 function signedInAsAdmin() {
@@ -133,6 +136,32 @@ describe('AdminUsersPage — user list', () => {
     renderPage()
     await waitFor(() => {
       expect(screen.getByText('Banned')).toBeDefined()
+    })
+  })
+})
+
+describe('AdminUsersPage — online indicator', () => {
+  it('shows "Online" badge for an online user', async () => {
+    api.admin.users.mockResolvedValue({ users: [ONLINE_USER], total: 1 })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByTestId('online-badge')).toBeDefined()
+    })
+  })
+
+  it('shows sign-in time below the online badge', async () => {
+    api.admin.users.mockResolvedValue({ users: [ONLINE_USER], total: 1 })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('5m ago')).toBeDefined()
+    })
+  })
+
+  it('does not show "Online" badge for offline user', async () => {
+    api.admin.users.mockResolvedValue({ users: [MOCK_USER], total: 1 })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.queryByTestId('online-badge')).toBeNull()
     })
   })
 })
