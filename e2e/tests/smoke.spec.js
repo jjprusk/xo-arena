@@ -55,7 +55,9 @@ test.describe('Smoke — frontend', () => {
 
   test('sign-in modal can be opened', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: /sign in/i }).first().click()
+    const signInBtn = page.getByRole('button', { name: /sign in/i }).first()
+    await signInBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    await signInBtn.click()
     await expect(page.locator('input[type="email"]')).toBeVisible()
   })
 
