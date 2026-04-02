@@ -215,6 +215,8 @@ describe('POST /api/v1/bots', () => {
     expect(res.status).toBe(201)
     expect(res.body.bot).toEqual(newBot)
     expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+    // ownerBaId must be the BA user ID so the gym's ownership check passes
+    expect(createBot).toHaveBeenCalledWith('usr_1', expect.objectContaining({ ownerBaId: 'ba_user_1' }))
   })
 
   it('user not found → 404', async () => {
