@@ -288,6 +288,7 @@ export default function GameBoard({ roomName }) {
       const humanLastMove = profileUserId ? lastHumanMoveRef.current : null
       try {
         // Use local Q-table inference if model is already cached (zero latency)
+        const localStart = Date.now()
         const localMove = isML && mlModelId ? getLocalMove(mlModelId, board, aiMark) : null
         if (localMove !== null) {
           // Still record the human's move for the player profile even when AI is local
@@ -296,6 +297,8 @@ export default function GameBoard({ roomName }) {
             boardBeforeHuman[humanLastMove] = null
             api.ml.recordHumanMove(mlModelId, profileUserId, boardBeforeHuman, humanLastMove).catch(() => {})
           }
+          // Fire-and-forget metric so the AI dashboard counts local inference moves
+          api.ai.recordMove('ml', 'ml', Date.now() - localStart, localMove).catch(() => {})
           if (!cancelled) {
             makeMove(localMove)
             play('move')
