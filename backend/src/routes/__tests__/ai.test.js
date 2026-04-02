@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { _reset, getTotal } from '../../services/aiMetrics.js'
 import express from 'express'
 import request from 'supertest'
 import aiRouter from '../ai.js'
@@ -72,5 +73,25 @@ describe('POST /api/v1/ai/move', () => {
       .post('/api/v1/ai/move')
       .send({ ...validBody, board: fullBoard })
     expect(res.status).toBe(400)
+  })
+})
+
+describe('POST /api/v1/ai/record-move', () => {
+  beforeEach(() => _reset())
+
+  it('records a move and returns 204', async () => {
+    const res = await request(app)
+      .post('/api/v1/ai/record-move')
+      .send({ implementation: 'ml', difficulty: 'ml', durationMs: 2, cellIndex: 4 })
+    expect(res.status).toBe(204)
+    expect(getTotal()).toBe(1)
+  })
+
+  it('ignores body missing implementation and returns 204', async () => {
+    const res = await request(app)
+      .post('/api/v1/ai/record-move')
+      .send({ durationMs: 2, cellIndex: 4 })
+    expect(res.status).toBe(204)
+    expect(getTotal()).toBe(0)
   })
 })

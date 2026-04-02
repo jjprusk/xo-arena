@@ -85,6 +85,8 @@ export const api = {
         ...(userId ? { userId } : {}),
         ...(humanLastMove !== null && humanLastMove !== undefined ? { humanLastMove } : {}),
       }),
+    recordMove: (implementation, difficulty, durationMs, cellIndex) =>
+      request('POST', '/ai/record-move', { implementation, difficulty, durationMs, cellIndex }),
   },
 
   ml: {
