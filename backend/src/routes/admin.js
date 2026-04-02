@@ -96,19 +96,34 @@ router.get('/users', async (req, res, next) => {
       db.user.count({ where }),
     ])
 
-    // Fetch BA roles + emailVerified for all users in one query
+    // Fetch BA roles + emailVerified + active sessions for all users in one query
     const baIds = rawUsers.map(u => u.betterAuthId).filter(Boolean)
-    const baUsers = baIds.length
-      ? await db.baUser.findMany({ where: { id: { in: baIds } }, select: { id: true, role: true, emailVerified: true } })
-      : []
-    const baRoleMap = Object.fromEntries(baUsers.map(b => [b.id, b.role]))
+    const now = new Date()
+    const [baUsers, baSessions] = baIds.length
+      ? await Promise.all([
+          db.baUser.findMany({ where: { id: { in: baIds } }, select: { id: true, role: true, emailVerified: true } }),
+          db.baSession.findMany({
+            where: { userId: { in: baIds }, expiresAt: { gt: now } },
+            select: { userId: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          }),
+        ])
+      : [[], []]
+    const baRoleMap     = Object.fromEntries(baUsers.map(b => [b.id, b.role]))
     const baVerifiedMap = Object.fromEntries(baUsers.map(b => [b.id, b.emailVerified]))
+    // Most-recent active session per user
+    const baSessionMap  = {}
+    for (const s of baSessions) {
+      if (!baSessionMap[s.userId]) baSessionMap[s.userId] = s.createdAt
+    }
 
     const users = rawUsers.map(u => ({
       ...u,
       roles: u.userRoles?.map(r => r.role) ?? [],
       baRole: baRoleMap[u.betterAuthId] ?? null,
       emailVerified: baVerifiedMap[u.betterAuthId] ?? null,
+      online: Boolean(baSessionMap[u.betterAuthId]),
+      signedInAt: baSessionMap[u.betterAuthId] ?? null,
     }))
 
     res.json({ users, total, page, limit })

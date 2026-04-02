@@ -199,7 +199,23 @@ export default function AdminUsersPage() {
 
                   {/* Status badge */}
                   <ListTd align="center">
-                    <StatusBadge active={!u.banned} />
+                    <div className="flex flex-col items-center gap-1">
+                      <StatusBadge active={!u.banned} />
+                      {u.online && (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: 'var(--color-teal-50)', color: 'var(--color-teal-600)' }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-teal-500)' }} />
+                            Online
+                          </span>
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                            {formatSignedIn(u.signedInAt)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </ListTd>
 
                   {/* Actions */}
@@ -289,6 +305,18 @@ export default function AdminUsersPage() {
 }
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
+
+function formatSignedIn(isoString) {
+  if (!isoString) return ''
+  const d = new Date(isoString)
+  const diffMs = Date.now() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1)  return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24)   return `${diffH}h ago`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
 
 const COLOR_MAP = {
   purple: { bg: 'var(--color-purple-100)', text: 'var(--color-purple-700)', border: 'var(--color-purple-300)' },

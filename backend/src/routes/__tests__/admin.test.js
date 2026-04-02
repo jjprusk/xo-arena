@@ -29,7 +29,7 @@ vi.mock('../../lib/db.js', () => {
     update:     vi.fn(),
     delete:     vi.fn(),
   }
-  const baSession = { deleteMany: vi.fn() }
+  const baSession = { findMany: vi.fn(), deleteMany: vi.fn() }
   const baAccount = { deleteMany: vi.fn() }
   const game = {
     count:      vi.fn(),
@@ -161,6 +161,7 @@ describe('GET /api/v1/admin/users', () => {
     db.user.findMany.mockResolvedValue([mockUser])
     db.user.count.mockResolvedValue(1)
     db.baUser.findMany.mockResolvedValue([mockBaUser])
+    db.baSession.findMany.mockResolvedValue([])
 
     const res = await request(app).get('/api/v1/admin/users')
 
@@ -175,6 +176,7 @@ describe('GET /api/v1/admin/users', () => {
     db.user.findMany.mockResolvedValue([])
     db.user.count.mockResolvedValue(0)
     db.baUser.findMany.mockResolvedValue([])
+    db.baSession.findMany.mockResolvedValue([])
 
     const res = await request(app).get('/api/v1/admin/users?search=bob')
 
@@ -191,11 +193,37 @@ describe('GET /api/v1/admin/users', () => {
     db.user.findMany.mockResolvedValue([mockUser])
     db.user.count.mockResolvedValue(1)
     db.baUser.findMany.mockResolvedValue([{ id: 'ba_user_1', role: 'admin', emailVerified: true }])
+    db.baSession.findMany.mockResolvedValue([])
 
     const res = await request(app).get('/api/v1/admin/users')
 
     expect(res.body.users[0].baRole).toBe('admin')
     expect(res.body.users[0].emailVerified).toBe(true)
+  })
+
+  it('marks user as online when they have an active session', async () => {
+    const signedInAt = new Date(Date.now() - 10 * 60_000).toISOString()
+    db.user.findMany.mockResolvedValue([mockUser])
+    db.user.count.mockResolvedValue(1)
+    db.baUser.findMany.mockResolvedValue([mockBaUser])
+    db.baSession.findMany.mockResolvedValue([{ userId: 'ba_user_1', createdAt: signedInAt }])
+
+    const res = await request(app).get('/api/v1/admin/users')
+
+    expect(res.body.users[0].online).toBe(true)
+    expect(res.body.users[0].signedInAt).toBe(signedInAt)
+  })
+
+  it('marks user as offline when no active session exists', async () => {
+    db.user.findMany.mockResolvedValue([mockUser])
+    db.user.count.mockResolvedValue(1)
+    db.baUser.findMany.mockResolvedValue([mockBaUser])
+    db.baSession.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/admin/users')
+
+    expect(res.body.users[0].online).toBe(false)
+    expect(res.body.users[0].signedInAt).toBeNull()
   })
 })
 
