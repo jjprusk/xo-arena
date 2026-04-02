@@ -540,30 +540,36 @@ describe('DELETE /api/v1/bots/:id', () => {
       if (where.id === 'bot_1') return mockBot  // botModelId: null
       return null
     })
-    mockDb.$transaction.mockResolvedValue(undefined)
+    const txMlModelDelete = vi.fn()
+    mockDb.$transaction.mockImplementation(async (fn) =>
+      fn({ game: mockDb.game, user: mockDb.user, mLModel: { delete: txMlModelDelete } })
+    )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
 
     expect(res.status).toBe(204)
     expect(mockDb.$transaction).toHaveBeenCalled()
-    expect(mockDb.mLModel.delete).not.toHaveBeenCalled()
+    expect(txMlModelDelete).not.toHaveBeenCalled()
     expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
   })
 
-  it('deletes bot with model → also attempts model deletion', async () => {
+  it('deletes bot with model → model deleted inside transaction', async () => {
     const botWithModel = { ...mockBot, botModelId: 'model_1' }
     mockDb.user.findUnique.mockImplementation(async ({ where }) => {
       if (where.betterAuthId) return mockCaller
       if (where.id === 'bot_1') return botWithModel
       return null
     })
-    mockDb.$transaction.mockResolvedValue(undefined)
-    mockDb.mLModel.delete.mockResolvedValue({})
+    const txMlModelDelete = vi.fn().mockResolvedValue({})
+    mockDb.$transaction.mockImplementation(async (fn) =>
+      fn({ game: mockDb.game, user: mockDb.user, mLModel: { delete: txMlModelDelete } })
+    )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
 
     expect(res.status).toBe(204)
-    expect(mockDb.mLModel.delete).toHaveBeenCalledWith({ where: { id: 'model_1' } })
+    expect(txMlModelDelete).toHaveBeenCalledWith({ where: { id: 'model_1' } })
+    expect(mockDb.mLModel.delete).not.toHaveBeenCalled()
   })
 
   it('bot not found → 404', async () => {

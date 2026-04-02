@@ -109,4 +109,17 @@ router.post('/move', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+/**
+ * POST /api/v1/ai/record-move
+ * Lightweight metric-only endpoint for moves computed client-side (local inference).
+ * Body: { implementation, difficulty, durationMs, cellIndex }
+ */
+router.post('/record-move', (req, res) => {
+  const { implementation, difficulty, durationMs, cellIndex } = req.body
+  if (implementation && typeof cellIndex === 'number') {
+    recordMove({ implementation, difficulty: difficulty || 'ml', durationMs: durationMs ?? 0, cellIndex })
+  }
+  res.status(204).end()
+})
+
 export default router

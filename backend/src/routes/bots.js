@@ -223,18 +223,17 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!result) return
     const { bot } = result
 
+    // Delete everything atomically so no orphaned ML models are left behind.
     // Games where this bot was player1 have a required (non-nullable) FK — no
     // cascade is defined so we must delete them first. Games where it was
     // player2 or winner use nullable FKs and will be set to null automatically.
     await db.$transaction(async (tx) => {
       await tx.game.deleteMany({ where: { player1Id: bot.id } })
       await tx.user.delete({ where: { id: bot.id } })
+      if (bot.botModelId) {
+        await tx.mLModel.delete({ where: { id: bot.botModelId } })
+      }
     })
-
-    // Delete the associated ML model (cascades to sessions, episodes, profiles…)
-    if (bot.botModelId) {
-      await db.mLModel.delete({ where: { id: bot.botModelId } }).catch(() => {})
-    }
 
     cache.invalidate(BOTS_CACHE_KEY)
     res.status(204).end()
