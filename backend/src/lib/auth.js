@@ -108,11 +108,17 @@ export const auth = betterAuth({
       create: {
         after: async (baUser) => {
           try {
+            const rawName = baUser.name?.trim()
+            // Treat empty string or literal "Unknown" (betterAuth placeholder) as no name
+            const resolvedName = (rawName && rawName.toLowerCase() !== 'unknown')
+              ? rawName
+              : baUser.email.split('@')[0]
+            logger.info({ userId: baUser.id, baName: baUser.name, resolvedName }, 'Post-createUser sync')
             await syncUser({
               betterAuthId: baUser.id,
               email: baUser.email,
-              username: baUser.name?.toLowerCase().replace(/\s+/g, '_') || baUser.email.split('@')[0],
-              displayName: baUser.name || baUser.email.split('@')[0],
+              username: resolvedName.toLowerCase().replace(/\s+/g, '_'),
+              displayName: resolvedName,
               oauthProvider: 'email',
               avatarUrl: baUser.image || null,
             })
