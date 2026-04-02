@@ -69,11 +69,15 @@ router.post('/sync', requireAuth, async (req, res, next) => {
     const baUser = await db.baUser.findUnique({ where: { id: req.auth.userId } })
     if (!baUser) return res.status(404).json({ error: 'Auth user not found' })
 
+    const rawName = baUser.name?.trim()
+    const resolvedName = (rawName && rawName.toLowerCase() !== 'unknown')
+      ? rawName
+      : baUser.email.split('@')[0]
     const user = await syncUser({
       betterAuthId: baUser.id,
       email: baUser.email,
-      username: baUser.name?.toLowerCase().replace(/\s+/g, '_') || baUser.email.split('@')[0],
-      displayName: baUser.name || baUser.email.split('@')[0],
+      username: resolvedName.toLowerCase().replace(/\s+/g, '_'),
+      displayName: resolvedName,
       oauthProvider: 'email',
       avatarUrl: baUser.image || null,
     })
