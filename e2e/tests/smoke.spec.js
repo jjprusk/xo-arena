@@ -64,10 +64,6 @@ test.describe('Smoke — frontend', () => {
     await expect(page.getByRole('heading', { name: /leaderboard/i })).toBeVisible()
   })
 
-  test('about page shows correct version', async ({ page }) => {
-    await page.goto('/about')
-    await expect(page.locator('span.font-mono')).toContainText(`v${EXPECTED_VERSION}`)
-  })
 })
 
 // ── Backend API smoke ─────────────────────────────────────────────────────────

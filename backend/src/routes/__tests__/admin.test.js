@@ -29,10 +29,11 @@ vi.mock('../../lib/db.js', () => {
     update:     vi.fn(),
   }
   const game = {
-    count:    vi.fn(),
-    findMany: vi.fn(),
-    delete:   vi.fn(),
+    count:      vi.fn(),
+    findMany:   vi.fn(),
+    delete:     vi.fn(),
     deleteMany: vi.fn(),
+    updateMany: vi.fn(),
   }
   const mLModel = {
     count:      vi.fn(),
@@ -85,12 +86,13 @@ const mockUser = {
   avatarUrl: null,
   eloRating: 1000,
   banned: false,
-  mlModelLimit: null,
   createdAt: new Date().toISOString(),
   botLimit: 5,
   userRoles: [],
   _count: { gamesAsPlayer1: 3 },
 }
+
+const mockAdmin = { id: 'admin_usr_1' }
 
 const mockBaUser = { id: 'ba_user_1', role: null, emailVerified: true }
 
@@ -254,31 +256,11 @@ describe('PATCH /api/v1/admin/users/:id', () => {
     expect(res.body.user.eloRating).toBe(1500)
   })
 
-  it('rejects invalid mlModelLimit', async () => {
-    const res = await request(app)
-      .patch('/api/v1/admin/users/usr_1')
-      .send({ mlModelLimit: -5 })
-
-    expect(res.status).toBe(400)
-    expect(res.body.error).toMatch(/mlModelLimit/)
-  })
-
-  it('resets mlModelLimit to null', async () => {
-    db.user.update.mockResolvedValue({ ...mockUser, mlModelLimit: null })
-    db.baUser.findUnique.mockResolvedValue(mockBaUser)
-
-    const res = await request(app)
-      .patch('/api/v1/admin/users/usr_1')
-      .send({ mlModelLimit: null })
-
-    expect(res.status).toBe(200)
-    expect(res.body.user.mlModelLimit).toBeNull()
-  })
-
   it('grants a domain role', async () => {
     db.user.findUnique
-      .mockResolvedValueOnce({ ...mockUser, userRoles: [] })       // initial fetch
-      .mockResolvedValueOnce({ ...mockUser, userRoles: [{ role: 'BOT_ADMIN', grantedAt: new Date() }] }) // re-fetch after update
+      .mockResolvedValueOnce({ ...mockUser, userRoles: [] })             // initial user fetch
+      .mockResolvedValueOnce(mockAdmin)                                   // admin domain user lookup
+      .mockResolvedValueOnce({ ...mockUser, userRoles: [{ role: 'BOT_ADMIN', grantedAt: new Date() }] }) // re-fetch
     db.userRole.create.mockResolvedValue({})
     db.baUser.findUnique.mockResolvedValue(mockBaUser)
 
@@ -293,10 +275,30 @@ describe('PATCH /api/v1/admin/users/:id', () => {
     expect(res.body.user.roles).toContain('BOT_ADMIN')
   })
 
+  it('records the acting admin as grantedById, not the target user', async () => {
+    db.user.findUnique
+      .mockResolvedValueOnce({ ...mockUser, userRoles: [] })   // initial user fetch
+      .mockResolvedValueOnce(mockAdmin)                         // admin domain user lookup
+      .mockResolvedValueOnce({ ...mockUser, userRoles: [{ role: 'BOT_ADMIN', grantedAt: new Date() }] })
+    db.userRole.create.mockResolvedValue({})
+    db.baUser.findUnique.mockResolvedValue(mockBaUser)
+
+    await request(app)
+      .patch('/api/v1/admin/users/usr_1')
+      .send({ roles: ['BOT_ADMIN'] })
+
+    expect(db.userRole.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ grantedById: mockAdmin.id }),
+      })
+    )
+  })
+
   it('revokes a domain role', async () => {
     db.user.findUnique
-      .mockResolvedValueOnce({ ...mockUser, userRoles: [{ role: 'BOT_ADMIN', grantedAt: new Date() }] })
-      .mockResolvedValueOnce({ ...mockUser, userRoles: [] })
+      .mockResolvedValueOnce({ ...mockUser, userRoles: [{ role: 'BOT_ADMIN', grantedAt: new Date() }] }) // initial
+      .mockResolvedValueOnce(mockAdmin)  // admin domain user lookup
+      .mockResolvedValueOnce({ ...mockUser, userRoles: [] }) // re-fetch
     db.userRole.deleteMany.mockResolvedValue({})
     db.baUser.findUnique.mockResolvedValue(mockBaUser)
 
@@ -351,24 +353,53 @@ describe('PATCH /api/v1/admin/users/:id', () => {
 // ─── DELETE /admin/users/:id ──────────────────────────────────────────────────
 
 describe('DELETE /api/v1/admin/users/:id', () => {
-  it('deletes a user with no bots', async () => {
+  it('deletes a user with no bots inside a transaction', async () => {
     db.user.findMany.mockResolvedValue([])
+    db.game.updateMany.mockResolvedValue({})
+    db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/users/usr_1')
 
     expect(res.status).toBe(204)
+    expect(db.$transaction).toHaveBeenCalled()
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
   })
 
-  it('deletes owned bots before deleting user', async () => {
+  it('nullifies game references before deleting user', async () => {
+    db.user.findMany.mockResolvedValue([])
+    db.game.updateMany.mockResolvedValue({})
+    db.game.deleteMany.mockResolvedValue({})
+    db.user.delete.mockResolvedValue({})
+
+    await request(app).delete('/api/v1/admin/users/usr_1')
+
+    expect(db.game.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ player2Id: 'usr_1' }) })
+    )
+    expect(db.game.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ winnerId: 'usr_1' }) })
+    )
+    expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'usr_1' } })
+  })
+
+  it('cleans up bot games before deleting bots and user', async () => {
     db.user.findMany.mockResolvedValue([{ id: 'bot_1' }])
+    db.game.updateMany.mockResolvedValue({})
+    db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/users/usr_1')
 
     expect(res.status).toBe(204)
+    // Bot game cleanup
+    expect(db.game.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ player2Id: 'bot_1' }) })
+    )
+    expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'bot_1' } })
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'bot_1' } })
+    // Owner game cleanup and deletion
+    expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'usr_1' } })
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
   })
 
@@ -376,7 +407,7 @@ describe('DELETE /api/v1/admin/users/:id', () => {
     db.user.findMany.mockResolvedValue([])
     const err = new Error('Not found')
     err.code = 'P2025'
-    db.user.delete.mockRejectedValue(err)
+    db.$transaction.mockRejectedValue(err)
 
     const res = await request(app).delete('/api/v1/admin/users/nonexistent')
 

@@ -18,9 +18,8 @@ export default function AdminUsersPage() {
   const [search, setSearch]   = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
-  const [editingElo, setEditingElo]               = useState(null) // { id, value }
-  const [editingModelLimit, setEditingModelLimit] = useState(null) // { id, value }
-  const [actionError, setActionError]             = useState(null)
+  const [editingElo, setEditingElo]   = useState(null) // { id, value }
+  const [actionError, setActionError] = useState(null)
 
   const totalPages = Math.ceil(total / LIMIT)
 
@@ -84,18 +83,6 @@ export default function AdminUsersPage() {
     } catch { setActionError('ELO update failed.') } finally { setEditingElo(null) }
   }
 
-  async function saveModelLimit(id) {
-    const raw = editingModelLimit.value.trim()
-    const val = raw === '' ? null : parseInt(raw)
-    if (val !== null && isNaN(val)) { setEditingModelLimit(null); return }
-    setActionError(null)
-    try {
-      const token = await getToken()
-      const updated = await api.admin.updateUser(id, { mlModelLimit: val }, token)
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, mlModelLimit: updated.user.mlModelLimit } : u))
-    } catch { setActionError('Model limit update failed.') } finally { setEditingModelLimit(null) }
-  }
-
   async function verifyEmail(user) {
     setActionError(null)
     try {
@@ -138,7 +125,6 @@ export default function AdminUsersPage() {
               <ListTh className="hidden sm:table-cell">Email</ListTh>
               <ListTh align="right">ELO</ListTh>
               <ListTh align="right" className="hidden md:table-cell">Games</ListTh>
-              <ListTh align="right" className="hidden md:table-cell">Model limit</ListTh>
               <ListTh align="center">Status</ListTh>
               <ListTh />
             </tr>
@@ -209,34 +195,6 @@ export default function AdminUsersPage() {
                   {/* Games */}
                   <ListTd align="right" className="hidden md:table-cell">
                     <span className="tabular-nums">{u._count.gamesAsPlayer1}</span>
-                  </ListTd>
-
-                  {/* Model limit — inline edit */}
-                  <ListTd align="right" className="hidden md:table-cell">
-                    {editingModelLimit?.id === u.id ? (
-                      <div className="flex items-center gap-1 justify-end">
-                        <input
-                          type="number" min="0" placeholder="default"
-                          value={editingModelLimit.value}
-                          onChange={e => setEditingModelLimit({ id: u.id, value: e.target.value })}
-                          onKeyDown={e => { if (e.key === 'Enter') saveModelLimit(u.id); if (e.key === 'Escape') setEditingModelLimit(null) }}
-                          className="w-20 px-2 py-0.5 rounded border text-sm text-right focus:outline-none"
-                          style={{ borderColor: 'var(--color-blue-400)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
-                          autoFocus
-                        />
-                        <button onClick={() => saveModelLimit(u.id)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>✓</button>
-                        <button onClick={() => setEditingModelLimit(null)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>✕</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setEditingModelLimit({ id: u.id, value: u.mlModelLimit ?? '' })}
-                        className="font-mono hover:underline"
-                        style={{ color: u.mlModelLimit !== null ? 'var(--color-blue-600)' : 'var(--text-muted)' }}
-                        title="Click to set a custom limit. Leave blank to use the default."
-                      >
-                        {u.mlModelLimit !== null ? u.mlModelLimit : 'default'}
-                      </button>
-                    )}
                   </ListTd>
 
                   {/* Status badge */}
