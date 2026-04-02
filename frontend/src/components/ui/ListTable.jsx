@@ -86,7 +86,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search…', classNam
 // bottomPadding — gap to leave between the table bottom and the viewport edge
 //                 when fitViewport is true (default 24px)
 
-export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, className = '' }) {
+export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, topOffset = 0, className = '' }) {
   const outerRef = useRef(null)
   const [dynamicMax, setDynamicMax] = useState(null)
 
@@ -96,7 +96,8 @@ export function ListTable({ children, maxHeight, fitViewport = false, bottomPadd
 
     const update = () => {
       if (!outerRef.current) return
-      const top = outerRef.current.getBoundingClientRect().top
+      const rawTop = outerRef.current.getBoundingClientRect().top
+      const top = Math.max(rawTop, topOffset)
       const available = window.innerHeight - top - bottomPadding
       setDynamicMax(Math.max(120, available) + 'px')
     }
@@ -114,7 +115,7 @@ export function ListTable({ children, maxHeight, fitViewport = false, bottomPadd
       window.removeEventListener('scroll', onEvent)
       if (rafId) cancelAnimationFrame(rafId)
     }
-  }, [fitViewport, bottomPadding])
+  }, [fitViewport, bottomPadding, topOffset])
 
   const effective = fitViewport ? dynamicMax : maxHeight
 
