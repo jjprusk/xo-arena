@@ -153,8 +153,8 @@ export default function GymGuidePage() {
       {content == null
         ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
         : (
-          <div className="rounded-xl border p-8" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
-            <div className="prose-guide">
+          <div className="rounded-xl border p-8 overflow-x-auto" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+            <div className="prose-guide min-w-0">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{displayContent}</ReactMarkdown>
             </div>
           </div>
