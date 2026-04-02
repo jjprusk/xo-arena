@@ -22,7 +22,7 @@ async function _getSystemConfig(key, defaultValue = null) {
  * Supports both Better Auth (betterAuthId) and legacy Clerk (clerkId) paths.
  * Auto-links existing Clerk users to Better Auth by email.
  */
-export async function syncUser({ betterAuthId, clerkId, email, username, displayName, oauthProvider, avatarUrl }) {
+export async function syncUser({ betterAuthId, clerkId, email, username, displayName, oauthProvider, avatarUrl, nameConfirmed = false }) {
   if (betterAuthId) {
     // Check if already linked by betterAuthId
     let user = await db.user.findUnique({ where: { betterAuthId } })
@@ -45,7 +45,7 @@ export async function syncUser({ betterAuthId, clerkId, email, username, display
     // New user — create from scratch
     const safeUsername = username || email?.split('@')[0] || betterAuthId
     return db.user.create({
-      data: { betterAuthId, email, username: safeUsername, displayName, oauthProvider, avatarUrl },
+      data: { betterAuthId, email, username: safeUsername, displayName, oauthProvider, avatarUrl, nameConfirmed },
     })
   }
 
@@ -112,7 +112,7 @@ export async function updateUser(id, { displayName, avatarUrl, preferences }) {
   return db.user.update({
     where: { id },
     data: {
-      ...(displayName !== undefined && { displayName }),
+      ...(displayName !== undefined && { displayName, nameConfirmed: true }),
       ...(avatarUrl !== undefined && { avatarUrl }),
       ...(preferences !== undefined && { preferences }),
     },

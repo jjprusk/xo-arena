@@ -82,7 +82,7 @@ router.post('/sync', requireAuth, async (req, res, next) => {
       avatarUrl: baUser.image || null,
     })
 
-    res.json({ user: { ...user, baRole: baUser.role ?? null } })
+    res.json({ user: { ...user, baRole: baUser.role ?? null, nameConfirmed: user.nameConfirmed } })
   } catch (err) {
     next(err)
   }
@@ -166,7 +166,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       eloRating: user.eloRating,
       createdAt: user.createdAt,
       ...(botData ?? {}),
-      ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider }),
+      ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider, nameConfirmed: user.nameConfirmed }),
     }
 
     res.json({ user: data })

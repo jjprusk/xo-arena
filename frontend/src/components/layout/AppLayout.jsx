@@ -15,6 +15,7 @@ import { usePvpStore } from '../../store/pvpStore.js'
 import { useRolesStore } from '../../store/rolesStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
+import NamePromptModal from '../NamePromptModal.jsx'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -85,6 +86,7 @@ export default function AppLayout() {
   const isSupport = !isAdmin && rolesStore.hasRole('SUPPORT')
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const prevUserId = useRef(null)
 
@@ -153,8 +155,11 @@ export default function AppLayout() {
     getToken()
       .then(token => {
         if (!token) return
-        return api.users.sync(token).then(() => {
+        return api.users.sync(token).then(({ user }) => {
           sessionStorage.setItem('xo_synced', session.user.id)
+          if (user && !user.nameConfirmed) {
+            setNamePrompt({ userId: user.id, currentName: user.displayName })
+          }
         })
       })
       .catch(() => {})
@@ -455,6 +460,14 @@ export default function AppLayout() {
           navigate={navigate}
         />
       )}
+
+      <NamePromptModal
+        isOpen={!!namePrompt}
+        userId={namePrompt?.userId}
+        currentName={namePrompt?.currentName}
+        onSave={() => setNamePrompt(null)}
+        onSkip={() => setNamePrompt(null)}
+      />
     </div>
   )
 }
