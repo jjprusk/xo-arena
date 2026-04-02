@@ -56,21 +56,34 @@ router.get('/stats', async (_req, res, next) => {
 router.get('/users', async (req, res, next) => {
   try {
     const search = req.query.search?.trim() || ''
+    const status = req.query.status || ''
     const page = Math.max(1, parseInt(req.query.page) || 1)
     const limit = Math.min(100, parseInt(req.query.limit) || 25)
     const skip = (page - 1) * limit
 
+    // For "online" filter, pre-fetch active BA session IDs so we can filter the user query
+    const now = new Date()
+    let onlineBaIds = null
+    if (status === 'online') {
+      const activeSessions = await db.baSession.findMany({
+        where: { expiresAt: { gt: now } },
+        select: { userId: true },
+      })
+      onlineBaIds = [...new Set(activeSessions.map(s => s.userId))]
+    }
+
     const where = {
       isBot: false,
-      ...(search
-        ? {
-            OR: [
-              { displayName: { contains: search, mode: 'insensitive' } },
-              { email: { contains: search, mode: 'insensitive' } },
-              { username: { contains: search, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
+      ...(search ? {
+        OR: [
+          { displayName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { username: { contains: search, mode: 'insensitive' } },
+        ],
+      } : {}),
+      ...(status === 'active'  ? { banned: false } : {}),
+      ...(status === 'banned'  ? { banned: true  } : {}),
+      ...(status === 'online'  ? { betterAuthId: { in: onlineBaIds } } : {}),
     }
 
     const [rawUsers, total] = await Promise.all([
@@ -98,7 +111,6 @@ router.get('/users', async (req, res, next) => {
 
     // Fetch BA roles + emailVerified + active sessions for all users in one query
     const baIds = rawUsers.map(u => u.betterAuthId).filter(Boolean)
-    const now = new Date()
     const [baUsers, baSessions] = baIds.length
       ? await Promise.all([
           db.baUser.findMany({ where: { id: { in: baIds } }, select: { id: true, role: true, emailVerified: true } }),
@@ -240,6 +252,52 @@ router.patch('/users/:id', async (req, res, next) => {
  * DELETE /api/v1/admin/users/:id
  * Hard-delete a user and all associated data (cascade).
  */
+/**
+ * GET /api/v1/admin/users/:id
+ * Single user with full enrichment (baRole, emailVerified, online, signedInAt).
+ */
+router.get('/users/:id', async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { id: req.params.id, isBot: false },
+      select: {
+        id: true, betterAuthId: true, username: true, displayName: true,
+        email: true, avatarUrl: true, eloRating: true, banned: true,
+        oauthProvider: true, createdAt: true, botLimit: true,
+        userRoles: { select: { role: true, grantedAt: true } },
+        _count: { select: { gamesAsPlayer1: true } },
+      },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const now = new Date()
+    const [baUser, sessions] = user.betterAuthId
+      ? await Promise.all([
+          db.baUser.findUnique({ where: { id: user.betterAuthId }, select: { role: true, emailVerified: true } }),
+          db.baSession.findMany({
+            where: { userId: user.betterAuthId, expiresAt: { gt: now } },
+            select: { createdAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          }),
+        ])
+      : [null, []]
+
+    res.json({
+      user: {
+        ...user,
+        roles: user.userRoles?.map(r => r.role) ?? [],
+        baRole: baUser?.role ?? null,
+        emailVerified: baUser?.emailVerified ?? null,
+        online: sessions.length > 0,
+        signedInAt: sessions[0]?.createdAt ?? null,
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.delete('/users/:id', async (req, res, next) => {
   try {
     const [domainUser, bots] = await Promise.all([

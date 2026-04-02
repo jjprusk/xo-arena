@@ -155,11 +155,13 @@ export const api = {
 
   admin: {
     stats:        (token)           => api.get('/admin/stats', token),
-    users:        (token, search, page, limit) => {
+    getUser:      (id, token)       => api.get(`/admin/users/${id}`, token),
+    users:        (token, search, page, limit, status) => {
       const p = new URLSearchParams()
       if (search) p.set('search', search)
       if (page)   p.set('page', page)
       if (limit)  p.set('limit', limit)
+      if (status) p.set('status', status)
       const qs = p.toString()
       return api.get(`/admin/users${qs ? `?${qs}` : ''}`, token)
     },

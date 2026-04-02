@@ -122,7 +122,7 @@ export function ListTable({ children, maxHeight, fitViewport = false, bottomPadd
     <div
       ref={outerRef}
       className={`rounded-xl border overflow-hidden ${className}`}
-      style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
     >
       <div
         className="overflow-x-auto"
@@ -166,7 +166,7 @@ export function ListTr({ children, dimmed = false, last = false, onClick, classN
   return (
     <tr
       onClick={onClick}
-      className={`transition-colors hover:bg-[var(--bg-surface-hover)] ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`transition-colors bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] ${onClick ? 'cursor-pointer' : ''} ${className}`}
       style={{
         opacity: dimmed ? 0.55 : 1,
         borderBottom: last ? 'none' : '1px solid var(--border-default)',

@@ -145,7 +145,7 @@ describe('AdminUsersPage — online indicator', () => {
     api.admin.users.mockResolvedValue({ users: [ONLINE_USER], total: 1 })
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText('Online')).toBeDefined()
+      expect(screen.getByTestId('online-badge')).toBeDefined()
     })
   })
 
@@ -161,7 +161,7 @@ describe('AdminUsersPage — online indicator', () => {
     api.admin.users.mockResolvedValue({ users: [MOCK_USER], total: 1 })
     renderPage()
     await waitFor(() => {
-      expect(screen.queryByText('Online')).toBeNull()
+      expect(screen.queryByTestId('online-badge')).toBeNull()
     })
   })
 })
