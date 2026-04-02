@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 /**
  * Smoke tests — run against BASE_URL after every production promotion.
  *
- * Polls /api/version until the expected version is live (up to 3 min),
+ * Polls /api/version until the expected version is live (up to 5 min),
  * then verifies key surfaces load and reports the deployed version.
  *
  * Run with:
@@ -21,8 +21,8 @@ const { version: EXPECTED_VERSION } = JSON.parse(
 // ── Wait for deploy ───────────────────────────────────────────────────────────
 
 test('wait for deploy — /api/version matches expected version', async ({ request }) => {
-  test.setTimeout(4 * 60 * 1000) // 4 min — overrides global 30s for this polling test
-  const deadline = Date.now() + 3 * 60 * 1000 // 3 minutes
+  test.setTimeout(6 * 60 * 1000) // 6 min — overrides global 30s for this polling test
+  const deadline = Date.now() + 5 * 60 * 1000 // 5 minutes
   let deployed = null
 
   while (Date.now() < deadline) {
