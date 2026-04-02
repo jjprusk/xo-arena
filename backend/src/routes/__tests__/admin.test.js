@@ -623,16 +623,44 @@ describe('DELETE /api/v1/admin/bots/:id', () => {
 // ─── ML model admin ───────────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/ml/models', () => {
-  it('returns model list with creator names', async () => {
+  it('returns model list with creator names resolved via BA user ID', async () => {
     db.mLModel.findMany.mockResolvedValue([mockModel])
     db.mLModel.count.mockResolvedValue(1)
-    db.user.findMany.mockResolvedValue([{ betterAuthId: 'ba_user_1', displayName: 'Alice', username: 'alice' }])
+    // byBaId lookup returns the user; byDomainId returns nothing
+    db.user.findMany.mockResolvedValueOnce([{ betterAuthId: 'ba_user_1', id: 'usr_1', displayName: 'Alice', username: 'alice' }])
+    db.user.findMany.mockResolvedValueOnce([])
 
     const res = await request(app).get('/api/v1/admin/ml/models')
 
     expect(res.status).toBe(200)
     expect(res.body.models[0].creatorName).toBe('Alice')
     expect(res.body.total).toBe(1)
+  })
+
+  it('resolves creator name via domain user ID (legacy bots)', async () => {
+    const legacyModel = { ...mockModel, createdBy: 'usr_1' }
+    db.mLModel.findMany.mockResolvedValue([legacyModel])
+    db.mLModel.count.mockResolvedValue(1)
+    // byBaId lookup finds nothing; byDomainId lookup finds the owner
+    db.user.findMany.mockResolvedValueOnce([])
+    db.user.findMany.mockResolvedValueOnce([{ betterAuthId: 'ba_user_1', id: 'usr_1', displayName: 'Alice', username: 'alice' }])
+
+    const res = await request(app).get('/api/v1/admin/ml/models')
+
+    expect(res.status).toBe(200)
+    expect(res.body.models[0].creatorName).toBe('Alice')
+  })
+
+  it('returns null creatorName when owner not found', async () => {
+    db.mLModel.findMany.mockResolvedValue([mockModel])
+    db.mLModel.count.mockResolvedValue(1)
+    db.user.findMany.mockResolvedValueOnce([])
+    db.user.findMany.mockResolvedValueOnce([])
+
+    const res = await request(app).get('/api/v1/admin/ml/models')
+
+    expect(res.status).toBe(200)
+    expect(res.body.models[0].creatorName).toBeNull()
   })
 
   it('filters by status', async () => {
