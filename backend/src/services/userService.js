@@ -317,7 +317,7 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
  */
 const VALID_ML_ALGORITHMS = ['Q_LEARNING', 'SARSA', 'MONTE_CARLO', 'POLICY_GRADIENT', 'DQN', 'ALPHA_ZERO']
 
-export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl } = {}) {
+export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
   const trimmedName = name.trim()
 
@@ -395,7 +395,7 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
           algorithm: mlAlgo,
           qtable: {},
           config: { ...ML_DEFAULT_CONFIG },
-          createdBy: ownerId,
+          createdBy: ownerBaId ?? ownerId,
           maxEpisodes,
         },
       })

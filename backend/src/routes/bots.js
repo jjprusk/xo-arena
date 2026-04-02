@@ -80,7 +80,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
 
     const { name, modelType, competitive, avatarUrl } = req.body
-    const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl })
+    const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl, ownerBaId: baId })
     cache.invalidate(BOTS_CACHE_KEY)
     res.status(201).json({ bot })
   } catch (err) {
