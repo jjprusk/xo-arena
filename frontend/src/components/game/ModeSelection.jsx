@@ -144,8 +144,8 @@ function BotRow({ bot, isSignedIn, onChallenge }) {
       {isSignedIn ? (
         <button
           onClick={() => onChallenge(bot)}
-          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
-          style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)' }}
+          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-95 active:translate-y-0.5 active:shadow-none"
+          style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.45)' }}
         >
           Challenge
         </button>
