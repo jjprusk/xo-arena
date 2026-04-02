@@ -204,6 +204,25 @@ TournamentStanding
 
 ---
 
+## Competitive Ranking Tiers
+
+Tournament standings and leaderboards use a competitive ranking tier system based on ELO
+rating and tournament performance. These are distinct from the participation tiers in the
+Credits system (Bronze → Diamond), which reward engagement. Competitive tiers reward skill.
+
+| Tier | Name | Icon |
+|------|------|------|
+| 0 | Newcomer | — |
+| 1 | Player | ▲ |
+| 2 | Competitor | ◆ |
+| 3 | Champion | ★ |
+| 4 | Legend | ⚡ |
+
+Thresholds, promotion/demotion rules, and display placement are to be defined when the
+tournament leaderboard feature is implemented.
+
+---
+
 ## Out of Scope (initial version)
 
 - Prize / reward system

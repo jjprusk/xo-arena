@@ -102,6 +102,7 @@ The admin nav entry (already in the sidebar as `/admin/ai` and `/admin/logs`) sh
 |-------|-----------|---------|
 | `/admin` | `AdminDashboard` | Platform stats overview |
 | `/admin/users` | `AdminUsersPage` | User table with search, sort, inline actions |
+| `/admin/users/:id` | `AdminUserDetailPage` | Full user profile view for any user — same panels as the user's own Profile page (stats, credits/tier, bots, game history) plus admin-only actions (ban, ELO adjust, override limits) |
 | `/admin/games` | `AdminGamesPage` | Global game log |
 | `/admin/puzzles` | `AdminPuzzlesPage` | Curated puzzle management |
 | `/admin/ai` | existing `AIDashboardPage` | AI metrics (already exists, needs auth gate) |
@@ -155,6 +156,7 @@ The `role` field in the DB is a convenience cache (for queries like "list all ad
 ### Phase 2 — User management
 - [ ] `GET/PATCH/DELETE /admin/users` routes
 - [ ] `AdminUsersPage` — search, view, ban, ELO adjust
+- [ ] `AdminUserDetailPage` — clicking any user in the list opens their full profile; reuses existing profile components with an admin action panel appended
 
 ### Phase 3 — Observability
 - [ ] `GET /admin/stats` route (DAU, total games, active ML sessions)
