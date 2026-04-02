@@ -227,10 +227,10 @@ router.patch('/users/:id', async (req, res, next) => {
  */
 router.delete('/users/:id', async (req, res, next) => {
   try {
-    const bots = await db.user.findMany({
-      where: { botOwnerId: req.params.id, isBot: true },
-      select: { id: true },
-    })
+    const [domainUser, bots] = await Promise.all([
+      db.user.findUnique({ where: { id: req.params.id }, select: { betterAuthId: true } }),
+      db.user.findMany({ where: { botOwnerId: req.params.id, isBot: true }, select: { id: true } }),
+    ])
     const botIds = bots.map(b => b.id)
 
     await db.$transaction(async (tx) => {
@@ -244,6 +244,12 @@ router.delete('/users/:id', async (req, res, next) => {
       await tx.game.updateMany({ where: { winnerId:  req.params.id }, data: { winnerId:  null } })
       await tx.game.deleteMany({ where: { player1Id: req.params.id } })
       await tx.user.delete({ where: { id: req.params.id } })
+      // Remove Better Auth records so the email can be re-registered
+      if (domainUser?.betterAuthId) {
+        await tx.baSession.deleteMany({ where: { userId: domainUser.betterAuthId } })
+        await tx.baAccount.deleteMany({ where: { userId: domainUser.betterAuthId } })
+        try { await tx.baUser.delete({ where: { id: domainUser.betterAuthId } }) } catch { }
+      }
     })
 
     res.status(204).end()

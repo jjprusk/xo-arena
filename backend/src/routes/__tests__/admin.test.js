@@ -27,7 +27,10 @@ vi.mock('../../lib/db.js', () => {
     findMany:   vi.fn(),
     findUnique: vi.fn(),
     update:     vi.fn(),
+    delete:     vi.fn(),
   }
+  const baSession = { deleteMany: vi.fn() }
+  const baAccount = { deleteMany: vi.fn() }
   const game = {
     count:      vi.fn(),
     findMany:   vi.fn(),
@@ -52,8 +55,8 @@ vi.mock('../../lib/db.js', () => {
   }
   return {
     default: {
-      user, baUser, game, mLModel, userRole, systemConfig,
-      $transaction: vi.fn(async (fn) => fn({ game, user })),
+      user, baUser, baSession, baAccount, game, mLModel, userRole, systemConfig,
+      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount })),
     },
   }
 })
@@ -354,6 +357,7 @@ describe('PATCH /api/v1/admin/users/:id', () => {
 
 describe('DELETE /api/v1/admin/users/:id', () => {
   it('deletes a user with no bots inside a transaction', async () => {
+    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
@@ -367,6 +371,7 @@ describe('DELETE /api/v1/admin/users/:id', () => {
   })
 
   it('nullifies game references before deleting user', async () => {
+    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
@@ -384,6 +389,7 @@ describe('DELETE /api/v1/admin/users/:id', () => {
   })
 
   it('cleans up bot games before deleting bots and user', async () => {
+    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([{ id: 'bot_1' }])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
@@ -403,7 +409,35 @@ describe('DELETE /api/v1/admin/users/:id', () => {
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
   })
 
+  it('deletes Better Auth records so the email can be re-registered', async () => {
+    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
+    db.user.findMany.mockResolvedValue([])
+    db.game.updateMany.mockResolvedValue({})
+    db.game.deleteMany.mockResolvedValue({})
+    db.user.delete.mockResolvedValue({})
+
+    await request(app).delete('/api/v1/admin/users/usr_1')
+
+    expect(db.baSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'ba_user_1' } })
+    expect(db.baAccount.deleteMany).toHaveBeenCalledWith({ where: { userId: 'ba_user_1' } })
+    expect(db.baUser.delete).toHaveBeenCalledWith({ where: { id: 'ba_user_1' } })
+  })
+
+  it('skips BA cleanup when user has no betterAuthId', async () => {
+    db.user.findUnique.mockResolvedValue({ betterAuthId: null })
+    db.user.findMany.mockResolvedValue([])
+    db.game.updateMany.mockResolvedValue({})
+    db.game.deleteMany.mockResolvedValue({})
+    db.user.delete.mockResolvedValue({})
+
+    const res = await request(app).delete('/api/v1/admin/users/usr_1')
+
+    expect(res.status).toBe(204)
+    expect(db.baUser.delete).not.toHaveBeenCalled()
+  })
+
   it('returns 404 for missing user', async () => {
+    db.user.findUnique.mockResolvedValue(null)
     db.user.findMany.mockResolvedValue([])
     const err = new Error('Not found')
     err.code = 'P2025'
