@@ -353,20 +353,31 @@ router.get('/ml/models', async (req, res, next) => {
       db.mLModel.count({ where }),
     ])
 
-    // Enrich with creator display names
+    // Enrich with creator display names.
+    // createdBy may store a BA user ID (ba_xxx) for new bots or a domain user ID
+    // for bots created before the ownerBaId fix — query both ways.
     const creatorIds = [...new Set(models.map(m => m.createdBy).filter(Boolean))]
-    const creators = creatorIds.length
-      ? await db.user.findMany({
-          where: { betterAuthId: { in: creatorIds } },
-          select: { betterAuthId: true, displayName: true, username: true },
-        })
-      : []
-    const creatorMap = Object.fromEntries(creators.map(u => [u.betterAuthId, u]))
+    const [byBaId, byDomainId] = creatorIds.length
+      ? await Promise.all([
+          db.user.findMany({
+            where: { betterAuthId: { in: creatorIds } },
+            select: { betterAuthId: true, id: true, displayName: true, username: true },
+          }),
+          db.user.findMany({
+            where: { id: { in: creatorIds } },
+            select: { betterAuthId: true, id: true, displayName: true, username: true },
+          }),
+        ])
+      : [[], []]
+    const creatorMap = Object.fromEntries([
+      ...byDomainId.map(u => [u.id, u]),
+      ...byBaId.map(u => [u.betterAuthId, u]),
+    ])
 
     const enriched = models.map(m => ({
       ...m,
       creatorName: m.createdBy
-        ? (creatorMap[m.createdBy]?.displayName || creatorMap[m.createdBy]?.username || 'Unknown')
+        ? (creatorMap[m.createdBy]?.displayName || creatorMap[m.createdBy]?.username || null)
         : null,
     }))
 
