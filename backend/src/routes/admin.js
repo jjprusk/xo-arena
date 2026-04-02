@@ -89,7 +89,6 @@ router.get('/users', async (req, res, next) => {
           eloRating: true,
           banned: true,
           userRoles: { select: { role: true, grantedAt: true } },
-          mlModelLimit: true,
           createdAt: true,
           _count: { select: { gamesAsPlayer1: true } },
         },
@@ -124,7 +123,7 @@ router.get('/users', async (req, res, next) => {
  */
 router.patch('/users/:id', async (req, res, next) => {
   try {
-    const { banned, eloRating, mlModelLimit, roles, baRole, emailVerified } = req.body
+    const { banned, eloRating, roles, baRole, emailVerified } = req.body
 
     const data = {}
     if (banned !== undefined) data.banned = Boolean(banned)
@@ -135,21 +134,12 @@ router.patch('/users/:id', async (req, res, next) => {
       }
       data.eloRating = elo
     }
-    if (mlModelLimit !== undefined) {
-      if (mlModelLimit === null) {
-        data.mlModelLimit = null  // reset to default
-      } else {
-        const v = parseInt(mlModelLimit)
-        if (isNaN(v) || v < 0) return res.status(400).json({ error: 'mlModelLimit must be a non-negative integer or null' })
-        data.mlModelLimit = v
-      }
-    }
     // Update domain user scalar fields
     let user = null
     const USER_SELECT = {
       id: true, betterAuthId: true, username: true, displayName: true,
       email: true, avatarUrl: true, eloRating: true, banned: true,
-      mlModelLimit: true, createdAt: true, botLimit: true,
+      createdAt: true, botLimit: true,
       userRoles: { select: { role: true, grantedAt: true } },
       _count: { select: { gamesAsPlayer1: true } },
     }
@@ -173,11 +163,16 @@ router.patch('/users/:id', async (req, res, next) => {
       const toAdd    = desired.filter(r => !current.includes(r))
       const toRemove = current.filter(r => !desired.includes(r) && VALID_DOMAIN_ROLES.includes(r))
 
-      const adminUserId = req.body._adminUserId ?? null // caller may pass their own id for audit
+      // Look up the admin's domain user ID for accurate audit trail
+      const adminDomain = await db.user.findUnique({
+        where: { betterAuthId: req.auth.userId },
+        select: { id: true },
+      })
+      const grantedById = adminDomain?.id ?? req.params.id
 
       await Promise.all([
         ...toAdd.map(role =>
-          db.userRole.create({ data: { userId: req.params.id, role, grantedById: adminUserId ?? req.params.id } })
+          db.userRole.create({ data: { userId: req.params.id, role, grantedById } })
         ),
         ...toRemove.map(role =>
           db.userRole.deleteMany({ where: { userId: req.params.id, role } })
@@ -232,15 +227,25 @@ router.patch('/users/:id', async (req, res, next) => {
  */
 router.delete('/users/:id', async (req, res, next) => {
   try {
-    // B-26: cascade delete all bots owned by this user first
-    const botIds = await db.user.findMany({
+    const bots = await db.user.findMany({
       where: { botOwnerId: req.params.id, isBot: true },
       select: { id: true },
     })
-    for (const { id } of botIds) {
-      await db.user.delete({ where: { id } })
-    }
-    await db.user.delete({ where: { id: req.params.id } })
+    const botIds = bots.map(b => b.id)
+
+    await db.$transaction(async (tx) => {
+      for (const botId of botIds) {
+        await tx.game.updateMany({ where: { player2Id: botId }, data: { player2Id: null } })
+        await tx.game.updateMany({ where: { winnerId:  botId }, data: { winnerId:  null } })
+        await tx.game.deleteMany({ where: { player1Id: botId } })
+        await tx.user.delete({ where: { id: botId } })
+      }
+      await tx.game.updateMany({ where: { player2Id: req.params.id }, data: { player2Id: null } })
+      await tx.game.updateMany({ where: { winnerId:  req.params.id }, data: { winnerId:  null } })
+      await tx.game.deleteMany({ where: { player1Id: req.params.id } })
+      await tx.user.delete({ where: { id: req.params.id } })
+    })
+
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' })

@@ -151,8 +151,12 @@ export default function AppLayout() {
     if (!session?.user?.id) return
     if (sessionStorage.getItem('xo_synced') === session.user.id) return
     getToken()
-      .then(token => { if (token) return api.users.sync(token) })
-      .then(() => { sessionStorage.setItem('xo_synced', session.user.id) })
+      .then(token => {
+        if (!token) return
+        return api.users.sync(token).then(() => {
+          sessionStorage.setItem('xo_synced', session.user.id)
+        })
+      })
       .catch(() => {})
   }, [session?.user?.id])
 
