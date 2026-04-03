@@ -147,6 +147,8 @@ export const api = {
     eloHistory: (id) => api.get(`/users/${id}/elo-history`),
     games: (id, page = 1) => api.get(`/users/${id}/games?page=${page}&limit=20`),
     mlProfiles: (id, token) => api.get(`/users/${id}/ml-profiles`, token),
+    getHints: (token) => api.get('/users/me/hints', token),
+    markFaqHint: (token) => api.post('/users/me/hints/faq', {}, token),
   },
 
   games: {
