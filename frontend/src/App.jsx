@@ -48,7 +48,7 @@ export default function App() {
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/bots/:id" element={<BotProfilePage />} />
-          <Route path="/ml" element={<GymPage />} />
+          <Route path="/gym" element={<GymPage />} />
           <Route path="/gym/guide" element={<GymGuidePage />} />
 
           {/* Admin routes — all guarded by AdminRoute */}

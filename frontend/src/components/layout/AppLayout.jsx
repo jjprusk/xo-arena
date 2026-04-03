@@ -16,20 +16,22 @@ import { useRolesStore } from '../../store/rolesStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
+import GettingStartedModal from '../GettingStartedModal.jsx'
+import { useOnboardingStore } from '../../store/onboardingStore.js'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
 const NAV_LINKS = [
   { to: '/play', label: 'Play' },
-  { to: '/ml', label: 'Gym' },
+  { to: '/gym', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
   { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
 ]
 
 const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
-  { to: '/ml', label: 'Gym', icon: '⚡' },
+  { to: '/gym', label: 'Gym', icon: '⚡' },
   { to: '/leaderboard', label: 'Ranks', icon: '★' },
   { to: '/stats', label: 'Stats', icon: '◎' },
   { to: '/profile', label: 'Profile', icon: '◉' },
@@ -37,7 +39,7 @@ const BOTTOM_NAV = [
 
 const MENU_LINKS = [
   { to: '/play',        label: 'Play',        icon: '⊞' },
-  { to: '/ml',          label: 'Gym',         icon: '⚡' },
+  { to: '/gym',         label: 'Gym',         icon: '⚡' },
   { to: '/puzzles',     label: 'Puzzles',      icon: '◈' },
   { to: '/leaderboard', label: 'Leaderboard',  icon: '★' },
   { to: '/stats',       label: 'Stats',        icon: '◎' },
@@ -60,7 +62,7 @@ const ADMIN_MENU_LINKS = [
 const PREFETCH_MAP = {
   '/play':        () => prefetch('/bots'),
   '/leaderboard': () => prefetch('/leaderboard?period=all&mode=all&includeBots=false'),
-  '/ml':          () => {
+  '/gym':         () => {
     // Preload the Gym's shared helpers + TrainTab (which pulls in vendor-charts)
     import('../gym/gymShared.jsx').catch(() => {})
     import('../gym/TrainTab.jsx').catch(() => {})
@@ -88,6 +90,8 @@ export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const { trainingDone, check: checkOnboarding } = useOnboardingStore()
   const prevUserId = useRef(null)
 
   // Close the mobile menu whenever the user navigates
@@ -160,6 +164,7 @@ export default function AppLayout() {
           if (user && !user.nameConfirmed) {
             setNamePrompt({ userId: user.id, currentName: user.displayName })
           }
+          checkOnboarding(session.user.id, token)
         })
       })
       .catch(() => {})
@@ -192,20 +197,37 @@ export default function AppLayout() {
         className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-6 md:px-8 h-14 border-b"
         style={{ backgroundColor: isStaging ? '#b45309' : 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
       >
-        {/* Logo */}
-        <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
-            <text x="2" y="23" fontSize="19" fontWeight="800" fill="white" fontFamily="var(--font-display), system-ui, sans-serif">X</text>
-            <text x="16" y="23" fontSize="19" fontWeight="800" fill="var(--color-teal-500)" fontFamily="var(--font-display), system-ui, sans-serif">O</text>
-          </svg>
-          <span
-            className="text-xl font-bold tracking-tight"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-blue-600)' }}
-          >
-            XO Arena
-          </span>
-        </Link>
+        {/* Logo + Getting Started guide button */}
+        <div className="flex items-center gap-2">
+          <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
+              <text x="2" y="23" fontSize="19" fontWeight="800" fill="white" fontFamily="var(--font-display), system-ui, sans-serif">X</text>
+              <text x="16" y="23" fontSize="19" fontWeight="800" fill="var(--color-teal-500)" fontFamily="var(--font-display), system-ui, sans-serif">O</text>
+            </svg>
+            <span
+              className="text-xl font-bold tracking-tight"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-blue-600)' }}
+            >
+              XO Arena
+            </span>
+          </Link>
+          {trainingDone === false && (
+            <button
+              onClick={() => setGuideOpen(true)}
+              aria-label="Getting Started guide"
+              title="Getting Started"
+              className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
+              style={{
+                background: 'linear-gradient(135deg, var(--color-blue-500), #6366f1)',
+                color: 'white',
+              }}
+            >
+              <span>✦</span>
+              <span className="hidden sm:inline">Guide</span>
+            </button>
+          )}
+        </div>
 
         {/* Desktop nav links */}
         <nav className="hidden md:flex items-center gap-6">
@@ -468,6 +490,7 @@ export default function AppLayout() {
         onSave={() => setNamePrompt(null)}
         onSkip={() => setNamePrompt(null)}
       />
+      <GettingStartedModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   )
 }

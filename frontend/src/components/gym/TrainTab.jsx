@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
+import { useOnboardingStore } from '../../store/onboardingStore.js'
 import { getSocket } from '../../lib/socket.js'
 import { runTrainingSession } from '../../services/trainingService.js'
 import {
@@ -206,6 +207,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
         samples:    result.samples,
       }, token)
 
+      useOnboardingStore.getState().markDone()
       setRunning(false)
       onComplete()
     } catch (err) {

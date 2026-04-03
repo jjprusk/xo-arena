@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -61,6 +61,8 @@ function highlightMarkdown(text, query) {
 }
 
 export default function GymGuidePage() {
+  const { state } = useLocation()
+  const fromGym = state?.from === '/gym'
   const [content, setContent]   = useState(null)
   const [query, setQuery]       = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -83,8 +85,8 @@ export default function GymGuidePage() {
 
   function handleDownload() {
     const a = Object.assign(document.createElement('a'), {
-      href: '/bot-training-guide.md',
-      download: 'Bot_Training_Guide.md',
+      href: '/bot-training-guide.pdf',
+      download: 'Bot_Training_Guide.pdf',
     })
     document.body.appendChild(a)
     a.click()
@@ -95,15 +97,17 @@ export default function GymGuidePage() {
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header bar */}
       <div className="flex items-center justify-between mb-6">
-        <Link
-          to="/ml"
-          className="text-sm font-medium"
-          style={{ color: 'var(--color-blue-600)' }}
-        >
-          ← Back to Gym
-        </Link>
+        {fromGym && (
+          <Link
+            to="/gym"
+            className="text-sm font-medium"
+            style={{ color: 'var(--color-blue-600)' }}
+          >
+            ← Back to Gym
+          </Link>
+        )}
         <button
-          onClick={handleDownload}
+          onClick={() => handleDownload('pdf')}
           className="text-sm font-medium px-4 py-2 rounded-lg border transition-colors"
           style={{
             borderColor: 'var(--border-default)',
@@ -111,7 +115,7 @@ export default function GymGuidePage() {
             color: 'var(--text-primary)',
           }}
         >
-          Download .md
+          Download PDF
         </button>
       </div>
 
