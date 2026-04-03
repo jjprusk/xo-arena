@@ -1,8 +1,18 @@
 import React, { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
+const FeedbackIcon = () => (
+  <span
+    className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs align-middle mx-0.5"
+    style={{ backgroundColor: 'var(--bg-base)', border: '1px solid var(--border-default)' }}
+    aria-label="feedback button"
+  >
+    💬
+  </span>
+)
+
 const STEPS = [
-  { n: 1, text: 'Press the bottom-right icon to send feedback anytime' },
+  { n: 1, text: <span>Press the <FeedbackIcon /> icon to send feedback anytime</span> },
   { n: 2, text: 'Read the FAQ on the About page' },
   { n: 3, text: 'Play a few games against the built-in bots' },
   { n: 4, text: 'Read the Training Guide on the Gym page' },
