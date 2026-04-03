@@ -113,21 +113,18 @@ export const auth = betterAuth({
             const resolvedName = (rawName && rawName.toLowerCase() !== 'unknown')
               ? rawName
               : baUser.email.split('@')[0]
-            // OAuth signups (Google/Apple) get nameConfirmed=false so the app
-            // can prompt them to set a preferred name on first login.
-            const socialAccount = await db.baAccount.findFirst({
-              where: { userId: baUser.id, providerId: { not: 'credential' } },
-            })
-            const nameConfirmed = !socialAccount
-            logger.info({ userId: baUser.id, baName: baUser.name, resolvedName, nameConfirmed }, 'Post-createUser sync')
+            // New users always start with nameConfirmed=false. The /sync endpoint
+            // (called by the frontend after login) flips it to true for email/credential
+            // accounts once ba_accounts is guaranteed to exist. OAuth users get prompted.
+            logger.info({ userId: baUser.id, baName: baUser.name, resolvedName }, 'Post-createUser sync')
             await syncUser({
               betterAuthId: baUser.id,
               email: baUser.email,
               username: resolvedName.toLowerCase().replace(/\s+/g, '_'),
               displayName: resolvedName,
-              oauthProvider: socialAccount ? socialAccount.providerId : 'email',
+              oauthProvider: 'email',
               avatarUrl: baUser.image || null,
-              nameConfirmed,
+              nameConfirmed: false,
             })
           } catch (err) {
             logger.warn({ err: err.message, userId: baUser.id }, 'Post-createUser domain upsert failed')
