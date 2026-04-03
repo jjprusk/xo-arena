@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
 import { useGameStore } from '../../store/gameStore.js'
 import { useRolesStore } from '../../store/rolesStore.js'
@@ -16,6 +16,14 @@ export default function FeedbackButton({
   const hasRole = useRolesStore(s => s.hasRole)
   const gameStatus = useGameStore(s => s.status)
   const gameMode = useGameStore(s => s.mode)
+
+  useEffect(() => {
+    function onMessage(e) {
+      if (e.data?.type === 'open-feedback') setOpen(true)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 
   // Don't show for support users
   if (hasRole('SUPPORT')) return null
@@ -61,7 +69,7 @@ export default function FeedbackButton({
         onClick={handleClick}
         disabled={capturing}
         aria-label="Send feedback"
-        className="fixed bottom-6 right-5 z-40 w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-lg transition-transform hover:scale-110 active:scale-95 disabled:opacity-60"
+        className="fixed bottom-20 md:bottom-6 right-5 z-40 w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-lg transition-transform hover:scale-110 active:scale-95 disabled:opacity-60"
         style={{
           backgroundColor: 'var(--bg-surface)',
           border: '1px solid var(--border-default)',

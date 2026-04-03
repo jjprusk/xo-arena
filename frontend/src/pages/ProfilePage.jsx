@@ -420,6 +420,89 @@ export default function ProfilePage() {
           <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{botActionError}</p>
         )}
 
+        {showCreateBot ? (
+          <form
+            onSubmit={handleCreateBot}
+            className="rounded-xl border p-4 space-y-3"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+          >
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>New bot</p>
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Name</span>
+              <input
+                type="text"
+                required
+                autoFocus
+                maxLength={40}
+                value={createForm.name}
+                onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
+              <select
+                value={createForm.modelType}
+                onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              >
+                <option value="DQN">DQN (Deep Q-Network)</option>
+                <option value="ALPHA_ZERO">AlphaZero</option>
+                <option value="POLICY_GRADIENT">Policy Gradient</option>
+                <option value="Q_LEARNING">Q-Learning</option>
+                <option value="SARSA">SARSA</option>
+                <option value="MONTE_CARLO">Monte Carlo</option>
+              </select>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                A fresh untrained brain of this type will be created. Train it in the Gym.
+              </p>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createForm.competitive}
+                onChange={e => setCreateForm(f => ({ ...f, competitive: e.target.checked }))}
+              />
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Competitive (eligible for leaderboard &amp; tournaments)</span>
+            </label>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={creatingBot}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+              >
+                {creatingBot ? 'Creating…' : 'Create'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowCreateBot(false); setBotActionError(null) }}
+                className="px-4 py-1.5 rounded-lg text-sm border"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            onClick={() => {
+              if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
+                setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
+                return
+              }
+              setBotActionError(null)
+              setShowCreateBot(true)
+            }}
+            className="text-sm font-medium transition-colors"
+            style={{ color: 'var(--color-blue-600)' }}
+          >
+            + Create new bot
+          </button>
+        )}
+
         {botsLoading && (
           <div className="flex items-center justify-center py-4">
             <div className="w-5 h-5 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
@@ -534,90 +617,6 @@ export default function ProfilePage() {
           </ListTable>
         )}
 
-        {/* Create bot form */}
-        {showCreateBot ? (
-          <form
-            onSubmit={handleCreateBot}
-            className="rounded-xl border p-4 space-y-3"
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
-          >
-            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>New bot</p>
-            <label className="space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Name</span>
-              <input
-                type="text"
-                required
-                autoFocus
-                maxLength={40}
-                value={createForm.name}
-                onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              />
-            </label>
-            <label className="space-y-1 block">
-              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
-              <select
-                value={createForm.modelType}
-                onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
-                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              >
-                <option value="DQN">DQN (Deep Q-Network)</option>
-                <option value="ALPHA_ZERO">AlphaZero</option>
-                <option value="POLICY_GRADIENT">Policy Gradient</option>
-                <option value="Q_LEARNING">Q-Learning</option>
-                <option value="SARSA">SARSA</option>
-                <option value="MONTE_CARLO">Monte Carlo</option>
-              </select>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                A fresh untrained brain of this type will be created. Train it in the Gym.
-              </p>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={createForm.competitive}
-                onChange={e => setCreateForm(f => ({ ...f, competitive: e.target.checked }))}
-              />
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Competitive (eligible for leaderboard & tournaments)</span>
-            </label>
-
-            <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                disabled={creatingBot}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
-              >
-                {creatingBot ? 'Creating…' : 'Create'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowCreateBot(false); setBotActionError(null) }}
-                className="px-4 py-1.5 rounded-lg text-sm border"
-                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <button
-            onClick={() => {
-              if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
-                setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
-                return
-              }
-              setBotActionError(null)
-              setShowCreateBot(true)
-            }}
-            className="text-sm font-medium transition-colors"
-            style={{ color: 'var(--color-blue-600)' }}
-          >
-            + Create new bot
-          </button>
-        )}
       </section>
 
       {/* Danger Zone — hidden for admins */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -61,6 +61,8 @@ function highlightMarkdown(text, query) {
 }
 
 export default function GymGuidePage() {
+  const { state } = useLocation()
+  const fromGym = state?.from === '/gym'
   const [content, setContent]   = useState(null)
   const [query, setQuery]       = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -81,29 +83,22 @@ export default function GymGuidePage() {
     return highlightMarkdown(content, query.trim())
   }, [content, query])
 
-  function handleDownload() {
-    const a = Object.assign(document.createElement('a'), {
-      href: '/bot-training-guide.md',
-      download: 'Bot_Training_Guide.md',
-    })
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-  }
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header bar */}
       <div className="flex items-center justify-between mb-6">
-        <Link
-          to="/ml"
-          className="text-sm font-medium"
-          style={{ color: 'var(--color-blue-600)' }}
-        >
-          ← Back to Gym
-        </Link>
-        <button
-          onClick={handleDownload}
+        {fromGym && (
+          <Link
+            to="/gym"
+            className="text-sm font-medium"
+            style={{ color: 'var(--color-blue-600)' }}
+          >
+            ← Back to Gym
+          </Link>
+        )}
+        <a
+          href="/bot-training-guide.pdf"
+          download="Bot_Training_Guide.pdf"
           className="text-sm font-medium px-4 py-2 rounded-lg border transition-colors"
           style={{
             borderColor: 'var(--border-default)',
@@ -111,8 +106,8 @@ export default function GymGuidePage() {
             color: 'var(--text-primary)',
           }}
         >
-          Download .md
-        </button>
+          Download PDF
+        </a>
       </div>
 
       {/* Search bar */}
