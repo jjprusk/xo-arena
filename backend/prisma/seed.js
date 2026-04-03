@@ -19,6 +19,8 @@ const CONFIG_DEFAULTS = [
   { key: 'game.idleWarnSeconds',        value: 120 },
   { key: 'game.idleGraceSeconds',       value: 60  },
   { key: 'game.spectatorIdleSeconds',   value: 600 },
+  { key: 'session.idleWarnMinutes',     value: 30  },
+  { key: 'session.idleGraceMinutes',    value: 5   },
 ]
 
 // ─── Built-in bot definitions ──────────────────────────────────────────────

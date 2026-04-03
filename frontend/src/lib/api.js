@@ -214,10 +214,13 @@ export const api = {
     setAivaiConfig: (body, token) => api.patch('/admin/aivai-config', body, token),
     getIdleConfig: (token) => api.get('/admin/idle-config', token),
     setIdleConfig: (body, token) => api.patch('/admin/idle-config', body, token),
+    getSessionConfig: (token) => api.get('/admin/session-config', token),
+    setSessionConfig: (body, token) => api.patch('/admin/session-config', body, token),
   },
 
   config: {
     getAivai: () => api.get('/config/aivai'),
+    getSessionIdle: () => api.get('/config/session-idle'),
   },
 
   botGames: {

@@ -908,6 +908,47 @@ router.patch('/idle-config', async (req, res, next) => {
   }
 })
 
+/**
+ * GET /api/v1/admin/session-config
+ */
+router.get('/session-config', async (_req, res, next) => {
+  try {
+    const [idleWarnMinutes, idleGraceMinutes] = await Promise.all([
+      getSystemConfig('session.idleWarnMinutes',  30),
+      getSystemConfig('session.idleGraceMinutes',  5),
+    ])
+    res.json({ idleWarnMinutes, idleGraceMinutes })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/session-config
+ */
+router.patch('/session-config', async (req, res, next) => {
+  try {
+    const { idleWarnMinutes, idleGraceMinutes } = req.body
+    if (idleWarnMinutes !== undefined) {
+      const v = parseInt(idleWarnMinutes)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'idleWarnMinutes must be >= 1' })
+      await setSystemConfig('session.idleWarnMinutes', v)
+    }
+    if (idleGraceMinutes !== undefined) {
+      const v = parseInt(idleGraceMinutes)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'idleGraceMinutes must be >= 1' })
+      await setSystemConfig('session.idleGraceMinutes', v)
+    }
+    const [warn, grace] = await Promise.all([
+      getSystemConfig('session.idleWarnMinutes',  30),
+      getSystemConfig('session.idleGraceMinutes',  5),
+    ])
+    res.json({ idleWarnMinutes: warn, idleGraceMinutes: grace })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── Feedback management (admin mirror) ──────────────────────────────────────
 
 /**

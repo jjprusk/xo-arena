@@ -17,6 +17,7 @@ import { useSoundStore } from '../../store/soundStore.js'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
 import GettingStartedModal from '../GettingStartedModal.jsx'
+import IdleLogoutManager from './IdleLogoutManager.jsx'
 import { useOnboardingStore } from '../../store/onboardingStore.js'
 import { getSocket } from '../../lib/socket.js'
 
@@ -491,6 +492,7 @@ export default function AppLayout() {
         onSkip={() => setNamePrompt(null)}
       />
       <GettingStartedModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
+      <IdleLogoutManager />
     </div>
   )
 }
