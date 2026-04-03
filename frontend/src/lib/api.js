@@ -212,6 +212,8 @@ export const api = {
     setBotLimits: (body, token) => api.patch('/admin/bot-limits', body, token),
     getAivaiConfig: (token) => api.get('/admin/aivai-config', token),
     setAivaiConfig: (body, token) => api.patch('/admin/aivai-config', body, token),
+    getIdleConfig: (token) => api.get('/admin/idle-config', token),
+    setIdleConfig: (body, token) => api.patch('/admin/idle-config', body, token),
   },
 
   config: {

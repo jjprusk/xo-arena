@@ -61,6 +61,7 @@ class RoomManager {
       winLine: null,
       spectatorAllowed,
       disconnectTimers: {},
+      idleTimers: {},
       createdAt: now,
       lastActivityAt: now,
     }
@@ -250,6 +251,58 @@ class RoomManager {
   }
 
   /**
+   * Reset (or start) the idle timer for a single participant.
+   *
+   * Phase 1: after warnMs, call onWarn and start the grace countdown.
+   * Phase 2: after graceMs from the warning, call onAbandon (player) or onKick (spectator).
+   *
+   * Calling resetIdleTimer again cancels any pending timer (both phases).
+   * Should be called: on game start (for all participants), on move (mover only), on idle:pong.
+   */
+  resetIdleTimer({ socketId, warnMs, graceMs, onWarn, onAbandon, onKick }) {
+    const slug = this._socketToRoom.get(socketId)
+    const room = slug && this._rooms.get(slug)
+    if (!room || room.status === 'finished' || room.status === 'waiting') return
+
+    this._clearSocketIdleTimer(room, socketId)
+
+    const isPlayer = room.hostId === socketId || room.guestId === socketId
+
+    room.idleTimers[socketId] = setTimeout(() => {
+      if (!this._rooms.has(slug)) return
+      delete room.idleTimers[socketId]
+
+      onWarn?.({ socketId, graceMs })
+
+      room.idleTimers[socketId] = setTimeout(() => {
+        if (!this._rooms.has(slug)) return
+        delete room.idleTimers[socketId]
+
+        if (isPlayer) {
+          // Snapshot before closeRoom wipes them
+          const absentSocketId = socketId
+          const absentUserId = room.hostId === socketId ? room.hostUserId : room.guestUserId
+          const allSocketIds = [room.hostId, room.guestId, ...room.spectatorIds].filter(Boolean)
+          this.closeRoom(slug)
+          onAbandon?.({ absentSocketId, absentUserId, allSocketIds })
+        } else {
+          room.spectatorIds.delete(socketId)
+          this._socketToRoom.delete(socketId)
+          onKick?.({ socketId })
+        }
+      }, graceMs)
+    }, warnMs)
+  }
+
+  _clearSocketIdleTimer(room, socketId) {
+    const t = room.idleTimers[socketId]
+    if (t) {
+      clearTimeout(t)
+      delete room.idleTimers[socketId]
+    }
+  }
+
+  /**
    * Close a room and release the mountain name.
    */
   closeRoom(slug) {
@@ -258,6 +311,9 @@ class RoomManager {
 
     // Clear any pending timers
     for (const timer of Object.values(room.disconnectTimers)) {
+      clearTimeout(timer)
+    }
+    for (const timer of Object.values(room.idleTimers)) {
       clearTimeout(timer)
     }
 

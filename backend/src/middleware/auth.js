@@ -10,6 +10,7 @@
 import logger from '../logger.js'
 import db from '../lib/db.js'
 import { jwtVerify, importJWK } from 'jose'
+import { recordActivity } from '../services/activityService.js'
 
 /**
  * Verifies a Better Auth JWT by looking up the signing key from the JWKS table.
@@ -60,9 +61,10 @@ export async function requireAuth(req, res, next) {
   try {
     const user = await db.user.findUnique({
       where: { betterAuthId: authPayload.userId },
-      select: { banned: true },
+      select: { id: true, banned: true },
     })
     if (user?.banned) return res.status(403).json({ error: 'Account suspended' })
+    if (user?.id) recordActivity(user.id)
   } catch (err) {
     logger.warn({ err }, 'Ban check failed — allowing request through')
   }
