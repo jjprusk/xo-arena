@@ -34,6 +34,7 @@ jobs:
         run: |
           npx --yes md-to-pdf \
             --highlight-style github \
+            --launch-options '{"args":["--no-sandbox","--disable-setuid-sandbox"]}' \
             frontend/public/bot-training-guide.md
         # Output lands at frontend/public/bot-training-guide.pdf
 
