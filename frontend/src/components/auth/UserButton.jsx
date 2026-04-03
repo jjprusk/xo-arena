@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { signOut } from '../../lib/auth-client.js'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 import { clearTokenCache } from '../../lib/getToken.js'
+import GettingStartedModal from '../GettingStartedModal.jsx'
 
 export default function UserButton({ afterSignOutUrl = '/play' }) {
   const { data: session } = useOptimisticSession()
   const [open, setOpen] = useState(false)
+  const [gettingStartedOpen, setGettingStartedOpen] = useState(false)
   const containerRef = useRef(null)
   const navigate = useNavigate()
 
@@ -85,6 +87,14 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
           {/* Menu items */}
           <div className="py-1">
             <button
+              onClick={() => { setOpen(false); setGettingStartedOpen(true) }}
+              className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Getting Started
+              <span style={{ color: 'var(--text-muted)' }}>?</span>
+            </button>
+            <button
               onClick={() => { setOpen(false); navigate('/profile') }}
               className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
               style={{ color: 'var(--text-primary)' }}
@@ -125,6 +135,8 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
           </div>
         </div>
       )}
+
+      <GettingStartedModal isOpen={gettingStartedOpen} onClose={() => setGettingStartedOpen(false)} />
     </div>
   )
 }

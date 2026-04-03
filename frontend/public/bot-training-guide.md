@@ -1,6 +1,23 @@
 # XO Arena — Bot Training Guide
 
-A practical reference for creating and training competitive bots. Each algorithm has different strengths, convergence speed, and ideal session structure. Follow the recipes below for the best results.
+## Getting Started: Bots, Brains & the Gym
+
+Every bot in XO Arena is powered by an **AI model** — its "Brain". Before you can train a bot, you need to create one on your Profile page and choose which Brain it will use. The Brain is the learning algorithm at the heart of your bot: it determines how the bot thinks, how it learns from experience, and ultimately how strong it can become.
+
+XO Arena offers six Brain types, ranging from classic tabular methods to neural-network approaches:
+
+| Brain | Style | Best For |
+|-------|-------|----------|
+| **Q-Learning** | Tabular, off-policy | Fast, reliable, great starting point |
+| **SARSA** | Tabular, on-policy | Conservative, less exploitable play |
+| **Monte Carlo** | Tabular, episode-level | Clean credit assignment, no bias |
+| **Policy Gradient** | Tabular softmax | Unpredictable, human-like play |
+| **DQN** | Neural network | Generalises unseen board states |
+| **AlphaZero** | Neural network + MCTS | Strongest ceiling, lookahead search |
+
+Once your bot exists and has a Brain, you bring it to the **Gym** to train. Training runs in sessions — you pick a mode (self-play, vs minimax, alternating), configure the exploration settings, and run a batch of episodes. Each episode is a full game your bot plays and learns from. Over many sessions you build up a trained, competitive bot ready to challenge others on the leaderboard.
+
+This guide is your training manual. It explains the core concepts that apply to all Brains, then goes deep on each algorithm — what it does differently, which settings to use, and session-by-session recipes for getting the best results. The [Benchmarking](#benchmarking--evaluation) and [Troubleshooting](#troubleshooting) sections at the end help you measure progress and diagnose problems.
 
 ---
 

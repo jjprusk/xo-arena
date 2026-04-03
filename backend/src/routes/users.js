@@ -82,7 +82,21 @@ router.post('/sync', requireAuth, async (req, res, next) => {
       avatarUrl: baUser.image || null,
     })
 
-    res.json({ user: { ...user, baRole: baUser.role ?? null } })
+    // If nameConfirmed is still false, check whether this is a credential (email)
+    // account — ba_accounts is guaranteed to exist by the time /sync is called.
+    // Email users get confirmed automatically; OAuth users stay false and get prompted.
+    let nameConfirmed = user.nameConfirmed
+    if (!nameConfirmed) {
+      const credentialAccount = await db.baAccount.findFirst({
+        where: { userId: baUser.id, providerId: 'credential' },
+      })
+      if (credentialAccount) {
+        await db.user.update({ where: { id: user.id }, data: { nameConfirmed: true } })
+        nameConfirmed = true
+      }
+    }
+
+    res.json({ user: { ...user, baRole: baUser.role ?? null, nameConfirmed } })
   } catch (err) {
     next(err)
   }
@@ -166,7 +180,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       eloRating: user.eloRating,
       createdAt: user.createdAt,
       ...(botData ?? {}),
-      ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider }),
+      ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider, nameConfirmed: user.nameConfirmed }),
     }
 
     res.json({ user: data })

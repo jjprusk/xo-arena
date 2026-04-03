@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>XO Arena — Getting Started</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #060810;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    overflow: hidden;
+    padding: 0;
+  }
+  svg { max-width: 100%; height: auto; border-radius: 28px; box-shadow: 0 48px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.05); }
+  .play-btn { cursor: pointer; }
+  .play-btn rect { transition: opacity 0.15s; }
+  .play-btn:hover rect { opacity: 1 !important; }
+  .play-btn:hover .play-arrow { transform: translateX(3px); }
+  .feedback-balloon { cursor: pointer; }
+  .have-fun-balloon { cursor: pointer; }
+  @keyframes pfly {
+    0%   { transform: translate(-50%,-50%) rotate(0deg) scale(1); opacity: 1; }
+    75%  { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--vx)), calc(-50% + var(--vy))) rotate(var(--rot)) scale(0.5); opacity: 0; }
+  }
+  @keyframes balloon-rise {
+    0%   { transform: translate(0, 0) scale(0.4); opacity: 0; }
+    12%  { opacity: 1; transform: translate(0, -30px) scale(1.05); }
+    100% { transform: translate(var(--drift), -680px) scale(1); opacity: 0; }
+  }
+  @keyframes trophy-pop {
+    0%   { transform: scale(1); }
+    20%  { transform: scale(1.25) rotate(-8deg); }
+    45%  { transform: scale(1.15) rotate(8deg); }
+    65%  { transform: scale(1.1) rotate(-4deg); }
+    80%  { transform: scale(1.05) rotate(2deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  #haveFunBalloon { transform-origin: 468px 578px; transform-box: fill-box; }
+  #haveFunBalloon.pop { animation: trophy-pop 0.6s ease-out; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" width="960" height="720"
+     style="font-family: system-ui, -apple-system, sans-serif;">
+<defs>
+
+  <!-- Card background gradient -->
+  <radialGradient id="bgGrad" cx="40%" cy="25%" r="75%">
+    <stop offset="0%" stop-color="#161c30"/>
+    <stop offset="100%" stop-color="#090c18"/>
+  </radialGradient>
+
+  <!-- Balloon radial gradients -->
+  <radialGradient id="g1" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#c7d2fe"/><stop offset="100%" stop-color="#3730a3"/>
+  </radialGradient>
+  <radialGradient id="g2" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#6ee7b7"/><stop offset="100%" stop-color="#047857"/>
+  </radialGradient>
+  <radialGradient id="g3" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#fbcfe8"/><stop offset="100%" stop-color="#be185d"/>
+  </radialGradient>
+  <radialGradient id="g4" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#fed7aa"/><stop offset="100%" stop-color="#c2410c"/>
+  </radialGradient>
+  <radialGradient id="g5" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#bfdbfe"/><stop offset="100%" stop-color="#1d4ed8"/>
+  </radialGradient>
+  <radialGradient id="g6" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#ddd6fe"/><stop offset="100%" stop-color="#6d28d9"/>
+  </radialGradient>
+  <radialGradient id="g7" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#fecaca"/><stop offset="100%" stop-color="#b91c1c"/>
+  </radialGradient>
+  <radialGradient id="g8" cx="32%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="#fef3c7"/><stop offset="100%" stop-color="#b45309"/>
+  </radialGradient>
+
+  <!-- Glow filter for balloons -->
+  <filter id="bglow" x="-80%" y="-80%" width="260%" height="260%">
+    <feGaussianBlur stdDeviation="14" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+
+  <!-- Arrowhead marker — neutral gray -->
+  <marker id="arr" viewBox="0 0 12 12" refX="10" refY="6"
+          markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M 0 1.5 L 10 6 L 0 10.5 Z" fill="#4b5563"/>
+  </marker>
+
+  <!-- Clip for card shape -->
+  <clipPath id="card"><rect width="960" height="720" rx="28"/></clipPath>
+
+</defs>
+
+<!-- ── Background ── -->
+<rect width="960" height="720" rx="28" fill="url(#bgGrad)"/>
+
+<!-- Subtle ambient blobs -->
+<circle cx="760" cy="120" r="220" fill="#6366f1" opacity="0.04" filter="url(#bglow)"/>
+<circle cx="180" cy="540" r="180" fill="#8b5cf6" opacity="0.04" filter="url(#bglow)"/>
+<circle cx="480" cy="580" r="160" fill="#f59e0b" opacity="0.04" filter="url(#bglow)"/>
+
+<!-- Faint dot grid -->
+<g fill="#ffffff" opacity="0.025">
+  <circle cx="60"  cy="140" r="1.5"/><circle cx="140" cy="140" r="1.5"/><circle cx="220" cy="140" r="1.5"/>
+  <circle cx="300" cy="140" r="1.5"/><circle cx="380" cy="140" r="1.5"/><circle cx="460" cy="140" r="1.5"/>
+  <circle cx="540" cy="140" r="1.5"/><circle cx="620" cy="140" r="1.5"/><circle cx="700" cy="140" r="1.5"/>
+  <circle cx="780" cy="140" r="1.5"/><circle cx="860" cy="140" r="1.5"/><circle cx="900" cy="140" r="1.5"/>
+  <circle cx="60"  cy="220" r="1.5"/><circle cx="140" cy="220" r="1.5"/><circle cx="220" cy="220" r="1.5"/>
+  <circle cx="700" cy="220" r="1.5"/><circle cx="780" cy="220" r="1.5"/><circle cx="860" cy="220" r="1.5"/>
+  <circle cx="60"  cy="600" r="1.5"/><circle cx="140" cy="600" r="1.5"/><circle cx="800" cy="600" r="1.5"/>
+  <circle cx="860" cy="600" r="1.5"/><circle cx="900" cy="600" r="1.5"/>
+</g>
+
+<!-- Watermark XO -->
+<text x="900" y="680" text-anchor="end" font-size="130" font-weight="900"
+      fill="rgba(99,102,241,0.045)" letter-spacing="-8">XO</text>
+
+<!-- ── Header ── -->
+<text x="480" y="46" text-anchor="middle" font-size="10.5" font-weight="700"
+      letter-spacing="4" fill="#6366f1">XO ARENA</text>
+<text x="480" y="85" text-anchor="middle" font-size="36" font-weight="800"
+      fill="#f9fafb" letter-spacing="-1">Getting Started</text>
+<text x="480" y="108" text-anchor="middle" font-size="13.5" fill="#6b7280">
+  Your journey from first move to full competitor
+</text>
+
+<!-- Header divider -->
+<line x1="360" y1="122" x2="600" y2="122" stroke="#1f2937" stroke-width="1"/>
+
+<!-- ══════════════════════════════════════
+     CONNECTING ARROWS  (drawn behind balloons)
+     Nodes:
+       1: (110,215)  2: (345,168)  3: (615,195)
+       4: (830,310)  5: (675,445)  6: (385,428)
+       7: (148,528)  8: (468,578)
+     ══════════════════════════════════════ -->
+
+<!-- 2 → 3 -->
+<path d="M 278 190 Q 388 192 496 214"
+      stroke="#374151" stroke-width="2.5" fill="none"
+      stroke-dasharray="8 6" marker-end="url(#arr)" opacity="0.75"/>
+
+<!-- 3 → 4 -->
+<path d="M 612 238 Q 698 252 774 272"
+      stroke="#374151" stroke-width="2.5" fill="none"
+      stroke-dasharray="8 6" marker-end="url(#arr)" opacity="0.75"/>
+
+<!-- 4 → 5 -->
+<path d="M 792 355 Q 808 405 730 406"
+      stroke="#374151" stroke-width="2.5" fill="none"
+      stroke-dasharray="8 6" marker-end="url(#arr)" opacity="0.75"/>
+
+<!-- 5 → 6 -->
+<path d="M 615 445 Q 528 368 444 381"
+      stroke="#374151" stroke-width="2.5" fill="none"
+      stroke-dasharray="8 6" marker-end="url(#arr)" opacity="0.75"/>
+
+<!-- 6 → 7 -->
+<path d="M 330 399 Q 235 405 204 422"
+      stroke="#374151" stroke-width="2.5" fill="none"
+      stroke-dasharray="8 6" marker-end="url(#arr)" opacity="0.75"/>
+
+<!-- 7 → 8 -->
+<path d="M 206 462 Q 315 462 396 548"
+      stroke="#374151" stroke-width="2.5" fill="none"
+      stroke-dasharray="8 6" marker-end="url(#arr)" opacity="0.75"/>
+
+<!-- ══════════════════════════════════════
+     BALLOONS
+     ══════════════════════════════════════ -->
+
+<!-- ── Feedback: disconnected, bottom-right corner ── cx=858 cy=622 -->
+<g class="feedback-balloon" onclick="openFeedback()">
+  <circle cx="858" cy="622" r="78" fill="#6366f1" opacity="0.07"/>
+  <circle cx="858" cy="622" r="56" fill="url(#g1)"/>
+  <ellipse cx="843" cy="606" rx="18" ry="12" fill="white" opacity="0.18" transform="rotate(-30 843 606)"/>
+  <text x="858" y="635" text-anchor="middle" dominant-baseline="middle"
+        font-size="30" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">💬</text>
+  <!-- Label to the left since it's in the corner -->
+  <text x="793" y="616" text-anchor="end" font-size="12" font-weight="600" fill="#e5e7eb">Send feedback</text>
+  <text x="793" y="631" text-anchor="end" font-size="11" fill="#9ca3af">anytime</text>
+</g>
+
+<!-- ── Step 2: Read the FAQ ── cx=220 cy=185 -->
+<a href="/faq?from=guide" target="_top" class="play-btn">
+  <circle cx="220" cy="185" r="82" fill="#10b981" opacity="0.07"/>
+  <circle cx="220" cy="185" r="60" fill="url(#g2)"/>
+  <ellipse cx="205" cy="169" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 205 169)"/>
+  <text x="220" y="198" text-anchor="middle" dominant-baseline="middle"
+        font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">📖</text>
+  <text x="220" y="262" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Read the FAQ</text>
+</a>
+
+<!-- ── Step 3: Play vs Bots ── cx=555 cy=220 -->
+<a href="/play" target="_top" class="play-btn">
+  <circle cx="555" cy="220" r="82" fill="#ec4899" opacity="0.07"/>
+  <circle cx="555" cy="220" r="60" fill="url(#g3)"/>
+  <ellipse cx="540" cy="204" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 540 204)"/>
+  <text x="555" y="233" text-anchor="middle" dominant-baseline="middle"
+        font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">🎮</text>
+  <text x="555" y="297" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Play vs bots</text>
+</a>
+
+<!-- ── Step 4: Study the Training Guide ── cx=830 cy=310 -->
+<a href="/gym/guide" target="_top" class="play-btn">
+  <circle cx="830" cy="310" r="82" fill="#f97316" opacity="0.07"/>
+  <circle cx="830" cy="310" r="60" fill="url(#g4)"/>
+  <ellipse cx="815" cy="294" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 815 294)"/>
+  <text x="830" y="323" text-anchor="middle" dominant-baseline="middle"
+        font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">📚</text>
+  <text x="830" y="387" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Study the</text>
+  <text x="830" y="403" text-anchor="middle" font-size="11.5" fill="#9ca3af">Training Guide</text>
+</a>
+
+<!-- ── Step 5: Create Your Bot ── cx=675 cy=445 -->
+<a href="/profile" target="_top" class="play-btn">
+  <circle cx="675" cy="445" r="82" fill="#3b82f6" opacity="0.07"/>
+  <circle cx="675" cy="445" r="60" fill="url(#g5)"/>
+  <ellipse cx="660" cy="429" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 660 429)"/>
+  <text x="675" y="458" text-anchor="middle" dominant-baseline="middle"
+        font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">🤖</text>
+  <text x="675" y="522" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Create your bot</text>
+</a>
+
+<!-- ── Step 6: Train Your Bot ── cx=385 cy=378 -->
+<a href="/gym" target="_top" class="play-btn">
+  <circle cx="385" cy="378" r="82" fill="#8b5cf6" opacity="0.07"/>
+  <circle cx="385" cy="378" r="60" fill="url(#g6)"/>
+  <ellipse cx="370" cy="362" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 370 362)"/>
+  <text x="385" y="391" text-anchor="middle" dominant-baseline="middle"
+        font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">⚙️</text>
+  <text x="385" y="455" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Train your bot</text>
+</a>
+
+<!-- ── Step 7: Compete ── cx=148 cy=453 -->
+<a href="/play" target="_top" class="play-btn">
+  <circle cx="148" cy="453" r="82" fill="#ef4444" opacity="0.07"/>
+  <circle cx="148" cy="453" r="60" fill="url(#g7)"/>
+  <ellipse cx="133" cy="437" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 133 437)"/>
+  <text x="148" y="466" text-anchor="middle" dominant-baseline="middle"
+        font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">⚔️</text>
+  <text x="148" y="530" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Compete!</text>
+</a>
+
+<!-- ── Step 8: Have Fun — larger, gold ── cx=468 cy=578 -->
+<g id="haveFunBalloon" class="have-fun-balloon" onclick="haveFun()">
+  <circle cx="468" cy="578" r="102" fill="#f59e0b" opacity="0.09"/>
+  <circle cx="468" cy="578" r="76"  fill="url(#g8)"/>
+  <ellipse cx="448" cy="558" rx="26" ry="17" fill="white" opacity="0.20" transform="rotate(-30 448 558)"/>
+  <text x="468" y="594" text-anchor="middle" dominant-baseline="middle"
+        font-size="40" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">🏆</text>
+  <text x="468" y="673" text-anchor="middle" font-size="14.5" font-weight="700" fill="#fde68a">Have Fun!</text>
+</g>
+
+
+<!-- ── Footer ── -->
+<line x1="60" y1="700" x2="900" y2="700" stroke="#1f2937" stroke-width="0.75"/>
+<text x="480" y="714" text-anchor="middle" font-size="11" fill="#374151">aiarena.callidity.com</text>
+
+</svg>
+<script>
+  function haveFun() {
+    // Pop the trophy balloon
+    const g = document.getElementById('haveFunBalloon')
+    g.classList.remove('pop')
+    void g.offsetWidth // reflow to restart animation
+    g.classList.add('pop')
+    g.addEventListener('animationend', () => g.classList.remove('pop'), { once: true })
+
+    const emojis = ['🎈','🎉','✨','🎊','⭐','🎆','🎇','🎀','🥳','🎁']
+    const colors = ['#f59e0b','#6366f1','#ec4899','#10b981','#3b82f6','#f87171','#a78bfa','#fde68a','#6ee7b7','#fbcfe8']
+
+    const svg = document.querySelector('svg')
+    const r   = svg.getBoundingClientRect()
+    const sx  = r.width  / 960
+    const sy  = r.height / 720
+    const ox  = r.left + 468 * sx
+    const oy  = r.top  + 578 * sy
+
+    const container = document.createElement('div')
+    container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden;'
+    document.body.appendChild(container)
+
+    function burst(content, isEmoji) {
+      const el   = document.createElement('div')
+      const ang  = (Math.random() * 360) * Math.PI / 180
+      const spd  = 120 + Math.random() * 260
+      const vx   = Math.cos(ang) * spd
+      const vy   = Math.sin(ang) * spd - 90
+      const size = isEmoji ? 22 + Math.random() * 20 : 5 + Math.random() * 9
+      const dur  = 1300 + Math.random() * 900
+      const del  = Math.random() * 300
+      const rot  = (Math.random() * 720 - 360).toFixed(0)
+      if (isEmoji) {
+        el.textContent = content
+        el.style.cssText = `position:absolute;left:${ox}px;top:${oy}px;font-size:${size}px;line-height:1;transform:translate(-50%,-50%);--vx:${vx}px;--vy:${vy}px;--rot:${rot}deg;animation:pfly ${dur}ms ${del}ms cubic-bezier(.15,.8,.35,1) forwards;`
+      } else {
+        const circle = Math.random() > 0.4
+        el.style.cssText = `position:absolute;left:${ox}px;top:${oy}px;width:${size}px;height:${circle ? size : size*1.8}px;border-radius:${circle?'50%':'3px'};background:${content};transform:translate(-50%,-50%);--vx:${vx}px;--vy:${vy}px;--rot:${rot}deg;animation:pfly ${dur}ms ${del}ms cubic-bezier(.15,.8,.35,1) forwards;`
+      }
+      container.appendChild(el)
+    }
+
+    for (let i = 0; i < 20; i++) burst(emojis[Math.floor(Math.random()*emojis.length)], true)
+    for (let i = 0; i < 60; i++) burst(colors[Math.floor(Math.random()*colors.length)], false)
+
+    // Floating balloons rising from below
+    const floatEmojis = ['🎈','🎉','🎊']
+    for (let i = 0; i < 10; i++) {
+      const el    = document.createElement('div')
+      const startX = r.left + 60 + Math.random() * (r.width - 120)
+      const drift  = ((Math.random() - 0.5) * 140).toFixed(0)
+      const size   = 26 + Math.random() * 22
+      const dur    = 2800 + Math.random() * 1600
+      const del    = 100 + Math.random() * 700
+      el.textContent = floatEmojis[Math.floor(Math.random()*floatEmojis.length)]
+      el.style.cssText = `position:absolute;left:${startX}px;top:${r.bottom+30}px;font-size:${size}px;line-height:1;--drift:${drift}px;animation:balloon-rise ${dur}ms ${del}ms ease-in forwards;`
+      container.appendChild(el)
+    }
+
+    setTimeout(() => container.remove(), 5000)
+  }
+
+  function openFeedback() {
+    const msg = { type: 'open-feedback' }
+    if (window.opener) {
+      // Opened from the app in a new tab — send back to it
+      window.opener.postMessage(msg, '*')
+    } else if (window.parent !== window) {
+      // Embedded in an iframe
+      window.parent.postMessage(msg, '*')
+    } else {
+      // Same window — post to self (app is running here)
+      window.postMessage(msg, '*')
+    }
+  }
+</script>
+</body>
+</html>

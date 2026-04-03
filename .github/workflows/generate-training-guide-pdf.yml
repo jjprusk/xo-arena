@@ -1,0 +1,48 @@
+name: Generate Training Guide PDF
+
+on:
+  push:
+    branches: [main, staging, dev]
+    paths:
+      - 'frontend/public/bot-training-guide.md'
+
+jobs:
+  generate-pdf:
+    name: Generate PDF from markdown
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Use a PAT or the default token — default token is fine for committing back
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # md-to-pdf uses Puppeteer which needs Chromium deps on Ubuntu
+      - name: Install Chromium dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxfixes3 libxrandr2 libgbm1 libasound2t64
+
+      - name: Generate PDF
+        run: |
+          npx --yes md-to-pdf \
+            --highlight-style github \
+            --launch-options '{"args":["--no-sandbox","--disable-setuid-sandbox"]}' \
+            frontend/public/bot-training-guide.md
+        # Output lands at frontend/public/bot-training-guide.pdf
+
+      - name: Commit PDF back to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/bot-training-guide.pdf
+          # Only commit if the PDF actually changed
+          git diff --staged --quiet || git commit -m "chore: regenerate bot-training-guide.pdf from .md [skip ci]"
+          git push

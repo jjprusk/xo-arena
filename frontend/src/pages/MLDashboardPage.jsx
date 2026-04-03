@@ -175,7 +175,7 @@ export default function GymPage() {
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Train and evaluate your bots. Create bots in your profile settings.</p>
           </div>
           <Link
-            to="/gym/guide"
+            to="/gym/guide" state={{ from: '/gym' }}
             className="text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors mt-1"
             style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
           >
@@ -304,7 +304,7 @@ export default function GymPage() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-1 border-b overflow-x-auto scrollbar-none" style={{ borderColor: 'var(--border-default)' }}>
+                <div className="flex gap-1 border-b overflow-x-auto overflow-y-hidden scrollbar-none" style={{ borderColor: 'var(--border-default)' }}>
                   {TAB_IDS.map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
                       className={`whitespace-nowrap shrink-0 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-[var(--color-blue-600)] text-[var(--color-blue-600)]' : 'border-transparent'}`}

@@ -113,6 +113,9 @@ export const auth = betterAuth({
             const resolvedName = (rawName && rawName.toLowerCase() !== 'unknown')
               ? rawName
               : baUser.email.split('@')[0]
+            // New users always start with nameConfirmed=false. The /sync endpoint
+            // (called by the frontend after login) flips it to true for email/credential
+            // accounts once ba_accounts is guaranteed to exist. OAuth users get prompted.
             logger.info({ userId: baUser.id, baName: baUser.name, resolvedName }, 'Post-createUser sync')
             await syncUser({
               betterAuthId: baUser.id,
@@ -121,6 +124,7 @@ export const auth = betterAuth({
               displayName: resolvedName,
               oauthProvider: 'email',
               avatarUrl: baUser.image || null,
+              nameConfirmed: false,
             })
           } catch (err) {
             logger.warn({ err: err.message, userId: baUser.id }, 'Post-createUser domain upsert failed')
