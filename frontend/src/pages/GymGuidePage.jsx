@@ -83,16 +83,6 @@ export default function GymGuidePage() {
     return highlightMarkdown(content, query.trim())
   }, [content, query])
 
-  function handleDownload() {
-    const a = Object.assign(document.createElement('a'), {
-      href: '/bot-training-guide.pdf',
-      download: 'Bot_Training_Guide.pdf',
-    })
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-  }
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header bar */}
@@ -106,8 +96,9 @@ export default function GymGuidePage() {
             ← Back to Gym
           </Link>
         )}
-        <button
-          onClick={() => handleDownload('pdf')}
+        <a
+          href="/bot-training-guide.pdf"
+          download="Bot_Training_Guide.pdf"
           className="text-sm font-medium px-4 py-2 rounded-lg border transition-colors"
           style={{
             borderColor: 'var(--border-default)',
@@ -116,7 +107,7 @@ export default function GymGuidePage() {
           }}
         >
           Download PDF
-        </button>
+        </a>
       </div>
 
       {/* Search bar */}
