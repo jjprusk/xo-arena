@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -57,7 +57,10 @@ function highlightMarkdown(text, query) {
 
 export default function FAQPage() {
   const { state } = useLocation()
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const fromAbout = state?.from === '/about'
+  const fromGuide = searchParams.get('from') === 'guide'
   const [content, setContent] = useState(null)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -82,7 +85,16 @@ export default function FAQPage() {
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header bar */}
       <div className="flex items-center justify-between mb-6">
-        {fromAbout && (
+        {fromGuide && (
+          <button
+            onClick={() => navigate('/play?open-guide=1')}
+            className="text-sm font-medium"
+            style={{ color: 'var(--color-blue-600)' }}
+          >
+            ← Back to Getting Started
+          </button>
+        )}
+        {fromAbout && !fromGuide && (
           <Link
             to="/about"
             className="text-sm font-medium"

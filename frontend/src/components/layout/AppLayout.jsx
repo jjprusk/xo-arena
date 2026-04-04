@@ -56,7 +56,6 @@ const ADMIN_MENU_LINKS = [
   { to: '/admin/ml-models', label: 'Bots' },
   { to: '/admin/ai',        label: 'AI' },
   { to: '/admin/logs',      label: 'Logs' },
-  { to: '/admin/feedback',  label: 'Feedback', icon: '💬' },
 ]
 
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
@@ -92,6 +91,7 @@ export default function AppLayout() {
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [guideShowHint, setGuideShowHint] = useState(false)
   const { trainingDone, check: checkOnboarding } = useOnboardingStore()
   const prevUserId = useRef(null)
 
@@ -112,7 +112,7 @@ export default function AppLayout() {
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-open Getting Started guide on first ever sign-in (before faqHintSeen is set)
+  // Auto-open Getting Started guide on first ever sign-in; show hint if not yet seen
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
@@ -120,11 +120,23 @@ export default function AppLayout() {
       try {
         const token = await getToken()
         const { faqHintSeen } = await api.users.getHints(token)
-        if (!faqHintSeen) setGuideOpen(true)
+        if (!faqHintSeen) {
+          api.users.markFaqHint(token).catch(() => {})
+          setGuideShowHint(true)
+          setGuideOpen(true)
+        }
       } catch { /* non-fatal */ }
     }
     maybeAutoOpen()
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-open guide when navigated back from FAQ with ?open-guide=1
+  useEffect(() => {
+    if (!location.search?.includes('open-guide=1')) return
+    setGuideShowHint(false)
+    setGuideOpen(true)
+    navigate(location.pathname, { replace: true })
+  }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll unread-count every 60s to seed the badge on sign-in (no chime — only socket chimes)
   useEffect(() => {
@@ -309,7 +321,6 @@ export default function AppLayout() {
                 { to: '/admin/ml-models', label: 'Bots' },
                 { to: '/admin/ai', label: 'AI' },
                 { to: '/admin/logs', label: 'Logs' },
-                { to: '/admin/feedback', label: 'Feedback' },
               ].map(({ to, label }) => (
                 <NavLink
                   key={to}
@@ -322,14 +333,8 @@ export default function AppLayout() {
                         : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
                     }`
                   }
-                  onClick={() => { if (to === '/admin/feedback') setUnreadCount(0) }}
                 >
                   {label}
-                  {to === '/admin/feedback' && unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: 'var(--color-red-500)' }}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
                 </NavLink>
               ))}
             </>
@@ -445,11 +450,6 @@ export default function AppLayout() {
                       }
                     >
                       {label}
-                      {to === '/admin/feedback' && unreadCount > 0 && (
-                        <span className="ml-auto min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: 'var(--color-red-500)' }}>
-                          {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                      )}
                     </NavLink>
                   ))}
                 </>
@@ -505,7 +505,11 @@ export default function AppLayout() {
         onSave={() => setNamePrompt(null)}
         onSkip={() => setNamePrompt(null)}
       />
-      <GettingStartedModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
+      <GettingStartedModal
+        isOpen={guideOpen}
+        showHint={guideShowHint}
+        onClose={() => { setGuideOpen(false); setGuideShowHint(false) }}
+      />
       <IdleLogoutManager />
     </div>
   )

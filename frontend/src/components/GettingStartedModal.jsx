@@ -1,11 +1,8 @@
 import React, { useEffect, useRef } from 'react'
-import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import { getToken } from '../lib/getToken.js'
-import { api } from '../lib/api.js'
 
-export default function GettingStartedModal({ isOpen, onClose }) {
-  const { data: session } = useOptimisticSession()
+export default function GettingStartedModal({ isOpen, onClose, showHint = false }) {
   const iframeRef = useRef(null)
+  const hintSentRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) return
@@ -14,53 +11,17 @@ export default function GettingStartedModal({ isOpen, onClose }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, onClose])
 
-  // When the modal opens, determine whether to show the FAQ hint.
-  // For authenticated users: check the server flag (stored in preferences JSON).
-  // For guests: fall back to localStorage — best-effort only.
+  // Reset the sent-guard whenever the modal closes so it can show again if needed
   useEffect(() => {
-    if (!isOpen) return
-    let cancelled = false
+    if (!isOpen) hintSentRef.current = false
+  }, [isOpen])
 
-    async function checkAndMaybeShowHint() {
-      const iframe = iframeRef.current
-      if (!iframe) return
-
-      const isAuth = !!session?.user
-
-      if (isAuth) {
-        try {
-          const token = await getToken()
-          const { faqHintSeen } = await api.users.getHints(token)
-          if (cancelled) return
-          if (!faqHintSeen) {
-            // Mark seen first so a fast re-open won't double-show
-            api.users.markFaqHint(token).catch(() => {})
-            iframe.contentWindow?.postMessage({ type: 'show-faq-hint' }, '*')
-          }
-        } catch {
-          // Network hiccup — fall through silently; hint just won't show
-        }
-      } else {
-        // Guest path: localStorage flag
-        if (!localStorage.getItem('faqHintShown')) {
-          localStorage.setItem('faqHintShown', '1')
-          iframe.contentWindow?.postMessage({ type: 'show-faq-hint' }, '*')
-        }
-      }
+  function handleLoad() {
+    if (showHint && !hintSentRef.current) {
+      hintSentRef.current = true
+      iframeRef.current?.contentWindow?.postMessage({ type: 'show-faq-hint' }, '*')
     }
-
-    // The iframe may still be loading when the modal first opens.
-    // Send the message both on iframe load and immediately (in case it's cached).
-    const iframe = iframeRef.current
-    function onLoad() { if (!cancelled) checkAndMaybeShowHint() }
-    iframe?.addEventListener('load', onLoad)
-    checkAndMaybeShowHint()
-
-    return () => {
-      cancelled = true
-      iframe?.removeEventListener('load', onLoad)
-    }
-  }, [isOpen, session])
+  }
 
   if (!isOpen) return null
 
@@ -87,6 +48,7 @@ export default function GettingStartedModal({ isOpen, onClose }) {
           src="/getting-started.html"
           title="Getting Started"
           scrolling="no"
+          onLoad={handleLoad}
           style={{ width: '100%', aspectRatio: '960/720', border: 'none', display: 'block', maxHeight: '85vh' }}
         />
       </div>
