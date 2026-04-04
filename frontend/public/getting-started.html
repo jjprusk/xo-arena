@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>XO Arena — Getting Started</title>
+<title>XO Arena — Guide</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -48,7 +48,7 @@
   @keyframes hintFadeOut {
     to { opacity: 0; }
   }
-  #faqHint { transform-origin: 220px 294px; display: none; }
+  #faqHint { transform-origin: 220px 298px; display: none; }
   #faqHint.bobbing { animation: fingerBob 0.7s ease-in-out infinite; }
   #faqHint.fading  { animation: hintFadeOut 0.8s ease-out forwards; }
 </style>
@@ -209,9 +209,9 @@
 
 <!-- ── FAQ hint finger (first-open only) ── -->
 <g id="faqHint">
-  <text x="220" y="284" text-anchor="middle" dominant-baseline="middle"
-        font-size="26" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">👆</text>
-  <text x="220" y="307" text-anchor="middle" font-size="11.5" font-weight="700" fill="#10b981"
+  <text x="220" y="280" text-anchor="middle" dominant-baseline="middle"
+        font-size="52" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">👆</text>
+  <text x="220" y="316" text-anchor="middle" font-size="23" font-weight="700" fill="#10b981"
         letter-spacing="0.5">Click here</text>
 </g>
 
@@ -283,18 +283,34 @@
 
 </svg>
 <script>
-  // ── FAQ hint: shown only when the parent app sends 'show-faq-hint' ──────────
-  window.addEventListener('message', function (e) {
-    if (!e.data || e.data.type !== 'show-faq-hint') return
+  // ── FAQ hint ─────────────────────────────────────────────────────────────────
+  function hideFaqHint() {
     var hint = document.getElementById('faqHint')
     if (!hint) return
+    hint.classList.remove('bobbing')
+    hint.classList.add('fading')
+    hint.addEventListener('animationend', function () { hint.style.display = 'none' }, { once: true })
+  }
+
+  function showFaqHint() {
+    var hint = document.getElementById('faqHint')
+    if (!hint || hint.style.display === 'inline') return
     hint.style.display = 'inline'
     hint.classList.add('bobbing')
-    setTimeout(function () {
-      hint.classList.remove('bobbing')
-      hint.classList.add('fading')
-      hint.addEventListener('animationend', function () { hint.style.display = 'none' }, { once: true })
-    }, 4000)
+    // Hide when the FAQ button is clicked
+    var faqLink = document.querySelector('a[href*="/faq"]')
+    if (faqLink) faqLink.addEventListener('click', hideFaqHint, { once: true })
+  }
+
+  // Primary: URL parameter (avoids postMessage timing races with React StrictMode)
+  if (new URLSearchParams(window.location.search).get('hint') === '1') {
+    showFaqHint()
+  }
+
+  // Fallback: postMessage from parent (kept for compatibility)
+  window.addEventListener('message', function (e) {
+    if (!e.data || e.data.type !== 'show-faq-hint') return
+    showFaqHint()
   })
   // Tell the parent that this listener is now registered and ready
   window.parent.postMessage({ type: 'getting-started-ready' }, '*')

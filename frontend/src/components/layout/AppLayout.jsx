@@ -18,7 +18,6 @@ import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
 import GettingStartedModal from '../GettingStartedModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
-import { useOnboardingStore } from '../../store/onboardingStore.js'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -92,7 +91,7 @@ export default function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [guideOpen, setGuideOpen] = useState(false)
   const [guideShowHint, setGuideShowHint] = useState(false)
-  const { trainingDone, check: checkOnboarding } = useOnboardingStore()
+  const [guideActive, setGuideActive] = useState(false)
   const prevUserId = useRef(null)
 
   // Close the mobile menu whenever the user navigates
@@ -104,9 +103,12 @@ export default function AppLayout() {
     if (userId && userId !== prevUserId.current) {
       // User just signed in (or changed)
       rolesStore.fetch()
+      if (localStorage.getItem(`xo_guide_active_${userId}`) === '1') setGuideActive(true)
       prevUserId.current = userId
     } else if (!userId && prevUserId.current) {
-      // User just signed out
+      // User just signed out — end first session
+      localStorage.removeItem(`xo_guide_active_${prevUserId.current}`)
+      setGuideActive(false)
       rolesStore.clear()
       prevUserId.current = null
     }
@@ -122,6 +124,8 @@ export default function AppLayout() {
         const { faqHintSeen } = await api.users.getHints(token)
         if (!faqHintSeen) {
           api.users.markFaqHint(token).catch(() => {})
+          localStorage.setItem(`xo_guide_active_${userId}`, '1')
+          setGuideActive(true)
           setGuideShowHint(true)
           setGuideOpen(true)
         }
@@ -191,7 +195,6 @@ export default function AppLayout() {
           if (user && !user.nameConfirmed) {
             setNamePrompt({ userId: user.id, currentName: user.displayName })
           }
-          checkOnboarding(session.user.id, token)
         })
       })
       .catch(() => {})
@@ -239,11 +242,11 @@ export default function AppLayout() {
               XO Arena
             </span>
           </Link>
-          {trainingDone === false && (
+          {guideActive && (
             <button
               onClick={() => setGuideOpen(true)}
-              aria-label="Getting Started guide"
-              title="Getting Started"
+              aria-label="Guide"
+              title="Guide"
               className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
               style={{
                 background: 'linear-gradient(135deg, var(--color-blue-500), #6366f1)',

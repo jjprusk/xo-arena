@@ -91,7 +91,7 @@ export default function FAQPage() {
             className="text-sm font-medium"
             style={{ color: 'var(--color-blue-600)' }}
           >
-            ← Back to Getting Started
+            ← Back to Guide
           </button>
         )}
         {fromAbout && !fromGuide && (
