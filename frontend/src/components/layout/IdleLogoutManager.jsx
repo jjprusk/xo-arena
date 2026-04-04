@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { usePvpStore } from '../../store/pvpStore.js'
@@ -20,6 +21,9 @@ const RESET_THROTTLE_MS = 10_000
  *  - User is not authenticated
  *  - A PvP game is in progress (the room idle timer handles that case)
  *  - A Gym training session is actively running
+ *
+ * Uses Page Visibility API to compensate for browser timer throttling when
+ * the tab is in the background.
  */
 export default function IdleLogoutManager() {
   const { data: session } = useOptimisticSession()
@@ -35,6 +39,12 @@ export default function IdleLogoutManager() {
   const graceTimerRef  = useRef(null)
   const countdownRef   = useRef(null)
   const lastResetRef   = useRef(Date.now())
+  // Wall-clock timestamps for Page Visibility catch-up
+  const warnDeadlineRef  = useRef(null)  // when the warn timer should fire
+  const graceDeadlineRef = useRef(null)  // when auto-logout should fire
+  // Synchronous mirror of `warning` state — lets handleActivity check instantly
+  // without waiting for React to re-render (avoids race with mousemove on tab focus)
+  const warningRef = useRef(false)
 
   const isAuthenticated = !!session?.user
   const suppressed = !isAuthenticated || pvpStatus === 'playing' || isTraining
@@ -58,55 +68,125 @@ export default function IdleLogoutManager() {
     warnTimerRef.current  = null
     graceTimerRef.current = null
     countdownRef.current  = null
+    warnDeadlineRef.current  = null
+    graceDeadlineRef.current = null
   }, [])
 
   const doLogout = useCallback(async () => {
     clearAllTimers()
+    warningRef.current = false
     setWarning(false)
     clearTokenCache()
     try { await signOut() } catch { /* best effort */ }
     navigate('/', { replace: true })
   }, [clearAllTimers, navigate])
 
+  // Start the grace-period countdown + auto-logout timer.
+  // Called when the warn timer fires (or immediately on visibility if overdue).
+  const startGrace = useCallback((graceMs) => {
+    clearTimeout(graceTimerRef.current)
+    clearInterval(countdownRef.current)
+
+    const graceSec = Math.round(graceMs / 1000)
+    warningRef.current = true  // set synchronously before React re-renders
+    setWarning(true)
+    setRemaining(graceSec)
+    graceDeadlineRef.current = Date.now() + graceMs
+
+    countdownRef.current = setInterval(() => {
+      setRemaining(r => {
+        if (r == null || r <= 1) return r
+        return r - 1
+      })
+    }, 1000)
+
+    graceTimerRef.current = setTimeout(doLogout, graceMs)
+  }, [doLogout])
+
   const startWarnTimer = useCallback(() => {
     if (!config) return
     clearAllTimers()
+    warningRef.current = false
     setWarning(false)
+    setRemaining(null)
 
+    warnDeadlineRef.current = Date.now() + config.idleWarnMs
     warnTimerRef.current = setTimeout(() => {
-      setWarning(true)
-      setRemaining(Math.round(config.idleGraceMs / 1000))
-
-      // Tick the countdown every second
-      countdownRef.current = setInterval(() => {
-        setRemaining(r => {
-          if (r == null || r <= 1) return r
-          return r - 1
-        })
-      }, 1000)
-
-      // Grace timer — auto-logout if no response
-      graceTimerRef.current = setTimeout(doLogout, config.idleGraceMs)
+      warnTimerRef.current   = null
+      warnDeadlineRef.current = null
+      startGrace(config.idleGraceMs)
     }, config.idleWarnMs)
-  }, [config, clearAllTimers, doLogout])
+  }, [config, clearAllTimers, startGrace])
 
   // Called when user acknowledges the warning
   const handleStayLoggedIn = useCallback(() => {
     startWarnTimer()
   }, [startWarnTimer])
 
-  // Reset idle timer on any activity (throttled)
+  // Reset idle timer on any activity (throttled).
+  // Uses warningRef (not warning state) to avoid a race where mousemove fires
+  // immediately after visibilitychange before React has committed the new state.
   const handleActivity = useCallback(() => {
     const now = Date.now()
     if (now - lastResetRef.current < RESET_THROTTLE_MS) return
     lastResetRef.current = now
-    if (!warning) startWarnTimer()
-  }, [warning, startWarnTimer])
+    if (!warningRef.current) startWarnTimer()
+  }, [startWarnTimer])
+
+  // Page Visibility API — compensates for browser timer throttling in background tabs.
+  // When the tab becomes visible, check if deadlines have passed and fire immediately.
+  useEffect(() => {
+    if (suppressed || !config) return
+
+    function onVisibilityChange() {
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+
+      // Grace period is active
+      if (graceDeadlineRef.current) {
+        if (now >= graceDeadlineRef.current) {
+          // Grace expired while tab was hidden — log out immediately
+          doLogout()
+        } else {
+          // Correct the countdown display and reschedule the timer precisely
+          const remainingSec = Math.ceil((graceDeadlineRef.current - now) / 1000)
+          setRemaining(remainingSec)
+          clearTimeout(graceTimerRef.current)
+          graceTimerRef.current = setTimeout(doLogout, graceDeadlineRef.current - now)
+        }
+        return
+      }
+
+      // Warn timer is running
+      if (warnDeadlineRef.current) {
+        if (now >= warnDeadlineRef.current) {
+          // Warn timer expired while tab was hidden — show popup immediately
+          clearTimeout(warnTimerRef.current)
+          warnTimerRef.current    = null
+          warnDeadlineRef.current = null
+          startGrace(config.idleGraceMs)
+        } else {
+          // Reschedule warn timer with precise remaining time
+          const remaining = warnDeadlineRef.current - now
+          clearTimeout(warnTimerRef.current)
+          warnTimerRef.current = setTimeout(() => {
+            warnTimerRef.current    = null
+            warnDeadlineRef.current = null
+            startGrace(config.idleGraceMs)
+          }, remaining)
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [suppressed, config, doLogout, startGrace])
 
   // Start/stop timer when suppression state or config changes
   useEffect(() => {
     if (suppressed || !config) {
       clearAllTimers()
+      warningRef.current = false
       setWarning(false)
       return
     }
@@ -127,10 +207,10 @@ export default function IdleLogoutManager() {
   const fraction   = remaining != null && graceSec > 0 ? remaining / graceSec : 0
   const urgent     = remaining != null && remaining <= 60
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999 }}
     >
       <div
         className="rounded-2xl border p-6 flex flex-col items-center gap-4 max-w-xs w-full mx-4 shadow-2xl"
@@ -183,6 +263,7 @@ export default function IdleLogoutManager() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

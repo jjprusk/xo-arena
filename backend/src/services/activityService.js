@@ -45,6 +45,8 @@ export async function recordActivity(userId) {
 
 /**
  * Flush all buffered activity timestamps from Redis to Postgres.
+ * Only updates users who currently have an active BaSession — signed-out
+ * users are skipped so their lastActiveAt stops updating after sign-out.
  * Called by the background job every 60s.
  */
 async function flushActivityToDb() {
@@ -57,11 +59,32 @@ async function flushActivityToDb() {
 
     const values = await redis.mget(...keys)
 
-    const updates = keys.map((key, i) => {
+    const candidates = keys.map((key, i) => {
       const userId = key.slice(REDIS_KEY_PREFIX.length)
       const ts = values[i] ? new Date(Number(values[i])) : null
       return { userId, ts }
     }).filter(u => u.ts)
+
+    if (candidates.length === 0) return
+
+    // Only flush for users who have an active BaSession (i.e. are signed in).
+    // Look up betterAuthId for all candidate domain user IDs, then check sessions.
+    const domainUsers = await db.user.findMany({
+      where: { id: { in: candidates.map(u => u.userId) } },
+      select: { id: true, betterAuthId: true },
+    })
+    const betterAuthIds = domainUsers.map(u => u.betterAuthId).filter(Boolean)
+
+    const activeSessions = await db.baSession.findMany({
+      where: { userId: { in: betterAuthIds }, expiresAt: { gt: new Date() } },
+      select: { userId: true },
+    })
+    const activeSet = new Set(activeSessions.map(s => s.userId))
+
+    const updates = candidates.filter(({ userId }) => {
+      const du = domainUsers.find(u => u.id === userId)
+      return du?.betterAuthId && activeSet.has(du.betterAuthId)
+    })
 
     if (updates.length === 0) return
 

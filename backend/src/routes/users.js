@@ -197,6 +197,26 @@ router.post('/me/hints/faq', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/by-username/:username
+ * Resolves a username to its email address — used by the sign-in form so users
+ * can authenticate with either an email or a username.
+ * Returns only { email } — no other user data is exposed.
+ * No auth required (must be callable before login).
+ */
+router.get('/by-username/:username', async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { username: req.params.username.toLowerCase() },
+      select: { email: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    res.json({ email: user.email })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/users/:id
  * Public profile (read-only). Returns sanitized user data.
  */
