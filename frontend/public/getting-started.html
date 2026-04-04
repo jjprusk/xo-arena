@@ -288,7 +288,7 @@
     if (!e.data || e.data.type !== 'show-faq-hint') return
     var hint = document.getElementById('faqHint')
     if (!hint) return
-    hint.style.display = ''
+    hint.style.display = 'inline'
     hint.classList.add('bobbing')
     setTimeout(function () {
       hint.classList.remove('bobbing')
