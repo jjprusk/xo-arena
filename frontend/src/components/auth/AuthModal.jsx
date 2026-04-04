@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
@@ -13,6 +13,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [resendSent, setResendSent] = useState(false)
+  const [honeypot, setHoneypot] = useState('')
+  const formStartedAt = useRef(null)
 
   // Reset state when modal opens
   useEffect(() => {
@@ -24,6 +26,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
       setName('')
       setError('')
       setResendSent(false)
+      setHoneypot('')
+      if (defaultView === 'sign-up') formStartedAt.current = Date.now()
     }
   }, [isOpen, defaultView])
 
@@ -38,6 +42,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
   function switchView(v) {
     setView(v)
     setError('')
+    if (v === 'sign-up') formStartedAt.current = Date.now()
   }
 
   async function handleSignIn(e) {
@@ -75,10 +80,27 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
     if (!password || password.length < 8) { setError('Password must be at least 8 characters.'); return }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return }
 
+    // Honeypot: silently abort without revealing the check
+    if (honeypot) { setView('verify-email'); return }
+
+    // Timing: bot submissions arrive too fast
+    if (formStartedAt.current && Date.now() - formStartedAt.current < 3000) {
+      setError('Please wait a moment before submitting.')
+      return
+    }
+
     setLoading(true)
     try {
       const displayName = name.trim() || email.split('@')[0]
-      const result = await signUp.email({ email, password, name: displayName })
+      const result = await signUp.email({
+        email, password, name: displayName,
+        fetchOptions: {
+          headers: {
+            'x-hp':  honeypot,
+            'x-fst': String(formStartedAt.current ?? 0),
+          },
+        },
+      })
       if (result?.error) { setError(result.error.message || 'Sign up failed.'); return }
       setView('verify-email')
     } catch (err) {
@@ -428,6 +450,17 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                         placeholder="••••••••"
                       />
                     </div>
+
+                    {/* Honeypot — hidden from humans, bots fill it in */}
+                    <input
+                      type="text"
+                      value={honeypot}
+                      onChange={e => setHoneypot(e.target.value)}
+                      tabIndex={-1}
+                      autoComplete="off"
+                      aria-hidden="true"
+                      style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden', opacity: 0 }}
+                    />
 
                     {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
 

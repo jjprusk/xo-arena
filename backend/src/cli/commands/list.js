@@ -134,7 +134,7 @@ export function listCommand(program) {
           col(u.username,                16),
           col(u.email,                   26),
           col(verified,                   8),
-          col(formatIdle(u.lastActiveAt), 7),
+          col(u.online ? formatIdle(u.lastActiveAt) : '—', 7),
           col(hints,                      6),
           col(roles,                     20),
           col(created,                   12),
