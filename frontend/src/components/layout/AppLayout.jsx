@@ -112,6 +112,20 @@ export default function AppLayout() {
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-open Getting Started guide on first ever sign-in (before faqHintSeen is set)
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
+    async function maybeAutoOpen() {
+      try {
+        const token = await getToken()
+        const { faqHintSeen } = await api.users.getHints(token)
+        if (!faqHintSeen) setGuideOpen(true)
+      } catch { /* non-fatal */ }
+    }
+    maybeAutoOpen()
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Poll unread-count every 60s to seed the badge on sign-in (no chime — only socket chimes)
   useEffect(() => {
     if (!isAdmin && !isSupport) return

@@ -301,7 +301,7 @@ function IdleConfigPanel() {
           All values are in seconds. Player rooms are abandoned (no result) when a player is idle too long; spectators are silently kicked.
         </p>
         <form onSubmit={handleSave} className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
             <label className="space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Idle warn (seconds)</span>
               <input
