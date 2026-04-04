@@ -31,7 +31,7 @@ export default function ProfilePage() {
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null) // { id, value }
-  const [createForm, setCreateForm] = useState({ name: '', modelType: 'DQN', competitive: false })
+  const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: false })
   const [creatingBot, setCreatingBot] = useState(false)
 
   // Account deletion
@@ -217,7 +217,7 @@ export default function ProfilePage() {
       const { bot: newBot } = await api.bots.create(payload, token)
       setBots(prev => [newBot, ...prev])
       setLimitInfo(prev => prev ? { ...prev, count: prev.count + 1 } : prev)
-      setCreateForm({ name: '', modelType: 'DQN', competitive: false })
+      setCreateForm({ name: '', modelType: 'Q_LEARNING', competitive: false })
       setShowCreateBot(false)
     } catch (err) {
       setBotActionError(err.message || 'Create failed.')
@@ -456,12 +456,12 @@ export default function ProfilePage() {
                 className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
                 style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
               >
-                <option value="DQN">DQN (Deep Q-Network)</option>
-                <option value="ALPHA_ZERO">AlphaZero</option>
-                <option value="POLICY_GRADIENT">Policy Gradient</option>
                 <option value="Q_LEARNING">Q-Learning</option>
                 <option value="SARSA">SARSA</option>
                 <option value="MONTE_CARLO">Monte Carlo</option>
+                <option value="POLICY_GRADIENT">Policy Gradient</option>
+                <option value="DQN">DQN (Deep Q-Network)</option>
+                <option value="ALPHA_ZERO">AlphaZero</option>
               </select>
               <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                 A fresh untrained brain of this type will be created. Train it in the Gym.
