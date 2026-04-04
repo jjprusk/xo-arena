@@ -64,6 +64,7 @@ export default function FAQPage() {
   const [content, setContent] = useState(null)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
+  const [openSections, setOpenSections] = useState(new Set())
 
   useEffect(() => {
     fetch('/faq.md')
@@ -71,15 +72,39 @@ export default function FAQPage() {
       .then(setContent)
   }, [])
 
-  const displayContent = useMemo(() => {
-    if (!content) return content
-    if (!query.trim()) { setMatchCount(0); return content }
+  // Parse markdown into preamble (H1) + sections (H2 blocks)
+  const { preamble, sections } = useMemo(() => {
+    if (!content) return { preamble: '', sections: [] }
+    const parts = content.split(/^(?=## )/m)
+    const preamble = parts[0]
+    const sections = parts.slice(1).map(part => {
+      const nl = part.indexOf('\n')
+      const title = nl === -1 ? part.replace(/^## /, '') : part.slice(3, nl)
+      const body = nl === -1 ? '' : part.slice(nl + 1).trim()
+      return { title, body }
+    })
+    return { preamble, sections }
+  }, [content])
+
+  const searching = !!query.trim()
+
+  // Count matches and compute highlighted bodies
+  const highlightedSections = useMemo(() => {
+    if (!searching) { setMatchCount(0); return sections.map(s => s.body) }
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const re = new RegExp(escaped, 'gi')
-    const matches = content.match(re)
+    const matches = content?.match(re)
     setMatchCount(matches ? matches.length : 0)
-    return highlightMarkdown(content, query.trim())
-  }, [content, query])
+    return sections.map(s => highlightMarkdown(s.body, query.trim()))
+  }, [content, sections, query, searching])
+
+  function toggleSection(i) {
+    setOpenSections(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i); else next.add(i)
+      return next
+    })
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -91,7 +116,7 @@ export default function FAQPage() {
             className="text-sm font-medium"
             style={{ color: 'var(--color-blue-600)' }}
           >
-            ← Back to Getting Started
+            ← Back to Guide
           </button>
         )}
         {fromAbout && !fromGuide && (
@@ -131,7 +156,7 @@ export default function FAQPage() {
               </button>
             )}
           </div>
-          {query.trim() && (
+          {searching && (
             <span className="text-xs whitespace-nowrap" style={{ color: matchCount > 0 ? 'var(--text-secondary)' : 'var(--color-red-500)' }}>
               {matchCount > 0 ? `${matchCount} match${matchCount !== 1 ? 'es' : ''}` : 'No matches'}
             </span>
@@ -139,14 +164,39 @@ export default function FAQPage() {
         </div>
       )}
 
-      {/* Rendered markdown */}
+      {/* Content */}
       {content == null
         ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
         : (
-          <div className="rounded-xl border p-4 sm:p-8" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
-            <div className="prose-guide">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{displayContent}</ReactMarkdown>
-            </div>
+          <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+            {/* H1 preamble */}
+            {preamble.trim() && (
+              <div className="px-6 pt-6 pb-2 prose-guide">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{preamble}</ReactMarkdown>
+              </div>
+            )}
+
+            {/* Accordion sections */}
+            {sections.map(({ title }, i) => {
+              const isOpen = searching || openSections.has(i)
+              const id = slugify(title)
+              return (
+                <div key={i} id={id} className="border-t" style={{ borderColor: 'var(--border-default)' }}>
+                  <button
+                    onClick={() => toggleSection(i)}
+                    className="w-full flex items-center justify-between px-6 py-4 text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+                  >
+                    <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</span>
+                    <span className="ml-4 flex-shrink-0 text-3xl transition-transform" style={{ color: 'var(--text-muted)', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
+                  </button>
+                  {isOpen && (
+                    <div className="px-6 pb-6 prose-guide">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{highlightedSections[i]}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )
       }

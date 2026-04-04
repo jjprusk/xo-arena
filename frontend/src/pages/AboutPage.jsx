@@ -74,7 +74,7 @@ export default function AboutPage() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--bg-surface-hover)]"
             style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-surface)' }}
           >
-            Getting Started →
+            Guide →
           </button>
           <Link
             to="/faq" state={{ from: '/about' }}

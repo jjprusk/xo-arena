@@ -28,7 +28,7 @@ SOUND_KEYS.forEach(getHowl)
 // ── Retro / Nature packs — Web Audio synthesis ───────────────────────────────
 let _audioCtx = null
 let _masterGain = null
-let _synthVolume = 0.5 // mirrors store volume; updated by setVolume and onRehydrateStorage
+let _synthVolume = 0.15 // mirrors store volume; updated by setVolume and onRehydrateStorage
 
 function ctx() {
   if (!_audioCtx) {
@@ -120,8 +120,8 @@ export const useSoundStore = create(
   persist(
     (set, get) => ({
       muted: false,
-      volume: 0.5,
-      soundPack: 'default',
+      volume: 0.15,
+      soundPack: 'retro',
 
       toggleMute() {
         const next = !get().muted

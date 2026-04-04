@@ -313,6 +313,14 @@ export default function ProfilePage() {
                   >
                     Edit
                   </button>
+                  <Link
+                    to="/settings"
+                    state={{ from: '/profile' }}
+                    className="text-xs font-medium underline underline-offset-2 transition-opacity hover:opacity-70 flex-shrink-0"
+                    style={{ color: 'var(--color-blue-600)' }}
+                  >
+                    Settings
+                  </Link>
                 </div>
                 {(dbUser.baRole === 'admin' || (dbUser.roles ?? []).length > 0) && (
                   <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">

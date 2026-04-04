@@ -18,7 +18,7 @@ import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
 import GettingStartedModal from '../GettingStartedModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
-import { useOnboardingStore } from '../../store/onboardingStore.js'
+import { usePrefsStore } from '../../store/prefsStore.js'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -27,7 +27,7 @@ const NAV_LINKS = [
   { to: '/play', label: 'Play' },
   { to: '/gym', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
-  { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
+  { to: '/leaderboard', label: 'Rankings', desktopOnly: true },
 ]
 
 const BOTTOM_NAV = [
@@ -42,7 +42,7 @@ const MENU_LINKS = [
   { to: '/play',        label: 'Play',        icon: '⊞' },
   { to: '/gym',         label: 'Gym',         icon: '⚡' },
   { to: '/puzzles',     label: 'Puzzles',      icon: '◈' },
-  { to: '/leaderboard', label: 'Leaderboard',  icon: '★' },
+  { to: '/leaderboard', label: 'Rankings',     icon: '★' },
   { to: '/stats',       label: 'Stats',        icon: '◎' },
   { to: '/profile',     label: 'Profile',      icon: '◉' },
   { to: '/about',       label: 'About',        icon: '○' },
@@ -92,7 +92,7 @@ export default function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [guideOpen, setGuideOpen] = useState(false)
   const [guideShowHint, setGuideShowHint] = useState(false)
-  const { trainingDone, check: checkOnboarding } = useOnboardingStore()
+  const { showGuideButton, setPrefs } = usePrefsStore()
   const prevUserId = useRef(null)
 
   // Close the mobile menu whenever the user navigates
@@ -102,24 +102,23 @@ export default function AppLayout() {
   useEffect(() => {
     const userId = session?.user?.id ?? null
     if (userId && userId !== prevUserId.current) {
-      // User just signed in (or changed)
       rolesStore.fetch()
       prevUserId.current = userId
     } else if (!userId && prevUserId.current) {
-      // User just signed out
       rolesStore.clear()
       prevUserId.current = null
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-open Getting Started guide on first ever sign-in; show hint if not yet seen
+  // Load preferences and auto-open guide on first ever sign-in
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
     async function maybeAutoOpen() {
       try {
         const token = await getToken()
-        const { faqHintSeen } = await api.users.getHints(token)
+        const { faqHintSeen, showGuideButton: sgb } = await api.users.getHints(token)
+        setPrefs({ showGuideButton: sgb })
         if (!faqHintSeen) {
           api.users.markFaqHint(token).catch(() => {})
           setGuideShowHint(true)
@@ -191,7 +190,6 @@ export default function AppLayout() {
           if (user && !user.nameConfirmed) {
             setNamePrompt({ userId: user.id, currentName: user.displayName })
           }
-          checkOnboarding(session.user.id, token)
         })
       })
       .catch(() => {})
@@ -239,11 +237,11 @@ export default function AppLayout() {
               XO Arena
             </span>
           </Link>
-          {trainingDone === false && (
+          {session && showGuideButton && (
             <button
               onClick={() => setGuideOpen(true)}
-              aria-label="Getting Started guide"
-              title="Getting Started"
+              aria-label="Guide"
+              title="Guide"
               className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
               style={{
                 background: 'linear-gradient(135deg, var(--color-blue-500), #6366f1)',
@@ -251,7 +249,7 @@ export default function AppLayout() {
               }}
             >
               <span>✦</span>
-              <span className="hidden sm:inline">Guide</span>
+              <span>Guide</span>
             </button>
           )}
         </div>

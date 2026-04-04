@@ -157,12 +157,12 @@ describe('MLDashboardPage — unauthenticated', () => {
 })
 
 describe('MLDashboardPage — empty bot list', () => {
-  it('shows "No bots yet" when the user has no bots', async () => {
+  it('shows empty message when the user has no bots', async () => {
     signedIn()
     setupApis({ bots: [] })
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText('No bots yet.')).toBeDefined()
+      expect(screen.getByText("You don't have any bots yet.")).toBeDefined()
     })
   })
 
@@ -171,7 +171,7 @@ describe('MLDashboardPage — empty bot list', () => {
     setupApis({ bots: [] })
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText(/Go to Profile.*Bots to create bots/)).toBeDefined()
+      expect(screen.getByText(/Go to your/)).toBeDefined()
     })
   })
 })

@@ -171,7 +171,10 @@ router.get('/me/hints', requireAuth, async (req, res, next) => {
       select: { preferences: true },
     })
     const prefs = (user?.preferences && typeof user.preferences === 'object') ? user.preferences : {}
-    res.json({ faqHintSeen: !!prefs.faqHintSeen })
+    res.json({
+      faqHintSeen:     !!prefs.faqHintSeen,
+      showGuideButton: prefs.showGuideButton !== false,  // default true
+    })
   } catch (err) {
     next(err)
   }
@@ -190,6 +193,28 @@ router.post('/me/hints/faq', requireAuth, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
     const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
     await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, faqHintSeen: true } } })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/users/me/preferences
+ * Updates allowed preference keys for the signed-in user.
+ */
+router.patch('/me/preferences', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true, preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    const { showGuideButton } = req.body
+    const updates = {}
+    if (typeof showGuideButton === 'boolean') updates.showGuideButton = showGuideButton
+    await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, ...updates } } })
     res.json({ ok: true })
   } catch (err) {
     next(err)

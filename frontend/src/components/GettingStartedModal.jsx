@@ -1,9 +1,6 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 
 export default function GettingStartedModal({ isOpen, onClose, showHint = false }) {
-  const iframeRef = useRef(null)
-  const hintSentRef = useRef(false)
-
   useEffect(() => {
     if (!isOpen) return
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -11,37 +8,9 @@ export default function GettingStartedModal({ isOpen, onClose, showHint = false 
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, onClose])
 
-  // Reset the sent-guard whenever the modal closes so it can show again if needed
-  useEffect(() => {
-    if (!isOpen) hintSentRef.current = false
-  }, [isOpen])
-
-  // Listen for the iframe's 'ready' handshake, then send the hint trigger.
-  // We also check readyState immediately in case the iframe loaded from cache
-  // before this effect registered its listener (React 18 fires effects after paint,
-  // which can lose the race against a fast cached load).
-  useEffect(() => {
-    if (!isOpen || !showHint) return
-    const iframe = iframeRef.current
-    function sendHint() {
-      if (hintSentRef.current) return
-      hintSentRef.current = true
-      iframe?.contentWindow?.postMessage({ type: 'show-faq-hint' }, '*')
-    }
-    function onMessage(e) {
-      if (e.data?.type !== 'getting-started-ready') return
-      sendHint()
-    }
-    window.addEventListener('message', onMessage)
-    // Fallback: if the iframe already finished loading before we registered,
-    // the 'getting-started-ready' message was lost — send the hint now.
-    try {
-      if (iframe?.contentDocument?.readyState === 'complete') sendHint()
-    } catch {}
-    return () => window.removeEventListener('message', onMessage)
-  }, [isOpen, showHint])
-
   if (!isOpen) return null
+
+  const src = showHint ? '/getting-started.html?hint=1' : '/getting-started.html'
 
   return (
     <div
@@ -62,9 +31,8 @@ export default function GettingStartedModal({ isOpen, onClose, showHint = false 
           ×
         </button>
         <iframe
-          ref={iframeRef}
-          src="/getting-started.html"
-          title="Getting Started"
+          src={src}
+          title="Guide"
           scrolling="no"
           style={{ width: '100%', aspectRatio: '960/720', border: 'none', display: 'block', maxHeight: '85vh' }}
         />
