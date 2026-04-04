@@ -13,9 +13,14 @@
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "db:seed": "node prisma/seed.js"
+    "db:seed": "node prisma/seed.js",
+    "um": "node --experimental-transform-types --no-warnings src/cli/um.js"
+  },
+  "bin": {
+    "um": "./src/cli/um.js"
   },
   "dependencies": {
+    "commander": "^13.0.0",
     "@prisma/adapter-pg": "^7.0.0",
     "@prisma/client": "^7.0.0",
     "@socket.io/redis-adapter": "^8.3.0",
