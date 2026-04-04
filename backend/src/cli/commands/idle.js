@@ -1,5 +1,5 @@
 import db from '../lib/db.js'
-import { resolveUser, ok, fail } from '../lib/safety.js'
+import { resolveUsers, ok, fail } from '../lib/safety.js'
 import Redis from 'ioredis'
 
 function parseDuration(str) {
@@ -25,42 +25,50 @@ export function formatIdle(lastActiveAt) {
 
 export function idleCommand(program) {
   program
-    .command('idle <username|email> [duration]')
-    .description('Show or set idle time. Without duration shows current idle time. With duration (e.g. 10m, 2h, 0) backdates lastActiveAt.')
+    .command('idle <username|email|pattern> [duration]')
+    .description('Show or set idle time. Without duration shows current idle time. With duration (e.g. 10m, 2h, 0) backdates lastActiveAt. Accepts a regex pattern to match multiple users.')
     .action(async (usernameOrEmail, duration) => {
-      const user = await resolveUser(db, usernameOrEmail)
+      const users = await resolveUsers(db, usernameOrEmail)
+      if (users.length === 0) fail(`no users found matching "${usernameOrEmail}"`)
 
       if (!duration) {
-        console.log(`"${user.username}" idle: ${formatIdle(user.lastActiveAt)}`)
+        for (const user of users) {
+          console.log(`"${user.username}" idle: ${formatIdle(user.lastActiveAt)}`)
+        }
         return
       }
 
-      const ms = parseDuration(duration)
-      const ts = new Date(Date.now() - ms)
+      const ms  = parseDuration(duration)
+      const ts  = new Date(Date.now() - ms)
 
-      await db.user.update({
-        where: { id: user.id },
-        data:  { lastActiveAt: ts },
-      })
-
-      // Remove the Redis activity key so the 60s flush job doesn't overwrite
-      // the value we just wrote with a newer cached timestamp.
+      // Open Redis once for all users (if configured)
+      let redis = null
       if (process.env.REDIS_URL) {
-        const redis = new Redis(process.env.REDIS_URL, { lazyConnect: true })
-        try {
-          await redis.connect()
-          await redis.del(`user:active:${user.id}`)
-        } catch {
-          // Non-fatal — Postgres value is already correct
-        } finally {
-          redis.disconnect()
-        }
+        redis = new Redis(process.env.REDIS_URL, { lazyConnect: true })
+        try { await redis.connect() } catch { redis = null }
       }
 
-      if (ms === 0) {
-        ok(`"${user.username}" lastActiveAt reset to now`)
-      } else {
-        ok(`"${user.username}" lastActiveAt set to ${ts.toISOString()} (${duration} ago)`)
+      try {
+        for (const user of users) {
+          await db.user.update({
+            where: { id: user.id },
+            data:  { lastActiveAt: ts },
+          })
+
+          // Remove the Redis activity key so the 60s flush job doesn't overwrite
+          // the value we just wrote with a newer cached timestamp.
+          if (redis) {
+            try { await redis.del(`user:active:${user.id}`) } catch { /* non-fatal */ }
+          }
+
+          if (ms === 0) {
+            ok(`"${user.username}" lastActiveAt reset to now`)
+          } else {
+            ok(`"${user.username}" lastActiveAt set to ${ts.toISOString()} (${duration} ago)`)
+          }
+        }
+      } finally {
+        redis?.disconnect()
       }
     })
 }

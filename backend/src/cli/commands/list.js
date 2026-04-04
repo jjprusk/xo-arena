@@ -1,27 +1,65 @@
 import db from '../lib/db.js'
 import { formatIdle } from './idle.js'
 
+const GREEN  = '\x1b[32m'
+const YELLOW = '\x1b[93m'
+const RED    = '\x1b[31m'
+const RESET  = '\x1b[0m'
+
+async function getIdleConfig() {
+  const [warnRow, graceRow] = await Promise.all([
+    db.systemConfig.findUnique({ where: { key: 'session.idleWarnMinutes' } }),
+    db.systemConfig.findUnique({ where: { key: 'session.idleGraceMinutes' } }),
+  ])
+  return {
+    warnMs:  ((warnRow?.value  ?? 30) * 60_000),
+    graceMs: ((graceRow?.value ??  5) * 60_000),
+  }
+}
+
 export function listCommand(program) {
   program
-    .command('list [username|email]')
-    .description('List users (pass a username or email to show a single user). IDLE reflects the last Postgres flush — may lag up to 60s behind real activity.')
+    .command('list [username|email|pattern]')
+    .description('List users. Pass a username/email for exact match or a regex pattern (quoted) to filter. IDLE reflects the last Postgres flush — may lag up to 60s behind real activity.')
     .option('--limit <n>', 'Max rows to show', '20')
     .option('--unverified', 'Show only unverified accounts')
     .action(async (usernameOrEmail, opts) => {
       const limit = parseInt(opts.limit, 10)
 
-      const singleFilter = usernameOrEmail
-        ? usernameOrEmail.includes('@')
-          ? { email: usernameOrEmail }
-          : { username: usernameOrEmail }
-        : undefined
+      // Resolve filter: exact email, exact username, regex, or none (all users)
+      let userFilter = null  // null = fetch all, then optionally apply regex
+      let regexFilter = null
 
-      const users = await db.user.findMany({
-        where:   { isBot: false, ...singleFilter },
-        take:    singleFilter ? undefined : limit,
-        orderBy: { createdAt: 'desc' },
-        include: { userRoles: true },
-      })
+      if (usernameOrEmail) {
+        if (usernameOrEmail.includes('@')) {
+          userFilter = { isBot: false, email: usernameOrEmail }
+        } else if (/[.*+?^${}()|[\]\\]/.test(usernameOrEmail)) {
+          // Regex pattern — fetch all and filter in JS
+          try { regexFilter = new RegExp(usernameOrEmail, 'i') } catch {
+            console.error(`um: invalid regex: ${usernameOrEmail}`)
+            process.exit(1)
+          }
+          userFilter = { isBot: false }
+        } else {
+          userFilter = { isBot: false, username: usernameOrEmail }
+        }
+      } else {
+        userFilter = { isBot: false }
+      }
+
+      const [allUsers, { warnMs, graceMs }] = await Promise.all([
+        db.user.findMany({
+          where:   userFilter,
+          take:    regexFilter || !usernameOrEmail ? limit : undefined,
+          orderBy: { createdAt: 'desc' },
+          include: { userRoles: true },
+        }),
+        getIdleConfig(),
+      ])
+
+      const users = regexFilter
+        ? allUsers.filter(u => regexFilter.test(u.username))
+        : allUsers
 
       // Fetch verification status and active sessions from BetterAuth
       const baIds = users.map(u => u.betterAuthId).filter(Boolean)
@@ -52,7 +90,7 @@ export function listCommand(program) {
         process.exit(0)
       }
 
-      // Column widths
+      // Column widths — col() pads the plain string; colour codes are added after
       const col = (val, w) => String(val ?? '').padEnd(w).slice(0, w)
 
       const header = [
@@ -74,11 +112,25 @@ export function listCommand(program) {
         const roles    = u.userRoles.map(r => r.role).join(', ') || '—'
         const created  = u.createdAt.toISOString().slice(0, 10)
         const verified = u.emailVerified == null ? '?' : u.emailVerified ? 'yes' : 'no'
-        const dot      = u.online ? '●' : '○'
         const prefs    = (u.preferences && typeof u.preferences === 'object') ? u.preferences : {}
         const hints    = prefs.faqHintSeen ? 'seen' : 'new'
+
+        // Colour the dot based on idle status (only for signed-in users).
+        // We can't use col() on the dot because ANSI codes inflate the byte
+        // length — build the padded dot cell manually (1 visible char + 1 space).
+        let dotCell
+        if (!u.online) {
+          dotCell = '○ '
+        } else {
+          const idleMs = u.lastActiveAt ? Date.now() - new Date(u.lastActiveAt).getTime() : Infinity
+          const color  = idleMs >= warnMs + graceMs ? RED
+                       : idleMs >= warnMs           ? YELLOW
+                       :                              GREEN
+          dotCell = `${color}●${RESET} `
+        }
+
         console.log([
-          col(dot,                        2),
+          dotCell,
           col(u.username,                16),
           col(u.email,                   26),
           col(verified,                   8),

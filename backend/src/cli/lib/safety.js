@@ -47,6 +47,58 @@ export async function resolveUser(db, usernameOrEmail) {
   return user
 }
 
+/**
+ * Resolve a username/email/regex pattern to one or more User rows.
+ *
+ * Resolution order:
+ *  1. If pattern contains '@'            → exact email match (exits if not found)
+ *  2. Exact username match               → returns [user]
+ *  3. Pattern contains regex special chars → regex filter over all non-bot users
+ *  4. No match and no regex chars         → exits with "not found"
+ */
+export async function resolveUsers(db, pattern) {
+  // Email: always exact
+  if (pattern.includes('@')) {
+    const user = await db.user.findUnique({
+      where: { email: pattern },
+      include: { userRoles: true },
+    })
+    if (!user) {
+      console.error(`um: user not found: ${pattern}`)
+      process.exit(1)
+    }
+    return [user]
+  }
+
+  // Try exact username first
+  const exact = await db.user.findUnique({
+    where: { username: pattern },
+    include: { userRoles: true },
+  })
+  if (exact) return [exact]
+
+  // Regex fallback — only if pattern contains special chars
+  if (/[.*+?^${}()|[\]\\]/.test(pattern)) {
+    let re
+    try {
+      re = new RegExp(pattern, 'i')
+    } catch {
+      console.error(`um: invalid regex: ${pattern}`)
+      process.exit(1)
+    }
+    const all = await db.user.findMany({
+      where:   { isBot: false },
+      orderBy: { username: 'asc' },
+      include: { userRoles: true },
+    })
+    return all.filter(u => re.test(u.username))
+  }
+
+  // No match
+  console.error(`um: user not found: ${pattern}`)
+  process.exit(1)
+}
+
 export function ok(msg) {
   console.log(`✓ ${msg}`)
 }
