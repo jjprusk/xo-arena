@@ -4,7 +4,7 @@ import { formatIdle } from './idle.js'
 export function listCommand(program) {
   program
     .command('list [username|email]')
-    .description('List users (pass a username or email to show a single user)')
+    .description('List users (pass a username or email to show a single user). IDLE reflects the last Postgres flush — may lag up to 60s behind real activity.')
     .option('--limit <n>', 'Max rows to show', '20')
     .option('--unverified', 'Show only unverified accounts')
     .action(async (usernameOrEmail, opts) => {

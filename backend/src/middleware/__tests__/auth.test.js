@@ -25,6 +25,9 @@ vi.mock('../../lib/db.js', () => ({
     baUser: {
       findUnique: vi.fn(async () => null),
     },
+    baSession: {
+      findFirst: vi.fn(async () => ({ id: 'session_1' })),
+    },
   },
 }))
 
@@ -61,6 +64,7 @@ beforeEach(() => {
   db.jwks.findUnique.mockResolvedValue({ id: 'kid_1', publicKey: '{}', createdAt: new Date() })
   db.user.findUnique.mockResolvedValue({ banned: false, userRoles: [] })
   db.baUser.findUnique.mockResolvedValue(null)
+  db.baSession.findFirst.mockResolvedValue({ id: 'session_1' })
   jwtVerify.mockResolvedValue({ payload: { sub: 'user_123' } })
 })
 

@@ -9,17 +9,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const envPath = resolve(__dirname, '../../../.env')
 dotenvConfig({ path: envPath })
 
-// When running on the host (not inside Docker), the DATABASE_URL uses the
-// Docker service hostname "postgres" which isn't resolvable from outside.
-// Port 5432 is mapped to localhost, so we rewrite the URL automatically.
-function fixDatabaseUrl() {
-  const url = process.env.DATABASE_URL
-  if (!url) return
-  // If we're inside Docker, /.dockerenv exists — leave URL unchanged
+// When running on the host (not inside Docker), Docker service hostnames
+// ("postgres", "redis") aren't resolvable. Both ports are mapped to localhost,
+// so we rewrite the URLs automatically.
+function fixDockerUrls() {
   if (existsSync('/.dockerenv')) return
-  process.env.DATABASE_URL = url.replace('@postgres:', '@localhost:')
+  const db = process.env.DATABASE_URL
+  if (db) process.env.DATABASE_URL = db.replace('@postgres:', '@localhost:')
+  const redis = process.env.REDIS_URL
+  if (redis) process.env.REDIS_URL = redis.replace('//redis:', '//localhost:')
 }
-fixDatabaseUrl()
+fixDockerUrls()
 
 export function guardProduction() {
   if (process.env.NODE_ENV === 'production') {

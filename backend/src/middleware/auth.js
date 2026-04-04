@@ -57,14 +57,22 @@ export async function requireAuth(req, res, next) {
   }
   req.auth = authPayload
 
-  // Check banned flag via betterAuthId on domain User
+  // Check banned flag and active session in parallel.
+  // Activity is only recorded when a real BaSession exists — this prevents
+  // a cached-but-still-valid JWT from updating lastActiveAt after sign-out.
   try {
-    const user = await db.user.findUnique({
-      where: { betterAuthId: authPayload.userId },
-      select: { id: true, banned: true },
-    })
+    const [user, activeSession] = await Promise.all([
+      db.user.findUnique({
+        where: { betterAuthId: authPayload.userId },
+        select: { id: true, banned: true },
+      }),
+      db.baSession.findFirst({
+        where: { userId: authPayload.userId, expiresAt: { gt: new Date() } },
+        select: { id: true },
+      }),
+    ])
     if (user?.banned) return res.status(403).json({ error: 'Account suspended' })
-    if (user?.id) recordActivity(user.id)
+    if (user?.id && activeSession) recordActivity(user.id)
   } catch (err) {
     logger.warn({ err }, 'Ban check failed — allowing request through')
   }

@@ -1,5 +1,6 @@
 import db from '../lib/db.js'
 import { resolveUser, ok, fail } from '../lib/safety.js'
+import Redis from 'ioredis'
 
 function parseDuration(str) {
   if (str === '0') return 0
@@ -41,6 +42,20 @@ export function idleCommand(program) {
         where: { id: user.id },
         data:  { lastActiveAt: ts },
       })
+
+      // Remove the Redis activity key so the 60s flush job doesn't overwrite
+      // the value we just wrote with a newer cached timestamp.
+      if (process.env.REDIS_URL) {
+        const redis = new Redis(process.env.REDIS_URL, { lazyConnect: true })
+        try {
+          await redis.connect()
+          await redis.del(`user:active:${user.id}`)
+        } catch {
+          // Non-fatal — Postgres value is already correct
+        } finally {
+          redis.disconnect()
+        }
+      }
 
       if (ms === 0) {
         ok(`"${user.username}" lastActiveAt reset to now`)

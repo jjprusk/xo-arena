@@ -12,7 +12,8 @@ import { idleCommand }    from './commands/idle.js'
 import { sessionCommand } from './commands/session.js'
 import { renameCommand }  from './commands/rename.js'
 import { statusCommand }  from './commands/status.js'
-import { hintsCommand }   from './commands/hints.js'
+import { hintsCommand }        from './commands/hints.js'
+import { sessionConfigCommand } from './commands/sessionconfig.js'
 
 guardProduction()
 
@@ -34,6 +35,7 @@ sessionCommand(program)
 renameCommand(program)
 statusCommand(program)
 hintsCommand(program)
+sessionConfigCommand(program)
 
 program.hook('postAction', () => disconnect())
 program.parse()

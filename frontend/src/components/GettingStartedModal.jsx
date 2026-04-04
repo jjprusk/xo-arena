@@ -17,17 +17,27 @@ export default function GettingStartedModal({ isOpen, onClose, showHint = false 
   }, [isOpen])
 
   // Listen for the iframe's 'ready' handshake, then send the hint trigger.
-  // This is more reliable than onLoad because we know the message listener
-  // inside getting-started.html is registered before we send 'show-faq-hint'.
+  // We also check readyState immediately in case the iframe loaded from cache
+  // before this effect registered its listener (React 18 fires effects after paint,
+  // which can lose the race against a fast cached load).
   useEffect(() => {
     if (!isOpen || !showHint) return
-    function onMessage(e) {
-      if (e.data?.type !== 'getting-started-ready') return
+    const iframe = iframeRef.current
+    function sendHint() {
       if (hintSentRef.current) return
       hintSentRef.current = true
-      iframeRef.current?.contentWindow?.postMessage({ type: 'show-faq-hint' }, '*')
+      iframe?.contentWindow?.postMessage({ type: 'show-faq-hint' }, '*')
+    }
+    function onMessage(e) {
+      if (e.data?.type !== 'getting-started-ready') return
+      sendHint()
     }
     window.addEventListener('message', onMessage)
+    // Fallback: if the iframe already finished loading before we registered,
+    // the 'getting-started-ready' message was lost — send the hint now.
+    try {
+      if (iframe?.contentDocument?.readyState === 'complete') sendHint()
+    } catch {}
     return () => window.removeEventListener('message', onMessage)
   }, [isOpen, showHint])
 
