@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { usePvpStore } from '../../store/pvpStore.js'
@@ -127,10 +128,10 @@ export default function IdleLogoutManager() {
   const fraction   = remaining != null && graceSec > 0 ? remaining / graceSec : 0
   const urgent     = remaining != null && remaining <= 60
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999 }}
     >
       <div
         className="rounded-2xl border p-6 flex flex-col items-center gap-4 max-w-xs w-full mx-4 shadow-2xl"
@@ -183,6 +184,7 @@ export default function IdleLogoutManager() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

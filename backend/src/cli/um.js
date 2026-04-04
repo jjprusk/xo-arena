@@ -3,6 +3,7 @@ import { Command } from 'commander'
 import { guardProduction } from './lib/safety.js'
 import { disconnect } from './lib/db.js'
 import { createCommand }  from './commands/create.js'
+import { cloneCommand }   from './commands/clone.js'
 import { verifyCommand }  from './commands/verify.js'
 import { passwordCommand } from './commands/password.js'
 import { roleCommand }    from './commands/role.js'
@@ -25,6 +26,7 @@ program
   .version('1.0.0')
 
 createCommand(program)
+cloneCommand(program)
 verifyCommand(program)
 passwordCommand(program)
 roleCommand(program)
