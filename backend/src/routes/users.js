@@ -173,6 +173,7 @@ router.get('/me/hints', requireAuth, async (req, res, next) => {
     const prefs = (user?.preferences && typeof user.preferences === 'object') ? user.preferences : {}
     res.json({
       faqHintSeen:     !!prefs.faqHintSeen,
+      playHintSeen:    !!prefs.playHintSeen,
       showGuideButton: prefs.showGuideButton !== false,  // default true
     })
   } catch (err) {
@@ -193,6 +194,25 @@ router.post('/me/hints/faq', requireAuth, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
     const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
     await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, faqHintSeen: true } } })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/users/me/hints/play
+ * Marks the play-page hint as seen.
+ */
+router.post('/me/hints/play', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true, preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, playHintSeen: true } } })
     res.json({ ok: true })
   } catch (err) {
     next(err)

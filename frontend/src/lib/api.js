@@ -149,6 +149,7 @@ export const api = {
     mlProfiles: (id, token) => api.get(`/users/${id}/ml-profiles`, token),
     getHints: (token) => api.get('/users/me/hints', token),
     markFaqHint: (token) => api.post('/users/me/hints/faq', {}, token),
+    markPlayHint: (token) => api.post('/users/me/hints/play', {}, token),
     updatePreferences: (prefs, token) => api.patch('/users/me/preferences', prefs, token),
     emailByUsername: (username) => api.get(`/users/by-username/${encodeURIComponent(username)}`),
   },

@@ -117,8 +117,8 @@ export default function AppLayout() {
     async function maybeAutoOpen() {
       try {
         const token = await getToken()
-        const { faqHintSeen, showGuideButton: sgb } = await api.users.getHints(token)
-        setPrefs({ showGuideButton: sgb })
+        const { faqHintSeen, playHintSeen, showGuideButton: sgb } = await api.users.getHints(token)
+        setPrefs({ showGuideButton: sgb, playHintSeen: !!playHintSeen })
         if (!faqHintSeen) {
           api.users.markFaqHint(token).catch(() => {})
           setGuideShowHint(true)

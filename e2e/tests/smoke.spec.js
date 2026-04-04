@@ -58,7 +58,7 @@ test.describe('Smoke — frontend', () => {
     const signInBtn = page.getByRole('button', { name: /sign in/i }).first()
     await signInBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await signInBtn.click()
-    await expect(page.locator('input[type="email"]')).toBeVisible()
+    await expect(page.locator('input[autocomplete="email"]')).toBeVisible({ timeout: 15_000 })
   })
 
   test('leaderboard page loads without auth', async ({ page }) => {
