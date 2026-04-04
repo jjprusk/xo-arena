@@ -1,17 +1,19 @@
 import React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { api, cachedFetch } from '../../lib/api.js'
+import { getToken } from '../../lib/getToken.js'
 import { ListTr, ListTd, SearchBar } from '../ui/ListTable.jsx'
+import { usePrefsStore } from '../../store/prefsStore.js'
 
 // ── BotAccordion ─────────────────────────────────────────────────────────────
 // Two-section accordion (Built-in / Community) using ListTr/ListTd for rows.
 // Only one section open at a time; built-in is open by default.
 // Community section includes a live search bar and a scrollable list.
 
-function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch }) {
-  const builtIn   = bots.filter(b => !b.botOwnerId)
+function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch, showPlayHint, onPlayHintDismiss }) {
+  const builtIn   = bots.filter(b => !b.botOwnerId).sort((a, b) => a.eloRating - b.eloRating)
   const community = bots.filter(b => b.botOwnerId)
   const filteredCommunity = communitySearch
     ? community.filter(b => b.displayName.toLowerCase().includes(communitySearch.toLowerCase()))
@@ -36,7 +38,22 @@ function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSecti
             {builtIn.map((bot, i) => (
               <ListTr key={bot.id} last={i === builtIn.length - 1}>
                 <ListTd>
-                  <BotRow bot={bot} isSignedIn={isSignedIn} onChallenge={onChallenge} />
+                  <div className={i === 0 && showPlayHint ? 'relative' : undefined}>
+                    <BotRow
+                      bot={bot}
+                      isSignedIn={isSignedIn}
+                      onChallenge={(b) => { if (i === 0) onPlayHintDismiss?.(); onChallenge(b) }}
+                    />
+                    {i === 0 && showPlayHint && (
+                      <div
+                        className="pointer-events-none absolute inset-y-0 right-0 flex flex-col items-center justify-center"
+                        style={{ right: '-4px', gap: '2px' }}
+                      >
+                        <span className="hint-bob text-xl" style={{ lineHeight: 1 }}>👆</span>
+                        <span className="text-[9px] font-semibold" style={{ color: 'var(--color-blue-600)', whiteSpace: 'nowrap' }}>Try me!</span>
+                      </div>
+                    )}
+                  </div>
                 </ListTd>
               </ListTr>
             ))}
@@ -213,6 +230,8 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
   const { data: session } = useOptimisticSession()
   const isSignedIn = !!session?.user
+  const { playHintSeen, setPlayHintSeen } = usePrefsStore()
+  const showPlayHint = isSignedIn && !playHintSeen
 
   const [aivaiExpanded, setAivaiExpanded] = useState(false)
   const [botExpanded, setBotExpanded] = useState(false)
@@ -305,6 +324,11 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     setBestOf(localBestOf)
     setMisereMode(localMisere)
     setBoardTheme(localTheme)
+  }
+
+  function handlePlayHintDismiss() {
+    setPlayHintSeen()
+    getToken().then(token => { if (token) api.users.markPlayHint(token).catch(() => {}) })
   }
 
   function handleChallengeBot(bot) {
@@ -413,6 +437,8 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 setOpenSection={setOpenSection}
                 communitySearch={communitySearch}
                 setCommunitySearch={setCommunitySearch}
+                showPlayHint={showPlayHint}
+                onPlayHintDismiss={handlePlayHintDismiss}
               />
             )}
 

@@ -244,6 +244,15 @@
   animation: xo-page-in 120ms ease-out both;
 }
 
+@keyframes hint-bob {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+.hint-bob {
+  animation: hint-bob 0.9s ease-in-out infinite;
+  display: inline-block;
+}
+
 @keyframes guide-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.8), 0 0 10px 3px rgba(99, 102, 241, 0.5); }
   50%       { box-shadow: 0 0 0 7px rgba(99, 102, 241, 0), 0 0 18px 6px rgba(99, 102, 241, 0.6); }

@@ -4,8 +4,8 @@ import { resolveUsers, ok, fail } from '../lib/safety.js'
 export function hintsCommand(program) {
   program
     .command('hints <username|email|pattern>')
-    .description('Show or reset Getting Started hint flags (popup + finger). Accepts a regex pattern to match multiple users.')
-    .option('--reset', 'Clear hints so popup and finger show again on next sign-in')
+    .description('Show or reset hint flags (Guide popup, play-page finger). Accepts a regex pattern to match multiple users.')
+    .option('--reset', 'Clear all hints so they show again on next visit')
     .action(async (usernameOrEmail, opts) => {
       const users = await resolveUsers(db, usernameOrEmail)
       if (users.length === 0) fail(`no users found matching "${usernameOrEmail}"`)
@@ -16,16 +16,16 @@ export function hintsCommand(program) {
           : {}
 
         if (opts.reset) {
-          const { faqHintSeen: _, ...rest } = prefs
+          const { faqHintSeen: _f, playHintSeen: _p, ...rest } = prefs
           await db.user.update({
             where: { id: user.id },
             data:  { preferences: rest },
           })
-          ok(`"${user.username}" hints reset — popup and finger will show on next sign-in`)
+          ok(`"${user.username}" hints reset — Guide popup, FAQ finger, and play-page finger will show on next visit`)
         } else {
-          const seen = !!prefs.faqHintSeen
           console.log(`"${user.username}" hints:`)
-          console.log(`  faqHintSeen: ${seen} — popup + finger will ${seen ? 'NOT show' : 'show'} on next sign-in`)
+          console.log(`  faqHintSeen:  ${!!prefs.faqHintSeen}  — Guide popup + FAQ finger will ${prefs.faqHintSeen ? 'NOT show' : 'show'} on next sign-in`)
+          console.log(`  playHintSeen: ${!!prefs.playHintSeen} — play-page finger will ${prefs.playHintSeen ? 'NOT show' : 'show'} on next visit`)
         }
       }
     })

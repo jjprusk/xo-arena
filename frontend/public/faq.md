@@ -109,12 +109,12 @@ or in community bot matches.
 ### What algorithms are available?
 Six brain architectures are available when creating a bot:
 
-- **DQN** — Deep Q-Network
-- **AlphaZero** — Monte Carlo Tree Search with neural network guidance
-- **Policy Gradient** — direct policy optimization
 - **Q-Learning** — classic tabular reinforcement learning
 - **SARSA** — on-policy variant of Q-Learning
 - **Monte Carlo** — episode-based value estimation
+- **Policy Gradient** — direct policy optimization
+- **DQN** — Deep Q-Network
+- **AlphaZero** — Monte Carlo Tree Search with neural network guidance
 
 ### How many bots can I create?
 By default each account can own up to **5 bots**.
