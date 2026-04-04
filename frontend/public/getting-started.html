@@ -296,6 +296,8 @@
       hint.addEventListener('animationend', function () { hint.style.display = 'none' }, { once: true })
     }, 4000)
   })
+  // Tell the parent that this listener is now registered and ready
+  window.parent.postMessage({ type: 'getting-started-ready' }, '*')
 
   function haveFun() {
     // Pop the trophy balloon
