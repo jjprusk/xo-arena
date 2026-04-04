@@ -16,12 +16,20 @@ export default function GettingStartedModal({ isOpen, onClose, showHint = false 
     if (!isOpen) hintSentRef.current = false
   }, [isOpen])
 
-  function handleLoad() {
-    if (showHint && !hintSentRef.current) {
+  // Listen for the iframe's 'ready' handshake, then send the hint trigger.
+  // This is more reliable than onLoad because we know the message listener
+  // inside getting-started.html is registered before we send 'show-faq-hint'.
+  useEffect(() => {
+    if (!isOpen || !showHint) return
+    function onMessage(e) {
+      if (e.data?.type !== 'getting-started-ready') return
+      if (hintSentRef.current) return
       hintSentRef.current = true
       iframeRef.current?.contentWindow?.postMessage({ type: 'show-faq-hint' }, '*')
     }
-  }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [isOpen, showHint])
 
   if (!isOpen) return null
 
@@ -48,7 +56,6 @@ export default function GettingStartedModal({ isOpen, onClose, showHint = false 
           src="/getting-started.html"
           title="Getting Started"
           scrolling="no"
-          onLoad={handleLoad}
           style={{ width: '100%', aspectRatio: '960/720', border: 'none', display: 'block', maxHeight: '85vh' }}
         />
       </div>

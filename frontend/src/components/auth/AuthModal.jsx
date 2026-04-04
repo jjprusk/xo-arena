@@ -185,8 +185,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                 <div className="pt-2">
                   <button
                     onClick={() => switchView('sign-in')}
-                    className="text-sm"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="text-sm underline"
+                    style={{ color: 'var(--color-blue-600)' }}
                   >
                     Back to sign in
                   </button>
@@ -225,8 +225,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                   <button
                     type="button"
                     onClick={() => switchView('sign-in')}
-                    className="text-sm"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="text-sm underline"
+                    style={{ color: 'var(--color-blue-600)' }}
                   >
                     Back to sign in
                   </button>
@@ -245,8 +245,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                 <div className="pt-2">
                   <button
                     onClick={() => switchView('sign-in')}
-                    className="text-sm"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="text-sm underline"
+                    style={{ color: 'var(--color-blue-600)' }}
                   >
                     Back to sign in
                   </button>
