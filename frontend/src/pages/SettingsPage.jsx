@@ -1,6 +1,11 @@
 import React from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { useThemeStore } from '../store/themeStore.js'
 import { useSoundStore, SOUND_PACKS } from '../store/soundStore.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { getToken } from '../lib/getToken.js'
+import { api } from '../lib/api.js'
+import { usePrefsStore } from '../store/prefsStore.js'
 
 const THEMES = [
   { value: 'light', label: 'Light', preview: '☀' },
@@ -12,9 +17,33 @@ const THEMES = [
 export default function SettingsPage() {
   const { theme, setTheme } = useThemeStore()
   const { muted, toggleMute, volume, setVolume, soundPack, setSoundPack, play } = useSoundStore()
+  const { data: session } = useOptimisticSession()
+  const { showGuideButton, setShowGuideButton } = usePrefsStore()
+  const location = useLocation()
+  const fromProfile = location.state?.from === '/profile'
+
+  async function handleGuideToggle() {
+    const next = !showGuideButton
+    setShowGuideButton(next)
+    try {
+      const token = await getToken()
+      await api.users.updatePreferences({ showGuideButton: next }, token)
+    } catch {
+      setShowGuideButton(!next) // revert on error
+    }
+  }
 
   return (
     <div className="max-w-lg mx-auto space-y-8">
+      {fromProfile && (
+        <Link
+          to="/profile"
+          className="inline-flex items-center gap-1 text-sm font-medium transition-opacity hover:opacity-70"
+          style={{ color: 'var(--color-blue-600)' }}
+        >
+          ‹ Profile
+        </Link>
+      )}
       <PageHeader title="Settings" />
 
       {/* Appearance */}
@@ -38,6 +67,31 @@ export default function SettingsPage() {
           ))}
         </div>
       </section>
+
+      {/* Interface (signed-in only) */}
+      {session && (
+        <section className="space-y-3">
+          <SectionLabel>Interface</SectionLabel>
+          <div
+            className="rounded-xl border p-5"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium">Show Guide button</span>
+                <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>Display the Guide shortcut in the header</p>
+              </div>
+              <button
+                onClick={handleGuideToggle}
+                className={`relative w-12 h-6 rounded-full transition-colors ${showGuideButton ? 'bg-[var(--color-blue-600)]' : 'bg-[var(--color-gray-300)]'}`}
+                aria-label={showGuideButton ? 'Hide Guide button' : 'Show Guide button'}
+              >
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${showGuideButton ? 'left-7' : 'left-1'}`} />
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* About */}
       <section className="space-y-3">

@@ -18,6 +18,7 @@ import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
 import GettingStartedModal from '../GettingStartedModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
+import { usePrefsStore } from '../../store/prefsStore.js'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -26,7 +27,7 @@ const NAV_LINKS = [
   { to: '/play', label: 'Play' },
   { to: '/gym', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
-  { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
+  { to: '/leaderboard', label: 'Rankings', desktopOnly: true },
 ]
 
 const BOTTOM_NAV = [
@@ -41,7 +42,7 @@ const MENU_LINKS = [
   { to: '/play',        label: 'Play',        icon: '⊞' },
   { to: '/gym',         label: 'Gym',         icon: '⚡' },
   { to: '/puzzles',     label: 'Puzzles',      icon: '◈' },
-  { to: '/leaderboard', label: 'Leaderboard',  icon: '★' },
+  { to: '/leaderboard', label: 'Rankings',     icon: '★' },
   { to: '/stats',       label: 'Stats',        icon: '◎' },
   { to: '/profile',     label: 'Profile',      icon: '◉' },
   { to: '/about',       label: 'About',        icon: '○' },
@@ -91,7 +92,7 @@ export default function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [guideOpen, setGuideOpen] = useState(false)
   const [guideShowHint, setGuideShowHint] = useState(false)
-  const [guideActive, setGuideActive] = useState(false)
+  const { showGuideButton, setPrefs } = usePrefsStore()
   const prevUserId = useRef(null)
 
   // Close the mobile menu whenever the user navigates
@@ -101,31 +102,25 @@ export default function AppLayout() {
   useEffect(() => {
     const userId = session?.user?.id ?? null
     if (userId && userId !== prevUserId.current) {
-      // User just signed in (or changed)
       rolesStore.fetch()
-      if (localStorage.getItem(`xo_guide_active_${userId}`) === '1') setGuideActive(true)
       prevUserId.current = userId
     } else if (!userId && prevUserId.current) {
-      // User just signed out — end first session
-      localStorage.removeItem(`xo_guide_active_${prevUserId.current}`)
-      setGuideActive(false)
       rolesStore.clear()
       prevUserId.current = null
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-open Getting Started guide on first ever sign-in; show hint if not yet seen
+  // Load preferences and auto-open guide on first ever sign-in
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
     async function maybeAutoOpen() {
       try {
         const token = await getToken()
-        const { faqHintSeen } = await api.users.getHints(token)
+        const { faqHintSeen, showGuideButton: sgb } = await api.users.getHints(token)
+        setPrefs({ showGuideButton: sgb })
         if (!faqHintSeen) {
           api.users.markFaqHint(token).catch(() => {})
-          localStorage.setItem(`xo_guide_active_${userId}`, '1')
-          setGuideActive(true)
           setGuideShowHint(true)
           setGuideOpen(true)
         }
@@ -242,7 +237,7 @@ export default function AppLayout() {
               XO Arena
             </span>
           </Link>
-          {guideActive && (
+          {session && showGuideButton && (
             <button
               onClick={() => setGuideOpen(true)}
               aria-label="Guide"
@@ -254,7 +249,7 @@ export default function AppLayout() {
               }}
             >
               <span>✦</span>
-              <span className="hidden sm:inline">Guide</span>
+              <span>Guide</span>
             </button>
           )}
         </div>

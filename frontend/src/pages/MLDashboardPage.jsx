@@ -35,6 +35,7 @@ export default function GymPage() {
 
   const [domainUserId, setDomainUserId]   = useState(null)
   const [bots, setBots]                   = useState([])
+  const [botsLoaded, setBotsLoaded]       = useState(false)
   const [selectedBotId, setSelectedBotId] = useState(null)
   const [botModels, setBotModels]         = useState({})   // { botId: mlModel }
   const [modelLoading, setModelLoading]   = useState(false)
@@ -83,6 +84,7 @@ export default function GymPage() {
     const token = await getToken()
     const { bots: bs } = await api.bots.list({ ownerId: domainUserId, token })
     setBots(bs || [])
+    setBotsLoaded(true)
     try { sessionStorage.setItem(cacheKey, JSON.stringify(bs || [])) } catch {}
   }, [domainUserId])
 
@@ -188,17 +190,19 @@ export default function GymPage() {
         <Card>
           <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>Sign in to access the Gym.</p>
         </Card>
+      ) : botsLoaded && bots.length === 0 ? (
+        <div className="text-center py-20">
+          <p className="text-base font-medium mb-2" style={{ color: 'var(--text-primary)' }}>You don't have any bots yet.</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Go to your <Link to="/profile" className="underline hover:opacity-80" style={{ color: 'var(--color-blue-600)' }}>Profile</Link> to create one.
+          </p>
+        </div>
       ) : (
         <div className="grid lg:grid-cols-[280px_1fr] gap-6">
           {/* Bot sidebar */}
           <aside className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>Your Bots</p>
-            {bots.length === 0 ? (
-              <div className="text-center py-6 px-3">
-                <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>No bots yet.</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Go to Profile → Bots to create bots.</p>
-              </div>
-            ) : (
+            {bots.length === 0 ? null : (
               <ListTable maxHeight="clamp(120px, calc(100dvh - 520px), 500px)">
                 <thead>
                   <tr>
