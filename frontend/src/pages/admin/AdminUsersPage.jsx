@@ -127,6 +127,7 @@ export default function AdminUsersPage() {
           <option value="online">Online</option>
           <option value="active">Active</option>
           <option value="banned">Banned</option>
+          <option value="inactive">Inactive &gt; 7 days</option>
         </select>
       </div>
 
@@ -143,6 +144,7 @@ export default function AdminUsersPage() {
               <ListTh align="right">ELO</ListTh>
               <ListTh align="right" className="hidden md:table-cell">Games</ListTh>
               <ListTh align="center">Status</ListTh>
+              <ListTh align="right" className="hidden lg:table-cell">Last Active</ListTh>
               <ListTh />
             </tr>
           </thead>
@@ -236,6 +238,13 @@ export default function AdminUsersPage() {
                     </div>
                   </ListTd>
 
+                  {/* Last active */}
+                  <ListTd align="right" className="hidden lg:table-cell">
+                    <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                      {formatLastActive(u.lastActiveAt)}
+                    </span>
+                  </ListTd>
+
                   {/* Actions */}
                   <ListTd>
                     <div className="flex items-center gap-1.5 justify-end flex-wrap" onClick={e => e.stopPropagation()}>
@@ -323,6 +332,20 @@ export default function AdminUsersPage() {
 }
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
+
+function formatLastActive(isoString) {
+  if (!isoString) return 'Never'
+  const d = new Date(isoString)
+  const diffMs = Date.now() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1)  return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24)   return `${diffH}h ago`
+  const diffD = Math.floor(diffH / 24)
+  if (diffD < 7)    return `${diffD}d ago`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: diffD > 365 ? 'numeric' : undefined })
+}
 
 function formatSignedIn(isoString) {
   if (!isoString) return ''

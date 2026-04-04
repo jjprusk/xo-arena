@@ -959,6 +959,135 @@ describe('PATCH /api/v1/admin/aivai-config', () => {
   })
 })
 
+// ─── Idle config (PvP room timers) ───────────────────────────────────────────
+
+describe('GET /api/v1/admin/idle-config', () => {
+  it('returns all three idle thresholds', async () => {
+    getSystemConfig
+      .mockResolvedValueOnce(120)
+      .mockResolvedValueOnce(60)
+      .mockResolvedValueOnce(600)
+
+    const res = await request(app).get('/api/v1/admin/idle-config')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ idleWarnSeconds: 120, idleGraceSeconds: 60, spectatorIdleSeconds: 600 })
+  })
+})
+
+describe('PATCH /api/v1/admin/idle-config', () => {
+  it('updates idleWarnSeconds', async () => {
+    setSystemConfig.mockResolvedValue()
+    getSystemConfig.mockResolvedValue(180)
+
+    const res = await request(app)
+      .patch('/api/v1/admin/idle-config')
+      .send({ idleWarnSeconds: 180 })
+
+    expect(res.status).toBe(200)
+    expect(setSystemConfig).toHaveBeenCalledWith('game.idleWarnSeconds', 180)
+  })
+
+  it('updates idleGraceSeconds', async () => {
+    setSystemConfig.mockResolvedValue()
+    getSystemConfig.mockResolvedValue(90)
+
+    const res = await request(app)
+      .patch('/api/v1/admin/idle-config')
+      .send({ idleGraceSeconds: 90 })
+
+    expect(res.status).toBe(200)
+    expect(setSystemConfig).toHaveBeenCalledWith('game.idleGraceSeconds', 90)
+  })
+
+  it('updates spectatorIdleSeconds', async () => {
+    setSystemConfig.mockResolvedValue()
+    getSystemConfig.mockResolvedValue(300)
+
+    const res = await request(app)
+      .patch('/api/v1/admin/idle-config')
+      .send({ spectatorIdleSeconds: 300 })
+
+    expect(res.status).toBe(200)
+    expect(setSystemConfig).toHaveBeenCalledWith('game.spectatorIdleSeconds', 300)
+  })
+
+  it('rejects idleWarnSeconds below 10', async () => {
+    const res = await request(app)
+      .patch('/api/v1/admin/idle-config')
+      .send({ idleWarnSeconds: 5 })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/idleWarnSeconds/)
+  })
+
+  it('rejects idleGraceSeconds below 10', async () => {
+    const res = await request(app)
+      .patch('/api/v1/admin/idle-config')
+      .send({ idleGraceSeconds: 0 })
+
+    expect(res.status).toBe(400)
+  })
+})
+
+// ─── Session idle config (app-wide session timeout) ──────────────────────────
+
+describe('GET /api/v1/admin/session-config', () => {
+  it('returns idleWarnMinutes and idleGraceMinutes', async () => {
+    getSystemConfig
+      .mockResolvedValueOnce(30)
+      .mockResolvedValueOnce(5)
+
+    const res = await request(app).get('/api/v1/admin/session-config')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ idleWarnMinutes: 30, idleGraceMinutes: 5 })
+  })
+})
+
+describe('PATCH /api/v1/admin/session-config', () => {
+  it('updates idleWarnMinutes', async () => {
+    setSystemConfig.mockResolvedValue()
+    getSystemConfig.mockResolvedValue(45)
+
+    const res = await request(app)
+      .patch('/api/v1/admin/session-config')
+      .send({ idleWarnMinutes: 45 })
+
+    expect(res.status).toBe(200)
+    expect(setSystemConfig).toHaveBeenCalledWith('session.idleWarnMinutes', 45)
+  })
+
+  it('updates idleGraceMinutes', async () => {
+    setSystemConfig.mockResolvedValue()
+    getSystemConfig.mockResolvedValue(10)
+
+    const res = await request(app)
+      .patch('/api/v1/admin/session-config')
+      .send({ idleGraceMinutes: 10 })
+
+    expect(res.status).toBe(200)
+    expect(setSystemConfig).toHaveBeenCalledWith('session.idleGraceMinutes', 10)
+  })
+
+  it('rejects idleWarnMinutes below 1', async () => {
+    const res = await request(app)
+      .patch('/api/v1/admin/session-config')
+      .send({ idleWarnMinutes: 0 })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/idleWarnMinutes/)
+  })
+
+  it('rejects idleGraceMinutes below 1', async () => {
+    const res = await request(app)
+      .patch('/api/v1/admin/session-config')
+      .send({ idleGraceMinutes: -1 })
+
+    expect(res.status).toBe(400)
+  })
+})
+
 // ─── Log retention ────────────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/logs/limit', () => {

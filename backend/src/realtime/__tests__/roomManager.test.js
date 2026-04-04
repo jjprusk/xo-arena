@@ -190,3 +190,139 @@ describe('RoomManager — closeRoom', () => {
     expect(rm.getRoom(room.slug)).toBeNull()
   })
 })
+
+describe('RoomManager — resetIdleTimer (player)', () => {
+  let rm, slug
+
+  beforeEach(() => {
+    rm = makeManager()
+    const room = rm.createRoom({ hostSocketId: 'host1' })
+    slug = room.slug
+    rm.joinRoom({ slug, guestSocketId: 'guest1' })
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+  })
+
+  it('calls onWarn after warnMs', () => {
+    const onWarn = vi.fn()
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 1000, graceMs: 500, onWarn })
+    vi.advanceTimersByTime(999)
+    expect(onWarn).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onWarn).toHaveBeenCalledWith({ socketId: 'host1', graceMs: 500 })
+  })
+
+  it('calls onAbandon after warnMs + graceMs with correct payload', () => {
+    const onAbandon = vi.fn()
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 1000, graceMs: 500, onAbandon })
+    vi.advanceTimersByTime(1500)
+    expect(onAbandon).toHaveBeenCalledWith(
+      expect.objectContaining({ absentSocketId: 'host1' })
+    )
+  })
+
+  it('closes the room when onAbandon fires for a player', () => {
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 100, graceMs: 100, onAbandon: vi.fn() })
+    vi.advanceTimersByTime(200)
+    expect(rm.getRoom(slug)).toBeNull()
+  })
+
+  it('allSocketIds snapshot includes both players and spectators', () => {
+    rm.joinAsSpectator({ slug, socketId: 'spec1' })
+    const onAbandon = vi.fn()
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 100, graceMs: 100, onAbandon })
+    vi.advanceTimersByTime(200)
+    const { allSocketIds } = onAbandon.mock.calls[0][0]
+    expect(allSocketIds).toContain('host1')
+    expect(allSocketIds).toContain('guest1')
+    expect(allSocketIds).toContain('spec1')
+  })
+
+  it('resetting the timer before warn cancels the original and restarts', () => {
+    const onWarn = vi.fn()
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 1000, graceMs: 500, onWarn })
+    vi.advanceTimersByTime(800)
+    // Reset with a fresh 1000ms warn window
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 1000, graceMs: 500, onWarn })
+    vi.advanceTimersByTime(400) // only 400ms into the NEW timer — should not fire
+    expect(onWarn).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(600) // now 1000ms into the new timer
+    expect(onWarn).toHaveBeenCalledTimes(1)
+  })
+
+  it('resetting the timer during the grace period cancels the grace', () => {
+    const onAbandon = vi.fn()
+    const onWarn    = vi.fn()
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 100, graceMs: 1000, onWarn, onAbandon })
+    vi.advanceTimersByTime(200) // warn fires
+    expect(onWarn).toHaveBeenCalledTimes(1)
+    // Reset during grace — this cancels the grace timer
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 5000, graceMs: 1000, onWarn, onAbandon })
+    vi.advanceTimersByTime(1200) // would have triggered grace on old timer
+    expect(onAbandon).not.toHaveBeenCalled()
+  })
+
+  it('does nothing if room does not exist', () => {
+    const onAbandon = vi.fn()
+    rm.resetIdleTimer({ socketId: 'unknown-socket', warnMs: 100, graceMs: 100, onAbandon })
+    vi.advanceTimersByTime(300)
+    expect(onAbandon).not.toHaveBeenCalled()
+  })
+
+  it('does nothing for a room in waiting status', () => {
+    const waitRm = makeManager()
+    const waitRoom = waitRm.createRoom({ hostSocketId: 'waiting-host' })
+    const onWarn = vi.fn()
+    waitRm.resetIdleTimer({ socketId: 'waiting-host', warnMs: 100, graceMs: 100, onWarn })
+    vi.advanceTimersByTime(300)
+    expect(onWarn).not.toHaveBeenCalled()
+  })
+})
+
+describe('RoomManager — resetIdleTimer (spectator)', () => {
+  let rm, slug
+
+  beforeEach(() => {
+    rm = makeManager()
+    const room = rm.createRoom({ hostSocketId: 'host1' })
+    slug = room.slug
+    rm.joinRoom({ slug, guestSocketId: 'guest1' })
+    rm.joinAsSpectator({ slug, socketId: 'spec1' })
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+  })
+
+  it('calls onKick (not onAbandon) for a spectator after warn + grace', () => {
+    const onAbandon = vi.fn()
+    const onKick    = vi.fn()
+    rm.resetIdleTimer({ socketId: 'spec1', warnMs: 100, graceMs: 100, onAbandon, onKick })
+    vi.advanceTimersByTime(200)
+    expect(onKick).toHaveBeenCalledWith({ socketId: 'spec1' })
+    expect(onAbandon).not.toHaveBeenCalled()
+  })
+
+  it('removes spectator from the room without closing it', () => {
+    rm.resetIdleTimer({ socketId: 'spec1', warnMs: 100, graceMs: 100, onKick: vi.fn() })
+    vi.advanceTimersByTime(200)
+    const room = rm.getRoom(slug)
+    expect(room).not.toBeNull()
+    expect(room.spectatorIds.has('spec1')).toBe(false)
+  })
+})
+
+describe('RoomManager — closeRoom clears idle timers', () => {
+  it('does not fire onAbandon after closeRoom is called', () => {
+    const rm = makeManager()
+    const room = rm.createRoom({ hostSocketId: 'host1' })
+    rm.joinRoom({ slug: room.slug, guestSocketId: 'guest1' })
+    const onAbandon = vi.fn()
+    rm.resetIdleTimer({ socketId: 'host1', warnMs: 100, graceMs: 100, onAbandon })
+    rm.closeRoom(room.slug)
+    vi.advanceTimersByTime(300)
+    expect(onAbandon).not.toHaveBeenCalled()
+  })
+})

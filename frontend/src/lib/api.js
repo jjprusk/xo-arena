@@ -147,6 +147,8 @@ export const api = {
     eloHistory: (id) => api.get(`/users/${id}/elo-history`),
     games: (id, page = 1) => api.get(`/users/${id}/games?page=${page}&limit=20`),
     mlProfiles: (id, token) => api.get(`/users/${id}/ml-profiles`, token),
+    getHints: (token) => api.get('/users/me/hints', token),
+    markFaqHint: (token) => api.post('/users/me/hints/faq', {}, token),
   },
 
   games: {
@@ -212,10 +214,15 @@ export const api = {
     setBotLimits: (body, token) => api.patch('/admin/bot-limits', body, token),
     getAivaiConfig: (token) => api.get('/admin/aivai-config', token),
     setAivaiConfig: (body, token) => api.patch('/admin/aivai-config', body, token),
+    getIdleConfig: (token) => api.get('/admin/idle-config', token),
+    setIdleConfig: (body, token) => api.patch('/admin/idle-config', body, token),
+    getSessionConfig: (token) => api.get('/admin/session-config', token),
+    setSessionConfig: (body, token) => api.patch('/admin/session-config', body, token),
   },
 
   config: {
     getAivai: () => api.get('/config/aivai'),
+    getSessionIdle: () => api.get('/config/session-idle'),
   },
 
   botGames: {

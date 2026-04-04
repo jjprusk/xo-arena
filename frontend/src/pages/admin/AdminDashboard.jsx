@@ -251,6 +251,203 @@ function LogRetentionPanel() {
   )
 }
 
+function IdleConfigPanel() {
+  const [form, setForm]   = useState({ idleWarnSeconds: '', idleGraceSeconds: '', spectatorIdleSeconds: '' })
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const token = await getToken()
+        const d = await api.admin.getIdleConfig(token)
+        setForm({ idleWarnSeconds: d.idleWarnSeconds, idleGraceSeconds: d.idleGraceSeconds, spectatorIdleSeconds: d.spectatorIdleSeconds })
+        setLoaded(true)
+      } catch { /* non-fatal */ }
+    }
+    load()
+  }, [])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    setSaved(false)
+    try {
+      const token = await getToken()
+      const d = await api.admin.setIdleConfig({
+        idleWarnSeconds: form.idleWarnSeconds,
+        idleGraceSeconds: form.idleGraceSeconds,
+        spectatorIdleSeconds: form.spectatorIdleSeconds,
+      }, token)
+      setForm({ idleWarnSeconds: d.idleWarnSeconds, idleGraceSeconds: d.idleGraceSeconds, spectatorIdleSeconds: d.spectatorIdleSeconds })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch { /* non-fatal */ } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!loaded) return null
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Inactivity Timers</h2>
+      <div
+        className="rounded-xl border p-4 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      >
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          All values are in seconds. Player rooms are abandoned (no result) when a player is idle too long; spectators are silently kicked.
+        </p>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Idle warn (seconds)</span>
+              <input
+                type="number"
+                min="10"
+                value={form.idleWarnSeconds}
+                onChange={e => setForm(f => ({ ...f, idleWarnSeconds: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Time since last move before "Still Active?" popup (default 120)</span>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Grace period (seconds)</span>
+              <input
+                type="number"
+                min="10"
+                value={form.idleGraceSeconds}
+                onChange={e => setForm(f => ({ ...f, idleGraceSeconds: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Time from warning before removal if no response (default 60)</span>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Spectator idle (seconds)</span>
+              <input
+                type="number"
+                min="10"
+                value={form.spectatorIdleSeconds}
+                onChange={e => setForm(f => ({ ...f, spectatorIdleSeconds: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Warn threshold for spectators; grace period reuses the value above (default 600)</span>
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {saved && <span className="text-xs font-semibold" style={{ color: 'var(--color-teal-600)' }}>✓ Saved</span>}
+          </div>
+        </form>
+      </div>
+    </section>
+  )
+}
+
+function SessionIdlePanel() {
+  const [form, setForm]     = useState({ idleWarnMinutes: '', idleGraceMinutes: '' })
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const token = await getToken()
+        const d = await api.admin.getSessionConfig(token)
+        setForm({ idleWarnMinutes: d.idleWarnMinutes, idleGraceMinutes: d.idleGraceMinutes })
+        setLoaded(true)
+      } catch { /* non-fatal */ }
+    }
+    load()
+  }, [])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    setSaved(false)
+    try {
+      const token = await getToken()
+      const d = await api.admin.setSessionConfig({
+        idleWarnMinutes: form.idleWarnMinutes,
+        idleGraceMinutes: form.idleGraceMinutes,
+      }, token)
+      setForm({ idleWarnMinutes: d.idleWarnMinutes, idleGraceMinutes: d.idleGraceMinutes })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch { /* non-fatal */ } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!loaded) return null
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Session Idle Timeout</h2>
+      <div
+        className="rounded-xl border p-4 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      >
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          App-wide idle timeout for authenticated users on any page. Suppressed during active PvP games and Gym training. Values are in minutes.
+        </p>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Idle warn (minutes)</span>
+              <input
+                type="number"
+                min="1"
+                value={form.idleWarnMinutes}
+                onChange={e => setForm(f => ({ ...f, idleWarnMinutes: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Inactivity before "Still there?" popup (default 30)</span>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Grace period (minutes)</span>
+              <input
+                type="number"
+                min="1"
+                value={form.idleGraceMinutes}
+                onChange={e => setForm(f => ({ ...f, idleGraceMinutes: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Time from warning before auto sign-out (default 5)</span>
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {saved && <span className="text-xs font-semibold" style={{ color: 'var(--color-teal-600)' }}>✓ Saved</span>}
+          </div>
+        </form>
+      </div>
+    </section>
+  )
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -290,6 +487,8 @@ export default function AdminDashboard() {
 
       <MLLimitsPanel />
       <LogRetentionPanel />
+      <IdleConfigPanel />
+      <SessionIdlePanel />
 
       <section className="space-y-2">
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Quick links</h2>

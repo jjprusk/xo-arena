@@ -76,6 +76,7 @@ vi.mock('../../auth/UserButton.jsx', () => ({ default: () => null }))
 vi.mock('../../auth/SignedIn.jsx',   () => ({ default: ({ children }) => <>{children}</> }))
 vi.mock('../../auth/SignedOut.jsx',  () => ({ default: () => null }))
 vi.mock('../../feedback/FeedbackButton.jsx', () => ({ default: () => null }))
+vi.mock('../IdleLogoutManager.jsx', () => ({ default: () => null }))
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────────
 

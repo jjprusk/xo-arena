@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
 import { usePvpStore } from '../store/pvpStore.js'
 import { cachedFetch } from '../lib/api.js'
@@ -7,14 +7,19 @@ import ModeSelection from '../components/game/ModeSelection.jsx'
 import GameBoard from '../components/game/GameBoard.jsx'
 import RoomLobby from '../components/room/RoomLobby.jsx'
 import PvPBoard from '../components/room/PvPBoard.jsx'
+import IdleWarningPopup from '../components/pvp/IdleWarningPopup.jsx'
 
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const joinSlug = searchParams.get('join')
   const spectateSlug = searchParams.get('spectate')
 
   const { status: pvaiStatus, mode: pvaiMode } = useGameStore()
-  const { status: pvpStatus, joinRoom, role, slug, isAutoRoom, displayName } = usePvpStore()
+  const {
+    status: pvpStatus, joinRoom, role, slug, isAutoRoom, displayName,
+    abandoned, kicked, myMark, reset,
+  } = usePvpStore()
 
   const inviteUrl = slug ? `${window.location.origin}/play?join=${slug}` : ''
 
@@ -47,6 +52,23 @@ export default function PlayPage() {
     }
   }, [pvpStatus])
 
+  // Room abandoned (idle) — navigate to lobby after brief notification
+  useEffect(() => {
+    if (!abandoned) return
+    const id = setTimeout(() => {
+      reset()
+      navigate('/play', { replace: true })
+    }, 3000)
+    return () => clearTimeout(id)
+  }, [abandoned])
+
+  // Kicked (spectator idle) — navigate away immediately
+  useEffect(() => {
+    if (!kicked) return
+    reset()
+    navigate('/play', { replace: true })
+  }, [kicked])
+
   // PvP flow — only show RoomLobby for manually created rooms
   if (pvpStatus === 'waiting' && role === 'host' && !isAutoRoom) return <RoomLobby />
   if (pvpStatus === 'waiting' && role === 'guest') return (
@@ -55,11 +77,34 @@ export default function PlayPage() {
       <p style={{ color: 'var(--text-secondary)' }}>Joining room…</p>
     </div>
   )
-  if (pvpStatus === 'playing' || pvpStatus === 'finished') return (
-    <div className="flex flex-col items-center w-full max-w-md mx-auto">
-      <PvPBoard />
-    </div>
-  )
+
+  if (pvpStatus === 'playing' || pvpStatus === 'finished') {
+    // Room abandoned — show the message overlay instead of the board
+    if (abandoned) {
+      const iSelf = myMark != null  // players have a mark; spectators don't
+      const wasMe = iSelf && abandoned.absentUserId === null  // we can't easily compare without userId
+      return (
+        <div className="flex flex-col items-center gap-4 py-16">
+          <div className="text-4xl">💤</div>
+          <p className="text-lg font-semibold text-center" style={{ color: 'var(--text-primary)' }}>
+            Room ended due to inactivity
+          </p>
+          <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
+            No result recorded. Returning to lobby…
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <>
+        <div className="flex flex-col items-center w-full max-w-md mx-auto">
+          <PvPBoard />
+        </div>
+        <IdleWarningPopup />
+      </>
+    )
+  }
 
   // PvAI / AI-vs-AI flow
   const inGame = pvaiStatus !== 'idle' && (pvaiMode === 'pvai' || pvaiMode === 'aivai')

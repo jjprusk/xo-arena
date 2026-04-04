@@ -41,6 +41,16 @@
   }
   #haveFunBalloon { transform-origin: 468px 578px; transform-box: fill-box; }
   #haveFunBalloon.pop { animation: trophy-pop 0.6s ease-out; }
+  @keyframes fingerBob {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+  @keyframes hintFadeOut {
+    to { opacity: 0; }
+  }
+  #faqHint { transform-origin: 220px 294px; display: none; }
+  #faqHint.bobbing { animation: fingerBob 0.7s ease-in-out infinite; }
+  #faqHint.fading  { animation: hintFadeOut 0.8s ease-out forwards; }
 </style>
 </head>
 <body>
@@ -197,6 +207,14 @@
   <text x="220" y="262" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Read the FAQ</text>
 </a>
 
+<!-- ── FAQ hint finger (first-open only) ── -->
+<g id="faqHint">
+  <text x="220" y="284" text-anchor="middle" dominant-baseline="middle"
+        font-size="26" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">👆</text>
+  <text x="220" y="307" text-anchor="middle" font-size="11.5" font-weight="700" fill="#10b981"
+        letter-spacing="0.5">Click here</text>
+</g>
+
 <!-- ── Step 3: Play vs Bots ── cx=555 cy=220 -->
 <a href="/play" target="_top" class="play-btn">
   <circle cx="555" cy="220" r="82" fill="#ec4899" opacity="0.07"/>
@@ -265,6 +283,20 @@
 
 </svg>
 <script>
+  // ── FAQ hint: shown only when the parent app sends 'show-faq-hint' ──────────
+  window.addEventListener('message', function (e) {
+    if (!e.data || e.data.type !== 'show-faq-hint') return
+    var hint = document.getElementById('faqHint')
+    if (!hint) return
+    hint.style.display = ''
+    hint.classList.add('bobbing')
+    setTimeout(function () {
+      hint.classList.remove('bobbing')
+      hint.classList.add('fading')
+      hint.addEventListener('animationend', function () { hint.style.display = 'none' }, { once: true })
+    }, 4000)
+  })
+
   function haveFun() {
     // Pop the trophy balloon
     const g = document.getElementById('haveFunBalloon')

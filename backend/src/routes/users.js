@@ -161,6 +161,42 @@ router.delete('/me', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/me/hints
+ * Returns per-user hint flags so the client knows what to show.
+ */
+router.get('/me/hints', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { preferences: true },
+    })
+    const prefs = (user?.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    res.json({ faqHintSeen: !!prefs.faqHintSeen })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/users/me/hints/faq
+ * Marks the FAQ hint as seen — stored inside the user's preferences JSON.
+ */
+router.post('/me/hints/faq', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true, preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, faqHintSeen: true } } })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/users/:id
  * Public profile (read-only). Returns sanitized user data.
  */

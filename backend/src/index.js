@@ -25,6 +25,7 @@ import supportRouter from './routes/support.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
 import { getSystemConfig } from './services/mlService.js'
+import { startActivityFlushJob } from './services/activityService.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -52,13 +53,25 @@ app.get('/api/version', (_req, res) => {
   res.json({ version })
 })
 
-// Public config endpoint (no auth required)
+// Public config endpoints (no auth required)
 app.get('/api/v1/config/aivai', async (_req, res) => {
   try {
     const maxGames = await getSystemConfig('aivai.maxGames', 5)
     res.json({ maxGames })
   } catch {
     res.json({ maxGames: 5 })
+  }
+})
+
+app.get('/api/v1/config/session-idle', async (_req, res) => {
+  try {
+    const [idleWarnMinutes, idleGraceMinutes] = await Promise.all([
+      getSystemConfig('session.idleWarnMinutes',  30),
+      getSystemConfig('session.idleGraceMinutes',  5),
+    ])
+    res.json({ idleWarnMinutes, idleGraceMinutes })
+  } catch {
+    res.json({ idleWarnMinutes: 30, idleGraceMinutes: 5 })
   }
 })
 
@@ -74,6 +87,9 @@ try {
 
 // Pre-warm the DB connection pool so first requests don't pay connection cost
 db.$connect().catch((err) => logger.warn('DB pre-connect failed', { err }))
+
+// Start background activity flush job (Redis → Postgres)
+startActivityFlushJob()
 
 attachSocketIO(server).then((io) => {
   app.set('io', io)
