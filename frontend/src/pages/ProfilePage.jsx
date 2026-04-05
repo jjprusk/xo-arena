@@ -34,6 +34,11 @@ export default function ProfilePage() {
   const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: false })
   const [creatingBot, setCreatingBot] = useState(false)
 
+  // Credits & tier
+  const [credits, setCredits] = useState(null)
+  const [emailAchievements, setEmailAchievements] = useState(false)
+  const [savingEmailPref, setSavingEmailPref] = useState(false)
+
   // Account deletion
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -66,11 +71,12 @@ export default function ProfilePage() {
         setDbUser(user)
         setNameInput(user.displayName)
 
-        // All three fetches in parallel — nothing depends on the others.
-        const [statsRes, eloRes, botsRes] = await Promise.allSettled([
+        // All fetches in parallel — nothing depends on the others.
+        const [statsRes, eloRes, botsRes, creditsRes] = await Promise.allSettled([
           api.users.stats(user.id),
           api.users.eloHistory(user.id),
           api.bots.list({ ownerId: user.id, includeInactive: true }),
+          api.users.credits(user.id),
         ])
 
         if (statsRes.status === 'fulfilled') setStats(statsRes.value.stats)
@@ -80,6 +86,10 @@ export default function ProfilePage() {
           setBots(b ?? [])
           if (li) setLimitInfo(li)
           if (pt != null) setProvisionalThreshold(pt)
+        }
+        if (creditsRes.status === 'fulfilled') {
+          setCredits(creditsRes.value)
+          setEmailAchievements(creditsRes.value.emailAchievements ?? false)
         }
       } catch {
         setError('Failed to load profile.')
@@ -111,6 +121,20 @@ export default function ProfilePage() {
       setNameInput(previous)
       setSaveError('Could not save. Try again.')
       setEditing(true)
+    }
+  }
+
+  async function handleToggleEmailAchievements() {
+    const next = !emailAchievements
+    setEmailAchievements(next)
+    setSavingEmailPref(true)
+    try {
+      const token = await getToken()
+      await api.users.updateSettings({ emailAchievements: next }, token)
+    } catch {
+      setEmailAchievements(!next)
+    } finally {
+      setSavingEmailPref(false)
     }
   }
 
@@ -408,6 +432,81 @@ export default function ProfilePage() {
           >
             View full stats →
           </Link>
+        </section>
+      )}
+
+      {/* Credits & Tier */}
+      {credits && (
+        <section className="space-y-3">
+          <SectionLabel>Credits &amp; Tier</SectionLabel>
+          <div
+            className="rounded-xl border p-5 space-y-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            {/* Tier badge */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl" aria-hidden="true">{credits.tierIcon}</span>
+                <div>
+                  <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{credits.tierName}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Activity Score: {credits.activityScore}</p>
+                </div>
+              </div>
+              {credits.nextTier !== null && (
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {credits.pointsToNextTier} pts to next tier
+                </p>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            {credits.nextTier !== null && (() => {
+              const THRESHOLDS = [0, 25, 100, 500, 2000]
+              const tierStart = THRESHOLDS[credits.tier]
+              const tierEnd   = THRESHOLDS[credits.nextTier]
+              const pct = Math.min(100, Math.round(((credits.activityScore - tierStart) / (tierEnd - tierStart)) * 100))
+              return (
+                <div>
+                  <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-base)' }}>
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, background: 'linear-gradient(90deg, var(--color-blue-500), var(--color-teal-500))' }}
+                    />
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Credit breakdown */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[
+                { label: 'HPC', value: credits.hpc, title: 'Human Play Credits' },
+                { label: 'BPC', value: credits.bpc, title: 'Bot Play Credits' },
+                { label: 'TC',  value: credits.tc,  title: 'Tournament Credits' },
+              ].map(({ label, value, title }) => (
+                <div key={label} className="rounded-lg p-2" style={{ backgroundColor: 'var(--bg-base)' }} title={title}>
+                  <div className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-blue-600)' }}>{value}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide mt-0.5" style={{ color: 'var(--text-muted)' }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Email achievements toggle */}
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <div
+                className={`relative w-9 h-5 rounded-full transition-colors ${emailAchievements ? 'bg-[var(--color-blue-600)]' : 'bg-[var(--border-default)]'} ${savingEmailPref ? 'opacity-60' : ''}`}
+                onClick={!savingEmailPref ? handleToggleEmailAchievements : undefined}
+              >
+                <div
+                  className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                  style={{ transform: emailAchievements ? 'translateX(16px)' : 'translateX(0)' }}
+                />
+              </div>
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Email me when I earn an achievement
+              </span>
+            </label>
+          </div>
         </section>
       )}
 
