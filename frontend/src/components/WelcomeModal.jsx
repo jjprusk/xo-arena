@@ -34,7 +34,7 @@ export default function WelcomeModal({ isOpen, onClose, onSignIn }) {
             Welcome to XO Arena
           </h2>
           <p className="text-sm" style={{ color: '#a5b4fc' }}>
-            A competitive tic-tac-toe platform with real ML bots and ELO rankings
+            A competitive tic-tac-toe platform with real AI bots and ELO rankings
           </p>
         </div>
 
@@ -67,7 +67,7 @@ export default function WelcomeModal({ isOpen, onClose, onSignIn }) {
                 Create an account to unlock everything
               </p>
               <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                Build and train your own ML bot, earn an ELO ranking, track your stats,
+                Build and train your own AI bot, earn an ELO ranking, track your stats,
                 and compete on the leaderboard.
               </p>
             </div>

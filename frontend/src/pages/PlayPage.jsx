@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
 import { usePvpStore } from '../store/pvpStore.js'
 import { cachedFetch } from '../lib/api.js'
@@ -12,6 +12,8 @@ import IdleWarningPopup from '../components/pvp/IdleWarningPopup.jsx'
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const guestChallengeHint = location.state?.guestChallengeHint ?? false
   const joinSlug = searchParams.get('join')
   const spectateSlug = searchParams.get('spectate')
 
@@ -121,6 +123,7 @@ export default function PlayPage() {
         inviteUrl={inviteUrl}
         roomName={displayName}
         onPvpJoin={(s) => usePvpStore.getState().joinRoom(s, 'player')}
+        guestChallengeHint={guestChallengeHint}
       />
     </div>
   )

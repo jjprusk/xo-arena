@@ -526,8 +526,10 @@ export default function AppLayout() {
       <WelcomeModal
         isOpen={welcomeOpen}
         onClose={() => {
+          const isFirst = !localStorage.getItem('xo_welcome_seen')
           localStorage.setItem('xo_welcome_seen', '1')
           setWelcomeOpen(false)
+          if (isFirst) navigate('/play', { state: { guestChallengeHint: true } })
         }}
         onSignIn={() => {
           localStorage.setItem('xo_welcome_seen', '1')
