@@ -154,7 +154,7 @@ export default function SettingsPage() {
               <span className="text-sm font-medium">Sound pack</span>
               <button
                 onClick={() => play('move')}
-                className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] active:scale-95 active:opacity-70"
                 style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
               >
                 ▶ Test sound
