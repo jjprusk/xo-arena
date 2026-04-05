@@ -140,8 +140,13 @@ export default function AppLayout() {
     navigate(location.pathname, { replace: true })
   }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Show welcome popup once to first-time visitors (signed-out only)
+  // Show welcome popup once to first-time visitors (signed-out only).
+  // ?reset-welcome=1 clears the seen flag for testing.
   useEffect(() => {
+    if (location.search?.includes('reset-welcome=1')) {
+      localStorage.removeItem('xo_welcome_seen')
+      navigate(location.pathname, { replace: true })
+    }
     if (session) return // already signed in — skip
     if (localStorage.getItem('xo_welcome_seen')) return
     const id = setTimeout(() => setWelcomeOpen(true), 1200)
