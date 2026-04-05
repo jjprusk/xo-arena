@@ -400,7 +400,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
             style={{ right: '-6px', top: '50%', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
           >
             <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.6)', whiteSpace: 'nowrap' }}>Try me!</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
           </div>
         )}
         {showHintFinger && botExpanded && openSection !== 'builtin' && (
@@ -409,7 +409,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
             style={{ right: '-6px', top: '108px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
           >
             <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.6)', whiteSpace: 'nowrap' }}>Try me!</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
           </div>
         )}
         {showHintFinger && botExpanded && openSection === 'builtin' && (
@@ -418,7 +418,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
             style={{ right: '-6px', top: '148px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
           >
             <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.6)', whiteSpace: 'nowrap' }}>Try me!</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
           </div>
         )}
         <div
