@@ -70,6 +70,27 @@ export const auth = betterAuth({
   plugins: [
     jwt(),
     admin({ adminRole: 'admin' }),
+    // Spam guard: honeypot + timing check on email signup
+    {
+      id: 'spam-guard',
+      async onRequest(req) {
+        const url = new URL(req.url)
+        if (!url.pathname.endsWith('/sign-up/email') || req.method !== 'POST') return
+        const hp  = req.headers.get('x-hp')
+        const fst = req.headers.get('x-fst')
+        // Filled honeypot → reject silently (generic message)
+        if (hp) {
+          return { response: new Response(JSON.stringify({ message: 'Sign up failed.' }), { status: 400, headers: { 'Content-Type': 'application/json' } }) }
+        }
+        // Submission faster than 3 s → reject
+        if (fst) {
+          const elapsed = Date.now() - Number(fst)
+          if (elapsed < 3000) {
+            return { response: new Response(JSON.stringify({ message: 'Please wait a moment before submitting.' }), { status: 400, headers: { 'Content-Type': 'application/json' } }) }
+          }
+        }
+      },
+    },
   ],
   socialProviders: {
     ...(process.env.GOOGLE_CLIENT_ID && {

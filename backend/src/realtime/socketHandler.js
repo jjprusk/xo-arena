@@ -11,9 +11,44 @@ import { botGameRunner } from './botGameRunner.js'
 import { auth } from '../lib/auth.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
+import { getSystemConfig } from '../services/mlService.js'
+import { recordActivity } from '../services/activityService.js'
 import logger from '../logger.js'
 
 const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
+
+async function getIdleConfig() {
+  const [warnSec, graceSec, spectatorSec] = await Promise.all([
+    getSystemConfig('game.idleWarnSeconds',      120),
+    getSystemConfig('game.idleGraceSeconds',      60),
+    getSystemConfig('game.spectatorIdleSeconds', 600),
+  ])
+  return {
+    warnMs:      warnSec      * 1000,
+    graceMs:     graceSec     * 1000,
+    spectatorMs: spectatorSec * 1000,
+  }
+}
+
+/**
+ * Build the idle-timer callbacks for a given io instance.
+ * Used when starting or resetting timers for players and spectators.
+ */
+function makeIdleCallbacks(io) {
+  return {
+    onWarn: ({ socketId, graceMs }) => {
+      io.to(socketId).emit('idle:warning', { secondsRemaining: Math.round(graceMs / 1000) })
+    },
+    onAbandon: ({ absentSocketId, absentUserId, allSocketIds }) => {
+      for (const sid of allSocketIds) {
+        io.to(sid).emit('room:abandoned', { reason: 'idle', absentUserId })
+      }
+    },
+    onKick: ({ socketId }) => {
+      io.to(socketId).emit('room:kicked', { reason: 'idle' })
+    },
+  }
+}
 
 async function resolveSocketUser(token) {
   if (!token) return null
@@ -84,6 +119,12 @@ export async function attachSocketIO(httpServer) {
           socket.join(slug)
           socket.emit('room:joined', { slug, role: 'spectator', room: sanitizeRoom(result.room) })
           io.to(slug).emit('room:spectatorJoined', { spectatorCount: result.room.spectatorIds.size })
+          // Start spectator idle timer (only if game is in progress)
+          if (result.room.status === 'playing') {
+            const { graceMs, spectatorMs } = await getIdleConfig()
+            const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+            roomManager.resetIdleTimer({ socketId: socket.id, warnMs: spectatorMs, graceMs, onWarn, onAbandon, onKick })
+          }
         } else if (botGameRunner.hasSlug(slug)) {
           const result = botGameRunner.joinAsSpectator({ slug, socketId: socket.id })
           if (result.error) return socket.emit('error', { message: result.error })
@@ -124,6 +165,13 @@ export async function attachSocketIO(httpServer) {
         io.to(slug).emit('room:guestJoined', { room: sanitizeRoom(room) })
         // Start game
         io.to(slug).emit('game:start', { board: room.board, currentTurn: room.currentTurn, round: room.round })
+
+        // Start idle timers for both players
+        const { warnMs, graceMs } = await getIdleConfig()
+        const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+        for (const pid of [room.hostId, room.guestId]) {
+          roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
+        }
       }
     })
 
@@ -143,7 +191,7 @@ export async function attachSocketIO(httpServer) {
 
     // ── Game events ─────────────────────────────────────────────────
 
-    socket.on('game:move', ({ cellIndex }) => {
+    socket.on('game:move', async ({ cellIndex }) => {
       const result = roomManager.makeMove({ socketId: socket.id, cellIndex })
       if (result.error) return socket.emit('error', { message: result.error })
 
@@ -162,10 +210,37 @@ export async function attachSocketIO(httpServer) {
 
       if (room.status === 'finished') {
         recordPvpGame(room).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
+      } else {
+        // Reset idle timer for the player who just moved; track activity
+        const userId = room.hostId === socket.id ? room.hostUserId : room.guestUserId
+        if (userId) recordActivity(userId)
+
+        const { warnMs, graceMs } = await getIdleConfig()
+        const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+        roomManager.resetIdleTimer({ socketId: socket.id, warnMs, graceMs, onWarn, onAbandon, onKick })
       }
     })
 
-    socket.on('game:rematch', () => {
+    socket.on('idle:pong', async () => {
+      // User acknowledged the "Still Active?" popup — reset their idle timer
+      const slug = roomManager._socketToRoom.get(socket.id)
+      const room = slug && roomManager.getRoom(slug)
+      if (!room || room.status !== 'playing') return
+
+      const isPlayer = room.hostId === socket.id || room.guestId === socket.id
+      const { warnMs, graceMs, spectatorMs } = await getIdleConfig()
+      const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+      roomManager.resetIdleTimer({
+        socketId: socket.id,
+        warnMs: isPlayer ? warnMs : spectatorMs,
+        graceMs,
+        onWarn,
+        onAbandon,
+        onKick,
+      })
+    })
+
+    socket.on('game:rematch', async () => {
       const result = roomManager.rematch({ socketId: socket.id })
       if (result.error) return socket.emit('error', { message: result.error })
 
@@ -176,6 +251,13 @@ export async function attachSocketIO(httpServer) {
         round: room.round,
         scores: room.scores,
       })
+
+      // Restart idle timers for both players on rematch
+      const { warnMs, graceMs } = await getIdleConfig()
+      const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+      for (const pid of [room.hostId, room.guestId]) {
+        if (pid) roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
+      }
     })
 
     socket.on('game:forfeit', () => {

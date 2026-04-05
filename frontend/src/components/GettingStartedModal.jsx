@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 
-export default function GettingStartedModal({ isOpen, onClose }) {
+export default function GettingStartedModal({ isOpen, onClose, showHint = false }) {
   useEffect(() => {
     if (!isOpen) return
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -9,6 +9,8 @@ export default function GettingStartedModal({ isOpen, onClose }) {
   }, [isOpen, onClose])
 
   if (!isOpen) return null
+
+  const src = showHint ? '/getting-started.html?hint=1' : '/getting-started.html'
 
   return (
     <div
@@ -29,8 +31,8 @@ export default function GettingStartedModal({ isOpen, onClose }) {
           ×
         </button>
         <iframe
-          src="/getting-started.html"
-          title="Getting Started"
+          src={src}
+          title="Guide"
           scrolling="no"
           style={{ width: '100%', aspectRatio: '960/720', border: 'none', display: 'block', maxHeight: '85vh' }}
         />

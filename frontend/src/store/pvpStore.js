@@ -39,6 +39,11 @@ export const usePvpStore = create((set, get) => ({
   // Optimistic move — snapshot before the move for rollback on server rejection
   _optimisticSnapshot: null,  // { board, currentTurn } | null
 
+  // Inactivity
+  idleWarning: null,  // { secondsRemaining: N } | null — "Still Active?" popup data
+  abandoned: null,    // { reason: 'idle', absentUserId } | null — room was abandoned
+  kicked: false,      // true when spectator was kicked for inactivity
+
   // ── Actions ──────────────────────────────────────────────────────
 
   /**
@@ -120,6 +125,14 @@ export const usePvpStore = create((set, get) => ({
   },
 
   /**
+   * Acknowledge "Still Active?" — resets the server idle timer.
+   */
+  idlePong() {
+    getSocket()?.emit('idle:pong')
+    set({ idleWarning: null })
+  },
+
+  /**
    * Reset state and disconnect.
    */
   reset() {
@@ -130,7 +143,7 @@ export const usePvpStore = create((set, get) => ({
       scores: { X: 0, O: 0 }, round: 1, winner: null, winLine: null,
       spectatorCount: 0, connected: false, error: null, isAutoRoom: false,
       incomingReaction: null, opponentName: null, opponentElo: null,
-      _optimisticSnapshot: null,
+      _optimisticSnapshot: null, idleWarning: null, abandoned: null, kicked: false,
     })
   },
 
@@ -203,7 +216,8 @@ export const usePvpStore = create((set, get) => ({
     })
 
     socket.on('game:moved', ({ board, currentTurn, status, winner, winLine, scores }) => {
-      set({ board, currentTurn, scores, _optimisticSnapshot: null })
+      // Auto-dismiss idle warning when a move is made (game is active)
+      set({ board, currentTurn, scores, _optimisticSnapshot: null, idleWarning: null })
       if (status === 'finished') {
         set({ status: 'finished', winner, winLine })
         useSoundStore.getState().play(winner ? 'win' : 'draw')
@@ -220,6 +234,18 @@ export const usePvpStore = create((set, get) => ({
     socket.on('game:reaction', ({ emoji, fromMark }) => {
       set({ incomingReaction: { emoji, fromMark, id: Date.now() } })
       setTimeout(() => set({ incomingReaction: null }), 2500)
+    })
+
+    socket.on('idle:warning', ({ secondsRemaining }) => {
+      set({ idleWarning: { secondsRemaining } })
+    })
+
+    socket.on('room:abandoned', ({ reason, absentUserId }) => {
+      set({ abandoned: { reason, absentUserId }, idleWarning: null })
+    })
+
+    socket.on('room:kicked', ({ reason }) => {
+      set({ kicked: reason === 'idle', idleWarning: null })
     })
 
     socket.on('error', ({ message }) => {

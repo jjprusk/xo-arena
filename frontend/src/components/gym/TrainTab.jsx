@@ -9,6 +9,7 @@ import { getToken } from '../../lib/getToken.js'
 import { useOnboardingStore } from '../../store/onboardingStore.js'
 import { getSocket } from '../../lib/socket.js'
 import { runTrainingSession } from '../../services/trainingService.js'
+import { useGymStore } from '../../store/gymStore.js'
 import {
   MODES, DIFFICULTIES, ALGORITHMS,
   Card, SectionLabel, Btn, StatusBadge, Spinner, MiniStat, ChartPanel, tooltipStyle,
@@ -44,6 +45,10 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   const [azCPuct, setAzCPuct]               = useState(1.5)
   const [azTemperature, setAzTemperature]   = useState(1.0)
   const [running, setRunning]               = useState(false)
+  const setTraining = useGymStore(s => s.setTraining)
+  // Keep gymStore in sync so the global idle-logout timer suppresses during training
+  function startRunning()  { setRunning(true);  setTraining(true)  }
+  function stopRunning()   { setRunning(false); setTraining(false) }
   const [sessionId, setSessionId]           = useState(null)
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
@@ -82,7 +87,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
 
       setSessionId(runningSession.id)
       setIterations(runningSession.iterations)
-      setRunning(true)
+      startRunning()
       setProgress(null)
       setChartData([])
       setCurriculumDifficulty(runningSession.config?.difficulty ?? null)
@@ -120,9 +125,9 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
         cleanupRef.current = null
       }
 
-      const onComplete_  = () => { setRunning(false); teardown(); onComplete() }
-      const onCancelled  = () => { setRunning(false); teardown(); onComplete() }
-      const onError      = (d) => { setRunning(false); alert(`Training failed: ${d.error}`); teardown() }
+      const onComplete_  = () => { stopRunning(); teardown(); onComplete() }
+      const onCancelled  = () => { stopRunning(); teardown(); onComplete() }
+      const onError      = (d) => { stopRunning(); alert(`Training failed: ${d.error}`); teardown() }
 
       socket.on('ml:progress',           onProgress)
       socket.on('ml:curriculum_advance',  onCurriculumAdvance)
@@ -143,7 +148,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
 
     // Show the progress panel immediately before the API call
     flushSync(() => {
-      setRunning(true)
+      startRunning()
       setProgress(null)
       setChartData([])
       setCurriculumDifficulty(null)
@@ -198,20 +203,23 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
         setProgress(prev => prev ? { ...prev, episode: prev.totalEpisodes } : prev)
       })
 
-      // Persist weights + stats to backend; it handles ELO calibration async
+      // Persist weights + stats to backend; it handles ELO calibration async.
+      // Re-fetch the token here — training can take longer than the JWT TTL (BA default: 15 min),
+      // so the token captured at training start may be expired by the time we finish.
+      const finishToken = await getToken()
       await api.ml.finishSession(session.id, {
         weights:    result.weights,
         stats:      result.stats,
         iterations: result.iterations,
         status:     result.status,
         samples:    result.samples,
-      }, token)
+      }, finishToken)
 
       useOnboardingStore.getState().markDone()
-      setRunning(false)
+      stopRunning()
       onComplete()
     } catch (err) {
-      setRunning(false)
+      stopRunning()
       alert(err.message)
     }
   }

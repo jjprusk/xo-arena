@@ -91,7 +91,7 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
               className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
               style={{ color: 'var(--text-primary)' }}
             >
-              Getting Started
+              Guide
               <span style={{ color: 'var(--text-muted)' }}>?</span>
             </button>
             <button

@@ -167,6 +167,7 @@
 .prose-guide tr:last-child td { border-bottom: none; }
 .prose-guide blockquote { border-left: 3px solid var(--color-blue-500); margin: 0.75rem 0; padding: 0.25rem 0 0.25rem 1rem; color: var(--text-muted); }
 .prose-guide hr { border: none; border-top: 1px solid var(--border-default); margin: 1.5rem 0; }
+.prose-guide img { max-width: 100% !important; height: auto; display: block; }
 .search-highlight { background-color: #fef08a; color: #1a1a1a; border-radius: 2px; padding: 0 1px; }
 
 @layer base {
@@ -244,9 +245,18 @@
   animation: xo-page-in 120ms ease-out both;
 }
 
+@keyframes hint-bob {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+.hint-bob {
+  animation: hint-bob 0.9s ease-in-out infinite;
+  display: inline-block;
+}
+
 @keyframes guide-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55), 0 0 6px 1px rgba(99, 102, 241, 0.25); }
-  50%       { box-shadow: 0 0 0 5px rgba(99, 102, 241, 0),  0 0 10px 3px rgba(99, 102, 241, 0.4); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.8), 0 0 10px 3px rgba(99, 102, 241, 0.5); }
+  50%       { box-shadow: 0 0 0 7px rgba(99, 102, 241, 0), 0 0 18px 6px rgba(99, 102, 241, 0.6); }
 }
 .guide-pulse {
   animation: guide-pulse 2.4s ease-in-out infinite;

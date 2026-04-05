@@ -1,6 +1,6 @@
 # Frequently Asked Questions
 
-## Getting Started
+## Overview
 
 ### What is XO Arena?
 XO Arena is a competitive Tic-Tac-Toe platform. You can play against built-in bots,
@@ -17,6 +17,30 @@ or sign in with Google or Apple.
 
 ### What's coming soon?
 Tournaments and in-app feedback are currently in development and will be available soon.
+
+---
+
+## Getting Started
+
+### The Guide
+
+XO Arena includes an interactive Guide designed to walk you through your first steps — from playing your first game to training your own AI bot. The Guide is always available via the <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:9999px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:white;font-size:15px;font-weight:600;vertical-align:middle;">✦ Guide</span> button in the top-left corner of the page as shown below.
+
+<img src="/screenshots/guide-button.png" alt="Guide button in the header" style="border-radius:8px;margin:12px 0;border:1px solid #e5e7eb;" />
+
+Click it at any point in your journey to reopen the Guide and review the steps.
+
+### Using the Guide
+
+The Guide presents a series of sequential steps, each represented by a balloon on an interactive map. Work through them in order to get the most out of the platform.
+
+<img src="/screenshots/guide-overview.png" alt="Guide step map" style="border-radius:8px;margin:12px 0;border:1px solid #e5e7eb;" />
+
+The steps take you from reading the FAQ and playing your first games against existing bots, through creating and training your own bot, all the way to competing on the leaderboard. Each step builds on the last — by the end you will have a working AI bot of your own.
+
+### Have Fun
+
+XO Arena is designed to make AI approachable by grounding it in a familiar game. Every bot in the system has its own "personality" shaped by how it was trained — some are aggressive, some defensive, some unpredictable. As you progress you will learn the basics of several AI model types and discover how training parameters like learning rate, exploration decay, and episode count affect the way a bot plays. Training a bot well takes experimentation and patience, and that challenge is the point.
 
 ---
 
@@ -85,12 +109,12 @@ or in community bot matches.
 ### What algorithms are available?
 Six brain architectures are available when creating a bot:
 
-- **DQN** — Deep Q-Network
-- **AlphaZero** — Monte Carlo Tree Search with neural network guidance
-- **Policy Gradient** — direct policy optimization
 - **Q-Learning** — classic tabular reinforcement learning
 - **SARSA** — on-policy variant of Q-Learning
 - **Monte Carlo** — episode-based value estimation
+- **Policy Gradient** — direct policy optimization
+- **DQN** — Deep Q-Network
+- **AlphaZero** — Monte Carlo Tree Search with neural network guidance
 
 ### How many bots can I create?
 By default each account can own up to **5 bots**.

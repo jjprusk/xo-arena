@@ -27,7 +27,7 @@ export const useOnboardingStore = create((set, get) => ({
     try {
       const data = await api.get('/ml/models', token)
       const done = Array.isArray(data?.models)
-        ? data.models.some(m => (m.totalEpisodes ?? 0) > 0)
+        ? data.models.filter(m => m.createdBy === userId).some(m => (m.totalEpisodes ?? 0) > 0)
         : false
       if (done) localStorage.setItem(cacheKey, '1')
       set({ trainingDone: done })

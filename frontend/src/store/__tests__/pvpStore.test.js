@@ -311,5 +311,106 @@ describe('pvpStore', () => {
       expect(state.board).toEqual(Array(9).fill(null))
       expect(state._optimisticSnapshot).toBeNull()
     })
+
+    it('clears idleWarning, abandoned, and kicked on reset', () => {
+      createRoom()
+      triggerRoomCreated()
+      usePvpStore.setState({ idleWarning: { secondsRemaining: 30 }, abandoned: { reason: 'idle' }, kicked: true })
+      s().reset()
+      expect(s().idleWarning).toBeNull()
+      expect(s().abandoned).toBeNull()
+      expect(s().kicked).toBe(false)
+    })
+  })
+
+  // ── socket event: idle:warning ────────────────────────────────────────────
+
+  describe('idle:warning event', () => {
+    it('sets idleWarning with secondsRemaining', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      mockSocket._trigger('idle:warning', { secondsRemaining: 45 })
+      expect(s().idleWarning).toEqual({ secondsRemaining: 45 })
+    })
+  })
+
+  // ── idlePong action ───────────────────────────────────────────────────────
+
+  describe('idlePong', () => {
+    it('emits idle:pong on the socket', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      s().idlePong()
+      expect(mockSocket.emit).toHaveBeenCalledWith('idle:pong')
+    })
+
+    it('clears idleWarning', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      usePvpStore.setState({ idleWarning: { secondsRemaining: 20 } })
+      s().idlePong()
+      expect(s().idleWarning).toBeNull()
+    })
+  })
+
+  // ── socket event: room:abandoned ──────────────────────────────────────────
+
+  describe('room:abandoned event', () => {
+    it('sets abandoned with reason and absentUserId', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      mockSocket._trigger('room:abandoned', { reason: 'idle', absentUserId: 'user-123' })
+      expect(s().abandoned).toEqual({ reason: 'idle', absentUserId: 'user-123' })
+    })
+
+    it('clears idleWarning when room is abandoned', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      usePvpStore.setState({ idleWarning: { secondsRemaining: 10 } })
+      mockSocket._trigger('room:abandoned', { reason: 'idle', absentUserId: null })
+      expect(s().idleWarning).toBeNull()
+    })
+  })
+
+  // ── socket event: room:kicked ─────────────────────────────────────────────
+
+  describe('room:kicked event', () => {
+    it('sets kicked to true for idle reason', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      mockSocket._trigger('room:kicked', { reason: 'idle' })
+      expect(s().kicked).toBe(true)
+    })
+
+    it('clears idleWarning when kicked', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      usePvpStore.setState({ idleWarning: { secondsRemaining: 5 } })
+      mockSocket._trigger('room:kicked', { reason: 'idle' })
+      expect(s().idleWarning).toBeNull()
+    })
+  })
+
+  // ── game:moved auto-dismisses idle warning ────────────────────────────────
+
+  describe('game:moved clears idle warning', () => {
+    it('clears idleWarning when a move is made', () => {
+      createRoom()
+      triggerRoomCreated()
+      triggerGameStart()
+      usePvpStore.setState({ idleWarning: { secondsRemaining: 30 } })
+      mockSocket._trigger('game:moved', {
+        board: Array(9).fill(null), currentTurn: 'O',
+        status: 'playing', winner: null, winLine: null, scores: { X: 0, O: 0 },
+      })
+      expect(s().idleWarning).toBeNull()
+    })
   })
 })

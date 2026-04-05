@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>XO Arena — Getting Started</title>
+<title>XO Arena — Guide</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -41,6 +41,16 @@
   }
   #haveFunBalloon { transform-origin: 468px 578px; transform-box: fill-box; }
   #haveFunBalloon.pop { animation: trophy-pop 0.6s ease-out; }
+  @keyframes fingerBob {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+  @keyframes hintFadeOut {
+    to { opacity: 0; }
+  }
+  #faqHint { transform-origin: 220px 298px; display: none; }
+  #faqHint.bobbing { animation: fingerBob 0.7s ease-in-out infinite; }
+  #faqHint.fading  { animation: hintFadeOut 0.8s ease-out forwards; }
 </style>
 </head>
 <body>
@@ -194,8 +204,16 @@
   <ellipse cx="205" cy="169" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 205 169)"/>
   <text x="220" y="198" text-anchor="middle" dominant-baseline="middle"
         font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">📖</text>
-  <text x="220" y="262" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Read the FAQ</text>
+  <text x="220" y="262" text-anchor="middle" font-size="14.5" font-weight="600" fill="#e5e7eb">Read the FAQ</text>
 </a>
+
+<!-- ── FAQ hint finger (first-open only) ── -->
+<g id="faqHint">
+  <text x="220" y="280" text-anchor="middle" dominant-baseline="middle"
+        font-size="52" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">👆</text>
+  <text x="220" y="316" text-anchor="middle" font-size="23" font-weight="700" fill="#10b981"
+        letter-spacing="0.5">Click here</text>
+</g>
 
 <!-- ── Step 3: Play vs Bots ── cx=555 cy=220 -->
 <a href="/play" target="_top" class="play-btn">
@@ -204,7 +222,7 @@
   <ellipse cx="540" cy="204" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 540 204)"/>
   <text x="555" y="233" text-anchor="middle" dominant-baseline="middle"
         font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">🎮</text>
-  <text x="555" y="297" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Play vs bots</text>
+  <text x="555" y="297" text-anchor="middle" font-size="14.5" font-weight="600" fill="#e5e7eb">Play vs bots</text>
 </a>
 
 <!-- ── Step 4: Study the Training Guide ── cx=830 cy=310 -->
@@ -214,8 +232,8 @@
   <ellipse cx="815" cy="294" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 815 294)"/>
   <text x="830" y="323" text-anchor="middle" dominant-baseline="middle"
         font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">📚</text>
-  <text x="830" y="387" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Study the</text>
-  <text x="830" y="403" text-anchor="middle" font-size="11.5" fill="#9ca3af">Training Guide</text>
+  <text x="830" y="387" text-anchor="middle" font-size="14.5" font-weight="600" fill="#e5e7eb">Study the</text>
+  <text x="830" y="403" text-anchor="middle" font-size="13.5" fill="#9ca3af">Training Guide</text>
 </a>
 
 <!-- ── Step 5: Create Your Bot ── cx=675 cy=445 -->
@@ -225,7 +243,7 @@
   <ellipse cx="660" cy="429" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 660 429)"/>
   <text x="675" y="458" text-anchor="middle" dominant-baseline="middle"
         font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">🤖</text>
-  <text x="675" y="522" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Create your bot</text>
+  <text x="675" y="522" text-anchor="middle" font-size="14.5" font-weight="600" fill="#e5e7eb">Create your bot</text>
 </a>
 
 <!-- ── Step 6: Train Your Bot ── cx=385 cy=378 -->
@@ -235,7 +253,7 @@
   <ellipse cx="370" cy="362" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 370 362)"/>
   <text x="385" y="391" text-anchor="middle" dominant-baseline="middle"
         font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">⚙️</text>
-  <text x="385" y="455" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Train your bot</text>
+  <text x="385" y="455" text-anchor="middle" font-size="14.5" font-weight="600" fill="#e5e7eb">Train your bot</text>
 </a>
 
 <!-- ── Step 7: Compete ── cx=148 cy=453 -->
@@ -245,7 +263,7 @@
   <ellipse cx="133" cy="437" rx="20" ry="13" fill="white" opacity="0.18" transform="rotate(-30 133 437)"/>
   <text x="148" y="466" text-anchor="middle" dominant-baseline="middle"
         font-size="32" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">⚔️</text>
-  <text x="148" y="530" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e5e7eb">Compete!</text>
+  <text x="148" y="530" text-anchor="middle" font-size="14.5" font-weight="600" fill="#e5e7eb">Compete!</text>
 </a>
 
 <!-- ── Step 8: Have Fun — larger, gold ── cx=468 cy=578 -->
@@ -265,6 +283,38 @@
 
 </svg>
 <script>
+  // ── FAQ hint ─────────────────────────────────────────────────────────────────
+  function hideFaqHint() {
+    var hint = document.getElementById('faqHint')
+    if (!hint) return
+    hint.classList.remove('bobbing')
+    hint.classList.add('fading')
+    hint.addEventListener('animationend', function () { hint.style.display = 'none' }, { once: true })
+  }
+
+  function showFaqHint() {
+    var hint = document.getElementById('faqHint')
+    if (!hint || hint.style.display === 'inline') return
+    hint.style.display = 'inline'
+    hint.classList.add('bobbing')
+    // Hide when the FAQ button is clicked
+    var faqLink = document.querySelector('a[href*="/faq"]')
+    if (faqLink) faqLink.addEventListener('click', hideFaqHint, { once: true })
+  }
+
+  // Primary: URL parameter (avoids postMessage timing races with React StrictMode)
+  if (new URLSearchParams(window.location.search).get('hint') === '1') {
+    showFaqHint()
+  }
+
+  // Fallback: postMessage from parent (kept for compatibility)
+  window.addEventListener('message', function (e) {
+    if (!e.data || e.data.type !== 'show-faq-hint') return
+    showFaqHint()
+  })
+  // Tell the parent that this listener is now registered and ready
+  window.parent.postMessage({ type: 'getting-started-ready' }, '*')
+
   function haveFun() {
     // Pop the trophy balloon
     const g = document.getElementById('haveFunBalloon')

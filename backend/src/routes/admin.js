@@ -72,6 +72,8 @@ router.get('/users', async (req, res, next) => {
       onlineBaIds = [...new Set(activeSessions.map(s => s.userId))]
     }
 
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
     const where = {
       isBot: false,
       ...(search ? {
@@ -81,9 +83,10 @@ router.get('/users', async (req, res, next) => {
           { username: { contains: search, mode: 'insensitive' } },
         ],
       } : {}),
-      ...(status === 'active'  ? { banned: false } : {}),
-      ...(status === 'banned'  ? { banned: true  } : {}),
-      ...(status === 'online'  ? { betterAuthId: { in: onlineBaIds } } : {}),
+      ...(status === 'active'   ? { banned: false } : {}),
+      ...(status === 'banned'   ? { banned: true  } : {}),
+      ...(status === 'online'   ? { betterAuthId: { in: onlineBaIds } } : {}),
+      ...(status === 'inactive' ? { OR: [{ lastActiveAt: { lt: sevenDaysAgo } }, { lastActiveAt: null }] } : {}),
     }
 
     const [rawUsers, total] = await Promise.all([
@@ -101,6 +104,7 @@ router.get('/users', async (req, res, next) => {
           avatarUrl: true,
           eloRating: true,
           banned: true,
+          lastActiveAt: true,
           userRoles: { select: { role: true, grantedAt: true } },
           createdAt: true,
           _count: { select: { gamesAsPlayer1: true } },
@@ -851,6 +855,95 @@ router.patch('/aivai-config', async (req, res, next) => {
     }
     const updated = await getSystemConfig('aivai.maxGames', 5)
     res.json({ maxGames: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/admin/idle-config
+ */
+router.get('/idle-config', async (_req, res, next) => {
+  try {
+    const [idleWarnSeconds, idleGraceSeconds, spectatorIdleSeconds] = await Promise.all([
+      getSystemConfig('game.idleWarnSeconds',      120),
+      getSystemConfig('game.idleGraceSeconds',      60),
+      getSystemConfig('game.spectatorIdleSeconds', 600),
+    ])
+    res.json({ idleWarnSeconds, idleGraceSeconds, spectatorIdleSeconds })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/idle-config
+ */
+router.patch('/idle-config', async (req, res, next) => {
+  try {
+    const { idleWarnSeconds, idleGraceSeconds, spectatorIdleSeconds } = req.body
+    if (idleWarnSeconds !== undefined) {
+      const v = parseInt(idleWarnSeconds)
+      if (isNaN(v) || v < 10) return res.status(400).json({ error: 'idleWarnSeconds must be >= 10' })
+      await setSystemConfig('game.idleWarnSeconds', v)
+    }
+    if (idleGraceSeconds !== undefined) {
+      const v = parseInt(idleGraceSeconds)
+      if (isNaN(v) || v < 10) return res.status(400).json({ error: 'idleGraceSeconds must be >= 10' })
+      await setSystemConfig('game.idleGraceSeconds', v)
+    }
+    if (spectatorIdleSeconds !== undefined) {
+      const v = parseInt(spectatorIdleSeconds)
+      if (isNaN(v) || v < 10) return res.status(400).json({ error: 'spectatorIdleSeconds must be >= 10' })
+      await setSystemConfig('game.spectatorIdleSeconds', v)
+    }
+    const [warn, grace, spec] = await Promise.all([
+      getSystemConfig('game.idleWarnSeconds',      120),
+      getSystemConfig('game.idleGraceSeconds',      60),
+      getSystemConfig('game.spectatorIdleSeconds', 600),
+    ])
+    res.json({ idleWarnSeconds: warn, idleGraceSeconds: grace, spectatorIdleSeconds: spec })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/admin/session-config
+ */
+router.get('/session-config', async (_req, res, next) => {
+  try {
+    const [idleWarnMinutes, idleGraceMinutes] = await Promise.all([
+      getSystemConfig('session.idleWarnMinutes',  30),
+      getSystemConfig('session.idleGraceMinutes',  5),
+    ])
+    res.json({ idleWarnMinutes, idleGraceMinutes })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/session-config
+ */
+router.patch('/session-config', async (req, res, next) => {
+  try {
+    const { idleWarnMinutes, idleGraceMinutes } = req.body
+    if (idleWarnMinutes !== undefined) {
+      const v = parseInt(idleWarnMinutes)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'idleWarnMinutes must be >= 1' })
+      await setSystemConfig('session.idleWarnMinutes', v)
+    }
+    if (idleGraceMinutes !== undefined) {
+      const v = parseInt(idleGraceMinutes)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'idleGraceMinutes must be >= 1' })
+      await setSystemConfig('session.idleGraceMinutes', v)
+    }
+    const [warn, grace] = await Promise.all([
+      getSystemConfig('session.idleWarnMinutes',  30),
+      getSystemConfig('session.idleGraceMinutes',  5),
+    ])
+    res.json({ idleWarnMinutes: warn, idleGraceMinutes: grace })
   } catch (err) {
     next(err)
   }

@@ -14,8 +14,13 @@ import { fileURLToPath } from 'url'
 // ─── System config defaults ────────────────────────────────────────────────
 
 const CONFIG_DEFAULTS = [
-  { key: 'bots.defaultBotLimit',       value: 5  },
-  { key: 'bots.calibrationGamesTotal', value: 12 },
+  { key: 'bots.defaultBotLimit',       value: 5   },
+  { key: 'bots.calibrationGamesTotal', value: 12  },
+  { key: 'game.idleWarnSeconds',        value: 120 },
+  { key: 'game.idleGraceSeconds',       value: 60  },
+  { key: 'game.spectatorIdleSeconds',   value: 600 },
+  { key: 'session.idleWarnMinutes',     value: 30  },
+  { key: 'session.idleGraceMinutes',    value: 5   },
 ]
 
 // ─── Built-in bot definitions ──────────────────────────────────────────────

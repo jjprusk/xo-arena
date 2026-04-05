@@ -1,17 +1,19 @@
 import React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { api, cachedFetch } from '../../lib/api.js'
+import { getToken } from '../../lib/getToken.js'
 import { ListTr, ListTd, SearchBar } from '../ui/ListTable.jsx'
+import { usePrefsStore } from '../../store/prefsStore.js'
 
 // ── BotAccordion ─────────────────────────────────────────────────────────────
 // Two-section accordion (Built-in / Community) using ListTr/ListTd for rows.
 // Only one section open at a time; built-in is open by default.
 // Community section includes a live search bar and a scrollable list.
 
-function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch }) {
-  const builtIn   = bots.filter(b => !b.botOwnerId)
+function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch, showPlayHint, onPlayHintDismiss }) {
+  const builtIn   = bots.filter(b => !b.botOwnerId).sort((a, b) => a.eloRating - b.eloRating)
   const community = bots.filter(b => b.botOwnerId)
   const filteredCommunity = communitySearch
     ? community.filter(b => b.displayName.toLowerCase().includes(communitySearch.toLowerCase()))
@@ -36,7 +38,11 @@ function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSecti
             {builtIn.map((bot, i) => (
               <ListTr key={bot.id} last={i === builtIn.length - 1}>
                 <ListTd>
-                  <BotRow bot={bot} isSignedIn={isSignedIn} onChallenge={onChallenge} />
+                  <BotRow
+                    bot={bot}
+                    isSignedIn={isSignedIn}
+                    onChallenge={(b) => { onPlayHintDismiss?.(); onChallenge(b) }}
+                  />
                 </ListTd>
               </ListTr>
             ))}
@@ -213,6 +219,19 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
   const { data: session } = useOptimisticSession()
   const isSignedIn = !!session?.user
+  const { playHintSeen, setPlayHintSeen, setPrefs } = usePrefsStore()
+  const showPlayHint = isSignedIn && !playHintSeen
+
+  // Re-fetch playHintSeen on every visit so a CLI reset is reflected immediately
+  useEffect(() => {
+    if (!isSignedIn) return
+    getToken().then(token => {
+      if (!token) return
+      api.users.getHints(token)
+        .then(({ playHintSeen: fresh }) => setPrefs({ playHintSeen: !!fresh }))
+        .catch(() => {})
+    })
+  }, [isSignedIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [aivaiExpanded, setAivaiExpanded] = useState(false)
   const [botExpanded, setBotExpanded] = useState(false)
@@ -228,7 +247,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   // Challenge a bot state
   const [bots, setBots] = useState([])
   const [botsLoading, setBotsLoading] = useState(false)
-  const [openSection, setOpenSection] = useState('builtin') // 'builtin' | 'community' | null
+  const [openSection, setOpenSection] = useState(null) // 'builtin' | 'community' | null
   const [communitySearch, setCommunitySearch] = useState('')
 
   // Bot vs Bot config
@@ -307,6 +326,11 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
     setBoardTheme(localTheme)
   }
 
+  function handlePlayHintDismiss() {
+    setPlayHintSeen()
+    getToken().then(token => { if (token) api.users.markPlayHint(token).catch(() => {}) })
+  }
+
   function handleChallengeBot(bot) {
     applyOptions()
     const cfg = getBotPlayConfig(bot)
@@ -369,29 +393,57 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
       </h1>
 
       {/* ── Challenge a Bot ─────────────────────────────────── */}
-      <div
-        className="rounded-xl border-2 overflow-hidden transition-colors"
-        style={{
-          borderColor: botExpanded ? 'var(--color-purple-600, #9333ea)' : 'var(--border-default)',
-          backgroundColor: 'var(--bg-surface)',
-          boxShadow: 'var(--shadow-card)',
-        }}
-      >
-        <button
-          onClick={() => { setBotExpanded(v => !v); setAivaiExpanded(false) }}
-          className="w-full flex items-center gap-4 p-4 text-left"
-        >
-          <span className="text-3xl">🤺</span>
-          <div className="flex-1">
-            <div className="font-semibold">Challenge a Bot</div>
-            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Play against a named bot — results are ranked
-            </div>
+      <div className="relative">
+        {showPlayHint && !botExpanded && (
+          <div
+            className="pointer-events-none absolute flex flex-col items-center justify-center"
+            style={{ right: '-52px', top: '50%', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
+          >
+            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', whiteSpace: 'nowrap' }}>Try me!</span>
           </div>
-          <span className="text-lg" style={{ color: 'var(--text-muted)' }}>
-            {botExpanded ? '▲' : '▼'}
-          </span>
-        </button>
+        )}
+        {showPlayHint && botExpanded && openSection !== 'builtin' && (
+          <div
+            className="pointer-events-none absolute flex flex-col items-center justify-center"
+            style={{ right: '-52px', top: '108px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
+          >
+            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', whiteSpace: 'nowrap' }}>Try me!</span>
+          </div>
+        )}
+        {showPlayHint && botExpanded && openSection === 'builtin' && (
+          <div
+            className="pointer-events-none absolute flex flex-col items-center justify-center"
+            style={{ right: '-52px', top: '148px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
+          >
+            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', whiteSpace: 'nowrap' }}>Try me!</span>
+          </div>
+        )}
+        <div
+          className="rounded-xl border-2 overflow-hidden transition-colors"
+          style={{
+            borderColor: botExpanded ? 'var(--color-purple-600, #9333ea)' : 'var(--border-default)',
+            backgroundColor: 'var(--bg-surface)',
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          <button
+            onClick={() => { setBotExpanded(v => !v); setAivaiExpanded(false) }}
+            className="w-full flex items-center gap-4 p-4 text-left"
+          >
+            <span className="text-3xl">🤺</span>
+            <div className="flex-1">
+              <div className="font-semibold">Challenge a Bot</div>
+              <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Play against a named bot — results are ranked
+              </div>
+            </div>
+            <span className="text-lg" style={{ color: 'var(--text-muted)' }}>
+              {botExpanded ? '▲' : '▼'}
+            </span>
+          </button>
 
         {botExpanded && (
           <div className="border-t" style={{ borderColor: 'var(--border-default)' }}>
@@ -413,6 +465,8 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 setOpenSection={setOpenSection}
                 communitySearch={communitySearch}
                 setCommunitySearch={setCommunitySearch}
+                showPlayHint={showPlayHint}
+                onPlayHintDismiss={handlePlayHintDismiss}
               />
             )}
 
@@ -540,6 +594,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Watch Bot vs Bot ────────────────────────────────── */}

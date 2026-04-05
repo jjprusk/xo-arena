@@ -161,6 +161,107 @@ router.delete('/me', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/me/hints
+ * Returns per-user hint flags so the client knows what to show.
+ */
+router.get('/me/hints', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { preferences: true },
+    })
+    const prefs = (user?.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    res.json({
+      faqHintSeen:     !!prefs.faqHintSeen,
+      playHintSeen:    !!prefs.playHintSeen,
+      showGuideButton: prefs.showGuideButton !== false,  // default true
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/users/me/hints/faq
+ * Marks the FAQ hint as seen — stored inside the user's preferences JSON.
+ */
+router.post('/me/hints/faq', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true, preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, faqHintSeen: true } } })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/users/me/hints/play
+ * Marks the play-page hint as seen.
+ */
+router.post('/me/hints/play', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true, preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, playHintSeen: true } } })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/users/me/preferences
+ * Updates allowed preference keys for the signed-in user.
+ */
+router.patch('/me/preferences', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true, preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    const { showGuideButton } = req.body
+    const updates = {}
+    if (typeof showGuideButton === 'boolean') updates.showGuideButton = showGuideButton
+    await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, ...updates } } })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/users/by-username/:username
+ * Resolves a username to its email address — used by the sign-in form so users
+ * can authenticate with either an email or a username.
+ * Returns only { email } — no other user data is exposed.
+ * No auth required (must be callable before login).
+ */
+router.get('/by-username/:username', async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { username: req.params.username.toLowerCase() },
+      select: { email: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    res.json({ email: user.email })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/users/:id
  * Public profile (read-only). Returns sanitized user data.
  */

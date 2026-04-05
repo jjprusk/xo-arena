@@ -76,6 +76,7 @@ vi.mock('../../auth/UserButton.jsx', () => ({ default: () => null }))
 vi.mock('../../auth/SignedIn.jsx',   () => ({ default: ({ children }) => <>{children}</> }))
 vi.mock('../../auth/SignedOut.jsx',  () => ({ default: () => null }))
 vi.mock('../../feedback/FeedbackButton.jsx', () => ({ default: () => null }))
+vi.mock('../IdleLogoutManager.jsx', () => ({ default: () => null }))
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────────
 
@@ -299,32 +300,3 @@ describe('AppLayout — Phase 3: badge clearing on navigation', () => {
   })
 })
 
-describe('AppLayout — Phase 3: hamburger badge', () => {
-  it('Feedback link in hamburger shows unread badge count', async () => {
-    setupAdmin()
-    stubFetch(4)
-    await act(async () => { render(<AppLayout />) })
-    await waitFor(() => expect(screen.getByText(/4 new feedback/i)).toBeDefined())
-
-    // Open hamburger menu
-    fireEvent.click(screen.getByRole('button', { name: /open menu/i }))
-    await waitFor(() => {
-      // Badge "4" appears in hamburger Feedback link
-      const badges = screen.getAllByText('4')
-      expect(badges.length).toBeGreaterThan(0)
-    })
-  })
-
-  it('hamburger badge shows "9+" when count > 9', async () => {
-    setupAdmin()
-    stubFetch(12)
-    await act(async () => { render(<AppLayout />) })
-    await waitFor(() => expect(screen.getByText(/12 new feedback/i)).toBeDefined())
-
-    fireEvent.click(screen.getByRole('button', { name: /open menu/i }))
-    await waitFor(() => {
-      const badges = screen.getAllByText('9+')
-      expect(badges.length).toBeGreaterThan(0)
-    })
-  })
-})

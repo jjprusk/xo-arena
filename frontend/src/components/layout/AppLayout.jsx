@@ -17,7 +17,8 @@ import { useSoundStore } from '../../store/soundStore.js'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
 import GettingStartedModal from '../GettingStartedModal.jsx'
-import { useOnboardingStore } from '../../store/onboardingStore.js'
+import IdleLogoutManager from './IdleLogoutManager.jsx'
+import { usePrefsStore } from '../../store/prefsStore.js'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -26,7 +27,7 @@ const NAV_LINKS = [
   { to: '/play', label: 'Play' },
   { to: '/gym', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
-  { to: '/leaderboard', label: 'Leaderboard', desktopOnly: true },
+  { to: '/leaderboard', label: 'Rankings', desktopOnly: true },
 ]
 
 const BOTTOM_NAV = [
@@ -41,7 +42,7 @@ const MENU_LINKS = [
   { to: '/play',        label: 'Play',        icon: '⊞' },
   { to: '/gym',         label: 'Gym',         icon: '⚡' },
   { to: '/puzzles',     label: 'Puzzles',      icon: '◈' },
-  { to: '/leaderboard', label: 'Leaderboard',  icon: '★' },
+  { to: '/leaderboard', label: 'Rankings',     icon: '★' },
   { to: '/stats',       label: 'Stats',        icon: '◎' },
   { to: '/profile',     label: 'Profile',      icon: '◉' },
   { to: '/about',       label: 'About',        icon: '○' },
@@ -55,7 +56,6 @@ const ADMIN_MENU_LINKS = [
   { to: '/admin/ml-models', label: 'Bots' },
   { to: '/admin/ai',        label: 'AI' },
   { to: '/admin/logs',      label: 'Logs' },
-  { to: '/admin/feedback',  label: 'Feedback', icon: '💬' },
 ]
 
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
@@ -91,7 +91,8 @@ export default function AppLayout() {
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const [guideOpen, setGuideOpen] = useState(false)
-  const { trainingDone, check: checkOnboarding } = useOnboardingStore()
+  const [guideShowHint, setGuideShowHint] = useState(false)
+  const { showGuideButton, setPrefs } = usePrefsStore()
   const prevUserId = useRef(null)
 
   // Close the mobile menu whenever the user navigates
@@ -101,15 +102,40 @@ export default function AppLayout() {
   useEffect(() => {
     const userId = session?.user?.id ?? null
     if (userId && userId !== prevUserId.current) {
-      // User just signed in (or changed)
       rolesStore.fetch()
       prevUserId.current = userId
     } else if (!userId && prevUserId.current) {
-      // User just signed out
       rolesStore.clear()
       prevUserId.current = null
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load preferences and auto-open guide on first ever sign-in
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
+    async function maybeAutoOpen() {
+      try {
+        const token = await getToken()
+        const { faqHintSeen, playHintSeen, showGuideButton: sgb } = await api.users.getHints(token)
+        setPrefs({ showGuideButton: sgb, playHintSeen: !!playHintSeen })
+        if (!faqHintSeen) {
+          api.users.markFaqHint(token).catch(() => {})
+          setGuideShowHint(true)
+          setGuideOpen(true)
+        }
+      } catch { /* non-fatal */ }
+    }
+    maybeAutoOpen()
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-open guide when navigated back from FAQ with ?open-guide=1
+  useEffect(() => {
+    if (!location.search?.includes('open-guide=1')) return
+    setGuideShowHint(false)
+    setGuideOpen(true)
+    navigate(location.pathname, { replace: true })
+  }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll unread-count every 60s to seed the badge on sign-in (no chime — only socket chimes)
   useEffect(() => {
@@ -164,7 +190,6 @@ export default function AppLayout() {
           if (user && !user.nameConfirmed) {
             setNamePrompt({ userId: user.id, currentName: user.displayName })
           }
-          checkOnboarding(session.user.id, token)
         })
       })
       .catch(() => {})
@@ -212,11 +237,11 @@ export default function AppLayout() {
               XO Arena
             </span>
           </Link>
-          {trainingDone === false && (
+          {session && showGuideButton && (
             <button
               onClick={() => setGuideOpen(true)}
-              aria-label="Getting Started guide"
-              title="Getting Started"
+              aria-label="Guide"
+              title="Guide"
               className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
               style={{
                 background: 'linear-gradient(135deg, var(--color-blue-500), #6366f1)',
@@ -224,7 +249,7 @@ export default function AppLayout() {
               }}
             >
               <span>✦</span>
-              <span className="hidden sm:inline">Guide</span>
+              <span>Guide</span>
             </button>
           )}
         </div>
@@ -294,7 +319,6 @@ export default function AppLayout() {
                 { to: '/admin/ml-models', label: 'Bots' },
                 { to: '/admin/ai', label: 'AI' },
                 { to: '/admin/logs', label: 'Logs' },
-                { to: '/admin/feedback', label: 'Feedback' },
               ].map(({ to, label }) => (
                 <NavLink
                   key={to}
@@ -307,14 +331,8 @@ export default function AppLayout() {
                         : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
                     }`
                   }
-                  onClick={() => { if (to === '/admin/feedback') setUnreadCount(0) }}
                 >
                   {label}
-                  {to === '/admin/feedback' && unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: 'var(--color-red-500)' }}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
                 </NavLink>
               ))}
             </>
@@ -430,11 +448,6 @@ export default function AppLayout() {
                       }
                     >
                       {label}
-                      {to === '/admin/feedback' && unreadCount > 0 && (
-                        <span className="ml-auto min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: 'var(--color-red-500)' }}>
-                          {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                      )}
                     </NavLink>
                   ))}
                 </>
@@ -490,7 +503,12 @@ export default function AppLayout() {
         onSave={() => setNamePrompt(null)}
         onSkip={() => setNamePrompt(null)}
       />
-      <GettingStartedModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
+      <GettingStartedModal
+        isOpen={guideOpen}
+        showHint={guideShowHint}
+        onClose={() => { setGuideOpen(false); setGuideShowHint(false) }}
+      />
+      <IdleLogoutManager />
     </div>
   )
 }

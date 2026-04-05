@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
+import { api } from '../../lib/api.js'
 
 export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) {
   const [view, setView] = useState(defaultView)        // 'sign-in' | 'sign-up' | 'verify-email' | 'forgot-password' | 'reset-sent'
-  const [step, setStep] = useState('email')             // 'email' | 'password'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -13,18 +13,21 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [resendSent, setResendSent] = useState(false)
+  const [honeypot, setHoneypot] = useState('')
+  const formStartedAt = useRef(null)
 
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setView(defaultView)
-      setStep('email')
       setEmail('')
       setPassword('')
       setConfirmPassword('')
       setName('')
       setError('')
       setResendSent(false)
+      setHoneypot('')
+      if (defaultView === 'sign-up') formStartedAt.current = Date.now()
     }
   }, [isOpen, defaultView])
 
@@ -38,24 +41,29 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
 
   function switchView(v) {
     setView(v)
-    setStep('email')
     setError('')
+    if (v === 'sign-up') formStartedAt.current = Date.now()
   }
 
   async function handleSignIn(e) {
     e.preventDefault()
     setError('')
-
-    if (step === 'email') {
-      if (!email || !email.includes('@')) { setError('Enter a valid email address.'); return }
-      setStep('password')
-      return
-    }
-
-    // step === 'password'
+    if (!email.trim()) { setError('Enter your email or username.'); return }
+    if (!password) { setError('Enter your password.'); return }
     setLoading(true)
     try {
-      const result = await signIn.email({ email, password })
+      // If input has no @, treat as username and resolve to email first
+      let resolvedEmail = email.trim()
+      if (!resolvedEmail.includes('@')) {
+        try {
+          const { email: found } = await api.users.emailByUsername(resolvedEmail.toLowerCase())
+          resolvedEmail = found
+        } catch {
+          setError('Username not found.')
+          return
+        }
+      }
+      const result = await signIn.email({ email: resolvedEmail, password })
       if (result?.error) { setError(result.error.message || 'Sign in failed.'); return }
       onClose()
     } catch (err) {
@@ -72,10 +80,27 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
     if (!password || password.length < 8) { setError('Password must be at least 8 characters.'); return }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return }
 
+    // Honeypot: silently abort without revealing the check
+    if (honeypot) { setView('verify-email'); return }
+
+    // Timing: bot submissions arrive too fast
+    if (formStartedAt.current && Date.now() - formStartedAt.current < 3000) {
+      setError('Please wait a moment before submitting.')
+      return
+    }
+
     setLoading(true)
     try {
       const displayName = name.trim() || email.split('@')[0]
-      const result = await signUp.email({ email, password, name: displayName })
+      const result = await signUp.email({
+        email, password, name: displayName,
+        fetchOptions: {
+          headers: {
+            'x-hp':  honeypot,
+            'x-fst': String(formStartedAt.current ?? 0),
+          },
+        },
+      })
       if (result?.error) { setError(result.error.message || 'Sign up failed.'); return }
       setView('verify-email')
     } catch (err) {
@@ -185,8 +210,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                 <div className="pt-2">
                   <button
                     onClick={() => switchView('sign-in')}
-                    className="text-sm"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="text-sm underline"
+                    style={{ color: 'var(--color-blue-600)' }}
                   >
                     Back to sign in
                   </button>
@@ -225,8 +250,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                   <button
                     type="button"
                     onClick={() => switchView('sign-in')}
-                    className="text-sm"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="text-sm underline"
+                    style={{ color: 'var(--color-blue-600)' }}
                   >
                     Back to sign in
                   </button>
@@ -245,8 +270,8 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                 <div className="pt-2">
                   <button
                     onClick={() => switchView('sign-in')}
-                    className="text-sm"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="text-sm underline"
+                    style={{ color: 'var(--color-blue-600)' }}
                   >
                     Back to sign in
                   </button>
@@ -291,60 +316,50 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                 {/* Sign-in form */}
                 {view === 'sign-in' && (
                   <form onSubmit={handleSignIn} className="space-y-3">
-                    {step === 'email' ? (
-                      <div>
-                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                          Email address
-                        </label>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={e => setEmail(e.target.value)}
-                          autoFocus
-                          autoComplete="email"
-                          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
-                          style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--color-blue-600)' }}
-                          placeholder="you@example.com"
-                        />
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Email or username
+                      </label>
+                      <input
+                        type="text"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        autoFocus
+                        autoComplete="email"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--color-blue-600)' }}
+                        placeholder="you@example.com or username"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        autoComplete="current-password"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                        placeholder="••••••••"
+                      />
+                      <div className="text-right mt-1">
+                        <button
+                          type="button"
+                          onClick={() => switchView('forgot-password')}
+                          className="text-xs"
+                          style={{ color: 'var(--color-blue-600)' }}
+                        >
+                          Forgot password?
+                        </button>
                       </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
-                          <span>{email}</span>
-                          <button type="button" onClick={() => setStep('email')} className="ml-auto text-xs underline" style={{ color: 'var(--color-blue-600)' }}>Change</button>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                            Password
-                          </label>
-                          <input
-                            type="password"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            autoFocus
-                            autoComplete="current-password"
-                            className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                            placeholder="••••••••"
-                          />
-                          <div className="text-right mt-1">
-                            <button
-                              type="button"
-                              onClick={() => switchView('forgot-password')}
-                              className="text-xs"
-                              style={{ color: 'var(--color-blue-600)' }}
-                            >
-                              Forgot password?
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
+                    </div>
 
                     {error && (
                       <div>
                         <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>
-                        {error.toLowerCase().includes('verif') && step === 'password' && (
+                        {error.toLowerCase().includes('verif') && (
                           resendSent ? (
                             <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-green-600, #16a34a)' }}>
                               ✓ Email sent — check your inbox
@@ -370,7 +385,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                       className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60 transition-opacity"
                       style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
                     >
-                      {loading ? 'Please wait…' : step === 'email' ? 'Continue' : 'Sign in'}
+                      {loading ? 'Please wait…' : 'Sign in'}
                     </button>
                   </form>
                 )}
@@ -435,6 +450,17 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                         placeholder="••••••••"
                       />
                     </div>
+
+                    {/* Honeypot — hidden from humans, bots fill it in */}
+                    <input
+                      type="text"
+                      value={honeypot}
+                      onChange={e => setHoneypot(e.target.value)}
+                      tabIndex={-1}
+                      autoComplete="off"
+                      aria-hidden="true"
+                      style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden', opacity: 0 }}
+                    />
 
                     {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
 
