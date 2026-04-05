@@ -91,7 +91,7 @@ export default function AppLayout() {
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const [guideOpen, setGuideOpen] = useState(false)
-  const [guideShowHint, setGuideShowHint] = useState(false)
+  const [guideHint, setGuideHint] = useState(null)
   const { showGuideButton, setPrefs } = usePrefsStore()
   const prevUserId = useRef(null)
 
@@ -121,7 +121,7 @@ export default function AppLayout() {
         setPrefs({ showGuideButton: sgb, playHintSeen: !!playHintSeen })
         if (!faqHintSeen) {
           api.users.markFaqHint(token).catch(() => {})
-          setGuideShowHint(true)
+          setGuideHint('faq')
           setGuideOpen(true)
         }
       } catch { /* non-fatal */ }
@@ -132,7 +132,8 @@ export default function AppLayout() {
   // Re-open guide when navigated back from FAQ with ?open-guide=1
   useEffect(() => {
     if (!location.search?.includes('open-guide=1')) return
-    setGuideShowHint(false)
+    const { playHintSeen } = usePrefsStore.getState()
+    setGuideHint(playHintSeen ? null : 'play')
     setGuideOpen(true)
     navigate(location.pathname, { replace: true })
   }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -505,8 +506,8 @@ export default function AppLayout() {
       />
       <GettingStartedModal
         isOpen={guideOpen}
-        showHint={guideShowHint}
-        onClose={() => { setGuideOpen(false); setGuideShowHint(false) }}
+        hint={guideHint}
+        onClose={() => { setGuideOpen(false); setGuideHint(null) }}
       />
       <IdleLogoutManager />
     </div>

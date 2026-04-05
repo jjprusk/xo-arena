@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 
-export default function GettingStartedModal({ isOpen, onClose, showHint = false }) {
+export default function GettingStartedModal({ isOpen, onClose, hint = null }) {
   useEffect(() => {
     if (!isOpen) return
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -10,7 +10,7 @@ export default function GettingStartedModal({ isOpen, onClose, showHint = false 
 
   if (!isOpen) return null
 
-  const src = showHint ? '/getting-started.html?hint=1' : '/getting-started.html'
+  const src = hint ? `/getting-started.html?hint=${hint}` : '/getting-started.html'
 
   return (
     <div
