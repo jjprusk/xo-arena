@@ -133,54 +133,59 @@ export default function IdleLogoutManager() {
     if (!warningRef.current) startWarnTimer()
   }, [startWarnTimer])
 
-  // Page Visibility API — compensates for browser timer throttling in background tabs.
-  // When the tab becomes visible, check if deadlines have passed and fire immediately.
-  useEffect(() => {
-    if (suppressed || !config) return
+  // Checks whether any deadline has passed and acts on it.
+  // Called both from the Page Visibility handler and the heartbeat interval so
+  // that screensavers (which don't hide the tab) are also caught.
+  const checkDeadlines = useCallback(() => {
+    const now = Date.now()
 
-    function onVisibilityChange() {
-      if (document.visibilityState !== 'visible') return
-      const now = Date.now()
-
-      // Grace period is active
-      if (graceDeadlineRef.current) {
-        if (now >= graceDeadlineRef.current) {
-          // Grace expired while tab was hidden — log out immediately
-          doLogout()
-        } else {
-          // Correct the countdown display and reschedule the timer precisely
-          const remainingSec = Math.ceil((graceDeadlineRef.current - now) / 1000)
-          setRemaining(remainingSec)
-          clearTimeout(graceTimerRef.current)
-          graceTimerRef.current = setTimeout(doLogout, graceDeadlineRef.current - now)
-        }
-        return
+    if (graceDeadlineRef.current) {
+      if (now >= graceDeadlineRef.current) {
+        doLogout()
+      } else {
+        const remainingSec = Math.ceil((graceDeadlineRef.current - now) / 1000)
+        setRemaining(remainingSec)
+        clearTimeout(graceTimerRef.current)
+        graceTimerRef.current = setTimeout(doLogout, graceDeadlineRef.current - now)
       }
+      return
+    }
 
-      // Warn timer is running
-      if (warnDeadlineRef.current) {
-        if (now >= warnDeadlineRef.current) {
-          // Warn timer expired while tab was hidden — show popup immediately
-          clearTimeout(warnTimerRef.current)
+    if (warnDeadlineRef.current) {
+      if (now >= warnDeadlineRef.current) {
+        clearTimeout(warnTimerRef.current)
+        warnTimerRef.current    = null
+        warnDeadlineRef.current = null
+        startGrace(config.idleGraceMs)
+      } else {
+        const remaining = warnDeadlineRef.current - now
+        clearTimeout(warnTimerRef.current)
+        warnTimerRef.current = setTimeout(() => {
           warnTimerRef.current    = null
           warnDeadlineRef.current = null
           startGrace(config.idleGraceMs)
-        } else {
-          // Reschedule warn timer with precise remaining time
-          const remaining = warnDeadlineRef.current - now
-          clearTimeout(warnTimerRef.current)
-          warnTimerRef.current = setTimeout(() => {
-            warnTimerRef.current    = null
-            warnDeadlineRef.current = null
-            startGrace(config.idleGraceMs)
-          }, remaining)
-        }
+        }, remaining)
       }
     }
+  }, [config, doLogout, startGrace])
 
+  // Page Visibility API — catches background-tab timer throttling.
+  useEffect(() => {
+    if (suppressed || !config) return
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') checkDeadlines()
+    }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
-  }, [suppressed, config, doLogout, startGrace])
+  }, [suppressed, config, checkDeadlines])
+
+  // Heartbeat — catches screensaver-induced timer throttling where the tab
+  // stays "visible" so visibilitychange never fires.
+  useEffect(() => {
+    if (suppressed || !config) return
+    const id = setInterval(checkDeadlines, 30_000)
+    return () => clearInterval(id)
+  }, [suppressed, config, checkDeadlines])
 
   // Start/stop timer when suppression state or config changes
   useEffect(() => {

@@ -19,11 +19,19 @@ vi.mock('../../../lib/api.js', () => ({
     rooms: {
       list: vi.fn(() => Promise.resolve({ rooms: [] })),
     },
+    users: {
+      getHints: vi.fn(() => Promise.resolve({ playHintSeen: true, faqHintSeen: true, showGuideButton: false })),
+      markPlayHint: vi.fn(() => Promise.resolve()),
+    },
   },
   cachedFetch: vi.fn(() => ({
     immediate: null,
     refresh: Promise.resolve({ bots: mockBots }),
   })),
+}))
+
+vi.mock('../../../lib/getToken.js', () => ({
+  getToken: vi.fn(() => Promise.resolve('mock-token')),
 }))
 
 vi.mock('../../../lib/useOptimisticSession.js', () => ({
@@ -49,6 +57,8 @@ describe('ModeSelection', () => {
   it('shows bot list after expanding Challenge a Bot', async () => {
     render(<ModeSelection />)
     fireEvent.click(screen.getByText('Challenge a Bot'))
+    await waitFor(() => screen.getByText(/Built-in/))
+    fireEvent.click(screen.getByText(/Built-in/))
     await waitFor(() => {
       expect(screen.getByText('Rusty')).toBeTruthy()
       expect(screen.getByText('Magnus')).toBeTruthy()
@@ -58,6 +68,8 @@ describe('ModeSelection', () => {
   it('shows Challenge buttons for each bot when signed in', async () => {
     render(<ModeSelection />)
     fireEvent.click(screen.getByText('Challenge a Bot'))
+    await waitFor(() => screen.getByText(/Built-in/))
+    fireEvent.click(screen.getByText(/Built-in/))
     await waitFor(() => screen.getByText('Rusty'))
     const challengeButtons = screen.getAllByText('Challenge')
     expect(challengeButtons.length).toBe(mockBots.length)
@@ -67,6 +79,8 @@ describe('ModeSelection', () => {
     const onStart = vi.fn()
     render(<ModeSelection onStart={onStart} />)
     fireEvent.click(screen.getByText('Challenge a Bot'))
+    await waitFor(() => screen.getByText(/Built-in/))
+    fireEvent.click(screen.getByText(/Built-in/))
     await waitFor(() => screen.getByText('Rusty'))
     fireEvent.click(screen.getAllByText('Challenge')[0])
     expect(onStart).toHaveBeenCalled()
