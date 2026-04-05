@@ -12,10 +12,19 @@ try { dotenvConfig({ path: envPath }) } catch { /* cwd may not exist when invoke
 // When running on the host (not inside Docker), Docker service hostnames
 // ("postgres", "redis") aren't resolvable. Both ports are mapped to localhost,
 // so we rewrite the URLs automatically.
+// When running via `railway run`, Railway injects internal hostnames that are
+// unreachable from outside its network. Fall back to DATABASE_PUBLIC_URL if set.
 function fixDockerUrls() {
   if (existsSync('/.dockerenv')) return
-  const db = process.env.DATABASE_URL
-  if (db) process.env.DATABASE_URL = db.replace('@postgres:', '@localhost:')
+
+  // Prefer the public URL when available (e.g. `railway run --environment staging`)
+  if (process.env.DATABASE_PUBLIC_URL) {
+    process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL
+  } else {
+    const db = process.env.DATABASE_URL
+    if (db) process.env.DATABASE_URL = db.replace('@postgres:', '@localhost:')
+  }
+
   const redis = process.env.REDIS_URL
   if (redis) process.env.REDIS_URL = redis.replace('//redis:', '//localhost:')
 }
