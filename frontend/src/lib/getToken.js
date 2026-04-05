@@ -8,6 +8,7 @@
 
 let _cachedToken = null
 let _tokenExpiry = 0
+let _nullUntil   = 0   // negative cache: skip the network if we recently got a 401
 
 function decodeExpiry(jwt) {
   try {
@@ -18,9 +19,10 @@ function decodeExpiry(jwt) {
 
 export async function getToken() {
   if (_cachedToken && Date.now() < _tokenExpiry - 60_000) return _cachedToken
+  if (Date.now() < _nullUntil) return null
   try {
     const res = await fetch('/api/auth/token', { method: 'GET', credentials: 'include' })
-    if (!res.ok) { _cachedToken = null; return null }
+    if (!res.ok) { _cachedToken = null; _nullUntil = Date.now() + 10_000; return null }
     const data = await res.json()
     const token = data?.token ?? null
     if (token) {
@@ -36,4 +38,5 @@ export async function getToken() {
 export function clearTokenCache() {
   _cachedToken = null
   _tokenExpiry = 0
+  _nullUntil   = 0
 }

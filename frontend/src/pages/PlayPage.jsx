@@ -14,6 +14,12 @@ export default function PlayPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const guestChallengeHint = location.state?.guestChallengeHint ?? false
+
+  // Clear navigation state so a page reload doesn't re-trigger the hint
+  useEffect(() => {
+    if (!guestChallengeHint) return
+    navigate(location.pathname + (location.search || ''), { replace: true, state: null })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const joinSlug = searchParams.get('join')
   const spectateSlug = searchParams.get('spectate')
 
