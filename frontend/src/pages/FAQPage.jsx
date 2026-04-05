@@ -67,7 +67,7 @@ export default function FAQPage() {
   const [openSections, setOpenSections] = useState(new Set())
 
   useEffect(() => {
-    fetch('/faq.md')
+    fetch('/faq.md', { cache: 'no-store' })
       .then(r => r.text())
       .then(setContent)
   }, [])
