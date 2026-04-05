@@ -21,7 +21,13 @@ function fixDockerUrls() {
   if (process.env.DATABASE_PUBLIC_URL) {
     process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL
   } else {
-    const db = process.env.DATABASE_URL
+    const db = process.env.DATABASE_URL ?? ''
+    if (db.includes('.railway.internal')) {
+      console.error('um: DATABASE_URL points to a Railway internal hostname that is unreachable from outside Railway.')
+      console.error('um: Enable the public TCP proxy on your Railway Postgres plugin to get DATABASE_PUBLIC_URL,')
+      console.error('um: or set DATABASE_PUBLIC_URL manually in your Railway environment variables.')
+      process.exit(1)
+    }
     if (db) process.env.DATABASE_URL = db.replace('@postgres:', '@localhost:')
   }
 
@@ -31,7 +37,10 @@ function fixDockerUrls() {
 fixDockerUrls()
 
 export function guardProduction() {
-  if (process.env.NODE_ENV === 'production') {
+  const isProduction = process.env.NODE_ENV === 'production'
+  const railwayEnv   = process.env.RAILWAY_ENVIRONMENT
+  // Allow staging even when Railway sets NODE_ENV=production
+  if (isProduction && railwayEnv !== 'staging') {
     console.error('um: refuses to run in production')
     process.exit(1)
   }

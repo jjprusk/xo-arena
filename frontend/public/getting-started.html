@@ -48,9 +48,12 @@
   @keyframes hintFadeOut {
     to { opacity: 0; }
   }
-  #faqHint { transform-origin: 220px 298px; display: none; }
-  #faqHint.bobbing { animation: fingerBob 0.7s ease-in-out infinite; }
-  #faqHint.fading  { animation: hintFadeOut 0.8s ease-out forwards; }
+  #faqHint  { transform-origin: 220px 298px; display: none; }
+  #faqHint.bobbing  { animation: fingerBob 0.7s ease-in-out infinite; }
+  #faqHint.fading   { animation: hintFadeOut 0.8s ease-out forwards; }
+  #playHint { transform-origin: 555px 318px; display: none; }
+  #playHint.bobbing { animation: fingerBob 0.7s ease-in-out infinite; }
+  #playHint.fading  { animation: hintFadeOut 0.8s ease-out forwards; }
 </style>
 </head>
 <body>
@@ -215,6 +218,14 @@
         letter-spacing="0.5">Click here</text>
 </g>
 
+<!-- ── Play vs Bots hint finger (after FAQ) ── -->
+<g id="playHint">
+  <text x="555" y="318" text-anchor="middle" dominant-baseline="middle"
+        font-size="52" font-family="Apple Color Emoji,Segoe UI Emoji,sans-serif">👆</text>
+  <text x="555" y="354" text-anchor="middle" font-size="23" font-weight="700" fill="#ec4899"
+        letter-spacing="0.5">Click here</text>
+</g>
+
 <!-- ── Step 3: Play vs Bots ── cx=555 cy=220 -->
 <a href="/play" target="_top" class="play-btn">
   <circle cx="555" cy="220" r="82" fill="#ec4899" opacity="0.07"/>
@@ -302,15 +313,37 @@
     if (faqLink) faqLink.addEventListener('click', hideFaqHint, { once: true })
   }
 
+  // ── Play hint ────────────────────────────────────────────────────────────────
+  function hidePlayHint() {
+    var hint = document.getElementById('playHint')
+    if (!hint) return
+    hint.classList.remove('bobbing')
+    hint.classList.add('fading')
+    hint.addEventListener('animationend', function () { hint.style.display = 'none' }, { once: true })
+  }
+
+  function showPlayHint() {
+    var hint = document.getElementById('playHint')
+    if (!hint || hint.style.display === 'inline') return
+    hint.style.display = 'inline'
+    hint.classList.add('bobbing')
+    var playLinks = document.querySelectorAll('a[href="/play"]')
+    playLinks.forEach(function (l) { l.addEventListener('click', hidePlayHint, { once: true }) })
+  }
+
   // Primary: URL parameter (avoids postMessage timing races with React StrictMode)
-  if (new URLSearchParams(window.location.search).get('hint') === '1') {
+  var hintParam = new URLSearchParams(window.location.search).get('hint')
+  if (hintParam === '1' || hintParam === 'faq') {
     showFaqHint()
+  } else if (hintParam === 'play') {
+    showPlayHint()
   }
 
   // Fallback: postMessage from parent (kept for compatibility)
   window.addEventListener('message', function (e) {
-    if (!e.data || e.data.type !== 'show-faq-hint') return
-    showFaqHint()
+    if (!e.data) return
+    if (e.data.type === 'show-faq-hint')  showFaqHint()
+    if (e.data.type === 'show-play-hint') showPlayHint()
   })
   // Tell the parent that this listener is now registered and ready
   window.parent.postMessage({ type: 'getting-started-ready' }, '*')

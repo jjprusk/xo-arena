@@ -10,7 +10,7 @@ export const useRolesStore = create((set, get) => ({
     try {
       const token = await getToken()
       if (!token) { set({ roles: [] }); return }
-      const res = await fetch(`${BASE}/api/v1/me/roles`, {
+      const res = await fetch(`${BASE}/api/v1/users/me/roles`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) { set({ roles: [] }); return }
