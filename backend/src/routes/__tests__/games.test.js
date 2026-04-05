@@ -20,11 +20,16 @@ vi.mock('../../services/eloService.js', () => ({
   updateBothElosAfterPvBot: vi.fn(async () => {}),
 }))
 
+vi.mock('../../services/creditService.js', () => ({
+  recordGameCompletion: vi.fn().mockResolvedValue([]),
+}))
+
 const gamesRouter = (await import('../games.js')).default
 const { getUserByBetterAuthId, getBotByModelId, createGame } =
   await import('../../services/userService.js')
 const { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot } =
   await import('../../services/eloService.js')
+const { recordGameCompletion } = await import('../../services/creditService.js')
 
 const app = express()
 app.use(express.json())
@@ -144,5 +149,46 @@ describe('POST /api/v1/games — PVBOT', () => {
       .post('/api/v1/games')
       .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
     expect(updatePlayerEloAfterPvAI).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Credits wiring (Phase 5)
+// ---------------------------------------------------------------------------
+
+describe('POST /api/v1/games — credit recording', () => {
+  beforeEach(() => {
+    getBotByModelId.mockResolvedValue(mockBot)
+  })
+
+  it('calls recordGameCompletion fire-and-forget for PVBOT games', async () => {
+    const res = await request(app)
+      .post('/api/v1/games')
+      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
+    expect(res.status).toBe(201)
+    // Allow the async fire-and-forget to settle
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(recordGameCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ appId: 'xo-arena', mode: 'pvp' })
+    )
+    const call = recordGameCompletion.mock.calls[0][0]
+    expect(call.participants).toContainEqual(expect.objectContaining({ userId: 'usr_1', isBot: false }))
+    expect(call.participants).toContainEqual(expect.objectContaining({ userId: 'bot_1', isBot: true }))
+  })
+
+  it('does not call recordGameCompletion for PVAI games', async () => {
+    await request(app)
+      .post('/api/v1/games')
+      .send({ ...BASE_BODY, difficulty: 'easy', aiImplementationId: 'minimax' })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(recordGameCompletion).not.toHaveBeenCalled()
+  })
+
+  it('credit failure does not affect the 201 response', async () => {
+    recordGameCompletion.mockRejectedValueOnce(new Error('DB offline'))
+    const res = await request(app)
+      .post('/api/v1/games')
+      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
+    expect(res.status).toBe(201)
   })
 })

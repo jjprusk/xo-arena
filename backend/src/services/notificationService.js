@@ -124,5 +124,8 @@ export async function checkAndNotify(userId, previousCredits) {
     }
   }
 
-  await Promise.allSettled(jobs)
+  const results = await Promise.allSettled(jobs)
+  return results
+    .filter(r => r.status === 'fulfilled' && r.value !== null)
+    .map(r => r.value)
 }

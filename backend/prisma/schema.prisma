@@ -119,6 +119,7 @@ model UserEloHistory {
 
 model Game {
   id                 String      @id @default(cuid())
+  appId              String      @default("xo-arena")
   player1Id          String
   player2Id          String?
   winnerId           String?

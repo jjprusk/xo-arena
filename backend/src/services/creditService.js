@@ -110,3 +110,56 @@ export async function getTierLimit(userId, capability) {
 
   throw new Error(`Unknown capability: ${capability}`)
 }
+
+/**
+ * Called by any game route after a completed game is committed to the DB.
+ * Game-agnostic: operates entirely on the normalized participants array.
+ *
+ * appId:        string — e.g. "xo-arena", "chess" (for context/logging; not used in logic)
+ * participants: { userId, isBot, botOwnerId }[]
+ * mode:         "pvp" | "pvc" | "bvb"
+ *   - "pvc" = player vs built-in AI → Universal Exclusion, no credits awarded
+ *   - "pvp" = real players (human or bot) on both sides → HPC for humans, BPC for bot owners
+ *   - "bvb" = bot vs bot → BPC for bot owners only
+ *
+ * Returns an array of UserNotification objects that were newly created.
+ */
+export async function recordGameCompletion({ appId, participants, mode }) {
+  // Dynamic import breaks the circular dependency with notificationService
+  // (notificationService imports getUserCredits/getTierLimit from this module).
+  const { checkAndNotify } = await import('./notificationService.js')
+
+  // Universal Exclusion: built-in AI games never earn credits
+  if (mode === 'pvc') return []
+
+  const created = []
+
+  // HPC: all non-bot participants in a qualifying PvP game (both sides must be human)
+  const humans = participants.filter(p => !p.isBot)
+  if (mode === 'pvp' && humans.length >= 2) {
+    for (const { userId } of humans) {
+      const prev = await getUserCredits(userId)
+      await db.user.update({ where: { id: userId }, data: { creditsHpc: { increment: 1 } } })
+      const notifs = await checkAndNotify(userId, prev)
+      created.push(...notifs)
+    }
+  }
+
+  // BPC: bot owner earns credit when their bot plays an external opponent
+  const bots = participants.filter(p => p.isBot && p.botOwnerId)
+  for (const bot of bots) {
+    const hasExternalOpponent = participants.some(p =>
+      p.userId !== bot.userId &&
+      p.userId !== bot.botOwnerId &&
+      p.botOwnerId !== bot.botOwnerId
+    )
+    if (hasExternalOpponent) {
+      const prev = await getUserCredits(bot.botOwnerId)
+      await db.user.update({ where: { id: bot.botOwnerId }, data: { creditsBpc: { increment: 1 } } })
+      const notifs = await checkAndNotify(bot.botOwnerId, prev)
+      created.push(...notifs)
+    }
+  }
+
+  return created
+}

@@ -120,6 +120,16 @@ describe('queueNotification — email delivery', () => {
     expect(emailSend).not.toHaveBeenCalled()
     expect(db.userNotification.update).not.toHaveBeenCalled()
   })
+
+  it('logs warning and still returns notification when email send throws', async () => {
+    mockUserOffline('ba_1', true)
+    emailSend.mockRejectedValueOnce(new Error('SMTP error'))
+    const result = await queueNotification('usr_1', 'first_hpc', { message: 'First!' })
+    // Notification was created before the email attempt
+    expect(db.userNotification.create).toHaveBeenCalledOnce()
+    // Despite the email failure, the notification row is still returned
+    expect(result).not.toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -174,5 +184,13 @@ describe('checkAndNotify', () => {
     getUserCredits.mockResolvedValue({ tier: 2, tierName: 'Gold', tierIcon: '🥇', hpc: 110, bpc: 0, tc: 0, activityScore: 110, nextTier: 3, pointsToNextTier: 390 })
     await checkAndNotify('usr_1', { tier: 2, hpc: 105, bpc: 0, tc: 0, activityScore: 105 })
     expect(db.userNotification.create).not.toHaveBeenCalled()
+  })
+
+  it('queues first_tc when tc goes from 0 to 1', async () => {
+    getUserCredits.mockResolvedValue({ tier: 0, tierName: 'Bronze', tierIcon: '🥉', hpc: 0, bpc: 0, tc: 1, activityScore: 5, nextTier: 1, pointsToNextTier: 20 })
+    await checkAndNotify('usr_1', { tier: 0, hpc: 0, bpc: 0, tc: 0, activityScore: 0 })
+    expect(db.userNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'first_tc' }) })
+    )
   })
 })

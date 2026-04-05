@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { getUserByBetterAuthId, getBotByModelId, createGame } from '../services/userService.js'
 import { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot } from '../services/eloService.js'
+import { recordGameCompletion } from '../services/creditService.js'
 import cache from '../utils/cache.js'
 import logger from '../logger.js'
 
@@ -61,6 +62,14 @@ router.post('/', requireAuth, async (req, res, next) => {
       // Update ELO for both sides (fire-and-forget)
       updateBothElosAfterPvBot(user.id, bot.id, outcome).catch(() => {})
       cache.invalidatePrefix('leaderboard:')
+
+      // Record credits (fire-and-forget — failure must never block the response)
+      const pvbotParticipants = [
+        { userId: user.id, isBot: false, botOwnerId: null },
+        { userId: bot.id, isBot: true, botOwnerId: bot.botOwnerId ?? null },
+      ]
+      recordGameCompletion({ appId: 'xo-arena', participants: pvbotParticipants, mode: 'pvp' })
+        .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))
 
       return res.status(201).json({ game: { id: game.id } })
     }
