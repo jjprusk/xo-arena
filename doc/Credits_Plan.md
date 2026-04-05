@@ -2,54 +2,84 @@
 
 ## Overview
 
-Credits are a **lifetime activity score** earned through gameplay engagement. They accumulate
-permanently and unlock higher platform limits and capabilities as users hit thresholds. Credits
-are never purchased, never expire, and cannot be transferred.
+Credits are a **lifetime activity score** earned through gameplay engagement. They accumulate permanently and unlock higher platform limits and capabilities as users hit thresholds. Credits are never purchased, never expire, and cannot be transferred.
 
-The system is designed to reward genuine participation, not grinding. Each credit type captures
-a different dimension of engagement. A combined **Activity Score** (weighted sum) determines the
-user's tier, which governs their default platform limits.
+The system is designed to reward genuine participation, not grinding. Each credit type captures a different dimension of engagement. A combined **Activity Score** (weighted sum) determines the user's tier, which governs their default platform limits.
 
-> **Admin overrides always win.** The per-user `botLimit` and `mlModelLimit` fields on the User
-> record take precedence over tier-derived limits. Admins can exempt specific users from the
-> credit system entirely.
+> **Admin overrides always win.** The per-user `botLimit` field on the User record takes precedence over tier-derived limits. Admins can exempt specific users from the credit system entirely.
 
 ---
 
 ## Cross-Game Design Principle
 
-The credit system is **game-agnostic by design**. It must work identically for XO Arena today
-and any future game (chess, checkers, etc.) without modification to the credit service itself.
+The credit system is **game-agnostic by design**. It must work identically for XO Arena today and any future game (chess, checkers, etc.) without modification to the credit service itself.
 
 This mirrors the feedback system's `appId` pattern:
 
-- Every game that emits credit-earning events passes an `appId` (e.g., `"xo-arena"`, `"chess"`)
-  alongside participant and outcome data.
-- The credit service never imports or queries game-specific tables directly. Instead, game
-  routes call a standardized hook: `creditService.recordGameCompletion(event)`.
-- The `Game` table (and any future game's equivalent) carries an `appId` column so credits
-  can be reported, filtered, and displayed per-game.
-- Activity Score and tiers are **global** across all games — a user's engagement on any game
-  counts toward the same tier.
-- Capability limits (bots, ML models) are currently global but are structured to accommodate
-  per-game pools when a second game ships.
+- Every game that emits credit-earning events passes an `appId` (e.g., `"xo-arena"`, `"chess"`) alongside participant and outcome data.
+- The credit service never imports or queries game-specific tables directly. Instead, game routes call a standardized hook: `creditService.recordGameCompletion(event)`.
+- The `Game` table (and any future game's equivalent) carries an `appId` column so credits can be reported, filtered, and displayed per-game.
+- Activity Score and tiers are **global** across all games — a user's engagement on any game counts toward the same tier.
+- Capability limits (bots) are currently global but are structured to accommodate per-game pools when a second game ships.
 
-**Phase 5 must be implemented as a generic hook**, not as a direct modification to
-`xo-arena/routes/games.js`. Any future game calls the same hook without touching the credit
-service internals.
+**Phase 5 must be implemented as a generic hook**, not as a direct modification to `xo-arena/routes/games.js`. Any future game calls the same hook without touching the credit service internals.
+
+---
+
+## Multi-Game Bots
+
+Bots are designed as **persistent entities that can compete across multiple games**. A bot is not tied to a single game — it is an agent identity that accumulates game-specific models as new games are supported on the platform.
+
+### Bot Entity vs. Model
+
+A bot entity (the `Bot` record) represents the agent: its name, owner, ELO ratings, and reputation. Each game the bot is trained for adds a **game model** — a trained brain specific to that game's rules and state space.
+
+- A bot named "Alpha" can have a tic-tac-toe model and a chess model.
+- Alpha can be fielded in any game it has a trained model for.
+- Training is always game-specific — the model learns one game at a time.
+- A bot with no model for a given game cannot be entered in that game.
+
+This is the **multi-model architecture** — each bot entity holds one model per game — rather than a single general-purpose model across all games. The latter (true general game-playing AI, akin to DeepMind's AlphaZero) would require a unified state representation across all games and is out of scope for now.
+
+### Schema Direction
+
+Instead of "each bot has exactly one model", the relationship becomes one-to-many:
+
+```
+Bot (1) ──── (many) BotModel
+                      gameId       String    // e.g. "xo-arena", "chess"
+                      modelData    ...       // game-specific weights / config
+                      trainedAt    DateTime
+                      episodeCount Int
+```
+
+ELO ratings are per-game. The `Bot` record holds a global default ELO, but game-specific ELO lives on `BotModel` (or a `BotGameStats` join table).
+
+### Bot Limits
+
+A bot entity counts as **one bot slot** regardless of how many game models it has. The limit governs the number of agents an owner manages, not the total number of trained models. A Diamond-tier user with 5 bots could have each bot trained in 3 games — 15 models total — but still occupies 5 bot slots.
+
+### Competitive Angle
+
+Multi-game bots open several possibilities as the platform grows:
+
+- **Per-game leaderboards** — a bot's ELO in tic-tac-toe and chess are tracked independently.
+- **Cross-game bot profile** — a bot's profile shows its rating and record across every game it has played.
+- **Generalist tournaments** — future tournament types could span multiple games, rewarding bots that perform consistently across a variety of games rather than specializing in one.
+- **Specialist vs. generalist comparison** — owners can observe whether deep training in one game transfers to performance in another, or whether specialization beats breadth.
 
 ---
 
 ## Universal Exclusion
 
-**Games involving built-in AI opponents never earn any credits** (HPC, BPC, or TC). Credits
-require real participants — human players or trained user-owned bots competing against each other.
+**Games involving built-in AI opponents never earn any credits** (HPC, BPC, or TC). Credits require real participants — human players or trained user-owned bots competing against each other.
 
 ---
 
 ## Credit Types
 
 ### 1. Human Play Credits (HPC)
+
 Earned when a **human user plays a completed PvP game** (user vs. user, both sides human).
 
 - **+1 HPC** per completed game (win, loss, or draw all count)
@@ -58,6 +88,7 @@ Earned when a **human user plays a completed PvP game** (user vs. user, both sid
 - Source: `Game` rows where `mode = 'pvp'` and both `player1Id` and `player2Id` are non-bot users
 
 ### 2. Bot Play Credits (BPC)
+
 Earned when **any of the user's bots participates in a completed game against an external opponent**.
 
 - **+1 BPC** per completed game involving one of the user's bots (as either player)
@@ -68,6 +99,7 @@ Earned when **any of the user's bots participates in a completed game against an
 - Source: `Game` rows where `player1Id` or `player2Id` is a bot with `botOwnerId = user.id`, and the other participant is neither `user.id` nor a bot with `botOwnerId = user.id`
 
 ### 3. Tournament Credits (TC)
+
 Earned when **the user or any of their bots enters a tournament**.
 
 - **+1 TC** per tournament entry (user registration or bot entry)
@@ -83,10 +115,7 @@ Earned when **the user or any of their bots enters a tournament**.
 ActivityScore = HPC + BPC + (TC × tcMultiplier)
 ```
 
-`tcMultiplier` defaults to **5** and is admin-configurable via system config key
-`credits.tcMultiplier`. Tournament credits are worth more than play credits because they
-represent higher commitment: bracket registration, scheduled participation, and competitive
-stakes.
+`tcMultiplier` defaults to **5** and is admin-configurable via system config key `credits.tcMultiplier`. Tournament credits are worth more than play credits because they represent higher commitment: bracket registration, scheduled participation, and competitive stakes.
 
 ### Example calculations
 
@@ -95,15 +124,14 @@ stakes.
 | New user | 0 | 0 | 0 | 0 | 🥉 Bronze |
 | Casual player | 20 | 5 | 0 | 25 | 🥈 Silver |
 | Active bot owner | 30 | 80 | 0 | 110 | 🥇 Gold |
-| Tournament regular | 15 | 30 | 10 | 95 → with TC×5: **95** | 🥇 Gold |
+| Tournament regular | 15 | 30 | 10 | 15 + 30 + (10×5) = **95** | 🥇 Gold |
 | Power user | 200 | 300 | 40 | 700 | 💠 Platinum |
 
 ---
 
 ## Tiers
 
-Tier thresholds are fully admin-configurable. The table below shows the **default values**
-stored under `credits.tiers` system config.
+Tier thresholds are fully admin-configurable. The table below shows the **default values** stored under `credits.tiers` system config.
 
 | Tier | Name | System Config Key | Default Min Score | Icon |
 |------|------|-------------------|-------------------|------|
@@ -113,21 +141,15 @@ stored under `credits.tiers` system config.
 | 3 | Platinum | `credits.tiers.platinum` | 500 | 💠 |
 | 4 | Diamond | `credits.tiers.diamond` | 2,000 | 💎 |
 
-Tiers are recalculated on-demand (not cached) from live credit counts. There is no
-"level up" event — users simply cross thresholds as they play.
+Tiers are recalculated on-demand (not cached) from live credit counts. There is no "level up" event — users simply cross thresholds as they play.
 
 ---
 
 ## Capabilities by Tier
 
-All per-tier capability values are admin-configurable via system config. A value of `0`
-means unlimited. The per-user `botLimit` override on the User record takes precedence over
-tier defaults.
+All per-tier capability values are admin-configurable via system config. A value of `0` means unlimited. The per-user `botLimit` override on the User record takes precedence over tier defaults.
 
-> **No separate ML model limit.** Each bot has exactly one model (its brain). The bot limit
-> is therefore the effective model limit — a user with 8 bots needs at most 8 models.
-> ML model count is not independently capped. The tier system governs compute usage
-> (episodes, concurrent sessions) rather than the model count itself.
+> **No ML limits.** Training runs entirely in the frontend — no backend compute is consumed. ML model count is not separately capped: a bot can hold one model per supported game, and the bot slot limit governs the number of agents an owner manages, not the total model count. Only bot counts are governed by tier.
 
 ### Bot Limits
 
@@ -141,43 +163,23 @@ tier defaults.
 
 ### Training Episodes Per Session
 
+Frontend-enforced cap on how many episodes a user may run in a single training session. Training runs entirely in the browser — this limit has no backend compute impact. It is a fairness and UX guardrail: higher tiers unlock longer sessions.
+
 | Tier | System Config Key | Default |
 |------|-------------------|---------|
 | Bronze (0) | `credits.limits.episodesPerSession.bronze` | 1,000 |
 | Silver (1) | `credits.limits.episodesPerSession.silver` | 5,000 |
 | Gold (2) | `credits.limits.episodesPerSession.gold` | 20,000 |
-| Platinum (3) | `credits.limits.episodesPerSession.platinum` | 100,000 |
-| Diamond (4) | `credits.limits.episodesPerSession.diamond` | 0 (unlimited) |
+| Platinum (3) | `credits.limits.episodesPerSession.platinum` | 50,000 |
+| Diamond (4) | `credits.limits.episodesPerSession.diamond` | 100,000 |
 
-The existing `ml.maxEpisodesPerSession` system config acts as an **absolute ceiling** across
-all tiers — the effective cap is the lower of the two.
-
-### Lifetime Episodes Per Bot
-
-| Tier | System Config Key | Default |
-|------|-------------------|---------|
-| Bronze (0) | `credits.limits.episodesPerBot.bronze` | 10,000 |
-| Silver (1) | `credits.limits.episodesPerBot.silver` | 50,000 |
-| Gold (2) | `credits.limits.episodesPerBot.gold` | 250,000 |
-| Platinum (3) | `credits.limits.episodesPerBot.platinum` | 1,000,000 |
-| Diamond (4) | `credits.limits.episodesPerBot.diamond` | 0 (unlimited) |
-
-### Concurrent Training Sessions
-
-| Tier | System Config Key | Default |
-|------|-------------------|---------|
-| Bronze (0) | `credits.limits.concurrentSessions.bronze` | 1 |
-| Silver (1) | `credits.limits.concurrentSessions.silver` | 2 |
-| Gold (2) | `credits.limits.concurrentSessions.gold` | 3 |
-| Platinum (3) | `credits.limits.concurrentSessions.platinum` | 5 |
-| Diamond (4) | `credits.limits.concurrentSessions.diamond` | 0 (unlimited) |
+The existing `ml.maxEpisodesPerSession` system config acts as an **absolute ceiling** across all tiers — the effective cap is the lower of the two.
 
 ---
 
 ## Future Credit Types (Candidates)
 
-These are not implemented yet but are expected to be slotted in as the platform grows.
-The formula and tier thresholds should be revisited when any of these are added.
+These are not implemented yet but are expected to be slotted in as the platform grows. The formula and tier thresholds should be revisited when any of these are added.
 
 | # | Name | Description |
 |---|------|-------------|
@@ -191,16 +193,13 @@ If Win Credits (WC) are added, the formula candidate is:
 ```
 ActivityScore = HPC + BPC + (TC × 5) + (WC × 0.5)
 ```
-Win credits are worth half a play credit to avoid skewing the score toward raw volume of wins
-over breadth of participation.
+Win credits are worth half a play credit to avoid skewing the score toward raw volume of wins over breadth of participation.
 
 ---
 
 ## Accomplishment Notifications
 
-Whenever a user crosses a tier threshold or earns a notable accomplishment, they receive a
-**celebratory popup**. The popup fires immediately if the user is currently logged in, or is
-queued and shown the next time they log in.
+Whenever a user crosses a tier threshold or earns a notable accomplishment, they receive a **celebratory popup**. The popup fires immediately if the user is currently logged in, or is queued and shown the next time they log in.
 
 ### Trigger Events
 
@@ -211,31 +210,26 @@ queued and shown the next time they log in.
 | First BPC | "Your bot played its first external game — bot play credits are now tracking." |
 | First TC | "You entered your first tournament — tournament credits are now tracking." |
 | Credit milestone | "You've earned 100 activity points!" *(at 100, 500, 2000)* |
+| First win | "You won your first game — congratulations!" |
+| First bot created | "Your first bot is ready to compete!" |
 
-More accomplishment types (first win, first bot created, ELO milestones, etc.) can be added
-without schema changes — they're just new trigger conditions evaluated at the same hook points.
+All accomplishment types are trigger conditions evaluated at the same hook points — no schema changes required to add more.
+
+### Future Accomplishments (not yet implemented)
+
+| Event | Notes |
+|-------|-------|
+| ELO milestone | Fire each time the user's ELO crosses a 100-point boundary above 1200 (e.g. 1300, 1400, …) |
 
 ### Delivery Mechanism
 
-**Immediate (user is online):**
-When a credit-earning event completes on the backend, check whether the user's tier or any
-accomplishment state changed. If so, push a notification payload via the existing Socket.IO
-connection. The frontend listens for an `accomplishment` event and renders the popup.
+**Immediate (user is online):** When a credit-earning event completes on the backend, check whether the user's tier or any accomplishment state changed. If so, push a notification payload via the existing Socket.IO connection. The frontend listens for an `accomplishment` event and renders the popup.
 
-**Deferred (user is offline):**
-Undelivered notifications are stored in a `UserNotification` table (see schema below). On
-login (after `/users/sync` completes), the frontend calls `GET /api/v1/users/me/notifications`
-and displays any pending popups in sequence, then marks them delivered.
+**Deferred (user is offline):** Undelivered notifications are stored in a `UserNotification` table (see schema below). On login (after `/users/sync` completes), the frontend calls `GET /api/v1/users/me/notifications` and displays any pending popups in sequence, then marks them delivered.
 
-**Email (user is offline + opted in):**
-If the user is offline at the time the notification is queued AND they have opted in to
-achievement emails, an email is sent via Resend immediately after the `UserNotification` row
-is inserted. The email is celebratory in tone — e.g., a bot winning a tournament match while
-the user was away. Email is never sent for notifications that were delivered in real time via
-Socket.IO (user was online and already saw the popup).
+**Email (user is offline + opted in):** If the user is offline at the time the notification is queued AND they have opted in to achievement emails, an email is sent via Resend immediately after the `UserNotification` row is inserted. The email is celebratory in tone — e.g., a bot winning a tournament match while the user was away. Email is never sent for notifications that were delivered in real time via Socket.IO (user was online and already saw the popup).
 
-User opt-in is controlled by a `emailAchievements` boolean preference (default `false`).
-Users can toggle this in their profile settings. No email is sent unless explicitly opted in.
+User opt-in is controlled by an `emailAchievements` boolean preference (default `false`). Users can toggle this in their profile settings. No email is sent unless explicitly opted in.
 
 ### Schema
 
@@ -255,8 +249,7 @@ model UserNotification {
 }
 ```
 
-A `deliveredAt = null` row is pending. The frontend marks rows delivered by calling
-`POST /api/v1/users/me/notifications/:id/deliver` (or a batch variant).
+A `deliveredAt = null` row is pending. The frontend marks rows delivered by calling `POST /api/v1/users/me/notifications/:id/deliver` (or a batch variant).
 
 User preference field on the `User` model:
 ```prisma
@@ -268,25 +261,20 @@ emailAchievements  Boolean  @default(false)
 - Displayed as a **modal overlay** centered on screen, above all other content (z-index above nav)
 - Shows tier icon, tier name, a short headline, and a one-line description of what unlocked
 - Single "Got it" dismiss button; also dismisses on backdrop click or Escape
-- If multiple notifications are queued, show them **one at a time** in chronological order
-  (next appears after current is dismissed)
-- Do not show more than one popup per page load for non-tier events (batch credit milestones
-  into a single "You hit several milestones!" summary if more than 2 are pending at once)
+- If multiple notifications are queued, show them **one at a time** in chronological order (next appears after current is dismissed)
+- Do not show more than one popup per page load for non-tier events (batch credit milestones into a single "You hit several milestones!" summary if more than 2 are pending at once)
 
 ### Deduplication
 
-Before inserting a `UserNotification`, check whether an undelivered notification of the same
-`type` + same key payload value (e.g., `tier = 2`) already exists for the user. If so, skip
-the insert — avoids duplicate popups if the trigger fires more than once before delivery.
+Before inserting a `UserNotification`, check whether an undelivered notification of the same `type` + same key payload value (e.g., `tier = 2`) already exists for the user. If so, skip the insert — avoids duplicate popups if the trigger fires more than once before delivery.
 
 ---
 
 ## Implementation Notes
 
 ### Credit Storage
-Credits are **stored as integer counters on the `User` record** and incremented atomically
-when a qualifying event is recorded. The `activityScore` and tier are derived from those
-three numbers on the fly — trivial math, no query needed.
+
+Credits are **stored as integer counters on the `User` record** and incremented atomically when a qualifying event is recorded. The `activityScore` and tier are derived from those three numbers on the fly — trivial math, no query needed.
 
 Three new columns on `User`:
 - `creditsHpc  Int  @default(0)` — Human Play Credits
@@ -298,32 +286,27 @@ Three new columns on `User`:
 activityScore = creditsHpc + creditsBpc + (creditsTc × tcMultiplier)
 ```
 
-A `GET /api/v1/users/:id/credits` endpoint returns `{ hpc, bpc, tc, activityScore, tier,
-tierName, tierIcon, nextTier, pointsToNextTier }` by reading the three columns and applying
-the formula. Fast, no joins.
+A `GET /api/v1/users/:id/credits` endpoint returns `{ hpc, bpc, tc, activityScore, tier, tierName, tierIcon, nextTier, pointsToNextTier }` by reading the three columns and applying the formula. Fast, no joins.
 
-The `tcMultiplier` is read from system config key `credits.tcMultiplier` (default `5`) so
-admins can tune it without a code deploy.
+The `tcMultiplier` is read from system config key `credits.tcMultiplier` (default `5`) so admins can tune it without a code deploy.
 
-**Important:** Credits are permanent and non-reversible by design. If a game row is deleted
-(e.g., admin cleanup), the counters are not decremented — this is intentional and consistent
-with credits being a lifetime engagement record.
+**Important:** Credits are permanent and non-reversible by design. If a game row is deleted (e.g., admin cleanup), the counters are not decremented — this is intentional and consistent with credits being a lifetime engagement record.
 
 ### Applying Limits
+
 When checking bot creation or training episode limits:
-1. Look up per-user override (`botLimit`, `mlModelLimit`) — if set, use it directly.
-2. Otherwise compute the user's tier from credits, look up the tier table, and apply
-   the tier default.
-3. System config globals still act as the absolute ceiling for episodes per session.
+- Look up per-user override (`botLimit`) — if set, use it directly.
+- Otherwise compute the user's tier from credits, look up the tier table, and apply the tier default.
+- System config globals still act as the absolute ceiling for episodes per session.
 
 ### Admin Exemptions
+
 - `isExempt` flag (already in `bots.js` for `botLimit`) can be extended to cover all tier limits.
 - Users with `baRole = 'admin'` or a `UserRole` of `admin` are exempt from all credit limits.
 
 ### System Config Keys (Full Reference)
 
-All credit system parameters live under the `credits.*` namespace in the `system_config` table
-and are editable via the admin panel. Defaults apply when a key is absent.
+All credit system parameters live under the `credits.*` namespace in the `system_config` table and are editable via the admin panel. Defaults apply when a key is absent.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -340,62 +323,44 @@ and are editable via the admin panel. Defaults apply when a key is absent.
 | `credits.limits.episodesPerSession.bronze` | `1000` | Episodes/session for Bronze |
 | `credits.limits.episodesPerSession.silver` | `5000` | Episodes/session for Silver |
 | `credits.limits.episodesPerSession.gold` | `20000` | Episodes/session for Gold |
-| `credits.limits.episodesPerSession.platinum` | `100000` | Episodes/session for Platinum |
-| `credits.limits.episodesPerSession.diamond` | `0` | Episodes/session for Diamond (0 = unlimited) |
-| `credits.limits.episodesPerBot.bronze` | `10000` | Lifetime eps/bot for Bronze |
-| `credits.limits.episodesPerBot.silver` | `50000` | Lifetime eps/bot for Silver |
-| `credits.limits.episodesPerBot.gold` | `250000` | Lifetime eps/bot for Gold |
-| `credits.limits.episodesPerBot.platinum` | `1000000` | Lifetime eps/bot for Platinum |
-| `credits.limits.episodesPerBot.diamond` | `0` | Lifetime eps/bot for Diamond (0 = unlimited) |
-| `credits.limits.concurrentSessions.bronze` | `1` | Concurrent training for Bronze |
-| `credits.limits.concurrentSessions.silver` | `2` | Concurrent training for Silver |
-| `credits.limits.concurrentSessions.gold` | `3` | Concurrent training for Gold |
-| `credits.limits.concurrentSessions.platinum` | `5` | Concurrent training for Platinum |
-| `credits.limits.concurrentSessions.diamond` | `0` | Concurrent training for Diamond (0 = unlimited) |
+| `credits.limits.episodesPerSession.platinum` | `50000` | Episodes/session for Platinum |
+| `credits.limits.episodesPerSession.diamond` | `100000` | Episodes/session for Diamond |
 
 ### Schema Changes Required
+
 None for the initial three credit types (HPC, BPC, TC) — all are computed from existing data.
 
-When Tournament ships, ensure the tournament participant table has `userId` and `botId` fields
-so TC can be queried directly.
+When Tournament ships, ensure the tournament participant table has `userId` and `botId` fields so TC can be queried directly.
 
 ---
 
 ## Decisions
 
-1. **Retroactive credits** — **No.** The platform has no meaningful user base yet. Credits
-   accrue from the day the system launches; historical games are not back-filled.
+1. **Retroactive credits** — **No.** The platform has no meaningful user base yet. Credits accrue from the day the system launches; historical games are not back-filled.
 
-2. **Display to users** — **Yes.** Show tier, Activity Score, HPC/BPC/TC breakdown, and a
-   progress bar to the next tier on the Profile page (below Quick Stats). Users should always
-   know where they stand and what moves them forward.
+2. **Display to users** — **Yes.** Show tier, Activity Score, HPC/BPC/TC breakdown, and a progress bar to the next tier on the Profile page (below Quick Stats). Users should always know where they stand and what moves them forward.
 
-3. **TC multiplier** — **5× as default, admin-configurable.** Stored under the system config
-   key `credits.tcMultiplier` (default `5`). Admins can tune it via the existing system config
-   admin panel. Revisit the value once tournament participation data is available.
+3. **TC multiplier** — **5× as default, admin-configurable.** Stored under the system config key `credits.tcMultiplier` (default `5`). Admins can tune it via the existing system config admin panel. Revisit the value once tournament participation data is available.
 
-4. **Bot opponent earns BPC** — **No.** BPC is a reward for bot owners only. The human
-   opponent chose to play a bot; they earn HPC if the game qualifies under HPC rules, but do
-   not receive BPC for being the other side in a bot game.
+4. **Bot opponent earns BPC** — **No.** BPC is a reward for bot owners only. The human opponent chose to play a bot; they earn HPC if the game qualifies under HPC rules, but do not receive BPC for being the other side in a bot game.
 
-5. **Caching strategy** — **Live computation to start.** Credits are computed on demand from
-   existing game tables. Add a `userCredits` denormalized cache only if query latency becomes
-   measurable in practice. Tic-tac-toe rows are small; even tens of thousands of games should
-   resolve in a single fast `COUNT`.
+5. **ML limits** — **Lifetime and concurrent session limits dropped; episodes-per-session retained as a frontend fairness cap.** Training runs entirely in the browser — no backend compute is consumed. Lifetime episodes-per-bot and concurrent-session limits add complexity with no meaningful impact and are removed. Episodes-per-session is kept as a UX guardrail: higher tiers unlock longer single training runs (capped at 100,000 for Diamond). The existing `ml.maxEpisodesPerSession` global config remains as an absolute ceiling.
+
+6. **Multi-game bot architecture** — **Multi-model per bot entity.** Each bot is a persistent identity with one trained model per game rather than a single cross-game model. This preserves the existing per-game training infrastructure, keeps ELO ratings meaningful per-game, and defers the much harder problem of true general game-playing AI. A bot entity still counts as one bot slot regardless of how many game models it holds.
+
+7. **Caching strategy** — **Live computation to start; denormalized cache when needed.** Credits are computed on demand from existing game tables. With a small user base and tiny tic-tac-toe rows, a `COUNT` query is fast enough that a cache adds complexity with no benefit. When query volume or latency becomes measurable, the migration path is straightforward: add a `userCredits` denormalized row (or columns directly on `User`) and increment it in the same transaction as the game completion. Because credits only ever increase, cache invalidation is trivial — there is no staleness risk.
 
 ---
 
 ## Implementation Plan
 
-Implementation is broken into 6 phases. Each phase is independently deployable and leaves
-the system in a working state. Phases build on each other in strict order.
+Implementation is broken into 6 phases. Each phase is independently deployable and leaves the system in a working state. Phases build on each other in strict order.
 
 ---
 
 ### Phase 1 — Schema: credit columns + UserNotification table
 
-**Goal:** Add credit counter columns to `User` and the persistence layer for accomplishment
-notifications.
+**Goal:** Add credit counter columns to `User` and the persistence layer for accomplishment notifications.
 
 **Changes:**
 - `backend/prisma/schema.prisma` — add three columns to the `User` model:
@@ -424,15 +389,13 @@ notifications.
 
 **Tests:** None required — schema only.
 
-**Completion check:** Migration succeeds; `users` table has `creditsHpc`, `creditsBpc`,
-`creditsTc` columns all defaulting to 0; `user_notifications` table exists.
+**Completion check:** Migration succeeds; `users` table has `creditsHpc`, `creditsBpc`, `creditsTc` columns all defaulting to 0; `user_notifications` table exists.
 
 ---
 
 ### Phase 2 — Backend: Credit calculation service
 
-**Goal:** A single backend service that computes HPC, BPC, Activity Score, and tier for any
-user. All limit lookups flow through here. No game-recording changes yet.
+**Goal:** A single backend service that computes HPC, BPC, Activity Score, and tier for any user. All limit lookups flow through here. No game-recording changes yet.
 
 **New file:** `backend/src/services/creditService.js`
 
@@ -441,9 +404,8 @@ Key exports:
 // Returns { hpc, bpc, tc, activityScore, tier, nextTier, pointsToNextTier }
 async function getUserCredits(userId)
 
-// Returns the tier-derived limit for a given capability, respecting per-user overrides
-// and the absolute ml.* system config ceiling where applicable.
-// capability: 'bots' | 'episodesPerSession' | 'episodesPerBot' | 'concurrentSessions'
+// Returns the tier-derived limit for a given capability, respecting per-user overrides.
+// capability: 'bots' | 'episodesPerSession'
 async function getTierLimit(userId, capability)
 
 // Returns the tier number (0–4) for a given activity score
@@ -451,15 +413,12 @@ async function getTierForScore(score)
 ```
 
 **Implementation notes:**
-- `getUserCredits` reads `creditsHpc`, `creditsBpc`, `creditsTc` directly from the `User`
-  row — a single `findUnique` with `select`, no joins or counts
+- `getUserCredits` reads `creditsHpc`, `creditsBpc`, `creditsTc` directly from the `User` row — a single `findUnique` with `select`, no joins or counts
 - `activityScore` computed inline: `hpc + bpc + (tc × tcMultiplier)`
 - TC: column exists and starts at 0; incremented when Tournament feature ships
 - All threshold and limit values read from `getSystemConfig` with hardcoded defaults
-- `getTierLimit` checks per-user `botLimit` / `mlModelLimit` overrides first; falls back to
-  tier-derived value; applies `ml.*` absolute ceiling for episode caps
-- `getTierForScore` reads the four `credits.tiers.*` config keys and returns the highest
-  tier whose threshold the score meets
+- `getTierLimit` checks per-user `botLimit` override first; falls back to tier-derived value
+- `getTierForScore` reads the four `credits.tiers.*` config keys and returns the highest tier whose threshold the score meets
 
 **Tests:** `backend/src/services/__tests__/creditService.test.js`
 - `getUserCredits` returns correct shape from user row values
@@ -467,8 +426,7 @@ async function getTierForScore(score)
 - `getTierLimit` returns per-user override when set, tier default otherwise
 - `activityScore` formula applies `tcMultiplier` correctly
 
-**Completion check:** All tests pass; `getUserCredits` returns correct results against a
-seeded test DB.
+**Completion check:** All tests pass; `getUserCredits` returns correct results against a seeded test DB.
 
 ---
 
@@ -505,23 +463,22 @@ Notification types to handle:
 - `first_hpc` — payload: `{ message }`
 - `first_bpc` — payload: `{ message }`
 - `first_tc` — payload: `{ message }`
+- `first_win` — payload: `{ message }`
+- `first_bot_created` — payload: `{ message }`
 - `credit_milestone` — payload: `{ score, message }` (triggers at 100, 500, 2000)
 
 **Email delivery logic in `queueNotification`:**
-1. Insert the `UserNotification` row
-2. Check whether the user has an active Socket.IO connection (is online)
-3. If offline AND `user.emailAchievements === true`:
-   - Send achievement email via Resend using an `achievementEmail` template
-   - Set `emailedAt = now()` on the row
-4. Never send email if the user is online (they'll see the popup immediately)
+1. Insert the `UserNotification` row.
+2. Check whether the user has an active Socket.IO connection (is online).
+3. If offline AND `user.emailAchievements === true`, send achievement email via Resend using an `achievementEmail` template and set `emailedAt = now()` on the row.
+
+Email is never sent if the user is online — they will see the popup immediately via Socket.IO.
 
 #### 3c — Notification delivery endpoints
 
 Add to `backend/src/routes/users.js`:
-- `GET /api/v1/users/me/notifications` — returns all undelivered `UserNotification` rows for
-  the authenticated user, ordered by `createdAt`
-- `POST /api/v1/users/me/notifications/deliver` — body `{ ids: string[] }` — sets
-  `deliveredAt = now()` for all listed IDs belonging to the user (batch)
+- `GET /api/v1/users/me/notifications` — returns all undelivered `UserNotification` rows for the authenticated user, ordered by `createdAt`
+- `POST /api/v1/users/me/notifications/deliver` — body `{ ids: string[] }` — sets `deliveredAt = now()` for all listed IDs belonging to the user (batch)
 - `PATCH /api/v1/users/me/settings` — update user preferences including `emailAchievements`
 
 **Tests:**
@@ -532,49 +489,32 @@ Add to `backend/src/routes/users.js`:
 - Achievement email not sent when user is online (even if opted in)
 - Achievement email not sent when user is offline but not opted in
 
-**Completion check:** `GET /api/v1/users/:id/credits` returns live data; notification rows
-can be inserted and marked delivered via the API.
+**Completion check:** `GET /api/v1/users/:id/credits` returns live data; notification rows can be inserted and marked delivered via the API.
 
 ---
 
-### Phase 4 — Backend: Wire credit checks into limit enforcement
+### Phase 4 — Backend: Wire credit checks into bot limit enforcement
 
-**Goal:** Replace the current flat `bots.defaultBotLimit` and `ml.*` checks with
-tier-aware lookups from `getTierLimit`. No new user-facing behavior yet — limits just
-become dynamic.
+**Goal:** Replace the current flat `bots.defaultBotLimit` check with a tier-aware lookup from `getTierLimit`. No new user-facing behavior yet — bot limits just become dynamic.
 
 **Files to modify:**
 
 `backend/src/routes/bots.js`
-- Bot creation check: replace `user.botLimit ?? defaultLimit` with
-  `await getTierLimit(userId, 'bots')` (which already handles the per-user override internally)
+- Bot creation check: replace `user.botLimit ?? defaultLimit` with `await getTierLimit(userId, 'bots')` (which already handles the per-user override internally)
 - Bot list response: replace `bots.defaultBotLimit` default with the same call
 - Remove the direct `getSystemConfig('bots.defaultBotLimit', 5)` call (now inside `getTierLimit`)
 
-`backend/src/services/mlService.js`
-- `startTraining` / `startAlphaZeroTraining`: replace `getSystemConfig('ml.maxEpisodesPerSession')`
-  with `getTierLimit(createdBy, 'episodesPerSession')` — the tier limit IS the per-session cap;
-  the absolute `ml.maxEpisodesPerSession` ceiling is applied inside `getTierLimit`
-- `createModel`: replace `getSystemConfig('ml.maxEpisodesPerModel')` with
-  `getTierLimit(createdBy, 'episodesPerBot')` for the new model's `maxEpisodes` field
-- Concurrent session check: replace `getSystemConfig('ml.maxConcurrentSessions')` with
-  `getTierLimit(createdBy, 'concurrentSessions')`
-
 **Tests:**
 - Bot creation blocked at correct tier limit
-- Episode cap enforced at tier limit (not global cap) for a Bronze user
 - Admin-exempt user (`BOT_ADMIN` role) bypasses bot limit
 
-**Completion check:** Creating a bot/model as a Newcomer hits the tier-derived limit, not the
-old flat default; existing unit tests still pass.
+**Completion check:** Creating a bot as a Bronze user hits the tier-derived limit (3), not the old flat default (5); existing unit tests still pass.
 
 ---
 
 ### Phase 5 — Backend: Generic game-completion hook + XO Arena wiring
 
-**Goal:** Implement a game-agnostic credit hook that any game calls after recording a
-completed game. Wire it into XO Arena's game routes as the first consumer. Future games call
-the same hook without modifying the credit service.
+**Goal:** Implement a game-agnostic credit hook that any game calls after recording a completed game. Wire it into XO Arena's game routes as the first consumer. Future games call the same hook without modifying the credit service.
 
 #### 5a — Generic hook in `creditService.js`
 
@@ -592,31 +532,25 @@ Internally this function:
 - Applies the Universal Exclusion rule (built-in AI → no credits)
 - Determines HPC earners: non-bot participants in a qualifying PvP game
 - Determines BPC earners: bot owners whose bot played an external opponent
-- Increments the appropriate counter atomically:
-  `db.user.update({ data: { creditsHpc: { increment: 1 } } })`
-- Snapshots credits before each increment, then calls `checkAndNotify` with the
-  pre-increment snapshot
+- Increments the appropriate counter atomically: `db.user.update({ data: { creditsHpc: { increment: 1 } } })`
+- Snapshots credits before each increment, then calls `checkAndNotify` with the pre-increment snapshot
 
-The function never references XO Arena-specific tables, columns, or game IDs. It operates
-entirely on the normalized `participants` array passed by the caller.
+The function never references XO Arena-specific tables, columns, or game IDs. It operates entirely on the normalized `participants` array passed by the caller.
 
 #### 5b — XO Arena wiring
 
 **File to modify:** `backend/src/routes/games.js`
-- After the game row is committed, build the `participants` array from the existing game
-  record and call `creditService.recordGameCompletion({ appId: 'xo-arena', participants, mode })`
+- After the game row is committed, build the `participants` array from the existing game record and call `creditService.recordGameCompletion({ appId: 'xo-arena', participants, mode })`
 - Wrap in `try/catch` — a credit failure must never block the game response
 - Fire-and-forget after `res.json()`
 
 **File to modify:** `backend/src/realtime/socketHandler.js`
 - Add handler for `accomplishment` server→client event
-- When `checkAndNotify` produces new notifications AND the user has an active socket
-  connection, emit `accomplishment` with the notification payload immediately
+- When `checkAndNotify` produces new notifications AND the user has an active socket connection, emit `accomplishment` with the notification payload immediately
 
 #### 5c — `Game` table: add `appId`
 
-Add `appId String @default("xo-arena")` to the `Game` model in `schema.prisma`. Backfill
-via migration default. This field is used for per-game credit reporting and future filtering.
+Add `appId String @default("xo-arena")` to the `Game` model in `schema.prisma`. Backfill via migration default. This field is used for per-game credit reporting and future filtering.
 
 **Tests:**
 - `recordGameCompletion` with `appId: "xo-arena"` increments HPC for both players in a PvP game
@@ -626,16 +560,13 @@ via migration default. This field is used for per-game credit reporting and futu
 - `checkAndNotify` is a no-op if tier and milestones haven't changed
 - A credit service failure does not affect the game response (error swallowed)
 
-**Completion check:** Playing a qualifying XO Arena PvP game produces a `UserNotification`
-row; `GET /api/v1/users/me/notifications` returns it; a future game calling the same hook
-with a different `appId` works identically.
+**Completion check:** Playing a qualifying XO Arena PvP game produces a `UserNotification` row; `GET /api/v1/users/me/notifications` returns it; a future game calling the same hook with a different `appId` works identically.
 
 ---
 
 ### Phase 6 — Frontend: Credits display + notification popup
 
-**Goal:** Show the user their tier and credits on the Profile page. Show accomplishment
-popups immediately (via Socket.IO) or on next login (via pending notifications fetch).
+**Goal:** Show the user their tier and credits on the Profile page. Show accomplishment popups immediately (via Socket.IO) or on next login (via pending notifications fetch).
 
 #### 6a — Profile page credits section
 
@@ -645,12 +576,11 @@ Add a new section between "Quick Stats" and "My Bots":
 - Tier badge (icon + name, e.g., "▲ Player")
 - Activity Score with a progress bar showing `score / nextTierThreshold`
 - Three mini-stats: HPC / BPC / TC counts
-- "Points to next tier: N" label (hidden at Legend tier)
-- Fetch from `GET /api/v1/users/:id/credits` in the existing parallel `Promise.allSettled`
-  load block
+- "Points to next tier: N" label (hidden at Diamond tier)
+- Fetch from `GET /api/v1/users/:id/credits` in the existing parallel `Promise.allSettled` load block
 
 **File:** `frontend/src/lib/api.js`
-- Add `api.users.credits(id)` → `api.get(\`/users/${id}/credits\`)`
+- Add `api.users.credits(id)` → ``api.get(`/users/${id}/credits`)``
 
 #### 6b — Accomplishment popup component
 
@@ -660,17 +590,14 @@ Add a new section between "Quick Stats" and "My Bots":
 - Shows tier icon (large), tier name, headline, description of what unlocked
 - "Got it" button + Escape key + backdrop click to dismiss
 - Queue-aware: accepts an array of notifications, shows one at a time, advances on dismiss
-- Batches non-tier notifications: if > 2 non-tier items are pending, collapses them into a
-  single "You hit several milestones!" card
+- Batches non-tier notifications: if > 2 non-tier items are pending, collapses them into a single "You hit several milestones!" card
 
 #### 6c — Notification fetch on login
 
 **File:** `frontend/src/components/layout/AppLayout.jsx`
 - After the existing `/users/sync` call succeeds, fetch `GET /api/v1/users/me/notifications`
-- If any pending notifications exist, store them in a React state and render
-  `<AccomplishmentPopup>`
-- After the user dismisses, call `POST /api/v1/users/me/notifications/deliver` with the
-  shown IDs
+- If any pending notifications exist, store them in a React state and render `<AccomplishmentPopup>`
+- After the user dismisses, call `POST /api/v1/users/me/notifications/deliver` with the shown IDs
 
 **File:** `frontend/src/lib/api.js`
 - Add `api.users.notifications(token)` and `api.users.deliverNotifications(ids, token)`
@@ -688,17 +615,14 @@ Add a new section between "Quick Stats" and "My Bots":
 - Add a "Notifications" section with a toggle: **"Email me about achievements when I'm offline"**
 - Default: off
 - On toggle, call `PATCH /api/v1/users/me/settings` with `{ emailAchievements: true/false }`
-- Brief explainer text: *"Get a celebratory email when your bot wins a tournament match or
-  you reach a new tier while you're not signed in."*
+- Brief explainer text: *"Get a celebratory email when your bot wins a tournament match or you reach a new tier while you're not signed in."*
 
 #### 6f — Admin panel: Credits config section
 
 **File:** `frontend/src/pages/admin/AdminMLPage.jsx` (or a new `AdminCreditsPage.jsx`)
 - New "Credits & Tiers" section in the admin panel
-- Displays and allows editing of all `credits.*` system config keys (the 30 keys from the
-  reference table above)
-- Same pattern as the existing ML limits section: read from `GET /api/v1/admin/limits`,
-  edit inline, save via `PUT /api/v1/admin/limits`
+- Displays and allows editing of all `credits.*` system config keys (the 15 keys from the reference table above)
+- Same pattern as the existing ML limits section: read from `GET /api/v1/admin/limits`, edit inline, save via `PUT /api/v1/admin/limits`
 - Backend: extend the existing admin limits GET/PUT endpoints to include `credits.*` keys
 
 **Tests:**
@@ -706,9 +630,7 @@ Add a new section between "Quick Stats" and "My Bots":
 - `AccomplishmentPopup` renders one notification at a time, advances queue on dismiss
 - Batching logic collapses > 2 non-tier items
 
-**Completion check:** Signed-in user sees their tier on their Profile page; playing a PvP
-game and refreshing shows updated counts; accomplishment popup appears on next login if
-a milestone was crossed.
+**Completion check:** Signed-in user sees their tier on their Profile page; playing a PvP game and refreshing shows updated counts; accomplishment popup appears on next login if a milestone was crossed.
 
 ---
 
@@ -716,16 +638,71 @@ a milestone was crossed.
 
 | Phase | What ships | Key files | Done |
 |-------|------------|-----------|------|
-| 1 | DB schema | `schema.prisma`, migration | [x] |
+| 1 | DB schema | `schema.prisma`, migration | [x] ✓ |
 | 2 | Credit calculation logic | `creditService.js` | [ ] |
 | 3 | Credits API, notification service, delivery endpoints | `users.js`, `notificationService.js` | [ ] |
-| 4 | Tier-aware limit enforcement (replaces flat defaults) | `bots.js`, `mlService.js`, `ml.js` | [ ] |
+| 4 | Tier-aware bot limit enforcement (replaces flat default) | `bots.js` | [ ] |
 | 5 | Generic game-completion hook + XO Arena wiring + `appId` on `Game` | `creditService.js`, `games.js`, `socketHandler.js`, `schema.prisma` | [ ] |
 | 6 | Frontend: profile display, popup, admin config UI | `ProfilePage.jsx`, `AppLayout.jsx`, `AccomplishmentPopup.jsx` | [ ] |
 
-Phases 1–4 are entirely backend and can be deployed without any visible user change.
-Phase 5 starts producing notification rows. Phase 6 makes everything visible.
+Phases 1–4 are entirely backend and can be deployed without any visible user change. Phase 5 starts producing notification rows. Phase 6 makes everything visible.
 
-**Adding a new game:** once Phase 5 ships, any new game route earns credits by calling
-`creditService.recordGameCompletion({ appId: '<game-id>', participants, mode })` after
-committing its game record. No other changes required.
+**Adding a new game:** once Phase 5 ships, any new game route earns credits by calling `creditService.recordGameCompletion({ appId: '<game-id>', participants, mode })` after committing its game record. No other changes required.
+
+---
+
+## Addendum — Open Questions
+
+The following items were flagged during plan review. Each needs a decision before or during the relevant implementation phase.
+
+1. **Phase 1 marked done — confirm schema is deployed**
+
+   The phase summary marks Phase 1 as complete, but the credit columns (`creditsHpc`, `creditsBpc`, `creditsTc`) and `UserNotification` table need to be verified as present in the production database before Phase 2 work begins.
+
+   *Decision needed:* Confirm Phase 1 is truly deployed, or re-open it.
+
+2. **BPC participant data — caller contract needs to be explicit**
+
+   The BPC exclusion rule requires knowing `botOwnerId` for both participants. The `recordGameCompletion` hook receives this via the `participants` array, but `games.js` (the caller) must populate it correctly. The exact shape and required fields for each participant should be documented as a formal contract to prevent silent bugs.
+
+   *Decision needed:* Define and document the required `participants` array shape before Phase 5 implementation.
+
+3. **No audit trail for credit increments — consider a recovery tool**
+
+   Credits are stored as atomic counters, never recomputed from game history. If the credit service has a bug and misses increments, those credits are permanently lost. A `recalculateCredits(userId)` admin utility that recomputes from game history would provide a recovery path without changing the normal flow.
+
+   *Decision needed:* Add a recalculation tool (admin-only, never run automatically), or accept the risk given the early-stage user base.
+
+4. **`emailedAt` column missing from Phase 1 schema** — ✅ Resolved
+
+   `emailedAt DateTime?` added to `UserNotification` in migration `20260405192356_add_emailedat_to_user_notification`. Phase 1 schema is now complete.
+
+5. **TC columns ship in Phase 1 but are never incremented until Tournament ships**
+
+   `creditsTc` will be `0` for all users until the Tournament feature is implemented. No functional issue, but the `getUserCredits` response will always show TC = 0 for the foreseeable future. The Activity Score formula still works correctly.
+
+   *Decision needed:* No action required — acknowledge and accept, or add a note in the Phase 2 service that TC is intentionally dormant until Tournament ships.
+
+6. **Phase 4 reduces the effective bot limit for new users (3 vs current default of 5)**
+
+   The existing flat default is `bots.defaultBotLimit = 5`. The Bronze tier default is `credits.limits.bots.bronze = 3`. Replacing the flat lookup with a tier lookup silently reduces the limit for new Bronze users. Existing users with per-user `botLimit` overrides are unaffected.
+
+   *Decision needed:* Raise the Bronze bot limit to 5 to match the current default, or keep it at 3 and accept the change as intentional for new users.
+
+7. **Online detection for email suppression — implementation gap**
+
+   Phase 3 requires checking whether a user has an active Socket.IO connection before sending an achievement email (suppress email if they're online and will see the popup). The existing `lastActiveAt` field is not sufficient — it reflects recent activity, not a live socket connection. A socket room membership check or an in-memory online-user set is needed.
+
+   *Decision needed:* Clarify the online-detection mechanism before Phase 3 implementation — either use the existing online-user tracking already present in the socket handler, or define a new approach.
+
+8. **Public exposure of HPC/BPC/TC counts**
+
+   `GET /api/v1/users/:id/credits` is planned as a public, unauthenticated endpoint (same pattern as `/users/:id/stats`). This exposes raw HPC, BPC, and TC counts for any user by ID. Depending on the beta user base, this may be a privacy concern.
+
+   *Decision needed:* Keep the endpoint public (simplest, consistent with existing stats), restrict to authenticated users, or return only tier/score publicly and gate the raw breakdown behind auth.
+
+9. **Bot schema: multi-game model relationship**
+
+   The current plan assumes one model per bot. Adopting the multi-game bot design (see Multi-Game Bots section) requires changing this to a one-to-many relationship (`Bot → BotModel` with `gameId`) before or alongside Phase 1. ELO tracking also needs to move to `BotModel` (or a `BotGameStats` join table) so ratings are per-game. This schema direction should be confirmed and the Phase 1 migration updated accordingly before any credit work begins.
+
+   *Decision needed:* Confirm multi-game bot schema direction and incorporate into Phase 1 migration scope.

@@ -422,6 +422,7 @@ model UserNotification {
   payload     Json
   createdAt   DateTime  @default(now())
   deliveredAt DateTime?
+  emailedAt   DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, deliveredAt])
