@@ -13,7 +13,13 @@ import { usePrefsStore } from '../../store/prefsStore.js'
 // Community section includes a live search bar and a scrollable list.
 
 function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch, showPlayHint, onPlayHintDismiss }) {
-  const builtIn   = bots.filter(b => !b.botOwnerId).sort((a, b) => a.eloRating - b.eloRating)
+  const BUILTIN_ORDER = { Rusty: 0, Copper: 1, Sterling: 2, Magnus: 3 }
+  const builtIn = bots.filter(b => !b.botOwnerId).sort((a, b) => {
+    const oa = BUILTIN_ORDER[a.displayName] ?? 99
+    const ob = BUILTIN_ORDER[b.displayName] ?? 99
+    if (oa !== ob) return oa - ob
+    return Number(a.eloRating ?? 1200) - Number(b.eloRating ?? 1200)
+  })
   const community = bots.filter(b => b.botOwnerId)
   const filteredCommunity = communitySearch
     ? community.filter(b => b.displayName.toLowerCase().includes(communitySearch.toLowerCase()))
