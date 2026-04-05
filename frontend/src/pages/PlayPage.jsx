@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
 import { usePvpStore } from '../store/pvpStore.js'
 import { cachedFetch } from '../lib/api.js'
@@ -12,13 +12,12 @@ import IdleWarningPopup from '../components/pvp/IdleWarningPopup.jsx'
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const location = useLocation()
-  const guestChallengeHint = location.state?.guestChallengeHint ?? false
+  const guestChallengeHint = sessionStorage.getItem('xo_guest_challenge_hint') === '1'
 
-  // Clear navigation state so a page reload doesn't re-trigger the hint
+  // Clear so reload doesn't re-trigger the hint
   useEffect(() => {
     if (!guestChallengeHint) return
-    navigate(location.pathname + (location.search || ''), { replace: true, state: null })
+    sessionStorage.removeItem('xo_guest_challenge_hint')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const joinSlug = searchParams.get('join')
   const spectateSlug = searchParams.get('spectate')

@@ -529,7 +529,10 @@ export default function AppLayout() {
           const isFirst = !localStorage.getItem('xo_welcome_seen')
           localStorage.setItem('xo_welcome_seen', '1')
           setWelcomeOpen(false)
-          if (isFirst) navigate('/play', { state: { guestChallengeHint: true } })
+          if (isFirst) {
+            sessionStorage.setItem('xo_guest_challenge_hint', '1')
+            navigate('/play')
+          }
         }}
         onSignIn={() => {
           localStorage.setItem('xo_welcome_seen', '1')
