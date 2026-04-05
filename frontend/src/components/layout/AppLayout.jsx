@@ -17,6 +17,7 @@ import { useSoundStore } from '../../store/soundStore.js'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
 import GettingStartedModal from '../GettingStartedModal.jsx'
+import WelcomeModal from '../WelcomeModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
 import { usePrefsStore } from '../../store/prefsStore.js'
 import { getSocket } from '../../lib/socket.js'
@@ -92,6 +93,7 @@ export default function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [guideOpen, setGuideOpen] = useState(false)
   const [guideHint, setGuideHint] = useState(null)
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
   const { showGuideButton, setPrefs } = usePrefsStore()
   const prevUserId = useRef(null)
 
@@ -137,6 +139,14 @@ export default function AppLayout() {
     setGuideOpen(true)
     navigate(location.pathname, { replace: true })
   }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show welcome popup once to first-time visitors (signed-out only)
+  useEffect(() => {
+    if (session) return // already signed in — skip
+    if (localStorage.getItem('xo_welcome_seen')) return
+    const id = setTimeout(() => setWelcomeOpen(true), 1200)
+    return () => clearTimeout(id)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll unread-count every 60s to seed the badge on sign-in (no chime — only socket chimes)
   useEffect(() => {
@@ -240,7 +250,11 @@ export default function AppLayout() {
           </Link>
           {session && showGuideButton && (
             <button
-              onClick={() => setGuideOpen(true)}
+              onClick={() => {
+                const { playHintSeen } = usePrefsStore.getState()
+                setGuideHint(playHintSeen ? null : 'play')
+                setGuideOpen(true)
+              }}
               aria-label="Guide"
               title="Guide"
               className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
@@ -508,6 +522,18 @@ export default function AppLayout() {
         isOpen={guideOpen}
         hint={guideHint}
         onClose={() => { setGuideOpen(false); setGuideHint(null) }}
+      />
+      <WelcomeModal
+        isOpen={welcomeOpen}
+        onClose={() => {
+          localStorage.setItem('xo_welcome_seen', '1')
+          setWelcomeOpen(false)
+        }}
+        onSignIn={() => {
+          localStorage.setItem('xo_welcome_seen', '1')
+          setWelcomeOpen(false)
+          setAuthModalOpen(true)
+        }}
       />
       <IdleLogoutManager />
     </div>
