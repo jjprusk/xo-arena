@@ -33,12 +33,13 @@ model User {
   botOwnerId      String?
   isBot           Boolean          @default(false)
   nameConfirmed   Boolean          @default(false)
-  lastActiveAt    DateTime?
-  botEloResetAt   DateTime?
-  botGamesPlayed  Int              @default(0)
-  creditsHpc      Int              @default(0)
-  creditsBpc      Int              @default(0)
-  creditsTc       Int              @default(0)
+  lastActiveAt      DateTime?
+  botEloResetAt     DateTime?
+  botGamesPlayed    Int              @default(0)
+  creditsHpc        Int              @default(0)
+  creditsBpc        Int              @default(0)
+  creditsTc         Int              @default(0)
+  emailAchievements Boolean          @default(false)
   gamesAsPlayer1  Game[]           @relation("Player1Games")
   gamesAsPlayer2  Game[]           @relation("Player2Games")
   gamesWon        Game[]           @relation("WinnerGames")
