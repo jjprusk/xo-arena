@@ -7,7 +7,7 @@ import { resolve, dirname } from 'path'
 // This ensures the right .env is found regardless of where `um` is invoked.
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const envPath = resolve(__dirname, '../../../.env')
-dotenvConfig({ path: envPath })
+try { dotenvConfig({ path: envPath }) } catch { /* cwd may not exist when invoked from a deleted directory */ }
 
 // When running on the host (not inside Docker), Docker service hostnames
 // ("postgres", "redis") aren't resolvable. Both ports are mapped to localhost,
