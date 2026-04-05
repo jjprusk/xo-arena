@@ -41,10 +41,13 @@ function ctx() {
     _masterGain = _audioCtx.createGain()
     _masterGain.gain.value = _synthVolume
     _masterGain.connect(_audioCtx.destination)
+    // Re-resume immediately whenever the browser auto-suspends the context
+    // so it is already mid-resume by the time the next sound needs to play.
+    _audioCtx.addEventListener('statechange', () => {
+      if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
+    })
   }
-  // Kick off resume without awaiting — tones use a small lookahead so the
-  // context has time to start before the first scheduled event fires.
-  if (_audioCtx.state === 'suspended') _audioCtx.resume()
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {})
   return _audioCtx
 }
 
