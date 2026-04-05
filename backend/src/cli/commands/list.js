@@ -70,18 +70,26 @@ export function listCommand(program) {
         baIds.length
           ? db.baSession.findMany({
               where: { userId: { in: baIds }, expiresAt: { gt: new Date() } },
-              select: { userId: true },
+              select: { userId: true, createdAt: true },
             })
           : [],
       ])
       const baMap      = Object.fromEntries(baUsers.map(u => [u.id, u]))
       const onlineSet  = new Set(activeSessions.map(s => s.userId))
+      // Most recent sign-in per user (latest session createdAt)
+      const signInMap  = {}
+      for (const s of activeSessions) {
+        if (!signInMap[s.userId] || s.createdAt > signInMap[s.userId]) {
+          signInMap[s.userId] = s.createdAt
+        }
+      }
 
       const rows = users
         .map(u => ({
           ...u,
           emailVerified: baMap[u.betterAuthId]?.emailVerified ?? null,
           online:        u.betterAuthId ? onlineSet.has(u.betterAuthId) : false,
+          signedInAt:    u.betterAuthId ? (signInMap[u.betterAuthId] ?? null) : null,
         }))
         .filter(u => !opts.unverified || !u.emailVerified)
 
@@ -99,6 +107,7 @@ export function listCommand(program) {
         col('EMAIL',     26),
         col('VERIFIED',  8),
         col('IDLE',      7),
+        col('SIGNED IN', 9),
         col('HINTS',     14),
         col('ROLES',     20),
         col('CREATED',   12),
@@ -138,6 +147,7 @@ export function listCommand(program) {
           col(u.email,                   26),
           col(verified,                   8),
           col(u.online ? formatIdle(u.lastActiveAt) : '—', 7),
+          col(u.signedInAt ? formatIdle(u.signedInAt) : '—', 9),
           col(hints,                     14),
           col(roles,                     20),
           col(created,                   12),
