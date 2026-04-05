@@ -134,7 +134,7 @@ describe('rolesStore — fetch', () => {
     vi.unstubAllGlobals()
   })
 
-  it('calls /api/v1/me/roles endpoint', async () => {
+  it('calls /api/v1/users/me/roles endpoint', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ roles: [] }),
@@ -144,7 +144,7 @@ describe('rolesStore — fetch', () => {
     await s().fetch()
 
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/me/roles'),
+      expect.stringContaining('/api/v1/users/me/roles'),
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: expect.stringContaining('Bearer') }),
       })

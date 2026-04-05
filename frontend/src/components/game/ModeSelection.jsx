@@ -110,7 +110,7 @@ function SectionHeader({ label, count, open, onToggle }) {
   )
 }
 
-function BotRow({ bot, isSignedIn, onChallenge }) {
+function BotRow({ bot, onChallenge }) {
   const initial   = (bot.displayName?.[0] || '?').toUpperCase()
   const algoLabel = ALGO_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'
   const elo       = Math.round(bot.eloRating ?? 1200)
@@ -147,23 +147,13 @@ function BotRow({ bot, isSignedIn, onChallenge }) {
           )}
         </div>
       </div>
-      {isSignedIn ? (
-        <button
-          onClick={() => onChallenge(bot)}
-          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-95 active:translate-y-0.5 active:shadow-none"
-          style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.45)' }}
-        >
-          Challenge
-        </button>
-      ) : (
-        <a
-          href="/sign-in"
-          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
-          style={{ backgroundColor: 'var(--bg-page)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
-        >
-          Sign in
-        </a>
-      )}
+      <button
+        onClick={() => onChallenge(bot)}
+        className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-95 active:translate-y-0.5 active:shadow-none"
+        style={{ background: 'linear-gradient(135deg, #9333ea, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.45)' }}
+      >
+        Challenge
+      </button>
     </div>
   )
 }
@@ -207,7 +197,7 @@ const BOARD_THEMES = [
   { id: 'retro',   label: 'Retro' },
 ]
 
-export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
+export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName, guestChallengeHint = false }) {
   const {
     setMode, setDifficulty, setAIImplementation, setMLModelId, setPvbotModelId,
     setAI2Implementation, setAI2Difficulty, setAI2ModelId,
@@ -221,6 +211,15 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
   const isSignedIn = !!session?.user
   const { playHintSeen, setPlayHintSeen, setPrefs } = usePrefsStore()
   const showPlayHint = isSignedIn && !playHintSeen
+  const [showGuestHint, setShowGuestHint] = useState(guestChallengeHint)
+  const showHintFinger = showPlayHint || showGuestHint
+
+  // Auto-open Challenge a Bot + Built-in for first-visit guest flow
+  useEffect(() => {
+    if (!guestChallengeHint) return
+    setBotExpanded(true)
+    setOpenSection('builtin')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fetch playHintSeen on every visit so a CLI reset is reflected immediately
   useEffect(() => {
@@ -328,6 +327,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
 
   function handlePlayHintDismiss() {
     setPlayHintSeen()
+    setShowGuestHint(false)
     getToken().then(token => { if (token) api.users.markPlayHint(token).catch(() => {}) })
   }
 
@@ -397,28 +397,28 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
         {showPlayHint && !botExpanded && (
           <div
             className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-52px', top: '50%', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
+            style={{ right: '-6px', top: '50%', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
           >
             <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', whiteSpace: 'nowrap' }}>Try me!</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
           </div>
         )}
-        {showPlayHint && botExpanded && openSection !== 'builtin' && (
+        {showHintFinger && botExpanded && openSection !== 'builtin' && (
           <div
             className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-52px', top: '108px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
+            style={{ right: '-6px', top: '108px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
           >
             <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', whiteSpace: 'nowrap' }}>Try me!</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
           </div>
         )}
-        {showPlayHint && botExpanded && openSection === 'builtin' && (
+        {showHintFinger && botExpanded && openSection === 'builtin' && (
           <div
             className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-52px', top: '148px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
+            style={{ right: '-6px', top: '148px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
           >
             <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', whiteSpace: 'nowrap' }}>Try me!</span>
+            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
           </div>
         )}
         <div
@@ -465,7 +465,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
                 setOpenSection={setOpenSection}
                 communitySearch={communitySearch}
                 setCommunitySearch={setCommunitySearch}
-                showPlayHint={showPlayHint}
+                showPlayHint={showHintFinger}
                 onPlayHintDismiss={handlePlayHintDismiss}
               />
             )}

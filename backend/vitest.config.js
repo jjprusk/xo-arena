@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     pool: 'forks',
     environment: 'node',
+    exclude: ['**/.claude/**', '**/node_modules/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
