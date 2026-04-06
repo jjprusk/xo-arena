@@ -6,6 +6,19 @@ import { api } from '../lib/api.js'
 import { signOut } from '../lib/auth-client.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
+const BOT_MODEL_LABELS = {
+  ml: 'ML',
+  minimax: 'Minimax',
+  mcts: 'MCTS',
+  rule_based: 'Rule-Based',
+  Q_LEARNING: 'Q-Learning',
+  SARSA: 'SARSA',
+  MONTE_CARLO: 'Monte Carlo',
+  POLICY_GRADIENT: 'Policy Gradient',
+  DQN: 'DQN',
+  ALPHA_ZERO: 'AlphaZero',
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate()
   const { data: session, isPending } = useOptimisticSession()
@@ -618,7 +631,7 @@ export default function ProfilePage() {
           )}
 
           {!botsLoading && bots.length > 0 && (
-            <ListTable fitViewport topOffset={56} bottomPadding={32}>
+            <ListTable fitViewport topOffset={56} bottomPadding={32} columns={['33%', '13%', '11%', '43%']}>
               <thead>
                 <tr>
                   <ListTh>Bot</ListTh>
@@ -666,7 +679,7 @@ export default function ProfilePage() {
                     </ListTd>
                     <ListTd>
                       <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}>
-                        {bot.botModelType}
+                        {BOT_MODEL_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'}
                       </span>
                     </ListTd>
                     <ListTd align="right">

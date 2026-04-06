@@ -269,7 +269,7 @@ describe('ProfilePage — bot list', () => {
     renderPage()
     await openBotsAccordion()
     await waitFor(() => {
-      expect(screen.getByText('ALPHA_ZERO')).toBeDefined()
+      expect(screen.getByText('AlphaZero')).toBeDefined()
     })
   })
 

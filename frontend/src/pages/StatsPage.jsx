@@ -244,53 +244,72 @@ export default function StatsPage() {
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 How the ML models have learned to read your play style.
               </p>
-              <div className="space-y-2">
-                {mlProfiles.map(p => {
-                  const tendencies = p.tendencies || {}
-                  const isExpanded = expandedProfile === p.id
-                  return (
-                    <div key={p.id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}>
-                      <button
-                        onClick={() => setExpandedProfile(prev => prev === p.id ? null : p.id)}
-                        className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
-                        style={{ backgroundColor: 'var(--bg-surface)' }}
-                      >
-                        <div>
-                          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                            {displayName}
-                          </div>
-                          <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                            vs {p.model?.name ?? 'Unknown model'} · {p.gamesRecorded} game{p.gamesRecorded !== 1 ? 's' : ''} · updated {new Date(p.updatedAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0 ml-4">
-                          <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                            Center {Math.round((tendencies.centerRate || 0) * 100)}% · Corner {Math.round((tendencies.cornerRate || 0) * 100)}%
-                          </span>
-                          <span style={{ color: 'var(--text-muted)' }}>{isExpanded ? '▲' : '▼'}</span>
-                        </div>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="px-3 py-3 sm:px-4 sm:py-4 border-t flex flex-wrap gap-4 items-start" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
-                          <div>
-                            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Opening Preferences</p>
-                            {Object.keys(p.openingPreferences || {}).length > 0
-                              ? <MiniBoard counts={p.openingPreferences} />
-                              : <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No opening data yet</p>
-                            }
-                          </div>
-                          <div className="flex-1 min-w-[160px] space-y-2">
-                            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Move Tendencies</p>
-                            <TendencyBar label="Center rate" value={tendencies.centerRate} />
-                            <TendencyBar label="Corner rate" value={tendencies.cornerRate} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+              <ListTable fitViewport columns={['38%', '10%', '20%', '32%']}>
+                <thead>
+                  <tr>
+                    <ListTh>Model</ListTh>
+                    <ListTh align="right">Games</ListTh>
+                    <ListTh>Updated</ListTh>
+                    <ListTh align="right">Tendencies</ListTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mlProfiles.map((p, i, arr) => {
+                    const tendencies = p.tendencies || {}
+                    const isExpanded = expandedProfile === p.id
+                    const isLast = i === arr.length - 1
+                    return (
+                      <React.Fragment key={p.id}>
+                        <ListTr
+                          onClick={() => setExpandedProfile(prev => prev === p.id ? null : p.id)}
+                          last={isExpanded || isLast}
+                        >
+                          <ListTd>
+                            <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{displayName}</div>
+                            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>vs {p.model?.name ?? 'Unknown model'}</div>
+                          </ListTd>
+                          <ListTd align="right">
+                            <span className="tabular-nums">{p.gamesRecorded}</span>
+                          </ListTd>
+                          <ListTd>
+                            <span className="text-xs">{new Date(p.updatedAt).toLocaleDateString()}</span>
+                          </ListTd>
+                          <ListTd align="right">
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                                Center {Math.round((tendencies.centerRate || 0) * 100)}% · Corner {Math.round((tendencies.cornerRate || 0) * 100)}%
+                              </span>
+                              <svg className="w-3 h-3 flex-shrink-0 transition-transform duration-200" style={{ color: 'var(--text-muted)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </ListTd>
+                        </ListTr>
+                        {isExpanded && (
+                          <tr style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                            <td colSpan={4} className="px-4 py-3">
+                              <div className="flex flex-wrap gap-4 items-start">
+                                <div>
+                                  <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Opening Preferences</p>
+                                  {Object.keys(p.openingPreferences || {}).length > 0
+                                    ? <MiniBoard counts={p.openingPreferences} />
+                                    : <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No opening data yet</p>
+                                  }
+                                </div>
+                                <div className="flex-1 min-w-[160px] space-y-2">
+                                  <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Move Tendencies</p>
+                                  <TendencyBar label="Center rate" value={tendencies.centerRate} />
+                                  <TendencyBar label="Corner rate" value={tendencies.cornerRate} />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </tbody>
+              </ListTable>
             </section>
           )}
         </>

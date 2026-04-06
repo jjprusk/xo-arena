@@ -1,9 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import GettingStartedModal from '../components/GettingStartedModal.jsx'
 
 export default function AboutPage() {
   const [gettingStartedOpen, setGettingStartedOpen] = useState(false)
+  const [changelog, setChangelog] = useState([])
+
+  useEffect(() => {
+    fetch('/changelog.json')
+      .then(r => r.json())
+      .then(setChangelog)
+      .catch(() => {})
+  }, [])
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div className="pb-4 border-b flex items-end gap-3" style={{ borderColor: 'var(--border-default)' }}>
@@ -85,6 +93,33 @@ export default function AboutPage() {
           </Link>
         </div>
       </section>
+
+      {/* Release history */}
+      {changelog.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Release History</h2>
+          <div
+            className="rounded-xl border overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            {changelog.map((entry, i) => (
+              <div
+                key={entry.version}
+                className="flex items-baseline gap-3 px-4 py-2.5 text-sm"
+                style={{ borderBottom: i < changelog.length - 1 ? '1px solid var(--border-default)' : 'none' }}
+              >
+                <span className="font-mono font-semibold flex-shrink-0 w-14" style={{ color: 'var(--color-blue-600)' }}>
+                  v{entry.version}
+                </span>
+                <span className="flex-shrink-0 tabular-nums text-xs w-24" style={{ color: 'var(--text-muted)' }}>
+                  {new Date(entry.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+                <span style={{ color: 'var(--text-secondary)' }}>{entry.description}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <GettingStartedModal isOpen={gettingStartedOpen} onClose={() => setGettingStartedOpen(false)} />
     </div>
