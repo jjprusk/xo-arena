@@ -13,6 +13,7 @@ import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
 import { getSystemConfig } from '../services/mlService.js'
 import { recordActivity } from '../services/activityService.js'
+import { recordGameCompletion } from '../services/creditService.js'
 import logger from '../logger.js'
 
 const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
@@ -209,7 +210,7 @@ export async function attachSocketIO(httpServer) {
       })
 
       if (room.status === 'finished') {
-        recordPvpGame(room).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
+        recordPvpGame(room, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
       } else {
         // Reset idle timer for the player who just moved; track activity
         const userId = room.hostId === socket.id ? room.hostUserId : room.guestUserId
@@ -270,7 +271,7 @@ export async function attachSocketIO(httpServer) {
       room.scores[oppMark]++
       room.status = 'finished'
       io.to(slug).emit('game:forfeit', { forfeiterMark: mark, winner: oppMark, scores: room.scores })
-      recordPvpGame(room).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
+      recordPvpGame(room, io).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
     })
 
     // ── Emoji reactions ──────────────────────────────────────────────
@@ -342,8 +343,9 @@ export async function attachSocketIO(httpServer) {
 /**
  * Record a finished PvP game for any authenticated players.
  * Skipped silently if neither player has a DB user.
+ * Fires credit recording and emits accomplishment events via Socket.IO.
  */
-async function recordPvpGame(room) {
+async function recordPvpGame(room, io) {
   if (!room.hostUserId && !room.guestUserId) return
 
   const totalMoves = room.board.filter(Boolean).length
@@ -386,6 +388,24 @@ async function recordPvpGame(room) {
   // Update ELO for both authenticated players (fire-and-forget)
   if (room.hostUserId && room.guestUserId) {
     updatePlayersEloAfterPvP(room.hostUserId, room.guestUserId, outcome).catch(() => {})
+  }
+
+  // Record credits and emit accomplishment events to connected sockets (fire-and-forget)
+  const pvpParticipants = [
+    room.hostUserId  ? { userId: room.hostUserId,  isBot: false, botOwnerId: null } : null,
+    room.guestUserId ? { userId: room.guestUserId, isBot: false, botOwnerId: null } : null,
+  ].filter(Boolean)
+
+  if (pvpParticipants.length > 0) {
+    recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: 'pvp' })
+      .then((notifications) => {
+        if (!io || !notifications.length) return
+        for (const notif of notifications) {
+          const socketId = notif.userId === room.hostUserId ? room.hostId : room.guestId
+          if (socketId) io.to(socketId).emit('accomplishment', notif)
+        }
+      })
+      .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))
   }
 }
 

@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import GettingStartedModal from '../components/GettingStartedModal.jsx'
+import changelog from '../../public/changelog.json'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 export default function AboutPage() {
   const [gettingStartedOpen, setGettingStartedOpen] = useState(false)
@@ -85,6 +87,39 @@ export default function AboutPage() {
           </Link>
         </div>
       </section>
+
+      {/* Release history */}
+      {changelog.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Release History</h2>
+          <ListTable maxHeight="28vh" columns={['12%', '22%', '66%']}>
+            <thead>
+              <tr>
+                <ListTh>Version</ListTh>
+                <ListTh>Date</ListTh>
+                <ListTh>Notes</ListTh>
+              </tr>
+            </thead>
+            <tbody>
+              {changelog.map((entry, i) => (
+                <ListTr key={entry.version} last={i === changelog.length - 1}>
+                  <ListTd>
+                    <span className="font-mono font-semibold" style={{ color: 'var(--color-blue-600)' }}>
+                      v{entry.version}
+                    </span>
+                  </ListTd>
+                  <ListTd>
+                    <span className="tabular-nums text-xs">
+                      {new Date(entry.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </ListTd>
+                  <ListTd>{entry.description}</ListTd>
+                </ListTr>
+              ))}
+            </tbody>
+          </ListTable>
+        </section>
+      )}
 
       <GettingStartedModal isOpen={gettingStartedOpen} onClose={() => setGettingStartedOpen(false)} />
     </div>

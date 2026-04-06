@@ -1,5 +1,5 @@
 /**
- * Email templates for the feedback system.
+ * Email templates for the feedback system and achievement notifications.
  */
 
 /**
@@ -86,6 +86,28 @@ export function staffAlertTemplate({ category, message, pageUrl, appId }) {
   <blockquote style="border-left: 3px solid #ccc; margin: 8px 0; padding: 8px 16px; color: #555;">
     ${truncated}
   </blockquote>
+</body>
+</html>
+  `.trim()
+}
+
+/**
+ * Achievement notification email sent when a user earns an accomplishment while offline.
+ * @param {{ name: string, type: string, payload: object }} params
+ * @returns {string} HTML string
+ */
+export function achievementTemplate({ name, type, payload }) {
+  const message = payload.message ?? 'You earned a new achievement!'
+  const icon = payload.tierIcon ?? '🏆'
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /></head>
+<body style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h2 style="color: #1a1a2e;">${icon} New Achievement, ${name}!</h2>
+  <p style="font-size: 1.1em;">${message}</p>
+  <p style="color: #888; font-size: 0.85em; margin-top: 32px;">Log in to XO Arena to see your updated profile.</p>
+  <p style="color: #888; font-size: 0.85em;">— The XO Arena Team</p>
 </body>
 </html>
   `.trim()

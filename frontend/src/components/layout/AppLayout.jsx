@@ -19,6 +19,7 @@ import NamePromptModal from '../NamePromptModal.jsx'
 import GettingStartedModal from '../GettingStartedModal.jsx'
 import WelcomeModal from '../WelcomeModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
+import AccomplishmentPopup from '../AccomplishmentPopup.jsx'
 import { usePrefsStore } from '../../store/prefsStore.js'
 import { getSocket } from '../../lib/socket.js'
 
@@ -91,6 +92,7 @@ export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
+  const [accomplishments, setAccomplishments] = useState([])
   const [guideOpen, setGuideOpen] = useState(false)
   const [guideHint, setGuideHint] = useState(null)
   const [welcomeOpen, setWelcomeOpen] = useState(false)
@@ -195,6 +197,7 @@ export default function AppLayout() {
 
   // Sync the signed-in user to our DB — once per browser session to avoid a
   // round trip on every page navigation (sessionStorage survives nav, not tab close).
+  // Also fetches any pending accomplishment notifications queued while offline.
   useEffect(() => {
     if (!session?.user?.id) return
     if (sessionStorage.getItem('xo_synced') === session.user.id) return
@@ -206,10 +209,32 @@ export default function AppLayout() {
           if (user && !user.nameConfirmed) {
             setNamePrompt({ userId: user.id, currentName: user.displayName })
           }
+          // Fetch notifications queued while the user was offline
+          return api.users.notifications(token).then(({ notifications }) => {
+            const pending = (notifications ?? []).filter(n => !n.deliveredAt)
+            if (pending.length > 0) setAccomplishments(pending)
+          }).catch(() => {})
         })
       })
       .catch(() => {})
-  }, [session?.user?.id])
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Real-time accomplishment events pushed from the server over Socket.IO
+  useEffect(() => {
+    const socket = getSocket()
+    function onAccomplishment(notif) {
+      setAccomplishments(prev => [...prev, notif])
+    }
+    socket.on('accomplishment', onAccomplishment)
+    return () => { socket.off('accomplishment', onAccomplishment) }
+  }, [])
+
+  function handleDismissAccomplishment(id) {
+    getToken()
+      .then(token => api.users.deliverNotifications([id], token))
+      .catch(() => {})
+    setAccomplishments(prev => prev.filter(n => n.id !== id))
+  }
 
   function handleLogoClick(e) {
     e.preventDefault()
@@ -545,6 +570,12 @@ export default function AppLayout() {
           setAuthModalOpen(true)
         }}
       />
+      {accomplishments.length > 0 && (
+        <AccomplishmentPopup
+          notification={accomplishments[0]}
+          onDismiss={() => handleDismissAccomplishment(accomplishments[0].id)}
+        />
+      )}
       <IdleLogoutManager />
     </div>
   )

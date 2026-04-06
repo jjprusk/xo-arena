@@ -87,6 +87,70 @@ Yes — toggle **Show bots** in the leaderboard filters. Bots are marked with �
 
 ---
 
+## Credits & Tiers
+
+### What are credits?
+Credits are a lifetime measure of your participation on the platform. They accumulate
+permanently, never expire, and cannot be purchased or transferred. There are three types:
+
+- **HPC (Human Play Credits)** — earned by playing PvP games against other humans.
+  +1 per completed game (win, loss, or draw all count).
+- **BPC (Bot Play Credits)** — earned when one of *your bots* competes against a human
+  or another user's bot. +1 per completed game. Credits go to the bot's owner, not the bot itself.
+- **TC (Tournament Credits)** — earned by entering tournaments. +1 per entry, awarded
+  at registration time. Entering yourself and a bot in the same tournament earns +2 TC.
+
+Games against the built-in bots (Rusty, Copper, Sterling, Magnus) never earn any credits.
+
+### What is my Activity Score?
+Your Activity Score is a weighted sum of your credits:
+
+> Activity Score = HPC + BPC + (TC × 5)
+
+Tournament credits are worth 5× more than play credits because they represent a
+higher level of commitment.
+
+### What are tiers?
+Your tier is determined by your Activity Score and unlocks higher platform limits as
+you participate more:
+
+| Tier | Min Score | Icon |
+|------|-----------|------|
+| Bronze | 0 | 🥉 |
+| Silver | 25 | 🥈 |
+| Gold | 100 | 🥇 |
+| Platinum | 500 | 💠 |
+| Diamond | 2,000 | 💎 |
+
+### What do higher tiers unlock?
+Two things currently scale with your tier:
+
+**Bot slots** — the number of bots you can own:
+
+| Tier | Bot Limit |
+|------|-----------|
+| Bronze | 3 |
+| Silver | 5 |
+| Gold | 8 |
+| Platinum | 15 |
+| Diamond | Unlimited |
+
+**Training session length** — the max episodes per training run in the Gym:
+
+| Tier | Episodes per session |
+|------|----------------------|
+| Bronze | 1,000 |
+| Silver | 5,000 |
+| Gold | 20,000 |
+| Platinum | 50,000 |
+| Diamond | 100,000 |
+
+### Where can I see my credits and tier?
+On your **Profile** page, in the Credits & Tier panel. It shows your current tier,
+Activity Score, progress toward the next tier, and a breakdown of HPC, BPC, and TC.
+
+---
+
 ## Puzzles
 
 ### What are puzzles?
@@ -117,7 +181,9 @@ Six brain architectures are available when creating a bot:
 - **AlphaZero** — Monte Carlo Tree Search with neural network guidance
 
 ### How many bots can I create?
-By default each account can own up to **5 bots**.
+It depends on your tier. Bronze accounts start with **3 bot slots** and the limit
+increases as your Activity Score grows. See the Credits & Tiers section for the
+full table.
 
 ### Can I delete a bot?
 Yes — from the Bots page, click **Delete** on any bot you own. Deletion is permanent

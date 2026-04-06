@@ -23,6 +23,8 @@ vi.mock('../../lib/api.js', () => ({
       sync: vi.fn(),
       stats: vi.fn(),
       eloHistory: vi.fn(),
+      credits: vi.fn(),
+      updateSettings: vi.fn(),
     },
     bots: {
       list: vi.fn(),
@@ -89,6 +91,14 @@ function renderPage() {
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
+const MOCK_CREDITS = {
+  hpc: 5, bpc: 2, tc: 0,
+  activityScore: 7,
+  tier: 0, tierName: 'Bronze', tierIcon: '🥉',
+  nextTier: 1, pointsToNextTier: 18,
+  emailAchievements: false,
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
@@ -97,6 +107,7 @@ beforeEach(() => {
   api.users.sync.mockResolvedValue({ user: MOCK_DB_USER })
   api.users.stats.mockResolvedValue({ stats: MOCK_STATS })
   api.users.eloHistory.mockResolvedValue({ history: [] })
+  api.users.credits.mockResolvedValue({ credits: MOCK_CREDITS })
   api.bots.list.mockResolvedValue({
     bots: [],
     limitInfo: { count: 0, limit: 3 },
@@ -148,6 +159,8 @@ describe('ProfilePage — loaded state', () => {
 
   it('shows "Create new bot" button when bots section loads', async () => {
     renderPage()
+    await waitFor(() => expect(screen.getByText('My Bots')).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: /my bots/i }))
     await waitFor(() => {
       expect(screen.getByText('+ Create new bot')).toBeDefined()
     })
@@ -155,6 +168,8 @@ describe('ProfilePage — loaded state', () => {
 
   it('shows "You have no bots yet." when bot list is empty', async () => {
     renderPage()
+    await waitFor(() => expect(screen.getByText('My Bots')).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: /my bots/i }))
     await waitFor(() => {
       expect(screen.getByText('You have no bots yet.')).toBeDefined()
     })
@@ -207,6 +222,11 @@ describe('ProfilePage — edit display name', () => {
 })
 
 describe('ProfilePage — bot list', () => {
+  async function openBotsAccordion() {
+    await waitFor(() => expect(screen.getByText('My Bots')).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: /my bots/i }))
+  }
+
   it('shows a bot name when bots API returns data', async () => {
     api.bots.list.mockResolvedValue({
       bots: [
@@ -224,6 +244,7 @@ describe('ProfilePage — bot list', () => {
       provisionalThreshold: 5,
     })
     renderPage()
+    await openBotsAccordion()
     await waitFor(() => {
       expect(screen.getByText('MyBot')).toBeDefined()
     })
@@ -246,8 +267,9 @@ describe('ProfilePage — bot list', () => {
       provisionalThreshold: 5,
     })
     renderPage()
+    await openBotsAccordion()
     await waitFor(() => {
-      expect(screen.getByText('ALPHA_ZERO')).toBeDefined()
+      expect(screen.getByText('AlphaZero')).toBeDefined()
     })
   })
 
@@ -258,6 +280,7 @@ describe('ProfilePage — bot list', () => {
       provisionalThreshold: 5,
     })
     renderPage()
+    // Bot count is shown as the accordion summary (visible when closed)
     await waitFor(() => {
       expect(screen.getByText('2 / 3 bots')).toBeDefined()
     })
@@ -265,8 +288,14 @@ describe('ProfilePage — bot list', () => {
 })
 
 describe('ProfilePage — danger zone', () => {
+  async function openDangerAccordion() {
+    await waitFor(() => expect(screen.getByText('Danger Zone')).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: /danger zone/i }))
+  }
+
   it('shows delete account button for non-admin users', async () => {
     renderPage()
+    await openDangerAccordion()
     await waitFor(() => {
       expect(screen.getByText('Delete my account…')).toBeDefined()
     })
@@ -274,6 +303,7 @@ describe('ProfilePage — danger zone', () => {
 
   it('shows confirmation prompt after clicking delete account', async () => {
     renderPage()
+    await openDangerAccordion()
     await waitFor(() => expect(screen.getByText('Delete my account…')).toBeDefined())
     fireEvent.click(screen.getByText('Delete my account…'))
     expect(screen.getByText('Yes, delete my account')).toBeDefined()
@@ -295,5 +325,57 @@ describe('ProfilePage — sessionStorage cache', () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Alice')).toBeDefined())
     expect(api.users.sync).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProfilePage — credits section', () => {
+  it('shows the Credits & Tier section heading', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Credits & Tier')).toBeDefined())
+  })
+
+  it('shows the tier name and icon', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Bronze')).toBeDefined())
+  })
+
+  it('shows activity score', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Activity Score: 7/)).toBeDefined())
+  })
+
+  it('shows HPC, BPC and TC counts', async () => {
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByTitle('Human Play Credits')).toBeDefined()
+      expect(screen.getByTitle('Bot Play Credits')).toBeDefined()
+      expect(screen.getByTitle('Tournament Credits')).toBeDefined()
+    })
+  })
+
+  it('shows points to next tier', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/18 pts to next tier/)).toBeDefined())
+  })
+
+  it('does not show credits section when api.users.credits rejects', async () => {
+    api.users.credits.mockRejectedValue(new Error('network'))
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alice')).toBeDefined())
+    expect(screen.queryByText('Credits & Tier')).toBeNull()
+  })
+
+  it('shows email achievements toggle', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Email me when I earn an achievement/)).toBeDefined())
+  })
+
+  it('calls api.users.updateSettings when email toggle is clicked', async () => {
+    api.users.updateSettings.mockResolvedValue({})
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Email me when I earn an achievement/)).toBeDefined())
+    const toggleTrack = document.querySelector('[class*="rounded-full"][class*="w-9"][class*="h-5"]')
+    fireEvent.click(toggleTrack)
+    await waitFor(() => expect(api.users.updateSettings).toHaveBeenCalledWith({ emailAchievements: true }, 'test-token'))
   })
 })

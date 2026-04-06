@@ -86,7 +86,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search…', classNam
 // bottomPadding — gap to leave between the table bottom and the viewport edge
 //                 when fitViewport is true (default 24px)
 
-export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, topOffset = 0, className = '' }) {
+export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, topOffset = 0, className = '', columns }) {
   const outerRef = useRef(null)
   const [dynamicMax, setDynamicMax] = useState(null)
 
@@ -119,16 +119,49 @@ export function ListTable({ children, maxHeight, fitViewport = false, bottomPadd
 
   const effective = fitViewport ? dynamicMax : maxHeight
 
+  const outerStyle = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }
+
+  // When a max-height scroll constraint is active, split thead and tbody into
+  // separate tables so the scrollbar only covers the body rows — not the header.
+  // Both tables use table-layout:fixed with a shared colgroup so columns stay
+  // aligned. Pass columns={['40%','20%','40%']} to control widths explicitly;
+  // omit for equal distribution.
+  if (effective) {
+    const childArray = React.Children.toArray(children)
+    const thead = childArray.find(c => c.type === 'thead')
+    const bodyChildren = childArray.filter(c => c.type !== 'thead')
+
+    const colgroup = columns?.length ? (
+      <colgroup>{columns.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+    ) : null
+
+    return (
+      <div ref={outerRef} className={`rounded-xl border overflow-hidden ${className}`} style={outerStyle}>
+        <div className="overflow-x-auto">
+          {thead && (
+            <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              {colgroup}
+              {thead}
+            </table>
+          )}
+          <div style={{ overflowY: 'auto', maxHeight: effective }}>
+            <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              {colgroup}
+              {bodyChildren}
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={outerRef}
       className={`rounded-xl border overflow-hidden ${className}`}
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      style={outerStyle}
     >
-      <div
-        className="overflow-x-auto"
-        style={effective ? { overflowY: 'auto', maxHeight: effective } : undefined}
-      >
+      <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           {children}
         </table>

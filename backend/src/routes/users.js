@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { getUserById, updateUser, getUserStats, getBotStats, syncUser } from '../services/userService.js'
+import { getUserCredits } from '../services/creditService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
@@ -220,6 +221,78 @@ router.post('/me/hints/play', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/me/notifications
+ * Returns all undelivered UserNotification rows for the authenticated user.
+ */
+router.get('/me/notifications', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const notifications = await db.userNotification.findMany({
+      where: { userId: user.id, deliveredAt: null },
+      orderBy: { createdAt: 'asc' },
+    })
+    res.json({ notifications })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/users/me/notifications/deliver
+ * Batch-mark notifications as delivered. Only affects rows belonging to the authenticated user.
+ * Body: { ids: string[] }
+ */
+router.post('/me/notifications/deliver', requireAuth, async (req, res, next) => {
+  try {
+    const { ids } = req.body
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids must be a non-empty array' })
+    }
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const { count } = await db.userNotification.updateMany({
+      where: { id: { in: ids }, userId: user.id, deliveredAt: null },
+      data: { deliveredAt: new Date() },
+    })
+    res.json({ delivered: count })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/users/me/settings
+ * Update user settings. Currently supports: emailAchievements (boolean).
+ */
+router.patch('/me/settings', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const updates = {}
+    if (typeof req.body.emailAchievements === 'boolean') {
+      updates.emailAchievements = req.body.emailAchievements
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid settings provided' })
+    }
+    await db.user.update({ where: { id: user.id }, data: updates })
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * PATCH /api/v1/users/me/preferences
  * Updates allowed preference keys for the signed-in user.
  */
@@ -312,6 +385,24 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
     const updated = await updateUser(user.id, { displayName, avatarUrl, preferences })
     res.json({ user: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/users/:id/credits
+ * Returns credit totals, activity score, tier, and progress for a user.
+ * Public endpoint — no auth required, same pattern as /:id/stats.
+ */
+router.get('/:id/credits', async (req, res, next) => {
+  try {
+    const [user, credits] = await Promise.all([
+      getUserById(req.params.id),
+      getUserCredits(req.params.id),
+    ])
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    res.json({ credits })
   } catch (err) {
     next(err)
   }

@@ -39,7 +39,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm install --workspace=backend --workspace=packages/ai --no-package-lock --legacy-peer-deps --ignore-scripts
+        run: npm ci --workspace=backend --workspace=packages/ai --ignore-scripts
 
       - name: Generate Prisma client
         working-directory: backend
@@ -78,7 +78,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm install --workspace=packages/ai --no-package-lock --legacy-peer-deps --ignore-scripts
+        run: npm ci --workspace=packages/ai --ignore-scripts
 
       - name: Run tests
         run: npm test --workspace=packages/ai
@@ -97,7 +97,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm install --workspace=frontend --workspace=packages/ai --no-package-lock --legacy-peer-deps --ignore-scripts
+        run: npm ci --workspace=frontend --workspace=packages/ai --ignore-scripts
 
       - name: Run tests
         working-directory: frontend
