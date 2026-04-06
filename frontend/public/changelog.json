@@ -1,8 +1,13 @@
 [
   {
+    "version": "1.6.9",
+    "date": "2026-04-06",
+    "description": "UI improvements for version history trail"
+  },
+  {
     "version": "1.6.7",
     "date": "2026-04-05",
-    "description": "Complete Phase 1 credits schema — add emailedAt to UserNotification"
+    "description": "Complete Phase 1 credits schema \u2014 add emailedAt to UserNotification"
   },
   {
     "version": "1.6.6",
@@ -27,7 +32,7 @@
   {
     "version": "1.6.1",
     "date": "2026-04-05",
-    "description": "Mobile FAQ viewing fix — removed inline max-width from guide images so the CSS rule applies correctly on iOS Safari"
+    "description": "Mobile FAQ viewing fix \u2014 removed inline max-width from guide images so the CSS rule applies correctly on iOS Safari"
   },
   {
     "version": "1.6.0",
@@ -77,7 +82,7 @@
   {
     "version": "1.2.2",
     "date": "2026-04-03",
-    "description": "Fix OAuth nameConfirmed timing bug — move social account check to /sync"
+    "description": "Fix OAuth nameConfirmed timing bug \u2014 move social account check to /sync"
   },
   {
     "version": "1.2.1",
@@ -132,6 +137,6 @@
   {
     "version": "1.0.0",
     "date": "2026-03-29",
-    "description": "Initial release — competitive Tic-Tac-Toe with ELO ratings, PvP rooms, AI opponents, Gym bot training, puzzles, and leaderboard"
+    "description": "Initial release \u2014 competitive Tic-Tac-Toe with ELO ratings, PvP rooms, AI opponents, Gym bot training, puzzles, and leaderboard"
   }
 ]
