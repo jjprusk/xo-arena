@@ -92,7 +92,7 @@ export default function AboutPage() {
       {changelog.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Release History</h2>
-          <ListTable maxHeight="28vh" columns={['12%', '22%', '66%']}>
+          <ListTable maxHeight="28vh" columns={['16%', '24%', '60%']}>
             <thead>
               <tr>
                 <ListTh>Version</ListTh>
