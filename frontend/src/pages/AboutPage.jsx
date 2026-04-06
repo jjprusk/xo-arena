@@ -1,17 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import GettingStartedModal from '../components/GettingStartedModal.jsx'
+import changelog from '../../public/changelog.json'
 
 export default function AboutPage() {
   const [gettingStartedOpen, setGettingStartedOpen] = useState(false)
-  const [changelog, setChangelog] = useState([])
-
-  useEffect(() => {
-    fetch('/changelog.json')
-      .then(r => r.json())
-      .then(setChangelog)
-      .catch(() => {})
-  }, [])
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div className="pb-4 border-b flex items-end gap-3" style={{ borderColor: 'var(--border-default)' }}>
