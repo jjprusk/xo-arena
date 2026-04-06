@@ -51,3 +51,19 @@ Deferred features and improvements that are worth revisiting but not currently p
 **Complexity:** Large. The game loop and rendering are new territory. The AI training pipeline is more reusable than it might seem — the Gym's episode-based training maps naturally to a real-time game where each episode is one full match.
 
 ---
+
+## Persist Game State Through Deploys (Redis-backed Rooms)
+
+**What:** Store active room and game state in Redis so that a Railway deploy (or any container restart) does not drop in-progress games. Currently all room state lives in the `roomManager`'s in-memory map — a restart silently kills any active session.
+
+**Why deferred:** Traffic is low enough that deploys rarely hit active games. A graceful SIGTERM drain window partially mitigates this for short deployments.
+
+**What it would take:**
+- **Redis room store:** serialize `roomManager` room state (board, turn, player sockets, timestamps) to a Redis hash on every state change. On startup, rehydrate in-memory state from Redis.
+- **Socket reconnection:** when a client reconnects after a brief drop, look up their room by session/user ID and re-join them to the recovered room rather than showing an error.
+- **Expiry:** set a TTL on room keys (e.g. 1 hour) so abandoned rooms don't accumulate.
+- **Bot games:** bot game runner state would need the same treatment, or bot games could simply be restarted on reconnect (acceptable since they're not PvP).
+
+**Complexity:** Medium (~1–2 days). Redis is already used for the activity/presence service, so the infrastructure is in place. The main work is wiring the roomManager writes/reads through Redis and handling the reconnect flow on the frontend.
+
+---
