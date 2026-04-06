@@ -41,14 +41,19 @@ function ctx() {
     _masterGain = _audioCtx.createGain()
     _masterGain.gain.value = _synthVolume
     _masterGain.connect(_audioCtx.destination)
-    // Re-resume immediately whenever the browser auto-suspends the context
-    // so it is already mid-resume by the time the next sound needs to play.
-    _audioCtx.addEventListener('statechange', () => {
-      if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
-    })
   }
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {})
   return _audioCtx
+}
+
+// Pre-warm the AudioContext on every pointer interaction in the capture phase.
+// capture:true fires BEFORE any component handlers, so by the time game logic
+// calls play() the resume is already in-flight — eliminating the async gap that
+// causes audible lag when the browser auto-suspends the context between moves.
+if (typeof window !== 'undefined') {
+  document.addEventListener('pointerdown', () => {
+    if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
+  }, { capture: true, passive: true })
 }
 
 function tone(ac, type, freq, startTime, duration, gain = 0.18, fadeOut = true) {
