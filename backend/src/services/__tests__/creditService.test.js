@@ -22,6 +22,7 @@ function mockUser(overrides = {}) {
     creditsHpc: 0,
     creditsBpc: 0,
     creditsTc: 0,
+    emailAchievements: false,
     botLimit: null,
     ...overrides,
   }
@@ -92,6 +93,7 @@ describe('getUserCredits', () => {
       activityScore: 0,
       tier: 0, tierName: 'Bronze', tierIcon: '🥉',
       nextTier: 1, pointsToNextTier: 25,
+      emailAchievements: false,
     })
   })
 
@@ -284,11 +286,11 @@ describe('recordGameCompletion', () => {
     )
   })
 
-  it('does not award HPC when only 1 human (e.g. pvp mode with a bot)', async () => {
+  it('awards HPC to the human when playing a community bot', async () => {
     await recordGameCompletion({ appId: 'xo-arena', participants: [human1, bot], mode: 'pvp' })
-    // Only BPC check runs; no HPC increment since only 1 human
-    const hpcCalls = db.user.update.mock.calls.filter(c => c[0]?.data?.creditsHpc)
-    expect(hpcCalls).toHaveLength(0)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'usr_1' }, data: { creditsHpc: { increment: 1 } } })
+    )
   })
 
   it('awards BPC to bot owner when bot plays external human opponent', async () => {

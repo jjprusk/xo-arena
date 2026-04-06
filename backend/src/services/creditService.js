@@ -54,7 +54,7 @@ export async function getTierForScore(score) {
 export async function getUserCredits(userId) {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { creditsHpc: true, creditsBpc: true, creditsTc: true },
+    select: { creditsHpc: true, creditsBpc: true, creditsTc: true, emailAchievements: true },
   })
   if (!user) throw new Error(`User not found: ${userId}`)
 
@@ -77,7 +77,7 @@ export async function getUserCredits(userId) {
   const nextTier = tier < 4 ? tier + 1 : null
   const pointsToNextTier = nextTier !== null ? thresholds[nextTier] - activityScore : null
 
-  return { hpc, bpc, tc, activityScore, tier, tierName, tierIcon, nextTier, pointsToNextTier }
+  return { hpc, bpc, tc, activityScore, tier, tierName, tierIcon, nextTier, pointsToNextTier, emailAchievements: user.emailAchievements }
 }
 
 /**
@@ -134,9 +134,9 @@ export async function recordGameCompletion({ appId, participants, mode }) {
 
   const created = []
 
-  // HPC: all non-bot participants in a qualifying PvP game (both sides must be human)
+  // HPC: all human participants in any qualifying game (built-in AI exclusion already handled above)
   const humans = participants.filter(p => !p.isBot)
-  if (mode === 'pvp' && humans.length >= 2) {
+  if (mode === 'pvp' && humans.length >= 1) {
     for (const { userId } of humans) {
       const prev = await getUserCredits(userId)
       await db.user.update({ where: { id: userId }, data: { creditsHpc: { increment: 1 } } })

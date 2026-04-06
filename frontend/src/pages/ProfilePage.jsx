@@ -39,6 +39,10 @@ export default function ProfilePage() {
   const [emailAchievements, setEmailAchievements] = useState(false)
   const [savingEmailPref, setSavingEmailPref] = useState(false)
 
+  // Accordion open state
+  const [openSections, setOpenSections] = useState({ profile: false, stats: true, credits: true, bots: false, danger: false })
+  const toggle = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
+
   // Account deletion
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -88,8 +92,8 @@ export default function ProfilePage() {
           if (pt != null) setProvisionalThreshold(pt)
         }
         if (creditsRes.status === 'fulfilled') {
-          setCredits(creditsRes.value)
-          setEmailAchievements(creditsRes.value.emailAchievements ?? false)
+          setCredits(creditsRes.value.credits)
+          setEmailAchievements(creditsRes.value.credits.emailAchievements ?? false)
         }
       } catch {
         setError('Failed to load profile.')
@@ -275,105 +279,56 @@ export default function ProfilePage() {
   const memberSince = new Date(dbUser.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
   const initial = (dbUser.displayName?.[0] || '?').toUpperCase()
 
-  return (
-    <div className="max-w-lg mx-auto space-y-8">
-      <PageHeader title="Profile" />
-
-      {/* Identity card */}
+  const profileHeader = (
+    <div className="flex items-center gap-3 min-w-0 py-0.5">
       <div
-        className="rounded-xl border p-6 space-y-5"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
+        style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
       >
-        {/* Avatar + name row */}
-        <div className="flex items-center gap-4">
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 overflow-hidden"
-            style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
-          >
-            {clerkUser?.image
-              ? <img src={clerkUser.image} alt={dbUser.displayName} className="w-full h-full object-cover" />
-              : initial}
+        {clerkUser?.image
+          ? <img src={clerkUser.image} alt="" className="w-full h-full object-cover" />
+          : initial}
+      </div>
+      <div className="flex-1 min-w-0">
+        {editing ? (
+          <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
+            <input
+              autoFocus
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditing(false) }}
+              maxLength={40}
+              className="w-full px-3 py-1 rounded-lg border text-sm font-semibold outline-none focus:border-[var(--color-blue-600)] transition-colors"
+              style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={e => { e.stopPropagation(); handleSaveName() }}
+                disabled={saving || !nameInput.trim()}
+                className="px-3 py-1 text-xs font-semibold rounded-lg transition-all hover:brightness-110 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}
+              >{saving ? 'Saving…' : 'Save'}</button>
+              <button
+                onClick={e => { e.stopPropagation(); setEditing(false); setNameInput(dbUser.displayName) }}
+                className="px-3 py-1 text-xs font-medium rounded-lg transition-colors"
+                style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-secondary)' }}
+              >Cancel</button>
+            </div>
+            {saveError && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{saveError}</p>}
           </div>
-          <div className="flex-1 min-w-0">
-            {editing ? (
-              <div className="space-y-2">
-                <input
-                  autoFocus
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditing(false) }}
-                  maxLength={40}
-                  className="w-full px-3 py-1.5 rounded-lg border text-sm font-semibold outline-none focus:border-[var(--color-blue-600)] transition-colors"
-                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSaveName}
-                    disabled={saving || !nameInput.trim()}
-                    className="px-3 py-1 text-xs font-semibold rounded-lg transition-all hover:brightness-110 disabled:opacity-50"
-                    style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}
-                  >
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    onClick={() => { setEditing(false); setNameInput(dbUser.displayName) }}
-                    className="px-3 py-1 text-xs font-medium rounded-lg transition-colors"
-                    style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-secondary)' }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-                {saveError && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{saveError}</p>}
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold truncate">{dbUser.displayName}</span>
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="text-xs px-2 py-0.5 rounded-md transition-colors flex-shrink-0"
-                    style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}
-                    title="Edit display name"
-                  >
-                    Edit
-                  </button>
-                  <Link
-                    to="/settings"
-                    state={{ from: '/profile' }}
-                    className="text-xs font-medium underline underline-offset-2 transition-opacity hover:opacity-70 flex-shrink-0"
-                    style={{ color: 'var(--color-blue-600)' }}
-                  >
-                    Settings
-                  </Link>
-                </div>
-                {(dbUser.baRole === 'admin' || (dbUser.roles ?? []).length > 0) && (
-                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                    {dbUser.baRole === 'admin' && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-purple-100)', color: 'var(--color-purple-700)' }}>admin</span>
-                    )}
-                    {(dbUser.roles ?? []).map(role => (
-                      <span key={role} className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-orange-100)', color: 'var(--color-orange-700)' }}>{role}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
-
-        {/* Details */}
-        <dl className="space-y-3">
-          <Row label="Email" value={dbUser.email || clerkUser?.email || '—'} />
-          <Row label="Sign-in method" value={dbUser.oauthProvider ? capitalize(dbUser.oauthProvider) : 'Email'} />
-          <Row label="Member since" value={memberSince} />
-          {eloData && (
-            <Row
-              label="ELO"
-              value={
-                <span className="flex items-center gap-1.5">
-                  <span className="font-bold tabular-nums" style={{ color: 'var(--color-blue-600)' }}>
+        ) : (
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold truncate">{dbUser.displayName}</span>
+              <button
+                onClick={e => { e.stopPropagation(); setEditing(true) }}
+                className="text-xs px-2 py-0.5 rounded-md transition-colors flex-shrink-0"
+                style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}
+                title="Edit display name"
+              >Edit</button>
+              {eloData && (
+                <span className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--color-blue-600)' }}>
                     {Math.round(eloData.currentElo)}
                   </span>
                   {eloData.eloHistory?.[0]?.delta != null && (
@@ -385,30 +340,90 @@ export default function ProfilePage() {
                     </span>
                   )}
                 </span>
-              }
-            />
-          )}
-        </dl>
+              )}
+              <Link
+                to="/settings"
+                state={{ from: '/profile' }}
+                onClick={e => e.stopPropagation()}
+                className="text-xs font-medium underline underline-offset-2 transition-opacity hover:opacity-70 flex-shrink-0"
+                style={{ color: 'var(--color-blue-600)' }}
+              >Settings</Link>
+            </div>
+            {(dbUser.baRole === 'admin' || (dbUser.roles ?? []).length > 0) && (
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                {dbUser.baRole === 'admin' && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-purple-100)', color: 'var(--color-purple-700)' }}>admin</span>
+                )}
+                {(dbUser.roles ?? []).map(role => (
+                  <span key={role} className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-orange-100)', color: 'var(--color-orange-700)' }}>{role}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="max-w-lg mx-auto space-y-2">
+      <PageHeader title="Profile" />
+
+      {/* Create Bot CTA */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => {
+            if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
+              setOpenSections(prev => ({ ...prev, bots: true }))
+              setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
+              return
+            }
+            setBotActionError(null)
+            setShowCreateBot(true)
+            setOpenSections(prev => ({ ...prev, bots: true }))
+          }}
+          className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white flex-shrink-0 transition-all hover:brightness-110"
+          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+        >
+          Create Bot
+        </button>
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Create a new bot to train and compete</span>
       </div>
 
-      {/* Quick stats */}
-      {stats && stats.totalGames > 0 && (
-        <section className="space-y-3">
-          <SectionLabel>Quick Stats</SectionLabel>
-          <div className="grid grid-cols-3 gap-3">
-            <StatCard label="Games" value={stats.totalGames} />
-            <StatCard label="Wins" value={stats.wins} color="var(--color-teal-600)" />
-            <StatCard label="Win Rate" value={`${Math.round(stats.winRate * 100)}%`} color="var(--color-teal-600)" />
-          </div>
-          {/* Win breakdown by opponent type (B-15e) */}
-          {stats.totalGames > 0 && (() => {
-            const pvaiWins = Object.values(stats.pvai).reduce((s, v) => s + v.wins, 0)
-            const pvbotWins = stats.pvbot?.wins ?? 0
-            const pvpWins = stats.pvp?.wins ?? 0
-            return (
+      {/* Profile */}
+      <AccordionSection
+        header={profileHeader}
+        open={openSections.profile}
+        onToggle={() => toggle('profile')}
+      >
+        <dl className="space-y-3">
+          <Row label="Email" value={dbUser.email || clerkUser?.email || '—'} />
+          <Row label="Sign-in method" value={dbUser.oauthProvider ? capitalize(dbUser.oauthProvider) : 'Email'} />
+          <Row label="Member since" value={memberSince} />
+        </dl>
+      </AccordionSection>
+
+      {/* Quick Stats */}
+      {stats && stats.totalGames > 0 && (() => {
+        const pvaiWins = Object.values(stats.pvai).reduce((s, v) => s + v.wins, 0)
+        const pvbotWins = stats.pvbot?.wins ?? 0
+        const pvpWins = stats.pvp?.wins ?? 0
+        return (
+          <AccordionSection
+            title="Quick Stats"
+            summary={`${stats.totalGames} games · ${stats.wins} wins · ${Math.round(stats.winRate * 100)}%`}
+            open={openSections.stats}
+            onToggle={() => toggle('stats')}
+          >
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <StatCard label="Games" value={stats.totalGames} />
+                <StatCard label="Wins" value={stats.wins} color="var(--color-teal-600)" />
+                <StatCard label="Win Rate" value={`${Math.round(stats.winRate * 100)}%`} color="var(--color-teal-600)" />
+              </div>
               <div
                 className="rounded-lg border px-4 py-2.5 grid grid-cols-3 divide-x text-center"
-                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)', divideColor: 'var(--border-default)' }}
+                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}
               >
                 {[
                   { label: 'vs Humans', wins: pvpWins, played: stats.pvp?.played ?? 0 },
@@ -423,27 +438,23 @@ export default function ProfilePage() {
                   </div>
                 ))}
               </div>
-            )
-          })()}
-          <Link
-            to="/stats"
-            className="text-sm font-medium transition-colors"
-            style={{ color: 'var(--color-blue-600)' }}
-          >
-            View full stats →
-          </Link>
-        </section>
-      )}
+              <Link to="/stats" className="text-sm font-medium transition-colors" style={{ color: 'var(--color-blue-600)' }}>
+                View full stats →
+              </Link>
+            </div>
+          </AccordionSection>
+        )
+      })()}
 
       {/* Credits & Tier */}
       {credits && (
-        <section className="space-y-3">
-          <SectionLabel>Credits &amp; Tier</SectionLabel>
-          <div
-            className="rounded-xl border p-5 space-y-4"
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-          >
-            {/* Tier badge */}
+        <AccordionSection
+          title="Credits & Tier"
+          summary={`${credits.tierIcon} ${credits.tierName} · ${credits.activityScore} pts`}
+          open={openSections.credits}
+          onToggle={() => toggle('credits')}
+        >
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-2xl" aria-hidden="true">{credits.tierIcon}</span>
@@ -453,31 +464,25 @@ export default function ProfilePage() {
                 </div>
               </div>
               {credits.nextTier !== null && (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {credits.pointsToNextTier} pts to next tier
-                </p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{credits.pointsToNextTier} pts to next tier</p>
               )}
             </div>
 
-            {/* Progress bar */}
             {credits.nextTier !== null && (() => {
               const THRESHOLDS = [0, 25, 100, 500, 2000]
               const tierStart = THRESHOLDS[credits.tier]
               const tierEnd   = THRESHOLDS[credits.nextTier]
               const pct = Math.min(100, Math.round(((credits.activityScore - tierStart) / (tierEnd - tierStart)) * 100))
               return (
-                <div>
-                  <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-base)' }}>
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, background: 'linear-gradient(90deg, var(--color-blue-500), var(--color-teal-500))' }}
-                    />
-                  </div>
+                <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--border-default)' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%`, background: 'linear-gradient(90deg, var(--color-blue-500), var(--color-teal-500))' }}
+                  />
                 </div>
               )
             })()}
 
-            {/* Credit breakdown */}
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
                 { label: 'HPC', value: credits.hpc, title: 'Human Play Credits' },
@@ -491,7 +496,6 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            {/* Email achievements toggle */}
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <div
                 className={`relative w-9 h-5 rounded-full transition-colors ${emailAchievements ? 'bg-[var(--color-blue-600)]' : 'bg-[var(--border-default)]'} ${savingEmailPref ? 'opacity-60' : ''}`}
@@ -507,244 +511,225 @@ export default function ProfilePage() {
               </span>
             </label>
           </div>
-        </section>
+        </AccordionSection>
       )}
 
       {/* My Bots */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <SectionLabel>My Bots</SectionLabel>
-          {limitInfo && (
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {limitInfo.isExempt
-                ? `${limitInfo.count} bots (no limit)`
-                : `${limitInfo.count} / ${limitInfo.limit} bots`}
-            </span>
+      <AccordionSection
+        title="My Bots"
+        summary={limitInfo
+          ? (limitInfo.isExempt ? `${limitInfo.count} bots (no limit)` : `${limitInfo.count} / ${limitInfo.limit} bots`)
+          : bots.length > 0 ? `${bots.length} bots` : null}
+        open={openSections.bots}
+        onToggle={() => toggle('bots')}
+      >
+        <div className="space-y-3">
+          {botActionError && (
+            <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{botActionError}</p>
+          )}
+
+          {showCreateBot ? (
+            <form onSubmit={handleCreateBot} className="space-y-3">
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>New bot</p>
+              <label className="space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Name</span>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  maxLength={40}
+                  value={createForm.name}
+                  onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+              </label>
+              <label className="space-y-1 block">
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
+                <select
+                  value={createForm.modelType}
+                  onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  <option value="Q_LEARNING">Q-Learning</option>
+                  <option value="SARSA">SARSA</option>
+                  <option value="MONTE_CARLO">Monte Carlo</option>
+                  <option value="POLICY_GRADIENT">Policy Gradient</option>
+                  <option value="DQN">DQN (Deep Q-Network)</option>
+                  <option value="ALPHA_ZERO">AlphaZero</option>
+                </select>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  A fresh untrained brain of this type will be created. Train it in the Gym.
+                </p>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createForm.competitive}
+                  onChange={e => setCreateForm(f => ({ ...f, competitive: e.target.checked }))}
+                />
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Competitive (eligible for leaderboard &amp; tournaments)</span>
+              </label>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={creatingBot}
+                  className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+                >
+                  {creatingBot ? 'Creating…' : 'Create'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateBot(false); setBotActionError(null) }}
+                  className="px-4 py-1.5 rounded-lg text-sm border"
+                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => {
+                if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
+                  setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
+                  return
+                }
+                setBotActionError(null)
+                setShowCreateBot(true)
+              }}
+              className="text-sm font-medium underline underline-offset-2 transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-blue-600)' }}
+            >
+              + Create new bot
+            </button>
+          )}
+
+          {botsLoading && (
+            <div className="flex items-center justify-center py-4">
+              <div className="w-5 h-5 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+
+          {!botsLoading && bots.length === 0 && (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>You have no bots yet.</p>
+          )}
+
+          {!botsLoading && bots.length > 0 && (
+            <ListTable fitViewport topOffset={56} bottomPadding={32}>
+              <thead>
+                <tr>
+                  <ListTh>Bot</ListTh>
+                  <ListTh>Type</ListTh>
+                  <ListTh align="right">ELO</ListTh>
+                  <ListTh align="right">Actions</ListTh>
+                </tr>
+              </thead>
+              <tbody>
+                {bots.map((bot, i) => (
+                  <ListTr key={bot.id} dimmed={!bot.botActive} last={i === bots.length - 1}>
+                    <ListTd>
+                      {renamingBot?.id === bot.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            autoFocus
+                            value={renamingBot.value}
+                            onChange={e => setRenamingBot({ id: bot.id, value: e.target.value })}
+                            onKeyDown={e => { if (e.key === 'Enter') handleRenameBot(bot.id); if (e.key === 'Escape') setRenamingBot(null) }}
+                            maxLength={40}
+                            className="px-2 py-0.5 rounded border text-sm focus:outline-none"
+                            style={{ borderColor: 'var(--color-blue-400)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', width: '140px' }}
+                          />
+                          <button onClick={() => handleRenameBot(bot.id)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>✓</button>
+                          <button onClick={() => setRenamingBot(null)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>✕</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link to={`/bots/${bot.id}`} className="font-semibold hover:underline" style={{ color: 'var(--text-primary)' }}>
+                            {bot.displayName}
+                          </Link>
+                          {bot.botProvisional && (
+                            <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>provisional</span>
+                          )}
+                          {!bot.botActive && (
+                            <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
+                          )}
+                        </div>
+                      )}
+                      {bot.botProvisional && (
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--color-amber-600)' }}>
+                          {Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0))} game{Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0)) !== 1 ? 's' : ''} to establish rating
+                        </div>
+                      )}
+                    </ListTd>
+                    <ListTd>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}>
+                        {bot.botModelType}
+                      </span>
+                    </ListTd>
+                    <ListTd align="right">
+                      <span className="font-mono tabular-nums">{Math.round(bot.eloRating)}</span>
+                    </ListTd>
+                    <ListTd align="right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setRenamingBot({ id: bot.id, value: bot.displayName })}
+                          className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                          title="Rename"
+                        >✎</button>
+                        <button
+                          onClick={() => handleToggleBotActive(bot)}
+                          className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                          style={{
+                            borderColor: bot.botActive ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
+                            color: bot.botActive ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
+                          }}
+                          title={bot.botActive ? 'Disable bot' : 'Enable bot'}
+                        >{bot.botActive ? 'Disable' : 'Enable'}</button>
+                        <button
+                          onClick={() => handleResetElo(bot)}
+                          disabled={bot.botInTournament}
+                          className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={{ borderColor: 'var(--color-purple-300)', color: 'var(--color-purple-600)' }}
+                          title={bot.botInTournament ? 'Cannot reset ELO while in tournament' : 'Reset ELO to 1200'}
+                        >Reset ELO</button>
+                        <button
+                          onClick={() => handleDeleteBot(bot)}
+                          className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)]"
+                          style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                          title="Delete bot"
+                        >✕</button>
+                      </div>
+                    </ListTd>
+                  </ListTr>
+                ))}
+              </tbody>
+            </ListTable>
           )}
         </div>
-
-        {botActionError && (
-          <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{botActionError}</p>
-        )}
-
-        {showCreateBot ? (
-          <form
-            onSubmit={handleCreateBot}
-            className="rounded-xl border p-4 space-y-3"
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
-          >
-            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>New bot</p>
-            <label className="space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Name</span>
-              <input
-                type="text"
-                required
-                autoFocus
-                maxLength={40}
-                value={createForm.name}
-                onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              />
-            </label>
-            <label className="space-y-1 block">
-              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
-              <select
-                value={createForm.modelType}
-                onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
-                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              >
-                <option value="Q_LEARNING">Q-Learning</option>
-                <option value="SARSA">SARSA</option>
-                <option value="MONTE_CARLO">Monte Carlo</option>
-                <option value="POLICY_GRADIENT">Policy Gradient</option>
-                <option value="DQN">DQN (Deep Q-Network)</option>
-                <option value="ALPHA_ZERO">AlphaZero</option>
-              </select>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                A fresh untrained brain of this type will be created. Train it in the Gym.
-              </p>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={createForm.competitive}
-                onChange={e => setCreateForm(f => ({ ...f, competitive: e.target.checked }))}
-              />
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Competitive (eligible for leaderboard &amp; tournaments)</span>
-            </label>
-            <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                disabled={creatingBot}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
-              >
-                {creatingBot ? 'Creating…' : 'Create'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowCreateBot(false); setBotActionError(null) }}
-                className="px-4 py-1.5 rounded-lg text-sm border"
-                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <button
-            onClick={() => {
-              if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
-                setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
-                return
-              }
-              setBotActionError(null)
-              setShowCreateBot(true)
-            }}
-            className="text-sm font-medium transition-colors"
-            style={{ color: 'var(--color-blue-600)' }}
-          >
-            + Create new bot
-          </button>
-        )}
-
-        {botsLoading && (
-          <div className="flex items-center justify-center py-4">
-            <div className="w-5 h-5 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-
-        {!botsLoading && bots.length === 0 && (
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>You have no bots yet.</p>
-        )}
-
-        {!botsLoading && bots.length > 0 && (
-          <ListTable fitViewport topOffset={56} bottomPadding={32}>
-            <thead>
-              <tr>
-                <ListTh>Bot</ListTh>
-                <ListTh>Type</ListTh>
-                <ListTh align="right">ELO</ListTh>
-                <ListTh align="right">Actions</ListTh>
-              </tr>
-            </thead>
-            <tbody>
-              {bots.map((bot, i) => (
-                <ListTr key={bot.id} dimmed={!bot.botActive} last={i === bots.length - 1}>
-                  {/* Name */}
-                  <ListTd>
-                    {renamingBot?.id === bot.id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          autoFocus
-                          value={renamingBot.value}
-                          onChange={e => setRenamingBot({ id: bot.id, value: e.target.value })}
-                          onKeyDown={e => { if (e.key === 'Enter') handleRenameBot(bot.id); if (e.key === 'Escape') setRenamingBot(null) }}
-                          maxLength={40}
-                          className="px-2 py-0.5 rounded border text-sm focus:outline-none"
-                          style={{ borderColor: 'var(--color-blue-400)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', width: '140px' }}
-                        />
-                        <button onClick={() => handleRenameBot(bot.id)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>✓</button>
-                        <button onClick={() => setRenamingBot(null)} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>✕</button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link
-                          to={`/bots/${bot.id}`}
-                          className="font-semibold hover:underline"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {bot.displayName}
-                        </Link>
-                        {bot.botProvisional && (
-                          <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>provisional</span>
-                        )}
-                        {!bot.botActive && (
-                          <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
-                        )}
-                      </div>
-                    )}
-                    {bot.botProvisional && (
-                      <div className="text-xs mt-0.5" style={{ color: 'var(--color-amber-600)' }}>
-                        {Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0))} game{Math.max(0, provisionalThreshold - (bot.botGamesPlayed ?? 0)) !== 1 ? 's' : ''} to establish rating
-                      </div>
-                    )}
-                  </ListTd>
-
-                  {/* Type */}
-                  <ListTd>
-                    <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}>
-                      {bot.botModelType}
-                    </span>
-                  </ListTd>
-
-                  {/* ELO */}
-                  <ListTd align="right">
-                    <span className="font-mono tabular-nums">{Math.round(bot.eloRating)}</span>
-                  </ListTd>
-
-                  {/* Actions */}
-                  <ListTd align="right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setRenamingBot({ id: bot.id, value: bot.displayName })}
-                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
-                        style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-                        title="Rename"
-                      >✎</button>
-                      <button
-                        onClick={() => handleToggleBotActive(bot)}
-                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
-                        style={{
-                          borderColor: bot.botActive ? 'var(--color-orange-300)' : 'var(--color-teal-300)',
-                          color: bot.botActive ? 'var(--color-orange-600)' : 'var(--color-teal-600)',
-                        }}
-                        title={bot.botActive ? 'Disable bot' : 'Enable bot'}
-                      >{bot.botActive ? 'Disable' : 'Enable'}</button>
-                      <button
-                        onClick={() => handleResetElo(bot)}
-                        disabled={bot.botInTournament}
-                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
-                        style={{ borderColor: 'var(--color-purple-300)', color: 'var(--color-purple-600)' }}
-                        title={bot.botInTournament ? 'Cannot reset ELO while in tournament' : 'Reset ELO to 1200'}
-                      >Reset ELO</button>
-                      <button
-                        onClick={() => handleDeleteBot(bot)}
-                        className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)]"
-                        style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
-                        title="Delete bot"
-                      >✕</button>
-                    </div>
-                  </ListTd>
-                </ListTr>
-              ))}
-            </tbody>
-          </ListTable>
-        )}
-
-      </section>
+      </AccordionSection>
 
       {/* Danger Zone — hidden for admins */}
       {dbUser.baRole !== 'admin' && (
-        <section className="space-y-3">
-          <SectionLabel>Danger Zone</SectionLabel>
-          <div
-            className="rounded-xl border p-5 space-y-3"
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--color-red-200)', boxShadow: 'var(--shadow-card)' }}
-          >
+        <AccordionSection
+          title="Danger Zone"
+          open={openSections.danger}
+          onToggle={() => toggle('danger')}
+          danger
+        >
+          <div className="space-y-3">
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Delete account</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                 Permanently removes your account, all your bots, stats, and game history. This cannot be undone.
               </p>
             </div>
-
             {deleteError && (
               <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{deleteError}</p>
             )}
-
             {!deleteConfirm ? (
               <button
                 onClick={() => setDeleteConfirm(true)}
@@ -779,7 +764,7 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-        </section>
+        </AccordionSection>
       )}
     </div>
   )
@@ -808,19 +793,79 @@ function StatCard({ label, value, color }) {
   )
 }
 
+function AccordionSection({ title, summary, header, open, onToggle, danger, children }) {
+  return (
+    <div
+      className="rounded-xl border overflow-hidden"
+      style={{
+        backgroundColor: 'var(--bg-surface)',
+        borderColor: danger ? 'var(--color-red-200)' : 'var(--border-default)',
+        boxShadow: 'var(--shadow-card)',
+      }}
+    >
+      {header ? (
+        // When header contains interactive elements (buttons, links), use a div to avoid
+        // invalid nested <button> HTML. Keyboard interaction preserved via onKeyDown.
+        <div
+          className="w-full flex items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-[var(--bg-surface-hover)] cursor-pointer"
+          onClick={onToggle}
+          role="button"
+          aria-label="Toggle section"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onToggle() }}
+        >
+          <span className="flex-1 min-w-0">{header}</span>
+          <svg
+            className="w-4 h-4 flex-shrink-0 transition-transform duration-200"
+            style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      ) : (
+        <button
+          className="w-full flex items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+          onClick={onToggle}
+        >
+          <span
+            className="text-[10px] font-semibold uppercase tracking-widest flex-shrink-0 w-20"
+            style={{ color: danger ? 'var(--color-red-500)' : 'var(--text-muted)' }}
+          >
+            {title}
+          </span>
+          {!open && summary && (
+            <span className="flex-1 min-w-0 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {summary}
+            </span>
+          )}
+          <span className="flex-1" />
+          <svg
+            className="w-4 h-4 flex-shrink-0 transition-transform duration-200"
+            style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
+      {open && (
+        <div
+          className="px-5 pt-4 pb-5 border-t"
+          style={{ borderColor: danger ? 'var(--color-red-200)' : 'var(--border-default)' }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PageHeader({ title }) {
   return (
     <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
       <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
     </div>
-  )
-}
-
-function SectionLabel({ children }) {
-  return (
-    <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-      {children}
-    </h2>
   )
 }
 

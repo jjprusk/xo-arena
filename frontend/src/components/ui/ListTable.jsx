@@ -119,16 +119,41 @@ export function ListTable({ children, maxHeight, fitViewport = false, bottomPadd
 
   const effective = fitViewport ? dynamicMax : maxHeight
 
+  const outerStyle = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }
+
+  // When a max-height scroll constraint is active, split thead and tbody into
+  // separate tables so the scrollbar only covers the body rows — not the header.
+  // Both tables use table-layout:fixed so columns stay aligned across the split.
+  if (effective) {
+    const childArray = React.Children.toArray(children)
+    const thead = childArray.find(c => c.type === 'thead')
+    const bodyChildren = childArray.filter(c => c.type !== 'thead')
+
+    return (
+      <div ref={outerRef} className={`rounded-xl border overflow-hidden ${className}`} style={outerStyle}>
+        <div className="overflow-x-auto">
+          {thead && (
+            <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              {thead}
+            </table>
+          )}
+          <div style={{ overflowY: 'auto', maxHeight: effective }}>
+            <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              {bodyChildren}
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={outerRef}
       className={`rounded-xl border overflow-hidden ${className}`}
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      style={outerStyle}
     >
-      <div
-        className="overflow-x-auto"
-        style={effective ? { overflowY: 'auto', maxHeight: effective } : undefined}
-      >
+      <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           {children}
         </table>

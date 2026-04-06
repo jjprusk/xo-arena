@@ -4,6 +4,7 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 import { StatsSkeleton } from '../components/ui/Skeleton.jsx'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 const AI_NAMES = {
   novice:       'Rusty',
@@ -202,27 +203,37 @@ export default function StatsPage() {
           {stats.pvbot?.played > 0 && (
             <section className="space-y-2">
               <SectionLabel>Bot Challenges</SectionLabel>
-              <div
-                className="rounded-xl border divide-y"
-                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)', divideColor: 'var(--border-default)' }}
-              >
-                {Object.values(stats.pvbot.byBot).map((entry) => (
-                  <div key={entry.bot.id} className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {entry.bot.avatarUrl && (
-                        <img src={entry.bot.avatarUrl} alt="" className="w-6 h-6 rounded-full" />
-                      )}
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                        {entry.bot.displayName ?? 'Bot'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                      <span>{entry.played} game{entry.played !== 1 ? 's' : ''}</span>
-                      <span style={{ color: '#9333ea', fontWeight: 600 }}>{Math.round(entry.rate * 100)}% win</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <ListTable maxHeight="220px">
+                <thead>
+                  <tr>
+                    <ListTh>Bot</ListTh>
+                    <ListTh align="right">Games</ListTh>
+                    <ListTh align="right">Win Rate</ListTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.values(stats.pvbot.byBot).map((entry, i, arr) => (
+                    <ListTr key={entry.bot.id} last={i === arr.length - 1}>
+                      <ListTd>
+                        <div className="flex items-center gap-2">
+                          {entry.bot.avatarUrl && (
+                            <img src={entry.bot.avatarUrl} alt="" className="w-5 h-5 rounded-full flex-shrink-0" />
+                          )}
+                          <span className="font-medium">{entry.bot.displayName ?? 'Bot'}</span>
+                        </div>
+                      </ListTd>
+                      <ListTd align="right">
+                        <span className="tabular-nums">{entry.played}</span>
+                      </ListTd>
+                      <ListTd align="right">
+                        <span className="tabular-nums font-semibold" style={{ color: '#9333ea' }}>
+                          {Math.round(entry.rate * 100)}%
+                        </span>
+                      </ListTd>
+                    </ListTr>
+                  ))}
+                </tbody>
+              </ListTable>
             </section>
           )}
 
