@@ -37,6 +37,10 @@ vi.mock('../../services/mlService.js', () => ({
   getSystemConfig: vi.fn(),
 }))
 
+vi.mock('../../services/creditService.js', () => ({
+  getTierLimit: vi.fn(),
+}))
+
 vi.mock('../../utils/cache.js', () => ({
   default: { get: vi.fn(), set: vi.fn(), invalidate: vi.fn() },
 }))
@@ -46,6 +50,7 @@ vi.mock('../../utils/cache.js', () => ({
 const botsRouter = (await import('../bots.js')).default
 const { listBots, createBot } = await import('../../services/userService.js')
 const { getSystemConfig } = await import('../../services/mlService.js')
+const { getTierLimit } = await import('../../services/creditService.js')
 const cache = (await import('../../utils/cache.js')).default
 
 const app = express()
@@ -119,9 +124,8 @@ describe('GET /api/v1/bots', () => {
     listBots.mockResolvedValue(bots)
     mockDb.user.findUnique.mockResolvedValue(owner)
     mockDb.user.count.mockResolvedValue(2)
-    getSystemConfig
-      .mockResolvedValueOnce(5)   // bots.defaultBotLimit
-      .mockResolvedValueOnce(5)   // bots.provisionalGames
+    getSystemConfig.mockResolvedValue(5)   // bots.provisionalGames
+    getTierLimit.mockResolvedValue(5)       // tier-derived bot limit
 
     const res = await request(app).get('/api/v1/bots?ownerId=usr_1')
 
@@ -131,7 +135,7 @@ describe('GET /api/v1/bots', () => {
     expect(res.body.provisionalThreshold).toBe(5)
   })
 
-  it('ownerId query with BOT_ADMIN owner → limit=null, isExempt=true', async () => {
+  it('ownerId query with BOT_ADMIN owner → limit=null, isExempt=true (getTierLimit not called)', async () => {
     const bots = [mockBot]
     const owner = {
       id: 'usr_1',
@@ -141,49 +145,43 @@ describe('GET /api/v1/bots', () => {
     listBots.mockResolvedValue(bots)
     mockDb.user.findUnique.mockResolvedValue(owner)
     mockDb.user.count.mockResolvedValue(10)
-    getSystemConfig
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(5)
+    getSystemConfig.mockResolvedValue(5)  // bots.provisionalGames
 
     const res = await request(app).get('/api/v1/bots?ownerId=usr_1')
 
     expect(res.status).toBe(200)
     expect(res.body.limitInfo).toEqual({ count: 10, limit: null, isExempt: true })
+    expect(getTierLimit).not.toHaveBeenCalled()
   })
 
-  it('ownerId query with custom botLimit on owner uses that limit', async () => {
+  it('ownerId query: getTierLimit is called and its result used as limit', async () => {
     const bots = []
-    const owner = {
-      id: 'usr_1',
-      botLimit: 10,
-      userRoles: [],
-    }
+    const owner = { id: 'usr_1', botLimit: null, userRoles: [] }
     listBots.mockResolvedValue(bots)
     mockDb.user.findUnique.mockResolvedValue(owner)
     mockDb.user.count.mockResolvedValue(1)
-    getSystemConfig
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(5)
+    getSystemConfig.mockResolvedValue(5)
+    getTierLimit.mockResolvedValue(8)   // e.g. Gold tier
 
     const res = await request(app).get('/api/v1/bots?ownerId=usr_1')
 
     expect(res.status).toBe(200)
-    expect(res.body.limitInfo.limit).toBe(10)
+    expect(res.body.limitInfo.limit).toBe(8)
+    expect(getTierLimit).toHaveBeenCalledWith('usr_1', 'bots')
   })
 
-  it('ownerId for unknown owner → isExempt=false, limit=defaultLimit', async () => {
+  it('ownerId for unknown owner → isExempt=false, limit=3 (Bronze fallback, getTierLimit not called)', async () => {
     listBots.mockResolvedValue([])
     mockDb.user.findUnique.mockResolvedValue(null)
     mockDb.user.count.mockResolvedValue(0)
-    getSystemConfig
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(5)
+    getSystemConfig.mockResolvedValue(5)  // bots.provisionalGames
 
     const res = await request(app).get('/api/v1/bots?ownerId=unknown')
 
     expect(res.status).toBe(200)
     expect(res.body.limitInfo.isExempt).toBe(false)
-    expect(res.body.limitInfo.limit).toBe(5)
+    expect(res.body.limitInfo.limit).toBe(3)
+    expect(getTierLimit).not.toHaveBeenCalled()
   })
 
   it('includeInactive=true is passed through to listBots', async () => {
@@ -204,7 +202,7 @@ describe('POST /api/v1/bots', () => {
   it('creates bot successfully → 201 with bot', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockCaller)
     mockDb.user.count.mockResolvedValue(0)
-    getSystemConfig.mockResolvedValue(5)
+    getTierLimit.mockResolvedValue(5)
     const newBot = { id: 'bot_new', displayName: 'AlphaBot' }
     createBot.mockResolvedValue(newBot)
 
@@ -217,6 +215,7 @@ describe('POST /api/v1/bots', () => {
     expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
     // ownerBaId must be the BA user ID so the gym's ownership check passes
     expect(createBot).toHaveBeenCalledWith('usr_1', expect.objectContaining({ ownerBaId: 'ba_user_1' }))
+    expect(getTierLimit).toHaveBeenCalledWith('usr_1', 'bots')
   })
 
   it('user not found → 404', async () => {
@@ -230,13 +229,27 @@ describe('POST /api/v1/bots', () => {
 
   it('bot limit reached → 409 with BOT_LIMIT_REACHED code', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockCaller)
-    getSystemConfig.mockResolvedValue(5)
-    mockDb.user.count.mockResolvedValue(5)
+    getTierLimit.mockResolvedValue(3)    // Bronze tier: limit 3
+    mockDb.user.count.mockResolvedValue(3)
 
     const res = await request(app).post('/api/v1/bots').send({ name: 'Bot' })
 
     expect(res.status).toBe(409)
     expect(res.body.code).toBe('BOT_LIMIT_REACHED')
+    expect(res.body.error).toContain('3')
+  })
+
+  it('Diamond tier (limit=0) allows creation even when count is high', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    getTierLimit.mockResolvedValue(0)    // Diamond: unlimited
+    mockDb.user.count.mockResolvedValue(99)
+    const newBot = { id: 'bot_diamond', displayName: 'DiamondBot' }
+    createBot.mockResolvedValue(newBot)
+
+    const res = await request(app).post('/api/v1/bots').send({ name: 'DiamondBot' })
+
+    expect(res.status).toBe(201)
+    expect(res.body.bot).toEqual(newBot)
   })
 
   it('BOT_ADMIN bypasses limit check and creates bot', async () => {
@@ -248,12 +261,12 @@ describe('POST /api/v1/bots', () => {
 
     expect(res.status).toBe(201)
     expect(mockDb.user.count).not.toHaveBeenCalled()
-    expect(getSystemConfig).not.toHaveBeenCalled()
+    expect(getTierLimit).not.toHaveBeenCalled()
   })
 
   it('createBot throws RESERVED_NAME → 400', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockCaller)
-    getSystemConfig.mockResolvedValue(5)
+    getTierLimit.mockResolvedValue(5)
     mockDb.user.count.mockResolvedValue(0)
     const err = new Error('Reserved name'); err.code = 'RESERVED_NAME'
     createBot.mockRejectedValue(err)
@@ -266,7 +279,7 @@ describe('POST /api/v1/bots', () => {
 
   it('createBot throws PROFANITY → 400', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockCaller)
-    getSystemConfig.mockResolvedValue(5)
+    getTierLimit.mockResolvedValue(5)
     mockDb.user.count.mockResolvedValue(0)
     const err = new Error('Profanity'); err.code = 'PROFANITY'
     createBot.mockRejectedValue(err)
@@ -279,7 +292,7 @@ describe('POST /api/v1/bots', () => {
 
   it('createBot throws INVALID_NAME → 400', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockCaller)
-    getSystemConfig.mockResolvedValue(5)
+    getTierLimit.mockResolvedValue(5)
     mockDb.user.count.mockResolvedValue(0)
     const err = new Error('Invalid name'); err.code = 'INVALID_NAME'
     createBot.mockRejectedValue(err)
@@ -292,7 +305,7 @@ describe('POST /api/v1/bots', () => {
 
   it('createBot throws INVALID_ALGORITHM → 400', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockCaller)
-    getSystemConfig.mockResolvedValue(5)
+    getTierLimit.mockResolvedValue(5)
     mockDb.user.count.mockResolvedValue(0)
     const err = new Error('Invalid algorithm'); err.code = 'INVALID_ALGORITHM'
     createBot.mockRejectedValue(err)

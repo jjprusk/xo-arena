@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import { createBot, listBots } from '../services/userService.js'
 import { getSystemConfig } from '../services/mlService.js'
+import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
 import cache from '../utils/cache.js'
 
@@ -28,11 +29,8 @@ router.get('/', async (req, res, next) => {
         include: { userRoles: { select: { role: true } } },
       })
       const isExempt = owner ? hasRole(owner, 'BOT_ADMIN') : false
-      const [defaultLimit, provisionalThreshold] = await Promise.all([
-        getSystemConfig('bots.defaultBotLimit', 5),
-        getSystemConfig('bots.provisionalGames', 5),
-      ])
-      const limit = isExempt ? null : (owner?.botLimit ?? defaultLimit)
+      const provisionalThreshold = await getSystemConfig('bots.provisionalGames', 5)
+      const limit = isExempt ? null : (owner ? await getTierLimit(owner.id, 'bots') : 3)
       const count = await db.user.count({ where: { botOwnerId: ownerId, isBot: true } })
       return res.json({ bots, limitInfo: { count, limit, isExempt }, provisionalThreshold })
     }
@@ -69,12 +67,11 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const userId = user.id
 
-    // Enforce bot limit
+    // Enforce bot limit (0 = unlimited for Diamond-tier users)
     if (!hasRole(user, 'BOT_ADMIN')) {
-      const defaultLimit = await getSystemConfig('bots.defaultBotLimit', 5)
-      const limit = user.botLimit ?? defaultLimit
+      const limit = await getTierLimit(userId, 'bots')
       const count = await db.user.count({ where: { botOwnerId: userId, isBot: true } })
-      if (count >= limit) {
+      if (limit !== 0 && count >= limit) {
         return res.status(409).json({ error: `Bot limit reached (${limit})`, code: 'BOT_LIMIT_REACHED' })
       }
     }

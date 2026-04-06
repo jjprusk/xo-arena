@@ -23,6 +23,8 @@ vi.mock('../../lib/api.js', () => ({
       sync: vi.fn(),
       stats: vi.fn(),
       eloHistory: vi.fn(),
+      credits: vi.fn(),
+      updateSettings: vi.fn(),
     },
     bots: {
       list: vi.fn(),
@@ -89,6 +91,14 @@ function renderPage() {
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
+const MOCK_CREDITS = {
+  hpc: 5, bpc: 2, tc: 0,
+  activityScore: 7,
+  tier: 0, tierName: 'Bronze', tierIcon: '🥉',
+  nextTier: 1, pointsToNextTier: 18,
+  emailAchievements: false,
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
@@ -97,6 +107,7 @@ beforeEach(() => {
   api.users.sync.mockResolvedValue({ user: MOCK_DB_USER })
   api.users.stats.mockResolvedValue({ stats: MOCK_STATS })
   api.users.eloHistory.mockResolvedValue({ history: [] })
+  api.users.credits.mockResolvedValue(MOCK_CREDITS)
   api.bots.list.mockResolvedValue({
     bots: [],
     limitInfo: { count: 0, limit: 3 },
@@ -295,5 +306,57 @@ describe('ProfilePage — sessionStorage cache', () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Alice')).toBeDefined())
     expect(api.users.sync).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProfilePage — credits section', () => {
+  it('shows the Credits & Tier section heading', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Credits & Tier')).toBeDefined())
+  })
+
+  it('shows the tier name and icon', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Bronze')).toBeDefined())
+  })
+
+  it('shows activity score', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Activity Score: 7/)).toBeDefined())
+  })
+
+  it('shows HPC, BPC and TC counts', async () => {
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByTitle('Human Play Credits')).toBeDefined()
+      expect(screen.getByTitle('Bot Play Credits')).toBeDefined()
+      expect(screen.getByTitle('Tournament Credits')).toBeDefined()
+    })
+  })
+
+  it('shows points to next tier', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/18 pts to next tier/)).toBeDefined())
+  })
+
+  it('does not show credits section when api.users.credits rejects', async () => {
+    api.users.credits.mockRejectedValue(new Error('network'))
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alice')).toBeDefined())
+    expect(screen.queryByText('Credits & Tier')).toBeNull()
+  })
+
+  it('shows email achievements toggle', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Email me when I earn an achievement/)).toBeDefined())
+  })
+
+  it('calls api.users.updateSettings when email toggle is clicked', async () => {
+    api.users.updateSettings.mockResolvedValue({})
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Email me when I earn an achievement/)).toBeDefined())
+    const toggleTrack = document.querySelector('[class*="rounded-full"][class*="w-9"]')
+    fireEvent.click(toggleTrack)
+    await waitFor(() => expect(api.users.updateSettings).toHaveBeenCalledWith({ emailAchievements: true }, 'test-token'))
   })
 })

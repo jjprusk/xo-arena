@@ -33,6 +33,10 @@ vi.mock('../../lib/db.js', () => ({
         image: null,
       })),
     },
+    user: {
+      findUnique: vi.fn(),
+      update: vi.fn(async () => ({})),
+    },
     game: {
       findMany: vi.fn(async () => []),
       count: vi.fn(async () => 0),
@@ -43,11 +47,21 @@ vi.mock('../../lib/db.js', () => ({
     mLPlayerProfile: {
       findMany: vi.fn(async () => []),
     },
+    userNotification: {
+      findMany: vi.fn(async () => []),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
   },
+}))
+
+vi.mock('../../services/creditService.js', () => ({
+  getUserCredits: vi.fn(),
 }))
 
 const usersRouter = (await import('../users.js')).default
 const { getUserById, updateUser, getUserStats } = await import('../../services/userService.js')
+const { getUserCredits } = await import('../../services/creditService.js')
+const db = (await import('../../lib/db.js')).default
 
 const app = express()
 app.use(express.json())
@@ -140,5 +154,135 @@ describe('GET /api/v1/users/:id/games', () => {
     expect(res.status).toBe(200)
     expect(res.body.games).toBeInstanceOf(Array)
     expect(res.body.total).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Credits endpoint (3a)
+// ---------------------------------------------------------------------------
+
+describe('GET /api/v1/users/:id/credits', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns credits shape for existing user', async () => {
+    getUserById.mockResolvedValue(mockUser)
+    getUserCredits.mockResolvedValue({
+      hpc: 10, bpc: 5, tc: 0,
+      activityScore: 15,
+      tier: 0, tierName: 'Bronze', tierIcon: '🥉',
+      nextTier: 1, pointsToNextTier: 10,
+    })
+    const res = await request(app).get('/api/v1/users/usr_1/credits')
+    expect(res.status).toBe(200)
+    expect(res.body.credits.hpc).toBe(10)
+    expect(res.body.credits.tierName).toBe('Bronze')
+  })
+
+  it('returns 404 when user not found', async () => {
+    getUserById.mockResolvedValue(null)
+    getUserCredits.mockResolvedValue({ hpc: 0, bpc: 0, tc: 0, activityScore: 0, tier: 0, tierName: 'Bronze', tierIcon: '🥉', nextTier: 1, pointsToNextTier: 25 })
+    const res = await request(app).get('/api/v1/users/bad/credits')
+    expect(res.status).toBe(404)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Notification endpoints (3c)
+// ---------------------------------------------------------------------------
+
+describe('GET /api/v1/users/me/notifications', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns undelivered notifications for authenticated user', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    db.userNotification.findMany.mockResolvedValue([
+      { id: 'n1', type: 'first_hpc', payload: { message: 'First!' }, createdAt: new Date() },
+    ])
+    const res = await request(app).get('/api/v1/users/me/notifications')
+    expect(res.status).toBe(200)
+    expect(res.body.notifications).toHaveLength(1)
+    expect(res.body.notifications[0].type).toBe('first_hpc')
+  })
+
+  it('returns 404 when user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app).get('/api/v1/users/me/notifications')
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /api/v1/users/me/notifications/deliver', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('marks notifications delivered and returns count', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    db.userNotification.updateMany.mockResolvedValue({ count: 2 })
+    const res = await request(app)
+      .post('/api/v1/users/me/notifications/deliver')
+      .send({ ids: ['n1', 'n2'] })
+    expect(res.status).toBe(200)
+    expect(res.body.delivered).toBe(2)
+  })
+
+  it('ignores IDs that belong to other users (updateMany where userId filter)', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    db.userNotification.updateMany.mockResolvedValue({ count: 0 })
+    const res = await request(app)
+      .post('/api/v1/users/me/notifications/deliver')
+      .send({ ids: ['other_user_notif'] })
+    expect(res.status).toBe(200)
+    expect(res.body.delivered).toBe(0)
+    // Verify userId scoping was applied
+    expect(db.userNotification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: 'usr_1' }) })
+    )
+  })
+
+  it('returns 400 for empty ids array', async () => {
+    const res = await request(app)
+      .post('/api/v1/users/me/notifications/deliver')
+      .send({ ids: [] })
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app)
+      .post('/api/v1/users/me/notifications/deliver')
+      .send({ ids: ['n1'] })
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('PATCH /api/v1/users/me/settings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('updates emailAchievements setting', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/settings')
+      .send({ emailAchievements: true })
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { emailAchievements: true } })
+    )
+  })
+
+  it('returns 400 when no valid settings provided', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    const res = await request(app)
+      .patch('/api/v1/users/me/settings')
+      .send({ unknownField: 'value' })
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app)
+      .patch('/api/v1/users/me/settings')
+      .send({ emailAchievements: false })
+    expect(res.status).toBe(404)
   })
 })

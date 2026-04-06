@@ -152,6 +152,10 @@ export const api = {
     markPlayHint: (token) => api.post('/users/me/hints/play', {}, token),
     updatePreferences: (prefs, token) => api.patch('/users/me/preferences', prefs, token),
     emailByUsername: (username) => api.get(`/users/by-username/${encodeURIComponent(username)}`),
+    credits: (id) => api.get(`/users/${id}/credits`),
+    notifications: (token) => api.get('/users/me/notifications', token),
+    deliverNotifications: (ids, token) => api.post('/users/me/notifications/deliver', { ids }, token),
+    updateSettings: (body, token) => api.patch('/users/me/settings', body, token),
   },
 
   games: {

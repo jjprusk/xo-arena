@@ -181,13 +181,15 @@ The existing `ml.maxEpisodesPerSession` system config acts as an **absolute ceil
 
 These are not implemented yet but are expected to be slotted in as the platform grows. The formula and tier thresholds should be revisited when any of these are added.
 
-| # | Name | Description |
-|---|------|-------------|
+Numbers continue from the three active credit types (HPC=1, BPC=2, TC=3).
+
+| Type # | Name | Description |
+|--------|------|-------------|
 | 4 | Win Credits (WC) | +1 per win in any mode (rewards skill, not just participation) |
 | 5 | Streak Credits (SC) | +N per N-game win streak (rewards sustained performance) |
 | 6 | Rating Milestone Credits (RMC) | +5 each time user's ELO crosses a 100-point boundary above 1200 |
 | 7 | Training Credits (TRC) | +1 per 1,000 completed training episodes (rewards ML investment) |
-| 8 | Social Credits (SOC) | +2 per referred user who reaches Player tier |
+| 8 | Social Credits (SOC) | +2 per referred user who reaches Silver tier or above |
 
 If Win Credits (WC) are added, the formula candidate is:
 ```
@@ -378,6 +380,7 @@ Implementation is broken into 6 phases. Each phase is independently deployable a
     payload     Json
     createdAt   DateTime  @default(now())
     deliveredAt DateTime?
+    emailedAt   DateTime?
     user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
     @@index([userId, deliveredAt])
@@ -469,7 +472,7 @@ Notification types to handle:
 
 **Email delivery logic in `queueNotification`:**
 1. Insert the `UserNotification` row.
-2. Check whether the user has an active Socket.IO connection (is online).
+2. Call `isUserOnline(userId)` — checks the socket handler's in-memory connected-users set (same set that powers the admin online status indicator).
 3. If offline AND `user.emailAchievements === true`, send achievement email via Resend using an `achievementEmail` template and set `emailedAt = now()` on the row.
 
 Email is never sent if the user is online — they will see the popup immediately via Socket.IO.
@@ -481,6 +484,14 @@ Add to `backend/src/routes/users.js`:
 - `POST /api/v1/users/me/notifications/deliver` — body `{ ids: string[] }` — sets `deliveredAt = now()` for all listed IDs belonging to the user (batch)
 - `PATCH /api/v1/users/me/settings` — update user preferences including `emailAchievements`
 
+#### 3d — Schema: emailAchievements preference
+
+Add to `backend/prisma/schema.prisma` on the `User` model:
+```prisma
+emailAchievements  Boolean  @default(false)
+```
+Generate and run migration: `add_email_achievements_preference`. This is the only schema change in Phase 3.
+
 **Tests:**
 - Credits endpoint returns correct shape
 - `queueNotification` deduplicates correctly
@@ -489,7 +500,7 @@ Add to `backend/src/routes/users.js`:
 - Achievement email not sent when user is online (even if opted in)
 - Achievement email not sent when user is offline but not opted in
 
-**Completion check:** `GET /api/v1/users/:id/credits` returns live data; notification rows can be inserted and marked delivered via the API.
+**Completion check:** `GET /api/v1/users/:id/credits` returns live data; notification rows can be inserted and marked delivered via the API; `emailAchievements` column exists on the `users` table.
 
 ---
 
@@ -523,7 +534,7 @@ Add a new export:
 ```js
 // Called by any game route after a game is committed to the DB.
 // appId: string — e.g. "xo-arena", "chess"
-// participants: array of { userId, isBot, botOwnerId | null }
+// participants: array of { userId: string, isBot: boolean, botOwnerId: string | null }
 // mode: "pvp" | "pvc" | "bvb" (player-vs-player, player-vs-computer, bot-vs-bot)
 async function recordGameCompletion({ appId, participants, mode })
 ```
@@ -573,7 +584,7 @@ Add `appId String @default("xo-arena")` to the `Game` model in `schema.prisma`. 
 **File:** `frontend/src/pages/ProfilePage.jsx`
 
 Add a new section between "Quick Stats" and "My Bots":
-- Tier badge (icon + name, e.g., "▲ Player")
+- Tier badge (icon + name, e.g., "🥇 Gold")
 - Activity Score with a progress bar showing `score / nextTierThreshold`
 - Three mini-stats: HPC / BPC / TC counts
 - "Points to next tier: N" label (hidden at Diamond tier)
@@ -638,9 +649,9 @@ Add a new section between "Quick Stats" and "My Bots":
 
 | Phase | What ships | Key files | Done |
 |-------|------------|-----------|------|
-| 1 | DB schema | `schema.prisma`, migration | [x] ✓ |
+| 1 | DB schema | `schema.prisma`, migration | ✅ |
 | 2 | Credit calculation logic | `creditService.js` | [ ] |
-| 3 | Credits API, notification service, delivery endpoints | `users.js`, `notificationService.js` | [ ] |
+| 3 | Credits API, notification service, delivery endpoints, `emailAchievements` schema | `users.js`, `notificationService.js`, `schema.prisma` | [ ] |
 | 4 | Tier-aware bot limit enforcement (replaces flat default) | `bots.js` | [ ] |
 | 5 | Generic game-completion hook + XO Arena wiring + `appId` on `Game` | `creditService.js`, `games.js`, `socketHandler.js`, `schema.prisma` | [ ] |
 | 6 | Frontend: profile display, popup, admin config UI | `ProfilePage.jsx`, `AppLayout.jsx`, `AccomplishmentPopup.jsx` | [ ] |
@@ -651,58 +662,57 @@ Phases 1–4 are entirely backend and can be deployed without any visible user c
 
 ---
 
+## Implementation Checklist
+
+- [x] **Phase 1** — DB schema: credit columns + UserNotification table (deployed v1.6.7)
+- [ ] **Phase 2** — Credit calculation service (`creditService.js`)
+- [ ] **Phase 3** — Credits API, notification service, delivery endpoints, `emailAchievements` schema
+- [ ] **Phase 4** — Tier-aware bot limit enforcement (`bots.js`)
+- [ ] **Phase 5** — Generic game-completion hook + XO Arena wiring + `appId` on `Game`
+- [ ] **Phase 6** — Frontend: profile display, accomplishment popup, admin config UI
+
+---
+
 ## Addendum — Open Questions
 
 The following items were flagged during plan review. Each needs a decision before or during the relevant implementation phase.
 
-1. **Phase 1 marked done — confirm schema is deployed**
+1. **Phase 1 marked done — confirm schema is deployed** — ✅ Resolved
 
-   The phase summary marks Phase 1 as complete, but the credit columns (`creditsHpc`, `creditsBpc`, `creditsTc`) and `UserNotification` table need to be verified as present in the production database before Phase 2 work begins.
+   Confirmed deployed to production (v1.6.7). All three credit columns (`creditsHpc`, `creditsBpc`, `creditsTc`) and the `UserNotification` table (including `emailedAt`) are present in the production database.
 
-   *Decision needed:* Confirm Phase 1 is truly deployed, or re-open it.
+2. **BPC participant data — caller contract needs to be explicit** — ✅ Resolved
 
-2. **BPC participant data — caller contract needs to be explicit**
+   Each entry in the `participants` array must conform to:
+   ```js
+   { userId: string, isBot: boolean, botOwnerId: string | null }
+   ```
+   `botOwnerId` is `null` for human players and set to the owner's `userId` for bots. `games.js` has all this data on the existing game record. This contract is the authoritative reference for Phase 5 implementation.
 
-   The BPC exclusion rule requires knowing `botOwnerId` for both participants. The `recordGameCompletion` hook receives this via the `participants` array, but `games.js` (the caller) must populate it correctly. The exact shape and required fields for each participant should be documented as a formal contract to prevent silent bugs.
+3. **No audit trail for credit increments — consider a recovery tool** — ✅ Resolved
 
-   *Decision needed:* Define and document the required `participants` array shape before Phase 5 implementation.
-
-3. **No audit trail for credit increments — consider a recovery tool**
-
-   Credits are stored as atomic counters, never recomputed from game history. If the credit service has a bug and misses increments, those credits are permanently lost. A `recalculateCredits(userId)` admin utility that recomputes from game history would provide a recovery path without changing the normal flow.
-
-   *Decision needed:* Add a recalculation tool (admin-only, never run automatically), or accept the risk given the early-stage user base.
+   Accepted risk for now given the early-stage user base. If a credit service bug is discovered, the fix is to correct the bug and manually recalculate against the game tables — feasible at small scale. A `recalculateCredits(userId)` admin utility will be added as a future tool when the user base warrants it.
 
 4. **`emailedAt` column missing from Phase 1 schema** — ✅ Resolved
 
    `emailedAt DateTime?` added to `UserNotification` in migration `20260405192356_add_emailedat_to_user_notification`. Phase 1 schema is now complete.
 
-5. **TC columns ship in Phase 1 but are never incremented until Tournament ships**
+5. **TC columns ship in Phase 1 but are never incremented until Tournament ships** — ✅ Resolved
 
-   `creditsTc` will be `0` for all users until the Tournament feature is implemented. No functional issue, but the `getUserCredits` response will always show TC = 0 for the foreseeable future. The Activity Score formula still works correctly.
+   Acknowledged and accepted. `creditsTc` will be `0` for all users until Tournament ships. The Phase 2 service will include a comment noting this is intentional. No functional impact — the Activity Score formula handles `tc = 0` correctly.
 
-   *Decision needed:* No action required — acknowledge and accept, or add a note in the Phase 2 service that TC is intentionally dormant until Tournament ships.
+6. **Phase 4 reduces the effective bot limit for new users (3 vs current default of 5)** — ✅ Resolved
 
-6. **Phase 4 reduces the effective bot limit for new users (3 vs current default of 5)**
+   Bronze stays at 3. This is intentional — the tier system is designed to reward engagement, and earning Silver (25 activity points) quickly unlocks 5 slots. Existing users with per-user `botLimit` overrides are unaffected by the change.
 
-   The existing flat default is `bots.defaultBotLimit = 5`. The Bronze tier default is `credits.limits.bots.bronze = 3`. Replacing the flat lookup with a tier lookup silently reduces the limit for new Bronze users. Existing users with per-user `botLimit` overrides are unaffected.
+7. **Online detection for email suppression — implementation gap** — ✅ Resolved
 
-   *Decision needed:* Raise the Bronze bot limit to 5 to match the current default, or keep it at 3 and accept the change as intentional for new users.
+   Use the existing socket handler's in-memory connected-users set — the same structure that powers the online status indicator on the admin Users page. The Phase 3 notification service calls `isUserOnline(userId)` which checks that set. No new mechanism required.
 
-7. **Online detection for email suppression — implementation gap**
+8. **Public exposure of HPC/BPC/TC counts** — ✅ Resolved
 
-   Phase 3 requires checking whether a user has an active Socket.IO connection before sending an achievement email (suppress email if they're online and will see the popup). The existing `lastActiveAt` field is not sufficient — it reflects recent activity, not a live socket connection. A socket room membership check or an in-memory online-user set is needed.
+   Endpoint is public and unauthenticated, consistent with the existing `/users/:id/stats` pattern. Credits are a public engagement metric — raw counts are not sensitive and will eventually surface on leaderboards and bot profiles.
 
-   *Decision needed:* Clarify the online-detection mechanism before Phase 3 implementation — either use the existing online-user tracking already present in the socket handler, or define a new approach.
+9. **Bot schema: multi-game model relationship** — ✅ Resolved (deferred)
 
-8. **Public exposure of HPC/BPC/TC counts**
-
-   `GET /api/v1/users/:id/credits` is planned as a public, unauthenticated endpoint (same pattern as `/users/:id/stats`). This exposes raw HPC, BPC, and TC counts for any user by ID. Depending on the beta user base, this may be a privacy concern.
-
-   *Decision needed:* Keep the endpoint public (simplest, consistent with existing stats), restrict to authenticated users, or return only tier/score publicly and gate the raw breakdown behind auth.
-
-9. **Bot schema: multi-game model relationship**
-
-   The current plan assumes one model per bot. Adopting the multi-game bot design (see Multi-Game Bots section) requires changing this to a one-to-many relationship (`Bot → BotModel` with `gameId`) before or alongside Phase 1. ELO tracking also needs to move to `BotModel` (or a `BotGameStats` join table) so ratings are per-game. This schema direction should be confirmed and the Phase 1 migration updated accordingly before any credit work begins.
-
-   *Decision needed:* Confirm multi-game bot schema direction and incorporate into Phase 1 migration scope.
+   The `Bot → BotModel` one-to-many refactor (with `gameId` and per-game ELO) is deferred until a second game is actively planned. The current single-model-per-bot schema is sufficient for XO Arena. When a second game ships, this refactor is a hard pre-requisite: bot creation, training, ELO tracking, and the bot profile page will all need updating to support per-game models. See the Multi-Game Bots section for the full design.
