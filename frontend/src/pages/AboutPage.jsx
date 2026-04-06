@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import GettingStartedModal from '../components/GettingStartedModal.jsx'
 import changelog from '../../public/changelog.json'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 export default function AboutPage() {
   const [gettingStartedOpen, setGettingStartedOpen] = useState(false)
@@ -91,26 +92,32 @@ export default function AboutPage() {
       {changelog.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Release History</h2>
-          <div
-            className="rounded-xl border overflow-hidden"
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-          >
-            {changelog.map((entry, i) => (
-              <div
-                key={entry.version}
-                className="flex items-baseline gap-3 px-4 py-2.5 text-sm"
-                style={{ borderBottom: i < changelog.length - 1 ? '1px solid var(--border-default)' : 'none' }}
-              >
-                <span className="font-mono font-semibold flex-shrink-0 w-14" style={{ color: 'var(--color-blue-600)' }}>
-                  v{entry.version}
-                </span>
-                <span className="flex-shrink-0 tabular-nums text-xs w-24" style={{ color: 'var(--text-muted)' }}>
-                  {new Date(entry.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-                <span style={{ color: 'var(--text-secondary)' }}>{entry.description}</span>
-              </div>
-            ))}
-          </div>
+          <ListTable maxHeight="28vh" columns={['12%', '22%', '66%']}>
+            <thead>
+              <tr>
+                <ListTh>Version</ListTh>
+                <ListTh>Date</ListTh>
+                <ListTh>Notes</ListTh>
+              </tr>
+            </thead>
+            <tbody>
+              {changelog.map((entry, i) => (
+                <ListTr key={entry.version} last={i === changelog.length - 1}>
+                  <ListTd>
+                    <span className="font-mono font-semibold" style={{ color: 'var(--color-blue-600)' }}>
+                      v{entry.version}
+                    </span>
+                  </ListTd>
+                  <ListTd>
+                    <span className="tabular-nums text-xs">
+                      {new Date(entry.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </ListTd>
+                  <ListTd>{entry.description}</ListTd>
+                </ListTr>
+              ))}
+            </tbody>
+          </ListTable>
         </section>
       )}
 
