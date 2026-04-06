@@ -83,3 +83,23 @@ Deferred features and improvements that are worth revisiting but not currently p
 **Complexity:** Small-to-medium (~half a day). The DB schema, ingestion endpoint, pruning, and live-tail socket are already in place — the missing piece is just the pino → DB bridge and the userId fix.
 
 ---
+
+## Guide as Navigation System (Command Palette Evolution)
+
+**What:** Evolve the Getting Started guide from a static SVG infographic into an active navigation layer. Experienced users already return to it as a quick-action menu — the goal is to lean into that pattern and make it a genuine power-user tool.
+
+**Why deferred:** The current guide works well as a visual map. Turning it into a navigation system requires a clear UX direction and some architectural decisions before building.
+
+**Three directions (in order of complexity):**
+
+1. **Make guide buttons actually navigate (low effort)** — clicking a card in the guide closes the modal and routes the user directly to the destination (`/play`, `/gym`, `/leaderboard`, etc.). The iframe already communicates via `?hint=` params; using `postMessage` from the iframe to the parent React app would let guide interactions dispatch navigation actions. One afternoon of work, immediately makes the guide feel alive.
+
+2. **Persistent command bar / ⌘K palette (medium effort)** — a keyboard-invokable overlay (Spotlight-style) accessible from anywhere in the app. Shows the same quick actions as the guide cards but also accepts typed shortcuts ("play friend", "my bots", "leaderboard"). This makes the guide less of a help artifact and more of a power-user navigation layer that rewards familiarity. Would replace the need to open the guide modal at all for experienced users.
+
+3. **Context-sensitive quick actions (larger effort)** — the guide adapts to session state: new users see onboarding cards, returning users see "Play your bot" or "Check your leaderboard rank" based on their profile and history. Requires passing auth/session data into the guide layer and dynamic card rendering rather than a static SVG.
+
+**Recommendation:** Start with Direction 1 — it's the smallest change with the clearest payoff. If engagement with the guide increases as a result, Direction 2 (command bar) is the natural next step and would be the highest-leverage navigation improvement in the app.
+
+**Complexity:** Direction 1: Small (~half a day). Direction 2: Medium (~2 days, new component). Direction 3: Large (requires dynamic guide rendering and session integration).
+
+---
