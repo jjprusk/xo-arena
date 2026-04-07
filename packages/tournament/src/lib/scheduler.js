@@ -21,6 +21,7 @@ const sentWarnings = new Set()
 
 let lastDemotionReviewDate = null
 let lastOccurrenceCheckDate = null
+let lastRetentionCheckDate = null
 
 /**
  * Start background scheduler.
@@ -58,6 +59,13 @@ export async function runSchedulerTick() {
     checkRecurringOccurrences().catch(err =>
       logger.error({ err }, 'Recurring occurrence check failed')
     )
+  }
+
+  // Daily replay retention cleanup
+  const retentionDate = new Date().toISOString().slice(0, 10)
+  if (lastRetentionCheckDate !== retentionDate) {
+    lastRetentionCheckDate = retentionDate
+    runReplayRetention().catch(err => logger.error({ err }, 'Replay retention failed'))
   }
 
   await Promise.allSettled([
@@ -328,6 +336,43 @@ async function checkRecurringOccurrences() {
     }
   } catch (err) {
     logger.error({ err }, 'checkRecurringOccurrences failed')
+  }
+}
+
+// ─── Replay retention ─────────────────────────────────────────────────────────
+
+async function _getSystemConfig(key, defaultValue) {
+  try {
+    const row = await db.systemConfig.findUnique({ where: { key } })
+    return row?.value ?? defaultValue
+  } catch {
+    return defaultValue
+  }
+}
+
+export async function runReplayRetention() {
+  const defaultDays = await _getSystemConfig('tournament.replay.defaultRetentionDays', 30)
+
+  const tournaments = await db.tournament.findMany({
+    where: { status: 'COMPLETED' },
+    select: { id: true, replayRetentionDays: true, updatedAt: true },
+  })
+
+  for (const t of tournaments) {
+    const retentionDays = t.replayRetentionDays ?? defaultDays
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
+    if (t.updatedAt > cutoff) continue // Not expired yet
+
+    const deleted = await db.game.deleteMany({
+      where: { tournamentId: t.id },
+    })
+
+    if (deleted.count > 0) {
+      logger.info(
+        { tournamentId: t.id, deleted: deleted.count },
+        'Replay retention: games deleted'
+      )
+    }
   }
 }
 

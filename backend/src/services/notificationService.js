@@ -4,7 +4,7 @@
 import { Resend } from 'resend'
 import db from '../lib/db.js'
 import { getUserCredits, getTierLimit } from './creditService.js'
-import { achievementTemplate } from '../lib/emailTemplates.js'
+import { achievementTemplate, tournamentMatchTemplate } from '../lib/emailTemplates.js'
 import logger from '../logger.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
@@ -58,10 +58,16 @@ export async function queueNotification(userId, type, payload) {
     ])
 
     if (!online && user?.emailAchievements && resend) {
-      const subject = payload.message
-        ? `XO Arena — ${payload.message}`
-        : 'XO Arena — New achievement!'
-      const html = achievementTemplate({ name: user.displayName, type, payload })
+      let subject, html
+      if (type === 'tournament_match_result') {
+        subject = 'XO Arena — Match result'
+        html = tournamentMatchTemplate({ name: user.displayName, payload })
+      } else {
+        subject = payload.message
+          ? `XO Arena — ${payload.message}`
+          : 'XO Arena — New achievement!'
+        html = achievementTemplate({ name: user.displayName, type, payload })
+      }
       await resend.emails.send({ from: FROM, to: user.email, subject, html })
       await db.userNotification.update({
         where: { id: notification.id },

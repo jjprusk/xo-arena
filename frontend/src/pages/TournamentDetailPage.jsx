@@ -298,9 +298,15 @@ function AdminControls({ tournament, token, onRefresh }) {
 
 // ── Registration panel ────────────────────────────────────────────────────────
 
+const NOTIF_PREF_LABELS = {
+  AS_PLAYED:          'after each match',
+  END_OF_TOURNAMENT:  'when tournament ends',
+}
+
 function RegistrationPanel({ tournament, token, userId, onRefresh }) {
-  const [busy, setBusy] = useState(false)
-  const [err, setErr]   = useState(null)
+  const [busy, setBusy]           = useState(false)
+  const [err, setErr]             = useState(null)
+  const [notifPref, setNotifPref] = useState('AS_PLAYED')
 
   const participants = tournament.participants ?? []
   const myParticipant = userId
@@ -317,7 +323,7 @@ function RegistrationPanel({ tournament, token, userId, onRefresh }) {
       if (isRegistered) {
         await tournamentApi.withdraw(tournament.id, token)
       } else {
-        await tournamentApi.register(tournament.id, token)
+        await tournamentApi.register(tournament.id, token, { resultNotifPref: notifPref })
       }
       onRefresh()
     } catch (e) {
@@ -359,6 +365,37 @@ function RegistrationPanel({ tournament, token, userId, onRefresh }) {
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Sign in to register</p>
         )}
       </div>
+
+      {/* Notification preference — picker when not yet registered, read-only when registered */}
+      {token && (
+        isRegistered ? (
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Notifying: <span style={{ color: 'var(--text-secondary)' }}>
+              {NOTIF_PREF_LABELS[myParticipant.resultNotifPref] ?? NOTIF_PREF_LABELS.AS_PLAYED}
+            </span>
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Notify me:</span>
+            {Object.entries(NOTIF_PREF_LABELS).map(([value, label]) => (
+              <label key={value} className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="notifPref"
+                  value={value}
+                  checked={notifPref === value}
+                  onChange={() => setNotifPref(value)}
+                  className="accent-[var(--color-teal-500)]"
+                />
+                <span className="text-xs" style={{ color: notifPref === value ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                  {label.charAt(0).toUpperCase() + label.slice(1)}
+                </span>
+              </label>
+            ))}
+          </div>
+        )
+      )}
+
       {err && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
       {tournament.registrationOpenAt && (
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -368,6 +405,259 @@ function RegistrationPanel({ tournament, token, userId, onRefresh }) {
           )}
         </p>
       )}
+    </div>
+  )
+}
+
+// ── Mixed match banner ────────────────────────────────────────────────────────
+
+const WIN_LINES = [
+  [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+  [0, 3, 6], [1, 4, 7], [2, 5, 8], // cols
+  [0, 4, 8], [2, 4, 6],             // diagonals
+]
+
+function checkWinner(cells) {
+  for (const [a, b, c] of WIN_LINES) {
+    if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) {
+      return cells[a] // 'X' or 'O'
+    }
+  }
+  return cells.every(Boolean) ? 'DRAW' : null
+}
+
+function MixedMatchBoard({ matchId, tournament, userId, token, onDone }) {
+  const participants = tournament.participants ?? []
+  const myParticipant = participants.find(p => p.userId === userId)
+
+  // Determine p1/p2 by seedPosition (lower seed = p1) or id sort fallback
+  const sortedParticipants = [...participants].sort((a, b) => {
+    if (a.seedPosition != null && b.seedPosition != null) return a.seedPosition - b.seedPosition
+    return a.id < b.id ? -1 : 1
+  })
+
+  // Find the two participants in this match — we know one is the current user.
+  // We need to find the opponent; use tournament.rounds to locate the match.
+  const myMark = (() => {
+    if (!myParticipant) return 'X'
+    const p1 = sortedParticipants[0]
+    return p1?.id === myParticipant.id ? 'X' : 'O'
+  })()
+  const botMark = myMark === 'X' ? 'O' : 'X'
+
+  const [cells, setCells]       = useState(Array(9).fill(null))
+  const [current, setCurrent]   = useState('X') // X always goes first
+  const [outcome, setOutcome]   = useState(null) // null | 'X' | 'O' | 'DRAW'
+  const [submitting, setSubmitting] = useState(false)
+  const [submitErr, setSubmitErr]   = useState(null)
+
+  // When it's the bot's turn, fire after a short delay
+  useEffect(() => {
+    if (outcome || current !== botMark) return
+    const timer = setTimeout(() => {
+      setCells(prev => {
+        const empty = prev.map((v, i) => v === null ? i : null).filter(i => i !== null)
+        if (empty.length === 0) return prev
+        const pick = empty[Math.floor(Math.random() * empty.length)]
+        const next = [...prev]
+        next[pick] = botMark
+        const result = checkWinner(next)
+        if (result) setOutcome(result)
+        else setCurrent(myMark)
+        return next
+      })
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [current, outcome, botMark, myMark])
+
+  function handleCellClick(idx) {
+    if (outcome || cells[idx] || current !== myMark) return
+    const next = [...cells]
+    next[idx] = myMark
+    const result = checkWinner(next)
+    setCells(next)
+    if (result) {
+      setOutcome(result)
+    } else {
+      setCurrent(botMark)
+    }
+  }
+
+  // Submit result when outcome is determined
+  useEffect(() => {
+    if (!outcome || submitting) return
+
+    async function submit() {
+      setSubmitting(true)
+      setSubmitErr(null)
+
+      // Determine p1 and p2 participants (by sortedParticipants order)
+      // We only have the current user's participant; the opponent participant id
+      // might not be in participants list if they are a bot (no userId).
+      // Find the match in tournament.rounds to get both participant ids.
+      let p1Id = null
+      let p2Id = null
+      for (const round of (tournament.rounds ?? [])) {
+        for (const match of (round.matches ?? [])) {
+          if (match.id === matchId) {
+            p1Id = match.participant1Id
+            p2Id = match.participant2Id
+            break
+          }
+        }
+        if (p1Id) break
+      }
+
+      // Fallback: use sorted participants
+      if (!p1Id) {
+        p1Id = sortedParticipants[0]?.id ?? null
+        p2Id = sortedParticipants[1]?.id ?? null
+      }
+
+      // myParticipant maps to either p1 or p2
+      const myParticipantId = myParticipant?.id ?? null
+      const opponentParticipantId = myParticipantId === p1Id ? p2Id : p1Id
+
+      let winnerId = null
+      let p1Wins = 0
+      let p2Wins = 0
+      let drawGames = 0
+
+      if (outcome === 'DRAW') {
+        drawGames = 1
+        winnerId = null
+      } else {
+        // outcome is 'X' or 'O' — the mark that won
+        const winnerIsMe = outcome === myMark
+        if (winnerIsMe) {
+          winnerId = myParticipantId
+        } else {
+          winnerId = opponentParticipantId
+        }
+        // p1Wins/p2Wins: is winnerId p1 or p2?
+        if (winnerId === p1Id) p1Wins = 1
+        else if (winnerId === p2Id) p2Wins = 1
+      }
+
+      try {
+        await tournamentApi.completeMatch(matchId, { winnerId, p1Wins, p2Wins, drawGames }, token)
+        onDone()
+      } catch (e) {
+        setSubmitErr(e.message || 'Failed to submit result.')
+        setSubmitting(false)
+      }
+    }
+
+    submit()
+  }, [outcome]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const statusText = (() => {
+    if (submitting) return 'Submitting result…'
+    if (outcome === 'DRAW') return "It's a draw!"
+    if (outcome === myMark) return 'You win!'
+    if (outcome) return 'Bot wins!'
+    if (current === myMark) return 'Your turn'
+    return 'Bot is thinking…'
+  })()
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-medium text-center" style={{ color: 'var(--text-secondary)' }}>
+        {statusText}
+      </p>
+
+      {/* 3×3 board */}
+      <div
+        className="grid mx-auto"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '6px',
+          maxWidth: '240px',
+        }}
+      >
+        {cells.map((cell, idx) => {
+          const isClickable = !outcome && !cell && current === myMark
+          return (
+            <button
+              key={idx}
+              onClick={() => handleCellClick(idx)}
+              disabled={!isClickable}
+              className="flex items-center justify-center rounded-lg border font-bold text-2xl transition-all"
+              style={{
+                height: '72px',
+                borderColor: 'var(--border-default)',
+                backgroundColor: cell
+                  ? cell === 'X' ? 'var(--color-teal-50)' : 'var(--color-orange-50)'
+                  : isClickable ? 'var(--bg-surface)' : 'var(--bg-surface)',
+                color: cell === 'X' ? 'var(--color-teal-700)' : 'var(--color-orange-500)',
+                cursor: isClickable ? 'pointer' : 'default',
+                boxShadow: isClickable ? 'var(--shadow-card)' : 'none',
+                opacity: outcome && !cell ? 0.4 : 1,
+              }}
+            >
+              {cell ?? (isClickable ? '' : '')}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex items-center justify-center gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+        <span>You: <strong style={{ color: 'var(--color-teal-700)' }}>{myMark}</strong></span>
+        <span>Bot: <strong style={{ color: 'var(--color-orange-500)' }}>{botMark}</strong></span>
+      </div>
+
+      {submitErr && (
+        <p className="text-xs text-center" style={{ color: 'var(--color-red-600)' }}>{submitErr}</p>
+      )}
+    </div>
+  )
+}
+
+function MixedMatchBanner({ tournament, userId, token, matchEvent, onDismiss }) {
+  if (!matchEvent || tournament.mode !== 'MIXED') return null
+
+  const { matchId, participant1UserId, participant2UserId } = matchEvent
+  const isParticipant = userId && (userId === participant1UserId || userId === participant2UserId)
+  if (!isParticipant) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--border-default)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        {/* Header */}
+        <div className="space-y-1 text-center">
+          <div
+            className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-0.5 rounded-full mb-1"
+            style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
+          >
+            Match Ready
+          </div>
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+            Your turn to play
+          </h2>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Play your tournament match below. The result will be submitted automatically.
+          </p>
+        </div>
+
+        <MixedMatchBoard
+          matchId={matchId}
+          tournament={tournament}
+          userId={userId}
+          token={token}
+          onDone={onDismiss}
+        />
+      </div>
     </div>
   )
 }
@@ -473,6 +763,7 @@ export default function TournamentDetailPage() {
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
   const [token, setToken]           = useState(null)
+  const [activeMatchEvent, setActiveMatchEvent] = useState(null)
 
   const { lastEvent } = useTournamentSocket()
 
@@ -502,11 +793,13 @@ export default function TournamentDetailPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Refresh on relevant socket events
+  // Refresh on relevant socket events; capture match:ready for MIXED mode
   useEffect(() => {
-    if (lastEvent && lastEvent.data?.tournamentId === id) {
-      load()
+    if (!lastEvent || lastEvent.data?.tournamentId !== id) return
+    if (lastEvent.channel === 'tournament:match:ready') {
+      setActiveMatchEvent(lastEvent.data)
     }
+    load()
   }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <Spinner />
@@ -524,6 +817,17 @@ export default function TournamentDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* MIXED mode match banner */}
+      {tournament && activeMatchEvent && (
+        <MixedMatchBanner
+          tournament={tournament}
+          userId={userId}
+          token={token}
+          matchEvent={activeMatchEvent}
+          onDismiss={() => { setActiveMatchEvent(null); load() }}
+        />
+      )}
+
       {/* Back link */}
       <Link to="/tournaments" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
         ← Tournaments

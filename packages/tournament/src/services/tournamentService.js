@@ -250,6 +250,8 @@ export async function registerParticipant(tournamentId, betterAuthId) {
     }
   }
 
+  // MIXED mode: both humans and bots may register — no additional restriction beyond the above
+
   // Check maxParticipants
   if (
     tournament.maxParticipants !== null &&
@@ -457,18 +459,7 @@ export async function startTournament(id, actorBetterAuthId) {
     }
     for (const match of createdMatches) {
       await db.tournamentMatch.update({ where: { id: match.id }, data: { status: 'IN_PROGRESS' } })
-      if (tournament.mode === 'BOT_VS_BOT') {
-        await enqueueJob(match.id, id)
-      } else {
-        const p1 = tournament.participants.find(p => p.id === match.participant1Id)
-        const p2 = tournament.participants.find(p => p.id === match.participant2Id)
-        await publishEvent('tournament:match:ready', {
-          tournamentId: id,
-          matchId: match.id,
-          participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
-          participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
-        })
-      }
+      await _dispatchMatch(tournament, match)
     }
     // All participants start as ACTIVE in round robin
     for (const p of tournament.participants) {
@@ -521,19 +512,7 @@ export async function startTournament(id, actorBetterAuthId) {
             data: { status: 'IN_PROGRESS' },
           })
 
-          if (tournament.mode === 'BOT_VS_BOT') {
-            await enqueueJob(match.id, id)
-          } else {
-            const p1 = tournament.participants.find(p => p.id === match.participant1Id)
-            const p2 = tournament.participants.find(p => p.id === match.participant2Id)
-
-            await publishEvent('tournament:match:ready', {
-              tournamentId: id,
-              matchId: match.id,
-              participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
-              participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
-            })
-          }
+          await _dispatchMatch(tournament, match)
         }
       }
     }
@@ -585,6 +564,44 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
       completedAt: new Date(),
     },
   })
+
+  // For MIXED human-vs-bot matches, write a Game record.
+  // (BOT_VS_BOT records it in the worker; PVP records it in socketHandler; MIXED h-vs-b records it here)
+  if (tournament.mode === 'MIXED' && match.participant1Id && match.participant2Id) {
+    const p1Participant = await db.tournamentParticipant.findUnique({
+      where: { id: match.participant1Id },
+      include: { user: { select: { id: true, isBot: true } } },
+    })
+    const p2Participant = await db.tournamentParticipant.findUnique({
+      where: { id: match.participant2Id },
+      include: { user: { select: { id: true, isBot: true } } },
+    })
+    const p1User = p1Participant?.user
+    const p2User = p2Participant?.user
+
+    if (p1User && p2User && (p1User.isBot !== p2User.isBot)) {
+      // human vs bot pairing — write Game row
+      const winnerUser = winnerId === match.participant1Id ? p1User : p2User
+      const outcome = winnerId === match.participant1Id ? 'PLAYER1_WIN'
+        : winnerId === match.participant2Id ? 'PLAYER2_WIN'
+        : 'DRAW'
+      await db.game.create({
+        data: {
+          appId: tournament.game,
+          player1Id: p1User.id,
+          player2Id: p2User.id,
+          winnerId: winnerId ? winnerUser?.id ?? null : null,
+          mode: 'PVBOT',
+          outcome,
+          totalMoves: 0,
+          durationMs: 0,
+          startedAt: match.createdAt ?? new Date(),
+          tournamentId: tournament.id,
+          tournamentMatchId: match.id,
+        },
+      })
+    }
+  }
 
   let updatedTournament = tournament
 
@@ -696,25 +713,7 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
             data: { status: 'IN_PROGRESS' },
           })
 
-          if (tournament.mode === 'BOT_VS_BOT') {
-            await enqueueJob(freshMatch.id, tournament.id)
-          } else {
-            const p1 = await db.tournamentParticipant.findUnique({
-              where: { id: freshMatch.participant1Id },
-              include: { user: { select: { betterAuthId: true } } },
-            })
-            const p2 = await db.tournamentParticipant.findUnique({
-              where: { id: freshMatch.participant2Id },
-              include: { user: { select: { betterAuthId: true } } },
-            })
-
-            await publishEvent('tournament:match:ready', {
-              tournamentId: tournament.id,
-              matchId: freshMatch.id,
-              participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
-              participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
-            })
-          }
+          await _dispatchMatch(tournament, freshMatch)
         }
       }
     } else {
@@ -728,6 +727,37 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
+
+/**
+ * Dispatch a match: bot-vs-bot → enqueue server-side job;
+ * human-vs-human or human-vs-bot → publish tournament:match:ready for client-side play.
+ *
+ * Works for all tournament modes (PVP, BOT_VS_BOT, MIXED).
+ */
+async function _dispatchMatch(tournament, match) {
+  const p1 = await db.tournamentParticipant.findUnique({
+    where: { id: match.participant1Id },
+    include: { user: { select: { betterAuthId: true, isBot: true } } },
+  })
+  const p2 = await db.tournamentParticipant.findUnique({
+    where: { id: match.participant2Id },
+    include: { user: { select: { betterAuthId: true, isBot: true } } },
+  })
+
+  const p1IsBot = p1?.user?.isBot ?? false
+  const p2IsBot = p2?.user?.isBot ?? false
+
+  if (p1IsBot && p2IsBot) {
+    await enqueueJob(match.id, tournament.id)
+  } else {
+    await publishEvent('tournament:match:ready', {
+      tournamentId: tournament.id,
+      matchId: match.id,
+      participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
+      participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+    })
+  }
+}
 
 /**
  * Advance a winner to the next round's match.

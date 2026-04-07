@@ -46,7 +46,7 @@ export function startTournamentBridge(io) {
   })
 }
 
-async function handleEvent(io, channel, data) {
+export async function handleEvent(io, channel, data) {
   switch (channel) {
     case 'tournament:match:ready': {
       // Emit real-time to both participants
@@ -59,8 +59,8 @@ async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:match:result': {
-      // Emit real-time to both participants — they can look up match details
-      // We need to find both participants for this match
+      // Emit real-time to participants with AS_PLAYED pref; queue notification for all.
+      // END_OF_TOURNAMENT participants get real-time batch at tournament:completed.
       const { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames } = data
       try {
         const match = await db.tournamentMatch.findUnique({
@@ -71,13 +71,18 @@ async function handleEvent(io, channel, data) {
             }
           }
         })
-        // Get participant1 and participant2 user IDs from the match
-        const p1 = match?.participant1Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant1Id }, select: { userId: true } }) : null
-        const p2 = match?.participant2Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant2Id }, select: { userId: true } }) : null
-        const userIds = [p1?.userId, p2?.userId].filter(Boolean)
-        for (const userId of userIds) {
-          io.to(`user:${userId}`).emit('tournament:match:result', { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames })
+        // Get participant1 and participant2 user IDs and their notification prefs
+        const p1 = match?.participant1Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant1Id }, select: { userId: true, resultNotifPref: true } }) : null
+        const p2 = match?.participant2Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant2Id }, select: { userId: true, resultNotifPref: true } }) : null
+        const participants = [p1, p2].filter(p => p?.userId)
+        for (const { userId, resultNotifPref } of participants) {
+          const pref = resultNotifPref ?? 'AS_PLAYED'
+          // Always persist notification so it can be flushed at tournament end
           await queueNotification(userId, 'tournament_match_result', { tournamentId, matchId })
+          // Only emit real-time immediately for AS_PLAYED preference
+          if (pref === 'AS_PLAYED') {
+            io.to(`user:${userId}`).emit('tournament:match:result', { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames })
+          }
         }
       } catch (err) {
         logger.error({ err, matchId }, 'Failed to deliver match result')
@@ -100,6 +105,37 @@ async function handleEvent(io, channel, data) {
       for (const { userId, position } of finalStandings) {
         io.to(`user:${userId}`).emit('tournament:completed', { tournamentId, position })
         await queueNotification(userId, 'tournament_completed', { tournamentId, position })
+      }
+
+      // Flush pending match result notifications for END_OF_TOURNAMENT participants
+      try {
+        const eotParticipants = await db.tournamentParticipant.findMany({
+          where: { tournamentId, resultNotifPref: 'END_OF_TOURNAMENT' },
+          select: { userId: true },
+        })
+        for (const { userId } of eotParticipants) {
+          const pending = await db.userNotification.findMany({
+            where: {
+              userId,
+              type: 'tournament_match_result',
+              deliveredAt: null,
+              payload: { path: ['tournamentId'], equals: tournamentId },
+            },
+          })
+          if (pending.length === 0) continue
+
+          // Emit all pending match results in a single batch
+          const matchIds = pending.map(n => n.payload?.matchId).filter(Boolean)
+          io.to(`user:${userId}`).emit('tournament:match:results:batch', { tournamentId, matchIds })
+
+          // Mark them delivered
+          await db.userNotification.updateMany({
+            where: { id: { in: pending.map(n => n.id) } },
+            data: { deliveredAt: new Date() },
+          })
+        }
+      } catch (err) {
+        logger.error({ err, tournamentId }, 'Failed to flush END_OF_TOURNAMENT match results')
       }
       break
     }

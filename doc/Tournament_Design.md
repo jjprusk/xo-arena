@@ -867,27 +867,27 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 ### Phase 5 — MIXED Mode, Notification Preferences, Replay Retention
 
 **MIXED Mode**
-- [ ] MIXED tournament accepts both human and bot registrations
-- [ ] Client-side match execution when human plays a bot
-- [ ] All MIXED match results recorded to Game with tournament linkage (identical to BOT_VS_BOT)
+- [x] MIXED tournament accepts both human and bot registrations
+- [x] Client-side match execution when human plays a bot
+- [x] All MIXED match results recorded to Game with tournament linkage (identical to BOT_VS_BOT)
 
 **Notification Preferences**
-- [ ] `AS_PLAYED` delivery — emit match result immediately via Redis pub/sub → Socket.io
-- [ ] `END_OF_TOURNAMENT` delivery — queue results internally, flush batch at COMPLETED
+- [x] `AS_PLAYED` delivery — emit match result immediately via Redis pub/sub → Socket.io
+- [x] `END_OF_TOURNAMENT` delivery — queue results internally, flush batch at COMPLETED
 - [ ] User-level default preference (stored in User preferences JSON)
-- [ ] Per-tournament preference override at registration time
-- [ ] Email delivery for match results (respects `emailAchievements` preference)
+- [x] Per-tournament preference override at registration time
+- [x] Email delivery for match results (respects `emailAchievements` preference)
 
 **Replay Retention**
-- [ ] Background job — archive or remove Game and Move records after `replayRetentionDays`
-- [ ] Retention job runs per-tournament after COMPLETED status
-- [ ] Seed SystemConfig: `tournament.replay.defaultRetentionDays`
+- [x] Background job — archive or remove Game and Move records after `replayRetentionDays`
+- [x] Retention job runs per-tournament after COMPLETED status
+- [x] Seed SystemConfig: `tournament.replay.defaultRetentionDays`
 
 **Tests**
-- [ ] MIXED match recorded correctly regardless of execution side
-- [ ] AS_PLAYED vs END_OF_TOURNAMENT delivery — correct timing for each
-- [ ] Per-tournament preference override takes precedence over global default
-- [ ] Replay retention job — records removed after window, not before
+- [x] MIXED match recorded correctly regardless of execution side
+- [x] AS_PLAYED vs END_OF_TOURNAMENT delivery — correct timing for each
+- [x] Per-tournament preference override takes precedence over global default
+- [x] Replay retention job — records removed after window, not before
 
 ---
 

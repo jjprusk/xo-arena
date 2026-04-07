@@ -63,8 +63,8 @@ export const tournamentApi = {
     request('POST', `/api/tournaments/${id}/start`, {}, token),
 
   /** POST /api/tournaments/:id/register */
-  register: (id, token) =>
-    request('POST', `/api/tournaments/${id}/register`, {}, token),
+  register: (id, token, body = {}) =>
+    request('POST', `/api/tournaments/${id}/register`, body, token),
 
   /** DELETE /api/tournaments/:id/register */
   withdraw: (id, token) =>
