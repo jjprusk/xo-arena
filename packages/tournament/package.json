@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@xo-arena/ai": "*",
     "@xo-arena/db": "*",
     "express": "^4.18.2",
     "ioredis": "^5.4.2",

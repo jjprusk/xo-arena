@@ -587,6 +587,7 @@ model Tournament {
   bestOfN                   Int                @default(3)
   botMinGamesPlayed         Int?
   allowNonCompetitiveBots   Boolean            @default(false)
+  paceMs                    Int?
   allowSpectators           Boolean            @default(true)
   replayRetentionDays       Int                @default(30)
   startTime                 DateTime?

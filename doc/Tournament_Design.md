@@ -795,33 +795,33 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 ### Phase 3 — BOT_VS_BOT Mode
 
 **Infrastructure**
-- [ ] Redis list-based job queue in tournament service
-- [ ] Background worker: pull jobs, execute bot match, write results, acknowledge job
-- [ ] Startup reconciliation: re-queue IN_PROGRESS matches with no active worker on service start
-- [ ] Seed SystemConfig: `tournament.botMatch.globalConcurrencyLimit`, `tournament.botMatch.defaultPaceMs`
+- [x] Redis list-based job queue in tournament service
+- [x] Background worker: pull jobs, execute bot match, write results, acknowledge job
+- [x] Startup reconciliation: re-queue IN_PROGRESS matches with no active worker on service start
+- [x] Seed SystemConfig: `tournament.botMatch.globalConcurrencyLimit`, `tournament.botMatch.defaultPaceMs`
 
 **Bot Eligibility**
-- [ ] Enforce bot eligibility at registration: active, available, non-provisional, min games played, and competitive (unless `allowNonCompetitiveBots = true`)
-- [ ] `botMinGamesPlayed` per tournament — read from Tournament config, fall back to SystemConfig default
-- [ ] `allowNonCompetitiveBots` — admin-configurable per tournament; defaults to false; when true, casual bots (`botCompetitive = false`) may register alongside competitive bots
+- [x] Enforce bot eligibility at registration: active, available, non-provisional, min games played, and competitive (unless `allowNonCompetitiveBots = true`)
+- [x] `botMinGamesPlayed` per tournament — read from Tournament config, fall back to SystemConfig default
+- [x] `allowNonCompetitiveBots` — admin-configurable per tournament; defaults to false; when true, casual bots (`botCompetitive = false`) may register alongside competitive bots
 
 **Match Execution**
-- [ ] Server-side bot match execution using shared `packages/ai` inference
-- [ ] Global concurrency limit enforcement across all concurrent bot tournaments
-- [ ] Per-tournament pace control (configurable delay between job dispatches)
-- [ ] Match result written to TournamentMatch and Game with tournament linkage
-- [ ] Worker crash resilience — job remains on queue until explicitly acknowledged
+- [x] Server-side bot match execution using shared `packages/ai` inference
+- [x] Global concurrency limit enforcement across all concurrent bot tournaments
+- [x] Per-tournament pace control (configurable delay between job dispatches)
+- [x] Match result written to TournamentMatch and Game with tournament linkage
+- [x] Worker crash resilience — job remains on queue until explicitly acknowledged
 
 **Admin**
-- [ ] Configure global concurrency limit and default pace via admin UI
-- [ ] Live view of active bot match jobs and queue depth
+- [x] Configure global concurrency limit and default pace via admin UI
+- [x] Live view of active bot match jobs and queue depth
 
 **Tests**
-- [ ] Bot eligibility checks — each condition independently, including `botCompetitive` gate and `allowNonCompetitiveBots` override
-- [ ] Concurrency limit — worker respects global cap
-- [ ] Startup reconciliation — IN_PROGRESS matches re-queued correctly
-- [ ] Job acknowledgement — job not removed until match confirmed written
-- [ ] Pace control — dispatch delay applied between jobs within a tournament
+- [x] Bot eligibility checks — each condition independently, including `botCompetitive` gate and `allowNonCompetitiveBots` override
+- [x] Concurrency limit — worker respects global cap
+- [x] Startup reconciliation — IN_PROGRESS matches re-queued correctly
+- [x] Job acknowledgement — job not removed until match confirmed written
+- [x] Pace control — dispatch delay applied between jobs within a tournament
 
 ---
 

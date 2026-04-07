@@ -73,4 +73,16 @@ export const tournamentApi = {
   /** POST /api/matches/:matchId/complete */
   completeMatch: (matchId, data, token) =>
     request('POST', `/api/matches/${matchId}/complete`, data, token),
+
+  /** GET /api/bot-matches/config */
+  getBotMatchConfig: (token) =>
+    request('GET', '/api/bot-matches/config', undefined, token),
+
+  /** PATCH /api/bot-matches/config */
+  updateBotMatchConfig: (data, token) =>
+    request('PATCH', '/api/bot-matches/config', data, token),
+
+  /** GET /api/bot-matches/status */
+  getBotMatchStatus: (token) =>
+    request('GET', '/api/bot-matches/status', undefined, token),
 }

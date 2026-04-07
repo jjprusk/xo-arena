@@ -51,6 +51,9 @@ const DEFAULT_FORM = {
   registrationOpenAt: '',
   registrationCloseAt: '',
   allowSpectators: true,
+  botMinGamesPlayed: '',
+  allowNonCompetitiveBots: false,
+  paceMs: '',
 }
 
 /**
@@ -79,6 +82,9 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       registrationOpenAt:  toLocalDatetimeValue(initialValues.registrationOpenAt),
       registrationCloseAt: toLocalDatetimeValue(initialValues.registrationCloseAt),
       allowSpectators:     initialValues.allowSpectators ?? true,
+      botMinGamesPlayed:   initialValues.botMinGamesPlayed != null ? String(initialValues.botMinGamesPlayed) : '',
+      allowNonCompetitiveBots: initialValues.allowNonCompetitiveBots ?? false,
+      paceMs:              initialValues.paceMs != null ? String(initialValues.paceMs) : '',
     }
   })
   const [errors, setErrors]   = useState({})
@@ -133,6 +139,11 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       if (form.startTime)             payload.startTime           = new Date(form.startTime).toISOString()
       if (form.registrationOpenAt)    payload.registrationOpenAt  = new Date(form.registrationOpenAt).toISOString()
       if (form.registrationCloseAt)   payload.registrationCloseAt = new Date(form.registrationCloseAt).toISOString()
+      if (form.mode === 'BOT_VS_BOT') {
+        payload.allowNonCompetitiveBots = form.allowNonCompetitiveBots
+        payload.botMinGamesPlayed = form.botMinGamesPlayed !== '' ? parseInt(form.botMinGamesPlayed, 10) : null
+        payload.paceMs            = form.paceMs !== '' ? parseInt(form.paceMs, 10) : null
+      }
 
       await onSubmit(payload)
     } catch (err) {
@@ -220,6 +231,39 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
           </select>
         </Field>
       </div>
+
+      {/* Bot Settings (BOT_VS_BOT only) */}
+      {form.mode === 'BOT_VS_BOT' && (
+        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Bot Settings</p>
+
+          <Field label="Min Games Played" hint="Bot must have played at least this many games (leave blank for system default)">
+            <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
+              value={form.botMinGamesPlayed}
+              onChange={e => setForm(f => ({ ...f, botMinGamesPlayed: e.target.value }))}
+              placeholder="System default"
+            />
+          </Field>
+
+          <Field label="Pace (ms between dispatches)" hint="Delay between job dispatches for this tournament (leave blank for system default)">
+            <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
+              value={form.paceMs}
+              onChange={e => setForm(f => ({ ...f, paceMs: e.target.value }))}
+              placeholder="System default"
+            />
+          </Field>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.allowNonCompetitiveBots}
+              onChange={e => setForm(f => ({ ...f, allowNonCompetitiveBots: e.target.checked }))}
+              className="w-4 h-4 rounded"
+            />
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Allow non-competitive bots</span>
+          </label>
+        </div>
+      )}
 
       {/* Best of N / Min / Max participants */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

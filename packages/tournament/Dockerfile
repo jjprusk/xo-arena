@@ -2,11 +2,13 @@ FROM node:22-alpine
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY packages/ai/package.json ./packages/ai/
 COPY packages/db/package.json ./packages/db/
 COPY packages/tournament/package.json ./packages/tournament/
 
-RUN npm ci --workspace=packages/db --workspace=packages/tournament --ignore-scripts
+RUN npm ci --workspace=packages/ai --workspace=packages/db --workspace=packages/tournament --ignore-scripts
 
+COPY packages/ai/ ./packages/ai/
 COPY packages/db/ ./packages/db/
 COPY packages/tournament/ ./packages/tournament/
 

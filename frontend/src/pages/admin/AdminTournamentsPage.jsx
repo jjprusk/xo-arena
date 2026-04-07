@@ -11,6 +11,193 @@ import TournamentForm from '../../components/tournament/TournamentForm.jsx'
 
 const LIMIT = 25
 
+// ── Bot Match Config ──────────────────────────────────────────────────────────
+
+function BotMatchConfig({ token }) {
+  const [config, setConfig]   = useState({ concurrencyLimit: '', defaultPaceMs: '' })
+  const [saving, setSaving]   = useState(false)
+  const [saved, setSaved]     = useState(false)
+  const [saveErr, setSaveErr] = useState(null)
+
+  useEffect(() => {
+    if (!token) return
+    tournamentApi.getBotMatchConfig(token)
+      .then(d => setConfig({ concurrencyLimit: d.concurrencyLimit, defaultPaceMs: d.defaultPaceMs }))
+      .catch(() => {})
+  }, [token])
+
+  async function handleSave() {
+    setSaving(true)
+    setSaved(false)
+    setSaveErr(null)
+    try {
+      const d = await tournamentApi.updateBotMatchConfig({
+        concurrencyLimit: Number(config.concurrencyLimit),
+        defaultPaceMs: Number(config.defaultPaceMs),
+      }, token)
+      setConfig({ concurrencyLimit: d.concurrencyLimit, defaultPaceMs: d.defaultPaceMs })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      setSaveErr(e.message || 'Save failed.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="rounded-xl border p-4 space-y-3"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Bot Match Configuration</p>
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Concurrency Limit</label>
+          <input
+            type="number"
+            min={1}
+            value={config.concurrencyLimit}
+            onChange={e => setConfig(c => ({ ...c, concurrencyLimit: e.target.value }))}
+            className="px-2 py-1.5 rounded-lg border text-sm w-28"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Default Pace (ms)</label>
+          <input
+            type="number"
+            min={0}
+            value={config.defaultPaceMs}
+            onChange={e => setConfig(c => ({ ...c, defaultPaceMs: e.target.value }))}
+            className="px-2 py-1.5 rounded-lg border text-sm w-28"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          />
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
+          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+        >
+          {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
+        </button>
+      </div>
+      {saveErr && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{saveErr}</p>}
+    </div>
+  )
+}
+
+// ── Bot Match Monitor ─────────────────────────────────────────────────────────
+
+function BotMatchMonitor({ token }) {
+  const [status, setStatus]   = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+
+  const fetchStatus = useCallback(async () => {
+    if (!token) return
+    setLoading(true)
+    setError(null)
+    try {
+      const d = await tournamentApi.getBotMatchStatus(token)
+      setStatus(d)
+    } catch {
+      setError('Failed to load bot match status.')
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => {
+    fetchStatus()
+    const id = setInterval(fetchStatus, 10000)
+    return () => clearInterval(id)
+  }, [fetchStatus])
+
+  function truncId(id) {
+    if (!id) return '—'
+    return id.length > 12 ? id.slice(0, 12) + '\u2026' : id
+  }
+
+  return (
+    <div
+      className="rounded-xl border p-4 space-y-3"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Bot Match Monitor</p>
+        <button
+          onClick={fetchStatus}
+          disabled={loading}
+          className="text-xs px-3 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40"
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+
+      {status && (
+        <>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div
+              className="flex flex-col gap-0.5 px-3 py-2 rounded-lg border"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}
+            >
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Active Jobs</span>
+              <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-blue-600)' }}>{status.activeCount}</span>
+            </div>
+            <div
+              className="flex flex-col gap-0.5 px-3 py-2 rounded-lg border"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}
+            >
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Queue Depth</span>
+              <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-teal-600)' }}>{status.queueDepth}</span>
+            </div>
+          </div>
+
+          {status.jobs && status.jobs.length > 0 ? (
+            <ListTable maxHeight="40vh">
+              <thead>
+                <tr>
+                  <ListTh>Match ID</ListTh>
+                  <ListTh>Tournament ID</ListTh>
+                  <ListTh>Enqueued At</ListTh>
+                </tr>
+              </thead>
+              <tbody>
+                {status.jobs.map((job, i) => (
+                  <ListTr key={job.matchId} last={i === status.jobs.length - 1}>
+                    <ListTd>
+                      <span className="font-mono text-xs" style={{ color: 'var(--text-primary)' }} title={job.matchId}>
+                        {truncId(job.matchId)}
+                      </span>
+                    </ListTd>
+                    <ListTd>
+                      <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }} title={job.tournamentId}>
+                        {truncId(job.tournamentId)}
+                      </span>
+                    </ListTd>
+                    <ListTd>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {job.enqueuedAt ? new Date(job.enqueuedAt).toLocaleString() : '—'}
+                      </span>
+                    </ListTd>
+                  </ListTr>
+                ))}
+              </tbody>
+            </ListTable>
+          ) : (
+            <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>No active jobs.</p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 const STATUS_STYLES = {
@@ -306,6 +493,9 @@ export default function AdminTournamentsPage() {
         onPageChange={setPage}
         noun="tournaments"
       />
+
+      <BotMatchConfig token={token} />
+      <BotMatchMonitor token={token} />
 
       {/* Create / Edit modal */}
       {modal && (

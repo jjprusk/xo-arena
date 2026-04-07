@@ -9,6 +9,18 @@ import db from '@xo-arena/db'
 import logger from '../logger.js'
 import { generateBracket } from '../lib/bracket.js'
 import { publishEvent } from '../lib/redis.js'
+import { enqueueJob } from '../lib/botJobQueue.js'
+
+// ─── Internal config helper ───────────────────────────────────────────────────
+
+async function _getSystemConfig(key, defaultValue) {
+  try {
+    const row = await db.systemConfig.findUnique({ where: { key } })
+    return row?.value ?? defaultValue
+  } catch {
+    return defaultValue
+  }
+}
 
 // ─── Create ──────────────────────────────────────────────────────────────────
 
@@ -183,7 +195,16 @@ export async function registerParticipant(tournamentId, betterAuthId) {
   // Look up the domain user
   const user = await db.user.findUnique({
     where: { betterAuthId },
-    select: { id: true, eloRating: true },
+    select: {
+      id: true,
+      eloRating: true,
+      isBot: true,
+      botActive: true,
+      botAvailable: true,
+      botProvisional: true,
+      botCompetitive: true,
+      botGamesPlayed: true,
+    },
   })
   if (!user) throw Object.assign(new Error('User not found'), { status: 404 })
 
@@ -198,6 +219,34 @@ export async function registerParticipant(tournamentId, betterAuthId) {
 
   if (tournament.status !== 'REGISTRATION_OPEN') {
     throw Object.assign(new Error('Tournament is not open for registration'), { status: 409 })
+  }
+
+  // Bot eligibility checks for BOT_VS_BOT tournaments
+  if (tournament.mode === 'BOT_VS_BOT') {
+    if (!user.isBot) {
+      throw Object.assign(new Error('Only bots may register for BOT_VS_BOT tournaments'), { status: 409 })
+    }
+    if (!user.botActive) {
+      throw Object.assign(new Error('Bot is not active'), { status: 409 })
+    }
+    if (!user.botAvailable) {
+      throw Object.assign(new Error('Bot is not available'), { status: 409 })
+    }
+    if (user.botProvisional) {
+      throw Object.assign(new Error('Provisional bots may not enter tournaments'), { status: 409 })
+    }
+
+    const minGames = tournament.botMinGamesPlayed
+      ?? await _getSystemConfig('tournament.botMatch.minGamesPlayed', 0)
+    if (user.botGamesPlayed < minGames) {
+      throw Object.assign(
+        new Error(`Bot has insufficient games played (${user.botGamesPlayed} < ${minGames})`),
+        { status: 409 }
+      )
+    }
+    if (!tournament.allowNonCompetitiveBots && !user.botCompetitive) {
+      throw Object.assign(new Error('Non-competitive bots are not allowed in this tournament'), { status: 409 })
+    }
   }
 
   // Check maxParticipants
@@ -417,21 +466,25 @@ export async function startTournament(id, actorBetterAuthId) {
 
         // Publish match:ready for non-BYE matches will happen below
       } else if (match.participant1Id && match.participant2Id) {
-        // Real match — set to IN_PROGRESS and publish event
+        // Real match — set to IN_PROGRESS and publish event (PVP) or enqueue (BOT_VS_BOT)
         await db.tournamentMatch.update({
           where: { id: match.id },
           data: { status: 'IN_PROGRESS' },
         })
 
-        const p1 = tournament.participants.find(p => p.id === match.participant1Id)
-        const p2 = tournament.participants.find(p => p.id === match.participant2Id)
+        if (tournament.mode === 'BOT_VS_BOT') {
+          await enqueueJob(match.id, id)
+        } else {
+          const p1 = tournament.participants.find(p => p.id === match.participant1Id)
+          const p2 = tournament.participants.find(p => p.id === match.participant2Id)
 
-        await publishEvent('tournament:match:ready', {
-          tournamentId: id,
-          matchId: match.id,
-          participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
-          participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
-        })
+          await publishEvent('tournament:match:ready', {
+            tournamentId: id,
+            matchId: match.id,
+            participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
+            participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+          })
+        }
       }
     }
   }
@@ -540,7 +593,7 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
         data: { status: 'IN_PROGRESS' },
       })
 
-      // Set next round matches to IN_PROGRESS and publish match:ready events
+      // Set next round matches to IN_PROGRESS and publish match:ready events (PVP) or enqueue (BOT_VS_BOT)
       const nextRoundMatches = allMatches.filter(m => m.roundId === nextRound.id)
       for (const nextMatch of nextRoundMatches) {
         // Re-fetch to get updated participant IDs
@@ -551,21 +604,25 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
             data: { status: 'IN_PROGRESS' },
           })
 
-          const p1 = await db.tournamentParticipant.findUnique({
-            where: { id: freshMatch.participant1Id },
-            include: { user: { select: { betterAuthId: true } } },
-          })
-          const p2 = await db.tournamentParticipant.findUnique({
-            where: { id: freshMatch.participant2Id },
-            include: { user: { select: { betterAuthId: true } } },
-          })
+          if (tournament.mode === 'BOT_VS_BOT') {
+            await enqueueJob(freshMatch.id, tournament.id)
+          } else {
+            const p1 = await db.tournamentParticipant.findUnique({
+              where: { id: freshMatch.participant1Id },
+              include: { user: { select: { betterAuthId: true } } },
+            })
+            const p2 = await db.tournamentParticipant.findUnique({
+              where: { id: freshMatch.participant2Id },
+              include: { user: { select: { betterAuthId: true } } },
+            })
 
-          await publishEvent('tournament:match:ready', {
-            tournamentId: tournament.id,
-            matchId: freshMatch.id,
-            participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
-            participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
-          })
+            await publishEvent('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: freshMatch.id,
+              participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
+              participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+            })
+          }
         }
       }
     } else {
