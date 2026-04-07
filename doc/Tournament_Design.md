@@ -14,13 +14,14 @@ Each phase delivers a working, deployable slice of the system. The architecture 
 
 | Phase | Scope |
 |-------|-------|
+| 0 | Shared database infrastructure — migrate Prisma schema to `packages/db` |
 | 1 | Planned tournaments, PVP mode, single elimination, core engine, basic notifications |
 | 2 | Player classification system — tiers, merits, promotion, demotion |
 | 3 | BOT_VS_BOT mode, bot eligibility validation, server-side match execution |
 | 4 | Open tournaments, Flash tournaments, round robin bracket, recurring tournaments |
 | 5 | MIXED mode, full notification preferences, replay retention, full admin configurability |
 
-Classification (Phase 2) is deliberately placed before bots (Phase 3) so that merit tracking and tier assignment are in place before any rated tournament play occurs. Retroactive merit assignment is avoided entirely.
+Phase 0 is a prerequisite infrastructure step with no user-facing changes. It must be completed and verified in production before Phase 1 begins. Classification (Phase 2) is deliberately placed before bots (Phase 3) so that merit tracking and tier assignment are in place before any rated tournament play occurs. Retroactive merit assignment is avoided entirely.
 
 ---
 
@@ -562,13 +563,41 @@ SystemConfig keys added in Phase 5:
 
 Check items off as each phase is built and shipped. Tests are an implicit part of every item — no item is complete without passing test coverage.
 
+### Phase 0 — Shared Database Infrastructure
+
+This phase has no user-facing changes and no new tournament tables. Its sole purpose is to move the Prisma schema out of `backend/` into a shared `packages/db` workspace so that the tournament service (Phase 1) can import the same generated client without duplicating the schema. It ships as a standalone PR, verified end-to-end in staging and production before Phase 1 begins.
+
+**Workspace setup**
+- [ ] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (re-exports PrismaClient)
+- [ ] Copy `backend/prisma/schema.prisma` into `packages/db/prisma/schema.prisma` (content unchanged)
+- [ ] Copy existing migration history (`backend/prisma/migrations/`) into `packages/db/prisma/migrations/`
+- [ ] Update root `package.json` to include `packages/db` as a workspace
+- [ ] Add `packages/db` as a dependency in `backend/package.json` and verify Prisma client generates correctly
+
+**Backend wiring**
+- [ ] Update `backend/src/lib/db.js` to import PrismaClient from `packages/db` instead of the local generated path
+- [ ] Update all other backend files that import from `../generated/prisma` to use the shared package
+- [ ] Remove `backend/prisma/` directory (schema, migrations, and generated client now live in `packages/db`)
+- [ ] Update `backend/package.json` scripts — `prisma migrate deploy`, `prisma generate`, `prisma studio` — to run from `packages/db`
+
+**Railway / deployment**
+- [ ] Update backend `Dockerfile` — `prisma migrate deploy` command now points to `packages/db`
+- [ ] Confirm Railway staging deploy runs migrations successfully from the new path
+- [ ] Confirm backend service starts and all existing API endpoints and tests pass against the migrated schema
+
+**Verification**
+- [ ] All existing backend tests pass unchanged
+- [ ] `prisma migrate deploy` runs cleanly from `packages/db` in CI
+- [ ] Staging smoke tests pass
+- [ ] Production deploy confirmed stable before Phase 1 begins
+
+---
+
 ### Phase 1 — Planned Tournaments, PVP, Single Elimination
 
 **Infrastructure**
-- [ ] Create `packages/db` workspace with shared Prisma schema
-- [ ] Migrate existing `backend/prisma/schema.prisma` into `packages/db`
-- [ ] Apply Phase 1 migration (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
-- [ ] Scaffold `packages/tournament` service (Express, Prisma client, Redis client, BetterAuth middleware)
+- [ ] Apply Phase 1 migration from `packages/db` (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
+- [ ] Scaffold `packages/tournament` service (Express, Prisma client from `packages/db`, Redis client, BetterAuth middleware)
 - [ ] Deploy tournament service to Railway (staging, then production)
 - [ ] Wire Redis pub/sub: tournament service publishes → backend service subscribes and forwards via Socket.io
 
