@@ -674,76 +674,76 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 **Repository layer:** `packages/db` exports the raw PrismaClient for service-specific queries, and additionally exports typed repository functions for operations that will be shared across services — looking up users, recording game results, reading system config. Keeping shared query logic here prevents each service from writing its own version of the same query with subtle variations, and makes cross-service test mocking straightforward. The repository layer starts thin and grows as shared access patterns emerge.
 
 **Workspace setup**
-- [ ] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (exports PrismaClient and shared repository functions)
-- [ ] Copy `backend/prisma/schema.prisma` into `packages/db/prisma/schema.prisma` (content unchanged)
-- [ ] Copy existing migration history (`backend/prisma/migrations/`) into `packages/db/prisma/migrations/`
-- [ ] Update root `package.json` to include `packages/db` as a workspace
-- [ ] Add `packages/db` as a dependency in `backend/package.json` and verify Prisma client generates correctly
-- [ ] Implement initial repository functions for shared operations: `getUser(id)`, `getUserByBetterAuthId(id)`, `recordGame({...})`, `getSystemConfig(key)`
+- [x] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (exports PrismaClient and shared repository functions)
+- [x] Copy `backend/prisma/schema.prisma` into `packages/db/prisma/schema.prisma` (content unchanged)
+- [x] Copy existing migration history (`backend/prisma/migrations/`) into `packages/db/prisma/migrations/`
+- [x] Update root `package.json` to include `packages/db` as a workspace
+- [x] Add `packages/db` as a dependency in `backend/package.json` and verify Prisma client generates correctly
+- [x] Implement initial repository functions for shared operations: `getUser(id)`, `getUserByBetterAuthId(id)`, `recordGame({...})`, `getSystemConfig(key)`
 
 **Backend wiring**
-- [ ] Update `backend/src/lib/db.js` to import PrismaClient from `packages/db` instead of the local generated path
-- [ ] Update all other backend files that import from `../generated/prisma` to use the shared package
-- [ ] Remove `backend/prisma/` directory (schema, migrations, and generated client now live in `packages/db`)
-- [ ] Update `backend/package.json` scripts — `prisma migrate deploy`, `prisma generate`, `prisma studio` — to run from `packages/db`
+- [x] Update `backend/src/lib/db.js` to import PrismaClient from `packages/db` instead of the local generated path
+- [x] Update all other backend files that import from `../generated/prisma` to use the shared package
+- [x] Remove `backend/prisma/` directory (schema, migrations, and generated client now live in `packages/db`)
+- [x] Update `backend/package.json` scripts — `prisma migrate deploy`, `prisma generate`, `prisma studio` — to run from `packages/db`
 
 **Railway / deployment**
-- [ ] Update backend `Dockerfile` — `prisma migrate deploy` on startup points to `packages/db`; backend remains the sole service that runs this command
-- [ ] Tournament service `Dockerfile` (Phase 1) must NOT run `prisma migrate deploy` — document this constraint explicitly
-- [ ] Confirm Railway staging deploy runs migrations successfully from the new path
-- [ ] Confirm backend service starts and all existing API endpoints and tests pass against the migrated schema
+- [x] Update backend `Dockerfile` — `prisma migrate deploy` on startup points to `packages/db`; backend remains the sole service that runs this command
+- [x] Tournament service `Dockerfile` (Phase 1) must NOT run `prisma migrate deploy` — document this constraint explicitly
+- [x] Confirm Railway staging deploy runs migrations successfully from the new path
+- [x] Confirm backend service starts and all existing API endpoints and tests pass against the migrated schema
 
 **Verification**
-- [ ] All existing backend tests pass unchanged
-- [ ] `prisma migrate deploy` runs cleanly from `packages/db` in CI
-- [ ] Staging smoke tests pass
-- [ ] Production deploy confirmed stable before Phase 1 begins
+- [x] All existing backend tests pass unchanged
+- [x] `prisma migrate deploy` runs cleanly from `packages/db` in CI
+- [x] Staging smoke tests pass
+- [x] Production deploy confirmed stable before Phase 1 begins
 
 ---
 
 ### Phase 1 — Planned Tournaments, PVP, Single Elimination
 
 **Infrastructure**
-- [ ] Apply Phase 1 migration from `packages/db` (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
-- [ ] Scaffold `packages/tournament` service (Express, Prisma client from `packages/db`, Redis client, BetterAuth middleware)
-- [ ] Deploy tournament service to Railway (staging, then production)
-- [ ] Wire Redis pub/sub: tournament service publishes → backend service subscribes and forwards via Socket.io
+- [x] Apply Phase 1 migration from `packages/db` (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
+- [x] Scaffold `packages/tournament` service (Express, Prisma client from `packages/db`, Redis client, BetterAuth middleware)
+- [x] Deploy tournament service to Railway (staging, then production)
+- [x] Wire Redis pub/sub: tournament service publishes → backend service subscribes and forwards via Socket.io
 
 **Tournament Management**
-- [ ] Create tournament (PLANNED format, PVP mode, SINGLE_ELIM bracket)
-- [ ] Publish tournament (DRAFT → REGISTRATION_OPEN)
-- [ ] Registration open/close window enforcement
-- [ ] Participant registration and withdrawal
-- [ ] Minimum participant check — auto-cancel if not met at start time
-- [ ] Bracket seeding by ELO at registration close
-- [ ] Single elimination bracket generation (rounds + matches)
-- [ ] BYE handling for non-power-of-2 fields
+- [x] Create tournament (PLANNED format, PVP mode, SINGLE_ELIM bracket)
+- [x] Publish tournament (DRAFT → REGISTRATION_OPEN)
+- [x] Registration open/close window enforcement
+- [x] Participant registration and withdrawal
+- [x] Minimum participant check — auto-cancel if not met at start time
+- [x] Bracket seeding by ELO at registration close
+- [x] Single elimination bracket generation (rounds + matches)
+- [x] BYE handling for non-power-of-2 fields
 
 **Match Execution**
-- [ ] Match lifecycle: PENDING → IN_PROGRESS → COMPLETED
-- [ ] Series win tracking (p1Wins, p2Wins, drawGames)
-- [ ] Draw resolution cascade for single elimination (total wins → ELO → random), all steps logged
-- [ ] Advance winner, eliminate loser
-- [ ] Tournament completion — final standings recorded
-- [ ] Game rows linked to tournament via `tournamentId` and `tournamentMatchId`
-- [ ] Confirm ELO is NOT updated for tournament games
+- [x] Match lifecycle: PENDING → IN_PROGRESS → COMPLETED
+- [x] Series win tracking (p1Wins, p2Wins, drawGames)
+- [x] Draw resolution cascade for single elimination (total wins → ELO → random), all steps logged
+- [x] Advance winner, eliminate loser
+- [x] Tournament completion — final standings recorded
+- [x] Game rows linked to tournament via `tournamentId` and `tournamentMatchId`
+- [x] Confirm ELO is NOT updated for tournament games
 
 **Notifications (basic)**
-- [ ] Planned tournament starts in 1 hour — notify registered participants (in-app)
-- [ ] Planned tournament starts in 15 min — notify registered participants (real-time)
-- [ ] Match ready — notify participant (real-time)
-- [ ] Match result — notify participant (real-time + persistent)
-- [ ] Tournament completed — notify all participants (in-app)
+- [x] Planned tournament starts in 1 hour — notify registered participants (in-app)
+- [x] Planned tournament starts in 15 min — notify registered participants (real-time)
+- [x] Match ready — notify participant (real-time)
+- [x] Match result — notify participant (real-time + persistent)
+- [x] Tournament completed — notify all participants (in-app)
 
 **Admin**
-- [ ] Create / edit / cancel tournament (tournament role or admin)
-- [ ] View tournament bracket and match status
-- [ ] `tournament.admin` role enforcement on all management endpoints
+- [x] Create / edit / cancel tournament (tournament role or admin)
+- [x] View tournament bracket and match status
+- [x] `tournament.admin` role enforcement on all management endpoints
 
 **Tests**
-- [ ] Bracket generation — seeding, round structure, BYE placement
-- [ ] Draw resolution cascade — all three steps, audit log entries
-- [ ] Series completion — correct winner advancement
+- [x] Bracket generation — seeding, round structure, BYE placement
+- [x] Draw resolution cascade — all three steps, audit log entries
+- [x] Series completion — correct winner advancement
 - [ ] Auto-cancel on minimum participant not met
 - [ ] ELO not modified for tournament game records
 - [ ] Registration open/close window enforcement
