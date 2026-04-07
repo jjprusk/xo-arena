@@ -15,13 +15,13 @@ Each phase delivers a working, deployable slice of the system. The architecture 
 | Phase | Scope |
 |-------|-------|
 | 0 | Shared database infrastructure — migrate Prisma schema to `packages/db` |
-| 1 | Planned tournaments, PVP mode, single elimination, core engine, basic notifications |
+| 1 | Planned tournaments, PVP mode, single elimination, core engine, basic notifications — admin UI only |
 | 2 | Player classification system — tiers, merits, promotion, demotion |
 | 3 | BOT_VS_BOT mode, bot eligibility validation, server-side match execution |
 | 4 | Open tournaments, Flash tournaments, round robin bracket, recurring tournaments |
 | 5 | MIXED mode, full notification preferences, replay retention, full admin configurability |
 
-Phase 0 is a prerequisite infrastructure step with no user-facing changes. It must be completed and verified in production before Phase 1 begins. Classification (Phase 2) is deliberately placed before bots (Phase 3) so that merit tracking and tier assignment are in place before any rated tournament play occurs. Retroactive merit assignment is avoided entirely.
+Phase 0 is a prerequisite infrastructure step with no user-facing changes. It must be completed and verified in production before Phase 1 begins. Phases 1–5 deliver tournament functionality through the existing XO Arena admin panel — no new frontend service is required. The landing page (`aiarena.callidity.com`) is deferred until the tournament engine is proven. Classification (Phase 2) is deliberately placed before bots (Phase 3) so that merit tracking and tier assignment are in place before any rated tournament play occurs. Retroactive merit assignment is avoided entirely.
 
 ---
 
@@ -35,14 +35,63 @@ Phase 0 is a prerequisite infrastructure step with no user-facing changes. It mu
 - The **Socket.io server remains in the backend service** for Phase 1–5. Extraction into a dedicated socket service is planned for when a second game requiring real-time delivery is added (see Futures).
 - All services share the **same BetterAuth instance** — one session, one user record, one token across the platform.
 
-### Service Map
+### Phase 1–5 Service Map (current target)
+
+Tournament management UI lives in the existing XO Arena admin panel for Phases 1–5. The landing page (`aiarena.callidity.com`) is a future addition — see the Landing Page section below. This keeps Phase 1 to two new Railway services (tournament backend + shared DB package) rather than three.
 
 ```
 Client (Browser)
-├── aiarena.callidity.com      (Landing / Platform Hub)
-└── xo-arena.callidity.com     (XO Arena Game)
+└── xo-arena.callidity.com     (XO Arena — game + tournament admin UI)
+              │
+              │ HTTPS + WebSocket
+              ▼
+┌─────────────────────────┐     ┌───────────────────────┐
+│    Backend Service      │     │  Tournament Service    │
+│    (Railway — existing) │     │  (Railway — new)       │
+│                         │     │                        │
+│ • REST API              │     │ • REST API             │
+│ • Game logic (XO)       │     │ • Tournament logic     │
+│ • Socket.io server      │     │ • Bot scheduler        │
+│ • Auth middleware       │     │ • Merit/class.         │
+│ • Activity service      │     │ • Notifications        │
+│ • Tournament admin UI   │     │                        │
+│   (served via frontend) │     │                        │
+└────────────┬────────────┘     └───────────┬────────────┘
+             │  subscribe +                 │  publish
+             │  forward to clients          │  events
+             └──────────────┐  ┌────────────┘
+                            ▼  ▼
+                    ┌───────────────┐
+                    │     Redis     │
+                    │   (Railway)   │
+                    │               │
+                    │ • Pub/Sub bus │
+                    │ • Job queue   │
+                    │ • Activity    │
+                    │   cache       │
+                    └───────┬───────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │  PostgreSQL   │
+                    │  (Railway)    │
+                    │               │
+                    │ • Shared DB   │
+                    │ • All schemas │
+                    └───────────────┘
+```
+
+### Target Architecture (with Landing Page — future)
+
+When the landing page is added, a third client and a fourth Railway service join the picture. The backend and tournament service are unchanged — the landing frontend simply talks to both.
+
+```
+Client (Browser)
+├── aiarena.callidity.com      (Landing — platform hub, future)
+└── xo-arena.callidity.com     (XO Arena — game + admin)
          │                              │
-         │ HTTPS + WebSocket            │ HTTPS + WebSocket
+         │ HTTPS (+ WebSocket           │ HTTPS + WebSocket
+         │  via backend)                │
          ▼                              ▼
 ┌────────────────────┐     ┌───────────────────────┐
 │ Tournament Service │     │    Backend Service     │
@@ -76,11 +125,6 @@ Client (Browser)
                │ • Shared DB   │
                │ • All schemas │
                └───────────────┘
-
-Monorepo (packages/)
-├── ai/        ← shared ML inference (backend + tournament)
-├── auth/      ← shared auth utilities
-└── types/     ← shared TypeScript types (future)
 ```
 
 ### Inter-Service Communication
@@ -95,26 +139,44 @@ This pattern is invisible to the client — it maintains a single WebSocket conn
 
 ### Monorepo Structure
 
-The tournament system adds one new workspace to the existing monorepo:
+**Phases 0–5** add two new workspaces to the existing monorepo:
 
 ```
 xo-arena/
 ├── frontend/          ← XO Arena game frontend (existing)
 ├── backend/           ← XO Arena game backend (existing)
-├── landing/           ← Platform hub frontend (new)
 ├── packages/
 │   ├── ai/            ← Shared ML inference (existing)
-│   ├── tournament/    ← Tournament service (new)
+│   ├── db/            ← Shared Prisma schema + repository layer (new — Phase 0)
+│   ├── tournament/    ← Tournament service (new — Phase 1)
 │   └── auth/          ← Shared auth utilities (future)
 ├── e2e/               ← End-to-end tests (existing)
 └── package.json       ← Monorepo root
 ```
 
+**Future** (landing page phase):
+
+```
+xo-arena/
+├── frontend/          ← XO Arena game frontend
+├── backend/           ← XO Arena game backend
+├── landing/           ← Platform hub frontend (future)
+├── packages/
+│   ├── ai/
+│   ├── db/
+│   ├── tournament/
+│   └── auth/
+├── e2e/
+└── package.json
+```
+
 ---
 
-## Landing Page
+## Landing Page (Deferred — Post Phase 5)
 
-The landing page (`aiarena.callidity.com`) is the front door to the entire AI Arena platform. It is built as a new `landing/` workspace using the same React + Vite + Tailwind stack as the XO Arena frontend.
+The landing page (`aiarena.callidity.com`) is the long-term front door to the entire AI Arena platform. For Phases 1–5, tournament management UI is delivered through the existing XO Arena admin panel. The landing page is deferred until the tournament engine is proven and stable.
+
+When built, it will be a new `landing/` workspace using the same React + Vite + Tailwind stack as the XO Arena frontend, deployed as a fourth Railway service.
 
 ### Page Structure
 
