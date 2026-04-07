@@ -39,17 +39,17 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --workspace=backend --workspace=packages/ai --ignore-scripts
+        run: npm install --workspace=backend --workspace=packages/ai --workspace=packages/db --ignore-scripts --no-package-lock
 
       - name: Generate Prisma client
         working-directory: backend
-        run: npx prisma generate
+        run: npx prisma generate --schema=../packages/db/prisma/schema.prisma
         env:
           DATABASE_URL: postgresql://xo:xo@localhost:5432/xo_arena_test
 
       - name: Run migrations
         working-directory: backend
-        run: npx prisma migrate deploy
+        run: npx prisma migrate deploy --schema=../packages/db/prisma/schema.prisma
         env:
           DATABASE_URL: postgresql://xo:xo@localhost:5432/xo_arena_test
 
@@ -78,7 +78,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --workspace=packages/ai --ignore-scripts
+        run: npm install --workspace=packages/ai --ignore-scripts --no-package-lock
 
       - name: Run tests
         run: npm test --workspace=packages/ai
@@ -97,7 +97,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --workspace=frontend --workspace=packages/ai --ignore-scripts
+        run: npm install --workspace=frontend --workspace=packages/ai --ignore-scripts --no-package-lock
 
       - name: Run tests
         working-directory: frontend
