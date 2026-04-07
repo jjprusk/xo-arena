@@ -768,6 +768,175 @@ function ClassificationConfigPanel({ token }) {
   )
 }
 
+// ── Recurring Registrations panel ─────────────────────────────────────────────
+
+function RecurringRegistrations({ token }) {
+  const [templateId, setTemplateId] = useState('')
+  const [registrations, setRegistrations] = useState(null)
+  const [loadErr, setLoadErr] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createTemplateId, setCreateTemplateId] = useState('')
+  const [createUserId, setCreateUserId] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createErr, setCreateErr] = useState(null)
+  const [createDone, setCreateDone] = useState(false)
+
+  async function handleLookup() {
+    if (!templateId.trim()) return
+    setLoading(true)
+    setLoadErr(null)
+    setRegistrations(null)
+    try {
+      const d = await tournamentApi.listRecurringRegistrations(templateId.trim(), token)
+      const list = Array.isArray(d) ? d : (d.registrations ?? d.data ?? [])
+      setRegistrations(list)
+    } catch (e) {
+      setLoadErr(e.message || 'Failed to load registrations.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCreate() {
+    if (!createTemplateId.trim() || !createUserId.trim()) return
+    setCreating(true)
+    setCreateErr(null)
+    setCreateDone(false)
+    try {
+      await tournamentApi.recurringRegister(createTemplateId.trim(), token)
+      setCreateDone(true)
+      setShowCreate(false)
+      setCreateTemplateId('')
+      setCreateUserId('')
+      setTimeout(() => setCreateDone(false), 2000)
+    } catch (e) {
+      setCreateErr(e.message || 'Enrollment failed.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div
+      className="rounded-xl border p-4 space-y-3"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recurring Registrations</p>
+        <button
+          onClick={() => { setShowCreate(s => !s); setCreateErr(null) }}
+          className="text-xs px-3 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+          style={{ borderColor: 'var(--color-blue-300)', color: 'var(--color-blue-600)' }}
+        >
+          {showCreate ? 'Cancel' : 'Create Enrollment'}
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="flex flex-col gap-2 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>New Enrollment</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              placeholder="Template ID"
+              value={createTemplateId}
+              onChange={e => setCreateTemplateId(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border text-sm flex-1"
+              style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+            <input
+              type="text"
+              placeholder="User ID"
+              value={createUserId}
+              onChange={e => setCreateUserId(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border text-sm flex-1"
+              style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+            <button
+              onClick={handleCreate}
+              disabled={creating || !createTemplateId.trim() || !createUserId.trim()}
+              className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40 whitespace-nowrap"
+              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+            >
+              {creating ? 'Enrolling…' : createDone ? 'Done' : 'Enroll'}
+            </button>
+          </div>
+          {createErr && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{createErr}</p>}
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end">
+        <div className="flex flex-col gap-1 flex-1">
+          <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Look up by Template ID</label>
+          <input
+            type="text"
+            placeholder="Recurring tournament template ID…"
+            value={templateId}
+            onChange={e => setTemplateId(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLookup()}
+            className="px-2 py-1.5 rounded-lg border text-sm"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          />
+        </div>
+        <button
+          onClick={handleLookup}
+          disabled={loading || !templateId.trim()}
+          className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
+          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+        >
+          {loading ? 'Loading…' : 'Look Up'}
+        </button>
+      </div>
+
+      {loadErr && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{loadErr}</p>}
+
+      {registrations !== null && (
+        registrations.length === 0 ? (
+          <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>No standing registrations for this template.</p>
+        ) : (
+          <ListTable maxHeight="40vh">
+            <thead>
+              <tr>
+                <ListTh>Template ID</ListTh>
+                <ListTh>User ID</ListTh>
+                <ListTh align="right">Missed</ListTh>
+                <ListTh className="hidden sm:table-cell">Opted Out At</ListTh>
+              </tr>
+            </thead>
+            <tbody>
+              {registrations.map((r, i) => (
+                <ListTr key={r.id ?? i} last={i === registrations.length - 1}>
+                  <ListTd>
+                    <span className="font-mono text-xs" style={{ color: 'var(--text-primary)' }} title={r.templateId}>
+                      {r.templateId ? r.templateId.slice(0, 12) + (r.templateId.length > 12 ? '\u2026' : '') : '—'}
+                    </span>
+                  </ListTd>
+                  <ListTd>
+                    <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }} title={r.userId}>
+                      {r.userId ? r.userId.slice(0, 12) + (r.userId.length > 12 ? '\u2026' : '') : '—'}
+                    </span>
+                  </ListTd>
+                  <ListTd align="right">
+                    <span className="text-xs tabular-nums" style={{ color: (r.missedCount ?? 0) > 0 ? 'var(--color-amber-700)' : 'var(--text-muted)' }}>
+                      {r.missedCount ?? 0}
+                    </span>
+                  </ListTd>
+                  <ListTd className="hidden sm:table-cell">
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {r.optedOutAt ? new Date(r.optedOutAt).toLocaleDateString() : '—'}
+                    </span>
+                  </ListTd>
+                </ListTr>
+              ))}
+            </tbody>
+          </ListTable>
+        )
+      )}
+    </div>
+  )
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 const STATUS_STYLES = {
@@ -964,7 +1133,14 @@ export default function AdminTournamentsPage() {
 
                   {/* Status */}
                   <ListTd className="hidden sm:table-cell">
-                    <StatusBadge status={t.status} />
+                    <div className="flex flex-col gap-0.5 items-start">
+                      <StatusBadge status={t.status} />
+                      {t.format && t.format !== 'PLANNED' && (
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          {t.status === 'IN_PROGRESS' && t.format === 'FLASH' ? '⚡ Flash' : t.format}
+                        </span>
+                      )}
+                    </div>
                   </ListTd>
 
                   {/* Format */}
@@ -1078,6 +1254,7 @@ export default function AdminTournamentsPage() {
         <ClassificationPanel token={token} />
         <MeritThresholdsPanel token={token} />
         <ClassificationConfigPanel token={token} />
+        <RecurringRegistrations token={token} />
       </div>
 
       {/* Create / Edit modal */}

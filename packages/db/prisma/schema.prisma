@@ -529,6 +529,18 @@ enum TournamentMode {
   MIXED
 }
 
+enum RegistrationMode {
+  SINGLE
+  RECURRING
+}
+
+enum RecurrenceInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
 enum TournamentFormat {
   OPEN
   PLANNED
@@ -607,6 +619,8 @@ model Tournament {
   noticePeriodMinutes       Int?
   durationMinutes           Int?
   isRecurring               Boolean            @default(false)
+  recurrenceInterval        RecurrenceInterval?
+  recurrenceEndDate         DateTime?
   autoOptOutAfterMissed     Int?
   createdById               String
   createdAt                 DateTime           @default(now())
@@ -632,6 +646,8 @@ model TournamentParticipant {
   resultNotifPref   ResultNotifPref   @default(AS_PLAYED)
   finalPosition     Int?
   finalPositionPct  Float?
+  points           Int               @default(0)
+  registrationMode RegistrationMode  @default(SINGLE)
   registeredAt      DateTime          @default(now())
 
   tournament        Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
@@ -738,4 +754,20 @@ model MeritThreshold {
   pos4    Int
 
   @@map("merit_thresholds")
+}
+
+// ─── Tournament Phase 4: Recurring ───────────────────────────────────────────
+
+model RecurringTournamentRegistration {
+  id           String    @id @default(cuid())
+  templateId   String
+  userId       String
+  missedCount  Int       @default(0)
+  optedOutAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([templateId, userId])
+  @@index([templateId])
+  @@index([userId])
+  @@map("recurring_tournament_registrations")
 }

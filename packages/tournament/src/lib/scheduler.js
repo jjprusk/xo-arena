@@ -10,7 +10,7 @@
 import db from '@xo-arena/db'
 import logger from '../logger.js'
 import { publishEvent } from './redis.js'
-import { cancelTournament, startTournament } from '../services/tournamentService.js'
+import { cancelTournament, startTournament, forceResolveMatch } from '../services/tournamentService.js'
 import { runDemotionReview } from '../services/classificationService.js'
 
 const INTERVAL_MS = 60 * 1000 // 1 minute
@@ -20,6 +20,7 @@ const INTERVAL_MS = 60 * 1000 // 1 minute
 const sentWarnings = new Set()
 
 let lastDemotionReviewDate = null
+let lastOccurrenceCheckDate = null
 
 /**
  * Start background scheduler.
@@ -50,10 +51,20 @@ export async function runSchedulerTick() {
     runDemotionReview().catch(err => logger.error({ err }, 'Demotion review failed'))
   }
 
+  // Daily recurring occurrence check
+  const todayDate = new Date().toISOString().slice(0, 10)
+  if (lastOccurrenceCheckDate !== todayDate) {
+    lastOccurrenceCheckDate = todayDate
+    checkRecurringOccurrences().catch(err =>
+      logger.error({ err }, 'Recurring occurrence check failed')
+    )
+  }
+
   await Promise.allSettled([
     checkWarnings(),
     checkAutoCancel(),
     checkAutoStart(),
+    checkFlashClose(),
   ])
 }
 
@@ -181,4 +192,169 @@ async function checkAutoStart() {
   } catch (err) {
     logger.error({ err }, 'Scheduler: checkAutoStart failed')
   }
+}
+
+// ─── Flash auto-close ─────────────────────────────────────────────────────────
+
+async function checkFlashClose() {
+  try {
+    const now = new Date()
+
+    // Find IN_PROGRESS FLASH tournaments whose endTime has passed
+    const tournaments = await db.tournament.findMany({
+      where: {
+        format: 'FLASH',
+        status: 'IN_PROGRESS',
+        endTime: { lt: now },
+      },
+    })
+
+    for (const tournament of tournaments) {
+      logger.info({ tournamentId: tournament.id }, 'Scheduler: force-closing flash tournament')
+      try {
+        // Force-resolve all incomplete matches
+        const incompleteMatches = await db.tournamentMatch.findMany({
+          where: {
+            tournamentId: tournament.id,
+            status: { in: ['PENDING', 'IN_PROGRESS'] },
+          },
+        })
+
+        for (const match of incompleteMatches) {
+          if (match.participant1Id && match.participant2Id) {
+            await forceResolveMatch(match.id)
+          }
+        }
+      } catch (err) {
+        logger.error({ err, tournamentId: tournament.id }, 'Scheduler: flash close failed')
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'Scheduler: checkFlashClose failed')
+  }
+}
+
+// ─── Recurring tournament occurrence generation ────────────────────────────────
+
+async function checkRecurringOccurrences() {
+  try {
+    // Find recurring template tournaments that have COMPLETED and need a new occurrence
+    const templates = await db.tournament.findMany({
+      where: {
+        isRecurring: true,
+        status: 'COMPLETED',
+        recurrenceInterval: { not: null },
+      },
+    })
+
+    const now = new Date()
+
+    for (const template of templates) {
+      try {
+        // Check if recurrenceEndDate has passed
+        if (template.recurrenceEndDate && template.recurrenceEndDate < now) continue
+
+        // Determine next occurrence start time
+        const nextStart = _nextOccurrenceStart(template)
+        if (!nextStart || nextStart > (template.recurrenceEndDate ?? new Date('2100-01-01'))) continue
+
+        // Check if an occurrence for this window already exists
+        const existing = await db.tournament.findFirst({
+          where: {
+            name: template.name,
+            startTime: nextStart,
+            isRecurring: false, // occurrences are not templates themselves
+          },
+        })
+        if (existing) continue
+
+        // Create new occurrence (clone of template)
+        const occurrence = await db.tournament.create({
+          data: {
+            name: template.name,
+            description: template.description,
+            game: template.game,
+            mode: template.mode,
+            format: template.format,
+            bracketType: template.bracketType,
+            status: 'REGISTRATION_OPEN',
+            minParticipants: template.minParticipants,
+            maxParticipants: template.maxParticipants,
+            bestOfN: template.bestOfN,
+            botMinGamesPlayed: template.botMinGamesPlayed,
+            allowNonCompetitiveBots: template.allowNonCompetitiveBots,
+            startTime: nextStart,
+            registrationOpenAt: now,
+            isRecurring: false,
+            createdById: template.createdById,
+          },
+        })
+
+        logger.info(
+          { templateId: template.id, occurrenceId: occurrence.id, nextStart },
+          'Recurring occurrence created'
+        )
+
+        // Auto-enroll RECURRING participants from the template
+        const standingRegistrations = await db.recurringTournamentRegistration.findMany({
+          where: { templateId: template.id, optedOutAt: null },
+        })
+
+        for (const reg of standingRegistrations) {
+          try {
+            await db.tournamentParticipant.create({
+              data: {
+                tournamentId: occurrence.id,
+                userId: reg.userId,
+                eloAtRegistration: 1200, // will be overwritten at start
+                status: 'REGISTERED',
+                registrationMode: 'RECURRING',
+              },
+            })
+          } catch {
+            // May already be registered; skip
+          }
+        }
+
+        // Publish notification for new occurrence
+        await publishEvent('tournament:recurring:occurrence', {
+          templateId: template.id,
+          occurrenceId: occurrence.id,
+          startTime: nextStart,
+        })
+      } catch (err) {
+        logger.error({ err, templateId: template.id }, 'Failed to generate occurrence')
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'checkRecurringOccurrences failed')
+  }
+}
+
+function _nextOccurrenceStart(template) {
+  if (!template.startTime || !template.recurrenceInterval) return null
+
+  const base = new Date(template.startTime)
+  const now = new Date()
+
+  // Find the next occurrence after now
+  let next = new Date(base)
+  while (next <= now) {
+    switch (template.recurrenceInterval) {
+      case 'DAILY':
+        next = new Date(next.getTime() + 24 * 60 * 60 * 1000)
+        break
+      case 'WEEKLY':
+        next = new Date(next.getTime() + 7 * 24 * 60 * 60 * 1000)
+        break
+      case 'MONTHLY':
+        next = new Date(next.setMonth(next.getMonth() + 1))
+        break
+      case 'CUSTOM':
+        return null // Custom interval requires manual handling
+      default:
+        return null
+    }
+  }
+  return next
 }

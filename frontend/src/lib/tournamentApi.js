@@ -118,4 +118,18 @@ export const tournamentApi = {
   /** PATCH /api/classification/config */
   updateClassificationConfig: (updates, token) =>
     request('PATCH', '/api/classification/config', updates, token),
+
+  // ─── Recurring registration ─────────────────────────────────────────────────
+
+  /** POST /api/recurring/:templateId/register */
+  recurringRegister: (templateId, token) =>
+    request('POST', `/api/recurring/${templateId}/register`, {}, token),
+
+  /** DELETE /api/recurring/:templateId/register */
+  recurringWithdraw: (templateId, token) =>
+    request('DELETE', `/api/recurring/${templateId}/register`, undefined, token),
+
+  /** GET /api/recurring/:templateId/registrations */
+  listRecurringRegistrations: (templateId, token) =>
+    request('GET', `/api/recurring/${templateId}/registrations`, undefined, token),
 }

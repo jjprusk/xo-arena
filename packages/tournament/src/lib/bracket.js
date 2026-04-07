@@ -139,3 +139,60 @@ function buildBracketPositions(n) {
 
   return positions
 }
+
+/**
+ * Generate a round-robin schedule using the circle method.
+ *
+ * For n players: n-1 rounds (if n even) or n rounds (if n odd).
+ * Each round has ⌊n/2⌋ matches. Players with a "bye" round get no match that round.
+ *
+ * @param {Array<{id: string, eloAtRegistration: number}>} participants
+ * @returns {Array<{roundNumber: number, matches: Array<{participant1Id: string, participant2Id: string}>}>}
+ */
+export function generateRoundRobinSchedule(participants) {
+  if (!participants || participants.length < 2) return []
+
+  // Sort by ELO descending for consistent ordering
+  const sorted = [...participants].sort(
+    (a, b) => (b.eloAtRegistration ?? 0) - (a.eloAtRegistration ?? 0)
+  )
+
+  const ids = sorted.map(p => p.id)
+
+  // If odd number of players, add null as bye placeholder
+  const hasOdd = ids.length % 2 !== 0
+  if (hasOdd) ids.push(null)
+
+  const n = ids.length          // always even after padding
+  const numRounds = n - 1
+  const fixed = ids[0]
+  const rotating = ids.slice(1) // n-1 elements, rotated each round
+
+  const rounds = []
+
+  for (let round = 0; round < numRounds; round++) {
+    const matches = []
+
+    // Fixed player pairs with last element of rotating
+    const opp = rotating[rotating.length - 1]
+    if (fixed !== null && opp !== null) {
+      matches.push({ participant1Id: fixed, participant2Id: opp })
+    }
+
+    // Middle pairs
+    for (let i = 0; i < Math.floor((n - 2) / 2); i++) {
+      const p1 = rotating[i]
+      const p2 = rotating[n - 3 - i] // n-2 is rotating.length-1, so n-3-i mirrors from end
+      if (p1 !== null && p2 !== null) {
+        matches.push({ participant1Id: p1, participant2Id: p2 })
+      }
+    }
+
+    rounds.push({ roundNumber: round + 1, matches })
+
+    // Rotate: move last rotating element to front
+    rotating.unshift(rotating.pop())
+  }
+
+  return rounds
+}

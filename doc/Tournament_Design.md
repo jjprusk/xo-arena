@@ -828,39 +828,39 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 ### Phase 4 — Open Tournaments, Flash Tournaments, Round Robin, Recurring
 
 **Open Tournaments**
-- [ ] Tournament starts at scheduled time with no REGISTRATION_CLOSED state
-- [ ] Organizer early-start override (minimum participants must be met)
-- [ ] Registration closes implicitly when tournament starts; late entry rejected
+- [x] Tournament starts at scheduled time with no REGISTRATION_CLOSED state
+- [x] Organizer early-start override (minimum participants must be met)
+- [x] Registration closes implicitly when tournament starts; late entry rejected
 
 **Flash Tournaments**
-- [ ] Flash tournament creation with notice period and duration parameters
+- [x] Flash tournament creation with notice period and duration parameters
 - [ ] Broadcast notification to all logged-in users on creation (real-time + in-app banner)
 - [ ] "Starting in 2 min" notification to opted-in users
-- [ ] Auto-start at T+N, auto-close at T+N+M
-- [ ] Incomplete match resolution at close time — current series score; draw cascade if level
+- [x] Auto-start at T+N, auto-close at T+N+M
+- [x] Incomplete match resolution at close time — current series score; draw cascade if level
 
 **Round Robin Bracket**
-- [ ] Round robin bracket generation — all participants play all others
-- [ ] Draw recorded as draw (1 point each); win = 2 points, loss = 0
-- [ ] Final standings by total points
-- [ ] Handle ties in final standings
+- [x] Round robin bracket generation — all participants play all others
+- [x] Draw recorded as draw (1 point each); win = 2 points, loss = 0
+- [x] Final standings by total points
+- [x] Handle ties in final standings
 
 **Recurring Tournaments**
-- [ ] Apply Phase 4 migration (RecurringTournamentRegistration, registrationMode on TournamentParticipant)
-- [ ] SINGLE vs RECURRING registration mode at enrollment
-- [ ] Auto-enroll RECURRING participants in each new occurrence
-- [ ] Occurrence generation on schedule (DAILY, WEEKLY, MONTHLY, CUSTOM)
-- [ ] Auto-opt-out after N consecutive missed occurrences (configurable)
-- [ ] Participant opt-out at any time
+- [x] Apply Phase 4 migration (RecurringTournamentRegistration, registrationMode on TournamentParticipant)
+- [x] SINGLE vs RECURRING registration mode at enrollment
+- [x] Auto-enroll RECURRING participants in each new occurrence
+- [x] Occurrence generation on schedule (DAILY, WEEKLY, MONTHLY, CUSTOM)
+- [x] Auto-opt-out after N consecutive missed occurrences (configurable)
+- [x] Participant opt-out at any time
 
 **Tests**
-- [ ] Flash tournament lifecycle — creation to auto-close
-- [ ] Incomplete match resolution at flash tournament close time
-- [ ] Round robin bracket generation and scoring
-- [ ] Round robin final standings with tiebreakers
-- [ ] Recurring enrollment — SINGLE and RECURRING modes
-- [ ] Auto-opt-out after missed occurrences threshold
-- [ ] Open tournament early-start enforcement
+- [x] Flash tournament lifecycle — creation to auto-close
+- [x] Incomplete match resolution at flash tournament close time
+- [x] Round robin bracket generation and scoring
+- [x] Round robin final standings with tiebreakers
+- [x] Recurring enrollment — SINGLE and RECURRING modes
+- [x] Auto-opt-out after missed occurrences threshold
+- [x] Open tournament early-start enforcement
 
 ---
 

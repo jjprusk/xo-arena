@@ -54,6 +54,12 @@ const DEFAULT_FORM = {
   botMinGamesPlayed: '',
   allowNonCompetitiveBots: false,
   paceMs: '',
+  noticePeriodMinutes: '',
+  durationMinutes: '',
+  isRecurring: false,
+  recurrenceInterval: 'WEEKLY',
+  recurrenceEndDate: '',
+  autoOptOutAfterMissed: '',
 }
 
 /**
@@ -85,6 +91,12 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       botMinGamesPlayed:   initialValues.botMinGamesPlayed != null ? String(initialValues.botMinGamesPlayed) : '',
       allowNonCompetitiveBots: initialValues.allowNonCompetitiveBots ?? false,
       paceMs:              initialValues.paceMs != null ? String(initialValues.paceMs) : '',
+      noticePeriodMinutes: initialValues.noticePeriodMinutes != null ? String(initialValues.noticePeriodMinutes) : '',
+      durationMinutes:     initialValues.durationMinutes != null ? String(initialValues.durationMinutes) : '',
+      isRecurring:         initialValues.isRecurring ?? false,
+      recurrenceInterval:  initialValues.recurrenceInterval ?? 'WEEKLY',
+      recurrenceEndDate:   initialValues.recurrenceEndDate ? initialValues.recurrenceEndDate.slice(0, 10) : '',
+      autoOptOutAfterMissed: initialValues.autoOptOutAfterMissed != null ? String(initialValues.autoOptOutAfterMissed) : '',
     }
   })
   const [errors, setErrors]   = useState({})
@@ -143,6 +155,16 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
         payload.allowNonCompetitiveBots = form.allowNonCompetitiveBots
         payload.botMinGamesPlayed = form.botMinGamesPlayed !== '' ? parseInt(form.botMinGamesPlayed, 10) : null
         payload.paceMs            = form.paceMs !== '' ? parseInt(form.paceMs, 10) : null
+      }
+      if (form.format === 'FLASH') {
+        payload.noticePeriodMinutes = form.noticePeriodMinutes !== '' ? parseInt(form.noticePeriodMinutes, 10) : null
+        payload.durationMinutes     = form.durationMinutes !== '' ? parseInt(form.durationMinutes, 10) : null
+      }
+      payload.isRecurring = form.isRecurring
+      if (form.isRecurring) {
+        payload.recurrenceInterval    = form.recurrenceInterval
+        payload.recurrenceEndDate     = form.recurrenceEndDate || null
+        payload.autoOptOutAfterMissed = form.autoOptOutAfterMissed !== '' ? parseInt(form.autoOptOutAfterMissed, 10) : null
       }
 
       await onSubmit(payload)
@@ -216,6 +238,8 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
             style={FIELD_STYLE}
           >
             <option value="PLANNED">Planned</option>
+            <option value="OPEN">Open</option>
+            <option value="FLASH">Flash</option>
           </select>
         </Field>
 
@@ -231,6 +255,45 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
           </select>
         </Field>
       </div>
+
+      {/* Format-specific fields */}
+      {form.format === 'FLASH' && (
+        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Flash Tournament Settings</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Notice Period (minutes)" hint="Time before tournament starts (minutes)">
+              <input
+                type="number"
+                min="0"
+                value={form.noticePeriodMinutes}
+                onChange={e => set('noticePeriodMinutes', e.target.value)}
+                placeholder="e.g. 15"
+                className={INPUT_CLASS}
+                style={FIELD_STYLE}
+              />
+            </Field>
+            <Field label="Duration (minutes)" hint="How long the tournament runs (minutes)">
+              <input
+                type="number"
+                min="1"
+                value={form.durationMinutes}
+                onChange={e => set('durationMinutes', e.target.value)}
+                placeholder="e.g. 60"
+                className={INPUT_CLASS}
+                style={FIELD_STYLE}
+              />
+            </Field>
+          </div>
+        </div>
+      )}
+
+      {form.format === 'OPEN' && (
+        <div className="px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Open format: registration stays open until the tournament starts. No registration close date needed.
+          </p>
+        </div>
+      )}
 
       {/* Bot Settings (BOT_VS_BOT only) */}
       {form.mode === 'BOT_VS_BOT' && (
@@ -262,6 +325,58 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
             />
             <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Allow non-competitive bots</span>
           </label>
+        </div>
+      )}
+
+      {/* Recurring Tournament */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={form.isRecurring}
+          onChange={e => set('isRecurring', e.target.checked)}
+          className="w-4 h-4 rounded accent-[var(--color-blue-600)]"
+        />
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Recurring Tournament</span>
+      </label>
+
+      {form.isRecurring && (
+        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Recurring Settings</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Recurrence Interval" required>
+              <select
+                value={form.recurrenceInterval}
+                onChange={e => set('recurrenceInterval', e.target.value)}
+                className={SELECT_CLASS}
+                style={FIELD_STYLE}
+              >
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="CUSTOM">Custom</option>
+              </select>
+            </Field>
+            <Field label="Recurrence End Date" hint="Optional — leave blank to recur indefinitely">
+              <input
+                type="date"
+                value={form.recurrenceEndDate}
+                onChange={e => set('recurrenceEndDate', e.target.value)}
+                className={INPUT_CLASS}
+                style={FIELD_STYLE}
+              />
+            </Field>
+          </div>
+          <Field label="Auto-opt-out after missed occurrences" hint="Auto-withdraw after N consecutive missed occurrences (0 = never)">
+            <input
+              type="number"
+              min="0"
+              value={form.autoOptOutAfterMissed}
+              onChange={e => set('autoOptOutAfterMissed', e.target.value)}
+              placeholder="0"
+              className={INPUT_CLASS}
+              style={FIELD_STYLE}
+            />
+          </Field>
         </div>
       )}
 

@@ -7,7 +7,7 @@
 
 import db from '@xo-arena/db'
 import logger from '../logger.js'
-import { generateBracket } from '../lib/bracket.js'
+import { generateBracket, generateRoundRobinSchedule } from '../lib/bracket.js'
 import { publishEvent } from '../lib/redis.js'
 import { enqueueJob } from '../lib/botJobQueue.js'
 import { awardTournamentMerits, getOrCreateClassification } from './classificationService.js'
@@ -380,11 +380,13 @@ export async function startTournament(id, actorBetterAuthId) {
     )
   }
 
-  // Close registration
-  await db.tournament.update({
-    where: { id },
-    data: { status: 'REGISTRATION_CLOSED' },
-  })
+  // Close registration (skip for OPEN format — goes directly to IN_PROGRESS)
+  if (tournament.format !== 'OPEN') {
+    await db.tournament.update({
+      where: { id },
+      data: { status: 'REGISTRATION_CLOSED' },
+    })
+  }
 
   // Seed participants (sorted by eloAtRegistration descending)
   const participantsForBracket = tournament.participants.map(p => ({
@@ -393,8 +395,13 @@ export async function startTournament(id, actorBetterAuthId) {
     eloAtRegistration: p.eloAtRegistration ?? 1200,
   }))
 
-  // Generate bracket
-  const bracketRounds = generateBracket(participantsForBracket)
+  // Generate bracket (SINGLE_ELIM or ROUND_ROBIN)
+  let bracketRounds
+  if (tournament.bracketType === 'ROUND_ROBIN') {
+    bracketRounds = generateRoundRobinSchedule(participantsForBracket)
+  } else {
+    bracketRounds = generateBracket(participantsForBracket)
+  }
 
   // Persist rounds and matches
   const createdRounds = []
@@ -433,63 +440,100 @@ export async function startTournament(id, actorBetterAuthId) {
     data: { status: 'IN_PROGRESS' },
   })
 
-  // Auto-complete BYE matches in round 1 and set round 1 IN_PROGRESS
-  const round1 = createdRounds[0]
-  if (round1) {
-    await db.tournamentRound.update({
-      where: { id: round1.id },
-      data: { status: 'IN_PROGRESS' },
+  // For FLASH format, ensure endTime is set
+  if (tournament.format === 'FLASH' && tournament.durationMinutes && !tournament.endTime) {
+    const startedAt = new Date()
+    const endTime = new Date(startedAt.getTime() + tournament.durationMinutes * 60 * 1000)
+    await db.tournament.update({
+      where: { id },
+      data: { endTime },
     })
+  }
 
-    const round1Matches = createdMatches.filter(m => m.roundId === round1.id)
-    for (const match of round1Matches) {
-      if (match.participant1Id && !match.participant2Id) {
-        // BYE — participant1 auto-advances
-        await db.tournamentMatch.update({
-          where: { id: match.id },
-          data: {
-            status: 'COMPLETED',
-            winnerId: match.participant1Id,
-            completedAt: new Date(),
-          },
+  if (tournament.bracketType === 'ROUND_ROBIN') {
+    // Round robin: all rounds and all matches start IN_PROGRESS simultaneously
+    for (const round of createdRounds) {
+      await db.tournamentRound.update({ where: { id: round.id }, data: { status: 'IN_PROGRESS' } })
+    }
+    for (const match of createdMatches) {
+      await db.tournamentMatch.update({ where: { id: match.id }, data: { status: 'IN_PROGRESS' } })
+      if (tournament.mode === 'BOT_VS_BOT') {
+        await enqueueJob(match.id, id)
+      } else {
+        const p1 = tournament.participants.find(p => p.id === match.participant1Id)
+        const p2 = tournament.participants.find(p => p.id === match.participant2Id)
+        await publishEvent('tournament:match:ready', {
+          tournamentId: id,
+          matchId: match.id,
+          participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
+          participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
         })
+      }
+    }
+    // All participants start as ACTIVE in round robin
+    for (const p of tournament.participants) {
+      await db.tournamentParticipant.update({
+        where: { id: p.id },
+        data: { status: 'ACTIVE' },
+      })
+    }
+  } else {
+    // SINGLE_ELIM: round 1 only, BYE handling
+    const round1 = createdRounds[0]
+    if (round1) {
+      await db.tournamentRound.update({
+        where: { id: round1.id },
+        data: { status: 'IN_PROGRESS' },
+      })
 
-        // Mark participant1 as ACTIVE (they're in the tournament)
-        await db.tournamentParticipant.update({
-          where: { id: match.participant1Id },
-          data: { status: 'ACTIVE' },
-        })
-
-        // Advance to next round immediately
-        await _advanceWinner(
-          match.participant1Id,
-          round1.id,
-          match.id,
-          id,
-          createdRounds,
-          createdMatches
-        )
-
-        // Publish match:ready for non-BYE matches will happen below
-      } else if (match.participant1Id && match.participant2Id) {
-        // Real match — set to IN_PROGRESS and publish event (PVP) or enqueue (BOT_VS_BOT)
-        await db.tournamentMatch.update({
-          where: { id: match.id },
-          data: { status: 'IN_PROGRESS' },
-        })
-
-        if (tournament.mode === 'BOT_VS_BOT') {
-          await enqueueJob(match.id, id)
-        } else {
-          const p1 = tournament.participants.find(p => p.id === match.participant1Id)
-          const p2 = tournament.participants.find(p => p.id === match.participant2Id)
-
-          await publishEvent('tournament:match:ready', {
-            tournamentId: id,
-            matchId: match.id,
-            participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
-            participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+      const round1Matches = createdMatches.filter(m => m.roundId === round1.id)
+      for (const match of round1Matches) {
+        if (match.participant1Id && !match.participant2Id) {
+          // BYE — participant1 auto-advances
+          await db.tournamentMatch.update({
+            where: { id: match.id },
+            data: {
+              status: 'COMPLETED',
+              winnerId: match.participant1Id,
+              completedAt: new Date(),
+            },
           })
+
+          // Mark participant1 as ACTIVE (they're in the tournament)
+          await db.tournamentParticipant.update({
+            where: { id: match.participant1Id },
+            data: { status: 'ACTIVE' },
+          })
+
+          // Advance to next round immediately
+          await _advanceWinner(
+            match.participant1Id,
+            round1.id,
+            match.id,
+            id,
+            createdRounds,
+            createdMatches
+          )
+        } else if (match.participant1Id && match.participant2Id) {
+          // Real match — set to IN_PROGRESS and publish event (PVP) or enqueue (BOT_VS_BOT)
+          await db.tournamentMatch.update({
+            where: { id: match.id },
+            data: { status: 'IN_PROGRESS' },
+          })
+
+          if (tournament.mode === 'BOT_VS_BOT') {
+            await enqueueJob(match.id, id)
+          } else {
+            const p1 = tournament.participants.find(p => p.id === match.participant1Id)
+            const p2 = tournament.participants.find(p => p.id === match.participant2Id)
+
+            await publishEvent('tournament:match:ready', {
+              tournamentId: id,
+              matchId: match.id,
+              participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
+              participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+            })
+          }
         }
       }
     }
@@ -542,6 +586,51 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
     },
   })
 
+  let updatedTournament = tournament
+
+  if (tournament.bracketType === 'ROUND_ROBIN') {
+    // Award points (2 for win, 1 each for draw, 0 for loss)
+    const isDraw = !winnerId
+    if (isDraw) {
+      // Both get 1 point
+      if (match.participant1Id) {
+        await db.tournamentParticipant.update({
+          where: { id: match.participant1Id },
+          data: { points: { increment: 1 } },
+        })
+      }
+      if (match.participant2Id) {
+        await db.tournamentParticipant.update({
+          where: { id: match.participant2Id },
+          data: { points: { increment: 1 } },
+        })
+      }
+    } else {
+      // Winner gets 2, loser gets 0 (no update needed for loser)
+      await db.tournamentParticipant.update({
+        where: { id: winnerId },
+        data: { points: { increment: 2 } },
+      })
+    }
+
+    // Check if all tournament matches are complete
+    const allTournamentMatches = await db.tournamentMatch.findMany({
+      where: { tournamentId: tournament.id },
+    })
+    const allDone = allTournamentMatches.every(
+      m => m.id === matchId ? true : m.status === 'COMPLETED'
+    )
+
+    if (allDone) {
+      updatedTournament = await _completeRoundRobinTournament(tournament.id)
+    }
+
+    const updatedMatch = await db.tournamentMatch.findUnique({ where: { id: matchId } })
+    return { match: updatedMatch, tournament: updatedTournament }
+  }
+
+  // SINGLE_ELIM path: eliminate loser, advance winner, check round/tournament completion
+
   // Mark loser as ELIMINATED
   const loserId = winnerId === match.participant1Id ? match.participant2Id : match.participant1Id
   if (loserId) {
@@ -575,12 +664,9 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
 
   // Check if the current round is complete
   const currentRoundMatches = allMatches.filter(m => m.roundId === match.roundId)
-  const updatedCurrentMatch = { ...currentRoundMatches.find(m => m.id === matchId), status: 'COMPLETED' }
   const allCurrentRoundDone = currentRoundMatches.every(
     m => m.id === matchId ? true : m.status === 'COMPLETED'
   )
-
-  let updatedTournament = tournament
 
   if (allCurrentRoundDone) {
     // Mark current round completed
@@ -796,4 +882,128 @@ async function _completeTournament(tournamentId) {
 
   logger.info({ tournamentId }, 'Tournament completed')
   return updated
+}
+
+/**
+ * Complete a round-robin tournament: calculate standings by points,
+ * tiebreak by head-to-head wins (p1Wins when winner is the participant),
+ * assign final positions, mark COMPLETED.
+ */
+async function _completeRoundRobinTournament(tournamentId) {
+  const participants = await db.tournamentParticipant.findMany({
+    where: { tournamentId, status: { notIn: ['WITHDRAWN'] } },
+    include: { user: { select: { betterAuthId: true } } },
+  })
+
+  const matches = await db.tournamentMatch.findMany({
+    where: { tournamentId },
+  })
+
+  // Tiebreak: count total wins (matches where winnerId === participant.id)
+  const winCounts = new Map()
+  for (const p of participants) {
+    const wins = matches.filter(m => m.winnerId === p.id).length
+    winCounts.set(p.id, wins)
+  }
+
+  // Sort: by points desc, then wins desc, then eloAtRegistration desc
+  const ranked = [...participants].sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points
+    const bWins = winCounts.get(b.id) ?? 0
+    const aWins = winCounts.get(a.id) ?? 0
+    if (bWins !== aWins) return bWins - aWins
+    return (b.eloAtRegistration ?? 0) - (a.eloAtRegistration ?? 0)
+  })
+
+  const totalParticipants = ranked.length
+
+  const finalStandings = []
+  for (let i = 0; i < ranked.length; i++) {
+    const p = ranked[i]
+    const position = i + 1
+    const positionPct = totalParticipants > 1
+      ? ((totalParticipants - position) / (totalParticipants - 1)) * 100
+      : 100
+
+    await db.tournamentParticipant.update({
+      where: { id: p.id },
+      data: {
+        finalPosition: position,
+        finalPositionPct: positionPct,
+        status: position === 1 ? 'ACTIVE' : 'ELIMINATED',
+      },
+    })
+
+    finalStandings.push({
+      userId: p.user?.betterAuthId ?? p.userId,
+      position,
+    })
+  }
+
+  const updated = await db.tournament.update({
+    where: { id: tournamentId },
+    data: { status: 'COMPLETED' },
+  })
+
+  // Phase 2: award merits
+  await awardTournamentMerits(tournamentId)
+
+  await publishEvent('tournament:completed', { tournamentId, finalStandings })
+  logger.info({ tournamentId }, 'Round robin tournament completed')
+  return updated
+}
+
+// ─── Force Resolve Match ──────────────────────────────────────────────────────
+
+/**
+ * Force-resolve a match at flash tournament close time.
+ * Uses current series score; if tied applies draw cascade (ELO then random).
+ *
+ * @param {string} matchId
+ * @returns {Promise<void>}
+ */
+export async function forceResolveMatch(matchId) {
+  const match = await db.tournamentMatch.findUnique({
+    where: { id: matchId },
+    include: {
+      round: { include: { tournament: true } },
+    },
+  })
+  if (!match || match.status === 'COMPLETED') return
+
+  let winnerId = null
+  let drawResolution = null
+
+  if (match.p1Wins > match.p2Wins) {
+    winnerId = match.participant1Id
+  } else if (match.p2Wins > match.p1Wins) {
+    winnerId = match.participant2Id
+  } else {
+    // Tied — ELO tiebreak: higher ELO at registration wins
+    const p1 = match.participant1Id
+      ? await db.tournamentParticipant.findUnique({ where: { id: match.participant1Id } })
+      : null
+    const p2 = match.participant2Id
+      ? await db.tournamentParticipant.findUnique({ where: { id: match.participant2Id } })
+      : null
+
+    if (p1?.eloAtRegistration !== p2?.eloAtRegistration &&
+        p1?.eloAtRegistration != null && p2?.eloAtRegistration != null) {
+      winnerId = (p1.eloAtRegistration > p2.eloAtRegistration)
+        ? match.participant1Id
+        : match.participant2Id
+      drawResolution = 'ELO'
+    } else {
+      // Random
+      winnerId = Math.random() < 0.5 ? match.participant1Id : match.participant2Id
+      drawResolution = 'RANDOM'
+    }
+  }
+
+  await completeMatch(matchId, winnerId, {
+    p1Wins: match.p1Wins,
+    p2Wins: match.p2Wins,
+    drawGames: match.drawGames,
+    drawResolution,
+  })
 }
