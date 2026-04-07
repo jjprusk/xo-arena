@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.6.11",
+    "date": "2026-04-07",
+    "description": "Internal database work in preparation for tournaments"
+  },
+  {
     "version": "1.6.10",
     "date": "2026-04-07",
     "description": "Internal instrumentation for resource management"
