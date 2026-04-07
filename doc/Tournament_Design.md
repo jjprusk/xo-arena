@@ -567,12 +567,17 @@ Check items off as each phase is built and shipped. Tests are an implicit part o
 
 This phase has no user-facing changes and no new tournament tables. Its sole purpose is to move the Prisma schema out of `backend/` into a shared `packages/db` workspace so that the tournament service (Phase 1) can import the same generated client without duplicating the schema. It ships as a standalone PR, verified end-to-end in staging and production before Phase 1 begins.
 
+**Migration authority:** The backend service is the sole migration authority. It runs `prisma migrate deploy` on startup and owns the migration history in `packages/db`. The tournament service (and any future service) imports the Prisma client from `packages/db` but never runs migrations itself. This prevents race conditions when multiple services deploy simultaneously against the same database.
+
+**Repository layer:** `packages/db` exports the raw PrismaClient for service-specific queries, and additionally exports typed repository functions for operations that will be shared across services — looking up users, recording game results, reading system config. Keeping shared query logic here prevents each service from writing its own version of the same query with subtle variations, and makes cross-service test mocking straightforward. The repository layer starts thin and grows as shared access patterns emerge.
+
 **Workspace setup**
-- [ ] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (re-exports PrismaClient)
+- [ ] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (exports PrismaClient and shared repository functions)
 - [ ] Copy `backend/prisma/schema.prisma` into `packages/db/prisma/schema.prisma` (content unchanged)
 - [ ] Copy existing migration history (`backend/prisma/migrations/`) into `packages/db/prisma/migrations/`
 - [ ] Update root `package.json` to include `packages/db` as a workspace
 - [ ] Add `packages/db` as a dependency in `backend/package.json` and verify Prisma client generates correctly
+- [ ] Implement initial repository functions for shared operations: `getUser(id)`, `getUserByBetterAuthId(id)`, `recordGame({...})`, `getSystemConfig(key)`
 
 **Backend wiring**
 - [ ] Update `backend/src/lib/db.js` to import PrismaClient from `packages/db` instead of the local generated path
@@ -581,7 +586,8 @@ This phase has no user-facing changes and no new tournament tables. Its sole pur
 - [ ] Update `backend/package.json` scripts — `prisma migrate deploy`, `prisma generate`, `prisma studio` — to run from `packages/db`
 
 **Railway / deployment**
-- [ ] Update backend `Dockerfile` — `prisma migrate deploy` command now points to `packages/db`
+- [ ] Update backend `Dockerfile` — `prisma migrate deploy` on startup points to `packages/db`; backend remains the sole service that runs this command
+- [ ] Tournament service `Dockerfile` (Phase 1) must NOT run `prisma migrate deploy` — document this constraint explicitly
 - [ ] Confirm Railway staging deploy runs migrations successfully from the new path
 - [ ] Confirm backend service starts and all existing API endpoints and tests pass against the migrated schema
 
