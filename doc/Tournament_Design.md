@@ -565,7 +565,9 @@ Check items off as each phase is built and shipped. Tests are an implicit part o
 
 ### Phase 0 — Shared Database Infrastructure
 
-This phase has no user-facing changes and no new tournament tables. Its sole purpose is to move the Prisma schema out of `backend/` into a shared `packages/db` workspace so that the tournament service (Phase 1) can import the same generated client without duplicating the schema. It ships as a standalone PR, verified end-to-end in staging and production before Phase 1 begins.
+This phase has no user-facing changes and no new tournament tables. It establishes the shared database infrastructure that every future service on the platform — the tournament service, future game backends (Connect4, Checkers, etc.), and the landing page API — will build on. The immediate trigger is the tournament service (Phase 1), but the architecture is designed for the full platform from the start.
+
+The work moves the Prisma schema out of `backend/` into a shared `packages/db` workspace so that any service can import the same generated client and repository layer without duplicating the schema or risking type drift. It ships as a standalone PR, verified end-to-end in staging and production before Phase 1 begins.
 
 **Migration authority:** The backend service is the sole migration authority. It runs `prisma migrate deploy` on startup and owns the migration history in `packages/db`. The tournament service (and any future service) imports the Prisma client from `packages/db` but never runs migrations itself. This prevents race conditions when multiple services deploy simultaneously against the same database.
 
