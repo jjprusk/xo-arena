@@ -14,13 +14,14 @@ Each phase delivers a working, deployable slice of the system. The architecture 
 
 | Phase | Scope |
 |-------|-------|
-| 1 | Planned tournaments, PVP mode, single elimination, core engine, basic notifications |
+| 0 | Shared database infrastructure — migrate Prisma schema to `packages/db` |
+| 1 | Planned tournaments, PVP mode, single elimination, core engine, basic notifications — admin UI only |
 | 2 | Player classification system — tiers, merits, promotion, demotion |
 | 3 | BOT_VS_BOT mode, bot eligibility validation, server-side match execution |
 | 4 | Open tournaments, Flash tournaments, round robin bracket, recurring tournaments |
 | 5 | MIXED mode, full notification preferences, replay retention, full admin configurability |
 
-Classification (Phase 2) is deliberately placed before bots (Phase 3) so that merit tracking and tier assignment are in place before any rated tournament play occurs. Retroactive merit assignment is avoided entirely.
+Phase 0 is a prerequisite infrastructure step with no user-facing changes. It must be completed and verified in production before Phase 1 begins. Phases 1–5 deliver tournament functionality through the existing XO Arena admin panel — no new frontend service is required. The landing page (`aiarena.callidity.com`) is deferred until the tournament engine is proven. Classification (Phase 2) is deliberately placed before bots (Phase 3) so that merit tracking and tier assignment are in place before any rated tournament play occurs. Retroactive merit assignment is avoided entirely.
 
 ---
 
@@ -34,14 +35,63 @@ Classification (Phase 2) is deliberately placed before bots (Phase 3) so that me
 - The **Socket.io server remains in the backend service** for Phase 1–5. Extraction into a dedicated socket service is planned for when a second game requiring real-time delivery is added (see Futures).
 - All services share the **same BetterAuth instance** — one session, one user record, one token across the platform.
 
-### Service Map
+### Phase 1–5 Service Map (current target)
+
+Tournament management UI lives in the existing XO Arena admin panel for Phases 1–5. The landing page (`aiarena.callidity.com`) is a future addition — see the Landing Page section below. This keeps Phase 1 to two new Railway services (tournament backend + shared DB package) rather than three.
 
 ```
 Client (Browser)
-├── aiarena.callidity.com      (Landing / Platform Hub)
-└── xo-arena.callidity.com     (XO Arena Game)
+└── xo-arena.callidity.com     (XO Arena — game + tournament admin UI)
+              │
+              │ HTTPS + WebSocket
+              ▼
+┌─────────────────────────┐     ┌───────────────────────┐
+│    Backend Service      │     │  Tournament Service    │
+│    (Railway — existing) │     │  (Railway — new)       │
+│                         │     │                        │
+│ • REST API              │     │ • REST API             │
+│ • Game logic (XO)       │     │ • Tournament logic     │
+│ • Socket.io server      │     │ • Bot scheduler        │
+│ • Auth middleware       │     │ • Merit/class.         │
+│ • Activity service      │     │ • Notifications        │
+│ • Tournament admin UI   │     │                        │
+│   (served via frontend) │     │                        │
+└────────────┬────────────┘     └───────────┬────────────┘
+             │  subscribe +                 │  publish
+             │  forward to clients          │  events
+             └──────────────┐  ┌────────────┘
+                            ▼  ▼
+                    ┌───────────────┐
+                    │     Redis     │
+                    │   (Railway)   │
+                    │               │
+                    │ • Pub/Sub bus │
+                    │ • Job queue   │
+                    │ • Activity    │
+                    │   cache       │
+                    └───────┬───────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │  PostgreSQL   │
+                    │  (Railway)    │
+                    │               │
+                    │ • Shared DB   │
+                    │ • All schemas │
+                    └───────────────┘
+```
+
+### Target Architecture (with Landing Page — future)
+
+When the landing page is added, a third client and a fourth Railway service join the picture. The backend and tournament service are unchanged — the landing frontend simply talks to both.
+
+```
+Client (Browser)
+├── aiarena.callidity.com      (Landing — platform hub, future)
+└── xo-arena.callidity.com     (XO Arena — game + admin)
          │                              │
-         │ HTTPS + WebSocket            │ HTTPS + WebSocket
+         │ HTTPS (+ WebSocket           │ HTTPS + WebSocket
+         │  via backend)                │
          ▼                              ▼
 ┌────────────────────┐     ┌───────────────────────┐
 │ Tournament Service │     │    Backend Service     │
@@ -75,11 +125,6 @@ Client (Browser)
                │ • Shared DB   │
                │ • All schemas │
                └───────────────┘
-
-Monorepo (packages/)
-├── ai/        ← shared ML inference (backend + tournament)
-├── auth/      ← shared auth utilities
-└── types/     ← shared TypeScript types (future)
 ```
 
 ### Inter-Service Communication
@@ -94,26 +139,44 @@ This pattern is invisible to the client — it maintains a single WebSocket conn
 
 ### Monorepo Structure
 
-The tournament system adds one new workspace to the existing monorepo:
+**Phases 0–5** add two new workspaces to the existing monorepo:
 
 ```
 xo-arena/
 ├── frontend/          ← XO Arena game frontend (existing)
 ├── backend/           ← XO Arena game backend (existing)
-├── landing/           ← Platform hub frontend (new)
 ├── packages/
 │   ├── ai/            ← Shared ML inference (existing)
-│   ├── tournament/    ← Tournament service (new)
+│   ├── db/            ← Shared Prisma schema + repository layer (new — Phase 0)
+│   ├── tournament/    ← Tournament service (new — Phase 1)
 │   └── auth/          ← Shared auth utilities (future)
 ├── e2e/               ← End-to-end tests (existing)
 └── package.json       ← Monorepo root
 ```
 
+**Future** (landing page phase):
+
+```
+xo-arena/
+├── frontend/          ← XO Arena game frontend
+├── backend/           ← XO Arena game backend
+├── landing/           ← Platform hub frontend (future)
+├── packages/
+│   ├── ai/
+│   ├── db/
+│   ├── tournament/
+│   └── auth/
+├── e2e/
+└── package.json
+```
+
 ---
 
-## Landing Page
+## Landing Page (Deferred — Post Phase 5)
 
-The landing page (`aiarena.callidity.com`) is the front door to the entire AI Arena platform. It is built as a new `landing/` workspace using the same React + Vite + Tailwind stack as the XO Arena frontend.
+The landing page (`aiarena.callidity.com`) is the long-term front door to the entire AI Arena platform. For Phases 1–5, tournament management UI is delivered through the existing XO Arena admin panel. The landing page is deferred until the tournament engine is proven and stable.
+
+When built, it will be a new `landing/` workspace using the same React + Vite + Tailwind stack as the XO Arena frontend, deployed as a fourth Railway service.
 
 ### Page Structure
 
@@ -171,6 +234,43 @@ Bot match execution is resilient to tournament service restarts through two comp
 1. **Durable jobs** — match jobs are not removed from the Redis queue until the worker explicitly acknowledges completion. A mid-match restart leaves the job on the queue; the next worker instance picks it up automatically.
 
 2. **Startup reconciliation** — on service startup, the tournament service queries PostgreSQL for any matches in `IN_PROGRESS` state with no corresponding active job and re-queues them. This handles edge cases where the Redis queue and database state diverged.
+
+---
+
+## Resource Management Constraints
+
+These constraints are non-negotiable implementation requirements for the tournament service and any future service in the platform. They exist to prevent the class of resource leaks — Redis connection exhaustion, Postgres connection pool exhaustion, stale Socket.io rooms — that become invisible until the container crashes.
+
+### Redis Connections
+
+Each service maintains **one shared Redis subscriber connection** for all pub/sub subscriptions, regardless of how many channels it subscribes to. A new connection must never be opened per match, per event type, or per request. Redis enforces a `maxclients` limit; exceeding it drops new connections silently.
+
+The tournament service opens exactly two Redis connections at startup:
+- One for publishing events and job queue operations (standard client)
+- One for subscribing to channels (dedicated subscriber — cannot be reused for publishing per Redis protocol)
+
+### Graceful Shutdown
+
+The tournament service must handle `SIGTERM` before exiting. On shutdown:
+
+1. Stop accepting new work — remove the service from any load balancer / Railway health check.
+2. Drain the job worker — allow any in-flight bot match to complete or checkpoint before exit. Do not block indefinitely; apply a drain timeout (e.g. 30 seconds).
+3. Close Redis connections cleanly — unsubscribe all channels, close the subscriber connection, then close the publisher connection.
+4. Close the Prisma connection pool.
+
+Jobs that cannot complete within the drain timeout are left on the queue (they were never acknowledged) and will be picked up by the next worker instance. This is correct behavior — do not force-acknowledge them.
+
+### Tournament Match Room Cleanup
+
+When the backend service receives a `match:complete` or `match:cancelled` event from Redis, it must tear down the corresponding Socket.io room in the same handler. Room cleanup is not deferred or best-effort — it runs synchronously in the event handler before acknowledging the event. This mirrors the responsibility the existing `roomManager` has for free-play rooms today.
+
+If the Redis event is lost or delivered out of order, the backend's periodic health log (socket snapshot every 60 s) will surface rooms with no associated active match. A future cleanup sweep can reclaim these, but the primary path must be event-driven.
+
+### Prisma Connection Pool
+
+`PrismaClient` is instantiated **once at module load** in `packages/db/src/index.js` and exported as a singleton. Services import this singleton — they do not instantiate their own `PrismaClient`. Instantiating per-request creates a new connection pool per request and exhausts Postgres `max_connections` within minutes under any real load.
+
+The backend already follows this pattern via `backend/src/lib/db.js`. Phase 0 must preserve this by re-exporting the same singleton from `packages/db`.
 
 ---
 
@@ -294,8 +394,9 @@ model Tournament {
   minParticipants       Int                 @default(2)
   maxParticipants       Int?
   bestOfN               Int                 @default(3)
-  botMinGamesPlayed     Int?
-  allowSpectators       Boolean             @default(true)
+  botMinGamesPlayed         Int?
+  allowNonCompetitiveBots   Boolean             @default(false)
+  allowSpectators           Boolean             @default(true)
   replayRetentionDays   Int                 @default(30)
   startTime             DateTime?
   endTime               DateTime?
@@ -562,13 +663,49 @@ SystemConfig keys added in Phase 5:
 
 Check items off as each phase is built and shipped. Tests are an implicit part of every item — no item is complete without passing test coverage.
 
+### Phase 0 — Shared Database Infrastructure
+
+This phase has no user-facing changes and no new tournament tables. It establishes the shared database infrastructure that every future service on the platform — the tournament service, future game backends (Connect4, Checkers, etc.), and the landing page API — will build on. The immediate trigger is the tournament service (Phase 1), but the architecture is designed for the full platform from the start.
+
+The work moves the Prisma schema out of `backend/` into a shared `packages/db` workspace so that any service can import the same generated client and repository layer without duplicating the schema or risking type drift. It ships as a standalone PR, verified end-to-end in staging and production before Phase 1 begins.
+
+**Migration authority:** The backend service is the sole migration authority. It runs `prisma migrate deploy` on startup and owns the migration history in `packages/db`. The tournament service (and any future service) imports the Prisma client from `packages/db` but never runs migrations itself. This prevents race conditions when multiple services deploy simultaneously against the same database.
+
+**Repository layer:** `packages/db` exports the raw PrismaClient for service-specific queries, and additionally exports typed repository functions for operations that will be shared across services — looking up users, recording game results, reading system config. Keeping shared query logic here prevents each service from writing its own version of the same query with subtle variations, and makes cross-service test mocking straightforward. The repository layer starts thin and grows as shared access patterns emerge.
+
+**Workspace setup**
+- [ ] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (exports PrismaClient and shared repository functions)
+- [ ] Copy `backend/prisma/schema.prisma` into `packages/db/prisma/schema.prisma` (content unchanged)
+- [ ] Copy existing migration history (`backend/prisma/migrations/`) into `packages/db/prisma/migrations/`
+- [ ] Update root `package.json` to include `packages/db` as a workspace
+- [ ] Add `packages/db` as a dependency in `backend/package.json` and verify Prisma client generates correctly
+- [ ] Implement initial repository functions for shared operations: `getUser(id)`, `getUserByBetterAuthId(id)`, `recordGame({...})`, `getSystemConfig(key)`
+
+**Backend wiring**
+- [ ] Update `backend/src/lib/db.js` to import PrismaClient from `packages/db` instead of the local generated path
+- [ ] Update all other backend files that import from `../generated/prisma` to use the shared package
+- [ ] Remove `backend/prisma/` directory (schema, migrations, and generated client now live in `packages/db`)
+- [ ] Update `backend/package.json` scripts — `prisma migrate deploy`, `prisma generate`, `prisma studio` — to run from `packages/db`
+
+**Railway / deployment**
+- [ ] Update backend `Dockerfile` — `prisma migrate deploy` on startup points to `packages/db`; backend remains the sole service that runs this command
+- [ ] Tournament service `Dockerfile` (Phase 1) must NOT run `prisma migrate deploy` — document this constraint explicitly
+- [ ] Confirm Railway staging deploy runs migrations successfully from the new path
+- [ ] Confirm backend service starts and all existing API endpoints and tests pass against the migrated schema
+
+**Verification**
+- [ ] All existing backend tests pass unchanged
+- [ ] `prisma migrate deploy` runs cleanly from `packages/db` in CI
+- [ ] Staging smoke tests pass
+- [ ] Production deploy confirmed stable before Phase 1 begins
+
+---
+
 ### Phase 1 — Planned Tournaments, PVP, Single Elimination
 
 **Infrastructure**
-- [ ] Create `packages/db` workspace with shared Prisma schema
-- [ ] Migrate existing `backend/prisma/schema.prisma` into `packages/db`
-- [ ] Apply Phase 1 migration (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
-- [ ] Scaffold `packages/tournament` service (Express, Prisma client, Redis client, BetterAuth middleware)
+- [ ] Apply Phase 1 migration from `packages/db` (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
+- [ ] Scaffold `packages/tournament` service (Express, Prisma client from `packages/db`, Redis client, BetterAuth middleware)
 - [ ] Deploy tournament service to Railway (staging, then production)
 - [ ] Wire Redis pub/sub: tournament service publishes → backend service subscribes and forwards via Socket.io
 
@@ -629,7 +766,7 @@ Check items off as each phase is built and shipped. Tests are an implicit part o
 - [ ] Calculate tier-peer count (players of same tier in same tournament) at tournament end
 - [ ] Look up correct MeritThreshold band and award merits by finish position
 - [ ] Handle ties at same finish position — shared merit award
-- [ ] Best Overall bonus — award 1 merit to top finisher across all tiers (minimum 10 participants)
+- [ ] Best Overall bonus — award 1 merit to the player with `finalPosition = 1` in the tournament (minimum 10 total participants); ties for 1st in round robin each receive the bonus
 - [ ] Write MeritTransaction row for every award
 - [ ] Promotion check after merit award — advance tier, reset merits to 0, write ClassificationHistory
 
@@ -647,7 +784,7 @@ Check items off as each phase is built and shipped. Tests are an implicit part o
 
 **Tests**
 - [ ] Merit award — each band size, each position, ties
-- [ ] Best Overall bonus — awarded correctly, minimum participant threshold enforced
+- [ ] Best Overall bonus — awarded to `finalPosition = 1`, minimum 10 participant threshold enforced, round robin ties each receive the bonus
 - [ ] Promotion — triggers at correct merit count, resets merits, writes history
 - [ ] Demotion — Finish Ratio calculation, eligibility conditions, opt-out
 - [ ] Bot classification is independent of owner classification
@@ -664,8 +801,9 @@ Check items off as each phase is built and shipped. Tests are an implicit part o
 - [ ] Seed SystemConfig: `tournament.botMatch.globalConcurrencyLimit`, `tournament.botMatch.defaultPaceMs`
 
 **Bot Eligibility**
-- [ ] Enforce bot eligibility at registration: active, available, non-provisional, min games played
+- [ ] Enforce bot eligibility at registration: active, available, non-provisional, min games played, and competitive (unless `allowNonCompetitiveBots = true`)
 - [ ] `botMinGamesPlayed` per tournament — read from Tournament config, fall back to SystemConfig default
+- [ ] `allowNonCompetitiveBots` — admin-configurable per tournament; defaults to false; when true, casual bots (`botCompetitive = false`) may register alongside competitive bots
 
 **Match Execution**
 - [ ] Server-side bot match execution using shared `packages/ai` inference
@@ -679,7 +817,7 @@ Check items off as each phase is built and shipped. Tests are an implicit part o
 - [ ] Live view of active bot match jobs and queue depth
 
 **Tests**
-- [ ] Bot eligibility checks — each condition independently
+- [ ] Bot eligibility checks — each condition independently, including `botCompetitive` gate and `allowNonCompetitiveBots` override
 - [ ] Concurrency limit — worker respects global cap
 - [ ] Startup reconciliation — IN_PROGRESS matches re-queued correctly
 - [ ] Job acknowledgement — job not removed until match confirmed written
@@ -761,7 +899,7 @@ The following items were flagged in the Tournament Requirements addendum as requ
 |------|---------------|
 | Mixed-mode execution (Human vs Bot) — client-side vs server-side | Phase 5 |
 | Server-side bot match pacing and concurrency scheduling logic | Phase 3 |
-| Best Overall merit bonus — cross-tier scoring comparison method | Phase 2 |
+| Best Overall merit bonus — cross-tier scoring comparison method | Phase 2 — **resolved:** award to `finalPosition = 1`; no cross-tier calculation needed; round robin ties share the bonus |
 | Full database schema | Phase 1 onwards |
 
 ---

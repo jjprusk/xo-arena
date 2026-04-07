@@ -4,6 +4,7 @@ import { getToken, clearTokenCache } from '../lib/getToken.js'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { signOut } from '../lib/auth-client.js'
+import { disconnectSocket } from '../lib/socket.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 const BOT_MODEL_LABELS = {
@@ -279,6 +280,7 @@ export default function ProfilePage() {
         .forEach(k => sessionStorage.removeItem(k))
       clearSessionCache()
       clearTokenCache()
+      disconnectSocket()
       await signOut()
       navigate('/play')
     } catch (err) {

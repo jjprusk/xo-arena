@@ -64,7 +64,7 @@ export default function FAQPage() {
   const [content, setContent] = useState(null)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
-  const [openSections, setOpenSections] = useState(new Set())
+  const [openSection, setOpenSection] = useState(null)
 
   useEffect(() => {
     fetch('/faq.md', { cache: 'no-store' })
@@ -99,11 +99,7 @@ export default function FAQPage() {
   }, [content, sections, query, searching])
 
   function toggleSection(i) {
-    setOpenSections(prev => {
-      const next = new Set(prev)
-      if (next.has(i)) next.delete(i); else next.add(i)
-      return next
-    })
+    setOpenSection(prev => prev === i ? null : i)
   }
 
   return (
@@ -178,7 +174,7 @@ export default function FAQPage() {
 
             {/* Accordion sections */}
             {sections.map(({ title }, i) => {
-              const isOpen = searching || openSections.has(i)
+              const isOpen = searching || openSection === i
               const id = slugify(title)
               return (
                 <div key={i} id={id} className="border-t" style={{ borderColor: 'var(--border-default)' }}>
