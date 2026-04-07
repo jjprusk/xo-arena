@@ -16,9 +16,10 @@ import { getInviteUrl } from './helpers.js'
 
 const BACKEND_URL  = process.env.BACKEND_URL  || 'http://localhost:3000'
 const ADMIN_TOKEN  = process.env.STRESS_ADMIN_TOKEN  // set via env — admin JWT
-const DRAIN_MS     = 8_000   // wait after abrupt disconnects for cleanup to fire
-const SNAPSHOT_MS  = 65_000  // just over one snapshot interval (60 s)
-const LEAK_WINDOW  = 3       // must match LEAK_WINDOW in resourceCounters.js
+const DRAIN_MS         = 8_000    // wait after abrupt disconnects for cleanup to fire
+const RECONNECT_MS     = 65_000   // just over RECONNECT_WINDOW_MS (60 s) in roomManager
+const SNAPSHOT_MS      = 65_000   // just over one snapshot interval (60 s)
+const LEAK_WINDOW      = 3        // must match LEAK_WINDOW in resourceCounters.js
 
 async function fetchHealth(request) {
   const resp = await request.get(`${BACKEND_URL}/api/v1/admin/health/sockets`, {
@@ -32,11 +33,13 @@ test.describe('Resource leak — baseline and churn', () => {
   test.setTimeout(120_000)
 
   test('socket and room counters return to baseline after connection churn', async ({ browser, request }) => {
+    test.setTimeout(RECONNECT_MS + 60_000)
+
     const baseline = await fetchHealth(request)
     const baselineSockets = baseline.latest?.sockets ?? 0
     const baselineRooms   = baseline.latest?.rooms   ?? 0
 
-    // Open 20 contexts and navigate to /play (triggers socket connect)
+    // Open 20 contexts and navigate to /play (triggers socket connect + auto-room creation)
     const CHURN_COUNT = 20
     const contexts = await Promise.all(
       Array.from({ length: CHURN_COUNT }, () => browser.newContext())
@@ -47,13 +50,17 @@ test.describe('Resource leak — baseline and churn', () => {
     // Abruptly close all contexts — simulates crash / network drop
     await Promise.all(contexts.map(ctx => ctx.close()))
 
-    // Wait for disconnect cleanup
+    // Sockets clean up quickly; check them after the short drain
     await new Promise(r => setTimeout(r, DRAIN_MS))
+    const afterSockets = await fetchHealth(request)
+    expect(afterSockets.latest.sockets).toBeLessThanOrEqual(baselineSockets + 1) // ±1 for admin browser
 
-    const after = await fetchHealth(request)
-    expect(after.latest.sockets).toBeLessThanOrEqual(baselineSockets + 1) // ±1 for admin browser
-    expect(after.latest.rooms).toBeLessThanOrEqual(baselineRooms)
-    expect(Object.values(after.alerts).some(Boolean)).toBe(false)
+    // Rooms linger for the 60 s reconnect window before being forfeited and closed.
+    // Wait for the full reconnect window to expire before asserting room count.
+    await new Promise(r => setTimeout(r, RECONNECT_MS))
+    const afterRooms = await fetchHealth(request)
+    expect(afterRooms.latest.rooms).toBeLessThanOrEqual(baselineRooms)
+    expect(Object.values(afterRooms.alerts).some(Boolean)).toBe(false)
   })
 
   test('room counter returns to zero after mid-game abrupt disconnect', async ({ browser, request }) => {
@@ -97,28 +104,36 @@ test.describe('Resource leak — leak detection', () => {
    * This test takes > 3 minutes by design — it's validating the alert mechanism.
    */
   test('leak detector fires after N consecutive rising snapshots', async ({ browser, request }) => {
-    test.setTimeout(SNAPSHOT_MS * LEAK_WINDOW + 60_000)
+    // Each batch opens BATCH_SIZE contexts and holds them. By opening a new batch
+    // after each snapshot interval, the socket count strictly increases across
+    // LEAK_WINDOW consecutive snapshots, which is what the detector requires.
+    test.setTimeout(SNAPSHOT_MS * (LEAK_WINDOW + 2) + 120_000)
 
-    const baseline = await fetchHealth(request)
+    const BATCH_SIZE = 5
+    const allHeld = []
 
-    // Open 10 contexts and hold them open — don't close
-    const HELD_COUNT = 10
-    const held = await Promise.all(
-      Array.from({ length: HELD_COUNT }, () => browser.newContext())
-    )
-    const pages = await Promise.all(held.map(ctx => ctx.newPage()))
-    await Promise.all(pages.map(p => p.goto('/play').catch(() => {})))
+    // Open one batch per snapshot interval so the count rises with each snapshot
+    for (let i = 0; i < LEAK_WINDOW; i++) {
+      const batch = await Promise.all(
+        Array.from({ length: BATCH_SIZE }, () => browser.newContext())
+      )
+      const pages = await Promise.all(batch.map(ctx => ctx.newPage()))
+      await Promise.all(pages.map(p => p.goto('/play').catch(() => {})))
+      allHeld.push(...batch)
 
-    // Wait for LEAK_WINDOW + 1 snapshot intervals to pass
-    await new Promise(r => setTimeout(r, SNAPSHOT_MS * (LEAK_WINDOW + 1)))
+      // Wait for the snapshot to fire before opening the next batch
+      if (i < LEAK_WINDOW - 1) await new Promise(r => setTimeout(r, SNAPSHOT_MS))
+    }
+
+    // Wait one more interval for the detector to evaluate the full window
+    await new Promise(r => setTimeout(r, SNAPSHOT_MS))
 
     const after = await fetchHealth(request)
     expect(after.alerts.sockets).toBe(true)
 
     // Cleanup — close held contexts; alert should auto-clear on next snapshot
-    await Promise.all(held.map(ctx => ctx.close()))
+    await Promise.all(allHeld.map(ctx => ctx.close()))
 
-    // Verify alert cleared
     await new Promise(r => setTimeout(r, SNAPSHOT_MS + DRAIN_MS))
     const cleared = await fetchHealth(request)
     expect(cleared.alerts.sockets).toBe(false)

@@ -37,6 +37,11 @@ class RoomManager {
    * Create a new room. Returns the room object.
    */
   createRoom({ hostSocketId, hostUserId = null, spectatorAllowed = true } = {}) {
+    // If this socket already owns a waiting room (e.g. StrictMode double-invoke),
+    // close the old one cleanly before creating a new one.
+    const existingSlug = this._socketToRoom.get(hostSocketId)
+    if (existingSlug) this.closeRoom(existingSlug)
+
     const name = this._pool.acquire()
     if (!name) throw new Error('No mountain names available')
     const slug = MountainNamePool.toSlug(name)
@@ -187,6 +192,17 @@ class RoomManager {
     }
 
     if (room.status === 'playing') {
+      const otherId = room.hostId === socketId ? room.guestId : room.hostId
+      const otherAlreadyDisconnected = otherId && room.disconnectTimers[otherId]
+
+      if (otherAlreadyDisconnected) {
+        // Both players disconnected — cancel the other forfeit timer and close immediately
+        clearTimeout(room.disconnectTimers[otherId])
+        delete room.disconnectTimers[otherId]
+        this.closeRoom(slug)
+        return { room, wasPlayer: true, roomClosed: true }
+      }
+
       const timer = setTimeout(() => {
         if (this._rooms.has(slug)) {
           const mark = room.playerMarks[socketId]
@@ -367,7 +383,14 @@ class RoomManager {
       }))
   }
 
-  get roomCount() { return this._rooms.size }
+  /** Active rooms only (waiting or playing) — finished rooms are in the stale sweep queue and not a leak risk. */
+  get roomCount() {
+    let count = 0
+    for (const room of this._rooms.values()) {
+      if (room.status === 'waiting' || room.status === 'playing') count++
+    }
+    return count
+  }
 }
 
 export const roomManager = new RoomManager()

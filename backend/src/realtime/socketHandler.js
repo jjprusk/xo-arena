@@ -109,6 +109,7 @@ export async function attachSocketIO(httpServer) {
     on('room:create', async ({ spectatorAllowed = true, authToken = null } = {}) => {
       try {
         const user = await resolveSocketUser(authToken)
+        if (!socket.connected) return  // disconnected while resolving auth
         const room = roomManager.createRoom({
           hostSocketId: socket.id,
           hostUserId: user?.id || null,
@@ -125,6 +126,7 @@ export async function attachSocketIO(httpServer) {
 
     on('room:join', async ({ slug, role = 'player', authToken = null }) => {
       const user = await resolveSocketUser(authToken)
+      if (!socket.connected) return  // disconnected while resolving auth
       if (role === 'spectator') {
         // First try PvP rooms, then bot game rooms
         if (roomManager.getRoom(slug)) {

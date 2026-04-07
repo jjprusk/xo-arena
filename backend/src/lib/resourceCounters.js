@@ -84,6 +84,8 @@ export function getAlerts() { return { ..._alerts } }
  */
 export function startSnapshotInterval(getRoomCount) {
   _roomCountFn = getRoomCount
+  // Take one immediately so the health endpoint always returns non-null data
+  takeSnapshot()
   const id = setInterval(takeSnapshot, SNAPSHOT_INTERVAL_MS)
   // Don't block process exit
   if (id.unref) id.unref()
