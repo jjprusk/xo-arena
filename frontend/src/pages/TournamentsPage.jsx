@@ -1,0 +1,296 @@
+import React, { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import { tournamentApi } from '../lib/tournamentApi.js'
+import { getToken } from '../lib/getToken.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
+
+// ── Status badge ─────────────────────────────────────────────────────────────
+
+const STATUS_STYLES = {
+  DRAFT:               { bg: 'var(--color-gray-100)',   text: 'var(--text-muted)',          label: 'Draft' },
+  REGISTRATION_OPEN:   { bg: 'var(--color-teal-50)',    text: 'var(--color-teal-700)',       label: 'Open' },
+  REGISTRATION_CLOSED: { bg: 'var(--color-amber-50)',   text: 'var(--color-amber-700)',      label: 'Reg Closed' },
+  IN_PROGRESS:         { bg: 'var(--color-blue-50)',    text: 'var(--color-blue-700)',       label: 'In Progress' },
+  COMPLETED:           { bg: 'var(--color-gray-100)',   text: 'var(--text-secondary)',       label: 'Completed' },
+  CANCELLED:           { bg: 'var(--color-red-50)',     text: 'var(--color-red-600)',        label: 'Cancelled' },
+}
+
+function StatusBadge({ status }) {
+  const s = STATUS_STYLES[status] ?? STATUS_STYLES.DRAFT
+  return (
+    <span
+      className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full"
+      style={{ backgroundColor: s.bg, color: s.text }}
+    >
+      {s.label}
+    </span>
+  )
+}
+
+// ── Filter bar ────────────────────────────────────────────────────────────────
+
+const FILTER_OPTIONS = [
+  { label: 'All',         value: '' },
+  { label: 'Open',        value: 'REGISTRATION_OPEN' },
+  { label: 'In Progress', value: 'IN_PROGRESS' },
+  { label: 'Completed',   value: 'COMPLETED' },
+]
+
+function FilterBar({ value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {FILTER_OPTIONS.map(opt => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors"
+          style={{
+            backgroundColor: value === opt.value ? 'var(--color-blue-600)' : 'var(--bg-surface)',
+            color:           value === opt.value ? 'white'                  : 'var(--text-secondary)',
+            borderColor:     value === opt.value ? 'var(--color-blue-600)' : 'var(--border-default)',
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── Registration button ───────────────────────────────────────────────────────
+
+function RegisterButton({ tournament, token, onSuccess }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr]   = useState(null)
+
+  async function handle(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    setBusy(true)
+    setErr(null)
+    try {
+      await tournamentApi.register(tournament.id, token)
+      onSuccess()
+    } catch (error) {
+      setErr(error.message || 'Failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <button
+        onClick={handle}
+        disabled={busy}
+        className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+        style={{ background: 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))' }}
+      >
+        {busy ? 'Joining…' : 'Register'}
+      </button>
+      {err && <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
+    </div>
+  )
+}
+
+// ── Tournament card ───────────────────────────────────────────────────────────
+
+function TournamentCard({ tournament, token, onRegistered }) {
+  const participantCount = tournament.participants?.length ?? tournament._count?.participants ?? 0
+  const max  = tournament.maxParticipants
+  const isOpen = tournament.status === 'REGISTRATION_OPEN'
+
+  return (
+    <Link
+      to={`/tournaments/${tournament.id}`}
+      className="block rounded-xl border transition-colors hover:bg-[var(--bg-surface-hover)] no-underline"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      <div className="p-4 space-y-3">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2
+              className="text-sm font-bold leading-tight truncate"
+              style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
+            >
+              {tournament.name}
+            </h2>
+            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+              {tournament.game?.toUpperCase()} · {tournament.mode} · {tournament.bracketType?.replace('_', ' ')}
+            </p>
+          </div>
+          <StatusBadge status={tournament.status} />
+        </div>
+
+        {/* Description */}
+        {tournament.description && (
+          <p className="text-xs line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+            {tournament.description}
+          </p>
+        )}
+
+        {/* Meta row */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+          <span>
+            {participantCount}{max ? `/${max}` : ''} players
+          </span>
+          {tournament.bestOfN && (
+            <span>Best of {tournament.bestOfN}</span>
+          )}
+          {tournament.startTime && (
+            <span>
+              Starts {new Date(tournament.startTime).toLocaleString()}
+            </span>
+          )}
+        </div>
+
+        {/* Registration window */}
+        {tournament.registrationOpenAt && (
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Reg: {new Date(tournament.registrationOpenAt).toLocaleString()}
+            {tournament.registrationCloseAt && (
+              <> – {new Date(tournament.registrationCloseAt).toLocaleString()}</>
+            )}
+          </p>
+        )}
+
+        {/* Register button */}
+        {isOpen && token && (
+          <div onClick={e => e.preventDefault()}>
+            <RegisterButton
+              tournament={tournament}
+              token={token}
+              onSuccess={onRegistered}
+            />
+          </div>
+        )}
+      </div>
+    </Link>
+  )
+}
+
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+
+function CardSkeleton() {
+  return (
+    <div
+      className="rounded-xl border p-4 space-y-3 animate-pulse"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+    >
+      <div className="h-4 rounded w-2/3" style={{ backgroundColor: 'var(--border-default)' }} />
+      <div className="h-3 rounded w-1/2" style={{ backgroundColor: 'var(--border-default)' }} />
+      <div className="h-3 rounded w-3/4" style={{ backgroundColor: 'var(--border-default)' }} />
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function TournamentsPage() {
+  const { data: session } = useOptimisticSession()
+  const [tournaments, setTournaments] = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [token, setToken]             = useState(null)
+
+  // Subscribe to live tournament events so we can refresh on changes
+  const { lastEvent } = useTournamentSocket()
+
+  // Fetch token once
+  useEffect(() => {
+    if (session?.user?.id) {
+      getToken().then(setToken).catch(() => {})
+    } else {
+      setToken(null)
+    }
+  }, [session?.user?.id])
+
+  const load = useCallback(async (filter) => {
+    setLoading(true)
+    setError(null)
+    try {
+      // Exclude DRAFT from the public list by either filtering server-side or client-side
+      const params = {}
+      if (filter) params.status = filter
+      const data = await tournamentApi.list(params, token)
+      const list = Array.isArray(data) ? data : (data.tournaments ?? [])
+      // Hide DRAFT tournaments on public page
+      setTournaments(list.filter(t => t.status !== 'DRAFT'))
+    } catch {
+      setError('Failed to load tournaments.')
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => { load(statusFilter) }, [statusFilter, load])
+
+  // Refresh when a tournament event arrives
+  useEffect(() => {
+    if (lastEvent) load(statusFilter)
+  }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleFilterChange(val) {
+    setStatusFilter(val)
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-5">
+      {/* Page header */}
+      <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <h1
+          className="text-3xl font-bold"
+          style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}
+        >
+          Tournaments
+        </h1>
+        <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+          Compete in structured brackets and climb the ranks.
+        </p>
+      </div>
+
+      {/* Filter bar */}
+      <FilterBar value={statusFilter} onChange={handleFilterChange} />
+
+      {/* Error */}
+      {error && (
+        <p className="text-sm text-center py-4" style={{ color: 'var(--color-red-600)' }}>{error}</p>
+      )}
+
+      {/* Loading skeletons */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <CardSkeleton key={i} />)}
+        </div>
+      )}
+
+      {/* Tournament grid */}
+      {!loading && tournaments.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tournaments.map(t => (
+            <TournamentCard
+              key={t.id}
+              tournament={t}
+              token={token}
+              onRegistered={() => load(statusFilter)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && tournaments.length === 0 && !error && (
+        <div className="text-center py-16 space-y-2">
+          <p className="text-3xl">⊕</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>No tournaments found</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {statusFilter ? 'Try a different filter.' : 'Check back soon for upcoming events.'}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}

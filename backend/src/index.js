@@ -26,6 +26,7 @@ import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
 import { getSystemConfig } from './services/mlService.js'
 import { startActivityFlushJob } from './services/activityService.js'
+import { startTournamentBridge } from './lib/tournamentBridge.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -95,6 +96,7 @@ attachSocketIO(server).then((io) => {
   app.set('io', io)
   mlSetIO(io)
   logSetIO(io)
+  startTournamentBridge(io)
   server.listen(PORT, () => {
     logger.info(`XO Arena backend running on port ${PORT}`)
   })

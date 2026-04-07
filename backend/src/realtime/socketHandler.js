@@ -317,6 +317,14 @@ export async function attachSocketIO(httpServer) {
       if (sessionId) socket.leave(`ml:session:${sessionId}`)
     })
 
+    // ── User-specific room (for tournament and other personal events) ─────────
+    on('user:subscribe', async ({ authToken } = {}) => {
+      const user = await resolveSocketUser(authToken)
+      if (!user) return
+      socket.join(`user:${user.id}`)
+      logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
+    })
+
     // ── Disconnect ──────────────────────────────────────────────────
 
     socket.on('disconnect', () => {

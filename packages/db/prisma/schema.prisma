@@ -40,13 +40,14 @@ model User {
   creditsBpc        Int              @default(0)
   creditsTc         Int              @default(0)
   emailAchievements Boolean          @default(false)
-  gamesAsPlayer1  Game[]           @relation("Player1Games")
-  gamesAsPlayer2  Game[]           @relation("Player2Games")
-  gamesWon        Game[]           @relation("WinnerGames")
-  eloHistory      UserEloHistory[]
-  userRoles       UserRole[]
-  notifications   UserNotification[]
-  feedback        Feedback[]
+  gamesAsPlayer1        Game[]                  @relation("Player1Games")
+  gamesAsPlayer2        Game[]                  @relation("Player2Games")
+  gamesWon              Game[]                  @relation("WinnerGames")
+  eloHistory            UserEloHistory[]
+  userRoles             UserRole[]
+  notifications         UserNotification[]
+  feedback              Feedback[]
+  tournamentParticipants TournamentParticipant[]
 
   @@map("users")
 }
@@ -132,11 +133,15 @@ model Game {
   startedAt          DateTime
   endedAt            DateTime    @default(now())
   roomName           String?
+  tournamentId       String?
+  tournamentMatchId  String?
   aiErrors           AIError[]
-  player1            User        @relation("Player1Games", fields: [player1Id], references: [id])
-  player2            User?       @relation("Player2Games", fields: [player2Id], references: [id])
-  winner             User?       @relation("WinnerGames", fields: [winnerId], references: [id])
+  player1            User             @relation("Player1Games", fields: [player1Id], references: [id])
+  player2            User?            @relation("Player2Games", fields: [player2Id], references: [id])
+  winner             User?            @relation("WinnerGames", fields: [winnerId], references: [id])
   moves              Move[]
+  tournament         Tournament?      @relation(fields: [tournamentId], references: [id])
+  tournamentMatch    TournamentMatch? @relation(fields: [tournamentMatchId], references: [id])
 
   @@index([outcome])
   @@index([aiImplementationId])
@@ -144,6 +149,7 @@ model Game {
   @@index([endedAt])
   @@index([player1Id])
   @@index([player2Id])
+  @@index([tournamentId])
   @@map("games")
 }
 
@@ -512,4 +518,154 @@ enum EpisodeOutcome {
   WIN
   LOSS
   DRAW
+}
+
+// ─── Tournament (Phase 1) ────────────────────────────────────────────────────
+
+enum TournamentMode {
+  PVP
+  BOT_VS_BOT
+  MIXED
+}
+
+enum TournamentFormat {
+  OPEN
+  PLANNED
+  FLASH
+}
+
+enum BracketType {
+  SINGLE_ELIM
+  ROUND_ROBIN
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ParticipantStatus {
+  REGISTERED
+  ACTIVE
+  ELIMINATED
+  WITHDRAWN
+}
+
+enum MatchStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum RoundStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ResultNotifPref {
+  AS_PLAYED
+  END_OF_TOURNAMENT
+}
+
+model Tournament {
+  id                        String             @id @default(cuid())
+  name                      String
+  description               String?
+  game                      String
+  mode                      TournamentMode
+  format                    TournamentFormat
+  bracketType               BracketType
+  status                    TournamentStatus   @default(DRAFT)
+  minParticipants           Int                @default(2)
+  maxParticipants           Int?
+  bestOfN                   Int                @default(3)
+  botMinGamesPlayed         Int?
+  allowNonCompetitiveBots   Boolean            @default(false)
+  allowSpectators           Boolean            @default(true)
+  replayRetentionDays       Int                @default(30)
+  startTime                 DateTime?
+  endTime                   DateTime?
+  registrationOpenAt        DateTime?
+  registrationCloseAt       DateTime?
+  noticePeriodMinutes       Int?
+  durationMinutes           Int?
+  isRecurring               Boolean            @default(false)
+  autoOptOutAfterMissed     Int?
+  createdById               String
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+
+  participants              TournamentParticipant[]
+  rounds                    TournamentRound[]
+  games                     Game[]
+
+  @@index([status])
+  @@index([game])
+  @@index([createdById])
+  @@map("tournaments")
+}
+
+model TournamentParticipant {
+  id                String            @id @default(cuid())
+  tournamentId      String
+  userId            String
+  seedPosition      Int?
+  eloAtRegistration Float?
+  status            ParticipantStatus @default(REGISTERED)
+  resultNotifPref   ResultNotifPref   @default(AS_PLAYED)
+  finalPosition     Int?
+  finalPositionPct  Float?
+  registeredAt      DateTime          @default(now())
+
+  tournament        Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
+  @@map("tournament_participants")
+}
+
+model TournamentRound {
+  id           String      @id @default(cuid())
+  tournamentId String
+  roundNumber  Int
+  status       RoundStatus @default(PENDING)
+  createdAt    DateTime    @default(now())
+
+  tournament   Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  matches      TournamentMatch[]
+
+  @@unique([tournamentId, roundNumber])
+  @@index([tournamentId])
+  @@map("tournament_rounds")
+}
+
+model TournamentMatch {
+  id             String      @id @default(cuid())
+  tournamentId   String
+  roundId        String
+  participant1Id String?
+  participant2Id String?
+  winnerId       String?
+  status         MatchStatus @default(PENDING)
+  drawResolution String?
+  p1Wins         Int         @default(0)
+  p2Wins         Int         @default(0)
+  drawGames      Int         @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime    @default(now())
+
+  round          TournamentRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  games          Game[]
+
+  @@index([tournamentId])
+  @@index([roundId])
+  @@map("tournament_matches")
 }

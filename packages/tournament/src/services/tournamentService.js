@@ -1,0 +1,733 @@
+/**
+ * Tournament service — orchestration layer.
+ *
+ * Handles all DB operations for tournament lifecycle:
+ * create, publish, cancel, register, withdraw, start, completeMatch.
+ */
+
+import db from '@xo-arena/db'
+import logger from '../logger.js'
+import { generateBracket } from '../lib/bracket.js'
+import { publishEvent } from '../lib/redis.js'
+
+// ─── Create ──────────────────────────────────────────────────────────────────
+
+/**
+ * Create a tournament in DRAFT status.
+ *
+ * @param {object} data - Tournament fields
+ * @param {string} createdByBetterAuthId - betterAuthId of the creator
+ * @returns {Promise<object>} Created tournament record
+ */
+export async function createTournament(data, createdByBetterAuthId) {
+  // Resolve domain user ID
+  const creator = await db.user.findUnique({
+    where: { betterAuthId: createdByBetterAuthId },
+    select: { id: true },
+  })
+  if (!creator) throw new Error('Creator user not found')
+
+  const tournament = await db.tournament.create({
+    data: {
+      name: data.name,
+      description: data.description ?? null,
+      game: data.game,
+      mode: data.mode,
+      format: data.format,
+      bracketType: data.bracketType ?? 'SINGLE_ELIM',
+      status: 'DRAFT',
+      minParticipants: data.minParticipants ?? 2,
+      maxParticipants: data.maxParticipants ?? null,
+      bestOfN: data.bestOfN ?? 3,
+      botMinGamesPlayed: data.botMinGamesPlayed ?? null,
+      allowNonCompetitiveBots: data.allowNonCompetitiveBots ?? false,
+      allowSpectators: data.allowSpectators ?? true,
+      replayRetentionDays: data.replayRetentionDays ?? 30,
+      startTime: data.startTime ? new Date(data.startTime) : null,
+      endTime: data.endTime ? new Date(data.endTime) : null,
+      registrationOpenAt: data.registrationOpenAt ? new Date(data.registrationOpenAt) : null,
+      registrationCloseAt: data.registrationCloseAt ? new Date(data.registrationCloseAt) : null,
+      noticePeriodMinutes: data.noticePeriodMinutes ?? null,
+      durationMinutes: data.durationMinutes ?? null,
+      isRecurring: data.isRecurring ?? false,
+      autoOptOutAfterMissed: data.autoOptOutAfterMissed ?? null,
+      createdById: creator.id,
+    },
+  })
+
+  logger.info({ tournamentId: tournament.id }, 'Tournament created')
+  return tournament
+}
+
+// ─── Update ──────────────────────────────────────────────────────────────────
+
+/**
+ * Update a tournament (only allowed in DRAFT status).
+ *
+ * @param {string} id - Tournament ID
+ * @param {object} data - Fields to update
+ * @param {string} actorBetterAuthId - betterAuthId of actor
+ * @returns {Promise<object>} Updated tournament record
+ */
+export async function updateTournament(id, data, actorBetterAuthId) {
+  const tournament = await db.tournament.findUnique({ where: { id } })
+  if (!tournament) throw Object.assign(new Error('Tournament not found'), { status: 404 })
+  if (tournament.status !== 'DRAFT') {
+    throw Object.assign(new Error('Tournament can only be updated in DRAFT status'), { status: 409 })
+  }
+
+  const allowedFields = [
+    'name', 'description', 'game', 'mode', 'format', 'bracketType',
+    'minParticipants', 'maxParticipants', 'bestOfN', 'botMinGamesPlayed',
+    'allowNonCompetitiveBots', 'allowSpectators', 'replayRetentionDays',
+    'startTime', 'endTime', 'registrationOpenAt', 'registrationCloseAt',
+    'noticePeriodMinutes', 'durationMinutes', 'isRecurring', 'autoOptOutAfterMissed',
+  ]
+
+  const updateData = {}
+  for (const field of allowedFields) {
+    if (field in data) {
+      if (['startTime', 'endTime', 'registrationOpenAt', 'registrationCloseAt'].includes(field)) {
+        updateData[field] = data[field] ? new Date(data[field]) : null
+      } else {
+        updateData[field] = data[field]
+      }
+    }
+  }
+
+  const updated = await db.tournament.update({ where: { id }, data: updateData })
+  logger.info({ tournamentId: id, actorBetterAuthId }, 'Tournament updated')
+  return updated
+}
+
+// ─── Publish ─────────────────────────────────────────────────────────────────
+
+/**
+ * Publish a tournament: DRAFT → REGISTRATION_OPEN.
+ *
+ * @param {string} id - Tournament ID
+ * @param {string} actorBetterAuthId - betterAuthId of actor
+ * @returns {Promise<object>} Updated tournament record
+ */
+export async function publishTournament(id, actorBetterAuthId) {
+  const tournament = await db.tournament.findUnique({ where: { id } })
+  if (!tournament) throw Object.assign(new Error('Tournament not found'), { status: 404 })
+  if (tournament.status !== 'DRAFT') {
+    throw Object.assign(new Error('Only DRAFT tournaments can be published'), { status: 409 })
+  }
+
+  const updated = await db.tournament.update({
+    where: { id },
+    data: { status: 'REGISTRATION_OPEN' },
+  })
+
+  logger.info({ tournamentId: id, actorBetterAuthId }, 'Tournament published')
+  return updated
+}
+
+// ─── Cancel ──────────────────────────────────────────────────────────────────
+
+/**
+ * Cancel a tournament.
+ * Publishes tournament:cancelled Redis event with all participant user IDs.
+ *
+ * @param {string} id - Tournament ID
+ * @param {string} actorBetterAuthId - betterAuthId of actor (or 'system' for auto-cancel)
+ * @returns {Promise<object>} Updated tournament record
+ */
+export async function cancelTournament(id, actorBetterAuthId) {
+  const tournament = await db.tournament.findUnique({
+    where: { id },
+    include: {
+      participants: {
+        where: { status: { notIn: ['WITHDRAWN', 'ELIMINATED'] } },
+        include: { user: { select: { betterAuthId: true } } },
+      },
+    },
+  })
+  if (!tournament) throw Object.assign(new Error('Tournament not found'), { status: 404 })
+
+  const terminalStatuses = ['COMPLETED', 'CANCELLED']
+  if (terminalStatuses.includes(tournament.status)) {
+    throw Object.assign(new Error('Tournament is already in a terminal state'), { status: 409 })
+  }
+
+  const updated = await db.tournament.update({
+    where: { id },
+    data: { status: 'CANCELLED' },
+  })
+
+  const participantUserIds = tournament.participants
+    .map(p => p.user?.betterAuthId)
+    .filter(Boolean)
+
+  await publishEvent('tournament:cancelled', {
+    tournamentId: id,
+    participantUserIds,
+  })
+
+  logger.info({ tournamentId: id, actorBetterAuthId }, 'Tournament cancelled')
+  return updated
+}
+
+// ─── Register ────────────────────────────────────────────────────────────────
+
+/**
+ * Register a participant in a tournament.
+ *
+ * @param {string} tournamentId - Tournament ID
+ * @param {string} betterAuthId - betterAuthId of the user registering
+ * @returns {Promise<object>} Created TournamentParticipant record
+ */
+export async function registerParticipant(tournamentId, betterAuthId) {
+  // Look up the domain user
+  const user = await db.user.findUnique({
+    where: { betterAuthId },
+    select: { id: true, eloRating: true },
+  })
+  if (!user) throw Object.assign(new Error('User not found'), { status: 404 })
+
+  // Fetch tournament with participant count
+  const tournament = await db.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      _count: { select: { participants: { where: { status: { notIn: ['WITHDRAWN'] } } } } },
+    },
+  })
+  if (!tournament) throw Object.assign(new Error('Tournament not found'), { status: 404 })
+
+  if (tournament.status !== 'REGISTRATION_OPEN') {
+    throw Object.assign(new Error('Tournament is not open for registration'), { status: 409 })
+  }
+
+  // Check maxParticipants
+  if (
+    tournament.maxParticipants !== null &&
+    tournament._count.participants >= tournament.maxParticipants
+  ) {
+    throw Object.assign(new Error('Tournament is full'), { status: 409 })
+  }
+
+  // Check for existing active registration
+  const existing = await db.tournamentParticipant.findUnique({
+    where: { tournamentId_userId: { tournamentId, userId: user.id } },
+  })
+  if (existing) {
+    if (existing.status !== 'WITHDRAWN') {
+      throw Object.assign(new Error('Already registered for this tournament'), { status: 409 })
+    }
+    // Re-activate a withdrawn registration
+    const reactivated = await db.tournamentParticipant.update({
+      where: { id: existing.id },
+      data: {
+        status: 'REGISTERED',
+        eloAtRegistration: user.eloRating,
+        registeredAt: new Date(),
+      },
+    })
+    logger.info({ tournamentId, userId: user.id }, 'Participant re-registered')
+    return reactivated
+  }
+
+  const participant = await db.tournamentParticipant.create({
+    data: {
+      tournamentId,
+      userId: user.id,
+      eloAtRegistration: user.eloRating,
+      status: 'REGISTERED',
+    },
+  })
+
+  logger.info({ tournamentId, userId: user.id }, 'Participant registered')
+  return participant
+}
+
+// ─── Withdraw ────────────────────────────────────────────────────────────────
+
+/**
+ * Withdraw a participant from a tournament.
+ *
+ * @param {string} tournamentId - Tournament ID
+ * @param {string} betterAuthId - betterAuthId of the user withdrawing
+ * @returns {Promise<object>} Updated TournamentParticipant record
+ */
+export async function withdrawParticipant(tournamentId, betterAuthId) {
+  const user = await db.user.findUnique({
+    where: { betterAuthId },
+    select: { id: true },
+  })
+  if (!user) throw Object.assign(new Error('User not found'), { status: 404 })
+
+  const tournament = await db.tournament.findUnique({ where: { id: tournamentId } })
+  if (!tournament) throw Object.assign(new Error('Tournament not found'), { status: 404 })
+
+  const allowedStatuses = ['REGISTRATION_OPEN', 'DRAFT']
+  if (!allowedStatuses.includes(tournament.status)) {
+    throw Object.assign(
+      new Error('Cannot withdraw after registration has closed'),
+      { status: 409 }
+    )
+  }
+
+  const participant = await db.tournamentParticipant.findUnique({
+    where: { tournamentId_userId: { tournamentId, userId: user.id } },
+  })
+  if (!participant || participant.status === 'WITHDRAWN') {
+    throw Object.assign(new Error('Not registered for this tournament'), { status: 404 })
+  }
+
+  const updated = await db.tournamentParticipant.update({
+    where: { id: participant.id },
+    data: { status: 'WITHDRAWN' },
+  })
+
+  logger.info({ tournamentId, userId: user.id }, 'Participant withdrawn')
+  return updated
+}
+
+// ─── Start ───────────────────────────────────────────────────────────────────
+
+/**
+ * Start a tournament: close registration, seed participants, generate bracket,
+ * set IN_PROGRESS. Auto-cancels if minParticipants not met.
+ *
+ * @param {string} id - Tournament ID
+ * @param {string} actorBetterAuthId - betterAuthId of actor
+ * @returns {Promise<{ tournament, rounds, matches }>}
+ */
+export async function startTournament(id, actorBetterAuthId) {
+  const tournament = await db.tournament.findUnique({
+    where: { id },
+    include: {
+      participants: {
+        where: { status: { notIn: ['WITHDRAWN'] } },
+        include: { user: { select: { betterAuthId: true, eloRating: true } } },
+      },
+    },
+  })
+  if (!tournament) throw Object.assign(new Error('Tournament not found'), { status: 404 })
+
+  const allowedStatuses = ['REGISTRATION_OPEN', 'REGISTRATION_CLOSED']
+  if (!allowedStatuses.includes(tournament.status)) {
+    throw Object.assign(new Error('Tournament cannot be started in its current state'), { status: 409 })
+  }
+
+  // Check minParticipants
+  if (tournament.participants.length < tournament.minParticipants) {
+    logger.warn(
+      { tournamentId: id, count: tournament.participants.length, min: tournament.minParticipants },
+      'Tournament auto-cancelled — insufficient participants'
+    )
+    await cancelTournament(id, 'system')
+    throw Object.assign(
+      new Error(`Insufficient participants (${tournament.participants.length}/${tournament.minParticipants}) — tournament cancelled`),
+      { status: 422 }
+    )
+  }
+
+  // Close registration
+  await db.tournament.update({
+    where: { id },
+    data: { status: 'REGISTRATION_CLOSED' },
+  })
+
+  // Seed participants (sorted by eloAtRegistration descending)
+  const participantsForBracket = tournament.participants.map(p => ({
+    id: p.id,
+    userId: p.userId,
+    eloAtRegistration: p.eloAtRegistration ?? 1200,
+  }))
+
+  // Generate bracket
+  const bracketRounds = generateBracket(participantsForBracket)
+
+  // Persist rounds and matches
+  const createdRounds = []
+  const createdMatches = []
+
+  for (const roundDef of bracketRounds) {
+    const round = await db.tournamentRound.create({
+      data: {
+        tournamentId: id,
+        roundNumber: roundDef.roundNumber,
+        status: 'PENDING',
+      },
+    })
+    createdRounds.push(round)
+
+    for (const matchDef of roundDef.matches) {
+      const match = await db.tournamentMatch.create({
+        data: {
+          tournamentId: id,
+          roundId: round.id,
+          participant1Id: matchDef.participant1Id,
+          participant2Id: matchDef.participant2Id,
+          status: 'PENDING',
+          p1Wins: 0,
+          p2Wins: 0,
+          drawGames: 0,
+        },
+      })
+      createdMatches.push(match)
+    }
+  }
+
+  // Set tournament IN_PROGRESS
+  const updatedTournament = await db.tournament.update({
+    where: { id },
+    data: { status: 'IN_PROGRESS' },
+  })
+
+  // Auto-complete BYE matches in round 1 and set round 1 IN_PROGRESS
+  const round1 = createdRounds[0]
+  if (round1) {
+    await db.tournamentRound.update({
+      where: { id: round1.id },
+      data: { status: 'IN_PROGRESS' },
+    })
+
+    const round1Matches = createdMatches.filter(m => m.roundId === round1.id)
+    for (const match of round1Matches) {
+      if (match.participant1Id && !match.participant2Id) {
+        // BYE — participant1 auto-advances
+        await db.tournamentMatch.update({
+          where: { id: match.id },
+          data: {
+            status: 'COMPLETED',
+            winnerId: match.participant1Id,
+            completedAt: new Date(),
+          },
+        })
+
+        // Mark participant1 as ACTIVE (they're in the tournament)
+        await db.tournamentParticipant.update({
+          where: { id: match.participant1Id },
+          data: { status: 'ACTIVE' },
+        })
+
+        // Advance to next round immediately
+        await _advanceWinner(
+          match.participant1Id,
+          round1.id,
+          match.id,
+          id,
+          createdRounds,
+          createdMatches
+        )
+
+        // Publish match:ready for non-BYE matches will happen below
+      } else if (match.participant1Id && match.participant2Id) {
+        // Real match — set to IN_PROGRESS and publish event
+        await db.tournamentMatch.update({
+          where: { id: match.id },
+          data: { status: 'IN_PROGRESS' },
+        })
+
+        const p1 = tournament.participants.find(p => p.id === match.participant1Id)
+        const p2 = tournament.participants.find(p => p.id === match.participant2Id)
+
+        await publishEvent('tournament:match:ready', {
+          tournamentId: id,
+          matchId: match.id,
+          participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
+          participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+        })
+      }
+    }
+  }
+
+  logger.info({ tournamentId: id, actorBetterAuthId }, 'Tournament started')
+  return { tournament: updatedTournament, rounds: createdRounds, matches: createdMatches }
+}
+
+// ─── Complete Match ───────────────────────────────────────────────────────────
+
+/**
+ * Complete a match: record result, advance winner, check round/tournament completion.
+ *
+ * @param {string} matchId - TournamentMatch ID
+ * @param {string} winnerId - participant ID of the winner
+ * @param {{ p1Wins: number, p2Wins: number, drawGames: number, drawResolution?: string }} result
+ * @returns {Promise<{ match, tournament }>}
+ */
+export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGames, drawResolution }) {
+  const match = await db.tournamentMatch.findUnique({
+    where: { id: matchId },
+    include: {
+      round: {
+        include: {
+          tournament: true,
+          matches: true,
+        },
+      },
+    },
+  })
+  if (!match) throw Object.assign(new Error('Match not found'), { status: 404 })
+  if (match.status === 'COMPLETED') {
+    throw Object.assign(new Error('Match is already completed'), { status: 409 })
+  }
+
+  const tournament = match.round.tournament
+
+  // Update match to COMPLETED
+  await db.tournamentMatch.update({
+    where: { id: matchId },
+    data: {
+      status: 'COMPLETED',
+      winnerId,
+      p1Wins: p1Wins ?? 0,
+      p2Wins: p2Wins ?? 0,
+      drawGames: drawGames ?? 0,
+      drawResolution: drawResolution ?? null,
+      completedAt: new Date(),
+    },
+  })
+
+  // Mark loser as ELIMINATED
+  const loserId = winnerId === match.participant1Id ? match.participant2Id : match.participant1Id
+  if (loserId) {
+    await db.tournamentParticipant.update({
+      where: { id: loserId },
+      data: { status: 'ELIMINATED' },
+    })
+  }
+
+  // Mark winner as ACTIVE (if not already)
+  if (winnerId) {
+    await db.tournamentParticipant.update({
+      where: { id: winnerId },
+      data: { status: 'ACTIVE' },
+    })
+  }
+
+  // Fetch all rounds for this tournament (needed for advancement)
+  const allRounds = await db.tournamentRound.findMany({
+    where: { tournamentId: tournament.id },
+    orderBy: { roundNumber: 'asc' },
+  })
+  const allMatches = await db.tournamentMatch.findMany({
+    where: { tournamentId: tournament.id },
+  })
+
+  // Advance winner to the next round
+  if (winnerId) {
+    await _advanceWinner(winnerId, match.roundId, matchId, tournament.id, allRounds, allMatches)
+  }
+
+  // Check if the current round is complete
+  const currentRoundMatches = allMatches.filter(m => m.roundId === match.roundId)
+  const updatedCurrentMatch = { ...currentRoundMatches.find(m => m.id === matchId), status: 'COMPLETED' }
+  const allCurrentRoundDone = currentRoundMatches.every(
+    m => m.id === matchId ? true : m.status === 'COMPLETED'
+  )
+
+  let updatedTournament = tournament
+
+  if (allCurrentRoundDone) {
+    // Mark current round completed
+    await db.tournamentRound.update({
+      where: { id: match.roundId },
+      data: { status: 'COMPLETED' },
+    })
+
+    const currentRound = allRounds.find(r => r.id === match.roundId)
+    const nextRound = allRounds.find(r => r.roundNumber === (currentRound?.roundNumber ?? 0) + 1)
+
+    if (nextRound) {
+      // Set next round IN_PROGRESS
+      await db.tournamentRound.update({
+        where: { id: nextRound.id },
+        data: { status: 'IN_PROGRESS' },
+      })
+
+      // Set next round matches to IN_PROGRESS and publish match:ready events
+      const nextRoundMatches = allMatches.filter(m => m.roundId === nextRound.id)
+      for (const nextMatch of nextRoundMatches) {
+        // Re-fetch to get updated participant IDs
+        const freshMatch = await db.tournamentMatch.findUnique({ where: { id: nextMatch.id } })
+        if (freshMatch?.participant1Id && freshMatch?.participant2Id) {
+          await db.tournamentMatch.update({
+            where: { id: freshMatch.id },
+            data: { status: 'IN_PROGRESS' },
+          })
+
+          const p1 = await db.tournamentParticipant.findUnique({
+            where: { id: freshMatch.participant1Id },
+            include: { user: { select: { betterAuthId: true } } },
+          })
+          const p2 = await db.tournamentParticipant.findUnique({
+            where: { id: freshMatch.participant2Id },
+            include: { user: { select: { betterAuthId: true } } },
+          })
+
+          await publishEvent('tournament:match:ready', {
+            tournamentId: tournament.id,
+            matchId: freshMatch.id,
+            participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
+            participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+          })
+        }
+      }
+    } else {
+      // No next round — this was the final round → tournament COMPLETED
+      updatedTournament = await _completeTournament(tournament.id)
+    }
+  }
+
+  const updatedMatch = await db.tournamentMatch.findUnique({ where: { id: matchId } })
+  return { match: updatedMatch, tournament: updatedTournament }
+}
+
+// ─── Internal helpers ────────────────────────────────────────────────────────
+
+/**
+ * Advance a winner to the next round's match.
+ * Finds the current match's position in the round and places the winner
+ * in the corresponding slot of the next round match.
+ *
+ * @param {string} winnerId - participant ID
+ * @param {string} currentRoundId - current round DB ID
+ * @param {string} currentMatchId - current match DB ID
+ * @param {string} tournamentId
+ * @param {object[]} allRounds - sorted by roundNumber asc
+ * @param {object[]} allMatches
+ */
+async function _advanceWinner(winnerId, currentRoundId, currentMatchId, tournamentId, allRounds, allMatches) {
+  const currentRound = allRounds.find(r => r.id === currentRoundId)
+  if (!currentRound) return
+
+  const nextRound = allRounds.find(r => r.roundNumber === currentRound.roundNumber + 1)
+  if (!nextRound) return // Final round — no advancement needed
+
+  // Determine position of current match within its round
+  const currentRoundMatches = allMatches
+    .filter(m => m.roundId === currentRoundId)
+    .sort((a, b) => a.createdAt > b.createdAt ? 1 : -1)
+
+  const matchIndex = currentRoundMatches.findIndex(m => m.id === currentMatchId)
+  if (matchIndex === -1) return
+
+  // Next round match index = Math.floor(matchIndex / 2)
+  const nextMatchIndex = Math.floor(matchIndex / 2)
+  // Whether winner goes into participant1 or participant2 slot
+  const isParticipant1Slot = matchIndex % 2 === 0
+
+  const nextRoundMatches = allMatches
+    .filter(m => m.roundId === nextRound.id)
+    .sort((a, b) => a.createdAt > b.createdAt ? 1 : -1)
+
+  const nextMatch = nextRoundMatches[nextMatchIndex]
+  if (!nextMatch) return
+
+  await db.tournamentMatch.update({
+    where: { id: nextMatch.id },
+    data: isParticipant1Slot
+      ? { participant1Id: winnerId }
+      : { participant2Id: winnerId },
+  })
+}
+
+/**
+ * Complete a tournament: set status COMPLETED, record final positions for all participants.
+ *
+ * @param {string} tournamentId
+ * @returns {Promise<object>} Updated tournament
+ */
+async function _completeTournament(tournamentId) {
+  // Determine final standings based on elimination round
+  // Winner of the final match = 1st place
+  // All other participants ranked by how far they got (later rounds = better placement)
+  const allRounds = await db.tournamentRound.findMany({
+    where: { tournamentId },
+    orderBy: { roundNumber: 'asc' },
+  })
+  const allMatches = await db.tournamentMatch.findMany({
+    where: { tournamentId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const participants = await db.tournamentParticipant.findMany({
+    where: { tournamentId, status: { notIn: ['WITHDRAWN'] } },
+    include: { user: { select: { betterAuthId: true } } },
+  })
+
+  const totalRounds = allRounds.length
+
+  // Build a map: participantId → last round they participated in
+  const participantLastRound = new Map()
+
+  for (const match of allMatches) {
+    if (match.status !== 'COMPLETED') continue
+    const round = allRounds.find(r => r.id === match.roundId)
+    if (!round) continue
+
+    const updateIfLater = (pid) => {
+      if (!pid) return
+      const current = participantLastRound.get(pid) ?? 0
+      if (round.roundNumber > current) {
+        participantLastRound.set(pid, round.roundNumber)
+      }
+    }
+    updateIfLater(match.participant1Id)
+    updateIfLater(match.participant2Id)
+    // Winner gets credit for advancing (last round = totalRounds for the champion)
+    if (match.winnerId) {
+      const winnerCurrent = participantLastRound.get(match.winnerId) ?? 0
+      if (round.roundNumber >= winnerCurrent) {
+        participantLastRound.set(match.winnerId, round.roundNumber + 0.5) // winner of round slightly higher
+      }
+    }
+  }
+
+  // Find the overall tournament winner (winner of the last round's match)
+  const finalRound = allRounds[allRounds.length - 1]
+  const finalMatch = allMatches.find(m => m.roundId === finalRound?.id && m.status === 'COMPLETED')
+  const tournamentWinnerId = finalMatch?.winnerId ?? null
+
+  // Sort participants: tournament winner first, then by last round descending
+  const ranked = [...participants].sort((a, b) => {
+    if (a.id === tournamentWinnerId) return -1
+    if (b.id === tournamentWinnerId) return 1
+    const aRound = participantLastRound.get(a.id) ?? 0
+    const bRound = participantLastRound.get(b.id) ?? 0
+    return bRound - aRound
+  })
+
+  const totalParticipants = ranked.length
+
+  // Assign final positions and update DB
+  const finalStandings = []
+  for (let i = 0; i < ranked.length; i++) {
+    const p = ranked[i]
+    const position = i + 1
+    const positionPct = totalParticipants > 1
+      ? ((totalParticipants - position) / (totalParticipants - 1)) * 100
+      : 100
+
+    await db.tournamentParticipant.update({
+      where: { id: p.id },
+      data: {
+        finalPosition: position,
+        finalPositionPct: positionPct,
+        status: p.id === tournamentWinnerId ? 'ACTIVE' : 'ELIMINATED',
+      },
+    })
+
+    finalStandings.push({
+      userId: p.user?.betterAuthId ?? p.userId,
+      position,
+    })
+  }
+
+  const updated = await db.tournament.update({
+    where: { id: tournamentId },
+    data: { status: 'COMPLETED' },
+  })
+
+  await publishEvent('tournament:completed', {
+    tournamentId,
+    finalStandings,
+  })
+
+  logger.info({ tournamentId }, 'Tournament completed')
+  return updated
+}

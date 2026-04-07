@@ -29,35 +29,38 @@ const NAV_LINKS = [
   { to: '/play', label: 'Play' },
   { to: '/gym', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
+  { to: '/tournaments', label: 'Tournaments' },
   { to: '/leaderboard', label: 'Rankings', desktopOnly: true },
 ]
 
 const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
   { to: '/gym', label: 'Gym', icon: '⚡' },
+  { to: '/tournaments', label: 'Tourney', icon: '⊕' },
   { to: '/leaderboard', label: 'Ranks', icon: '★' },
-  { to: '/stats', label: 'Stats', icon: '◎' },
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
 
 const MENU_LINKS = [
-  { to: '/play',        label: 'Play',        icon: '⊞' },
-  { to: '/gym',         label: 'Gym',         icon: '⚡' },
-  { to: '/puzzles',     label: 'Puzzles',      icon: '◈' },
-  { to: '/leaderboard', label: 'Rankings',     icon: '★' },
-  { to: '/stats',       label: 'Stats',        icon: '◎' },
-  { to: '/profile',     label: 'Profile',      icon: '◉' },
-  { to: '/about',       label: 'About',        icon: '○' },
-  { to: '/faq',         label: 'FAQ',          icon: '?' },
-  { to: '/settings',    label: 'Settings',     icon: '⚙' },
+  { to: '/play',        label: 'Play',         icon: '⊞' },
+  { to: '/gym',         label: 'Gym',          icon: '⚡' },
+  { to: '/puzzles',     label: 'Puzzles',       icon: '◈' },
+  { to: '/tournaments', label: 'Tournaments',   icon: '⊕' },
+  { to: '/leaderboard', label: 'Rankings',      icon: '★' },
+  { to: '/stats',       label: 'Stats',         icon: '◎' },
+  { to: '/profile',     label: 'Profile',       icon: '◉' },
+  { to: '/about',       label: 'About',         icon: '○' },
+  { to: '/faq',         label: 'FAQ',           icon: '?' },
+  { to: '/settings',    label: 'Settings',      icon: '⚙' },
 ]
 
 const ADMIN_MENU_LINKS = [
-  { to: '/admin',           label: 'Dashboard', end: true },
-  { to: '/admin/users',     label: 'Users' },
-  { to: '/admin/ml-models', label: 'Bots' },
-  { to: '/admin/ai',        label: 'AI' },
-  { to: '/admin/logs',      label: 'Logs' },
+  { to: '/admin',              label: 'Dashboard',   end: true },
+  { to: '/admin/users',        label: 'Users' },
+  { to: '/admin/ml-models',    label: 'Bots' },
+  { to: '/admin/tournaments',  label: 'Tournaments' },
+  { to: '/admin/ai',           label: 'AI' },
+  { to: '/admin/logs',         label: 'Logs' },
 ]
 
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
@@ -362,6 +365,7 @@ export default function AppLayout() {
                 { to: '/admin', label: 'Admin' },
                 { to: '/admin/users', label: 'Users' },
                 { to: '/admin/ml-models', label: 'Bots' },
+                { to: '/admin/tournaments', label: 'Tournaments' },
                 { to: '/admin/ai', label: 'AI' },
                 { to: '/admin/logs', label: 'Logs' },
               ].map(({ to, label }) => (
