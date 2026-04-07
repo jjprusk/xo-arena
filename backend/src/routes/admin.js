@@ -3,6 +3,7 @@ import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
+import { getSnapshots, getLatestSnapshot, getAlerts } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/mlService.js'
 import { hasRole } from '../utils/roles.js'
 import {
@@ -22,6 +23,21 @@ const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 
 const router = Router()
 router.use(requireAuth, requireAdmin)
+
+// ─── Resource health ─────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/health/sockets
+ * Returns current resource counters, rolling snapshot history, and active leak alerts.
+ */
+router.get('/health/sockets', (req, res) => {
+  res.json({
+    latest: getLatestSnapshot(),
+    history: getSnapshots(),
+    alerts: getAlerts(),
+    uptime: Math.round(process.uptime()),
+  })
+})
 
 // ─── Platform stats ───────────────────────────────────────────────────────────
 

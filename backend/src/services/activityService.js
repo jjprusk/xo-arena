@@ -13,6 +13,7 @@
 
 import Redis from 'ioredis'
 import db from '../lib/db.js'
+import { incrementRedis, decrementRedis } from '../lib/resourceCounters.js'
 import logger from '../logger.js'
 
 const REDIS_KEY_PREFIX = 'user:active:'
@@ -23,6 +24,8 @@ let redisClient = null
 function getRedis() {
   if (!redisClient && process.env.REDIS_URL) {
     redisClient = new Redis(process.env.REDIS_URL)
+    redisClient.on('connect', () => incrementRedis())
+    redisClient.on('end',     () => decrementRedis())
     redisClient.on('error', err => logger.warn({ err: err.message }, 'activityService Redis error'))
   }
   return redisClient

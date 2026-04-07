@@ -7,6 +7,7 @@ import { useGymStore } from '../../store/gymStore.js'
 import { api } from '../../lib/api.js'
 import { signOut } from '../../lib/auth-client.js'
 import { clearTokenCache } from '../../lib/getToken.js'
+import { disconnectSocket } from '../../lib/socket.js'
 
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click']
 // Throttle resets: ignore activity events that come within 10s of the last one
@@ -77,6 +78,7 @@ export default function IdleLogoutManager() {
     warningRef.current = false
     setWarning(false)
     clearTokenCache()
+    disconnectSocket()
     try { await signOut() } catch { /* best effort */ }
     navigate('/', { replace: true })
   }, [clearAllTimers, navigate])

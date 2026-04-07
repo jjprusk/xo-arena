@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { signOut } from '../../lib/auth-client.js'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 import { clearTokenCache } from '../../lib/getToken.js'
+import { disconnectSocket } from '../../lib/socket.js'
 import GettingStartedModal from '../GettingStartedModal.jsx'
 
 export default function UserButton({ afterSignOutUrl = '/play' }) {
@@ -38,6 +39,7 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
     Object.keys(sessionStorage)
       .filter(k => k.startsWith('xo_dbuser_'))
       .forEach(k => sessionStorage.removeItem(k))
+    disconnectSocket()
     await signOut()
     navigate(afterSignOutUrl)
   }

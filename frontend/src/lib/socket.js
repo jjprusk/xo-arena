@@ -27,3 +27,15 @@ export function connectSocket(token = null) {
 export function disconnectSocket() {
   if (_socket?.connected) _socket.disconnect()
 }
+
+/**
+ * Log current listener counts per event to the console.
+ * Only active when VITE_DEBUG_SOCKET=true — no-op in production.
+ */
+export function logSocketListeners() {
+  if (import.meta.env.VITE_DEBUG_SOCKET !== 'true') return
+  const s = getSocket()
+  const events = ['accomplishment', 'feedback:new', 'connect', 'disconnect',
+    'pvp:move', 'pvp:start', 'pvp:end', 'room:created', 'room:joined']
+  console.table(Object.fromEntries(events.map(e => [e, s.listeners(e).length])))
+}
