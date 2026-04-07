@@ -335,7 +335,7 @@ In `MIXED` tournaments, when a human plays against a bot the match may run clien
 Bot vs Bot matches run server-side and must be spread across available capacity to avoid overloading the server. The exact pacing and scheduling logic — including how concurrency limits are enforced and how pace is exposed as an organizer-configurable parameter — is to be determined during design.
 
 **Best Overall merit bonus — multi-tier calculation**
-When multiple classification tiers are present in a tournament, the Best Overall bonus (1 merit awarded to the single top finisher across all tiers, minimum 10 total participants) requires a defined cross-tier scoring comparison. The precise calculation method is to be determined during design.
+Resolved during design: the bonus is awarded to the player with `finalPosition = 1` in the tournament's overall final standings — the same finishing order the bracket already produces. No special cross-tier comparison is required. In round robin, ties for 1st place share the bonus. In single elimination there is exactly one bracket winner.
 
 **Database schema**
 The tournament system introduces a significant number of configurable fields, classification thresholds, merit parameters, and demotion rules, all of which are database-driven. The full schema design — including tables for tournaments, participants, matches, brackets, merits, classification history, and recurring registration — is to be produced during the design phase.

@@ -237,6 +237,43 @@ Bot match execution is resilient to tournament service restarts through two comp
 
 ---
 
+## Resource Management Constraints
+
+These constraints are non-negotiable implementation requirements for the tournament service and any future service in the platform. They exist to prevent the class of resource leaks — Redis connection exhaustion, Postgres connection pool exhaustion, stale Socket.io rooms — that become invisible until the container crashes.
+
+### Redis Connections
+
+Each service maintains **one shared Redis subscriber connection** for all pub/sub subscriptions, regardless of how many channels it subscribes to. A new connection must never be opened per match, per event type, or per request. Redis enforces a `maxclients` limit; exceeding it drops new connections silently.
+
+The tournament service opens exactly two Redis connections at startup:
+- One for publishing events and job queue operations (standard client)
+- One for subscribing to channels (dedicated subscriber — cannot be reused for publishing per Redis protocol)
+
+### Graceful Shutdown
+
+The tournament service must handle `SIGTERM` before exiting. On shutdown:
+
+1. Stop accepting new work — remove the service from any load balancer / Railway health check.
+2. Drain the job worker — allow any in-flight bot match to complete or checkpoint before exit. Do not block indefinitely; apply a drain timeout (e.g. 30 seconds).
+3. Close Redis connections cleanly — unsubscribe all channels, close the subscriber connection, then close the publisher connection.
+4. Close the Prisma connection pool.
+
+Jobs that cannot complete within the drain timeout are left on the queue (they were never acknowledged) and will be picked up by the next worker instance. This is correct behavior — do not force-acknowledge them.
+
+### Tournament Match Room Cleanup
+
+When the backend service receives a `match:complete` or `match:cancelled` event from Redis, it must tear down the corresponding Socket.io room in the same handler. Room cleanup is not deferred or best-effort — it runs synchronously in the event handler before acknowledging the event. This mirrors the responsibility the existing `roomManager` has for free-play rooms today.
+
+If the Redis event is lost or delivered out of order, the backend's periodic health log (socket snapshot every 60 s) will surface rooms with no associated active match. A future cleanup sweep can reclaim these, but the primary path must be event-driven.
+
+### Prisma Connection Pool
+
+`PrismaClient` is instantiated **once at module load** in `packages/db/src/index.js` and exported as a singleton. Services import this singleton — they do not instantiate their own `PrismaClient`. Instantiating per-request creates a new connection pool per request and exhausts Postgres `max_connections` within minutes under any real load.
+
+The backend already follows this pattern via `backend/src/lib/db.js`. Phase 0 must preserve this by re-exporting the same singleton from `packages/db`.
+
+---
+
 ## Futures
 
 The following items are explicitly deferred but should be revisited as the platform grows.
@@ -357,8 +394,9 @@ model Tournament {
   minParticipants       Int                 @default(2)
   maxParticipants       Int?
   bestOfN               Int                 @default(3)
-  botMinGamesPlayed     Int?
-  allowSpectators       Boolean             @default(true)
+  botMinGamesPlayed         Int?
+  allowNonCompetitiveBots   Boolean             @default(false)
+  allowSpectators           Boolean             @default(true)
   replayRetentionDays   Int                 @default(30)
   startTime             DateTime?
   endTime               DateTime?
@@ -728,7 +766,7 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 - [ ] Calculate tier-peer count (players of same tier in same tournament) at tournament end
 - [ ] Look up correct MeritThreshold band and award merits by finish position
 - [ ] Handle ties at same finish position — shared merit award
-- [ ] Best Overall bonus — award 1 merit to top finisher across all tiers (minimum 10 participants)
+- [ ] Best Overall bonus — award 1 merit to the player with `finalPosition = 1` in the tournament (minimum 10 total participants); ties for 1st in round robin each receive the bonus
 - [ ] Write MeritTransaction row for every award
 - [ ] Promotion check after merit award — advance tier, reset merits to 0, write ClassificationHistory
 
@@ -746,7 +784,7 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 
 **Tests**
 - [ ] Merit award — each band size, each position, ties
-- [ ] Best Overall bonus — awarded correctly, minimum participant threshold enforced
+- [ ] Best Overall bonus — awarded to `finalPosition = 1`, minimum 10 participant threshold enforced, round robin ties each receive the bonus
 - [ ] Promotion — triggers at correct merit count, resets merits, writes history
 - [ ] Demotion — Finish Ratio calculation, eligibility conditions, opt-out
 - [ ] Bot classification is independent of owner classification
@@ -763,8 +801,9 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 - [ ] Seed SystemConfig: `tournament.botMatch.globalConcurrencyLimit`, `tournament.botMatch.defaultPaceMs`
 
 **Bot Eligibility**
-- [ ] Enforce bot eligibility at registration: active, available, non-provisional, min games played
+- [ ] Enforce bot eligibility at registration: active, available, non-provisional, min games played, and competitive (unless `allowNonCompetitiveBots = true`)
 - [ ] `botMinGamesPlayed` per tournament — read from Tournament config, fall back to SystemConfig default
+- [ ] `allowNonCompetitiveBots` — admin-configurable per tournament; defaults to false; when true, casual bots (`botCompetitive = false`) may register alongside competitive bots
 
 **Match Execution**
 - [ ] Server-side bot match execution using shared `packages/ai` inference
@@ -778,7 +817,7 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 - [ ] Live view of active bot match jobs and queue depth
 
 **Tests**
-- [ ] Bot eligibility checks — each condition independently
+- [ ] Bot eligibility checks — each condition independently, including `botCompetitive` gate and `allowNonCompetitiveBots` override
 - [ ] Concurrency limit — worker respects global cap
 - [ ] Startup reconciliation — IN_PROGRESS matches re-queued correctly
 - [ ] Job acknowledgement — job not removed until match confirmed written
@@ -860,7 +899,7 @@ The following items were flagged in the Tournament Requirements addendum as requ
 |------|---------------|
 | Mixed-mode execution (Human vs Bot) — client-side vs server-side | Phase 5 |
 | Server-side bot match pacing and concurrency scheduling logic | Phase 3 |
-| Best Overall merit bonus — cross-tier scoring comparison method | Phase 2 |
+| Best Overall merit bonus — cross-tier scoring comparison method | Phase 2 — **resolved:** award to `finalPosition = 1`; no cross-tier calculation needed; round robin ties share the bonus |
 | Full database schema | Phase 1 onwards |
 
 ---
