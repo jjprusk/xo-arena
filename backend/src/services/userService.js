@@ -2,7 +2,7 @@
  * User service — account management and stats.
  */
 import db from '../lib/db.js'
-import { Prisma } from '../generated/prisma/client.ts'
+import { Prisma } from '@xo-arena/db'
 import { DEFAULT_CONFIG as ML_DEFAULT_CONFIG } from '@xo-arena/ai'
 
 const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
