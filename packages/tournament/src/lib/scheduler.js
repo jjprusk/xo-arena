@@ -11,12 +11,15 @@ import db from '@xo-arena/db'
 import logger from '../logger.js'
 import { publishEvent } from './redis.js'
 import { cancelTournament, startTournament } from '../services/tournamentService.js'
+import { runDemotionReview } from '../services/classificationService.js'
 
 const INTERVAL_MS = 60 * 1000 // 1 minute
 
 // Track which warnings have been sent to avoid duplicate notifications
 // { tournamentId_minutes: true }
 const sentWarnings = new Set()
+
+let lastDemotionReviewDate = null
 
 /**
  * Start background scheduler.
@@ -40,6 +43,13 @@ export function startScheduler() {
  * Execute one scheduler tick. Separated for testability.
  */
 export async function runSchedulerTick() {
+  // Daily demotion review
+  const today = new Date().toISOString().slice(0, 10)
+  if (lastDemotionReviewDate !== today) {
+    lastDemotionReviewDate = today
+    runDemotionReview().catch(err => logger.error({ err }, 'Demotion review failed'))
+  }
+
   await Promise.allSettled([
     checkWarnings(),
     checkAutoCancel(),

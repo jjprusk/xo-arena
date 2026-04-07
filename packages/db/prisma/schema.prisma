@@ -48,6 +48,7 @@ model User {
   notifications         UserNotification[]
   feedback              Feedback[]
   tournamentParticipants TournamentParticipant[]
+  classification PlayerClassification?
 
   @@map("users")
 }
@@ -573,6 +574,15 @@ enum ResultNotifPref {
   END_OF_TOURNAMENT
 }
 
+enum ClassificationTier {
+  RECRUIT
+  CONTENDER
+  VETERAN
+  ELITE
+  CHAMPION
+  LEGEND
+}
+
 model Tournament {
   id                        String             @id @default(cuid())
   name                      String
@@ -669,4 +679,63 @@ model TournamentMatch {
   @@index([tournamentId])
   @@index([roundId])
   @@map("tournament_matches")
+}
+
+// ─── Tournament Phase 2: Player Classification ────────────────────────────────
+
+model PlayerClassification {
+  id        String             @id @default(cuid())
+  userId    String             @unique
+  tier      ClassificationTier @default(RECRUIT)
+  merits    Int                @default(0)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meritTx   MeritTransaction[]
+  history   ClassificationHistory[]
+
+  @@map("player_classifications")
+}
+
+model MeritTransaction {
+  id               String   @id @default(cuid())
+  classificationId String
+  tournamentId     String?
+  delta            Int
+  reason           String
+  createdAt        DateTime @default(now())
+
+  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+
+  @@index([classificationId])
+  @@index([tournamentId])
+  @@map("merit_transactions")
+}
+
+model ClassificationHistory {
+  id               String              @id @default(cuid())
+  classificationId String
+  fromTier         ClassificationTier?
+  toTier           ClassificationTier
+  reason           String
+  tournamentId     String?
+  createdAt        DateTime            @default(now())
+
+  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+
+  @@index([classificationId])
+  @@map("classification_history")
+}
+
+model MeritThreshold {
+  id      String @id @default(cuid())
+  bandMin Int
+  bandMax Int?
+  pos1    Int
+  pos2    Int
+  pos3    Int
+  pos4    Int
+
+  @@map("merit_thresholds")
 }

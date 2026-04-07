@@ -46,6 +46,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./packages/ai:/app/packages/ai
+      - ./packages/db:/app/packages/db
       - /app/node_modules
     depends_on:
       postgres:

@@ -7,6 +7,7 @@ import express from 'express'
 import tournamentRouter from './routes/tournaments.js'
 import matchRouter from './routes/matches.js'
 import botMatchesRouter from './routes/botMatches.js'
+import classificationRouter from './routes/classification.js'
 import logger from './logger.js'
 
 const app = express()
@@ -49,6 +50,7 @@ app.use((req, _res, next) => {
 app.use('/tournaments', tournamentRouter)
 app.use('/matches', matchRouter)
 app.use('/bot-matches', botMatchesRouter)
+app.use('/classification', classificationRouter)
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 

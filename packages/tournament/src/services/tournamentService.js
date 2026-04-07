@@ -10,6 +10,7 @@ import logger from '../logger.js'
 import { generateBracket } from '../lib/bracket.js'
 import { publishEvent } from '../lib/redis.js'
 import { enqueueJob } from '../lib/botJobQueue.js'
+import { awardTournamentMerits, getOrCreateClassification } from './classificationService.js'
 
 // ─── Internal config helper ───────────────────────────────────────────────────
 
@@ -277,6 +278,11 @@ export async function registerParticipant(tournamentId, betterAuthId) {
     logger.info({ tournamentId, userId: user.id }, 'Participant re-registered')
     return reactivated
   }
+
+  // Ensure classification record exists (creates RECRUIT/0 if first time)
+  await getOrCreateClassification(user.id).catch(err =>
+    logger.warn({ err, userId: user.id }, 'Failed to bootstrap classification')
+  )
 
   const participant = await db.tournamentParticipant.create({
     data: {
@@ -779,6 +785,9 @@ async function _completeTournament(tournamentId) {
     where: { id: tournamentId },
     data: { status: 'COMPLETED' },
   })
+
+  // Phase 2: Award merits based on finish positions
+  await awardTournamentMerits(tournamentId)
 
   await publishEvent('tournament:completed', {
     tournamentId,

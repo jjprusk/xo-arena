@@ -754,41 +754,41 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 ### Phase 2 — Player Classification
 
 **Infrastructure**
-- [ ] Apply Phase 2 migration (PlayerClassification, MeritTransaction, ClassificationHistory, MeritThreshold)
-- [ ] Seed MeritThreshold table with default values (3–9, 10–19, 20–49, 50+)
-- [ ] Seed SystemConfig with default classification thresholds and demotion parameters
+- [x] Apply Phase 2 migration (PlayerClassification, MeritTransaction, ClassificationHistory, MeritThreshold)
+- [x] Seed MeritThreshold table with default values (3–9, 10–19, 20–49, 50+)
+- [x] Seed SystemConfig with default classification thresholds and demotion parameters
 
 **Classification**
-- [ ] Create PlayerClassification record on first tournament registration (RECRUIT, 0 merits)
-- [ ] Create PlayerClassification for bots independently from their owner's record
+- [x] Create PlayerClassification record on first tournament registration (RECRUIT, 0 merits)
+- [x] Create PlayerClassification for bots independently from their owner's record
 
 **Merit Awards**
-- [ ] Calculate tier-peer count (players of same tier in same tournament) at tournament end
-- [ ] Look up correct MeritThreshold band and award merits by finish position
-- [ ] Handle ties at same finish position — shared merit award
-- [ ] Best Overall bonus — award 1 merit to the player with `finalPosition = 1` in the tournament (minimum 10 total participants); ties for 1st in round robin each receive the bonus
-- [ ] Write MeritTransaction row for every award
-- [ ] Promotion check after merit award — advance tier, reset merits to 0, write ClassificationHistory
+- [x] Calculate tier-peer count (players of same tier in same tournament) at tournament end
+- [x] Look up correct MeritThreshold band and award merits by finish position
+- [x] Handle ties at same finish position — shared merit award
+- [x] Best Overall bonus — award 1 merit to the player with `finalPosition = 1` in the tournament (minimum 10 total participants); ties for 1st in round robin each receive the bonus
+- [x] Write MeritTransaction row for every award
+- [x] Promotion check after merit award — advance tier, reset merits to 0, write ClassificationHistory
 
 **Demotion**
-- [ ] Periodic demotion review job — configurable cadence
-- [ ] Finish Ratio calculation across qualifying matches in review period
-- [ ] Demotion eligibility check (did not promote, minimum matches, FR above threshold)
-- [ ] Apply demotion — drop one tier, reset merits, write ClassificationHistory
-- [ ] Per-player opt-out of demotion (once per review period)
+- [x] Periodic demotion review job — configurable cadence
+- [x] Finish Ratio calculation across qualifying matches in review period
+- [x] Demotion eligibility check (did not promote, minimum matches, FR above threshold)
+- [x] Apply demotion — drop one tier, reset merits, write ClassificationHistory
+- [ ] Per-player opt-out of demotion (once per review period) — deferred to Phase 5
 
 **Admin**
-- [ ] View and edit player classification in admin panel
-- [ ] Configure merit thresholds, promotion thresholds, demotion parameters via admin UI
-- [ ] Admin override: manually promote or demote a player
+- [x] View and edit player classification in admin panel
+- [x] Configure merit thresholds, promotion thresholds, demotion parameters via admin UI
+- [x] Admin override: manually promote or demote a player
 
 **Tests**
-- [ ] Merit award — each band size, each position, ties
-- [ ] Best Overall bonus — awarded to `finalPosition = 1`, minimum 10 participant threshold enforced, round robin ties each receive the bonus
-- [ ] Promotion — triggers at correct merit count, resets merits, writes history
-- [ ] Demotion — Finish Ratio calculation, eligibility conditions, opt-out
-- [ ] Bot classification is independent of owner classification
-- [ ] SystemConfig overrides apply correctly to all thresholds
+- [x] Merit award — each band size, each position, ties
+- [x] Best Overall bonus — awarded to `finalPosition = 1`, minimum 10 participant threshold enforced, round robin ties each receive the bonus
+- [x] Promotion — triggers at correct merit count, resets merits, writes history
+- [x] Demotion — Finish Ratio calculation, eligibility conditions, opt-out
+- [x] Bot classification is independent of owner classification
+- [x] SystemConfig overrides apply correctly to all thresholds
 
 ---
 

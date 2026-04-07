@@ -85,4 +85,37 @@ export const tournamentApi = {
   /** GET /api/bot-matches/status */
   getBotMatchStatus: (token) =>
     request('GET', '/api/bot-matches/status', undefined, token),
+
+  // ─── Classification ─────────────────────────────────────────────────────────
+
+  /** GET /api/classification/players?page=&limit=&tier= */
+  getClassificationPlayers: ({ page = 1, limit = 50, tier } = {}, token) => {
+    const p = new URLSearchParams({ page, limit })
+    if (tier) p.set('tier', tier)
+    return request('GET', `/api/classification/players?${p}`, undefined, token)
+  },
+
+  /** GET /api/classification/players/:userId */
+  getPlayerClassification: (userId, token) =>
+    request('GET', `/api/classification/players/${userId}`, undefined, token),
+
+  /** POST /api/classification/players/:userId/override */
+  overridePlayerTier: (userId, tier, token) =>
+    request('POST', `/api/classification/players/${userId}/override`, { tier }, token),
+
+  /** GET /api/classification/thresholds */
+  getMeritThresholds: (token) =>
+    request('GET', '/api/classification/thresholds', undefined, token),
+
+  /** PUT /api/classification/thresholds */
+  updateMeritThresholds: (bands, token) =>
+    request('PUT', '/api/classification/thresholds', bands, token),
+
+  /** GET /api/classification/config */
+  getClassificationConfig: (token) =>
+    request('GET', '/api/classification/config', undefined, token),
+
+  /** PATCH /api/classification/config */
+  updateClassificationConfig: (updates, token) =>
+    request('PATCH', '/api/classification/config', updates, token),
 }
