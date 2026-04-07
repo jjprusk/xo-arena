@@ -86,20 +86,82 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ## Guide as Navigation System (Command Palette Evolution)
 
-**What:** Evolve the Getting Started guide from a static SVG infographic into an active navigation layer. Experienced users already return to it as a quick-action menu — the goal is to lean into that pattern and make it a genuine power-user tool.
+**What:** Add a ⌘K command palette — a keyboard-invokable search overlay (Spotlight / Linear-style) that lets users jump anywhere in the app by typing rather than clicking through the nav.
 
-**Why deferred:** The current guide works well as a visual map. Turning it into a navigation system requires a clear UX direction and some architectural decisions before building.
+**Current navigation structure:**
+- **Desktop:** a top header bar with Play, Gym, Puzzles, Rankings as primary links, plus Stats / Profile / About in-line. Admin links appear for admin users.
+- **Mobile:** a fixed bottom tab bar (Play, Gym, Ranks, Stats, Profile) plus a hamburger menu that expands the full link list including Settings, FAQ, and About.
+- **Guide button:** a pulsing "Guide" button sits next to the logo in the header and opens the Getting Started modal, whose cards navigate directly to destinations via `target="_top"` links. Users can hide this button in Settings.
 
-**Three directions (in order of complexity):**
+The nav works fine but requires knowing where things live. There's no way to reach a page by typing its name, and no single surface that lists every destination at once.
 
-1. **Make guide buttons actually navigate (low effort)** — clicking a card in the guide closes the modal and routes the user directly to the destination (`/play`, `/gym`, `/leaderboard`, etc.). The iframe already communicates via `?hint=` params; using `postMessage` from the iframe to the parent React app would let guide interactions dispatch navigation actions. One afternoon of work, immediately makes the guide feel alive.
+**How the palette would work:**
+- Press ⌘K (Ctrl+K on Windows) from anywhere to open a centered overlay with a search input and a list of destinations.
+- The list pre-populates with the same links in `MENU_LINKS` — Play, Gym, Puzzles, Rankings, Stats, Profile, About, FAQ, Settings — plus admin links when applicable.
+- Typing filters the list instantly. Enter or clicking an item navigates and closes the palette. Escape closes without navigating.
+- A small ⌘K hint badge in the header (next to the Guide button) would make it discoverable.
 
-2. **Persistent command bar / ⌘K palette (medium effort)** — a keyboard-invokable overlay (Spotlight-style) accessible from anywhere in the app. Shows the same quick actions as the guide cards but also accepts typed shortcuts ("play friend", "my bots", "leaderboard"). This makes the guide less of a help artifact and more of a power-user navigation layer that rewards familiarity. Would replace the need to open the guide modal at all for experienced users.
+**Relationship to the guide:** The guide is visual and onboarding-oriented — it shows the journey from new user to competitor. The palette is speed-oriented for returning users who already know what they want. They serve different moments and can coexist.
 
-3. **Context-sensitive quick actions (larger effort)** — the guide adapts to session state: new users see onboarding cards, returning users see "Play your bot" or "Check your leaderboard rank" based on their profile and history. Requires passing auth/session data into the guide layer and dynamic card rendering rather than a static SVG.
+**Why deferred:** The existing nav covers current usage. The palette pays off most when users are frequent enough to remember keyboard shortcuts.
 
-**Recommendation:** Start with Direction 1 — it's the smallest change with the clearest payoff. If engagement with the guide increases as a result, Direction 2 (command bar) is the natural next step and would be the highest-leverage navigation improvement in the app.
+**Complexity:** Medium (~2 days). Purely frontend — a new React component with a `keydown` listener at the app root, no backend changes needed.
 
-**Complexity:** Direction 1: Small (~half a day). Direction 2: Medium (~2 days, new component). Direction 3: Large (requires dynamic guide rendering and session integration).
+---
+
+## Configurable Guide
+
+**What:** Let users personalize the Getting Started guide through a "Configure Guide" panel in Settings. Three layers of configuration, in increasing complexity:
+
+1. **Arrow toggle** — a switch to show or hide the dashed connector arrows between balloons. Some users find them helpful for understanding the progression; returning users who use the guide as a launcher find them visual noise.
+
+2. **Balloon count** — a slider or stepper (1–9, the current maximum) controlling how many balloon positions are shown. Fewer balloons means a less cluttered guide focused on the actions the user actually uses. Hidden positions render empty — the layout stays fixed so the guide doesn't reflow.
+
+3. **Balloon assignment** — a drag-and-drop configurator where the user picks which function occupies each position. A palette lists all available destinations (Play, Gym, Puzzles, Rankings, Stats, Profile, About, FAQ, Settings, plus the Feedback and Have Fun easter eggs). The user drags a destination from the palette onto a slot in a miniature preview of the guide layout. The resulting assignment is saved and the guide renders accordingly.
+
+4. **Presets** — 3–4 named configurations selectable with a single click, shown at the top of the Configure Guide panel before the manual controls. Selecting a preset populates the arrow toggle, balloon count, and slot assignments all at once; the user can then fine-tune from there. Candidate presets:
+   - **Default** — the current fixed layout (all 9 balloons, arrows on, original assignments). Restores the out-of-the-box experience.
+   - **Onboarding** — arrows on, all balloons visible, ordered as a learning path (FAQ → Play → Training Guide → Create Bot → Train → Compete).
+   - **Launcher** — arrows off, 5–6 balloons showing only the most-used destinations (Play, Gym, Leaderboard, Profile, Puzzles). Optimized for returning users who treat the guide as a quick-action menu.
+   - **Minimal** — arrows off, 3 balloons (user-chosen or defaulting to Play, Gym, Profile). Maximum signal, minimum clutter.
+
+**Balloon actions beyond simple navigation:**
+
+Each balloon in the palette would be associated with an *action*, not just a URL. An action is a small descriptor like `{ to: '/profile', open: 'bots' }` or `{ to: '/gym', focus: 'model-name' }`. When the user clicks the balloon, the guide posts the action to the parent via `postMessage`; the parent closes the modal and calls React Router's `navigate(to, { state: action })`. The destination page reads `location.state` on mount and performs the side effect — opening an accordion, scrolling to a section, setting focus on an input, pre-selecting a tab, etc.
+
+This means the palette of available destinations is really a palette of *actions*, each with a label, an emoji, a destination route, and an optional UI side effect. Examples:
+
+- **Play** → `/play` (no side effect)
+- **Train a bot** → `/gym` + open the training panel
+- **My Bots** → `/profile` + open the My Bots accordion
+- **Leaderboard** → `/leaderboard` (no side effect)
+- **Create a bot** → `/profile` + open the My Bots accordion + focus the Create New Bot input
+- **Puzzles** → `/puzzles` (no side effect)
+- **Settings** → `/settings` (no side effect)
+- **FAQ** → `/faq` (no side effect)
+
+This approach requires that the destination pages handle incoming `location.state` gracefully — if no state is present, they render normally; if state carries an `open` or `focus` key, they apply it on mount. It also means the current `<a target="_top">` implementation in the guide HTML must be replaced with `onclick` handlers that `postMessage` the action instead, since `<a>` tags can only carry a URL.
+
+**Current guide architecture and the key constraint:**
+
+The guide is a self-contained static HTML file (`/public/getting-started.html`) rendered in an iframe inside `GettingStartedModal`. The parent React app communicates with it via URL params (`?hint=faq`) and `postMessage`. The guide currently has 9 balloon positions at fixed SVG coordinates and 6 dashed arrow paths.
+
+Making the guide configurable means the iframe must receive a config object and render dynamically rather than statically. Two approaches:
+
+- **Pass config via postMessage (lower effort, preserves current architecture):** The parent serializes the user's guide config and sends it to the iframe after load (the guide already fires `getting-started-ready` to signal it's listening). The guide JS reads the config and shows/hides arrows, shows/hides balloon slots, and swaps each slot's emoji, label, and `href`. The drag-and-drop configurator lives entirely in the React Settings page — it never needs to be inside the iframe.
+
+- **Convert guide to a React component (higher effort, cleaner long-term):** Remove the iframe and rewrite the SVG as a React component that reads guide config directly from the prefs store. No postMessage coordination needed. Loses the ability to link to the guide standalone, but makes all three config layers straightforward React state.
+
+The postMessage approach is the right starting point — it extends the existing communication channel without a rewrite.
+
+**Persistence:** Guide config is a small JSON blob (arrow visibility, balloon count, slot assignments) stored as a new field in user preferences — same pattern as `showGuideButton`, persisted via `api.users.updatePreferences` and loaded at sign-in via `api.users.getHints`.
+
+**What it would take:**
+- **Schema:** add a `guideConfig` JSON column to the user preferences table. Default: arrows on, all 9 balloons, current fixed assignments.
+- **Settings UI:** a "Configure Guide" section below the existing Guide button toggle — arrow switch, balloon count stepper, and a drag-and-drop canvas showing the 9 slot positions with a destination palette beside it.
+- **Guide HTML:** replace hardcoded balloon content with a JS renderer that reads config from the `postMessage` payload and builds SVG elements dynamically. Arrow `<path>` elements toggled by CSS class; balloon `<a>` elements generated from the slot assignment array.
+- **`GettingStartedModal`:** after the iframe fires `getting-started-ready`, post the saved guide config to it.
+
+**Complexity:** Medium-to-large (~3–4 days total). Arrow toggle alone is small (~2 hours). Balloon count adds half a day. The drag-and-drop configurator UI, the dynamic SVG renderer in the guide HTML, and schema/persistence together account for most of the estimate.
 
 ---
