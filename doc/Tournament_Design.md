@@ -744,10 +744,10 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 - [x] Bracket generation — seeding, round structure, BYE placement
 - [x] Draw resolution cascade — all three steps, audit log entries
 - [x] Series completion — correct winner advancement
-- [ ] Auto-cancel on minimum participant not met
-- [ ] ELO not modified for tournament game records
-- [ ] Registration open/close window enforcement
-- [ ] Role-based access control on management endpoints
+- [x] Auto-cancel on minimum participant not met
+- [x] ELO not modified for tournament game records
+- [x] Registration open/close window enforcement
+- [x] Role-based access control on management endpoints
 
 ---
 
