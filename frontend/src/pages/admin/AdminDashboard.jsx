@@ -500,6 +500,7 @@ export default function AdminDashboard() {
             { to: '/admin/bots',   label: 'Bot Management',   desc: 'View all bots, enable/disable, delete' },
             { to: '/admin/ai',     label: 'AI Metrics',       desc: 'Move timing & heatmaps' },
             { to: '/admin/logs',   label: 'Log Viewer',       desc: 'Frontend & API logs' },
+            { to: '/admin/health', label: 'Resource Health',  desc: 'Socket, room & Redis counters' },
           ].map(({ to, label, desc }) => (
             <Link
               key={to}

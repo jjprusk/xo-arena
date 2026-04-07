@@ -18,6 +18,12 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: ['**/stress.spec.js'],  // excluded from default run
+    },
+    {
+      name: 'stress',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['**/stress.spec.js'],
     },
   ],
 })

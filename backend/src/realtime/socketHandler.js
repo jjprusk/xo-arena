@@ -14,6 +14,11 @@ import { updatePlayersEloAfterPvP } from '../services/eloService.js'
 import { getSystemConfig } from '../services/mlService.js'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
+import {
+  incrementSocket, decrementSocket,
+  incrementRedis, decrementRedis,
+  trackedOn, startSnapshotInterval,
+} from '../lib/resourceCounters.js'
 import logger from '../logger.js'
 
 const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
@@ -80,6 +85,10 @@ export async function attachSocketIO(httpServer) {
     try {
       const pubClient = new Redis(process.env.REDIS_URL)
       const subClient = pubClient.duplicate()
+      pubClient.on('connect', () => incrementRedis())
+      pubClient.on('end',     () => decrementRedis())
+      subClient.on('connect', () => incrementRedis())
+      subClient.on('end',     () => decrementRedis())
       await Promise.all([pubClient.connect(), subClient.connect()])
       io.adapter(createAdapter(pubClient, subClient))
       logger.info('Socket.io Redis adapter connected')
@@ -89,11 +98,15 @@ export async function attachSocketIO(httpServer) {
   }
 
   io.on('connection', (socket) => {
+    incrementSocket()
     logger.info({ socketId: socket.id }, 'socket connected')
 
     // ── Room lifecycle ──────────────────────────────────────────────
 
-    socket.on('room:create', async ({ spectatorAllowed = true, authToken = null } = {}) => {
+    const cleanups = []
+    const on = (event, handler) => cleanups.push(trackedOn(socket, event, handler))
+
+    on('room:create', async ({ spectatorAllowed = true, authToken = null } = {}) => {
       try {
         const user = await resolveSocketUser(authToken)
         const room = roomManager.createRoom({
@@ -110,7 +123,7 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    socket.on('room:join', async ({ slug, role = 'player', authToken = null }) => {
+    on('room:join', async ({ slug, role = 'player', authToken = null }) => {
       const user = await resolveSocketUser(authToken)
       if (role === 'spectator') {
         // First try PvP rooms, then bot game rooms
@@ -176,13 +189,13 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    socket.on('room:swapName', () => {
+    on('room:swapName', () => {
       const result = roomManager.swapName({ socketId: socket.id })
       if (result.error) return socket.emit('error', { message: result.error })
       socket.emit('room:renamed', { slug: result.room.slug, displayName: result.room.displayName })
     })
 
-    socket.on('room:cancel', () => {
+    on('room:cancel', () => {
       const slug = roomManager._socketToRoom.get(socket.id)
       if (slug) {
         io.to(slug).emit('room:cancelled')
@@ -192,7 +205,7 @@ export async function attachSocketIO(httpServer) {
 
     // ── Game events ─────────────────────────────────────────────────
 
-    socket.on('game:move', async ({ cellIndex }) => {
+    on('game:move', async ({ cellIndex }) => {
       const result = roomManager.makeMove({ socketId: socket.id, cellIndex })
       if (result.error) return socket.emit('error', { message: result.error })
 
@@ -222,7 +235,7 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    socket.on('idle:pong', async () => {
+    on('idle:pong', async () => {
       // User acknowledged the "Still Active?" popup — reset their idle timer
       const slug = roomManager._socketToRoom.get(socket.id)
       const room = slug && roomManager.getRoom(slug)
@@ -241,7 +254,7 @@ export async function attachSocketIO(httpServer) {
       })
     })
 
-    socket.on('game:rematch', async () => {
+    on('game:rematch', async () => {
       const result = roomManager.rematch({ socketId: socket.id })
       if (result.error) return socket.emit('error', { message: result.error })
 
@@ -261,7 +274,7 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    socket.on('game:forfeit', () => {
+    on('game:forfeit', () => {
       const slug = roomManager._socketToRoom.get(socket.id)
       const room = slug && roomManager.getRoom(slug)
       if (!room) return
@@ -276,7 +289,7 @@ export async function attachSocketIO(httpServer) {
 
     // ── Emoji reactions ──────────────────────────────────────────────
 
-    socket.on('game:reaction', ({ emoji }) => {
+    on('game:reaction', ({ emoji }) => {
       if (!ALLOWED_REACTIONS.includes(emoji)) return
       const slug = roomManager._socketToRoom.get(socket.id)
       if (!slug) return
@@ -288,23 +301,28 @@ export async function attachSocketIO(httpServer) {
 
     // ── Support room ─────────────────────────────────────────────────
 
-    socket.on('support:join', () => {
+    on('support:join', () => {
       socket.join('support')
     })
 
     // ── ML training progress ─────────────────────────────────────────
 
-    socket.on('ml:watch', ({ sessionId }) => {
+    on('ml:watch', ({ sessionId }) => {
       if (sessionId) socket.join(`ml:session:${sessionId}`)
     })
 
-    socket.on('ml:unwatch', ({ sessionId }) => {
+    on('ml:unwatch', ({ sessionId }) => {
       if (sessionId) socket.leave(`ml:session:${sessionId}`)
     })
 
     // ── Disconnect ──────────────────────────────────────────────────
 
     socket.on('disconnect', () => {
+      decrementSocket()
+      cleanups.forEach(fn => fn())
+      if (socket._trackedListenerCount !== 0) {
+        logger.warn({ socketId: socket.id, remaining: socket._trackedListenerCount }, 'socket disconnected with uncleaned listeners')
+      }
       logger.info({ socketId: socket.id }, 'socket disconnected')
 
       const result = roomManager.handleDisconnect({
@@ -337,6 +355,7 @@ export async function attachSocketIO(httpServer) {
   })
 
   botGameRunner.setIO(io)
+  startSnapshotInterval(() => roomManager.roomCount)
   return io
 }
 

@@ -164,6 +164,7 @@ export const api = {
 
   admin: {
     stats:        (token)           => api.get('/admin/stats', token),
+    getHealth:    (token)           => api.get('/admin/health/sockets', token),
     getUser:      (id, token)       => api.get(`/admin/users/${id}`, token),
     users:        (token, search, page, limit, status) => {
       const p = new URLSearchParams()

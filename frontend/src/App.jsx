@@ -20,6 +20,7 @@ import AdminMLPage from './pages/admin/AdminMLPage.jsx'
 import AdminBotsPage from './pages/admin/AdminBotsPage.jsx'
 import AdminFeedbackPage from './pages/admin/AdminFeedbackPage.jsx'
 import AdminUserProfilePage from './pages/admin/AdminUserProfilePage.jsx'
+import AdminHealthPage from './pages/admin/AdminHealthPage.jsx'
 import SupportPage from './pages/SupportPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/admin/ml-models" element={<AdminRoute><AdminMLPage /></AdminRoute>} />
           <Route path="/admin/bots" element={<AdminRoute><AdminBotsPage /></AdminRoute>} />
           <Route path="/admin/feedback" element={<AdminRoute><AdminFeedbackPage /></AdminRoute>} />
+          <Route path="/admin/health" element={<AdminRoute><AdminHealthPage /></AdminRoute>} />
 
           {/* Support route — accessible to admin and SUPPORT role users */}
           <Route path="/support" element={<SupportRoute><SupportPage /></SupportRoute>} />
