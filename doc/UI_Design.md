@@ -232,6 +232,7 @@ This resolves Design Exercise #3 (shared vs. distinct component surface).
 - Components are built against token names (`--color-primary`, `--surface-raised`, etc.) with no hardcoded colours
 
 **Each site provides (site-specific overrides):**
+
 - Token values in their `tailwind.config.js` (primary colour scale, surface colours)
 - Background image and opacity
 - Any site-specific component variants (e.g. the Guide orb glow colour)
@@ -394,6 +395,7 @@ Users can invite any other player to a game via a Guide slot action (⚔️ Invi
 4. Send
 
 **Routing**:
+
 - **Online** → real-time `invite` notification card delivered to recipient's Guide stack immediately via Socket.io
 - **Offline** → falls through to the email notification service with a deep link to the game
 
@@ -452,12 +454,14 @@ Steps complete automatically when the underlying event is detected — no "mark 
 When the user is on a page relevant to their current step, a highlight ring and floating label appear on the specific UI element they need to interact with.
 
 **Visual treatment (Option A):**
+
 - 2px animated amber pulse ring around the target element
 - Small floating label positioned above or below the element: *"Step N: [step title] →"*
 - Amber colour matches the Guide's onboarding language — consistent, immediately recognisable
 - Non-disruptive: the page remains fully usable; the spotlight is a hint, not a blocker
 
 **Examples:**
+
 - Bot list with no bots → ring on "Create Bot" button: *"Step 4: Create your first bot →"*
 - `/gym` with no training runs → ring on "Start Training": *"Step 5: Train your bot →"*
 - Tournament lobby (not yet registered) → ring on first tournament's "Register" button: *"Step 6: Enter a tournament →"*
@@ -491,6 +495,7 @@ A compact strip of avatars is displayed in the Guide below the notification stac
 This is distinct from the general game invite: it requires no configuration, works only for online players, and carries the sender's current room context automatically.
 
 **Online strip rules**:
+
 - Shows up to 6 avatars; overflow displayed as "+N more"
 - Online indicator (green dot) on each avatar
 - Only online users are shown — no offline fallback for room invites
@@ -674,6 +679,7 @@ This is not a full redesign — it is an alignment pass. It should be planned as
 #### 2. Color tokens
 
 **Aligned:**
+
 - Teal palette (`#24B587` / `#1D9E75`) — matches spec exactly; retained as xo.aiarena primary
 - Amber palette (`#D4891E`) — matches
 - Red (`#E85554`) — matches
@@ -681,6 +687,7 @@ This is not a full redesign — it is an alignment pass. It should be planned as
 - Light/dark CSS variable split on `:root` / `.dark` — matches approach
 
 **Missing / wrong:**
+
 - **Slate blue ramp absent** — `#4A6FA5` (platform primary, used for Guide, nav accents, and admin) has no tokens in `index.css`. The current blue (`#2E86E0`) is for X marks only; the platform accent colour is entirely missing.
 - **`--color-slate-{50–900}` ramp** needs to be added to `index.css`.
 - The Guide trigger, orb, active nav states, and focus rings all reference slate tokens — without them the Guide component cannot be added.
@@ -712,18 +719,21 @@ This is not a full redesign — it is an alignment pass. It should be planned as
 #### 5. Navigation
 
 **Current nav structure:**
+
 - Play · Gym · Puzzles · Tournaments · Rankings
 - Admin links inline in the top bar (desktop only, amber-tinted)
 - Mobile: bottom tab bar (Play / Gym / Tourney / Ranks / Profile) + hamburger slide-out
 - Guide: separate "✦ Guide" pill button (conditionally shown, not integrated with nav)
 
 **Spec navigation:**
+
 - Header: destination links only (Play / Gym / Tournaments / Rankings)
 - Guide: orb button replaces "✦ Guide" pill — floating panel, not a modal
 - Admin: all admin routes redirect to `aiarena.callidity.com/admin`; admin links removed from xo.aiarena header
 - Mobile: bottom tab bar stays (good — keep as is); hamburger kept for overflow
 
 **Gaps:**
+
 - Admin links need to be removed from the xo.aiarena header and replaced with a single "Admin" link that navigates to the platform admin URL
 - "Puzzles" is an xo.aiarena-specific link — keep it
 - "✦ Guide" pill replaced by the Guide orb component (new build)
@@ -759,11 +769,13 @@ This is the largest gap — a near-complete rebuild.
 | Server-side state | Slot config + journey progress stored in `User.preferences` |
 
 **What can be reused:**
+
 - `AccomplishmentPopup.jsx` socket listener logic → migrate into Guide notification stack
 - `onboardingStore.js` training check → feeds into journey step 5 completion
 - `prefsStore.js` → can be subsumed into Guide store
 
 **What gets retired:**
+
 - `GettingStartedModal.jsx` (iframe approach replaced)
 - `WelcomeModal.jsx` (replaced by Guide auto-open on first login)
 - `/getting-started.html` (archived; SVG journey map may be repurposed as a decorative asset)
@@ -828,6 +840,7 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 8. [ ] Smoke-test: existing user login → no stale onboarding state shown
 
 **Acceptance criteria:**
+
 - `grep -r "onboarding\|tutorial\|walkthrough" frontend/src` returns no matches in component or store files (doc/comments OK)
 - New and returning user flows both reach the lobby without any onboarding overlay or redirect
 - All existing non-onboarding tests pass
@@ -952,6 +965,7 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 *Do this only after the platform admin at `aiarena.callidity.com/admin` has full feature parity with the current xo.aiarena admin pages.*
 
 **Prerequisite checklist — platform admin must cover:**
+
 - [ ] User list with tier, ELO, online status, ban controls
 - [ ] User profile detail view
 - [ ] Bot list with owner, competitive flag, activity
@@ -1082,6 +1096,7 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 #### Tasks
 
 **Frontend**
+
 - [ ] `GuideOrb` component: circular orb button, SVG progress ring (animated arc for 0–7 steps), idle / onboarding-amber / urgent-amber pulse animations, notification badge, minimum 44px touch target
 - [ ] `GuidePanel` component: slide-in panel from right (320px desktop, full-width mobile bottom-sheet), header with orb + title + settings/close buttons, scrollable body, chat input footer
 - [ ] `SlotGrid` component: 4-column grid, up to 8 slots, edit mode (gear toggles drag handles + × badges + empty "Add" slots), onboarding slots with dashed amber border and ⏱ expiry countdown
@@ -1094,6 +1109,7 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 - [ ] Replace Guide pill button in nav with `GuideOrb` component
 
 **Backend**
+
 - [ ] Add `guideSlots` and `guideNotificationPrefs` JSONB fields to `User.preferences` (Prisma migration)
 - [ ] `GET /api/guide/preferences` — return slots + notification prefs for authenticated user
 - [ ] `PATCH /api/guide/preferences` — update slots or prefs; validate slot count ≤ 8
@@ -1136,6 +1152,7 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 #### Tasks
 
 **Frontend**
+
 - [ ] `JourneyCard` component: pinned at top of Guide body above notification stack; collapsed state (progress bar, next step name, CTA button, expand toggle); expanded state (all 7 steps with status markers, action buttons on uncompleted steps, dismiss link at bottom)
 - [ ] Orb progress ring: update ring fill arc as step count changes (0/7 = empty, 7/7 = full); amber during journey, teal on completion
 - [ ] `useJourneyAutoOpen()` hook: on route change, check `GuideStore.journeyProgress` against step trigger map; if current route matches an incomplete step and user is not mid-game, call `guideStore.open()`
@@ -1147,6 +1164,7 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 - [ ] Retire `onboardingStore.js` (training completion check absorbed into journey step 5 state in GuideStore)
 
 **Backend**
+
 - [ ] `journeyProgress` JSONB field in `User.preferences`: `{ completedSteps: number[], dismissedAt: string|null }`
 - [ ] Step completion detection for server-detectable steps:
   - Step 2: first game record created (`GameRecord` table)
