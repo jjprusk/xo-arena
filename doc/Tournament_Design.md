@@ -172,41 +172,33 @@ xo-arena/
 
 ---
 
+## User Interface
+
+Platform-wide UI design — including the Guide, notification system, design language, shared packages, navigation model, and cross-site concerns — is documented in **[UI_Design.md](./UI_Design.md)**.
+
+This section covers only tournament-specific UI pages and surfaces.
+
+### Tournament Pages
+
+| Page | Description |
+|------|-------------|
+| **Tournament lobby** | Browse, filter, and search tournaments. Tab bar (Upcoming / In Progress / Completed), filter chips by mode and game, search by name, card grid with load-more pagination. Mockup: `doc/mockups/lobby.html`. |
+| **Tournament detail** | Bracket view, round and match status, registration panel with notification preference selector. Not yet mocked. |
+| **Admin — tournament list** | Paginated list of all tournaments with status filters, bulk actions, quick-edit. Not yet mocked. |
+| **Admin — create / edit** | Tournament creation and editing form: mode, format, schedule, participant limits, recurring config, bot eligibility settings. Not yet mocked. |
+| **Admin — classification config** | Tier thresholds, merit values, demotion settings — all admin-configurable. Not yet mocked. |
+
+### Tournament Notifications via Guide
+
+Flash tournament announcements and match-ready alerts surface in the Guide notification stack (see UI_Design.md). Both aiarena and xo.aiarena subscribe to the `tournament:flash:announced` and `tournament:match:ready` Socket.io events via the existing tournament bridge. No separate page-level banner exists.
+
+---
+
 ## Landing Page (Deferred — Post Phase 5)
 
 The landing page (`aiarena.callidity.com`) is the long-term front door to the entire AI Arena platform. For Phases 1–5, tournament management UI is delivered through the existing XO Arena admin panel. The landing page is deferred until the tournament engine is proven and stable.
 
-When built, it will be a new `landing/` workspace using the same React + Vite + Tailwind stack as the XO Arena frontend, deployed as a fourth Railway service.
-
-### Page Structure
-
-```
-aiarena.callidity.com/
-├── /                  ← Platform home (featured tournaments, news, highlights)
-├── /tournaments       ← Tournament hub (browse, register, watch, results)
-├── /rankings          ← Cross-game leaderboards
-├── /replays           ← Game replay browser
-├── /games             ← Directory of available games
-└── /profile           ← Platform-level player profile
-```
-
-### Authentication
-
-The landing page shares the same BetterAuth instance as all game sites. Users sign in once and are authenticated across the entire platform. Guest users may view tournaments, rankings, and replays without an account. Registration is required to enter tournaments or play games.
-
-### Player Profile Hierarchy
-
-| Level | URL | Content |
-|---------------|-------------------------------|------------------------------------------------------|
-| Platform | aiarena.callidity.com/profile | Cross-game overview, tournament classification, credits, links to game profiles |
-| Game-specific | xo-arena.callidity.com/profile | XO ELO, XO stats, XO bots, XO game history |
-
-### Rankings
-
-The `/rankings` page provides two views:
-
-- **Overall** — cross-game leaderboard ranked by tournament classification tier (primary), activity score (secondary), combined ELO (tertiary)
-- **By game** — per-game leaderboard with a game selector; mirrors the leaderboard on each game site
+When built, the current `landing/` workspace will be replaced in place with a full React + Vite + Tailwind application. Page structure, authentication model, player profile hierarchy, and rankings are documented in **[UI_Design.md](./UI_Design.md)**.
 
 ---
 
