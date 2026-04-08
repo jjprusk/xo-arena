@@ -406,6 +406,9 @@
   box-shadow: 0 0 0 2px rgba(26, 111, 212, 0.2);
 }
 .form-textarea { resize: vertical; }
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Modals */
 @keyframes modal-slide-up {

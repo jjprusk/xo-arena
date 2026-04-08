@@ -367,10 +367,10 @@ export default function ProfilePage() {
             {(dbUser.baRole === 'admin' || (dbUser.roles ?? []).length > 0) && (
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                 {dbUser.baRole === 'admin' && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-purple-100)', color: 'var(--color-purple-700)' }}>admin</span>
+                  <span className="badge badge-mixed">admin</span>
                 )}
                 {(dbUser.roles ?? []).map(role => (
-                  <span key={role} className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-orange-100)', color: 'var(--color-orange-700)' }}>{role}</span>
+                  <span key={role} className="badge badge-closed">{role}</span>
                 ))}
               </div>
             )}
@@ -397,8 +397,7 @@ export default function ProfilePage() {
             setShowCreateBot(true)
             setOpenSections(prev => ({ ...prev, bots: true }))
           }}
-          className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white flex-shrink-0 transition-all hover:brightness-110"
-          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+          className="btn btn-primary btn-sm flex-shrink-0"
         >
           Create Bot
         </button>
@@ -590,8 +589,7 @@ export default function ProfilePage() {
                 <button
                   type="submit"
                   disabled={creatingBot}
-                  className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+                  className="btn btn-primary btn-sm"
                 >
                   {creatingBot ? 'Creating…' : 'Create'}
                 </button>
@@ -666,10 +664,10 @@ export default function ProfilePage() {
                             {bot.displayName}
                           </Link>
                           {bot.botProvisional && (
-                            <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>provisional</span>
+                            <span className="badge badge-closed">provisional</span>
                           )}
                           {!bot.botActive && (
-                            <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
+                            <span className="badge badge-done">inactive</span>
                           )}
                         </div>
                       )}
@@ -680,7 +678,7 @@ export default function ProfilePage() {
                       )}
                     </ListTd>
                     <ListTd>
-                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}>
+                      <span className="badge badge-live">
                         {BOT_MODEL_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'}
                       </span>
                     </ListTd>

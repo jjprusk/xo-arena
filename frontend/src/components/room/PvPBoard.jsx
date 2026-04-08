@@ -30,9 +30,7 @@ export default function PvPBoard() {
           {displayName}
         </span>
         {spectatorCount > 0 && (
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-teal-50)', color: 'var(--color-teal-600)' }}>
-            👁 {spectatorCount}
-          </span>
+          <span className="badge badge-bot">👁 {spectatorCount}</span>
         )}
       </div>
 
@@ -181,8 +179,7 @@ export default function PvPBoard() {
           </button>
           <button
             onClick={reset}
-            className="flex-1 py-3 rounded-xl font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+            className="btn btn-primary flex-1 py-3 rounded-xl active:scale-[0.98]"
           >
             New Game
           </button>

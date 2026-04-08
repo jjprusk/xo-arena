@@ -58,13 +58,7 @@ export default function RoomLobby() {
           />
           <button
             onClick={handleCopy}
-            className="px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-            style={{
-              background: copied
-                ? 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))'
-                : 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))',
-              color: 'white',
-            }}
+            className={`btn ${copied ? 'btn-teal' : 'btn-primary'}`}
           >
             {copied ? '✓' : 'Copy'}
           </button>
