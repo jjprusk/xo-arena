@@ -54,14 +54,7 @@ const MENU_LINKS = [
   { to: '/settings',    label: 'Settings',      icon: '⚙' },
 ]
 
-const ADMIN_MENU_LINKS = [
-  { to: '/admin',              label: 'Dashboard',   end: true },
-  { to: '/admin/users',        label: 'Users' },
-  { to: '/admin/ml-models',    label: 'Bots' },
-  { to: '/admin/tournaments',  label: 'Tournaments' },
-  { to: '/admin/ai',           label: 'AI' },
-  { to: '/admin/logs',         label: 'Logs' },
-]
+const PLATFORM_ADMIN_URL = 'https://aiarena.callidity.com/admin'
 
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
 const PREFETCH_MAP = {
@@ -248,17 +241,18 @@ export default function AppLayout() {
 
   return (
     <div className="flex flex-col min-h-dvh relative">
-      {/* Mountain background */}
+      {/* Colosseum background — opacity controlled by --photo-opacity CSS var (light: 0.25, dark: 0.08) */}
+      {/* ⚠ Image file: /public/colosseum-bg.jpg needs to be sourced and added */}
       <div
         aria-hidden="true"
         className="fixed inset-0 pointer-events-none select-none"
         style={{
           zIndex: 0,
-          opacity: 0.30,
-          backgroundImage: 'url(/mountain-bg.jpg)',
+          opacity: 'var(--photo-opacity)',
+          backgroundImage: 'url(/colosseum-bg.jpg)',
           backgroundSize: 'cover',
           backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center center',
+          backgroundPosition: 'center 30%',
         }}
       />
       {/* Top nav bar */}
@@ -281,6 +275,7 @@ export default function AppLayout() {
               XO Arena
             </span>
           </Link>
+          {/* Guide orb button — placeholder until Phase 3 Guide component is built */}
           {session && showGuideButton && (
             <button
               onClick={() => {
@@ -292,11 +287,11 @@ export default function AppLayout() {
               title="Guide"
               className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
               style={{
-                background: 'linear-gradient(135deg, var(--color-blue-500), #6366f1)',
+                background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))',
                 color: 'white',
               }}
             >
-              <span>✦</span>
+              <span>🤖</span>
               <span>Guide</span>
             </button>
           )}
@@ -357,33 +352,21 @@ export default function AppLayout() {
             About
           </NavLink>
 
-          {/* Admin section — amber-tinted, desktop-only, admins only */}
+          {/* Admin — single link to unified platform admin */}
           {isAdmin && (
             <>
               <span className="w-px h-4 mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
-              {[
-                { to: '/admin', label: 'Admin' },
-                { to: '/admin/users', label: 'Users' },
-                { to: '/admin/ml-models', label: 'Bots' },
-                { to: '/admin/tournaments', label: 'Tournaments' },
-                { to: '/admin/ai', label: 'AI' },
-                { to: '/admin/logs', label: 'Logs' },
-              ].map(({ to, label }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={to === '/admin'}
-                  className={({ isActive }) =>
-                    `text-xs font-medium px-2 py-1 rounded-md transition-colors relative ${
-                      isActive
-                        ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
-                        : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
+              <a
+                href={PLATFORM_ADMIN_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium px-2 py-1 rounded-md transition-colors"
+                style={{ color: 'var(--color-amber-600)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--color-amber-50)'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}
+              >
+                Admin ↗
+              </a>
             </>
           )}
         </nav>
@@ -478,27 +461,20 @@ export default function AppLayout() {
                 </NavLink>
               ))}
 
-              {/* Admin section */}
+              {/* Admin — single external link to unified platform admin */}
               {isAdmin && (
                 <>
                   <div className="my-2 h-px mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
-                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-amber-600)' }}>Admin</p>
-                  {ADMIN_MENU_LINKS.map(({ to, label, end }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={end}
-                      className={({ isActive }) =>
-                        `relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
-                            : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
+                  <a
+                    href={PLATFORM_ADMIN_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-[var(--color-amber-50)]"
+                    style={{ color: 'var(--color-amber-600)' }}
+                  >
+                    <span className="text-base w-5 text-center leading-none">⚙</span>
+                    Platform Admin ↗
+                  </a>
                 </>
               )}
             </nav>
