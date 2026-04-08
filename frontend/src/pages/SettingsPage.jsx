@@ -4,8 +4,8 @@ import { useThemeStore } from '../store/themeStore.js'
 import { useSoundStore, SOUND_PACKS } from '../store/soundStore.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGuideStore } from '../store/guideStore.js'
-import api from '../lib/api.js'
-import { getToken } from '../lib/auth.js'
+import { api } from '../lib/api.js'
+import { getToken } from '../lib/getToken.js'
 
 const THEMES = [
   { value: 'light', label: 'Light', preview: '☀' },

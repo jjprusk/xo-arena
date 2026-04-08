@@ -256,7 +256,7 @@ export default function JourneyCard() {
           borderTop: '1px solid rgba(212,137,30,0.15)',
           fontSize: '0.75rem', color: 'var(--guide-text-muted, #5A6478)',
           cursor: 'pointer', background: 'none',
-          border: 'none', borderTop: '1px solid rgba(212,137,30,0.15)',
+          border: 'none',
           width: '100%', fontFamily: 'inherit',
         }}
       >
