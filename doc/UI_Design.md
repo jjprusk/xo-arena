@@ -1078,13 +1078,13 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 
 #### Tasks
 
-- [ ] `grep -r "onboarding\|tutorial\|walkthrough\|GettingStarted\|WelcomeModal\|firstLogin\|hasSeenTutorial\|tourComplete" frontend/src` — audit and list every match
-- [ ] Delete or empty identified onboarding components (step modals, intro tooltips, welcome popovers, tutorial overlays)
-- [ ] Remove onboarding fields from Zustand stores (e.g. `onboardingStep`, `hasSeenTutorial`)
-- [ ] Remove any route guards or redirects that funnel new users into an onboarding flow
-- [ ] Remove onboarding-related API calls from frontend (backend endpoints / DB columns deferred — Phase 4 will define the new schema)
-- [ ] Verify `AppLayout.jsx` has no remaining onboarding modal imports or invocations
-- [ ] Run full unit + Playwright smoke suite; confirm no regressions
+- [x] `grep -r "onboarding\|tutorial\|walkthrough\|GettingStarted\|WelcomeModal\|firstLogin\|hasSeenTutorial\|tourComplete" frontend/src` — audit and list every match
+- [x] Delete or empty identified onboarding components (step modals, intro tooltips, welcome popovers, tutorial overlays)
+- [x] Remove onboarding fields from Zustand stores (e.g. `onboardingStep`, `hasSeenTutorial`)
+- [x] Remove any route guards or redirects that funnel new users into an onboarding flow
+- [x] Remove onboarding-related API calls from frontend (backend endpoints / DB columns deferred — Phase 4 will define the new schema)
+- [x] Verify `AppLayout.jsx` has no remaining onboarding modal imports or invocations
+- [x] Run full unit + Playwright smoke suite; confirm no regressions
 
 #### Acceptance Criteria
 
@@ -1240,7 +1240,7 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 - [x] Clicking "Play XO vs community bot" Guide slot navigates to xo.aiarena game page with bot pre-selected
 - [x] Clicking "Open Gym" slot navigates to Gym with training config focused
 - [x] Journey step 6 CTA opens tournament lobby with registration modal for a suitable upcoming tournament
-- [ ] Arriving from a cross-site link works whether user is already signed in or signs in mid-flow
+- [x] Arriving from a cross-site link works whether user is already signed in or signs in mid-flow
 
 #### Tests
 
@@ -1260,7 +1260,7 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 - [x] **Cards**: add `.card` class using `--radius-card`, `--shadow-card`, `--border-default`; available for page-level adoption
 - [x] **Modals**: built `<Modal>` component (`components/ui/Modal.jsx`) with backdrop blur, `modal-slide-up` animation, Escape-to-close, `aria-modal`; migrated `NamePromptModal` and `AuthModal`
 - [x] **Form inputs**: defined `.form-input`, `.form-select`, `.form-textarea` with focus ring; replaced inline input styles in `AuthModal` and `NamePromptModal`
-- [ ] **Dark-mode cards**: verify cards in dark mode use tone elevation (`--bg-surface-2`) rather than box shadows; update any that still rely on `--shadow-card` alone
+- [x] **Dark-mode cards**: verify cards in dark mode use tone elevation (`--bg-surface-2`) rather than box shadows; update any that still rely on `--shadow-card` alone
 
 #### Acceptance criteria
 
@@ -1269,7 +1269,7 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 - [x] Cards have consistent radius (16px), border, and shadow at all breakpoints
 - [x] Modal backdrop, animation, and close behaviour is identical across all modals
 - [x] Focus rings on all interactive elements use consistent `--color-blue-600` ring via `.form-input`
-- [ ] Dark mode cards do not have visible box-shadow halos; elevation is communicated by tone
+- [x] Dark mode cards do not have visible box-shadow halos; elevation is communicated by tone
 
 #### Tests
 
@@ -1367,17 +1367,17 @@ A phase is complete when:
 
 Before starting Phase 3, confirm:
 
-- [ ] Phase 1 and 2 merged and live on staging ✅
-- [ ] `User.preferences` JSONB column exists or migration is ready to run
-- [ ] Socket.IO `guide:` event namespace agreed with backend team
-- [ ] `colosseum-bg.jpg` sourced and added to aiarena platform app `/public/` (not xo.aiarena)
-- [ ] Design mockups in `doc/mockups/` reviewed and approved as implementation targets:
-  - [ ] `lobby.html` — tournament list, view toggle, Guide slots
-  - [ ] `tournament-detail.html` — standings, match banner, registration sidebar
-  - [ ] `player-profile.html` — tier, merit, history
-  - [ ] `xo-game.html` — Guide panel states (mid-game context, notifications, slots, online strip)
-  - [ ] `onboarding-journey.html` — Journey card all states (1/7, 3/7, 6/7 spotlight, complete)
-  - [ ] `admin.html` — platform admin sidebar and all panel views
-- [ ] Playwright E2E suite passes on staging before any Phase 3 work begins
-- [ ] Team alignment: frontend and backend engineers briefed on Guide architecture and event naming
+- [x] Phase 1 and 2 merged and live on staging ✅
+- [x] `User.preferences` JSONB column exists or migration is ready to run
+- [x] Socket.IO `guide:` event namespace agreed with backend team
+- [x] `colosseum-bg.jpg` sourced and added to aiarena platform app `/public/` (not xo.aiarena)
+- [x] Design mockups in `doc/mockups/` reviewed and approved as implementation targets:
+  - [x] `lobby.html` — tournament list, view toggle, Guide slots
+  - [x] `tournament-detail.html` — standings, match banner, registration sidebar
+  - [x] `player-profile.html` — tier, merit, history
+  - [x] `xo-game.html` — Guide panel states (mid-game context, notifications, slots, online strip)
+  - [x] `onboarding-journey.html` — Journey card all states (1/7, 3/7, 6/7 spotlight, complete)
+  - [x] `admin.html` — platform admin sidebar and all panel views
+- [x] Playwright E2E suite passes on staging before any Phase 3 work begins
+- [x] Team alignment: frontend and backend engineers briefed on Guide architecture and event naming
 
