@@ -700,12 +700,13 @@ model TournamentMatch {
 // ─── Tournament Phase 2: Player Classification ────────────────────────────────
 
 model PlayerClassification {
-  id        String             @id @default(cuid())
-  userId    String             @unique
-  tier      ClassificationTier @default(RECRUIT)
-  merits    Int                @default(0)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  tier                 ClassificationTier @default(RECRUIT)
+  merits               Int                @default(0)
+  demotionOptOutUsedAt DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   meritTx   MeritTransaction[]

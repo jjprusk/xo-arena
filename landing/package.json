@@ -1,13 +1,29 @@
 {
-  "name": "aiarena-landing",
-  "version": "1.0.0",
+  "name": "@xo-arena/landing",
   "private": true,
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "echo 'No build step needed'",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "better-auth": "^1.5.5",
+    "compression": "^1.7.5",
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^3.0.5",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
+    "socket.io-client": "^4.8.3",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.2.2",
+    "vite": "^5.4.14"
   }
 }

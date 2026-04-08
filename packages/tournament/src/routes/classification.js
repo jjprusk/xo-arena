@@ -15,12 +15,29 @@
 import { Router } from 'express'
 import db from '@xo-arena/db'
 import { requireAuth, requireTournamentAdmin } from '../middleware/auth.js'
-import { adminOverrideTier } from '../services/classificationService.js'
+import { adminOverrideTier, useDemotionOptOut } from '../services/classificationService.js'
 import logger from '../logger.js'
 
 // ─── Self-service route (no admin required) ───────────────────────────────────
 
 export const classificationMeRouter = Router()
+
+classificationMeRouter.post('/demotion-opt-out', requireAuth, async (req, res) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const updated = await useDemotionOptOut(user.id)
+    res.json(updated)
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
+    logger.error({ err }, 'POST /classification/me/demotion-opt-out failed')
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
 
 classificationMeRouter.get('/', requireAuth, async (req, res) => {
   try {

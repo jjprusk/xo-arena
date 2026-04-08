@@ -5,6 +5,7 @@
   "workspaces": [
     "frontend",
     "backend",
+    "landing",
     "e2e",
     "packages/*"
   ],

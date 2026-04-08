@@ -336,8 +336,11 @@ async function _reviewDemotion(classification, reviewStart, minMatches, frThresh
   })
   if (promotedInPeriod) return
 
-  // Check opt-out (not implemented in Phase 2 DB — deferred; check SystemConfig flag per user would require schema change)
-  // For Phase 2, demotion opt-out is a future enhancement — apply demotion if all other conditions met
+  // Check demotion opt-out — skip if the player used it within the current review period
+  if (classification.demotionOptOutUsedAt && classification.demotionOptOutUsedAt >= reviewStart) {
+    logger.info({ classificationId: classification.id }, 'Demotion skipped — opt-out used this period')
+    return
+  }
 
   const fromTier = classification.tier
   const tierIndex = TIERS.indexOf(fromTier)
@@ -407,6 +410,48 @@ export async function adminOverrideTier(userId, toTier, reason = 'admin_override
     where: { userId },
     include: { history: { orderBy: { createdAt: 'desc' }, take: 5 } },
   })
+}
+
+// ─── Demotion opt-out ─────────────────────────────────────────────────────────
+
+/**
+ * Allow a player to opt out of demotion for the current review period.
+ * Can only be used once per period — calling again while the opt-out is still
+ * active (within the current review window) returns a 409 error.
+ *
+ * Returns the updated classification.
+ */
+export async function useDemotionOptOut(userId) {
+  const classification = await db.playerClassification.findUnique({ where: { userId } })
+  if (!classification) {
+    const err = new Error('No classification record found')
+    err.status = 404
+    throw err
+  }
+
+  if (classification.tier === 'RECRUIT') {
+    const err = new Error('RECRUIT players cannot be demoted — opt-out not applicable')
+    err.status = 400
+    throw err
+  }
+
+  const cadenceDays = await getConfig('classification.demotion.reviewCadenceDays', 30)
+  const reviewStart = new Date(Date.now() - cadenceDays * 24 * 60 * 60 * 1000)
+
+  if (classification.demotionOptOutUsedAt && classification.demotionOptOutUsedAt >= reviewStart) {
+    const err = new Error('Demotion opt-out already used for the current review period')
+    err.status = 409
+    throw err
+  }
+
+  const updated = await db.playerClassification.update({
+    where: { id: classification.id },
+    data: { demotionOptOutUsedAt: new Date() },
+    include: { history: { orderBy: { createdAt: 'desc' }, take: 5 } },
+  })
+
+  logger.info({ userId, tier: classification.tier }, 'Demotion opt-out used')
+  return updated
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

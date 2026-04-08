@@ -767,7 +767,7 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 - [x] Finish Ratio calculation across qualifying matches in review period
 - [x] Demotion eligibility check (did not promote, minimum matches, FR above threshold)
 - [x] Apply demotion — drop one tier, reset merits, write ClassificationHistory
-- [ ] Per-player opt-out of demotion (once per review period) — deferred to Phase 5
+- [x] Per-player opt-out of demotion (once per review period)
 
 **Admin**
 - [x] View and edit player classification in admin panel

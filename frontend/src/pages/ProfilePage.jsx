@@ -66,6 +66,8 @@ export default function ProfilePage() {
 
   // Tournament classification
   const [classification, setClassification] = useState(null)
+  const [optOutBusy, setOptOutBusy]         = useState(false)
+  const [optOutError, setOptOutError]       = useState(null)
 
   // Accordion open state
   const [openSections, setOpenSections] = useState({ profile: false, stats: true, credits: true, tournament: false, bots: false, danger: false })
@@ -283,6 +285,20 @@ export default function ProfilePage() {
       setBotActionError(err.message || 'Create failed.')
     } finally {
       setCreatingBot(false)
+    }
+  }
+
+  async function handleDemotionOptOut() {
+    setOptOutBusy(true)
+    setOptOutError(null)
+    try {
+      const token = await getToken()
+      const updated = await tournamentApi.useDemotionOptOut(token)
+      setClassification(updated)
+    } catch (err) {
+      setOptOutError(err.message || 'Failed to use opt-out')
+    } finally {
+      setOptOutBusy(false)
     }
   }
 
@@ -596,6 +612,41 @@ export default function ProfilePage() {
                 ))}
               </div>
             )}
+
+            {/* Demotion opt-out — only for players above RECRUIT */}
+            {classification.tier !== 'RECRUIT' && (() => {
+              const usedAt = classification.demotionOptOutUsedAt
+              const usedRecently = usedAt && (Date.now() - new Date(usedAt).getTime()) < 30 * 24 * 60 * 60 * 1000
+              return (
+                <div className="pt-1 border-t" style={{ borderColor: 'var(--border-default)' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                    Demotion protection
+                  </p>
+                  {usedRecently ? (
+                    <p className="text-xs" style={{ color: 'var(--color-teal-500)' }}>
+                      ✓ Protected this review cycle
+                    </p>
+                  ) : (
+                    <div>
+                      <button
+                        onClick={handleDemotionOptOut}
+                        disabled={optOutBusy}
+                        className="btn btn-sm"
+                        style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}
+                      >
+                        {optOutBusy ? 'Saving…' : 'Protect from demotion this cycle'}
+                      </button>
+                      <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                        Once per review period (~30 days). Skips your next demotion check.
+                      </p>
+                      {optOutError && (
+                        <p className="text-[10px] mt-1" style={{ color: 'var(--color-red-600)' }}>{optOutError}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         </AccordionSection>
       )}

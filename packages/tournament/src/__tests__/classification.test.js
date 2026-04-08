@@ -38,6 +38,7 @@ const {
   checkPromotion,
   runDemotionReview,
   adminOverrideTier,
+  useDemotionOptOut,
 } = await import('../services/classificationService.js')
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -443,6 +444,138 @@ describe('runDemotionReview', () => {
     await runDemotionReview()
 
     expect(mockDb.playerClassification.update).not.toHaveBeenCalled()
+  })
+})
+
+// ─── Demotion opt-out ─────────────────────────────────────────────────────────
+
+describe('runDemotionReview — opt-out', () => {
+  it('skips demotion when opt-out was used within the current review period', async () => {
+    const classification = makeClassification({
+      tier: 'CONTENDER',
+      merits: 2,
+      demotionOptOutUsedAt: new Date(), // just now — within any review window
+    })
+    mockDb.playerClassification.findMany.mockResolvedValue([classification])
+    mockDb.systemConfig.findUnique.mockResolvedValue(null)
+    mockDb.tournamentParticipant.findMany.mockResolvedValue(
+      Array.from({ length: 5 }, () =>
+        makeParticipant({ finalPositionPct: 0, registeredAt: new Date() })
+      )
+    )
+    mockDb.classificationHistory.findFirst.mockResolvedValue(null)
+
+    await runDemotionReview()
+
+    expect(mockDb.playerClassification.update).not.toHaveBeenCalled()
+  })
+
+  it('does NOT skip demotion when opt-out is older than the review period', async () => {
+    const oldDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) // 60 days ago
+    const classification = makeClassification({
+      tier: 'CONTENDER',
+      merits: 2,
+      demotionOptOutUsedAt: oldDate,
+    })
+    mockDb.playerClassification.findMany.mockResolvedValue([classification])
+    mockDb.systemConfig.findUnique.mockResolvedValue(null)
+    mockDb.tournamentParticipant.findMany.mockResolvedValue(
+      Array.from({ length: 5 }, () =>
+        makeParticipant({ finalPositionPct: 0, registeredAt: new Date() })
+      )
+    )
+    mockDb.classificationHistory.findFirst.mockResolvedValue(null)
+    mockDb.playerClassification.update.mockResolvedValue({ ...classification, tier: 'RECRUIT', merits: 0 })
+    mockDb.meritTransaction.create.mockResolvedValue({})
+    mockDb.classificationHistory.create.mockResolvedValue({})
+
+    await runDemotionReview()
+
+    expect(mockDb.playerClassification.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { tier: 'RECRUIT', merits: 0 } })
+    )
+  })
+
+  it('does NOT skip demotion when demotionOptOutUsedAt is null', async () => {
+    const classification = makeClassification({
+      tier: 'CONTENDER',
+      merits: 2,
+      demotionOptOutUsedAt: null,
+    })
+    mockDb.playerClassification.findMany.mockResolvedValue([classification])
+    mockDb.systemConfig.findUnique.mockResolvedValue(null)
+    mockDb.tournamentParticipant.findMany.mockResolvedValue(
+      Array.from({ length: 5 }, () =>
+        makeParticipant({ finalPositionPct: 0, registeredAt: new Date() })
+      )
+    )
+    mockDb.classificationHistory.findFirst.mockResolvedValue(null)
+    mockDb.playerClassification.update.mockResolvedValue({ ...classification, tier: 'RECRUIT', merits: 0 })
+    mockDb.meritTransaction.create.mockResolvedValue({})
+    mockDb.classificationHistory.create.mockResolvedValue({})
+
+    await runDemotionReview()
+
+    expect(mockDb.playerClassification.update).toHaveBeenCalled()
+  })
+})
+
+describe('useDemotionOptOut', () => {
+  it('sets demotionOptOutUsedAt for an eligible player', async () => {
+    const classification = makeClassification({ tier: 'VETERAN', merits: 3, demotionOptOutUsedAt: null })
+    mockDb.playerClassification.findUnique.mockResolvedValue(classification)
+    mockDb.systemConfig.findUnique.mockResolvedValue(null)
+    const updated = { ...classification, demotionOptOutUsedAt: new Date() }
+    mockDb.playerClassification.update.mockResolvedValue(updated)
+
+    const result = await useDemotionOptOut('user_1')
+
+    expect(mockDb.playerClassification.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: classification.id },
+        data: expect.objectContaining({ demotionOptOutUsedAt: expect.any(Date) }),
+      })
+    )
+    expect(result.demotionOptOutUsedAt).toBeTruthy()
+  })
+
+  it('throws 409 when opt-out already used in current period', async () => {
+    const classification = makeClassification({
+      tier: 'VETERAN',
+      merits: 3,
+      demotionOptOutUsedAt: new Date(), // just used
+    })
+    mockDb.playerClassification.findUnique.mockResolvedValue(classification)
+    mockDb.systemConfig.findUnique.mockResolvedValue(null)
+
+    await expect(useDemotionOptOut('user_1')).rejects.toMatchObject({ status: 409 })
+    expect(mockDb.playerClassification.update).not.toHaveBeenCalled()
+  })
+
+  it('throws 400 for RECRUIT tier (cannot be demoted)', async () => {
+    const classification = makeClassification({ tier: 'RECRUIT', merits: 0 })
+    mockDb.playerClassification.findUnique.mockResolvedValue(classification)
+
+    await expect(useDemotionOptOut('user_1')).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('throws 404 when no classification record exists', async () => {
+    mockDb.playerClassification.findUnique.mockResolvedValue(null)
+
+    await expect(useDemotionOptOut('user_1')).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('allows opt-out again after previous opt-out has expired (older than review period)', async () => {
+    const oldOptOut = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) // 60 days ago
+    const classification = makeClassification({ tier: 'ELITE', merits: 5, demotionOptOutUsedAt: oldOptOut })
+    mockDb.playerClassification.findUnique.mockResolvedValue(classification)
+    mockDb.systemConfig.findUnique.mockResolvedValue(null)
+    mockDb.playerClassification.update.mockResolvedValue({ ...classification, demotionOptOutUsedAt: new Date() })
+
+    const result = await useDemotionOptOut('user_1')
+
+    expect(mockDb.playerClassification.update).toHaveBeenCalled()
+    expect(result.demotionOptOutUsedAt).toBeTruthy()
   })
 })
 

@@ -99,6 +99,10 @@ export const tournamentApi = {
   getMyClassification: (token) =>
     request('GET', '/api/classification/me', undefined, token),
 
+  /** POST /api/classification/me/demotion-opt-out — use once-per-period demotion opt-out */
+  useDemotionOptOut: (token) =>
+    request('POST', '/api/classification/me/demotion-opt-out', {}, token),
+
   /** GET /api/classification/players/:userId */
   getPlayerClassification: (userId, token) =>
     request('GET', `/api/classification/players/${userId}`, undefined, token),
