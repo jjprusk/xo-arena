@@ -12,13 +12,6 @@ import IdleWarningPopup from '../components/pvp/IdleWarningPopup.jsx'
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const guestChallengeHint = sessionStorage.getItem('xo_guest_challenge_hint') === '1'
-
-  // Clear so reload doesn't re-trigger the hint
-  useEffect(() => {
-    if (!guestChallengeHint) return
-    sessionStorage.removeItem('xo_guest_challenge_hint')
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const joinSlug = searchParams.get('join')
   const spectateSlug = searchParams.get('spectate')
 
@@ -128,7 +121,6 @@ export default function PlayPage() {
         inviteUrl={inviteUrl}
         roomName={displayName}
         onPvpJoin={(s) => usePvpStore.getState().joinRoom(s, 'player')}
-        guestChallengeHint={guestChallengeHint}
       />
     </div>
   )

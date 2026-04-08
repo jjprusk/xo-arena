@@ -5,14 +5,13 @@ import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { api, cachedFetch } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { ListTr, ListTd, SearchBar } from '../ui/ListTable.jsx'
-import { usePrefsStore } from '../../store/prefsStore.js'
 
 // ── BotAccordion ─────────────────────────────────────────────────────────────
 // Two-section accordion (Built-in / Community) using ListTr/ListTd for rows.
 // Only one section open at a time; built-in is open by default.
 // Community section includes a live search bar and a scrollable list.
 
-function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch, showPlayHint, onPlayHintDismiss }) {
+function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch }) {
   const BUILTIN_ORDER = { Rusty: 0, Copper: 1, Sterling: 2, Magnus: 3 }
   const builtIn = bots.filter(b => !b.botOwnerId).sort((a, b) => {
     const oa = BUILTIN_ORDER[a.displayName] ?? 99
@@ -47,7 +46,7 @@ function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSecti
                   <BotRow
                     bot={bot}
                     isSignedIn={isSignedIn}
-                    onChallenge={(b) => { onPlayHintDismiss?.(); onChallenge(b) }}
+                    onChallenge={onChallenge}
                   />
                 </ListTd>
               </ListTr>
@@ -203,7 +202,7 @@ const BOARD_THEMES = [
   { id: 'retro',   label: 'Retro' },
 ]
 
-export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName, guestChallengeHint = false }) {
+export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
   const {
     setMode, setDifficulty, setAIImplementation, setMLModelId, setPvbotModelId,
     setAI2Implementation, setAI2Difficulty, setAI2ModelId,
@@ -215,28 +214,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
 
   const { data: session } = useOptimisticSession()
   const isSignedIn = !!session?.user
-  const { playHintSeen, setPlayHintSeen, setPrefs } = usePrefsStore()
-  const showPlayHint = isSignedIn && !playHintSeen
-  const [showGuestHint, setShowGuestHint] = useState(guestChallengeHint)
-  const showHintFinger = showPlayHint || showGuestHint
-
-  // Auto-open Challenge a Bot + Built-in for first-visit guest flow
-  useEffect(() => {
-    if (!guestChallengeHint) return
-    setBotExpanded(true)
-    setOpenSection('builtin')
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Re-fetch playHintSeen on every visit so a CLI reset is reflected immediately
-  useEffect(() => {
-    if (!isSignedIn) return
-    getToken().then(token => {
-      if (!token) return
-      api.users.getHints(token)
-        .then(({ playHintSeen: fresh }) => setPrefs({ playHintSeen: !!fresh }))
-        .catch(() => {})
-    })
-  }, [isSignedIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [aivaiExpanded, setAivaiExpanded] = useState(false)
   const [botExpanded, setBotExpanded] = useState(false)
@@ -331,12 +308,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
     setBoardTheme(localTheme)
   }
 
-  function handlePlayHintDismiss() {
-    setPlayHintSeen()
-    setShowGuestHint(false)
-    getToken().then(token => { if (token) api.users.markPlayHint(token).catch(() => {}) })
-  }
-
   function handleChallengeBot(bot) {
     applyOptions()
     const cfg = getBotPlayConfig(bot)
@@ -400,33 +371,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
 
       {/* ── Challenge a Bot ─────────────────────────────────── */}
       <div className="relative">
-        {showPlayHint && !botExpanded && (
-          <div
-            className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-6px', top: '50%', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
-          >
-            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
-          </div>
-        )}
-        {showHintFinger && botExpanded && openSection !== 'builtin' && (
-          <div
-            className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-6px', top: '108px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
-          >
-            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
-          </div>
-        )}
-        {showHintFinger && botExpanded && openSection === 'builtin' && (
-          <div
-            className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-6px', top: '148px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
-          >
-            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
-          </div>
-        )}
         <div
           className="rounded-xl border-2 overflow-hidden transition-colors"
           style={{
@@ -471,8 +415,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
                 setOpenSection={setOpenSection}
                 communitySearch={communitySearch}
                 setCommunitySearch={setCommunitySearch}
-                showPlayHint={showHintFinger}
-                onPlayHintDismiss={handlePlayHintDismiss}
               />
             )}
 

@@ -1,11 +1,9 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { Link } from 'react-router-dom'
-import GettingStartedModal from '../components/GettingStartedModal.jsx'
 import changelog from '../../public/changelog.json'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 export default function AboutPage() {
-  const [gettingStartedOpen, setGettingStartedOpen] = useState(false)
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div className="pb-4 border-b flex items-end gap-3" style={{ borderColor: 'var(--border-default)' }}>
@@ -71,13 +69,6 @@ export default function AboutPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Help</h2>
         <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => setGettingStartedOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--bg-surface-hover)]"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-surface)' }}
-          >
-            Guide →
-          </button>
           <Link
             to="/faq" state={{ from: '/about' }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--bg-surface-hover)]"
@@ -121,7 +112,6 @@ export default function AboutPage() {
         </section>
       )}
 
-      <GettingStartedModal isOpen={gettingStartedOpen} onClose={() => setGettingStartedOpen(false)} />
     </div>
   )
 }

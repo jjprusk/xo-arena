@@ -16,11 +16,8 @@ import { useRolesStore } from '../../store/rolesStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
-import GettingStartedModal from '../GettingStartedModal.jsx'
-import WelcomeModal from '../WelcomeModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
 import AccomplishmentPopup from '../AccomplishmentPopup.jsx'
-import { usePrefsStore } from '../../store/prefsStore.js'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -89,10 +86,6 @@ export default function AppLayout() {
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const [accomplishments, setAccomplishments] = useState([])
-  const [guideOpen, setGuideOpen] = useState(false)
-  const [guideHint, setGuideHint] = useState(null)
-  const [welcomeOpen, setWelcomeOpen] = useState(false)
-  const { showGuideButton, setPrefs } = usePrefsStore()
   const prevUserId = useRef(null)
 
   // Close the mobile menu whenever the user navigates
@@ -109,47 +102,6 @@ export default function AppLayout() {
       prevUserId.current = null
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load preferences and auto-open guide on first ever sign-in
-  useEffect(() => {
-    const userId = session?.user?.id
-    if (!userId) return
-    async function maybeAutoOpen() {
-      try {
-        const token = await getToken()
-        const { faqHintSeen, playHintSeen, showGuideButton: sgb } = await api.users.getHints(token)
-        setPrefs({ showGuideButton: sgb, playHintSeen: !!playHintSeen })
-        if (!faqHintSeen) {
-          api.users.markFaqHint(token).catch(() => {})
-          setGuideHint('faq')
-          setGuideOpen(true)
-        }
-      } catch { /* non-fatal */ }
-    }
-    maybeAutoOpen()
-  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Re-open guide when navigated back from FAQ with ?open-guide=1
-  useEffect(() => {
-    if (!location.search?.includes('open-guide=1')) return
-    const { playHintSeen } = usePrefsStore.getState()
-    setGuideHint(playHintSeen ? null : 'play')
-    setGuideOpen(true)
-    navigate(location.pathname, { replace: true })
-  }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Show welcome popup once to first-time visitors (signed-out only).
-  // ?reset-welcome=1 clears the seen flag for testing.
-  useEffect(() => {
-    if (location.search?.includes('reset-welcome=1')) {
-      localStorage.removeItem('xo_welcome_seen')
-      navigate(location.pathname, { replace: true })
-    }
-    if (session) return // already signed in — skip
-    if (localStorage.getItem('xo_welcome_seen')) return
-    const id = setTimeout(() => setWelcomeOpen(true), 1200)
-    return () => clearTimeout(id)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll unread-count every 60s to seed the badge on sign-in (no chime — only socket chimes)
   useEffect(() => {
@@ -275,26 +227,6 @@ export default function AppLayout() {
               XO Arena
             </span>
           </Link>
-          {/* Guide orb button — placeholder until Phase 3 Guide component is built */}
-          {session && showGuideButton && (
-            <button
-              onClick={() => {
-                const { playHintSeen } = usePrefsStore.getState()
-                setGuideHint(playHintSeen ? null : 'play')
-                setGuideOpen(true)
-              }}
-              aria-label="Guide"
-              title="Guide"
-              className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
-              style={{
-                background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))',
-                color: 'white',
-              }}
-            >
-              <span>🤖</span>
-              <span>Guide</span>
-            </button>
-          )}
         </div>
 
         {/* Desktop nav links */}
@@ -527,28 +459,6 @@ export default function AppLayout() {
         currentName={namePrompt?.currentName}
         onSave={() => setNamePrompt(null)}
         onSkip={() => setNamePrompt(null)}
-      />
-      <GettingStartedModal
-        isOpen={guideOpen}
-        hint={guideHint}
-        onClose={() => { setGuideOpen(false); setGuideHint(null) }}
-      />
-      <WelcomeModal
-        isOpen={welcomeOpen}
-        onClose={() => {
-          const isFirst = !localStorage.getItem('xo_welcome_seen')
-          localStorage.setItem('xo_welcome_seen', '1')
-          setWelcomeOpen(false)
-          if (isFirst) {
-            sessionStorage.setItem('xo_guest_challenge_hint', '1')
-            navigate('/play')
-          }
-        }}
-        onSignIn={() => {
-          localStorage.setItem('xo_welcome_seen', '1')
-          setWelcomeOpen(false)
-          setAuthModalOpen(true)
-        }}
       />
       {accomplishments.length > 0 && (
         <AccomplishmentPopup
