@@ -18,6 +18,36 @@ import { requireAuth, requireTournamentAdmin } from '../middleware/auth.js'
 import { adminOverrideTier } from '../services/classificationService.js'
 import logger from '../logger.js'
 
+// ─── Self-service route (no admin required) ───────────────────────────────────
+
+export const classificationMeRouter = Router()
+
+classificationMeRouter.get('/', requireAuth, async (req, res) => {
+  try {
+    // Look up the internal User ID from the BetterAuth ID in the token
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const classification = await db.playerClassification.findUnique({
+      where: { userId: user.id },
+      include: {
+        history: { orderBy: { createdAt: 'desc' }, take: 5 },
+      },
+    })
+    if (!classification) return res.status(404).json({ error: 'No classification record' })
+
+    res.json(classification)
+  } catch (err) {
+    logger.error({ err }, 'GET /classification/me failed')
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ─── Admin routes ─────────────────────────────────────────────────────────────
+
 const router = Router()
 router.use(requireAuth, requireTournamentAdmin)
 

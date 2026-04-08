@@ -6,6 +6,17 @@ import { api } from '../lib/api.js'
 import { signOut } from '../lib/auth-client.js'
 import { disconnectSocket } from '../lib/socket.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
+import { tournamentApi } from '../lib/tournamentApi.js'
+
+const TIER_ORDER = ['RECRUIT', 'CONTENDER', 'VETERAN', 'ELITE', 'CHAMPION', 'LEGEND']
+const TIER_ICONS = {
+  RECRUIT:   '🎖️',
+  CONTENDER: '🥉',
+  VETERAN:   '🥈',
+  ELITE:     '🥇',
+  CHAMPION:  '🏆',
+  LEGEND:    '👑',
+}
 
 const BOT_MODEL_LABELS = {
   ml: 'ML',
@@ -53,8 +64,11 @@ export default function ProfilePage() {
   const [emailAchievements, setEmailAchievements] = useState(false)
   const [savingEmailPref, setSavingEmailPref] = useState(false)
 
+  // Tournament classification
+  const [classification, setClassification] = useState(null)
+
   // Accordion open state
-  const [openSections, setOpenSections] = useState({ profile: false, stats: true, credits: true, bots: false, danger: false })
+  const [openSections, setOpenSections] = useState({ profile: false, stats: true, credits: true, tournament: false, bots: false, danger: false })
   const toggle = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
 
   // Account deletion
@@ -90,11 +104,12 @@ export default function ProfilePage() {
         setNameInput(user.displayName)
 
         // All fetches in parallel — nothing depends on the others.
-        const [statsRes, eloRes, botsRes, creditsRes] = await Promise.allSettled([
+        const [statsRes, eloRes, botsRes, creditsRes, classificationRes] = await Promise.allSettled([
           api.users.stats(user.id),
           api.users.eloHistory(user.id),
           api.bots.list({ ownerId: user.id, includeInactive: true }),
           api.users.credits(user.id),
+          tournamentApi.getMyClassification(token),
         ])
 
         if (statsRes.status === 'fulfilled') setStats(statsRes.value.stats)
@@ -108,6 +123,9 @@ export default function ProfilePage() {
         if (creditsRes.status === 'fulfilled') {
           setCredits(creditsRes.value.credits)
           setEmailAchievements(creditsRes.value.credits.emailAchievements ?? false)
+        }
+        if (classificationRes.status === 'fulfilled') {
+          setClassification(classificationRes.value)
         }
       } catch {
         setError('Failed to load profile.')
@@ -524,6 +542,60 @@ export default function ProfilePage() {
                 Email me when I earn an achievement
               </span>
             </label>
+          </div>
+        </AccordionSection>
+      )}
+
+      {/* Tournament Rank */}
+      {classification && (
+        <AccordionSection
+          title="Tournament Rank"
+          summary={`${TIER_ICONS[classification.tier] ?? ''} ${classification.tier} · ${classification.merits} merit${classification.merits !== 1 ? 's' : ''}`}
+          open={openSections.tournament}
+          onToggle={() => toggle('tournament')}
+        >
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl" aria-hidden="true">{TIER_ICONS[classification.tier] ?? '🏅'}</span>
+              <div>
+                <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{classification.tier}</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{classification.merits} merit{classification.merits !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+
+            {/* Tier ladder */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {TIER_ORDER.map((tier) => {
+                const active = tier === classification.tier
+                return (
+                  <span
+                    key={tier}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: active ? 'var(--color-blue-600)' : 'var(--bg-base)',
+                      color: active ? 'white' : 'var(--text-muted)',
+                    }}
+                  >
+                    {TIER_ICONS[tier]} {tier}
+                  </span>
+                )
+              })}
+            </div>
+
+            {/* Recent tier history */}
+            {classification.history?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Recent changes</p>
+                {classification.history.slice(0, 3).map((h, i) => (
+                  <p key={i} className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {h.fromTier ? `${h.fromTier} → ` : ''}{h.toTier}
+                    <span className="ml-1" style={{ color: 'var(--text-muted)' }}>
+                      ({h.reason}) · {new Date(h.createdAt).toLocaleDateString()}
+                    </span>
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         </AccordionSection>
       )}

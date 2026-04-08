@@ -9,6 +9,26 @@ import logger from '../logger.js'
 import { queueNotification } from '../services/notificationService.js'
 import { completeStep } from '../services/journeyService.js'
 
+// ─── Pending PVP match registry ───────────────────────────────────────────────
+// Stores state for PVP tournament matches waiting for players to join a room.
+// matchId → { tournamentId, participant1UserId, participant2UserId, bestOfN, slug }
+// "slug" is null until the first player requests the room via tournament:room:join.
+
+const _pendingPvpMatches = new Map()
+
+export function getPendingPvpMatch(matchId) {
+  return _pendingPvpMatches.get(matchId) ?? null
+}
+
+export function setPendingPvpMatchSlug(matchId, slug) {
+  const entry = _pendingPvpMatches.get(matchId)
+  if (entry) entry.slug = slug
+}
+
+export function deletePendingPvpMatch(matchId) {
+  _pendingPvpMatches.delete(matchId)
+}
+
 // Channels to subscribe to
 const CHANNELS = [
   'tournament:flash:announced',
@@ -67,8 +87,19 @@ export async function handleEvent(io, channel, data) {
     }
     case 'tournament:match:ready': {
       // Emit real-time to both participants
-      const { tournamentId, matchId, participant1UserId, participant2UserId } = data
+      const { tournamentId, matchId, participant1UserId, participant2UserId, bestOfN } = data
       const userIds = [participant1UserId, participant2UserId].filter(Boolean)
+
+      // Store pending PVP match so socketHandler can create/join the room on demand
+      if (participant1UserId && participant2UserId) {
+        _pendingPvpMatches.set(matchId, {
+          tournamentId,
+          participant1UserId,
+          participant2UserId,
+          bestOfN: bestOfN ?? 1,
+          slug: null,
+        })
+      }
 
       // Look up tournament type to decide Guide notification style (flash vs match_ready)
       let tournamentType = null
@@ -79,7 +110,7 @@ export async function handleEvent(io, channel, data) {
       const guideType = tournamentType === 'FLASH' ? 'flash' : 'match_ready'
 
       for (const userId of userIds) {
-        io.to(`user:${userId}`).emit('tournament:match:ready', { tournamentId, matchId })
+        io.to(`user:${userId}`).emit('tournament:match:ready', { tournamentId, matchId, bestOfN: bestOfN ?? 1 })
         await queueNotification(userId, 'tournament_match_ready', { tournamentId, matchId })
         // Journey step 6: first tournament registration detected at match-ready time (fire-and-forget)
         completeStep(userId, 6, io).catch(() => {})

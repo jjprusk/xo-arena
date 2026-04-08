@@ -54,35 +54,85 @@ function FilterBar({ value, onChange }) {
 
 // ── Registration button ───────────────────────────────────────────────────────
 
-function RegisterButton({ tournament, token, onSuccess }) {
-  const [busy, setBusy] = useState(false)
-  const [err, setErr]   = useState(null)
+const NOTIF_PREF_OPTIONS = [
+  { value: 'AS_PLAYED',         label: 'After each match' },
+  { value: 'END_OF_TOURNAMENT', label: 'When tournament ends' },
+]
 
-  async function handle(e) {
+function RegisterButton({ tournament, token, onSuccess }) {
+  const [step, setStep] = useState('idle')   // 'idle' | 'picking' | 'busy'
+  const [notifPref, setNotifPref] = useState('AS_PLAYED')
+  const [err, setErr] = useState(null)
+
+  async function handleConfirm(e) {
     e.preventDefault()
     e.stopPropagation()
-    setBusy(true)
+    setStep('busy')
     setErr(null)
     try {
-      await tournamentApi.register(tournament.id, token)
+      await tournamentApi.register(tournament.id, token, { resultNotifPref: notifPref })
       onSuccess()
     } catch (error) {
       setErr(error.message || 'Failed')
-    } finally {
-      setBusy(false)
+      setStep('picking')
     }
   }
 
+  if (step === 'idle') {
+    return (
+      <div>
+        <button
+          onClick={e => { e.preventDefault(); e.stopPropagation(); setStep('picking') }}
+          className="btn btn-teal btn-sm"
+        >
+          Register
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div>
-      <button
-        onClick={handle}
-        disabled={busy}
-        className="btn btn-teal btn-sm"
-      >
-        {busy ? 'Joining…' : 'Register'}
-      </button>
-      {err && <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
+    <div
+      className="space-y-2 p-2 rounded-lg border"
+      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)' }}
+      onClick={e => e.preventDefault()}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        Notify me:
+      </p>
+      <div className="flex flex-col gap-1">
+        {NOTIF_PREF_OPTIONS.map(opt => (
+          <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="radio"
+              name={`notif-${tournament.id}`}
+              value={opt.value}
+              checked={notifPref === opt.value}
+              onChange={() => setNotifPref(opt.value)}
+              className="accent-[var(--color-teal-500)]"
+            />
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{opt.label}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-1.5">
+        <button
+          onClick={handleConfirm}
+          disabled={step === 'busy'}
+          className="btn btn-teal btn-sm flex-1"
+        >
+          {step === 'busy' ? 'Joining…' : 'Confirm'}
+        </button>
+        <button
+          onClick={e => { e.preventDefault(); setStep('idle'); setErr(null) }}
+          disabled={step === 'busy'}
+          className="btn btn-sm"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          Cancel
+        </button>
+      </div>
+      {err && <p className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
     </div>
   )
 }

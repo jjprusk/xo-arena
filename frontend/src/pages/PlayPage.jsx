@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import React, { useEffect, useState, useRef } from 'react'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
 import { usePvpStore } from '../store/pvpStore.js'
 import { cachedFetch } from '../lib/api.js'
@@ -8,6 +8,7 @@ import GameBoard from '../components/game/GameBoard.jsx'
 import RoomLobby from '../components/room/RoomLobby.jsx'
 import PvPBoard from '../components/room/PvPBoard.jsx'
 import IdleWarningPopup from '../components/pvp/IdleWarningPopup.jsx'
+import { getSocket } from '../lib/socket.js'
 
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
@@ -15,6 +16,11 @@ export default function PlayPage() {
   const joinSlug = searchParams.get('join')
   const spectateSlug = searchParams.get('spectate')
   const actionParam = searchParams.get('action')
+  const tournamentMatchId = searchParams.get('tournamentMatch')
+  const tournamentId = searchParams.get('tournamentId')
+  const isTournamentMatch = !!tournamentMatchId
+
+  const [seriesResult, setSeriesResult] = useState(null)  // set when tournament:series:complete fires
 
   const { status: pvaiStatus, mode: pvaiMode } = useGameStore()
   const {
@@ -42,6 +48,22 @@ export default function PlayPage() {
     return () => clearTimeout(id)
   }, [])
 
+  // Listen for tournament series completion
+  useEffect(() => {
+    if (!isTournamentMatch) return
+    const socket = getSocket()
+    if (!socket) return
+
+    function onSeriesComplete(data) {
+      if (data.matchId === tournamentMatchId) {
+        setSeriesResult(data)
+      }
+    }
+
+    socket.on('tournament:series:complete', onSeriesComplete)
+    return () => socket.off('tournament:series:complete', onSeriesComplete)
+  }, [isTournamentMatch, tournamentMatchId])
+
   // Auto-create a room on arrival (unless joining or spectating via link)
   useEffect(() => {
     if (spectateSlug) {
@@ -58,7 +80,7 @@ export default function PlayPage() {
     if (!abandoned) return
     const id = setTimeout(() => {
       reset()
-      navigate('/play', { replace: true })
+      navigate(isTournamentMatch ? `/tournaments/${tournamentId}` : '/play', { replace: true })
     }, 3000)
     return () => clearTimeout(id)
   }, [abandoned])
@@ -70,20 +92,44 @@ export default function PlayPage() {
     navigate('/play', { replace: true })
   }, [kicked])
 
-  // PvP flow — only show RoomLobby for manually created rooms
-  if (pvpStatus === 'waiting' && role === 'host' && !isAutoRoom) return <RoomLobby />
-  if (pvpStatus === 'waiting' && role === 'guest') return (
+  // Tournament series complete screen
+  if (seriesResult) {
+    return (
+      <div className="flex flex-col items-center gap-6 py-16 max-w-sm mx-auto text-center">
+        <div className="text-5xl">🏆</div>
+        <div>
+          <p className="text-xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+            Series Complete
+          </p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            {seriesResult.p1Wins} – {seriesResult.p2Wins}
+          </p>
+        </div>
+        <Link
+          to={`/tournaments/${tournamentId}`}
+          className="btn btn-primary"
+          onClick={() => { reset(); setSeriesResult(null) }}
+        >
+          Back to Tournament
+        </Link>
+      </div>
+    )
+  }
+
+  // PvP flow — only show RoomLobby for manually created rooms (not tournament rooms)
+  if (pvpStatus === 'waiting' && role === 'host' && !isAutoRoom && !isTournamentMatch) return <RoomLobby />
+  if (pvpStatus === 'waiting' && (role === 'guest' || (role === 'host' && isTournamentMatch))) return (
     <div className="flex flex-col items-center gap-4 py-12">
       <div className="w-8 h-8 border-4 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
-      <p style={{ color: 'var(--text-secondary)' }}>Joining room…</p>
+      <p style={{ color: 'var(--text-secondary)' }}>
+        {isTournamentMatch ? 'Waiting for opponent…' : 'Joining room…'}
+      </p>
     </div>
   )
 
   if (pvpStatus === 'playing' || pvpStatus === 'finished') {
     // Room abandoned — show the message overlay instead of the board
     if (abandoned) {
-      const iSelf = myMark != null  // players have a mark; spectators don't
-      const wasMe = iSelf && abandoned.absentUserId === null  // we can't easily compare without userId
       return (
         <div className="flex flex-col items-center gap-4 py-16">
           <div className="text-4xl">💤</div>
@@ -91,7 +137,7 @@ export default function PlayPage() {
             Room ended due to inactivity
           </p>
           <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
-            No result recorded. Returning to lobby…
+            No result recorded. Returning…
           </p>
         </div>
       )
@@ -100,7 +146,7 @@ export default function PlayPage() {
     return (
       <>
         <div className="flex flex-col items-center w-full max-w-md mx-auto">
-          <PvPBoard />
+          <PvPBoard isTournamentMatch={isTournamentMatch} />
         </div>
         <IdleWarningPopup />
       </>

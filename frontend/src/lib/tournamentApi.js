@@ -95,6 +95,10 @@ export const tournamentApi = {
     return request('GET', `/api/classification/players?${p}`, undefined, token)
   },
 
+  /** GET /api/classification/me — current user's own classification (no admin required) */
+  getMyClassification: (token) =>
+    request('GET', '/api/classification/me', undefined, token),
+
   /** GET /api/classification/players/:userId */
   getPlayerClassification: (userId, token) =>
     request('GET', `/api/classification/players/${userId}`, undefined, token),

@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useRolesStore } from '../store/rolesStore.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
+import { connectSocket } from '../lib/socket.js'
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
@@ -614,6 +615,101 @@ function MixedMatchBoard({ matchId, tournament, userId, token, onDone }) {
   )
 }
 
+// ── PVP match banner ──────────────────────────────────────────────────────────
+
+function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDismiss }) {
+  const navigate = useNavigate()
+  const [joining, setJoining] = useState(false)
+  const [err, setErr]         = useState(null)
+
+  if (!matchEvent || tournament.mode !== 'PVP') return null
+
+  const { matchId, participant1UserId, participant2UserId, bestOfN } = matchEvent
+  const isParticipant = userBetterAuthId &&
+    (userBetterAuthId === participant1UserId || userBetterAuthId === participant2UserId)
+  if (!isParticipant) return null
+
+  function handleJoin() {
+    setJoining(true)
+    setErr(null)
+    const socket = connectSocket()
+
+    function cleanup() {
+      socket.off('tournament:room:ready', onReady)
+      socket.off('error', onError)
+    }
+
+    function onReady({ slug, tournamentId }) {
+      cleanup()
+      onDismiss()
+      navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
+    }
+
+    function onError({ message }) {
+      cleanup()
+      setJoining(false)
+      setErr(message || 'Failed to join match room')
+    }
+
+    socket.once('tournament:room:ready', onReady)
+    socket.once('error', onError)
+    getToken().then(authToken => {
+      socket.emit('tournament:room:join', { matchId, authToken })
+    })
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--border-default)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        <div className="space-y-1 text-center">
+          <div
+            className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-0.5 rounded-full mb-1"
+            style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
+          >
+            Match Ready
+          </div>
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+            Your tournament match is ready
+          </h2>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Best of {bestOfN ?? 1} series. Play against your opponent now.
+          </p>
+        </div>
+
+        {err && <p className="text-xs text-center" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleJoin}
+            disabled={joining}
+            className="btn btn-primary flex-1"
+          >
+            {joining ? 'Joining…' : 'Join Match'}
+          </button>
+          <button
+            onClick={onDismiss}
+            disabled={joining}
+            className="btn"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Later
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MixedMatchBanner({ tournament, userId, token, matchEvent, onDismiss }) {
   if (!matchEvent || tournament.mode !== 'MIXED') return null
 
@@ -767,8 +863,10 @@ export default function TournamentDetailPage() {
 
   const { lastEvent } = useTournamentSocket()
 
-  const isAdmin = session?.user?.role === 'admin' || rolesStore.hasRole('TOURNAMENT_ADMIN')
-  const userId  = session?.user?.id ?? null
+  const isAdmin          = session?.user?.role === 'admin' || rolesStore.hasRole('TOURNAMENT_ADMIN')
+  const userId           = session?.user?.id ?? null
+  // BetterAuth ID — matches participant1UserId / participant2UserId in match:ready events
+  const userBetterAuthId = session?.user?.id ?? null
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -817,6 +915,17 @@ export default function TournamentDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* PVP mode match banner */}
+      {tournament && activeMatchEvent && (
+        <PvpMatchBanner
+          tournament={tournament}
+          userBetterAuthId={userBetterAuthId}
+          token={token}
+          matchEvent={activeMatchEvent}
+          onDismiss={() => setActiveMatchEvent(null)}
+        />
+      )}
+
       {/* MIXED mode match banner */}
       {tournament && activeMatchEvent && (
         <MixedMatchBanner

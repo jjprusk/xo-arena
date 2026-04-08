@@ -775,6 +775,7 @@ async function _dispatchMatch(tournament, match) {
       matchId: match.id,
       participant1UserId: p1?.user?.betterAuthId ?? p1?.userId,
       participant2UserId: p2?.user?.betterAuthId ?? p2?.userId,
+      bestOfN: tournament.bestOfN ?? 1,
     })
   }
 }
