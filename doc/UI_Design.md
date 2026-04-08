@@ -60,6 +60,186 @@ WCAG AA minimum across all surfaces. Requirements:
 
 ---
 
+## aiarena Visual Identity Spec
+
+This section is the buildable spec for `packages/ui` and the `aiarena` application. It is the authoritative source for all design tokens, typography, shape, elevation, and background treatment.
+
+### Color Tokens
+
+#### Primary — Slate Blue
+
+| Token | Hex | Use |
+|-------|-----|-----|
+| `primary-50` | `#EEF3FA` | Tinted backgrounds, subtle highlights |
+| `primary-100` | `#D5E2F3` | Hover backgrounds, selected states |
+| `primary-200` | `#AABFE6` | Borders, dividers |
+| `primary-300` | `#7A9DD4` | Disabled foreground |
+| `primary-400` | `#5580BC` | Secondary actions |
+| `primary-500` | `#4A6FA5` | **Base — buttons, links, active nav** |
+| `primary-600` | `#3D5D8A` | Button hover |
+| `primary-700` | `#304A6E` | Button pressed; dark mode primary |
+| `primary-800` | `#233653` | Dark surface accents |
+| `primary-900` | `#162338` | Deep backgrounds |
+
+#### Neutral — Zinc
+
+Standard Tailwind zinc scale (`zinc-50` through `zinc-950`). Zinc's slight cool cast pairs well with slate blue and is shared across all sites in the family.
+
+#### Semantic Colors
+
+| Token | Hex | Use |
+|-------|-----|-----|
+| `amber-500` | `#F59E0B` | Urgent notifications, flash tournaments, onboarding orb pulse |
+| `green-500` | `#22C55E` | Online status, success states |
+| `red-500` | `#EF4444` | Errors, ban indicators, destructive actions |
+| `purple-500` | `#A855F7` | Match-ready notifications |
+
+#### Surface Tokens
+
+Semantic surface names are defined in `packages/ui`; values are set per site.
+
+**Light mode:**
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `surface-base` | `zinc-50` `#FAFAFA` | Page background |
+| `surface-raised` | `#FFFFFF` + shadow-md | Cards, panels |
+| `surface-overlay` | `#FFFFFF` + shadow-lg | Modals, drawers |
+| `surface-sunken` | `zinc-100` `#F4F4F5` | Input backgrounds, code blocks |
+
+**Dark mode (tone steps — no shadows):**
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `surface-base` | `zinc-950` `#09090B` | Page background |
+| `surface-raised` | `zinc-900` `#18181B` | Cards, panels |
+| `surface-overlay` | `zinc-800` `#27272A` | Modals, drawers |
+| `surface-sunken` | `zinc-950` `#09090B` | Input backgrounds |
+
+#### Text Tokens
+
+| Token | Light | Dark |
+|-------|-------|------|
+| `text-primary` | `zinc-900` | `zinc-50` |
+| `text-secondary` | `zinc-600` | `zinc-400` |
+| `text-muted` | `zinc-400` | `zinc-600` |
+| `text-inverse` | `#FFFFFF` | `zinc-900` |
+| `text-link` | `primary-500` | `primary-300` |
+
+#### Border Tokens
+
+| Token | Light | Dark |
+|-------|-------|------|
+| `border-default` | `zinc-200` | `zinc-800` |
+| `border-subtle` | `zinc-100` | `zinc-900` |
+| `border-strong` | `zinc-300` | `zinc-700` |
+
+---
+
+### Typography Scale
+
+All sizes in rem; base = 16px.
+
+| Role | Typeface | Size | Weight | Line height |
+|------|----------|------|--------|-------------|
+| `display` | Inter Tight | 3rem (48px) | 800 | 1.1 |
+| `h1` | Inter Tight | 2.25rem (36px) | 700 | 1.2 |
+| `h2` | Inter Tight | 1.75rem (28px) | 700 | 1.25 |
+| `h3` | Inter Tight | 1.375rem (22px) | 600 | 1.3 |
+| `h4` | Inter Tight | 1.125rem (18px) | 600 | 1.4 |
+| `body-lg` | Inter | 1.125rem (18px) | 400 | 1.7 |
+| `body` | Inter | 1rem (16px) | 400 | 1.6 |
+| `body-sm` | Inter | 0.875rem (14px) | 400 | 1.5 |
+| `caption` | Inter | 0.75rem (12px) | 400 | 1.4 |
+| `mono` | Menlo | 0.875rem (14px) | 400 | 1.5 |
+
+---
+
+### Shape — Border Radius
+
+Soft profile, consistent with xo.aiarena.
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `radius-sm` | 6px | Badges, tags, small inputs |
+| `radius-md` | 10px | Buttons, cards, inputs |
+| `radius-lg` | 16px | Modals, panels, large cards |
+| `radius-full` | 9999px | Pills, guide orb, avatars |
+
+---
+
+### Elevation Model — Hybrid
+
+Light mode uses shadows; dark mode uses tone steps (no shadows).
+
+**Light mode shadows:**
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `shadow-sm` | `0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)` | Subtle card lift |
+| `shadow-md` | `0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06)` | Cards, dropdowns |
+| `shadow-lg` | `0 20px 40px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08)` | Modals, overlays |
+
+Dark mode elevation is achieved via the tone-step surface tokens above — no shadow is applied.
+
+---
+
+### Background Treatment
+
+The Colosseum photo is platform-wide across all aiarena pages, including admin.
+
+```css
+/* aiarena global background */
+.site-bg {
+  position: fixed;
+  inset: 0;
+  background: url('/colosseum-bg.jpg') center 30% / cover no-repeat;
+  opacity: 0.15;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dark .site-bg {
+  opacity: 0.08;
+}
+```
+
+If the photo proves visually heavy on data-dense pages (admin tables, reports), a per-page override can reduce opacity further or suppress it entirely — decided during implementation, not pre-empted here.
+
+---
+
+### Animation
+
+| Token | Duration | Easing | Use |
+|-------|----------|--------|-----|
+| `duration-fast` | 100ms | ease-out | Hover states, badge count changes |
+| `duration-normal` | 200ms | ease-out | Panel open, tooltip appear |
+| `duration-slow` | 300ms | ease-out | Modal enter, Guide panel slide |
+| — | — | ease-in | All exit animations (reverse of above) |
+
+`prefers-reduced-motion`: all durations collapse to `0.01ms`.
+
+---
+
+### packages/ui Boundary
+
+This resolves Design Exercise #3 (shared vs. distinct component surface).
+
+**`packages/ui` provides (shared across all sites):**
+- Tailwind preset: spacing scale, type scale, border radius tokens, shadow tokens, animation tokens
+- CSS custom property names (token names only — not values)
+- Base component primitives: `Button`, `Card`, `Input`, `Select`, `Badge`, `Avatar`, `Spinner`, `Tooltip`, `Modal`
+- Components are built against token names (`--color-primary`, `--surface-raised`, etc.) with no hardcoded colours
+
+**Each site provides (site-specific overrides):**
+- Token values in their `tailwind.config.js` (primary colour scale, surface colours)
+- Background image and opacity
+- Any site-specific component variants (e.g. the Guide orb glow colour)
+
+This means adding a third game site requires only a new colour palette and background image — all component behaviour, spacing, and typography are inherited automatically.
+
+---
+
 ## Shared Packages
 
 Before the aiarena frontend can be built, four packages must be extracted or created in the monorepo:
@@ -89,7 +269,50 @@ Guest users may view tournaments, rankings, and replays without an account. Regi
 
 ### Admin Navigation
 
-Admin surfaces (tournament management, classification config, merit thresholds, user management) use a **traditional structured menu** — sidebar or top-nav with clearly labelled sections. The destination space is large and users navigate it deliberately.
+All admin functions live at **`aiarena.callidity.com/admin`** — the single unified admin panel for the entire platform. The xo.aiarena admin panel is deprecated immediately and redirects to the platform admin. As additional games are added, per-game admin settings appear as sub-sections under **Games** rather than as separate admin surfaces.
+
+Admin navigation uses a **sidebar** with clearly labelled top-level sections. The destination space is large and users navigate it deliberately.
+
+#### Admin Sidebar Structure
+
+```
+Tournaments
+  ├── All Tournaments       ← list view, filterable by status / mode / game
+  ├── Create Tournament     ← full creation form
+  └── Flash Tournament      ← quick-trigger panel; also available as a Guide slot (admin only)
+
+Classification
+  ├── Tier Thresholds       ← merit values required for promotion at each tier boundary
+  ├── Merit Values          ← points awarded per result type (win / draw / loss / finish position)
+  └── Demotion Rules        ← inactivity window, review period, opt-out settings
+
+Players
+  ├── Player List           ← all users; columns: username, tier badge, ELO, last active, status
+  └── Player Profile        ← game stats, tier history, credits balance, ban controls, bot limits
+
+Bots & ML
+  ├── Bot List              ← all bots across all users; filter by owner, competitive flag, activity
+  └── ML Models             ← model inventory, training status, storage usage per user
+
+Games
+  ├── XO Arena              ← ELO config, match settings, leaderboard controls
+  └── Game Registry         ← enable / disable games platform-wide; cross-site routing config
+
+Reports
+  ├── Tournament Stats      ← participation counts, completion rates, format and mode breakdown
+  ├── Tier Distribution     ← player counts per tier, promotion / demotion trends over time
+  └── Activity Overview     ← DAU / WAU, game volume, bot vs. human match ratio
+
+System
+  ├── General Settings      ← invite expiry, onboarding TC reward amount, platform feature flags
+  └── Notifications         ← admin broadcast tool: compose and send an admin-type Guide notification to all users
+```
+
+All Reports pages include a **Export PDF** action. Reports are read-only dashboards.
+
+#### Admin Guide Slot (Flash Tournament)
+
+The Guide action library includes an **Admin** section visible only to users with the admin role. Flash Tournament is the primary action — one tap opens the quick-trigger panel. Admins can pin it to their Guide slots for fast access during events. Additional admin actions may be added to this section over time.
 
 ### General User Navigation
 
@@ -174,6 +397,83 @@ Users can invite any other player to a game via a Guide slot action (⚔️ Invi
 
 Invite expiry: **5 minutes by default**, configurable by admins globally via `SystemConfig` (key: `invite.expiryMinutes`). When an invite expires it auto-dismisses and the sender receives a quiet `invite_expired` notification.
 
+### Onboarding Journey
+
+New users are guided through a 7-step journey that teaches the platform progressively — from watching a game to competing in a tournament with their own trained bot. The journey lives entirely inside the Guide, reinforcing it as the platform's primary navigation hub from the user's first interaction.
+
+#### Entry point
+
+On the very first login the Guide auto-opens to the Journey card (step 1 — Welcome). This is the only login-triggered auto-open. After that, the orb and contextual triggers keep the journey visible without being intrusive.
+
+#### Orb state during onboarding
+
+While the journey is in progress the orb displays a **progress ring** (e.g. a subtle arc showing 3 of 7 steps complete) with a slow amber pulse — visually distinct from both the normal idle pulse and the urgent notification pulse. The ring disappears when the journey is complete or dismissed.
+
+Users learn quickly that the ring means "your journey is in progress." Clicking the orb opens the Guide to the Journey card.
+
+#### Contextual auto-open (Option 4)
+
+When the user navigates to a page that matches their current uncompleted step, the Guide auto-opens to that step. Examples:
+
+| Page | Step triggered |
+|------|---------------|
+| `/gym` (first visit, no training runs) | Step 5 — Train your bot |
+| Bot list (no bots created) | Step 4 — Create your first bot |
+| `/gym/guide` | Step 3 — Learn how AI training works |
+| Tournament lobby | Step 6 — Enter a tournament |
+
+The Guide never auto-opens mid-game or while a form is being filled (same active-context rule as urgent notifications).
+
+#### Journey steps
+
+| # | Step | Completion trigger | Guide action |
+|---|------|--------------------|--------------|
+| 1 | **Welcome to XO Arena** | Auto — first login | Context text only |
+| 2 | **Play a game — see how it works** | First game completed (any mode) | Cross-site: opens XO vs community bot, game queued and ready |
+| 3 | **Learn how AI training works** | Visit `/gym/guide` | Cross-site: opens `xo.aiarena.callidity.com/gym/guide` |
+| 4 | **Create your first bot** | First bot created (API event) | Cross-site: opens bot creation flow |
+| 5 | **Train your bot** | First training run completes (`totalEpisodes > 0`) | Cross-site: opens Gym |
+| 6 | **Enter a tournament** | First tournament registration | Cross-site: opens tournament lobby |
+| 7 | **Play your first tournament match** | First tournament match played | Celebration — journey complete |
+
+Steps complete automatically when the underlying event is detected — no "mark as done" button. Progress is stored server-side in the `preferences` JSON field on the `User` record so the journey follows the user across devices and browsers.
+
+#### Guide presentation
+
+- A **Journey card** is pinned at the top of the Guide panel, above the notification stack
+- Collapsed view: progress bar ("3 of 7 complete") + next step title + action button
+- Expanded view: all 7 steps, checkmarks on completed ones, action buttons on uncompleted ones
+- A **× dismiss** button in the card corner — requires a one-tap confirmation prompt before permanently hiding the journey
+
+#### Contextual spotlight
+
+When the user is on a page relevant to their current step, a subtle highlight ring and one-line tooltip appear on the specific UI element they need to interact with:
+
+- Bot list with no bots → spotlight on "Create Bot": *"Step 4: Create your first bot"*
+- `/gym` with no training runs → spotlight on "Start Training": *"Step 5: Train your bot"*
+
+The spotlight dismisses automatically when the step completes or the user navigates away. It never appears mid-game.
+
+#### Dismissal
+
+- Dismissed state stored server-side — the journey never resurfaces after dismissal
+- A **Restart onboarding** option in Settings → Account for users who want to revisit
+- On restart, already-completed steps remain marked done — the user continues from where they left off
+
+#### Completion reward
+
+When step 7 is recorded:
+
+- Confetti burst in the Guide panel
+- **Onboarding Complete** badge awarded to the user's profile
+- **50 TC** (Tournament Credits) deposited — enough to enter a couple of tournaments and keep the momentum going
+
+#### Relationship to existing components
+
+The current `GettingStartedModal.jsx`, `getting-started.html` SVG journey map, and `onboardingStore.js` are replaced by this system. The "Getting Started" header button is removed — the Guide orb is the sole entry point. The SVG map may be archived or repurposed as a decorative asset.
+
+---
+
 ### Online Presence Strip
 
 A compact strip of avatars is displayed in the Guide below the notification stack, showing currently signed-in players. Tapping an avatar sends a **one-tap room invite** — a `room_invite` notification delivered directly to that player's Guide with a link to the sender's current room.
@@ -189,6 +489,37 @@ This is distinct from the general game invite: it requires no configuration, wor
 ### Technical Approach
 
 The Guide's conversational layer uses a **hybrid model**: rule-based intent matching handles navigation and known actions client-side at zero cost; unrecognised queries fall through to a Claude API call for flexible natural-language handling. This balances cost and capability.
+
+#### Rule-based layer (client-side, zero cost)
+
+Handles all recognisable intents before any API call is made:
+
+- **Navigation**: "go to tournaments", "show rankings", "open gym" → direct route push
+- **Known actions**: "invite someone", "flash tournament", "my profile" → trigger slot action
+- **Onboarding FAQ**: "how do I train a bot", "what's a tier" → static canned response
+- **Out of scope**: deflects with *"I can help with navigation, tournaments, and platform questions."*
+
+#### Claude API layer (server-side fallback)
+
+Only queries that clear the rule-based layer reach Claude.
+
+| Parameter | Value |
+|-----------|-------|
+| Model | `claude-haiku-4-5-20251001` |
+| Input cap | 1,500 tokens (system prompt ~600, history ~800, user message ~100) |
+| Output cap | 250 tokens |
+| History window | Rolling last 6 turns |
+| Per-user rate limit | 20 calls / hour; resets on the hour |
+
+**System prompt** is assembled server-side per request and injects: current page, user context (onboarding step, tier, active tournament), available slot actions as a structured list, and persona directive (concise, helpful, slightly AI-leaning, never verbose). The prompt is never sent from the client.
+
+#### Fallback behaviour
+
+| Scenario | Behaviour |
+|----------|-----------|
+| Claude timeout (> 4s) | Canned: *"Having trouble connecting — try navigating directly or check back shortly."* |
+| API unavailable | Same canned message; rule-based layer continues normally |
+| Rate limit reached | Quiet inline note: *"I'm running a bit slow right now — try asking more directly or use the slots below."* No error state shown. |
 
 ---
 
@@ -224,9 +555,9 @@ The `/rankings` page provides two views:
 
 The following decisions must be resolved in a design session before the aiarena build begins:
 
-1. **aiarena visual identity spec** — slate blue confirmed, Inter confirmed, system dark/light confirmed. Not yet formalised as a buildable spec that `packages/ui` can be built from.
-2. **Admin menu structure** — information architecture for the tournament admin section: top-level categories, page hierarchy, how classification config, merit thresholds, and demotion settings are organised. Nothing designed yet.
-3. **Shared vs. distinct component surface** — which primitives (buttons, cards, inputs, badges) go into `packages/ui` vs. remain site-specific overrides.
+1. ~~**aiarena visual identity spec**~~ — **Resolved.** See aiarena Visual Identity Spec section above.
+2. ~~**Admin menu structure**~~ — **Resolved.** See Admin Navigation section above.
+3. ~~**Shared vs. distinct component surface**~~ — **Resolved.** See packages/ui Boundary section above.
 4. **Guide technical approach** — confirm hybrid model; decide Claude model, token budget, and fallback behaviour.
 
 ---
@@ -235,36 +566,52 @@ The following decisions must be resolved in a design session before the aiarena 
 
 ### Blocking — Prerequisites to Build
 
-| # | Item | Notes |
-|---|------|-------|
-| 1 | **Admin menu structure** | Nothing designed yet. See Design Exercise above. |
-| 2 | **aiarena visual identity spec** | Decisions made but not formalised as a buildable spec. |
-| 3 | **Shared vs. distinct component surface** | Depends on identity spec (#2). |
+All blocking design exercises are resolved. The aiarena build may begin once `packages/ui` is initialised with the identity spec above.
 
 ### Non-Blocking — Resolve During Design Iteration
 
 | # | Item | Notes |
 |---|------|-------|
-| 4 | **Guide: primary vs. supplementary nav** | Lobby mockup leans supplementary. Not formally settled. |
-| 5 | **Guide technical approach** | Hybrid model agreed in principle; model, token budget, fallback not yet specified. |
-| 6 | **Onboarding arrow design** | Configurable arrows for onboarding slots that expire. Mentioned, not yet designed. |
-| 7 | **Online strip — activity status** | Future phase: show what a player is doing ("in a tournament", "playing", "browsing"). Not in scope for alpha. |
+| 3 | **Guide: primary vs. supplementary nav** | Lobby mockup leans supplementary. Not formally settled. |
+| 4 | **Guide technical approach** | Hybrid model agreed in principle; model, token budget, fallback not yet specified. |
+| 5 | **Onboarding spotlight design** | Visual treatment for the contextual highlight ring + tooltip. Not yet mocked. |
+| 6 | **Online strip — activity status** | Future phase: show what a player is doing ("in a tournament", "playing", "browsing"). Not in scope for alpha. |
 
 ### Mockups Not Yet Built
 
 | # | Page / Surface | Key elements |
 |---|---------------|-------------|
-| 8 | **Tournament detail page** | Bracket view, match status, registration panel, notification preference selector |
-| 9 | **Classification / player profile page** | Tier badge, merit history, promotion/demotion progress, match record |
-| 10 | **Admin tournament pages** | Tournament list, create/edit form, classification config panel, merit threshold settings |
-| 11 | **xo.aiarena Guide integration** | Guide on the game site with cross-site slots; flash tournament notification in active-game context |
+| 7 | **Tournament detail page** | Bracket view, match status, registration panel, notification preference selector |
+| 8 | **Classification / player profile page** | Tier badge, merit history, promotion/demotion progress, match record |
+| 9 | **Admin pages** | Sidebar layout, tournament list, create/edit form, classification config, reports with PDF export |
+| 10 | **xo.aiarena Guide integration** | Guide on the game site with cross-site slots; flash tournament notification in active-game context |
+| 11 | **Onboarding Journey card** | Guide Journey card (collapsed + expanded states), orb progress ring, completion celebration |
 
 ### Resolved
 
 | # | Item | Resolution |
 |---|------|-----------|
+| — | Admin menu structure | Unified at aiarena.callidity.com/admin; sidebar with 7 sections; xo.aiarena admin deprecated immediately |
+| — | Admin — xo.aiarena admin fate | Deprecated immediately, redirects to platform admin |
+| — | Admin — Flash Tournament | Sub-item under Tournaments; also pinnable as Guide slot action (admin only) |
+| — | Admin — Reports | Read-only dashboards with PDF export from day one; 3 reports: Tournament Stats, Tier Distribution, Activity Overview |
+| — | Onboarding journey | Guide-native journey tracker (orb progress ring + contextual auto-open); 7 steps; dismissible; badge + 50 TC reward |
+| — | Onboarding — auto-open rule | Guide auto-opens on first login only; orb progress ring + contextual page triggers thereafter |
 | — | Flash tournament page banner | Removed — surfaces in Guide notification stack instead |
 | — | Lobby background treatment | Colosseum photo, `opacity: 0.25`, `background-position: center 30%` |
 | — | Guide name and persona | "Guide" — AI-leaning, personality with restraint |
 | — | Guide invocation model | On-demand floating orb button in header |
 | — | Site colour palette | Slate blue (`#4A6FA5`) for aiarena; teal retained for xo.aiarena |
+| — | Guide technical approach | Hybrid: rule-based client-side + Haiku 4.5 fallback; 1,500 token input cap, 250 token output cap, 20 calls/user/hour |
+
+---
+
+## Addendum — Deferred Features and Future Considerations
+
+### Guide AI — Cost and Volume Scaling
+
+The current Guide AI approach (Claude Haiku 4.5 as a separate API service) is appropriate for early-stage usage. If platform volume grows significantly — many concurrent users making frequent Guide queries — the per-call cost of the external Claude API will become material.
+
+**Future consideration**: if Claude API costs increase significantly relative to platform scale, migrate the Guide's conversational layer to a backend-hosted model integrated with the existing AI infrastructure rather than continuing to call the external API per query. This would bring the Guide's intelligence in-house alongside the existing ML/bot training backend, reduce per-query cost, and allow tighter integration with user and game state without round-tripping through the API.
+
+This is not a day-one concern — monitor monthly Claude API spend as a line item and trigger this evaluation if it exceeds a meaningful fraction of total infrastructure cost.
