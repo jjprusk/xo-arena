@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useThemeStore } from '../store/themeStore.js'
 import { useSoundStore, SOUND_PACKS } from '../store/soundStore.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { useGuideStore } from '../store/guideStore.js'
 
 const THEMES = [
   { value: 'light', label: 'Light', preview: '☀' },
@@ -15,6 +16,10 @@ export default function SettingsPage() {
   const { theme, setTheme } = useThemeStore()
   const { muted, toggleMute, volume, setVolume, soundPack, setSoundPack, play } = useSoundStore()
   const { data: session } = useOptimisticSession()
+  const { journeyProgress, restartJourney } = useGuideStore()
+  const [journeyRestarting, setJourneyRestarting] = useState(false)
+  const journeyDismissed = !!journeyProgress?.dismissedAt
+  const journeyComplete  = (journeyProgress?.completedSteps?.length ?? 0) >= 7
   const location = useLocation()
   const fromProfile = location.state?.from === '/profile'
 
@@ -133,6 +138,35 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      {/* Journey */}
+      {session?.user && (journeyDismissed || journeyComplete) && (
+        <section className="space-y-3">
+          <SectionLabel>Onboarding Journey</SectionLabel>
+          <div
+            className="rounded-xl p-4 space-y-3"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+          >
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {journeyComplete
+                ? 'You completed your onboarding journey. Restart to go through it again.'
+                : 'Your journey was dismissed. Restart to pick up where you left off.'}
+            </p>
+            <button
+              onClick={async () => {
+                setJourneyRestarting(true)
+                await restartJourney()
+                setJourneyRestarting(false)
+              }}
+              disabled={journeyRestarting}
+              className="text-sm px-4 py-2 rounded-lg font-semibold transition-opacity disabled:opacity-50"
+              style={{ background: 'var(--color-amber-500)', color: 'white' }}
+            >
+              {journeyRestarting ? 'Restarting…' : 'Restart onboarding journey'}
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

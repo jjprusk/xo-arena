@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { api } from '../lib/api.js'
+import { getToken } from '../lib/getToken.js'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -71,6 +73,13 @@ export default function GymGuidePage() {
     fetch('/bot-training-guide.md')
       .then(r => r.text())
       .then(setContent)
+  }, [])
+
+  // Journey step 3: visiting the AI Training Guide page (fire-and-forget)
+  useEffect(() => {
+    getToken().then(token => {
+      if (token) api.guide.triggerStep(3, token).catch(() => {})
+    }).catch(() => {})
   }, [])
 
   const displayContent = useMemo(() => {

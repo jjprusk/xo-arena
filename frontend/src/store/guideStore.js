@@ -56,6 +56,31 @@ export const useGuideStore = create((set, get) => ({
     return get().notifications.length
   },
 
+  // ── Journey actions ───────────────────────────────────────────────
+
+  // Apply a step completion received via socket (guide:journeyStep)
+  applyJourneyStep({ completedSteps }) {
+    set(s => ({
+      journeyProgress: { ...s.journeyProgress, completedSteps },
+    }))
+  },
+
+  dismissJourney() {
+    const dismissedAt = new Date().toISOString()
+    set(s => ({ journeyProgress: { ...s.journeyProgress, dismissedAt } }))
+    getToken().then(token => {
+      if (token) api.guide.patchPreferences({ journeyProgress: { ...get().journeyProgress } }, token).catch(() => {})
+    }).catch(() => {})
+  },
+
+  async restartJourney() {
+    try {
+      const token = await getToken()
+      if (token) await api.guide.restartJourney(token)
+      set({ journeyProgress: { completedSteps: [], dismissedAt: null } })
+    } catch { /* non-fatal */ }
+  },
+
   // ── Slot actions ──────────────────────────────────────────────────
 
   async updateSlots(slots) {

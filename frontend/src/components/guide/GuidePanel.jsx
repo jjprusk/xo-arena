@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useGuideStore } from '../../store/guideStore.js'
 import NotificationStack from './NotificationStack.jsx'
+import JourneyCard from './JourneyCard.jsx'
 import SlotGrid from './SlotGrid.jsx'
 import SlotPicker from './SlotPicker.jsx'
 import OnlineStrip from './OnlineStrip.jsx'
@@ -114,6 +115,7 @@ export default function GuidePanel({ isAdmin = false }) {
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 p-4">
+            <JourneyCard />
             <NotificationStack />
             <SlotGrid
               editMode={editMode}

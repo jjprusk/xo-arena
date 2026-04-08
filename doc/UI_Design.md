@@ -885,22 +885,22 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 *The core new UI work. Build the Guide as a self-contained component that replaces the existing pill button and GettingStartedModal.*
 
 **Frontend sub-tasks:**
-1. `GuideOrb` — orb button in nav header; progress ring SVG overlay; urgent amber pulse; notification badge count
-2. `GuidePanel` — slide-in right panel; header with orb + title + close/settings; scrollable body; chat input footer
-3. `SlotGrid` — 8 configurable quick-action slots in a 4-column grid; edit mode (gear button) exposes drag handles and × remove badges; onboarding slots render with dashed amber border and ⏱ expiry
-4. `SlotPicker` overlay — action library organised by section: Platform / XO Arena / Onboarding; cross-site actions labelled ↗
-5. `NotificationStack` — card types: `flash` (amber, urgent), `match_ready` (slate, urgent), `admin` (blue), `invite` (teal), `room_invite` (teal); dismiss removes card and decrements badge; up to 3 visible + "+N more"
-6. `OnlineStrip` — up to 6 online player avatars; amber dot = in-match; tap sends one-tap room invite
-7. `GuideStore` (Zustand) — panel open/close, slot config, notification queue, journey progress; mirrors server-side state
-8. Wire `AccomplishmentPopup` socket events → Guide `NotificationStack`
-9. Wire Flash tournament socket events → Guide `NotificationStack` (urgent, never auto-opens mid-game)
-10. Active-game context rule: detect mid-game state; block Guide auto-open; show orb pulse only
+1. ✅ `GuideOrb` — orb button in nav header; progress ring SVG overlay; urgent amber pulse; notification badge count
+2. ✅ `GuidePanel` — slide-in right panel; header with orb + title + close/settings; scrollable body; chat input footer
+3. ✅ `SlotGrid` — 8 configurable quick-action slots in a 4-column grid; edit mode (gear button) exposes drag handles and × remove badges; onboarding slots render with dashed amber border and ⏱ expiry
+4. ✅ `SlotPicker` overlay — action library organised by section: Platform / XO Arena / Onboarding; cross-site actions labelled ↗
+5. ✅ `NotificationStack` — card types: `flash` (amber, urgent), `match_ready` (slate, urgent), `admin` (blue), `invite` (teal), `room_invite` (teal); dismiss removes card and decrements badge; up to 3 visible + "+N more"
+6. ✅ `OnlineStrip` — up to 6 online player avatars; amber dot = in-match; tap sends one-tap room invite
+7. ✅ `GuideStore` (Zustand) — panel open/close, slot config, notification queue, journey progress; mirrors server-side state
+8. ✅ Wire `AccomplishmentPopup` socket events → Guide `NotificationStack`
+9. ✅ Wire Flash tournament socket events → Guide `NotificationStack` (urgent, never auto-opens mid-game)
+10. ✅ Active-game context rule: detect mid-game state; block Guide auto-open; show orb pulse only
 
 **Backend sub-tasks:**
-1. Add `preferences` JSONB column to `User` table (or extend existing if present); fields: `guideSlots`, `journeyProgress`, `journeyDismissed`
-2. `GET /api/guide/preferences` — return slot config + journey state for authenticated user
-3. `PATCH /api/guide/preferences` — update slot config or journey fields
-4. Socket event: `guide:notification` — server pushes notification cards to connected user's Guide stack
+1. ✅ Add `preferences` JSONB column to `User` table (or extend existing if present); fields: `guideSlots`, `journeyProgress`, `journeyDismissed`
+2. ✅ `GET /api/guide/preferences` — return slot config + journey state for authenticated user
+3. ✅ `PATCH /api/guide/preferences` — update slot config or journey fields
+4. ✅ Socket event: `guide:notification` — server pushes notification cards to connected user's Guide stack
 
 **Retire on completion:** `GettingStartedModal.jsx` (iframe approach), `WelcomeModal.jsx` (replaced by Guide auto-open on first login)
 
@@ -994,7 +994,7 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 | 0 | Remove existing onboarding from xo.aiarena | Upcoming | Small–Medium | Low | — |
 | 1 | Token alignment (palette, radius, photo opacity) | ✅ Done | Small | Very low | — |
 | 2 | Nav cleanup (admin links out, Guide pill → slate) | ✅ Done | Small | Low | — |
-| 3 | Guide component build | Upcoming | Large | Medium | Phase 1, 2 |
+| 3 | Guide component build | ✅ Done | Large | Medium | Phase 1, 2 |
 | 4 | Onboarding journey | Upcoming | Large | Medium | Phase 0, 3 |
 | 5 | Cross-site slot actions | Upcoming | Medium | Medium | Phase 3, 4 |
 | 6 | Component library alignment | Ongoing | Medium | Low | Phase 1 |
@@ -1112,39 +1112,39 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 
 **Frontend**
 
-- [ ] `GuideOrb` component: circular orb button, SVG progress ring (animated arc for 0–7 steps), idle / onboarding-amber / urgent-amber pulse animations, notification badge, minimum 44px touch target
-- [ ] `GuidePanel` component: slide-in panel from right (320px desktop, full-width mobile bottom-sheet), header with orb + title + settings/close buttons, scrollable body, chat input footer
-- [ ] `SlotGrid` component: 4-column grid, up to 8 slots, edit mode (gear toggles drag handles + × badges + empty "Add" slots), onboarding slots with dashed amber border and ⏱ expiry countdown
-- [ ] `SlotPicker` overlay: modal with action library by section (Platform / XO Arena / Onboarding / Admin); cross-site actions labelled ↗; selecting adds to next empty slot
-- [ ] `NotificationStack` component: ordered by arrival, newest first; up to 3 visible + "+N more"; flash (amber), match_ready (slate), admin (blue), invite (teal), room_invite (teal); dismiss animates out and decrements badge
-- [ ] `OnlineStrip` component: up to 6 avatar tiles + overflow count; amber dot = in-match; green dot = available; tap sends room invite notification
-- [ ] `GuideStore` (Zustand): `panelOpen`, `slots[]`, `notifications[]`, `journeyProgress`, `journeyDismissed`; `addNotification`, `dismissNotification`, `updateSlots` actions; hydrates from server on sign-in
-- [ ] Active-game detection: `useIsInGame()` hook reads `gameStore` + `pvpStore`; blocks Guide auto-open; orb still pulses urgently
-- [ ] Retire `GettingStartedModal.jsx` import and usage from `AppLayout.jsx`; retire `WelcomeModal.jsx` (first-login opens Guide panel instead)
-- [ ] Replace Guide pill button in nav with `GuideOrb` component
+- [x] `GuideOrb` component: circular orb button, SVG progress ring (animated arc for 0–7 steps), idle / onboarding-amber / urgent-amber pulse animations, notification badge, minimum 44px touch target
+- [x] `GuidePanel` component: slide-in panel from right (320px desktop, full-width mobile bottom-sheet), header with orb + title + settings/close buttons, scrollable body, chat input footer
+- [x] `SlotGrid` component: 4-column grid, up to 8 slots, edit mode (gear toggles drag handles + × badges + empty "Add" slots), onboarding slots with dashed amber border and ⏱ expiry countdown
+- [x] `SlotPicker` overlay: modal with action library by section (Platform / XO Arena / Onboarding / Admin); cross-site actions labelled ↗; selecting adds to next empty slot
+- [x] `NotificationStack` component: ordered by arrival, newest first; up to 3 visible + "+N more"; flash (amber), match_ready (slate), admin (blue), invite (teal), room_invite (teal); dismiss animates out and decrements badge
+- [x] `OnlineStrip` component: up to 6 avatar tiles + overflow count; amber dot = in-match; green dot = available; tap sends room invite notification
+- [x] `GuideStore` (Zustand): `panelOpen`, `slots[]`, `notifications[]`, `journeyProgress`, `journeyDismissed`; `addNotification`, `dismissNotification`, `updateSlots` actions; hydrates from server on sign-in
+- [x] Active-game detection: `useIsInGame()` hook reads `gameStore` + `pvpStore`; blocks Guide auto-open; orb still pulses urgently
+- [x] Retire `GettingStartedModal.jsx` import and usage from `AppLayout.jsx`; retire `WelcomeModal.jsx` (first-login opens Guide panel instead)
+- [x] Replace Guide pill button in nav with `GuideOrb` component
 
 **Backend**
 
-- [ ] Add `guideSlots` and `guideNotificationPrefs` JSONB fields to `User.preferences` (Prisma migration)
-- [ ] `GET /api/guide/preferences` — return slots + notification prefs for authenticated user
-- [ ] `PATCH /api/guide/preferences` — update slots or prefs; validate slot count ≤ 8
-- [ ] Socket event `guide:notification` — server pushes notification cards to user's connected socket; client `GuideStore` receives and enqueues
-- [ ] Wire existing Flash tournament socket event into `guide:notification` with type `flash`
-- [ ] Wire existing accomplishment socket event into `guide:notification` with type `match_ready` or `admin` as appropriate
+- [x] Add `guideSlots` and `guideNotificationPrefs` JSONB fields to `User.preferences` (Prisma migration)
+- [x] `GET /api/guide/preferences` — return slots + notification prefs for authenticated user
+- [x] `PATCH /api/guide/preferences` — update slots or prefs; validate slot count ≤ 8
+- [x] Socket event `guide:notification` — server pushes notification cards to user's connected socket; client `GuideStore` receives and enqueues
+- [x] Wire existing Flash tournament socket event into `guide:notification` with type `flash`
+- [x] Wire existing accomplishment socket event into `guide:notification` with type `match_ready` or `admin` as appropriate
 
 #### Acceptance criteria
 
-- [ ] Guide orb visible in nav on all pages when signed in
-- [ ] Clicking orb toggles panel open/closed; Escape closes it
-- [ ] Panel does not auto-open mid-game (play page with active game); orb pulses urgently if notification arrives
-- [ ] Panel does auto-open for urgent notifications when user is in a passive context (browsing, lobby, rankings)
-- [ ] Slots load from server on sign-in; changes persist across page reloads and devices
-- [ ] Notification badge count matches number of unread notification cards
-- [ ] Dismissing a notification card removes it and decrements badge; badge disappears at 0
-- [ ] Flash tournament notification arrives in real time and triggers amber orb pulse
-- [ ] Guide pill button and `GettingStartedModal` are gone from the codebase
-- [ ] First sign-in opens Guide panel (not a modal iframe)
-- [ ] All Guide UI passes WCAG AA: orb has `aria-label`, panel has `role="dialog" aria-modal`, slots are keyboard-navigable
+- [x] Guide orb visible in nav on all pages when signed in
+- [x] Clicking orb toggles panel open/closed; Escape closes it
+- [x] Panel does not auto-open mid-game (play page with active game); orb pulses urgently if notification arrives
+- [x] Panel does auto-open for urgent notifications when user is in a passive context (browsing, lobby, rankings)
+- [x] Slots load from server on sign-in; changes persist across page reloads and devices
+- [x] Notification badge count matches number of unread notification cards
+- [x] Dismissing a notification card removes it and decrements badge; badge disappears at 0
+- [x] Flash tournament notification arrives in real time and triggers amber orb pulse
+- [x] Guide pill button and `GettingStartedModal` are gone from the codebase
+- [x] First sign-in opens Guide panel (not a modal iframe)
+- [x] All Guide UI passes WCAG AA: orb has `aria-label`, panel has `role="dialog" aria-modal`, slots are keyboard-navigable
 
 #### Tests
 

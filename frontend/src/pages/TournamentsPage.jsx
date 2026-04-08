@@ -4,6 +4,7 @@ import { tournamentApi } from '../lib/tournamentApi.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
+import { useSpotlight, SpotlightRing } from '../lib/useSpotlight.js'
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ function RegisterButton({ tournament, token, onSuccess }) {
 
 // ── Tournament card ───────────────────────────────────────────────────────────
 
-function TournamentCard({ tournament, token, onRegistered }) {
+function TournamentCard({ tournament, token, onRegistered, spotlitRegister = false }) {
   const participantCount = tournament.participants?.length ?? tournament._count?.participants ?? 0
   const max  = tournament.maxParticipants
   const isOpen = tournament.status === 'REGISTRATION_OPEN'
@@ -159,11 +160,13 @@ function TournamentCard({ tournament, token, onRegistered }) {
         {/* Register button */}
         {isOpen && token && (
           <div onClick={e => e.preventDefault()}>
-            <RegisterButton
-              tournament={tournament}
-              token={token}
-              onSuccess={onRegistered}
-            />
+            {spotlitRegister ? (
+              <SpotlightRing label="Step 6: Enter a tournament →">
+                <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
+              </SpotlightRing>
+            ) : (
+              <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
+            )}
           </div>
         )}
       </div>
@@ -195,6 +198,9 @@ export default function TournamentsPage() {
   const [error, setError]             = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [token, setToken]             = useState(null)
+
+  // Journey step 6 spotlight on the first open tournament's Register button
+  const { active: spotlightStep6 } = useSpotlight(6)
 
   // Subscribe to live tournament events so we can refresh on changes
   const { lastEvent } = useTournamentSocket()
@@ -268,18 +274,22 @@ export default function TournamentsPage() {
       )}
 
       {/* Tournament grid */}
-      {!loading && tournaments.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tournaments.map(t => (
-            <TournamentCard
-              key={t.id}
-              tournament={t}
-              token={token}
-              onRegistered={() => load(statusFilter)}
-            />
-          ))}
-        </div>
-      )}
+      {!loading && tournaments.length > 0 && (() => {
+        const firstOpenIdx = tournaments.findIndex(t => t.status === 'REGISTRATION_OPEN')
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {tournaments.map((t, idx) => (
+              <TournamentCard
+                key={t.id}
+                tournament={t}
+                token={token}
+                onRegistered={() => load(statusFilter)}
+                spotlitRegister={spotlightStep6 && idx === firstOpenIdx}
+              />
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Empty state */}
       {!loading && tournaments.length === 0 && !error && (

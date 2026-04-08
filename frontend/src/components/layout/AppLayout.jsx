@@ -22,6 +22,7 @@ import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { getSocket } from '../../lib/socket.js'
+import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -90,6 +91,8 @@ export default function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [accomplishments, setAccomplishments] = useState([])
   const prevUserId = useRef(null)
+
+  useJourneyAutoOpen()
 
   // Close the mobile menu whenever the user navigates
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
@@ -194,7 +197,16 @@ export default function AppLayout() {
       }
     }
     socket.on('guide:notification', onGuideNotification)
-    return () => { socket.off('guide:notification', onGuideNotification) }
+
+    function onJourneyStep({ completedSteps }) {
+      useGuideStore.getState().applyJourneyStep({ completedSteps })
+    }
+    socket.on('guide:journeyStep', onJourneyStep)
+
+    return () => {
+      socket.off('guide:notification', onGuideNotification)
+      socket.off('guide:journeyStep', onJourneyStep)
+    }
   }, [])
 
   // Real-time accomplishment events pushed from the server over Socket.IO

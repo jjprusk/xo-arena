@@ -159,8 +159,10 @@ export const api = {
   },
 
   guide: {
-    getPreferences:  (token)        => api.get('/guide/preferences', token),
-    patchPreferences:(body, token)  => api.patch('/guide/preferences', body, token),
+    getPreferences:   (token)       => api.get('/guide/preferences', token),
+    patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),
+    triggerStep:      (step, token) => api.post('/guide/journey/step', { step }, token),
+    restartJourney:   (token)       => api.post('/guide/journey/restart', {}, token),
   },
 
   games: {

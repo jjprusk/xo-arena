@@ -27,6 +27,11 @@ vi.mock('../../logger.js', () => ({
   default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
+vi.mock('../../services/journeyService.js', () => ({
+  completeStep:   vi.fn().mockResolvedValue(true),
+  restartJourney: vi.fn().mockResolvedValue(undefined),
+}))
+
 import db from '../../lib/db.js'
 import guideRouter from '../guide.js'
 
@@ -46,12 +51,14 @@ beforeEach(() => {
 // ── GET /preferences ──────────────────────────────────────────────────────────
 
 describe('GET /preferences', () => {
-  it('returns default prefs when preferences is empty', async () => {
+  it('returns default prefs when preferences is empty (auto-completes step 1)', async () => {
     const res = await request(buildApp()).get('/preferences')
     expect(res.status).toBe(200)
     expect(res.body.guideSlots).toEqual([])
     expect(res.body.guideNotificationPrefs).toEqual({})
-    expect(res.body.journeyProgress).toEqual({ completedSteps: [], dismissedAt: null })
+    // Step 1 (Welcome) is auto-completed on first hydration
+    expect(res.body.journeyProgress.completedSteps).toContain(1)
+    expect(res.body.journeyProgress.dismissedAt).toBeNull()
   })
 
   it('returns stored guideSlots when present', async () => {

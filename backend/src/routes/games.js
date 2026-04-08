@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js'
 import { getUserByBetterAuthId, getBotByModelId, createGame } from '../services/userService.js'
 import { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot } from '../services/eloService.js'
 import { recordGameCompletion } from '../services/creditService.js'
+import { completeStep } from '../services/journeyService.js'
 import cache from '../utils/cache.js'
 import logger from '../logger.js'
 
@@ -71,6 +72,9 @@ router.post('/', requireAuth, async (req, res, next) => {
       recordGameCompletion({ appId: 'xo-arena', participants: pvbotParticipants, mode: 'pvp' })
         .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))
 
+      // Journey step 2: first game played (fire-and-forget)
+      completeStep(user.id, 2).catch(() => {})
+
       return res.status(201).json({ game: { id: game.id } })
     }
 
@@ -93,6 +97,9 @@ router.post('/', requireAuth, async (req, res, next) => {
     // Update player ELO (fire-and-forget — non-fatal)
     updatePlayerEloAfterPvAI(user.id, outcome, difficulty).catch(() => {})
     cache.invalidatePrefix('leaderboard:')
+
+    // Journey step 2: first game played (fire-and-forget)
+    completeStep(user.id, 2).catch(() => {})
 
     res.status(201).json({ game: { id: game.id } })
   } catch (err) {
