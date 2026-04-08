@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
@@ -193,11 +193,15 @@ function CardSkeleton() {
 
 export default function TournamentsPage() {
   const { data: session } = useOptimisticSession()
+  const [searchParams] = useSearchParams()
   const [tournaments, setTournaments] = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [token, setToken]             = useState(null)
+  const [autoRegisterId, setAutoRegisterId] = useState(
+    searchParams.get('action') === 'register' ? searchParams.get('tournamentId') : null
+  )
 
   // Journey step 6 spotlight on the first open tournament's Register button
   const { active: spotlightStep6 } = useSpotlight(6)
@@ -233,6 +237,16 @@ export default function TournamentsPage() {
   }, [token])
 
   useEffect(() => { load(statusFilter) }, [statusFilter, load])
+
+  // ?action=register&tournamentId=X — auto-register once data is ready
+  useEffect(() => {
+    if (!autoRegisterId || !token || loading || tournaments.length === 0) return
+    const target = tournaments.find(t => t.id === autoRegisterId && t.status === 'REGISTRATION_OPEN')
+    if (!target) return
+    tournamentApi.register(autoRegisterId, token)
+      .then(() => { setAutoRegisterId(null); load(statusFilter) })
+      .catch(() => setAutoRegisterId(null))
+  }, [autoRegisterId, token, loading, tournaments]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh when a tournament event arrives
   useEffect(() => {

@@ -14,6 +14,7 @@ export default function PlayPage() {
   const navigate = useNavigate()
   const joinSlug = searchParams.get('join')
   const spectateSlug = searchParams.get('spectate')
+  const actionParam = searchParams.get('action')
 
   const { status: pvaiStatus, mode: pvaiMode } = useGameStore()
   const {
@@ -121,6 +122,7 @@ export default function PlayPage() {
         inviteUrl={inviteUrl}
         roomName={displayName}
         onPvpJoin={(s) => usePvpStore.getState().joinRoom(s, 'player')}
+        autoAction={actionParam}
       />
     </div>
   )

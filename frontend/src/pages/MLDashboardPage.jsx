@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useState, useCallback, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
@@ -39,7 +39,10 @@ export default function GymPage() {
   const [selectedBotId, setSelectedBotId] = useState(null)
   const [botModels, setBotModels]         = useState({})   // { botId: mlModel }
   const [modelLoading, setModelLoading]   = useState(false)
-  const [activeTab, setActiveTab]         = useState('train')
+  const [searchParams] = useSearchParams()
+  // ?action=start-training — land on the train tab (already the default, but explicit for clarity)
+  const initialTab = searchParams.get('action') === 'start-training' ? 'train' : 'train'
+  const [activeTab, setActiveTab]         = useState(initialTab)
   const [regressions, setRegressions]     = useState(new Set())
   const [toasts, setToasts]               = useState([])
   const [sessions, setSessions]           = useState([])    // shared across tabs

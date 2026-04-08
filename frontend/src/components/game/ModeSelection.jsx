@@ -202,7 +202,7 @@ const BOARD_THEMES = [
   { id: 'retro',   label: 'Retro' },
 ]
 
-export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName }) {
+export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName, autoAction }) {
   const {
     setMode, setDifficulty, setAIImplementation, setMLModelId, setPvbotModelId,
     setAI2Implementation, setAI2Difficulty, setAI2ModelId,
@@ -298,6 +298,24 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName 
       .finally(() => { if (!cancelled) setBotsLoading(false) })
     return () => { cancelled = true }
   }, [botExpanded, aivaiExpanded])
+
+  // Auto-action: ?action=vs-community-bot — expand bot section then challenge Rusty
+  useEffect(() => {
+    if (autoAction !== 'vs-community-bot') return
+    setBotExpanded(true)
+  }, [autoAction])
+
+  useEffect(() => {
+    if (autoAction !== 'vs-community-bot') return
+    if (!botExpanded || bots.length === 0) return
+    // Challenge "Rusty" (easiest built-in) or first available bot
+    const BUILTIN_ORDER = { Rusty: 0, Copper: 1, Sterling: 2, Magnus: 3 }
+    const builtIn = bots
+      .filter(b => !b.botOwnerId)
+      .sort((a, b) => (BUILTIN_ORDER[a.displayName] ?? 99) - (BUILTIN_ORDER[b.displayName] ?? 99))
+    const target = builtIn[0] ?? bots[0]
+    if (target) handleChallengeBot(target)
+  }, [autoAction, botExpanded, bots]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply options to store
   function applyOptions() {

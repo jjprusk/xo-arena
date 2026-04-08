@@ -1228,18 +1228,18 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 
 #### Tasks
 
-- [ ] Define and document the cross-site URL scheme (decision: query-param approach on each target site, e.g. `xo.aiarena.callidity.com/play?action=vs-community-bot`)
-- [ ] xo.aiarena `/play` page: read `?action=vs-community-bot` query param on mount; auto-select community bot and queue game
-- [ ] xo.aiarena `/gym` page: read `?action=start-training` param; open TrainTab and focus training config
-- [ ] xo.aiarena `/tournaments` page: read `?action=register&tournamentId=X` param; open registration modal for specified tournament
-- [ ] Guide slot actions updated: "Play XO vs community bot", "Open Gym", "Enter tournament" use the cross-site URLs
-- [ ] Journey step CTAs updated to use cross-site URLs for steps 2, 3, 4, 5, 6
+- [x] Define and document the cross-site URL scheme (decision: query-param approach on each target site, e.g. `xo.aiarena.callidity.com/play?action=vs-community-bot`)
+- [x] xo.aiarena `/play` page: read `?action=vs-community-bot` query param on mount; auto-select community bot and queue game
+- [x] xo.aiarena `/gym` page: read `?action=start-training` param; open TrainTab and focus training config
+- [x] xo.aiarena `/tournaments` page: read `?action=register&tournamentId=X` param; open registration modal for specified tournament
+- [x] Guide slot actions updated: "Play XO vs community bot", "Open Gym", "Enter tournament" use the cross-site URLs
+- [x] Journey step CTAs updated to use cross-site URLs for steps 2, 3, 4, 5, 6
 
 #### Acceptance criteria
 
-- [ ] Clicking "Play XO vs community bot" Guide slot navigates to xo.aiarena game page with bot pre-selected
-- [ ] Clicking "Open Gym" slot navigates to Gym with training config focused
-- [ ] Journey step 6 CTA opens tournament lobby with registration modal for a suitable upcoming tournament
+- [x] Clicking "Play XO vs community bot" Guide slot navigates to xo.aiarena game page with bot pre-selected
+- [x] Clicking "Open Gym" slot navigates to Gym with training config focused
+- [x] Journey step 6 CTA opens tournament lobby with registration modal for a suitable upcoming tournament
 - [ ] Arriving from a cross-site link works whether user is already signed in or signs in mid-flow
 
 #### Tests

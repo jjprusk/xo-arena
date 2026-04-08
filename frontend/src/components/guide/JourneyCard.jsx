@@ -7,13 +7,13 @@ import { getToken } from '../../lib/getToken.js'
 // ── Step definitions ──────────────────────────────────────────────────────────
 
 const STEPS = [
-  { index: 1, title: 'Welcome to the Arena',    cta: null,                  href: null              },
-  { index: 2, title: 'Play your first game',     cta: 'Play now',           href: '/play'            },
-  { index: 3, title: 'Explore AI Training',      cta: 'Open Gym Guide',     href: '/gym/guide'       },
-  { index: 4, title: 'Create your first bot',    cta: 'Create a bot',       href: '/bots'            },
-  { index: 5, title: 'Train your bot',           cta: 'Start training',     href: '/gym'             },
-  { index: 6, title: 'Enter a tournament',       cta: 'Browse tournaments', href: '/tournaments'     },
-  { index: 7, title: 'Play a tournament match',  cta: 'Check tournaments',  href: '/tournaments'     },
+  { index: 1, title: 'Welcome to the Arena',    cta: null,                  href: null                              },
+  { index: 2, title: 'Play your first game',     cta: 'Play now',           href: '/play?action=vs-community-bot'   },
+  { index: 3, title: 'Explore AI Training',      cta: 'Open Gym Guide',     href: '/gym/guide'                      },
+  { index: 4, title: 'Create your first bot',    cta: 'Create a bot',       href: '/bots'                           },
+  { index: 5, title: 'Train your bot',           cta: 'Start training',     href: '/gym?action=start-training'      },
+  { index: 6, title: 'Enter a tournament',       cta: 'Browse tournaments', href: '/tournaments'                    },
+  { index: 7, title: 'Play a tournament match',  cta: 'Check tournaments',  href: '/tournaments'                    },
 ]
 
 const TOTAL = 7
