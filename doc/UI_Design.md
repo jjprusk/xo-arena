@@ -814,6 +814,28 @@ This is the largest gap — a near-complete rebuild.
 
 Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status is noted where work has begun.
 
+#### Phase 0 — Remove existing onboarding from xo.aiarena
+
+*Clean-slate step. Remove all current onboarding UI and logic so Phase 4's Journey system is built from scratch without conflicts or legacy code.*
+
+1. [ ] Audit and list all current onboarding-related files, components, hooks, and store slices (search for: `onboarding`, `tutorial`, `walkthrough`, `first-time`, `intro`, `welcome`)
+2. [ ] Remove onboarding UI components (e.g. step modals, tooltips, banners, popovers that are part of the tutorial flow)
+3. [ ] Remove onboarding state from Zustand stores (clear any `onboardingStep`, `hasSeenTutorial`, `tourComplete`, etc.)
+4. [ ] Remove onboarding-related API calls and backend endpoints (if any — e.g. `POST /api/onboarding/complete`)
+5. [ ] Remove onboarding-related database flags from frontend (schema changes, if any, are deferred until Phase 4 defines the Journey schema)
+6. [ ] Remove any route guards or redirects that funnel new users into an onboarding flow
+7. [ ] Smoke-test: new user registration → lobby loads cleanly with no onboarding prompts
+8. [ ] Smoke-test: existing user login → no stale onboarding state shown
+
+**Acceptance criteria:**
+- `grep -r "onboarding\|tutorial\|walkthrough" frontend/src` returns no matches in component or store files (doc/comments OK)
+- New and returning user flows both reach the lobby without any onboarding overlay or redirect
+- All existing non-onboarding tests pass
+
+**Effort:** Small–Medium. **Risk:** Low — delete-only; no new logic introduced.
+
+---
+
 #### Phase 1 — Token alignment ✅ Done
 
 *Pure CSS changes. No component logic. Builds the foundation all subsequent phases depend on.*
@@ -875,7 +897,7 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 
 #### Phase 4 — Onboarding journey
 
-*Build the Journey card inside the Guide panel. Requires Phase 3 complete.*
+*Build the Journey card inside the Guide panel. Requires Phase 0 (legacy onboarding removed) and Phase 3 complete.*
 
 **Frontend sub-tasks:**
 1. `JourneyCard` component — collapsed view (progress bar + next step + CTA) and expanded view (all 7 steps with checkmarks, arrows, action buttons); pinned above notification stack
@@ -955,12 +977,374 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 
 | Phase | What | Status | Effort | Risk | Dependency |
 |-------|------|--------|--------|------|-----------|
+| 0 | Remove existing onboarding from xo.aiarena | Upcoming | Small–Medium | Low | — |
 | 1 | Token alignment (palette, radius, photo opacity) | ✅ Done | Small | Very low | — |
 | 2 | Nav cleanup (admin links out, Guide pill → slate) | ✅ Done | Small | Low | — |
 | 3 | Guide component build | Upcoming | Large | Medium | Phase 1, 2 |
-| 4 | Onboarding journey | Upcoming | Large | Medium | Phase 3 |
+| 4 | Onboarding journey | Upcoming | Large | Medium | Phase 0, 3 |
 | 5 | Cross-site slot actions | Upcoming | Medium | Medium | Phase 3, 4 |
 | 6 | Component library alignment | Ongoing | Medium | Low | Phase 1 |
 | 7 | xo.aiarena admin deprecation | Last step | Small | Low | Platform admin feature-complete |
 
-Phase 3 is the core new build — start here once ready. Phases 4 and 5 follow in sequence. Phase 6 runs in the background. Phase 7 is gated on the platform admin being fully built and verified.
+Phase 0 clears the slate for the new onboarding system. Phase 3 is the core new build — start here once Phases 0–2 are done. Phases 4 and 5 follow in sequence. Phase 6 runs in the background. Phase 7 is gated on the platform admin being fully built and verified.
+
+---
+
+## Integrated UI Implementation Plan
+
+This section ties together all UI work across both the xo.aiarena game site refresh and the new aiarena platform surfaces (Guide, onboarding, admin). It is the single source of truth for sequencing, team responsibilities, acceptance criteria, and testing.
+
+---
+
+### Team and Skills Required
+
+| Role | Responsibilities | Skills |
+|------|-----------------|--------|
+| **Frontend Engineer (primary)** | Guide component, onboarding journey, xo.aiarena UI alignment, component library | React 19, Zustand, Tailwind v4, CSS custom properties, SVG animation, Socket.IO client, Vite |
+| **Frontend Engineer (secondary / can overlap)** | Platform admin build (aiarena), cross-site routing, packages/ui extraction | Same as above; familiarity with multi-repo or monorepo patterns |
+| **Backend Engineer** | Guide preferences API, journey step detection, TC deposit, Socket.IO events, admin API | Node.js, Prisma, PostgreSQL, Socket.IO, REST API design |
+| **UI/UX (design review)** | Sign off each phase against mockups before merge; catch visual regressions | Ability to open and evaluate HTML mockups in `doc/mockups/`; familiarity with the design spec in this document |
+| **QA** | Manual smoke tests per phase; own the E2E test suite additions | Playwright, visual comparison, cross-browser, mobile viewport testing |
+| **DevOps (light touch)** | Railway deploy coordination; environment variable management for new API endpoints | Railway, GitHub Actions CI |
+
+A team of 2 engineers (1 frontend-heavy, 1 backend-heavy) plus a QA resource can execute this sequentially. Phases 3 and 4 benefit most from frontend/backend working in parallel.
+
+---
+
+### Development Streams
+
+Work can be parallelised across two streams once Phase 1+2 are merged (done).
+
+```
+Stream A — xo.aiarena (game site)          Stream B — aiarena platform
+─────────────────────────────────          ────────────────────────────
+Phase 6: Component library alignment  ──►  Platform admin build (new app)
+Phase 3: Guide component (frontend)   ──►  Guide backend API
+Phase 4: Onboarding journey           ──►  Journey step events + TC deposit
+Phase 5: Cross-site slot actions      ──►  Cross-site redirect service
+Phase 7: Admin deprecation (last)     ◄──  Platform admin feature-complete
+```
+
+Stream A and Stream B share a backend engineer. The frontend engineers can work in parallel: one on xo.aiarena components, one on the platform admin app.
+
+---
+
+### Milestones
+
+| # | Milestone | What's shippable | Phases complete |
+|---|-----------|-----------------|-----------------|
+| M0 | **Foundation** | Token ramp, nav cleanup live on staging | 1, 2 ✅ |
+| M1 | **Guide MVP** | Guide orb, panel, slots, notification stack live; old Guide modal retired | 3 |
+| M2 | **Onboarding live** | Full 7-step journey, spotlight, completion reward; old modals retired | 4 |
+| M3 | **Cross-site connected** | Guide slots deep-link across sites; journey steps 2–6 fully automated | 5 |
+| M4 | **Component library** | Buttons, badges, cards, modals consistent across xo.aiarena | 6 |
+| M5 | **Platform admin live** | aiarena.callidity.com/admin fully functional | (separate build) |
+| M6 | **Full deprecation** | xo.aiarena admin routes removed; single unified admin | 7 |
+
+M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M6 gates on M5.
+
+---
+
+### Phase 0 — Remove Existing Onboarding: Tasks, Acceptance Criteria, Tests
+
+#### Tasks
+
+- [ ] `grep -r "onboarding\|tutorial\|walkthrough\|GettingStarted\|WelcomeModal\|firstLogin\|hasSeenTutorial\|tourComplete" frontend/src` — audit and list every match
+- [ ] Delete or empty identified onboarding components (step modals, intro tooltips, welcome popovers, tutorial overlays)
+- [ ] Remove onboarding fields from Zustand stores (e.g. `onboardingStep`, `hasSeenTutorial`)
+- [ ] Remove any route guards or redirects that funnel new users into an onboarding flow
+- [ ] Remove onboarding-related API calls from frontend (backend endpoints / DB columns deferred — Phase 4 will define the new schema)
+- [ ] Verify `AppLayout.jsx` has no remaining onboarding modal imports or invocations
+- [ ] Run full unit + Playwright smoke suite; confirm no regressions
+
+#### Acceptance Criteria
+
+| # | Criterion |
+|---|-----------|
+| 1 | `grep -r "onboarding\|tutorial\|walkthrough" frontend/src/components frontend/src/store` returns zero results |
+| 2 | New user registration → lobby renders with no onboarding UI |
+| 3 | Existing user login → lobby renders with no stale onboarding state |
+| 4 | All existing Playwright smoke tests pass |
+
+#### Tests
+
+| Type | What to test |
+|------|-------------|
+| Manual | Register fresh account → reach lobby with no tutorial modal/overlay |
+| Manual | Login existing account → no onboarding state shown |
+| Playwright | `smoke` suite passes |
+| Unit | Any onboarding store slices deleted; no orphaned imports |
+
+---
+
+### Phase 3 — Guide Component: Tasks, Acceptance Criteria, Tests
+
+#### Tasks
+
+**Frontend**
+- [ ] `GuideOrb` component: circular orb button, SVG progress ring (animated arc for 0–7 steps), idle / onboarding-amber / urgent-amber pulse animations, notification badge, minimum 44px touch target
+- [ ] `GuidePanel` component: slide-in panel from right (320px desktop, full-width mobile bottom-sheet), header with orb + title + settings/close buttons, scrollable body, chat input footer
+- [ ] `SlotGrid` component: 4-column grid, up to 8 slots, edit mode (gear toggles drag handles + × badges + empty "Add" slots), onboarding slots with dashed amber border and ⏱ expiry countdown
+- [ ] `SlotPicker` overlay: modal with action library by section (Platform / XO Arena / Onboarding / Admin); cross-site actions labelled ↗; selecting adds to next empty slot
+- [ ] `NotificationStack` component: ordered by arrival, newest first; up to 3 visible + "+N more"; flash (amber), match_ready (slate), admin (blue), invite (teal), room_invite (teal); dismiss animates out and decrements badge
+- [ ] `OnlineStrip` component: up to 6 avatar tiles + overflow count; amber dot = in-match; green dot = available; tap sends room invite notification
+- [ ] `GuideStore` (Zustand): `panelOpen`, `slots[]`, `notifications[]`, `journeyProgress`, `journeyDismissed`; `addNotification`, `dismissNotification`, `updateSlots` actions; hydrates from server on sign-in
+- [ ] Active-game detection: `useIsInGame()` hook reads `gameStore` + `pvpStore`; blocks Guide auto-open; orb still pulses urgently
+- [ ] Retire `GettingStartedModal.jsx` import and usage from `AppLayout.jsx`; retire `WelcomeModal.jsx` (first-login opens Guide panel instead)
+- [ ] Replace Guide pill button in nav with `GuideOrb` component
+
+**Backend**
+- [ ] Add `guideSlots` and `guideNotificationPrefs` JSONB fields to `User.preferences` (Prisma migration)
+- [ ] `GET /api/guide/preferences` — return slots + notification prefs for authenticated user
+- [ ] `PATCH /api/guide/preferences` — update slots or prefs; validate slot count ≤ 8
+- [ ] Socket event `guide:notification` — server pushes notification cards to user's connected socket; client `GuideStore` receives and enqueues
+- [ ] Wire existing Flash tournament socket event into `guide:notification` with type `flash`
+- [ ] Wire existing accomplishment socket event into `guide:notification` with type `match_ready` or `admin` as appropriate
+
+#### Acceptance criteria
+
+- [ ] Guide orb visible in nav on all pages when signed in
+- [ ] Clicking orb toggles panel open/closed; Escape closes it
+- [ ] Panel does not auto-open mid-game (play page with active game); orb pulses urgently if notification arrives
+- [ ] Panel does auto-open for urgent notifications when user is in a passive context (browsing, lobby, rankings)
+- [ ] Slots load from server on sign-in; changes persist across page reloads and devices
+- [ ] Notification badge count matches number of unread notification cards
+- [ ] Dismissing a notification card removes it and decrements badge; badge disappears at 0
+- [ ] Flash tournament notification arrives in real time and triggers amber orb pulse
+- [ ] Guide pill button and `GettingStartedModal` are gone from the codebase
+- [ ] First sign-in opens Guide panel (not a modal iframe)
+- [ ] All Guide UI passes WCAG AA: orb has `aria-label`, panel has `role="dialog" aria-modal`, slots are keyboard-navigable
+
+#### Tests
+
+| Type | What | Tool |
+|------|------|------|
+| Unit | `GuideStore` actions: addNotification, dismiss, slot update, badge count | Vitest |
+| Unit | `useIsInGame()` returns true when `gameStore` has active board | Vitest |
+| Integration | `PATCH /api/guide/preferences` persists slot config; `GET` returns it | Vitest (backend) |
+| Integration | Socket event `guide:notification` arrives in `GuideStore.notifications` | Vitest with mock socket |
+| E2E | Open Guide → dismiss notification → badge decrements | Playwright |
+| E2E | Flash tournament announcement → orb pulses amber → open Guide → notification card present | Playwright |
+| E2E | Edit slots → reorder → reload page → order persists | Playwright |
+| Visual | Guide panel at 1280px, 768px, 375px against mockup screenshots | Manual / Playwright screenshot |
+| A11y | Keyboard navigation through panel and slots; screen reader announces notification | axe-core / manual |
+
+---
+
+### Phase 4 — Onboarding Journey: Tasks, Acceptance Criteria, Tests
+
+#### Tasks
+
+**Frontend**
+- [ ] `JourneyCard` component: pinned at top of Guide body above notification stack; collapsed state (progress bar, next step name, CTA button, expand toggle); expanded state (all 7 steps with status markers, action buttons on uncompleted steps, dismiss link at bottom)
+- [ ] Orb progress ring: update ring fill arc as step count changes (0/7 = empty, 7/7 = full); amber during journey, teal on completion
+- [ ] `useJourneyAutoOpen()` hook: on route change, check `GuideStore.journeyProgress` against step trigger map; if current route matches an incomplete step and user is not mid-game, call `guideStore.open()`
+- [ ] `useSpotlight(stepIndex, targetRef)` hook: renders amber 2px pulse ring as absolutely-positioned overlay around `targetRef`; floating label above/below with "Step N: [title] →"; hides when step completes or route changes
+- [ ] Add spotlight to: Tournaments page first "Register" button (step 6), bot list "Create Bot" button (step 4), Gym page "Start Training" button (step 5)
+- [ ] Completion celebration: confetti component (40 pieces, randomised colours/sizes/durations), "Onboarding Complete" badge pop animation, Guide notification card announcing +50 TC
+- [ ] Dismiss flow: × in card header → confirmation overlay ("Dismiss your journey? Your progress is saved.") → "Keep going" / "Yes, dismiss" → on confirm, `PATCH /api/guide/preferences` with `journeyDismissed: true`; Journey card removed from panel
+- [ ] "Restart onboarding" option in Settings → Account page: calls `POST /api/guide/journey/restart`; resets dismissed flag; journey resumes from first incomplete step
+- [ ] Retire `onboardingStore.js` (training completion check absorbed into journey step 5 state in GuideStore)
+
+**Backend**
+- [ ] `journeyProgress` JSONB field in `User.preferences`: `{ completedSteps: number[], dismissedAt: string|null }`
+- [ ] Step completion detection for server-detectable steps:
+  - Step 2: first game record created (`GameRecord` table)
+  - Step 4: first bot created (`User` where `isBot=true` and `createdBy=userId`)
+  - Step 5: first training run completes (`totalEpisodes > 0`)
+  - Step 6: first tournament registration (`TournamentParticipant` row created)
+  - Step 7: first tournament match played (match with `tournamentId` recorded)
+- [ ] On each detection: update `journeyProgress.completedSteps`, emit `guide:journeyStep` socket event to user
+- [ ] Step 1 (Welcome): auto-complete on first sign-in (server marks step 1 complete when user record is created)
+- [ ] Step 3 (AI training guide visit): client-side — fire `POST /api/guide/journey/step/3` when user visits `/gym/guide`
+- [ ] Step 7 completion: deposit 50 TC via existing credits system; emit `guide:notification` with type `admin` confirming reward; award "Onboarding Complete" badge to user profile
+- [ ] `POST /api/guide/journey/restart`: clear `completedSteps` and `dismissedAt`
+
+#### Acceptance criteria
+
+- [ ] Journey card appears for new users on first sign-in with step 1 pre-completed (Welcome)
+- [ ] Journey card does not appear after journey is dismissed (persists across sessions)
+- [ ] Progress bar and ring reflect actual completed step count
+- [ ] Completing step 4 (bot creation) while Guide is closed: orb badge increments; opening Guide shows step updated
+- [ ] Contextual auto-open fires when navigating to tournament lobby with step 6 incomplete; does not fire mid-game
+- [ ] Spotlight ring appears on "Register" button in tournament lobby when step 6 is active; disappears on registration
+- [ ] Step 7 completion triggers confetti in Guide panel, "Onboarding Complete" badge on profile, +50 TC deposit
+- [ ] Dismissal requires confirmation; dismissed state survives sign-out and back in
+- [ ] Restart onboarding in Settings reactivates Journey card from first incomplete step
+
+#### Tests
+
+| Type | What | Tool |
+|------|------|------|
+| Unit | `JourneyCard` renders correct step count and CTA per step index | Vitest + React Testing Library |
+| Unit | `useJourneyAutoOpen` fires on correct routes; does not fire when `useIsInGame()` is true | Vitest |
+| Unit | `useSpotlight` mounts/unmounts ring on correct step transitions | Vitest |
+| Integration | Server marks step 2 complete after `GameRecord` insert; emits socket event | Vitest (backend) |
+| Integration | Step 7 completion triggers TC deposit and badge award | Vitest (backend) |
+| Integration | `POST /api/guide/journey/restart` resets progress | Vitest (backend) |
+| E2E | New user flow: sign in → Guide opens → complete step 2 (play game) → step updates in panel | Playwright |
+| E2E | Complete all 7 steps → confetti fires → badge appears on profile | Playwright |
+| E2E | Dismiss journey → confirm → journey card gone → sign out → sign back in → still gone | Playwright |
+| E2E | Restart journey from Settings → journey card reappears | Playwright |
+| Visual | Journey card collapsed + expanded states against `onboarding-journey.html` mockup | Manual |
+| Visual | Spotlight ring positioned correctly on Register button at 1280px and 375px | Manual |
+
+---
+
+### Phase 5 — Cross-Site Slot Actions: Tasks, Acceptance Criteria, Tests
+
+#### Tasks
+
+- [ ] Define and document the cross-site URL scheme (decision: query-param approach on each target site, e.g. `xo.aiarena.callidity.com/play?action=vs-community-bot`)
+- [ ] xo.aiarena `/play` page: read `?action=vs-community-bot` query param on mount; auto-select community bot and queue game
+- [ ] xo.aiarena `/gym` page: read `?action=start-training` param; open TrainTab and focus training config
+- [ ] xo.aiarena `/tournaments` page: read `?action=register&tournamentId=X` param; open registration modal for specified tournament
+- [ ] Guide slot actions updated: "Play XO vs community bot", "Open Gym", "Enter tournament" use the cross-site URLs
+- [ ] Journey step CTAs updated to use cross-site URLs for steps 2, 3, 4, 5, 6
+
+#### Acceptance criteria
+
+- [ ] Clicking "Play XO vs community bot" Guide slot navigates to xo.aiarena game page with bot pre-selected
+- [ ] Clicking "Open Gym" slot navigates to Gym with training config focused
+- [ ] Journey step 6 CTA opens tournament lobby with registration modal for a suitable upcoming tournament
+- [ ] Arriving from a cross-site link works whether user is already signed in or signs in mid-flow
+
+#### Tests
+
+| Type | What | Tool |
+|------|------|------|
+| E2E | Click Guide slot → lands on correct page → correct action is pre-triggered | Playwright (cross-origin) |
+| E2E | Journey step 2 CTA → play page → game loads vs community bot | Playwright |
+
+---
+
+### Phase 6 — Component Library Alignment: Tasks, Acceptance Criteria, Tests
+
+#### Tasks
+
+- [ ] **Buttons**: add `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-sm` CSS classes to `index.css`; audit and replace all inline `linear-gradient` button styles across all page components
+- [ ] **Badges**: add `.badge`, `.badge-open`, `.badge-live`, `.badge-done`, `.badge-draft`, `.badge-pvp`, `.badge-bot`, `.badge-mixed` classes; replace inline badge styling in `TournamentsPage`, `TournamentDetailPage`, `ProfilePage`, `LeaderboardPage`
+- [ ] **Cards**: add `.card`, `.card-header`, `.card-body` classes using `--radius-card`, `--shadow-card`, `--border-default`; audit pages and replace inline card containers
+- [ ] **Modals**: build `<Modal>` component with backdrop blur, `slide-up` animation, Escape-to-close, `aria-modal`; migrate `NamePromptModal`, `AuthModal`
+- [ ] **Form inputs**: define `.form-input`, `.form-select`, `.form-textarea` with consistent focus ring using `--color-slate-500`; audit Settings, Profile, and tournament forms
+- [ ] **Dark-mode cards**: verify cards in dark mode use tone elevation (`--bg-surface-2`) rather than box shadows; update any that still rely on `--shadow-card` alone
+
+#### Acceptance criteria
+
+- [ ] All primary action buttons across the site use the same visual style
+- [ ] All status badges are visually consistent regardless of which page renders them
+- [ ] Cards have consistent radius (16px), border, and shadow at all breakpoints
+- [ ] Modal backdrop, animation, and close behaviour is identical across all modals
+- [ ] Focus rings on all interactive elements use `--color-slate-500` consistently
+- [ ] Dark mode cards do not have visible box-shadow halos; elevation is communicated by tone
+
+#### Tests
+
+| Type | What | Tool |
+|------|------|------|
+| Visual | Button variants (primary, secondary, danger, sm) in light + dark | Manual / Playwright screenshot |
+| Visual | Badge variants across all types | Manual |
+| Visual | Card with header + body in light + dark at 375px, 768px, 1280px | Manual |
+| A11y | All buttons have accessible name; all form inputs have associated labels | axe-core |
+
+---
+
+### Phase 7 — Admin Deprecation: Tasks, Acceptance Criteria, Tests
+
+*Gated on platform admin at `aiarena.callidity.com/admin` having full feature parity. See prerequisite checklist in the Phase 7 section above.*
+
+#### Tasks
+
+- [ ] Verify all items on the feature parity checklist are live and tested in platform admin
+- [ ] Replace all `/admin/*` `<Route>` entries in `App.jsx` with a single `<Navigate to={PLATFORM_ADMIN_URL} />` or server-level redirect
+- [ ] Remove local admin page component imports from `App.jsx`
+- [ ] Remove `AdminRoute` component if unused after admin removal; verify `SupportRoute` still needed for `/support`
+- [ ] Archive `frontend/src/pages/admin/` directory (rename to `_admin_deprecated/`); schedule deletion after 30-day safety period
+- [ ] Update `FeedbackButton` and `FeedbackToast` unread-count poll endpoint if feedback inbox has moved to platform admin
+- [ ] Remove `unreadCount` state and related socket listener from `AppLayout.jsx` if admin feedback is fully platform-side
+- [ ] Verify no remaining references to `/admin` routes in `MENU_LINKS`, `BOTTOM_NAV`, or any page-level `<Link>` components
+
+#### Acceptance criteria
+
+- [ ] Navigating to `xo.aiarena.callidity.com/admin` redirects to platform admin
+- [ ] No 404s or broken links anywhere on xo.aiarena related to admin
+- [ ] Admin users can perform all previous admin tasks via the platform admin
+- [ ] `frontend/src/pages/admin/` is archived and not imported anywhere
+
+#### Tests
+
+| Type | What | Tool |
+|------|------|------|
+| E2E | Navigate to `/admin` on xo.aiarena → redirects to platform admin URL | Playwright |
+| Smoke | All xo.aiarena nav links return 200; no broken internal links | Playwright smoke suite |
+
+---
+
+### Overall Testing Strategy
+
+#### Test levels
+
+| Level | Scope | Tool | When |
+|-------|-------|------|------|
+| Unit | Store actions, hooks, utility functions | Vitest | Every PR |
+| Integration | API endpoints, socket events, database mutations | Vitest (backend) | Every PR |
+| Component | React components in isolation with mocked stores | Vitest + React Testing Library | Every PR |
+| E2E | Full user journeys across pages and features | Playwright | Every PR; full suite on staging deploy |
+| Visual | Key surfaces against HTML mockups in `doc/mockups/` | Manual per milestone | Milestone reviews |
+| A11y | WCAG AA compliance on all new components | axe-core + manual | Milestone reviews |
+| Performance | Core Web Vitals on Play, Tournaments, and Profile pages | Lighthouse CI | Milestone reviews |
+| Mobile | All new UI at 375px (iPhone SE), 390px (iPhone 15), 768px (iPad) | Manual + Playwright | Every major component |
+| Cross-browser | Chrome, Firefox, Safari on latest two versions | Playwright | Pre-staging |
+
+#### Existing test suite
+
+The backend uses Vitest with the `forks` pool. New tests for Guide preferences API and journey step detection go in `backend/src/__tests__/` following the existing pattern.
+
+E2E tests live in `e2e/` (Playwright). The existing smoke suite covers `/api/version`, sign-in, and the play page. New journey tests extend this suite.
+
+#### Definition of Done (per phase)
+
+A phase is complete when:
+- [ ] All tasks in the phase checklist are marked done
+- [ ] All acceptance criteria pass
+- [ ] All automated tests pass in CI (green on `dev` branch)
+- [ ] A visual review against the relevant `doc/mockups/` file has been signed off by a second person
+- [ ] The feature has been tested on mobile (375px) and desktop (1280px) in both light and dark mode
+- [ ] No new console errors or warnings introduced
+- [ ] No accessibility regressions (axe-core clean on changed components)
+- [ ] PR merged to `dev`, staged to `staging`, smoke tests pass, promoted to `main`
+
+---
+
+### Risk Register
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| Guide real-time events conflict with existing Socket.IO listeners | Medium | Medium | Namespace Guide events under `guide:` prefix; audit existing listeners before adding new ones |
+| Journey step detection server-side is delayed (socket delivery lag) | Low | Low | Client can optimistically mark step complete on action; server confirms asynchronously |
+| Cross-site deep-links break if auth session not shared across subdomains | Medium | High | Verify Better Auth session cookie scope covers `*.callidity.com`; test sign-in state across site boundaries early in Phase 5 |
+| Component library migration introduces visual regressions on pages not reviewed | Medium | Medium | Do one component type at a time (buttons first, then badges, etc.); screenshot tests before/after each batch |
+| Platform admin build takes longer than expected, blocking Phase 7 | High | Low | Phase 7 is last step and has no user-facing urgency; xo.aiarena admin routes remain functional in the interim |
+| Confetti / animation performance on low-end devices | Low | Low | Use `prefers-reduced-motion` media query to disable animations; confetti is already gated behind journey completion |
+| `User.preferences` JSONB grows unbounded over time | Low | Low | Cap slot array at 8 entries server-side; prune delivered notification history after 30 days |
+
+---
+
+### Pre-Build Checklist
+
+Before starting Phase 3, confirm:
+
+- [ ] Phase 1 and 2 merged and live on staging ✅
+- [ ] `User.preferences` JSONB column exists or migration is ready to run
+- [ ] Socket.IO `guide:` event namespace agreed with backend team
+- [ ] `colosseum-bg.jpg` sourced and added to aiarena platform app `/public/` (not xo.aiarena)
+- [ ] Design mockups in `doc/mockups/` reviewed and approved as implementation targets:
+  - [ ] `lobby.html` — tournament list, view toggle, Guide slots
+  - [ ] `tournament-detail.html` — standings, match banner, registration sidebar
+  - [ ] `player-profile.html` — tier, merit, history
+  - [ ] `xo-game.html` — Guide panel states (mid-game context, notifications, slots, online strip)
+  - [ ] `onboarding-journey.html` — Journey card all states (1/7, 3/7, 6/7 spotlight, complete)
+  - [ ] `admin.html` — platform admin sidebar and all panel views
+- [ ] Playwright E2E suite passes on staging before any Phase 3 work begins
+- [ ] Team alignment: frontend and backend engineers briefed on Guide architecture and event naming
+
