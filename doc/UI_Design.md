@@ -800,60 +800,76 @@ This is the largest gap — a near-complete rebuild.
 
 #### 10. Admin
 
-**Current:** Admin links inline in the xo.aiarena nav, separate admin pages at `/admin/*` routes within the xo.aiarena app.
+**Current:** Admin links removed from xo.aiarena nav (Phase 2 complete). The `/admin/*` routes and page components (`AdminUsersPage`, `AdminTournamentsPage`, `AdminBotsPage`, etc.) still exist in the xo.aiarena app and remain fully functional — admins can reach them by navigating directly.
 
-**Spec:** Unified admin at `aiarena.callidity.com/admin`. xo.aiarena admin deprecated immediately; routes redirect.
+**Target:** All admin functionality lives at `aiarena.callidity.com/admin`. xo.aiarena admin routes are deprecated once the platform admin has feature parity.
 
-**Action**: replace xo.aiarena admin routes with a redirect to the platform admin URL. The existing admin page code may be migrated to the aiarena app or rebuilt there directly.
+**Why not now:** The platform admin is currently a mockup only. Removing or redirecting the xo.aiarena admin routes before the platform admin is built would leave admins without working tools. The existing pages serve as a functional bridge during the transition.
+
+**Deprecation plan (Phase 7 — last step):** Once the platform admin at `aiarena.callidity.com/admin` is built and covers the xo.aiarena admin feature set, redirect all `/admin/*` routes in App.jsx to the platform admin URL and remove the local admin page components. The xo.aiarena-specific admin data (games config, ELO settings, match settings, leaderboard controls) becomes a sub-section under **Games → XO Arena** in the platform admin sidebar as specified in the Admin Navigation section above.
 
 ---
 
 ### Prioritised Implementation Plan
 
-Phases are ordered by dependency. Each phase can be a separate PR or sprint.
+Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status is noted where work has begun.
 
-#### Phase 1 — Token alignment (low risk, high leverage)
+#### Phase 1 — Token alignment ✅ Done
 
-*These are pure CSS changes. No component logic changes. Do this first so all subsequent work builds on correct tokens.*
+*Pure CSS changes. No component logic. Builds the foundation all subsequent phases depend on.*
 
-1. Add `--color-slate-{50–900}` ramp to `index.css`
-2. Add `--radius-sm / --radius-md / --radius-lg / --radius-pill` tokens to `index.css`
-3. Keep `mountain-bg.jpg` (xo.aiarena has its own visual identity; Colosseum is aiarena platform only). Fix opacity to 0.25 (light) / 0.08 (dark) via `--photo-opacity` CSS var; fix position to `center 30%`
-4. Audit dark-mode shadow values; introduce tone elevation for cards in dark mode
+1. ✅ Add `--color-slate-{50–900}` ramp to `index.css` (platform accent colour for Guide, nav accents, focus rings)
+2. ✅ Add `--radius-sm` (6px), `--radius-card` (16px), `--radius-pill` (9999px) tokens
+3. ✅ Add `--bg-surface-2` (secondary surface / dark-mode tone elevation step) to both themes
+4. ✅ Add `--shadow-nav` token
+5. ✅ Add `--photo-opacity` CSS variable (0.25 light / 0.08 dark) — dark mode auto-subdues background
+6. ✅ Fix background position to `center 30%`; keep `mountain-bg.jpg` (xo.aiarena visual identity — Colosseum is aiarena platform only)
 
-**Effort:** Small (half-day). **Risk:** Very low.
-
----
-
-#### Phase 2 — Navigation cleanup
-
-*Remove admin links from xo.aiarena header; make room for Guide orb.*
-
-1. Remove admin nav links from `AppLayout.jsx`; add a single "Admin" external link to `aiarena.callidity.com/admin` (visible to admin role only)
-2. Remove the inline "✦ Guide" pill button — replaced by the Guide orb component (Phase 4)
-3. Audit nav link set: confirm Play / Gym / Puzzles / Tournaments / Rankings is the right set for xo.aiarena
-
-**Effort:** Small. **Risk:** Low.
+**Commit:** `295b275` + `5614d8e`
 
 ---
 
-#### Phase 3 — Guide component build (new)
+#### Phase 2 — Navigation cleanup ✅ Done
 
-*The biggest single piece of new UI work. Build the Guide as a self-contained component.*
+*Remove admin links from xo.aiarena header; stub Guide button with slate tokens.*
 
-Sub-tasks:
-1. **GuideOrb** — orb button with progress ring SVG, urgent pulse, badge count
-2. **GuidePanel** — slide-in panel with header, body sections, chat input
-3. **SlotGrid** — 8 configurable slots (add/remove/reorder in edit mode), onboarding slots with dashed border and expiry
-4. **SlotPicker** overlay — library of available actions organised by section (Platform / XO Arena / Onboarding)
-5. **NotificationStack** — card types: flash, match_ready, admin, invite, room_invite; dismiss; badge decrement
-6. **OnlineStrip** — 6 avatar slots, one-tap room invite
-7. **GuideStore** — Zustand store for panel open state, slot config, notification queue, journey progress (mirrors server-side `User.preferences`)
-8. Wire AccomplishmentPopup socket events into NotificationStack
-9. Wire Flash tournament socket events into NotificationStack (urgent)
-10. Server-side: add slot config + journey progress to `User.preferences` JSONB field; expose via GET/PATCH `/api/guide/preferences`
+1. ✅ Remove inline admin nav links from desktop header (`AppLayout.jsx`)
+2. ✅ Remove admin section from hamburger menu
+3. ✅ Replace both with single external "Admin ↗" link → `aiarena.callidity.com/admin` (admin role only)
+4. ✅ Update Guide pill button gradient to use slate tokens (visual interim — full orb in Phase 3)
+5. ✅ Remove `ADMIN_MENU_LINKS` constant; add `PLATFORM_ADMIN_URL` constant
 
-**Effort:** Large (1–2 sprints). **Risk:** Medium — real-time notification wiring requires backend coordination.
+**Nav link set confirmed for xo.aiarena:** Play · Gym · Puzzles · Tournaments · Rankings · Stats · Profile · About
+
+**Commit:** `295b275`
+
+---
+
+#### Phase 3 — Guide component build
+
+*The core new UI work. Build the Guide as a self-contained component that replaces the existing pill button and GettingStartedModal.*
+
+**Frontend sub-tasks:**
+1. `GuideOrb` — orb button in nav header; progress ring SVG overlay; urgent amber pulse; notification badge count
+2. `GuidePanel` — slide-in right panel; header with orb + title + close/settings; scrollable body; chat input footer
+3. `SlotGrid` — 8 configurable quick-action slots in a 4-column grid; edit mode (gear button) exposes drag handles and × remove badges; onboarding slots render with dashed amber border and ⏱ expiry
+4. `SlotPicker` overlay — action library organised by section: Platform / XO Arena / Onboarding; cross-site actions labelled ↗
+5. `NotificationStack` — card types: `flash` (amber, urgent), `match_ready` (slate, urgent), `admin` (blue), `invite` (teal), `room_invite` (teal); dismiss removes card and decrements badge; up to 3 visible + "+N more"
+6. `OnlineStrip` — up to 6 online player avatars; amber dot = in-match; tap sends one-tap room invite
+7. `GuideStore` (Zustand) — panel open/close, slot config, notification queue, journey progress; mirrors server-side state
+8. Wire `AccomplishmentPopup` socket events → Guide `NotificationStack`
+9. Wire Flash tournament socket events → Guide `NotificationStack` (urgent, never auto-opens mid-game)
+10. Active-game context rule: detect mid-game state; block Guide auto-open; show orb pulse only
+
+**Backend sub-tasks:**
+1. Add `preferences` JSONB column to `User` table (or extend existing if present); fields: `guideSlots`, `journeyProgress`, `journeyDismissed`
+2. `GET /api/guide/preferences` — return slot config + journey state for authenticated user
+3. `PATCH /api/guide/preferences` — update slot config or journey fields
+4. Socket event: `guide:notification` — server pushes notification cards to connected user's Guide stack
+
+**Retire on completion:** `GettingStartedModal.jsx` (iframe approach), `WelcomeModal.jsx` (replaced by Guide auto-open on first login)
+
+**Effort:** Large (1–2 sprints). **Risk:** Medium — real-time notification wiring and backend schema require coordination.
 
 ---
 
@@ -861,55 +877,90 @@ Sub-tasks:
 
 *Build the Journey card inside the Guide panel. Requires Phase 3 complete.*
 
-1. **JourneyCard** component — collapsed and expanded states, orb progress ring, CTA per step
-2. **JourneyStore** — step completion state, server sync
-3. **Contextual auto-open** — page-load hook checks current route against incomplete step triggers; calls `guideStore.open()` if matched (never mid-game)
-4. **Spotlight** — `useSpotlight(stepIndex, targetRef)` hook; renders amber pulse ring + label
-5. **Completion celebration** — confetti, badge award, +50 TC deposit
-6. **Dismiss flow** — one-tap confirmation; server-side `dismissed: true` in journey state
-7. Retire `GettingStartedModal.jsx`, `WelcomeModal.jsx`, update `onboardingStore.js`
-8. Backend: journey step completion events (step detected server-side or reported from client); TC deposit on step 7
+**Frontend sub-tasks:**
+1. `JourneyCard` component — collapsed view (progress bar + next step + CTA) and expanded view (all 7 steps with checkmarks, arrows, action buttons); pinned above notification stack
+2. Orb progress ring updates to reflect step count (amber arc, 0–7)
+3. Contextual auto-open hook — on page load, check current route against incomplete step trigger map; call `guideStore.open()` if matched; never triggers mid-game or mid-form
+4. `useSpotlight(stepIndex, targetRef)` hook — renders amber 2px pulse ring around target element + floating label ("Step N: [title] →"); dismisses on step completion or navigation
+5. Completion celebration — confetti burst, "Onboarding Complete" badge pop, +50 TC deposit notification
+6. Dismiss flow — × button in card corner → one-tap confirmation overlay → `journeyDismissed: true` synced server-side
+7. "Restart onboarding" option in Settings → Account
 
-**Effort:** Large (1 sprint). **Risk:** Medium — journey step 2, 4, 5, 6 require cross-site deep-links.
+**Backend sub-tasks:**
+1. Journey step completion detection — server-side where possible (first game completed, first bot created, first training run, first tournament registration, first tournament match); emit `guide:journeyStep` socket event on detection
+2. TC deposit on step 7 — trigger existing credits system; send `guide:notification` with type `admin` confirming reward
+3. `POST /api/guide/journey/dismiss` — mark dismissed server-side
+
+**Retire on completion:** `onboardingStore.js` (replaced by journey state in GuideStore); `/getting-started.html` (archive or repurpose SVG journey map as decorative asset)
+
+**Effort:** Large (1 sprint). **Risk:** Medium — steps 2, 4, 5, 6 require cross-site deep-links (Phase 5 dependency for full flow; journey card can ship without cross-site actions and add them in Phase 5).
 
 ---
 
 #### Phase 5 — Cross-site slot actions
 
-*Wire the Guide slot actions that jump to other aiarena sites.*
+*Wire Guide slot actions that deep-link across aiarena sites. Requires Phase 3.*
 
-1. Define the cross-site URL scheme: `aiarena.callidity.com/redirect?target=gym&action=start-training&userId=…`
-2. Implement "Play XO vs community bot" slot action (opens xo.aiarena game with bot pre-selected)
-3. Implement "Open Gym" cross-site slot (opens gym page with training flow ready)
-4. Implement "Enter tournament" cross-site slot (opens tournament lobby with registration modal pre-opened)
+1. Define cross-site URL scheme — e.g. `xo.aiarena.callidity.com/go?action=play-bot` or via a central redirect at `aiarena.callidity.com/go?target=xo&action=play-bot`
+2. "Play XO vs community bot" — opens xo.aiarena game page with community bot pre-selected and game queued
+3. "Open Gym" — opens `xo.aiarena.callidity.com/gym` with training flow in ready state
+4. "Enter tournament" — opens tournament lobby with registration modal pre-opened for the relevant tournament
+5. Journey step deep-links use the same scheme (steps 2, 3, 4, 5, 6)
 
-**Effort:** Medium. **Risk:** Medium — requires coordination with the aiarena app shell.
+**Effort:** Medium. **Risk:** Medium — requires coordination between the xo.aiarena and aiarena apps; auth token needs to be passed or user already signed in via shared auth.
 
 ---
 
 #### Phase 6 — Component library alignment (ongoing)
 
-*Progressively migrate inline-styled components to shared token usage. Not a big-bang rewrite.*
+*Progressively migrate inline-styled components to shared token usage. Not a big-bang rewrite — runs alongside other phases.*
 
-1. Buttons: define three variants (primary, secondary, danger) as CSS classes in `index.css` or as a `Button` component; replace inline gradient buttons site-wide
-2. Badges: define badge CSS classes; replace inline badge styling
-3. Cards: define card CSS class with correct radius, shadow, and border; audit pages
-4. Modals: build a `<Modal>` component with correct backdrop, animation, close behaviour; migrate existing modals
-5. Once `packages/ui` exists: migrate base primitives there
+1. **Buttons** — define `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-danger` CSS classes in `index.css`; replace inline `linear-gradient` button styles site-wide
+2. **Badges / pills** — define `.badge`, `.badge-open`, `.badge-live`, `.badge-done` etc.; replace inline badge styling
+3. **Cards** — define `.card` CSS class with `--radius-card`, `--shadow-card`, `--border-default`; audit pages for consistency
+4. **Modals** — build a `<Modal>` component with correct backdrop blur, animation (`slide-up`), close-on-Escape, and `aria-modal`; migrate `NamePromptModal`, `AuthModal` and any remaining modals
+5. **When `packages/ui` is created** — migrate base primitives (Button, Badge, Card, Avatar, Input) to the shared package; import from there in xo.aiarena
 
-**Effort:** Medium (can be broken into small PRs per component type). **Risk:** Low.
+**Effort:** Medium (small PRs per component type, can run in parallel with other phases). **Risk:** Low.
+
+---
+
+#### Phase 7 — xo.aiarena admin deprecation (last step)
+
+*Do this only after the platform admin at `aiarena.callidity.com/admin` has full feature parity with the current xo.aiarena admin pages.*
+
+**Prerequisite checklist — platform admin must cover:**
+- [ ] User list with tier, ELO, online status, ban controls
+- [ ] User profile detail view
+- [ ] Bot list with owner, competitive flag, activity
+- [ ] Tournament list, create/edit form, flash trigger, results view
+- [ ] XO Arena game config (ELO settings, match timeout, leaderboard toggle)
+- [ ] Reports: Tournament Stats, Tier Distribution, Activity Overview
+- [ ] System: general settings, notification broadcaster
+- [ ] Feedback inbox (currently at `/admin/feedback` and `/support`)
+
+**Migration steps:**
+1. Verify each checklist item is live and tested in the platform admin
+2. In `frontend/src/App.jsx`, replace all `/admin/*` `<Route>` entries with a single catch-all that redirects to `PLATFORM_ADMIN_URL`
+3. Remove local admin page component imports from `App.jsx`
+4. Archive (do not delete immediately) `frontend/src/pages/admin/` — keep for 30 days as a safety net, then remove in a follow-up PR
+5. Remove `AdminRoute` and `SupportRoute` guard components if no longer needed
+6. Update `FeedbackButton` and `FeedbackToast` unread-count logic if the feedback inbox has moved
+
+**Effort:** Small (mostly deletions once platform admin is ready). **Risk:** Low if checklist is complete before cutting over.
 
 ---
 
 ### Summary table
 
-| Phase | What | Effort | Risk | Dependency |
-|-------|------|--------|------|-----------|
-| 1 | Token alignment (palette, radius, background) | Small | Very low | None |
-| 2 | Nav cleanup (strip admin, remove Guide pill) | Small | Low | None |
-| 3 | Guide component build | Large | Medium | Phase 1, 2 |
-| 4 | Onboarding journey | Large | Medium | Phase 3 |
-| 5 | Cross-site slot actions | Medium | Medium | Phase 3, 4 |
-| 6 | Component library alignment | Medium | Low | Phase 1 (ongoing) |
+| Phase | What | Status | Effort | Risk | Dependency |
+|-------|------|--------|--------|------|-----------|
+| 1 | Token alignment (palette, radius, photo opacity) | ✅ Done | Small | Very low | — |
+| 2 | Nav cleanup (admin links out, Guide pill → slate) | ✅ Done | Small | Low | — |
+| 3 | Guide component build | Upcoming | Large | Medium | Phase 1, 2 |
+| 4 | Onboarding journey | Upcoming | Large | Medium | Phase 3 |
+| 5 | Cross-site slot actions | Upcoming | Medium | Medium | Phase 3, 4 |
+| 6 | Component library alignment | Ongoing | Medium | Low | Phase 1 |
+| 7 | xo.aiarena admin deprecation | Last step | Small | Low | Platform admin feature-complete |
 
-Phases 1 and 2 can land in the same PR. Phase 3 is the core new build and should be its own branch. Phases 4 and 5 follow naturally. Phase 6 is evergreen work that runs alongside everything else.
+Phase 3 is the core new build — start here once ready. Phases 4 and 5 follow in sequence. Phase 6 runs in the background. Phase 7 is gated on the platform admin being fully built and verified.
