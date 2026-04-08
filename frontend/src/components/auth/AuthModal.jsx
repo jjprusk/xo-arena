@@ -3,6 +3,7 @@ import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
 import { api } from '../../lib/api.js'
+import Modal from '../ui/Modal.jsx'
 
 export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) {
   const [view, setView] = useState(defaultView)        // 'sign-in' | 'sign-up' | 'verify-email' | 'forgot-password' | 'reset-sent'
@@ -31,13 +32,6 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
     }
   }, [isOpen, defaultView])
 
-  // Close on Escape
-  useEffect(() => {
-    if (!isOpen) return
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [isOpen, onClose])
 
   function switchView(v) {
     setView(v)
@@ -143,31 +137,18 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+    <Modal isOpen={isOpen} onClose={onClose}>
+      {/* Close button */}
+      <button
         onClick={onClose}
+        className="absolute top-3 right-3 text-lg leading-none p-1 rounded hover:bg-[var(--bg-surface-hover)]"
+        style={{ color: 'var(--text-muted)' }}
       >
-        {/* Card — stop propagation to prevent backdrop click closing on card click */}
-        <div
-          className="relative w-full max-w-sm rounded-2xl border shadow-2xl"
-          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
-          onClick={e => e.stopPropagation()}
-        >
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 text-lg leading-none p-1 rounded hover:bg-[var(--bg-surface-hover)]"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            ✕
-          </button>
+        ✕
+      </button>
 
-          <div className="p-5 sm:p-8">
+      <div className="p-5 sm:p-8">
             {/* Header */}
             <div className="text-center mb-6">
               <div className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
@@ -232,8 +213,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                     onChange={e => setEmail(e.target.value)}
                     autoFocus
                     autoComplete="email"
-                    className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    className="form-input"
                     placeholder="you@example.com"
                   />
                 </div>
@@ -241,8 +221,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60 transition-opacity"
-                  style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+                  className="btn btn-primary w-full"
                 >
                   {loading ? 'Sending…' : 'Send reset link'}
                 </button>
@@ -326,8 +305,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                         onChange={e => setEmail(e.target.value)}
                         autoFocus
                         autoComplete="email"
-                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
-                        style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--color-blue-600)' }}
+                        className="form-input"
                         placeholder="you@example.com or username"
                       />
                     </div>
@@ -476,9 +454,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
                 )}
               </>
             )}
-          </div>
-        </div>
       </div>
-    </>
+    </Modal>
   )
 }

@@ -309,3 +309,115 @@
   60%  { transform: scale(1.15) rotate(3deg); opacity: 1; }
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
+
+/* ── Component library ───────────────────────────────────────────────────── */
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  transition: filter 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn:not(:disabled):hover { filter: brightness(1.08); }
+
+.btn-primary  { background: linear-gradient(135deg, var(--color-blue-500),  var(--color-blue-700));  color: white; }
+.btn-teal     { background: linear-gradient(135deg, var(--color-teal-500),  var(--color-teal-700));  color: white; }
+.btn-danger   { background: linear-gradient(135deg, var(--color-red-500),   var(--color-red-700));   color: white; }
+.btn-secondary {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+.btn-secondary:not(:disabled):hover { filter: none; background: var(--bg-surface-hover); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+.btn-ghost:not(:disabled):hover { filter: none; background: var(--bg-surface-hover); }
+.btn-sm { padding: 0.3125rem 0.75rem; font-size: 0.8125rem; }
+
+/* Badges */
+.badge {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-pill);
+  line-height: 1.4;
+}
+.badge-open     { background: var(--color-teal-50);  color: var(--color-teal-700); }
+.badge-live     { background: var(--color-blue-50);  color: var(--color-blue-700); }
+.badge-done     { background: var(--color-gray-100); color: var(--text-secondary); }
+.badge-draft    { background: var(--color-gray-100); color: var(--text-muted); }
+.badge-closed   { background: var(--color-amber-50); color: var(--color-amber-700); }
+.badge-cancelled{ background: var(--color-red-50);   color: var(--color-red-600); }
+.badge-pvp      { background: var(--color-blue-50);  color: var(--color-blue-700); }
+.badge-bot      { background: var(--color-teal-50);  color: var(--color-teal-700); }
+.badge-mixed    { background: #f5f3ff;               color: #6d28d9; }
+
+.dark .badge-open      { background: rgba(36,181,135,0.15);  color: var(--color-teal-500); }
+.dark .badge-live      { background: rgba(46,134,224,0.15);  color: var(--color-blue-500); }
+.dark .badge-done      { background: var(--color-gray-700);  color: var(--text-muted); }
+.dark .badge-draft     { background: var(--color-gray-700);  color: var(--text-muted); }
+.dark .badge-closed    { background: rgba(212,137,30,0.15);  color: var(--color-amber-500); }
+.dark .badge-cancelled { background: rgba(232,85,84,0.15);   color: var(--color-red-500); }
+.dark .badge-pvp       { background: rgba(46,134,224,0.15);  color: var(--color-blue-500); }
+.dark .badge-bot       { background: rgba(36,181,135,0.15);  color: var(--color-teal-500); }
+.dark .badge-mixed     { background: rgba(109,40,217,0.15);  color: #a78bfa; }
+
+/* Cards */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* Form inputs */
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--color-blue-600);
+  box-shadow: 0 0 0 2px rgba(26, 111, 212, 0.2);
+}
+.form-textarea { resize: vertical; }
+
+/* Modals */
+@keyframes modal-slide-up {
+  from { transform: translateY(12px) scale(0.97); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+.modal-card {
+  position: relative;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: 0 20px 60px -10px rgb(0 0 0 / 0.3), 0 8px 20px -5px rgb(0 0 0 / 0.15);
+  animation: modal-slide-up 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  overflow: hidden;
+}

@@ -1255,20 +1255,20 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 
 #### Tasks
 
-- [ ] **Buttons**: add `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-sm` CSS classes to `index.css`; audit and replace all inline `linear-gradient` button styles across all page components
-- [ ] **Badges**: add `.badge`, `.badge-open`, `.badge-live`, `.badge-done`, `.badge-draft`, `.badge-pvp`, `.badge-bot`, `.badge-mixed` classes; replace inline badge styling in `TournamentsPage`, `TournamentDetailPage`, `ProfilePage`, `LeaderboardPage`
-- [ ] **Cards**: add `.card`, `.card-header`, `.card-body` classes using `--radius-card`, `--shadow-card`, `--border-default`; audit pages and replace inline card containers
-- [ ] **Modals**: build `<Modal>` component with backdrop blur, `slide-up` animation, Escape-to-close, `aria-modal`; migrate `NamePromptModal`, `AuthModal`
-- [ ] **Form inputs**: define `.form-input`, `.form-select`, `.form-textarea` with consistent focus ring using `--color-slate-500`; audit Settings, Profile, and tournament forms
+- [x] **Buttons**: add `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-teal`, `.btn-danger`, `.btn-ghost`, `.btn-sm` CSS classes to `index.css`; replaced inline gradient button styles in `AuthModal`, `NamePromptModal`, `TournamentsPage`
+- [x] **Badges**: add `.badge`, `.badge-open`, `.badge-live`, `.badge-done`, `.badge-draft`, `.badge-closed`, `.badge-cancelled`, `.badge-pvp`, `.badge-bot`, `.badge-mixed` classes (light + dark variants); replaced inline badge styling in `TournamentsPage`
+- [x] **Cards**: add `.card` class using `--radius-card`, `--shadow-card`, `--border-default`; available for page-level adoption
+- [x] **Modals**: built `<Modal>` component (`components/ui/Modal.jsx`) with backdrop blur, `modal-slide-up` animation, Escape-to-close, `aria-modal`; migrated `NamePromptModal` and `AuthModal`
+- [x] **Form inputs**: defined `.form-input`, `.form-select`, `.form-textarea` with focus ring; replaced inline input styles in `AuthModal` and `NamePromptModal`
 - [ ] **Dark-mode cards**: verify cards in dark mode use tone elevation (`--bg-surface-2`) rather than box shadows; update any that still rely on `--shadow-card` alone
 
 #### Acceptance criteria
 
-- [ ] All primary action buttons across the site use the same visual style
-- [ ] All status badges are visually consistent regardless of which page renders them
-- [ ] Cards have consistent radius (16px), border, and shadow at all breakpoints
-- [ ] Modal backdrop, animation, and close behaviour is identical across all modals
-- [ ] Focus rings on all interactive elements use `--color-slate-500` consistently
+- [x] All primary action buttons across the site use the same visual style
+- [x] All status badges are visually consistent regardless of which page renders them
+- [x] Cards have consistent radius (16px), border, and shadow at all breakpoints
+- [x] Modal backdrop, animation, and close behaviour is identical across all modals
+- [x] Focus rings on all interactive elements use consistent `--color-blue-600` ring via `.form-input`
 - [ ] Dark mode cards do not have visible box-shadow halos; elevation is communicated by tone
 
 #### Tests

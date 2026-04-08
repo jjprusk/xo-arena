@@ -8,25 +8,18 @@ import { useSpotlight, SpotlightRing } from '../lib/useSpotlight.jsx'
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
-const STATUS_STYLES = {
-  DRAFT:               { bg: 'var(--color-gray-100)',   text: 'var(--text-muted)',          label: 'Draft' },
-  REGISTRATION_OPEN:   { bg: 'var(--color-teal-50)',    text: 'var(--color-teal-700)',       label: 'Open' },
-  REGISTRATION_CLOSED: { bg: 'var(--color-amber-50)',   text: 'var(--color-amber-700)',      label: 'Reg Closed' },
-  IN_PROGRESS:         { bg: 'var(--color-blue-50)',    text: 'var(--color-blue-700)',       label: 'In Progress' },
-  COMPLETED:           { bg: 'var(--color-gray-100)',   text: 'var(--text-secondary)',       label: 'Completed' },
-  CANCELLED:           { bg: 'var(--color-red-50)',     text: 'var(--color-red-600)',        label: 'Cancelled' },
+const STATUS_META = {
+  DRAFT:               { cls: 'badge-draft',     label: 'Draft' },
+  REGISTRATION_OPEN:   { cls: 'badge-open',      label: 'Open' },
+  REGISTRATION_CLOSED: { cls: 'badge-closed',    label: 'Reg Closed' },
+  IN_PROGRESS:         { cls: 'badge-live',      label: 'In Progress' },
+  COMPLETED:           { cls: 'badge-done',      label: 'Completed' },
+  CANCELLED:           { cls: 'badge-cancelled', label: 'Cancelled' },
 }
 
 function StatusBadge({ status }) {
-  const s = STATUS_STYLES[status] ?? STATUS_STYLES.DRAFT
-  return (
-    <span
-      className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full"
-      style={{ backgroundColor: s.bg, color: s.text }}
-    >
-      {s.label}
-    </span>
-  )
+  const { cls, label } = STATUS_META[status] ?? STATUS_META.DRAFT
+  return <span className={`badge ${cls}`}>{label}</span>
 }
 
 // ── Filter bar ────────────────────────────────────────────────────────────────
@@ -85,8 +78,7 @@ function RegisterButton({ tournament, token, onSuccess }) {
       <button
         onClick={handle}
         disabled={busy}
-        className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
-        style={{ background: 'linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700))' }}
+        className="btn btn-teal btn-sm"
       >
         {busy ? 'Joining…' : 'Register'}
       </button>
