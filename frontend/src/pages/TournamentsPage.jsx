@@ -4,7 +4,7 @@ import { tournamentApi } from '../lib/tournamentApi.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
-import { useSpotlight, SpotlightRing } from '../lib/useSpotlight.js'
+import { useSpotlight, SpotlightRing } from '../lib/useSpotlight.jsx'
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
