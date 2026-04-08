@@ -251,6 +251,103 @@ describe('registerParticipant — window enforcement', () => {
   })
 })
 
+// ─── registerParticipant — notification preference stamping ───────────────────
+
+describe('registerParticipant — notification preference stamping', () => {
+  function setupOpenTournament() {
+    mockDb.tournament.findUnique.mockResolvedValue({
+      ...makeTournament({ status: 'REGISTRATION_OPEN' }),
+      _count: { participants: 0 },
+    })
+    mockDb.tournamentParticipant.findUnique.mockResolvedValue(null)
+    mockDb.tournamentParticipant.create.mockImplementation(({ data }) =>
+      Promise.resolve({ id: 'part_new', ...data })
+    )
+  }
+
+  it('stamps AS_PLAYED when user preference is AS_PLAYED', async () => {
+    mockDb.user.findUnique.mockResolvedValue({
+      id: 'user_1', eloRating: 1200,
+      preferences: { tournamentResultNotifPref: 'AS_PLAYED' },
+    })
+    setupOpenTournament()
+
+    await registerParticipant('tour_1', 'ba_1')
+
+    expect(mockDb.tournamentParticipant.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ resultNotifPref: 'AS_PLAYED' }),
+      })
+    )
+  })
+
+  it('stamps END_OF_TOURNAMENT when user preference is END_OF_TOURNAMENT', async () => {
+    mockDb.user.findUnique.mockResolvedValue({
+      id: 'user_1', eloRating: 1200,
+      preferences: { tournamentResultNotifPref: 'END_OF_TOURNAMENT' },
+    })
+    setupOpenTournament()
+
+    await registerParticipant('tour_1', 'ba_1')
+
+    expect(mockDb.tournamentParticipant.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ resultNotifPref: 'END_OF_TOURNAMENT' }),
+      })
+    )
+  })
+
+  it('does not stamp resultNotifPref when user has no preference set', async () => {
+    mockDb.user.findUnique.mockResolvedValue({
+      id: 'user_1', eloRating: 1200, preferences: {},
+    })
+    setupOpenTournament()
+
+    await registerParticipant('tour_1', 'ba_1')
+
+    const createCall = mockDb.tournamentParticipant.create.mock.calls[0][0]
+    expect(createCall.data).not.toHaveProperty('resultNotifPref')
+  })
+
+  it('does not stamp resultNotifPref for invalid preference values', async () => {
+    mockDb.user.findUnique.mockResolvedValue({
+      id: 'user_1', eloRating: 1200,
+      preferences: { tournamentResultNotifPref: 'IMMEDIATELY' },
+    })
+    setupOpenTournament()
+
+    await registerParticipant('tour_1', 'ba_1')
+
+    const createCall = mockDb.tournamentParticipant.create.mock.calls[0][0]
+    expect(createCall.data).not.toHaveProperty('resultNotifPref')
+  })
+
+  it('stamps preference on re-activation of a withdrawn registration', async () => {
+    mockDb.user.findUnique.mockResolvedValue({
+      id: 'user_1', eloRating: 1200,
+      preferences: { tournamentResultNotifPref: 'END_OF_TOURNAMENT' },
+    })
+    mockDb.tournament.findUnique.mockResolvedValue({
+      ...makeTournament({ status: 'REGISTRATION_OPEN' }),
+      _count: { participants: 0 },
+    })
+    mockDb.tournamentParticipant.findUnique.mockResolvedValue(
+      makeParticipant({ status: 'WITHDRAWN' })
+    )
+    mockDb.tournamentParticipant.update.mockImplementation(({ data }) =>
+      Promise.resolve({ ...makeParticipant(), ...data })
+    )
+
+    await registerParticipant('tour_1', 'ba_1')
+
+    expect(mockDb.tournamentParticipant.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ resultNotifPref: 'END_OF_TOURNAMENT' }),
+      })
+    )
+  })
+})
+
 describe('withdrawParticipant — window enforcement', () => {
   it('succeeds when tournament is REGISTRATION_OPEN', async () => {
     mockDb.user.findUnique.mockResolvedValue({ id: 'user_1' })

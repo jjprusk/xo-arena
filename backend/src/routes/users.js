@@ -293,6 +293,27 @@ router.patch('/me/settings', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/me/preferences
+ * Returns user-level preference keys relevant to client settings.
+ */
+router.get('/me/preferences', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    res.json({
+      showGuideButton:          prefs.showGuideButton !== false,
+      tournamentResultNotifPref: prefs.tournamentResultNotifPref ?? 'AS_PLAYED',
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * PATCH /api/v1/users/me/preferences
  * Updates allowed preference keys for the signed-in user.
  */
@@ -304,9 +325,12 @@ router.patch('/me/preferences', requireAuth, async (req, res, next) => {
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
     const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
-    const { showGuideButton } = req.body
+    const { showGuideButton, tournamentResultNotifPref } = req.body
     const updates = {}
     if (typeof showGuideButton === 'boolean') updates.showGuideButton = showGuideButton
+    if (tournamentResultNotifPref === 'AS_PLAYED' || tournamentResultNotifPref === 'END_OF_TOURNAMENT') {
+      updates.tournamentResultNotifPref = tournamentResultNotifPref
+    }
     await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, ...updates } } })
     res.json({ ok: true })
   } catch (err) {

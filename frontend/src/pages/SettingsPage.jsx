@@ -1,9 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useThemeStore } from '../store/themeStore.js'
 import { useSoundStore, SOUND_PACKS } from '../store/soundStore.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGuideStore } from '../store/guideStore.js'
+import api from '../lib/api.js'
+import { getToken } from '../lib/auth.js'
 
 const THEMES = [
   { value: 'light', label: 'Light', preview: '☀' },
@@ -18,6 +20,15 @@ export default function SettingsPage() {
   const { data: session } = useOptimisticSession()
   const { journeyProgress, restartJourney } = useGuideStore()
   const [journeyRestarting, setJourneyRestarting] = useState(false)
+  const [tournamentNotifPref, setTournamentNotifPref] = useState(null)
+  const [savingNotifPref, setSavingNotifPref] = useState(false)
+
+  useEffect(() => {
+    if (!session?.user) return
+    getToken().then(token => api.users.getPreferences(token)).then(data => {
+      setTournamentNotifPref(data.tournamentResultNotifPref ?? 'AS_PLAYED')
+    }).catch(() => {})
+  }, [session?.user])
   const journeyDismissed = !!journeyProgress?.dismissedAt
   const journeyComplete  = (journeyProgress?.completedSteps?.length ?? 0) >= 7
   const location = useLocation()
@@ -138,6 +149,54 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      {/* Tournaments */}
+      {session?.user && tournamentNotifPref !== null && (
+        <section className="space-y-3">
+          <SectionLabel>Tournaments</SectionLabel>
+          <div
+            className="rounded-xl border p-5 space-y-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <div>
+              <div className="font-medium mb-1">Match result notifications</div>
+              <div className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+                Choose when you receive match results during a tournament. This becomes your default when you register.
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                {[
+                  { value: 'AS_PLAYED', label: 'As played', desc: 'Get each result immediately after the match.' },
+                  { value: 'END_OF_TOURNAMENT', label: 'End of tournament', desc: 'Receive all results in one batch when the tournament finishes.' },
+                ].map(({ value, label, desc }) => (
+                  <button
+                    key={value}
+                    disabled={savingNotifPref}
+                    onClick={async () => {
+                      if (tournamentNotifPref === value) return
+                      setSavingNotifPref(true)
+                      try {
+                        const token = await getToken()
+                        await api.users.updatePreferences({ tournamentResultNotifPref: value }, token)
+                        setTournamentNotifPref(value)
+                      } finally {
+                        setSavingNotifPref(false)
+                      }
+                    }}
+                    className={`flex-1 text-left p-3 rounded-xl border-2 transition-all active:scale-[0.98] disabled:opacity-60 ${
+                      tournamentNotifPref === value
+                        ? 'border-[var(--color-blue-600)] bg-[var(--color-blue-50)]'
+                        : 'border-[var(--border-default)] bg-[var(--bg-base)] hover:border-[var(--color-gray-400)]'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">{label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Journey */}
       {session?.user && (journeyDismissed || journeyComplete) && (

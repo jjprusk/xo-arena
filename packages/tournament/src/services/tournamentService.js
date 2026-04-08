@@ -205,6 +205,7 @@ export async function registerParticipant(tournamentId, betterAuthId) {
       botProvisional: true,
       botCompetitive: true,
       botGamesPlayed: true,
+      preferences: true,
     },
   })
   if (!user) throw Object.assign(new Error('User not found'), { status: 404 })
@@ -269,12 +270,16 @@ export async function registerParticipant(tournamentId, betterAuthId) {
       throw Object.assign(new Error('Already registered for this tournament'), { status: 409 })
     }
     // Re-activate a withdrawn registration
+    const userNotifPref = user.preferences?.tournamentResultNotifPref
     const reactivated = await db.tournamentParticipant.update({
       where: { id: existing.id },
       data: {
         status: 'REGISTERED',
         eloAtRegistration: user.eloRating,
         registeredAt: new Date(),
+        ...(userNotifPref === 'AS_PLAYED' || userNotifPref === 'END_OF_TOURNAMENT'
+          ? { resultNotifPref: userNotifPref }
+          : {}),
       },
     })
     logger.info({ tournamentId, userId: user.id }, 'Participant re-registered')
@@ -286,12 +291,16 @@ export async function registerParticipant(tournamentId, betterAuthId) {
     logger.warn({ err, userId: user.id }, 'Failed to bootstrap classification')
   )
 
+  const userNotifPref = user.preferences?.tournamentResultNotifPref
   const participant = await db.tournamentParticipant.create({
     data: {
       tournamentId,
       userId: user.id,
       eloAtRegistration: user.eloRating,
       status: 'REGISTERED',
+      ...(userNotifPref === 'AS_PLAYED' || userNotifPref === 'END_OF_TOURNAMENT'
+        ? { resultNotifPref: userNotifPref }
+        : {}),
     },
   })
 
