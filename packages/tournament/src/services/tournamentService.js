@@ -135,6 +135,17 @@ export async function publishTournament(id, actorBetterAuthId) {
   })
 
   logger.info({ tournamentId: id, actorBetterAuthId }, 'Tournament published')
+
+  if (tournament.format === 'FLASH') {
+    await publishEvent('tournament:flash:announced', {
+      tournamentId: id,
+      name: tournament.name,
+      startTime: tournament.startTime?.toISOString() ?? null,
+      noticePeriodMinutes: tournament.noticePeriodMinutes ?? null,
+      durationMinutes: tournament.durationMinutes ?? null,
+    })
+  }
+
   return updated
 }
 

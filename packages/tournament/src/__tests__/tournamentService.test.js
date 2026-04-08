@@ -40,6 +40,7 @@ vi.mock('../lib/redis.js', () => ({ publishEvent: mockPublishEvent }))
 
 const {
   startTournament,
+  publishTournament,
   registerParticipant,
   withdrawParticipant,
   completeMatch,
@@ -345,6 +346,64 @@ describe('registerParticipant — notification preference stamping', () => {
         data: expect.objectContaining({ resultNotifPref: 'END_OF_TOURNAMENT' }),
       })
     )
+  })
+})
+
+// ─── publishTournament — flash announcement ───────────────────────────────────
+
+describe('publishTournament — flash:announced event', () => {
+  it('publishes tournament:flash:announced for FLASH format', async () => {
+    const flashTournament = {
+      id: 'tour_flash',
+      name: 'Midday Blitz',
+      status: 'DRAFT',
+      format: 'FLASH',
+      startTime: new Date('2026-04-08T12:00:00Z'),
+      noticePeriodMinutes: 5,
+      durationMinutes: 30,
+    }
+    mockDb.tournament.findUnique.mockResolvedValue(flashTournament)
+    mockDb.tournament.update.mockResolvedValue({ ...flashTournament, status: 'REGISTRATION_OPEN' })
+
+    await publishTournament('tour_flash', 'ba_admin')
+
+    expect(mockPublishEvent).toHaveBeenCalledWith('tournament:flash:announced', {
+      tournamentId: 'tour_flash',
+      name: 'Midday Blitz',
+      startTime: flashTournament.startTime.toISOString(),
+      noticePeriodMinutes: 5,
+      durationMinutes: 30,
+    })
+  })
+
+  it('does NOT publish flash:announced for PLANNED format', async () => {
+    const planned = {
+      id: 'tour_planned',
+      name: 'Weekend Classic',
+      status: 'DRAFT',
+      format: 'PLANNED',
+      startTime: null,
+      noticePeriodMinutes: null,
+      durationMinutes: null,
+    }
+    mockDb.tournament.findUnique.mockResolvedValue(planned)
+    mockDb.tournament.update.mockResolvedValue({ ...planned, status: 'REGISTRATION_OPEN' })
+
+    await publishTournament('tour_planned', 'ba_admin')
+
+    const flashCall = mockPublishEvent.mock.calls.find(c => c[0] === 'tournament:flash:announced')
+    expect(flashCall).toBeUndefined()
+  })
+
+  it('throws 409 if tournament is not in DRAFT status', async () => {
+    mockDb.tournament.findUnique.mockResolvedValue({
+      id: 'tour_1', status: 'REGISTRATION_OPEN', format: 'FLASH',
+    })
+
+    await expect(publishTournament('tour_1', 'ba_admin')).rejects.toMatchObject({
+      status: 409,
+    })
+    expect(mockPublishEvent).not.toHaveBeenCalled()
   })
 })
 

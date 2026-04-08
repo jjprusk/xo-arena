@@ -11,6 +11,7 @@ import { completeStep } from '../services/journeyService.js'
 
 // Channels to subscribe to
 const CHANNELS = [
+  'tournament:flash:announced',
   'tournament:match:ready',
   'tournament:match:result',
   'tournament:warning',
@@ -49,6 +50,21 @@ export function startTournamentBridge(io) {
 
 export async function handleEvent(io, channel, data) {
   switch (channel) {
+    case 'tournament:flash:announced': {
+      // Broadcast to all connected sockets — flash tournaments are live events.
+      // No UserNotification row: if you're not online, the window has likely passed.
+      const { tournamentId, name, noticePeriodMinutes } = data
+      const minuteText = noticePeriodMinutes != null ? ` — starting in ${noticePeriodMinutes} min` : ''
+      io.emit('guide:notification', {
+        type:         'flash',
+        title:        `Flash Tournament: ${name}`,
+        body:         `Registration is open${minuteText}. Register now!`,
+        href:         '/tournaments',
+        tournamentId,
+      })
+      logger.info({ tournamentId }, 'Flash tournament announced to all connected clients')
+      break
+    }
     case 'tournament:match:ready': {
       // Emit real-time to both participants
       const { tournamentId, matchId, participant1UserId, participant2UserId } = data

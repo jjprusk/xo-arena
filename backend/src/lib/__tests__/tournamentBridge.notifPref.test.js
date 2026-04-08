@@ -51,7 +51,7 @@ const { handleEvent } = await import('../tournamentBridge.js')
 function makeIo() {
   const emitFn = vi.fn()
   const toFn = vi.fn().mockReturnValue({ emit: emitFn })
-  return { to: toFn, _emit: emitFn }
+  return { to: toFn, emit: vi.fn(), _emit: emitFn }
 }
 
 function makeMatch() {
@@ -77,6 +77,63 @@ beforeEach(() => {
 })
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
+
+// ─── Flash broadcast ─────────────────────────────────────────────────────────
+
+describe('tournament:flash:announced — global broadcast', () => {
+  it('emits guide:notification to all connected sockets', async () => {
+    const io = makeIo()
+
+    await handleEvent(io, 'tournament:flash:announced', {
+      tournamentId: 'tour_flash',
+      name: 'Midday Blitz',
+      noticePeriodMinutes: 5,
+      durationMinutes: 30,
+      startTime: new Date().toISOString(),
+    })
+
+    expect(io.emit).toHaveBeenCalledOnce()
+    const [event, payload] = io.emit.mock.calls[0]
+    expect(event).toBe('guide:notification')
+    expect(payload.type).toBe('flash')
+    expect(payload.title).toBe('Flash Tournament: Midday Blitz')
+    expect(payload.body).toContain('5 min')
+    expect(payload.href).toBe('/tournaments')
+    expect(payload.tournamentId).toBe('tour_flash')
+  })
+
+  it('does not emit to individual user rooms', async () => {
+    const io = makeIo()
+
+    await handleEvent(io, 'tournament:flash:announced', {
+      tournamentId: 'tour_flash',
+      name: 'Quick Fire',
+      noticePeriodMinutes: null,
+      durationMinutes: 15,
+      startTime: null,
+    })
+
+    expect(io.to).not.toHaveBeenCalled()
+  })
+
+  it('handles null noticePeriodMinutes gracefully', async () => {
+    const io = makeIo()
+
+    await handleEvent(io, 'tournament:flash:announced', {
+      tournamentId: 'tour_flash',
+      name: 'Surprise Tournament',
+      noticePeriodMinutes: null,
+      durationMinutes: 20,
+      startTime: null,
+    })
+
+    expect(io.emit).toHaveBeenCalledOnce()
+    const [, payload] = io.emit.mock.calls[0]
+    // Body should not contain "null" or crash
+    expect(payload.body).not.toContain('null')
+    expect(payload.body).toContain('Register now')
+  })
+})
 
 describe('tournament:match:result — notification preference gating', () => {
   it('emits real-time immediately for AS_PLAYED participant', async () => {
