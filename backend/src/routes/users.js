@@ -305,8 +305,9 @@ router.get('/me/preferences', requireAuth, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
     const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
     res.json({
-      showGuideButton:          prefs.showGuideButton !== false,
+      showGuideButton:           prefs.showGuideButton !== false,
       tournamentResultNotifPref: prefs.tournamentResultNotifPref ?? 'AS_PLAYED',
+      flashStartAlerts:          prefs.flashStartAlerts !== false,
     })
   } catch (err) {
     next(err)
@@ -325,12 +326,13 @@ router.patch('/me/preferences', requireAuth, async (req, res, next) => {
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
     const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
-    const { showGuideButton, tournamentResultNotifPref } = req.body
+    const { showGuideButton, tournamentResultNotifPref, flashStartAlerts } = req.body
     const updates = {}
     if (typeof showGuideButton === 'boolean') updates.showGuideButton = showGuideButton
     if (tournamentResultNotifPref === 'AS_PLAYED' || tournamentResultNotifPref === 'END_OF_TOURNAMENT') {
       updates.tournamentResultNotifPref = tournamentResultNotifPref
     }
+    if (typeof flashStartAlerts === 'boolean') updates.flashStartAlerts = flashStartAlerts
     await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, ...updates } } })
     res.json({ ok: true })
   } catch (err) {

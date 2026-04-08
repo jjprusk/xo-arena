@@ -124,8 +124,58 @@ async function checkWarnings() {
         )
       }
     }
+
+    // 2-min warning — FLASH tournaments only, filtered to opted-in participants
+    await checkFlashTwoMinWarning()
   } catch (err) {
     logger.error({ err }, 'Scheduler: checkWarnings failed')
+  }
+}
+
+export async function checkFlashTwoMinWarning(now = new Date()) {
+  const windowStart = new Date(now.getTime() + 1 * 60 * 1000)
+  const windowEnd   = new Date(now.getTime() + 3 * 60 * 1000)
+
+  const tournaments = await db.tournament.findMany({
+    where: {
+      format: 'FLASH',
+      status: 'REGISTRATION_OPEN',
+      startTime: { gte: windowStart, lte: windowEnd },
+    },
+    include: {
+      participants: {
+        where: { status: { notIn: ['WITHDRAWN'] } },
+        include: { user: { select: { betterAuthId: true, preferences: true } } },
+      },
+    },
+  })
+
+  for (const tournament of tournaments) {
+    const warningKey = `${tournament.id}_2`
+    if (sentWarnings.has(warningKey)) continue
+
+    // Filter to participants who have not explicitly disabled flash start alerts
+    const participantUserIds = tournament.participants
+      .filter(p => p.user?.preferences?.flashStartAlerts !== false)
+      .map(p => p.user?.betterAuthId)
+      .filter(Boolean)
+
+    if (participantUserIds.length === 0) {
+      sentWarnings.add(warningKey)
+      continue
+    }
+
+    await publishEvent('tournament:warning', {
+      tournamentId: tournament.id,
+      minutesUntilStart: 2,
+      participantUserIds,
+    })
+
+    sentWarnings.add(warningKey)
+    logger.info(
+      { tournamentId: tournament.id, count: participantUserIds.length },
+      'Flash 2-min warning published'
+    )
   }
 }
 

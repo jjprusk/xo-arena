@@ -135,6 +135,60 @@ describe('tournament:flash:announced — global broadcast', () => {
   })
 })
 
+describe('tournament:warning — 2-min warning persistence', () => {
+  it('persists a UserNotification for minutesUntilStart=2', async () => {
+    const io = makeIo()
+
+    await handleEvent(io, 'tournament:warning', {
+      tournamentId: 'tour_1',
+      minutesUntilStart: 2,
+      participantUserIds: ['user_1', 'user_2'],
+    })
+
+    expect(mockQueueNotification).toHaveBeenCalledTimes(2)
+    expect(mockQueueNotification).toHaveBeenCalledWith('user_1', 'tournament_starting_soon', { tournamentId: 'tour_1', minutesUntilStart: 2 })
+    expect(mockQueueNotification).toHaveBeenCalledWith('user_2', 'tournament_starting_soon', { tournamentId: 'tour_1', minutesUntilStart: 2 })
+  })
+
+  it('persists for 60-min but NOT for 15-min', async () => {
+    const io = makeIo()
+
+    await handleEvent(io, 'tournament:warning', {
+      tournamentId: 'tour_1',
+      minutesUntilStart: 15,
+      participantUserIds: ['user_1'],
+    })
+
+    expect(mockQueueNotification).not.toHaveBeenCalled()
+
+    vi.clearAllMocks()
+
+    await handleEvent(io, 'tournament:warning', {
+      tournamentId: 'tour_1',
+      minutesUntilStart: 60,
+      participantUserIds: ['user_1'],
+    })
+
+    expect(mockQueueNotification).toHaveBeenCalledOnce()
+  })
+
+  it('emits real-time socket event for all warning tiers', async () => {
+    const io = makeIo()
+
+    for (const minutesUntilStart of [60, 15, 2]) {
+      await handleEvent(io, 'tournament:warning', {
+        tournamentId: 'tour_1',
+        minutesUntilStart,
+        participantUserIds: ['user_1'],
+      })
+    }
+
+    // io.to called once per tier (one participant each)
+    expect(io.to).toHaveBeenCalledTimes(3)
+    expect(io.to).toHaveBeenCalledWith('user:user_1')
+  })
+})
+
 describe('tournament:match:result — notification preference gating', () => {
   it('emits real-time immediately for AS_PLAYED participant', async () => {
     const io = makeIo()

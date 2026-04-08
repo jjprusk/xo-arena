@@ -281,6 +281,20 @@ describe('GET /api/v1/users/me/preferences', () => {
     expect(res.body.showGuideButton).toBe(false)
   })
 
+  it('returns flashStartAlerts=true by default', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: {} })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.flashStartAlerts).toBe(true)
+  })
+
+  it('returns flashStartAlerts=false when explicitly disabled', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: { flashStartAlerts: false } })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.flashStartAlerts).toBe(false)
+  })
+
   it('returns 404 when user not found', async () => {
     db.user.findUnique.mockResolvedValue(null)
     const res = await request(app).get('/api/v1/users/me/preferences')
@@ -346,6 +360,31 @@ describe('PATCH /api/v1/users/me/preferences', () => {
       faqHintSeen: true,
       tournamentResultNotifPref: 'END_OF_TOURNAMENT',
     })
+  })
+
+  it('saves flashStartAlerts=false', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ flashStartAlerts: false })
+    expect(res.status).toBe(200)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { preferences: expect.objectContaining({ flashStartAlerts: false }) },
+      })
+    )
+  })
+
+  it('saves flashStartAlerts=true', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: { flashStartAlerts: false } })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ flashStartAlerts: true })
+    expect(res.status).toBe(200)
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences.flashStartAlerts).toBe(true)
   })
 
   it('returns 404 when user not found', async () => {

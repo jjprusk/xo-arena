@@ -22,11 +22,14 @@ export default function SettingsPage() {
   const [journeyRestarting, setJourneyRestarting] = useState(false)
   const [tournamentNotifPref, setTournamentNotifPref] = useState(null)
   const [savingNotifPref, setSavingNotifPref] = useState(false)
+  const [flashStartAlerts, setFlashStartAlerts] = useState(null)
+  const [savingFlashAlerts, setSavingFlashAlerts] = useState(false)
 
   useEffect(() => {
     if (!session?.user) return
     getToken().then(token => api.users.getPreferences(token)).then(data => {
       setTournamentNotifPref(data.tournamentResultNotifPref ?? 'AS_PLAYED')
+      setFlashStartAlerts(data.flashStartAlerts !== false)
     }).catch(() => {})
   }, [session?.user])
   const journeyDismissed = !!journeyProgress?.dismissedAt
@@ -193,6 +196,33 @@ export default function SettingsPage() {
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Flash tournament alerts</div>
+                <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                  Get a 2-minute heads-up when a flash tournament you've registered for is about to start.
+                </div>
+              </div>
+              <button
+                disabled={savingFlashAlerts || flashStartAlerts === null}
+                onClick={async () => {
+                  const next = !flashStartAlerts
+                  setSavingFlashAlerts(true)
+                  try {
+                    const token = await getToken()
+                    await api.users.updatePreferences({ flashStartAlerts: next }, token)
+                    setFlashStartAlerts(next)
+                  } finally {
+                    setSavingFlashAlerts(false)
+                  }
+                }}
+                className={`relative w-12 h-6 rounded-full transition-colors shrink-0 disabled:opacity-50 ${flashStartAlerts ? 'bg-[var(--color-blue-600)]' : 'bg-[var(--color-gray-300)]'}`}
+                aria-label={flashStartAlerts ? 'Disable flash alerts' : 'Enable flash alerts'}
+              >
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${flashStartAlerts ? 'left-7' : 'left-1'}`} />
+              </button>
             </div>
           </div>
         </section>

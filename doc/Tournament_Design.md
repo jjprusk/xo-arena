@@ -827,7 +827,7 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 **Flash Tournaments**
 - [x] Flash tournament creation with notice period and duration parameters
 - [x] Broadcast notification to all logged-in users on creation (real-time + in-app banner)
-- [ ] "Starting in 2 min" notification to opted-in users
+- [x] "Starting in 2 min" notification to opted-in users
 - [x] Auto-start at T+N, auto-close at T+N+M
 - [x] Incomplete match resolution at close time — current series score; draw cascade if level
 

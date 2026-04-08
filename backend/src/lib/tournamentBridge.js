@@ -132,8 +132,8 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, minutesUntilStart, participantUserIds } = data
       for (const userId of participantUserIds) {
         io.to(`user:${userId}`).emit('tournament:warning', { tournamentId, minutesUntilStart })
-        // Only persist the 60min warning (15min is real-time only)
-        if (minutesUntilStart === 60) {
+        // Persist 60-min and 2-min warnings; 15-min is real-time only
+        if (minutesUntilStart === 60 || minutesUntilStart === 2) {
           await queueNotification(userId, 'tournament_starting_soon', { tournamentId, minutesUntilStart })
         }
       }
