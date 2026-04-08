@@ -158,6 +158,11 @@ export const api = {
     updateSettings: (body, token) => api.patch('/users/me/settings', body, token),
   },
 
+  guide: {
+    getPreferences:  (token)        => api.get('/guide/preferences', token),
+    patchPreferences:(body, token)  => api.patch('/guide/preferences', body, token),
+  },
+
   games: {
     record: (body, token) => api.post('/games', body, token),
   },

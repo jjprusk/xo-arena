@@ -1,0 +1,150 @@
+import React, { useState, useEffect, useRef } from 'react'
+import { useGuideStore } from '../../store/guideStore.js'
+import NotificationStack from './NotificationStack.jsx'
+import SlotGrid from './SlotGrid.jsx'
+import SlotPicker from './SlotPicker.jsx'
+import OnlineStrip from './OnlineStrip.jsx'
+
+/**
+ * GuidePanel — slide-in panel from the right.
+ * 320px on desktop, full-width bottom-sheet on mobile.
+ * Closes on Escape or clicking the backdrop.
+ */
+export default function GuidePanel({ isAdmin = false }) {
+  const { panelOpen, close } = useGuideStore()
+  const [editMode,     setEditMode]     = useState(false)
+  const [pickerOpen,   setPickerOpen]   = useState(false)
+  const panelRef = useRef(null)
+
+  // Escape key closes panel
+  useEffect(() => {
+    if (!panelOpen) return
+    function onKey(e) { if (e.key === 'Escape') close() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [panelOpen, close])
+
+  // Focus trap — move focus into panel on open
+  useEffect(() => {
+    if (panelOpen && panelRef.current) {
+      panelRef.current.focus()
+    }
+  }, [panelOpen])
+
+  if (!panelOpen) return null
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40"
+        style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}
+        onClick={close}
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Guide"
+        tabIndex={-1}
+        className="fixed z-50 flex flex-col outline-none"
+        style={{
+          // Desktop: right-side drawer
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          maxWidth: 320,
+          backgroundColor: 'var(--bg-surface)',
+          borderLeft: '1px solid var(--border-default)',
+          boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
+          animation: 'guide-panel-in 0.2s ease-out both',
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center gap-2 px-4 py-3 shrink-0"
+          style={{ borderBottom: '1px solid var(--border-default)' }}
+        >
+          {/* Mini orb */}
+          <div
+            className="flex items-center justify-center rounded-full shrink-0"
+            style={{
+              width: 28,
+              height: 28,
+              background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))',
+              fontSize: 14,
+            }}
+          >
+            🤖
+          </div>
+
+          <span className="flex-1 font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+            Guide
+          </span>
+
+          {/* Edit mode toggle */}
+          <button
+            onClick={() => setEditMode(m => !m)}
+            aria-label={editMode ? 'Done editing slots' : 'Edit slots'}
+            aria-pressed={editMode}
+            className="text-sm px-2 py-1 rounded-md transition-colors"
+            style={{
+              color: editMode ? 'var(--color-blue-600)' : 'var(--text-muted)',
+              background: editMode ? 'var(--color-blue-50)' : 'none',
+            }}
+          >
+            {editMode ? 'Done' : '⚙'}
+          </button>
+
+          {/* Close */}
+          <button
+            onClick={close}
+            aria-label="Close Guide"
+            className="text-xl leading-none hover:opacity-60 transition-opacity"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex flex-col gap-5 p-4">
+            <NotificationStack />
+            <SlotGrid
+              editMode={editMode}
+              onAddSlot={() => setPickerOpen(true)}
+              isAdmin={isAdmin}
+            />
+            <OnlineStrip onlineUsers={[]} />
+          </div>
+        </div>
+
+        {/* Chat input footer (placeholder — Phase 4+) */}
+        <div
+          className="shrink-0 px-4 py-3"
+          style={{ borderTop: '1px solid var(--border-default)' }}
+        >
+          <div
+            className="flex items-center gap-2 rounded-full px-3 py-2"
+            style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border-default)' }}
+          >
+            <span style={{ fontSize: 16 }}>🤖</span>
+            <span className="flex-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+              Ask Guide anything…
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Slot picker overlay */}
+      {pickerOpen && (
+        <SlotPicker onClose={() => setPickerOpen(false)} isAdmin={isAdmin} />
+      )}
+    </>
+  )
+}

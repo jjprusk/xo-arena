@@ -52,9 +52,27 @@ export async function handleEvent(io, channel, data) {
       // Emit real-time to both participants
       const { tournamentId, matchId, participant1UserId, participant2UserId } = data
       const userIds = [participant1UserId, participant2UserId].filter(Boolean)
+
+      // Look up tournament type to decide Guide notification style (flash vs match_ready)
+      let tournamentType = null
+      try {
+        const t = await db.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } })
+        tournamentType = t?.format ?? null
+      } catch { /* non-fatal */ }
+      const guideType = tournamentType === 'FLASH' ? 'flash' : 'match_ready'
+
       for (const userId of userIds) {
         io.to(`user:${userId}`).emit('tournament:match:ready', { tournamentId, matchId })
         await queueNotification(userId, 'tournament_match_ready', { tournamentId, matchId })
+        // Push into Guide notification stack
+        io.to(`user:${userId}`).emit('guide:notification', {
+          id:        `tmr-${matchId}-${userId}`,
+          type:      guideType,
+          title:     guideType === 'flash' ? 'Flash Tournament Match Ready' : 'Tournament Match Ready',
+          body:      'Your next match is ready to play.',
+          createdAt: new Date().toISOString(),
+          meta:      { tournamentId, matchId },
+        })
       }
       break
     }

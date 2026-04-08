@@ -432,6 +432,20 @@ async function recordPvpGame(room, io) {
         for (const notif of notifications) {
           const socketId = notif.userId === room.hostUserId ? room.hostId : room.guestId
           if (socketId) io.to(socketId).emit('accomplishment', notif)
+          // Also push into Guide notification stack
+          const guideType = notif.type === 'tier_upgrade' ? 'admin' : 'match_ready'
+          const guideTitle = notif.type === 'tier_upgrade'
+            ? 'Tier Upgrade!'
+            : notif.type === 'credit_milestone'
+              ? 'Milestone Reached!'
+              : 'Achievement Unlocked'
+          io.to(`user:${notif.userId}`).emit('guide:notification', {
+            id:        notif.id,
+            type:      guideType,
+            title:     guideTitle,
+            body:      notif.payload?.description ?? notif.payload?.message ?? '',
+            createdAt: (notif.createdAt ?? new Date()).toISOString(),
+          })
         }
       })
       .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))

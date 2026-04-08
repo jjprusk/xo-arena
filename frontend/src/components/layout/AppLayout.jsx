@@ -18,6 +18,9 @@ import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
 import AccomplishmentPopup from '../AccomplishmentPopup.jsx'
+import GuideOrb from '../guide/GuideOrb.jsx'
+import GuidePanel from '../guide/GuidePanel.jsx'
+import { useGuideStore } from '../../store/guideStore.js'
 import { getSocket } from '../../lib/socket.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -167,6 +170,33 @@ export default function AppLayout() {
       .catch(() => {})
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Hydrate GuideStore on sign-in; reset on sign-out
+  useEffect(() => {
+    if (session?.user?.id) {
+      useGuideStore.getState().hydrate()
+    } else {
+      useGuideStore.getState().reset()
+    }
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Real-time guide:notification events → GuideStore
+  useEffect(() => {
+    const socket = getSocket()
+    function onGuideNotification(notif) {
+      useGuideStore.getState().addNotification(notif)
+      // Auto-open panel for urgent types if not mid-game
+      if (notif.type === 'flash' || notif.type === 'match_ready') {
+        const { panelOpen } = useGuideStore.getState()
+        const { status: pvaiStatus } = useGameStore.getState()
+        const { status: pvpStatus } = usePvpStore.getState()
+        const inGame = pvaiStatus === 'playing' || pvpStatus === 'playing'
+        if (!panelOpen && !inGame) useGuideStore.getState().open()
+      }
+    }
+    socket.on('guide:notification', onGuideNotification)
+    return () => { socket.off('guide:notification', onGuideNotification) }
+  }, [])
+
   // Real-time accomplishment events pushed from the server over Socket.IO
   useEffect(() => {
     const socket = getSocket()
@@ -227,6 +257,10 @@ export default function AppLayout() {
               XO Arena
             </span>
           </Link>
+          {/* Guide orb — shown to signed-in users */}
+          <SignedIn>
+            <GuideOrb />
+          </SignedIn>
         </div>
 
         {/* Desktop nav links */}
@@ -466,6 +500,9 @@ export default function AppLayout() {
           onDismiss={() => handleDismissAccomplishment(accomplishments[0].id)}
         />
       )}
+      <SignedIn>
+        <GuidePanel isAdmin={isAdmin} />
+      </SignedIn>
       <IdleLogoutManager />
     </div>
   )

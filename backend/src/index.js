@@ -22,6 +22,7 @@ import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
 import supportRouter from './routes/support.js'
+import guideRouter from './routes/guide.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
 import { getSystemConfig } from './services/mlService.js'
@@ -45,6 +46,7 @@ registerRoutes(app, {
   '/bot-games': botGamesRouter,
   '/feedback': feedbackRouter,
   '/support': supportRouter,
+  '/guide': guideRouter,
 })
 
 // Public version endpoint — no auth required
