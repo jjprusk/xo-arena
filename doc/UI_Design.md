@@ -186,7 +186,7 @@ Dark mode elevation is achieved via the tone-step surface tokens above — no sh
 
 ### Background Treatment
 
-The Colosseum photo is platform-wide across all aiarena pages, including admin.
+The Colosseum photo is used across **aiarena platform pages** (the main platform site and admin). Individual game sites — including **xo.aiarena** — keep their own distinct backgrounds that fit their game identity. xo.aiarena uses the mountain background (`mountain-bg.jpg`). The Colosseum is not applied to game sites.
 
 ```css
 /* aiarena global background */
@@ -662,12 +662,12 @@ This is not a full redesign — it is an alignment pass. It should be planned as
 
 | | Current | Spec |
 |---|---------|------|
-| Image | `mountain-bg.jpg` (a mountain landscape) | Colosseum photo (`colosseum-bg.jpg`) |
-| Opacity (light) | 0.30 | 0.15–0.25 |
+| Image | `mountain-bg.jpg` | `mountain-bg.jpg` — **correct** (Colosseum is aiarena platform only; game sites keep their own backgrounds) |
+| Opacity (light) | 0.30 | 0.25 |
 | Opacity (dark) | 0.30 (no dark override) | 0.08 |
 | Position | `center center` | `center 30%` |
 
-**Action**: swap image, add dark-mode opacity override, adjust position.
+**Action**: keep mountain image; add dark-mode opacity override via `--photo-opacity` CSS var; adjust position to `center 30%`.
 
 ---
 
@@ -818,7 +818,7 @@ Phases are ordered by dependency. Each phase can be a separate PR or sprint.
 
 1. Add `--color-slate-{50–900}` ramp to `index.css`
 2. Add `--radius-sm / --radius-md / --radius-lg / --radius-pill` tokens to `index.css`
-3. Swap background image from `mountain-bg.jpg` to `colosseum-bg.jpg`, set opacity 0.25 (light) / 0.08 (dark), position `center 30%`
+3. Keep `mountain-bg.jpg` (xo.aiarena has its own visual identity; Colosseum is aiarena platform only). Fix opacity to 0.25 (light) / 0.08 (dark) via `--photo-opacity` CSS var; fix position to `center 30%`
 4. Audit dark-mode shadow values; introduce tone elevation for cards in dark mode
 
 **Effort:** Small (half-day). **Risk:** Very low.

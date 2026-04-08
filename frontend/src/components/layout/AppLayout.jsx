@@ -241,15 +241,15 @@ export default function AppLayout() {
 
   return (
     <div className="flex flex-col min-h-dvh relative">
-      {/* Colosseum background — opacity controlled by --photo-opacity CSS var (light: 0.25, dark: 0.08) */}
-      {/* ⚠ Image file: /public/colosseum-bg.jpg needs to be sourced and added */}
+      {/* Mountain background — xo.aiarena game site has its own visual identity distinct from the aiarena platform */}
+      {/* The Colosseum background applies to aiarena.callidity.com (platform + admin), not the game sites */}
       <div
         aria-hidden="true"
         className="fixed inset-0 pointer-events-none select-none"
         style={{
           zIndex: 0,
           opacity: 'var(--photo-opacity)',
-          backgroundImage: 'url(/colosseum-bg.jpg)',
+          backgroundImage: 'url(/mountain-bg.jpg)',
           backgroundSize: 'cover',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center 30%',
