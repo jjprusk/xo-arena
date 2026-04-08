@@ -1,25 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { configurePvp, usePvpStore } from '@xo-arena/xo'
 
-// Mock sound store — pvpStore calls useSoundStore.getState().play() in event handlers
-vi.mock('../soundStore.js', () => ({
-  useSoundStore: {
-    getState: vi.fn(() => ({ play: vi.fn() })),
-  },
-}))
-
-// Mock getToken — used inside createRoom / joinRoom async calls
-vi.mock('../../lib/getToken.js', () => ({
-  getToken: vi.fn(() => Promise.resolve(null)),
-}))
-
-// Build a fresh mock socket factory so each test can have isolated listeners
+// Build a fresh mock socket for each test so listener maps are isolated
 function makeMockSocket() {
   const listeners = {}
   return {
-    on: vi.fn((event, cb) => { listeners[event] = cb }),
-    off: vi.fn(),
-    emit: vi.fn(),
-    connect: vi.fn(),
+    on:         vi.fn((event, cb) => { listeners[event] = cb }),
+    off:        vi.fn(),
+    emit:       vi.fn(),
+    connect:    vi.fn(),
     disconnect: vi.fn(),
     id: 'test-socket-id',
     _listeners: listeners,
@@ -27,52 +16,40 @@ function makeMockSocket() {
   }
 }
 
-// Module-level socket reference — replaced in beforeEach
 let mockSocket
-
-vi.mock('../../lib/socket.js', () => ({
-  getSocket: vi.fn(() => mockSocket),
-  connectSocket: vi.fn(() => mockSocket),
-  disconnectSocket: vi.fn(),
-}))
-
-import { getSocket, connectSocket } from '../../lib/socket.js'
-import { usePvpStore } from '../pvpStore.js'
-
-function s() {
-  return usePvpStore.getState()
-}
+const mockConnectSocket    = vi.fn()
+const mockDisconnectSocket = vi.fn()
+const mockGetSocket        = vi.fn()
+const mockGetToken         = vi.fn(() => Promise.resolve(null))
+const mockPlaySound        = vi.fn()
 
 beforeEach(() => {
-  // Build a new socket so listener maps are clean for each test
   mockSocket = makeMockSocket()
-  getSocket.mockReturnValue(mockSocket)
-  connectSocket.mockReturnValue(mockSocket)
+  mockConnectSocket.mockReturnValue(mockSocket)
+  mockGetSocket.mockReturnValue(mockSocket)
 
-  // Full state reset
+  configurePvp({
+    connectSocket:    mockConnectSocket,
+    disconnectSocket: mockDisconnectSocket,
+    getSocket:        mockGetSocket,
+    getToken:         mockGetToken,
+    playSound:        mockPlaySound,
+  })
+
   usePvpStore.getState().reset()
-  // reset() calls disconnectSocket and clears state; also clear the listener guard
   usePvpStore.setState({ _listenersRegistered: false })
 })
 
-// Helper: call createRoom and register listeners
-function createRoom() {
-  s().createRoom()
-}
+function s() { return usePvpStore.getState() }
 
-// Helper: trigger room:created so slug/mark are set
+function createRoom() { s().createRoom() }
+
 function triggerRoomCreated(slug = 'test-room') {
   mockSocket._trigger('room:created', { slug, displayName: 'Test Room', mark: 'X' })
 }
 
-// Helper: trigger game:start
 function triggerGameStart(board = Array(9).fill(null)) {
-  mockSocket._trigger('game:start', {
-    board,
-    currentTurn: 'X',
-    round: 1,
-    scores: { X: 0, O: 0 },
-  })
+  mockSocket._trigger('game:start', { board, currentTurn: 'X', round: 1, scores: { X: 0, O: 0 } })
 }
 
 describe('pvpStore', () => {
@@ -82,10 +59,8 @@ describe('pvpStore', () => {
   describe('createRoom', () => {
     it('emits "room:create" on the socket', () => {
       createRoom()
-      // emit is called asynchronously after getToken resolves; wait a tick
       return Promise.resolve().then(() => {
-        const calls = mockSocket.emit.mock.calls
-        expect(calls.some(([event]) => event === 'room:create')).toBe(true)
+        expect(mockSocket.emit.mock.calls.some(([e]) => e === 'room:create')).toBe(true)
       })
     })
 
@@ -127,7 +102,6 @@ describe('pvpStore', () => {
       createRoom()
       triggerRoomCreated()
       triggerGameStart()
-      // myMark was set to 'X' by room:created
     })
 
     it('emits "game:move" with the cellIndex', () => {
@@ -148,7 +122,7 @@ describe('pvpStore', () => {
     it('saves an optimistic snapshot for potential rollback', () => {
       s().move(4)
       expect(s()._optimisticSnapshot).not.toBeNull()
-      expect(s()._optimisticSnapshot.board[4]).toBeNull() // snapshot captured board BEFORE move
+      expect(s()._optimisticSnapshot.board[4]).toBeNull()
       expect(s()._optimisticSnapshot.currentTurn).toBe('X')
     })
   })
@@ -238,7 +212,6 @@ describe('pvpStore', () => {
   describe('error event — room full auto-retry', () => {
     it('re-emits room:join as spectator when room is full and role is guest', () => {
       s().joinRoom('mt-everest', 'player')
-      // status='waiting', role='guest' at this point
       mockSocket._trigger('error', { message: 'Room is full' })
       const retryCall = mockSocket.emit.mock.calls.find(
         ([e, d]) => e === 'room:join' && d.role === 'spectator'
@@ -254,10 +227,9 @@ describe('pvpStore', () => {
     })
 
     it('does NOT auto-retry when role is not guest', () => {
-      createRoom() // role = 'host'
+      createRoom()
       triggerRoomCreated()
       mockSocket._trigger('error', { message: 'Room is full' })
-      // Should not change role to spectator
       expect(s().role).toBe('host')
       expect(s().error).toBe('Room is full')
     })
@@ -274,11 +246,10 @@ describe('pvpStore', () => {
 
       mockSocket._trigger('error', { message: 'Not your turn' })
 
-      const state = s()
-      expect(state.board[4]).toBeNull()
-      expect(state.currentTurn).toBe('X')
-      expect(state._optimisticSnapshot).toBeNull()
-      expect(state.error).toBe('Not your turn')
+      expect(s().board[4]).toBeNull()
+      expect(s().currentTurn).toBe('X')
+      expect(s()._optimisticSnapshot).toBeNull()
+      expect(s().error).toBe('Not your turn')
     })
   })
 
@@ -303,13 +274,12 @@ describe('pvpStore', () => {
       createRoom()
       triggerRoomCreated()
       s().reset()
-      const state = s()
-      expect(state.status).toBe('idle')
-      expect(state.slug).toBeNull()
-      expect(state.myMark).toBeNull()
-      expect(state.role).toBeNull()
-      expect(state.board).toEqual(Array(9).fill(null))
-      expect(state._optimisticSnapshot).toBeNull()
+      expect(s().status).toBe('idle')
+      expect(s().slug).toBeNull()
+      expect(s().myMark).toBeNull()
+      expect(s().role).toBeNull()
+      expect(s().board).toEqual(Array(9).fill(null))
+      expect(s()._optimisticSnapshot).toBeNull()
     })
 
     it('clears idleWarning, abandoned, and kicked on reset', () => {

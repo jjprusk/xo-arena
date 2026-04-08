@@ -6,6 +6,12 @@ const BACKEND_URL     = process.env.BACKEND_URL     || 'http://localhost:3000'
 const TOURNAMENT_URL  = process.env.TOURNAMENT_URL  || 'http://localhost:3001'
 
 export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/test/setup.js',
+    exclude: ['**/.claude/**', '**/node_modules/**'],
+  },
   plugins: [
     react({ jsxRuntime: 'automatic' }),
     tailwindcss(),

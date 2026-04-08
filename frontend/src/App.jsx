@@ -21,9 +21,6 @@ import AdminBotsPage from './pages/admin/AdminBotsPage.jsx'
 import AdminFeedbackPage from './pages/admin/AdminFeedbackPage.jsx'
 import AdminUserProfilePage from './pages/admin/AdminUserProfilePage.jsx'
 import AdminHealthPage from './pages/admin/AdminHealthPage.jsx'
-import AdminTournamentsPage from './pages/admin/AdminTournamentsPage.jsx'
-import TournamentsPage from './pages/TournamentsPage.jsx'
-import TournamentDetailPage from './pages/TournamentDetailPage.jsx'
 import SupportPage from './pages/SupportPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
@@ -66,12 +63,6 @@ export default function App() {
           <Route path="/admin/bots" element={<AdminRoute><AdminBotsPage /></AdminRoute>} />
           <Route path="/admin/feedback" element={<AdminRoute><AdminFeedbackPage /></AdminRoute>} />
           <Route path="/admin/health" element={<AdminRoute><AdminHealthPage /></AdminRoute>} />
-          <Route path="/admin/tournaments" element={<AdminRoute><AdminTournamentsPage /></AdminRoute>} />
-
-          {/* Public tournament routes */}
-          <Route path="/tournaments" element={<TournamentsPage />} />
-          <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
-
           {/* Support route — accessible to admin and SUPPORT role users */}
           <Route path="/support" element={<SupportRoute><SupportPage /></SupportRoute>} />
         </Route>
