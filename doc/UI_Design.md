@@ -1012,16 +1012,31 @@ This section ties together all UI work across both the xo.aiarena game site refr
 
 ### Team and Skills Required
 
-| Role | Responsibilities | Skills |
-|------|-----------------|--------|
-| **Frontend Engineer (primary)** | Guide component, onboarding journey, xo.aiarena UI alignment, component library | React 19, Zustand, Tailwind v4, CSS custom properties, SVG animation, Socket.IO client, Vite |
-| **Frontend Engineer (secondary / can overlap)** | Platform admin build (aiarena), cross-site routing, packages/ui extraction | Same as above; familiarity with multi-repo or monorepo patterns |
-| **Backend Engineer** | Guide preferences API, journey step detection, TC deposit, Socket.IO events, admin API | Node.js, Prisma, PostgreSQL, Socket.IO, REST API design |
-| **UI/UX (design review)** | Sign off each phase against mockups before merge; catch visual regressions | Ability to open and evaluate HTML mockups in `doc/mockups/`; familiarity with the design spec in this document |
-| **QA** | Manual smoke tests per phase; own the E2E test suite additions | Playwright, visual comparison, cross-browser, mobile viewport testing |
-| **DevOps (light touch)** | Railway deploy coordination; environment variable management for new API endpoints | Railway, GitHub Actions CI |
+| Role | Person | Responsibilities | Skills |
+|------|--------|-----------------|--------|
+| **Orchestrator** | Claude (AI) | Break phases into tasks, write and review code, enforce design spec, coordinate between engineers, flag blockers | Full-stack context, design spec, codebase |
+| **Frontend Engineer (primary)** | TBD | Guide component, onboarding journey, xo.aiarena UI alignment, component library | React 19, Zustand, Tailwind v4, CSS custom properties, SVG animation, Socket.IO client, Vite |
+| **Frontend Engineer (secondary / can overlap)** | TBD | Platform admin build (aiarena), cross-site routing, packages/ui extraction | Same as above; familiarity with multi-repo or monorepo patterns |
+| **Backend Engineer** | TBD | Guide preferences API, journey step detection, TC deposit, Socket.IO events, admin API | Node.js, Prisma, PostgreSQL, Socket.IO, REST API design |
+| **UI/UX (design review)** | TBD | Sign off each phase against mockups before merge; catch visual regressions; review new mockups as needed | Figma or HTML mockup evaluation; familiarity with the design spec in this document |
+| **QA Engineer** | TBD | Manual smoke tests per phase; own the E2E Playwright suite additions; cross-browser and mobile viewport testing | Playwright, visual comparison, cross-browser, mobile |
+| **DevOps (light touch)** | TBD | Railway deploy coordination; environment variable management for new API endpoints | Railway, GitHub Actions CI |
 
-A team of 2 engineers (1 frontend-heavy, 1 backend-heavy) plus a QA resource can execute this sequentially. Phases 3 and 4 benefit most from frontend/backend working in parallel.
+### Phase 3 Active Team
+
+For Phase 3 specifically, the active team is:
+
+| Role | Person | Phase 3 focus |
+|------|--------|---------------|
+| **Orchestrator** | Claude (AI) | Task breakdown, code implementation, PR review, design spec enforcement |
+| **Frontend Engineer (primary)** | TBD | Build `GuideOrb`, `GuidePanel`, `SlotGrid`, `SlotPicker`, `NotificationStack`, `OnlineStrip`, `GuideStore` |
+| **Backend Engineer** | TBD | `guide/preferences` API, `guide:notification` Socket.IO event, Flash/accomplishment wiring |
+| **UI/UX (design review)** | TBD | Visual sign-off against `doc/mockups/xo-game.html` before merge to staging |
+| **QA Engineer** | TBD | Smoke test on staging; Playwright coverage for orb toggle, panel open/close, notification dismiss |
+
+Frontend secondary and DevOps are not needed until Phase 5+ (cross-site actions) and have no Phase 3 responsibilities.
+
+A team of 2 engineers (1 frontend-heavy, 1 backend-heavy) plus UI/UX and QA can execute Phase 3 in one sprint, with frontend and backend working in parallel.
 
 ---
 
