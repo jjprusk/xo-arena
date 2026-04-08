@@ -189,6 +189,58 @@ describe('tournament:warning — 2-min warning persistence', () => {
   })
 })
 
+// ─── Per-registration pref takes precedence over global default ───────────────
+//
+// The bridge reads resultNotifPref from the TournamentParticipant row, which is
+// stamped at registration from the user's global default at that moment.
+// Changing the global default afterwards does NOT affect existing registrations.
+
+describe('tournament:match:result — per-registration pref takes precedence over global default', () => {
+  it('delivers AS_PLAYED for a participant registered with AS_PLAYED even when the user later prefers END_OF_TOURNAMENT', async () => {
+    const io = makeIo()
+
+    // Participant row has AS_PLAYED stamped at registration time.
+    // The user may have since changed their global to END_OF_TOURNAMENT, but
+    // the bridge only reads from the participant row — no live user lookup.
+    mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
+    mockDb.tournamentParticipant.findUnique
+      .mockResolvedValueOnce({ userId: 'user_1', resultNotifPref: 'AS_PLAYED' })
+      .mockResolvedValueOnce(null)
+
+    await handleEvent(io, 'tournament:match:result', {
+      tournamentId: 'tour_1',
+      matchId: 'match_1',
+      winnerId: 'part_1',
+      p1Wins: 2, p2Wins: 0, drawGames: 0,
+    })
+
+    // Real-time emit fired immediately (AS_PLAYED behaviour)
+    expect(io.to).toHaveBeenCalledWith('user:user_1')
+  })
+
+  it('withholds real-time for a participant registered with END_OF_TOURNAMENT even when the user later prefers AS_PLAYED', async () => {
+    const io = makeIo()
+
+    mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
+    mockDb.tournamentParticipant.findUnique
+      .mockResolvedValueOnce({ userId: 'user_1', resultNotifPref: 'END_OF_TOURNAMENT' })
+      .mockResolvedValueOnce(null)
+
+    await handleEvent(io, 'tournament:match:result', {
+      tournamentId: 'tour_1',
+      matchId: 'match_1',
+      winnerId: 'part_1',
+      p1Wins: 2, p2Wins: 0, drawGames: 0,
+    })
+
+    // No real-time emit — END_OF_TOURNAMENT holds results until tournament end
+    const toCallArgs = io.to.mock.calls.map(c => c[0])
+    expect(toCallArgs).not.toContain('user:user_1')
+    // But notification is still queued for the end-of-tournament flush
+    expect(mockQueueNotification).toHaveBeenCalledWith('user_1', 'tournament_match_result', expect.any(Object))
+  })
+})
+
 describe('tournament:match:result — notification preference gating', () => {
   it('emits real-time immediately for AS_PLAYED participant', async () => {
     const io = makeIo()
