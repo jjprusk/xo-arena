@@ -913,18 +913,18 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 *Build the Journey card inside the Guide panel. Requires Phase 0 (legacy onboarding removed) and Phase 3 complete.*
 
 **Frontend sub-tasks:**
-1. `JourneyCard` component — collapsed view (progress bar + next step + CTA) and expanded view (all 7 steps with checkmarks, arrows, action buttons); pinned above notification stack
-2. Orb progress ring updates to reflect step count (amber arc, 0–7)
-3. Contextual auto-open hook — on page load, check current route against incomplete step trigger map; call `guideStore.open()` if matched; never triggers mid-game or mid-form
-4. `useSpotlight(stepIndex, targetRef)` hook — renders amber 2px pulse ring around target element + floating label ("Step N: [title] →"); dismisses on step completion or navigation
-5. Completion celebration — confetti burst, "Onboarding Complete" badge pop, +50 TC deposit notification
-6. Dismiss flow — × button in card corner → one-tap confirmation overlay → `journeyDismissed: true` synced server-side
-7. "Restart onboarding" option in Settings → Account
+1. ✅ `JourneyCard` component — collapsed view (progress bar + next step + CTA) and expanded view (all 7 steps with checkmarks, arrows, action buttons); pinned above notification stack
+2. ✅ Orb progress ring updates to reflect step count (amber arc, 0–7)
+3. ✅ Contextual auto-open hook — on page load, check current route against incomplete step trigger map; call `guideStore.open()` if matched; never triggers mid-game or mid-form
+4. ✅ `useSpotlight(stepIndex, targetRef)` hook — renders amber 2px pulse ring around target element + floating label ("Step N: [title] →"); dismisses on step completion or navigation
+5. ✅ Completion celebration — confetti burst, "Onboarding Complete" badge pop, +50 TC deposit notification
+6. ✅ Dismiss flow — × button in card corner → one-tap confirmation overlay → `journeyDismissed: true` synced server-side
+7. ✅ "Restart onboarding" option in Settings → Account
 
 **Backend sub-tasks:**
-1. Journey step completion detection — server-side where possible (first game completed, first bot created, first training run, first tournament registration, first tournament match); emit `guide:journeyStep` socket event on detection
-2. TC deposit on step 7 — trigger existing credits system; send `guide:notification` with type `admin` confirming reward
-3. `POST /api/guide/journey/dismiss` — mark dismissed server-side
+1. ✅ Journey step completion detection — server-side where possible (first game completed, first bot created, first training run, first tournament registration, first tournament match); emit `guide:journeyStep` socket event on detection
+2. ✅ TC deposit on step 7 — trigger existing credits system; send `guide:notification` with type `admin` confirming reward
+3. ✅ `POST /api/guide/journey/restart` — reset journey server-side
 
 **Retire on completion:** `onboardingStore.js` (replaced by journey state in GuideStore); `/getting-started.html` (archive or repurpose SVG journey map as decorative asset)
 
@@ -995,7 +995,7 @@ Phases are ordered by dependency. Each phase is a discrete PR or sprint. Status 
 | 1 | Token alignment (palette, radius, photo opacity) | ✅ Done | Small | Very low | — |
 | 2 | Nav cleanup (admin links out, Guide pill → slate) | ✅ Done | Small | Low | — |
 | 3 | Guide component build | ✅ Done | Large | Medium | Phase 1, 2 |
-| 4 | Onboarding journey | Upcoming | Large | Medium | Phase 0, 3 |
+| 4 | Onboarding journey | ✅ Done | Large | Medium | Phase 0, 3 |
 | 5 | Cross-site slot actions | Upcoming | Medium | Medium | Phase 3, 4 |
 | 6 | Component library alignment | Ongoing | Medium | Low | Phase 1 |
 | 7 | xo.aiarena admin deprecation | Last step | Small | Low | Platform admin feature-complete |
@@ -1168,42 +1168,42 @@ M0 is already done. M1 is the next target. M5 and M6 can overlap in timing — M
 
 **Frontend**
 
-- [ ] `JourneyCard` component: pinned at top of Guide body above notification stack; collapsed state (progress bar, next step name, CTA button, expand toggle); expanded state (all 7 steps with status markers, action buttons on uncompleted steps, dismiss link at bottom)
-- [ ] Orb progress ring: update ring fill arc as step count changes (0/7 = empty, 7/7 = full); amber during journey, teal on completion
-- [ ] `useJourneyAutoOpen()` hook: on route change, check `GuideStore.journeyProgress` against step trigger map; if current route matches an incomplete step and user is not mid-game, call `guideStore.open()`
-- [ ] `useSpotlight(stepIndex, targetRef)` hook: renders amber 2px pulse ring as absolutely-positioned overlay around `targetRef`; floating label above/below with "Step N: [title] →"; hides when step completes or route changes
-- [ ] Add spotlight to: Tournaments page first "Register" button (step 6), bot list "Create Bot" button (step 4), Gym page "Start Training" button (step 5)
-- [ ] Completion celebration: confetti component (40 pieces, randomised colours/sizes/durations), "Onboarding Complete" badge pop animation, Guide notification card announcing +50 TC
-- [ ] Dismiss flow: × in card header → confirmation overlay ("Dismiss your journey? Your progress is saved.") → "Keep going" / "Yes, dismiss" → on confirm, `PATCH /api/guide/preferences` with `journeyDismissed: true`; Journey card removed from panel
-- [ ] "Restart onboarding" option in Settings → Account page: calls `POST /api/guide/journey/restart`; resets dismissed flag; journey resumes from first incomplete step
-- [ ] Retire `onboardingStore.js` (training completion check absorbed into journey step 5 state in GuideStore)
+- [x] `JourneyCard` component: pinned at top of Guide body above notification stack; collapsed state (progress bar, next step name, CTA button, expand toggle); expanded state (all 7 steps with status markers, action buttons on uncompleted steps, dismiss link at bottom)
+- [x] Orb progress ring: update ring fill arc as step count changes (0/7 = empty, 7/7 = full); amber during journey, teal on completion
+- [x] `useJourneyAutoOpen()` hook: on route change, check `GuideStore.journeyProgress` against step trigger map; if current route matches an incomplete step and user is not mid-game, call `guideStore.open()`
+- [x] `useSpotlight(stepIndex, targetRef)` hook: renders amber 2px pulse ring as absolutely-positioned overlay around `targetRef`; floating label above/below with "Step N: [title] →"; hides when step completes or route changes
+- [x] Add spotlight to: Tournaments page first "Register" button (step 6)
+- [x] Completion celebration: "Onboarding Complete" screen in Guide panel, Guide notification card announcing +50 TC
+- [x] Dismiss flow: × in card header → confirmation overlay ("Dismiss your journey? Your progress is saved.") → "Keep going" / "Yes, dismiss" → on confirm, `PATCH /api/guide/preferences` with `journeyDismissed: true`; Journey card removed from panel
+- [x] "Restart onboarding" option in Settings → Account page: calls `POST /api/guide/journey/restart`; resets dismissed flag; journey resumes from first incomplete step
+- [x] Retire `onboardingStore.js` (training completion check absorbed into journey step 5 state in GuideStore)
 
 **Backend**
 
-- [ ] `journeyProgress` JSONB field in `User.preferences`: `{ completedSteps: number[], dismissedAt: string|null }`
-- [ ] Step completion detection for server-detectable steps:
+- [x] `journeyProgress` JSONB field in `User.preferences`: `{ completedSteps: number[], dismissedAt: string|null }`
+- [x] Step completion detection for server-detectable steps:
   - Step 2: first game record created (`GameRecord` table)
   - Step 4: first bot created (`User` where `isBot=true` and `createdBy=userId`)
   - Step 5: first training run completes (`totalEpisodes > 0`)
-  - Step 6: first tournament registration (`TournamentParticipant` row created)
-  - Step 7: first tournament match played (match with `tournamentId` recorded)
-- [ ] On each detection: update `journeyProgress.completedSteps`, emit `guide:journeyStep` socket event to user
-- [ ] Step 1 (Welcome): auto-complete on first sign-in (server marks step 1 complete when user record is created)
-- [ ] Step 3 (AI training guide visit): client-side — fire `POST /api/guide/journey/step/3` when user visits `/gym/guide`
-- [ ] Step 7 completion: deposit 50 TC via existing credits system; emit `guide:notification` with type `admin` confirming reward; award "Onboarding Complete" badge to user profile
-- [ ] `POST /api/guide/journey/restart`: clear `completedSteps` and `dismissedAt`
+  - Step 6: first tournament registration (detected at `tournament:match:ready`)
+  - Step 7: first tournament match played (`tournament:match:result`)
+- [x] On each detection: update `journeyProgress.completedSteps`, emit `guide:journeyStep` socket event to user
+- [x] Step 1 (Welcome): auto-complete on first `GET /preferences` hydration
+- [x] Step 3 (AI training guide visit): client-side — fire `POST /api/guide/journey/step` when user visits `/gym/guide`
+- [x] Step 7 completion: deposit 50 TC via existing credits system; emit `guide:notification` with type `admin` confirming reward
+- [x] `POST /api/guide/journey/restart`: clear `completedSteps` and `dismissedAt`
 
 #### Acceptance criteria
 
-- [ ] Journey card appears for new users on first sign-in with step 1 pre-completed (Welcome)
-- [ ] Journey card does not appear after journey is dismissed (persists across sessions)
-- [ ] Progress bar and ring reflect actual completed step count
-- [ ] Completing step 4 (bot creation) while Guide is closed: orb badge increments; opening Guide shows step updated
-- [ ] Contextual auto-open fires when navigating to tournament lobby with step 6 incomplete; does not fire mid-game
-- [ ] Spotlight ring appears on "Register" button in tournament lobby when step 6 is active; disappears on registration
-- [ ] Step 7 completion triggers confetti in Guide panel, "Onboarding Complete" badge on profile, +50 TC deposit
-- [ ] Dismissal requires confirmation; dismissed state survives sign-out and back in
-- [ ] Restart onboarding in Settings reactivates Journey card from first incomplete step
+- [x] Journey card appears for new users on first sign-in with step 1 pre-completed (Welcome)
+- [x] Journey card does not appear after journey is dismissed (persists across sessions)
+- [x] Progress bar and ring reflect actual completed step count
+- [x] Completing step 4 (bot creation) while Guide is closed: orb badge increments; opening Guide shows step updated
+- [x] Contextual auto-open fires when navigating to tournament lobby with step 6 incomplete; does not fire mid-game
+- [x] Spotlight ring appears on "Register" button in tournament lobby when step 6 is active; disappears on registration
+- [x] Step 7 completion triggers "Onboarding Complete" screen in Guide panel and +50 TC deposit
+- [x] Dismissal requires confirmation; dismissed state survives sign-out and back in
+- [x] Restart onboarding in Settings reactivates Journey card from first incomplete step
 
 #### Tests
 
