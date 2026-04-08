@@ -356,10 +356,46 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
 .filter-chip.active { border-color:var(--color-slate-500); background:var(--color-slate-50); color:var(--color-slate-600); font-weight:600; }
 .dark .filter-chip.active { background:rgba(74,111,165,0.15); color:var(--color-slate-200); }
 
+/* ── View toggle ───────────────────────────────────────────────────── */
+.view-toggle-wrap { display:flex; align-items:center; gap:0.5rem; flex-shrink:0; }
+.view-toggle-label { font-size:0.75rem; font-weight:600; color:var(--text-muted); white-space:nowrap; }
+.view-toggle { display:flex; align-items:center; gap:0.25rem; border:1.5px solid var(--border-default); border-radius:0.5rem; padding:0.2rem; background:var(--bg-surface); }
+.view-toggle-btn {
+  display:flex; align-items:center; gap:0.3rem;
+  padding:0.25rem 0.625rem; border-radius:0.35rem;
+  font-size:0.75rem; font-weight:600; color:var(--text-muted);
+  transition:background 0.12s, color 0.12s; white-space:nowrap;
+}
+.view-toggle-btn:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+.view-toggle-btn.active { background:var(--color-slate-500); color:white; }
+
 /* ── Cards grid ────────────────────────────────────────────────────── */
 .cards-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; }
 @media (max-width:900px) { .cards-grid { grid-template-columns:repeat(2,1fr); } }
 @media (max-width:560px) { .cards-grid { grid-template-columns:1fr; } }
+
+/* ── List view ─────────────────────────────────────────────────────── */
+.list-view { width:100%; overflow-x:auto; border:1.5px solid var(--border-default); border-radius:0.75rem; background:#ffffff; box-shadow:var(--shadow-card); position:relative; z-index:1; }
+.dark .list-view { background:#3A3836; }
+.list-view[hidden] { display:none; }
+.list-table { width:100%; border-collapse:collapse; font-size:0.875rem; min-width:680px; }
+.list-table th { font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); padding:0.625rem 1rem; text-align:left; border-bottom:1.5px solid var(--border-default); background:#F1EFE8; white-space:nowrap; }
+.dark .list-table th { background:#4E4C49; }
+.list-table td { padding:0.75rem 1rem; border-bottom:1px solid var(--border-default); vertical-align:middle; background:#ffffff; }
+.dark .list-table td { background:#3A3836; }
+.list-table tr:last-child td { border-bottom:none; }
+.list-table tr:hover td { background:#EEF2F8; }
+.dark .list-table tr:hover td { background:#454340; }
+.list-table tr.row-flash td { background:linear-gradient(180deg,#FFFBF5 0%,white 100%); }
+.dark .list-table tr.row-flash td { background:rgba(212,137,30,0.06); }
+.list-name { font-weight:600; color:var(--text-primary); line-height:1.3; }
+.list-game { font-size:0.75rem; color:var(--text-muted); margin-top:0.1rem; }
+.list-participants { display:flex; flex-direction:column; gap:0.3rem; min-width:80px; }
+.list-part-text { font-size:0.8125rem; color:var(--text-secondary); white-space:nowrap; }
+.list-progress { height:4px; background:var(--border-default); border-radius:2px; overflow:hidden; }
+.list-progress-fill { height:100%; border-radius:2px; background:var(--color-slate-500); }
+.list-progress-fill-flash { background:var(--color-amber-500); }
+.list-action { white-space:nowrap; }
 
 /* ── Card ──────────────────────────────────────────────────────────── */
 .card {
@@ -375,6 +411,8 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
 .dark .card-flash { border-color:var(--color-amber-600); background:linear-gradient(180deg,#2A1F00 0%,var(--color-gray-800) 60%); }
 .card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem; }
 .card-name { font-family:var(--font-display); font-size:1rem; font-weight:700; color:var(--text-primary); line-height:1.3; letter-spacing:-0.01em; }
+a.card-name { text-decoration:none; display:block; }
+a.card-name:hover { color:var(--color-slate-500); text-decoration:underline; text-underline-offset:3px; }
 .card-game { font-size:0.6875rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:0.15rem; }
 .badge { display:inline-flex; align-items:center; gap:0.25rem; font-size:0.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:0.2rem 0.5rem; border-radius:0.375rem; white-space:nowrap; }
 .badge-open     { background:var(--color-teal-50); color:var(--color-teal-600); }
@@ -842,9 +880,9 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
     AI Arena
   </a>
   <div class="nav-links" role="list">
-    <a href="/tournaments" class="nav-link active mobile-show" role="listitem" aria-current="page">Tournaments</a>
-    <a href="/rankings"    class="nav-link" role="listitem">Rankings</a>
-    <a href="/games"       class="nav-link" role="listitem">Games</a>
+    <a href="lobby.html"          class="nav-link active mobile-show" role="listitem" aria-current="page">Tournaments</a>
+    <a href="#rankings"           class="nav-link" role="listitem">Rankings</a>
+    <a href="#games"              class="nav-link" role="listitem">Games</a>
   </div>
   <div class="nav-right">
     <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">☀️</button>
@@ -853,7 +891,7 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
       Guide
       <span class="guide-orb-badge" id="guideBadge" aria-hidden="true"></span>
     </button>
-    <button class="sign-in-btn">Sign in</button>
+    <a href="player-profile.html" class="nav-avatar" aria-label="Your profile" style="display:flex;align-items:center;justify-content:center;text-decoration:none;">JD</a>
   </div>
 </nav>
 
@@ -878,20 +916,27 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
     <button class="filter-chip" aria-pressed="false">PVP</button>
     <button class="filter-chip" aria-pressed="false">Bot vs Bot</button>
     <button class="filter-chip" aria-pressed="false">Mixed</button>
+    <button class="filter-chip" aria-pressed="false">Flash</button>
     <div class="filter-search-wrap">
       <i class="filter-search-icon" aria-hidden="true">🔍</i>
       <input class="filter-search" id="tournamentSearch" type="search" placeholder="Search tournaments…" aria-label="Search tournaments by name" autocomplete="off">
       <button class="filter-search-clear" id="searchClear" aria-label="Clear search">✕</button>
     </div>
-    <button class="filter-chip" aria-pressed="false">Flash</button>
+    <div class="view-toggle-wrap">
+      <span class="view-toggle-label">View:</span>
+      <div class="view-toggle" role="group" aria-label="View mode">
+        <button class="view-toggle-btn active" id="viewGrid" aria-pressed="true" aria-label="Switch to card view">⊞ Cards</button>
+        <button class="view-toggle-btn" id="viewList" aria-pressed="false" aria-label="Switch to list view">☰ List</button>
+      </div>
+    </div>
   </div>
 
-  <div class="cards-grid">
+  <div class="cards-grid" id="cardsGrid">
 
     <!-- Flash in progress -->
     <article class="card card-flash">
       <div class="card-top">
-        <div><div class="card-name">Speed Blitz</div><div class="card-game">XO Arena</div></div>
+        <div><a href="tournament-detail.html" class="card-name">Speed Blitz</a><div class="card-game">XO Arena</div></div>
         <span class="badge badge-flash">⚡ Flash</span>
       </div>
       <div class="card-chips">
@@ -916,7 +961,7 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
     <!-- Open, registered -->
     <article class="card">
       <div class="card-top">
-        <div><div class="card-name">Open Arena</div><div class="card-game">XO Arena</div></div>
+        <div><a href="tournament-detail.html" class="card-name">Open Arena</a><div class="card-game">XO Arena</div></div>
         <span class="badge badge-open">Reg. Open</span>
       </div>
       <div class="card-chips"><span class="chip chip-pvp">PVP</span><span class="chip">Open</span><span class="chip">Round Robin</span></div>
@@ -936,7 +981,7 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
     <!-- Bot vs Bot -->
     <article class="card">
       <div class="card-top">
-        <div><div class="card-name">Silicon Clash</div><div class="card-game">XO Arena</div></div>
+        <div><a href="tournament-detail.html" class="card-name">Silicon Clash</a><div class="card-game">XO Arena</div></div>
         <span class="badge badge-open">Reg. Open</span>
       </div>
       <div class="card-chips"><span class="chip chip-bot">Bot vs Bot</span><span class="chip">Planned</span><span class="chip">Single Elim</span></div>
@@ -956,7 +1001,7 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
     <!-- Mixed -->
     <article class="card">
       <div class="card-top">
-        <div><div class="card-name">Mixed Signals</div><div class="card-game">XO Arena</div></div>
+        <div><a href="tournament-detail.html" class="card-name">Mixed Signals</a><div class="card-game">XO Arena</div></div>
         <span class="badge badge-open">Reg. Open</span>
       </div>
       <div class="card-chips"><span class="chip chip-mixed">Mixed</span><span class="chip">Planned</span><span class="chip">Best of 5</span></div>
@@ -976,7 +1021,7 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
     <!-- In progress -->
     <article class="card">
       <div class="card-top">
-        <div><div class="card-name">Weekly Clash</div><div class="card-game">XO Arena</div></div>
+        <div><a href="tournament-detail.html" class="card-name">Weekly Clash</a><div class="card-game">XO Arena</div></div>
         <span class="badge badge-progress">In Progress</span>
       </div>
       <div class="card-chips"><span class="chip chip-pvp">PVP</span><span class="chip">Planned</span><span class="chip">Single Elim</span><span class="chip">Recurring</span></div>
@@ -993,7 +1038,7 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
     <!-- Completed -->
     <article class="card">
       <div class="card-top">
-        <div><div class="card-name">Grand Prix XO</div><div class="card-game">XO Arena</div></div>
+        <div><a href="tournament-detail.html" class="card-name">Grand Prix XO</a><div class="card-game">XO Arena</div></div>
         <span class="badge badge-completed">Completed</span>
       </div>
       <div class="card-chips"><span class="chip chip-pvp">PVP</span><span class="chip">Round Robin</span></div>
@@ -1009,8 +1054,235 @@ button { cursor:pointer; font-family:inherit; border:none; background:none; }
 
   </div>
 
+  <!-- ── List view ───────────────────────────────────────────────────── -->
+  <div class="list-view" id="listView" hidden>
+    <table class="list-table" aria-label="Tournaments list">
+      <thead>
+        <tr>
+          <th>Tournament</th>
+          <th>Mode</th>
+          <th>Format</th>
+          <th>Status</th>
+          <th>Participants</th>
+          <th>Starts</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-flash">
+          <td><div class="list-name">⚡ Speed Blitz</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip chip-flash">Flash</span></td>
+          <td><span class="badge badge-flash">In Progress</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">12 / 16</span>
+              <div class="list-progress"><div class="list-progress-fill list-progress-fill-flash" style="width:75%"></div></div>
+            </div>
+          </td>
+          <td style="font-family:monospace;font-size:0.875rem;color:var(--color-amber-500);font-weight:700;">04:22</td>
+          <td class="list-action"><button class="btn-register btn-register-flash">Join now</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Spring Open 2026</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-progress">In Progress</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">8 / 8</span>
+              <div class="list-progress"><div class="list-progress-fill" style="width:100%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Started</td>
+          <td class="list-action"><button class="btn-registered">✓ Registered</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Championship #4</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">11 / 32</span>
+              <div class="list-progress"><div class="list-progress-fill list-progress-fill-teal" style="width:34%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 12</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Gold League — Week 14</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">6 / 8</span>
+              <div class="list-progress"><div class="list-progress-fill" style="width:75%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 15</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Mixed Masters</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-mixed">Mixed</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">3 / 16</span>
+              <div class="list-progress"><div class="list-progress-fill" style="width:19%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 20</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Weekly Blitz #22</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">24 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Apr 5</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Silicon League — Week 3</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">2 / 8</span><div class="list-progress"><div class="list-progress-fill" style="width:25%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 22</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Cup — Qualifier 2</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">18 / 32</span><div class="list-progress"><div class="list-progress-fill list-progress-fill-teal" style="width:56%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 25</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Platinum Invitational</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">5 / 8</span><div class="list-progress"><div class="list-progress-fill" style="width:63%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 28</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Mixed Masters II</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-mixed">Mixed</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">7 / 16</span><div class="list-progress"><div class="list-progress-fill" style="width:44%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">May 2</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Weekly Blitz #21</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">16 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 29</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Gold League — Week 13</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">8 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 22</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Championship #3</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 15</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Spring Tournament Series — R3</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">12 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 8</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Weekly Blitz #20</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">16 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 1</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Silver Open — Feb 2026</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">24 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Feb 22</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Mixed Masters I</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-mixed">Mixed</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">16 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Feb 15</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Winter Championship 2026</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Jan 20</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Cup — Qualifier 1</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Jan 10</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Grand Prix XO — Season 1</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Jan 5</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:0.625rem 1rem;font-size:0.8125rem;color:var(--text-muted);border-top:1px solid var(--border-default);">
+      Showing all 24 tournaments
+    </div>
+  </div>
+
   <!-- ── Load more ─────────────────────────────────────────────────── -->
-  <div class="load-more-row">
+  <div class="load-more-row" id="loadMoreRow">
     <span class="load-more-count" id="loadMoreCount">Showing 6 of 24 tournaments</span>
     <button class="load-more-btn" id="loadMoreBtn" aria-label="Load more tournaments">
       Load more
@@ -1669,10 +1941,47 @@ document.querySelectorAll('.filter-chip').forEach(chip => {
 });
 
 /* ── Search ─────────────────────────────────────────────────────────── */
+/* ── View toggle ────────────────────────────────────────────────────── */
+const cardsGrid   = document.getElementById('cardsGrid');
+const listView    = document.getElementById('listView');
+const loadMoreRow = document.getElementById('loadMoreRow');
+const viewGridBtn = document.getElementById('viewGrid');
+const viewListBtn = document.getElementById('viewList');
+let currentView   = 'grid';
+
+// List rows navigate to detail page
+document.querySelectorAll('.list-table tbody tr').forEach(row => {
+  row.style.cursor = 'pointer';
+  row.addEventListener('click', e => {
+    if (e.target.closest('button')) return;
+    location.href = 'tournament-detail.html';
+  });
+});
+
+viewGridBtn.addEventListener('click', () => {
+  if (currentView === 'grid') return;
+  currentView = 'grid';
+  cardsGrid.style.display = '';
+  listView.style.display  = 'none';
+  loadMoreRow.style.display = '';
+  viewGridBtn.classList.add('active');    viewGridBtn.setAttribute('aria-pressed','true');
+  viewListBtn.classList.remove('active'); viewListBtn.setAttribute('aria-pressed','false');
+});
+viewListBtn.addEventListener('click', () => {
+  if (currentView === 'list') return;
+  currentView = 'list';
+  cardsGrid.style.display = 'none';
+  listView.style.display  = 'block';
+  loadMoreRow.style.display = 'none';
+  viewListBtn.classList.add('active');    viewListBtn.setAttribute('aria-pressed','true');
+  viewGridBtn.classList.remove('active'); viewGridBtn.setAttribute('aria-pressed','false');
+});
+
+/* ── Search ─────────────────────────────────────────────────────────── */
 const searchInput = document.getElementById('tournamentSearch');
 const searchClear = document.getElementById('searchClear');
-const cards = document.querySelectorAll('.cards-grid article');
-const grid  = document.querySelector('.cards-grid');
+const cards = document.querySelectorAll('#cardsGrid article');
+const grid  = document.getElementById('cardsGrid');
 
 function applySearch(query) {
   const q = query.trim().toLowerCase();
@@ -1883,6 +2192,12 @@ slotPicker.addEventListener('click', e => {
 });
 
 /* Slot click (normal mode — navigate) */
+const SLOT_ROUTES = {
+  'tournaments':    'lobby.html',
+  'classification': 'player-profile.html',
+  'profile':        'player-profile.html',
+  'flash':          'lobby.html',
+};
 slotsGrid.addEventListener('click', e => {
   if (editMode) return;
   const slot = e.target.closest('.guide-slot');
@@ -1893,6 +2208,9 @@ slotsGrid.addEventListener('click', e => {
   if (status && meta) {
     status.textContent = `Opening ${meta.label}…`;
     setTimeout(() => { status.textContent = 'Ready to help'; }, 1800);
+  }
+  if (SLOT_ROUTES[action]) {
+    setTimeout(() => { location.href = SLOT_ROUTES[action]; }, 300);
   }
 });
 </script>

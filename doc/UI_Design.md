@@ -320,6 +320,8 @@ For general users the **Guide is the primary cross-platform navigation and actio
 
 This is a deliberate product differentiator: the Guide reinforces the platform's AI identity, reduces cognitive load, and makes navigation itself part of the experience.
 
+The two layers serve distinct jobs and do not compete: **header nav links handle destinations** (where do I go); **the Guide handles actions and alerts** (what do I do, what needs my attention). A user who never opens the Guide can still navigate the site normally via header links. A user who lives in the Guide gets a richer, more integrated experience.
+
 The Guide is **platform-wide** — it appears on every site in the family with the same component, same slot system, and same notification stack. Slot configuration is per-site with user overrides on top.
 
 ---
@@ -447,10 +449,18 @@ Steps complete automatically when the underlying event is detected — no "mark 
 
 #### Contextual spotlight
 
-When the user is on a page relevant to their current step, a subtle highlight ring and one-line tooltip appear on the specific UI element they need to interact with:
+When the user is on a page relevant to their current step, a highlight ring and floating label appear on the specific UI element they need to interact with.
 
-- Bot list with no bots → spotlight on "Create Bot": *"Step 4: Create your first bot"*
-- `/gym` with no training runs → spotlight on "Start Training": *"Step 5: Train your bot"*
+**Visual treatment (Option A):**
+- 2px animated amber pulse ring around the target element
+- Small floating label positioned above or below the element: *"Step N: [step title] →"*
+- Amber colour matches the Guide's onboarding language — consistent, immediately recognisable
+- Non-disruptive: the page remains fully usable; the spotlight is a hint, not a blocker
+
+**Examples:**
+- Bot list with no bots → ring on "Create Bot" button: *"Step 4: Create your first bot →"*
+- `/gym` with no training runs → ring on "Start Training": *"Step 5: Train your bot →"*
+- Tournament lobby (not yet registered) → ring on first tournament's "Register" button: *"Step 6: Enter a tournament →"*
 
 The spotlight dismisses automatically when the step completes or the user navigates away. It never appears mid-game.
 
@@ -572,10 +582,10 @@ All blocking design exercises are resolved. The aiarena build may begin once `pa
 
 | # | Item | Notes |
 |---|------|-------|
-| 3 | **Guide: primary vs. supplementary nav** | Lobby mockup leans supplementary. Not formally settled. |
+| 3 | ~~**Guide: primary vs. supplementary nav**~~ | **Resolved.** See below. |
 | 4 | **Guide technical approach** | Hybrid model agreed in principle; model, token budget, fallback not yet specified. |
-| 5 | **Onboarding spotlight design** | Visual treatment for the contextual highlight ring + tooltip. Not yet mocked. |
-| 6 | **Online strip — activity status** | Future phase: show what a player is doing ("in a tournament", "playing", "browsing"). Not in scope for alpha. |
+| 5 | ~~**Onboarding spotlight design**~~ | **Resolved.** See below. |
+| 6 | ~~**Online strip — activity status**~~ | **Deferred.** Show what a player is doing ("in a tournament", "playing", "browsing"). Not in scope for alpha. |
 
 ### Mockups Not Yet Built
 
@@ -586,6 +596,7 @@ All blocking design exercises are resolved. The aiarena build may begin once `pa
 | 9 | **Admin pages** | Sidebar layout, tournament list, create/edit form, classification config, reports with PDF export |
 | 10 | **xo.aiarena Guide integration** | Guide on the game site with cross-site slots; flash tournament notification in active-game context |
 | 11 | **Onboarding Journey card** | Guide Journey card (collapsed + expanded states), orb progress ring, completion celebration |
+| 12 | **XO Arena site UI review** | Audit current xo.aiarena frontend against the new design system: palette, typography, component styling, Guide integration, nav structure, Colosseum background. Identify gaps and produce a prioritised list of changes needed before or alongside Guide/onboarding implementation. |
 
 ### Resolved
 
@@ -603,6 +614,9 @@ All blocking design exercises are resolved. The aiarena build may begin once `pa
 | — | Guide invocation model | On-demand floating orb button in header |
 | — | Site colour palette | Slate blue (`#4A6FA5`) for aiarena; teal retained for xo.aiarena |
 | — | Guide technical approach | Hybrid: rule-based client-side + Haiku 4.5 fallback; 1,500 token input cap, 250 token output cap, 20 calls/user/hour |
+| — | Guide: primary vs. supplementary nav | Option C — header nav handles destinations; Guide handles actions, notifications, and cross-site operations. Neither competes. |
+| — | Onboarding spotlight design | Option A — amber pulse ring around target element, small floating label with step title. Non-disruptive; consistent with Guide amber language. |
+| — | Online strip — activity status | Deferred to post-alpha. |
 
 ---
 
@@ -615,3 +629,287 @@ The current Guide AI approach (Claude Haiku 4.5 as a separate API service) is ap
 **Future consideration**: if Claude API costs increase significantly relative to platform scale, migrate the Guide's conversational layer to a backend-hosted model integrated with the existing AI infrastructure rather than continuing to call the external API per query. This would bring the Guide's intelligence in-house alongside the existing ML/bot training backend, reduce per-query cost, and allow tighter integration with user and game state without round-tripping through the API.
 
 This is not a day-one concern — monitor monthly Claude API spend as a line item and trigger this evaluation if it exceeds a meaningful fraction of total infrastructure cost.
+
+### xo.aiarena UI — Structured Revisit Required
+
+The xo.aiarena frontend was built organically without a formal design spec. Now that the platform identity spec (color tokens, type scale, shape, elevation, spacing) is formalised, the existing game UI should be audited and brought into alignment.
+
+This is not a full redesign — it is an alignment pass. It should be planned as a discrete task once `packages/ui` is initialised, so the primitives already exist to migrate to.
+
+---
+
+## XO Arena UI Audit — Findings
+
+*Conducted April 2026 against the design system spec in this document.*
+
+### Stack summary (current)
+
+| Layer | What's there |
+|-------|-------------|
+| Framework | React 19.2, React Router v7, Vite + Tailwind v4 |
+| State | Zustand 5.0 (7 stores) |
+| Real-time | Socket.IO |
+| Auth | Better Auth |
+| Fonts | Inter 400/500/600/700 + Inter Tight 700/800 (Google Fonts) — **matches spec** |
+| Sound | Howler.js + Web Audio API synth |
+| Charts | Recharts (lazy-loaded) |
+
+---
+
+### Gap Analysis by Area
+
+#### 1. Background image
+
+| | Current | Spec |
+|---|---------|------|
+| Image | `mountain-bg.jpg` (a mountain landscape) | Colosseum photo (`colosseum-bg.jpg`) |
+| Opacity (light) | 0.30 | 0.15–0.25 |
+| Opacity (dark) | 0.30 (no dark override) | 0.08 |
+| Position | `center center` | `center 30%` |
+
+**Action**: swap image, add dark-mode opacity override, adjust position.
+
+---
+
+#### 2. Color tokens
+
+**Aligned:**
+- Teal palette (`#24B587` / `#1D9E75`) — matches spec exactly; retained as xo.aiarena primary
+- Amber palette (`#D4891E`) — matches
+- Red (`#E85554`) — matches
+- Warm gray scale (`gray-50: #F1EFE8` through `gray-900`) — matches
+- Light/dark CSS variable split on `:root` / `.dark` — matches approach
+
+**Missing / wrong:**
+- **Slate blue ramp absent** — `#4A6FA5` (platform primary, used for Guide, nav accents, and admin) has no tokens in `index.css`. The current blue (`#2E86E0`) is for X marks only; the platform accent colour is entirely missing.
+- **`--color-slate-{50–900}` ramp** needs to be added to `index.css`.
+- The Guide trigger, orb, active nav states, and focus rings all reference slate tokens — without them the Guide component cannot be added.
+
+**Action**: add the full slate blue ramp (50–900) to `index.css` with the values from this spec.
+
+---
+
+#### 3. Border radius
+
+**Current:** No border-radius tokens defined. Tailwind utilities used inline (`rounded-lg`, `rounded-xl`, etc.) with no consistency check.
+
+**Spec:** Soft profile — `6px` (sm), `10px` (md/default), `16px` (lg/card), `9999px` (pill). Named tokens: `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-pill`.
+
+**Action**: define the four radius tokens in `index.css`. Audit key components (cards, buttons, badges, modals, nav items) and apply consistently.
+
+---
+
+#### 4. Elevation (shadows)
+
+**Current:** `--shadow-sm`, `--shadow-md`, `--shadow-card`, `--shadow-cell`, `--shadow-cell-win` — defined but not audited for dark mode adaptation.
+
+**Spec:** Hybrid elevation — shadows in light mode, tone steps (slightly lighter surface) in dark mode.
+
+**Action**: review dark-mode shadow values; ensure cards in dark mode use tone elevation (`bg-surface-2`) rather than box shadows.
+
+---
+
+#### 5. Navigation
+
+**Current nav structure:**
+- Play · Gym · Puzzles · Tournaments · Rankings
+- Admin links inline in the top bar (desktop only, amber-tinted)
+- Mobile: bottom tab bar (Play / Gym / Tourney / Ranks / Profile) + hamburger slide-out
+- Guide: separate "✦ Guide" pill button (conditionally shown, not integrated with nav)
+
+**Spec navigation:**
+- Header: destination links only (Play / Gym / Tournaments / Rankings)
+- Guide: orb button replaces "✦ Guide" pill — floating panel, not a modal
+- Admin: all admin routes redirect to `aiarena.callidity.com/admin`; admin links removed from xo.aiarena header
+- Mobile: bottom tab bar stays (good — keep as is); hamburger kept for overflow
+
+**Gaps:**
+- Admin links need to be removed from the xo.aiarena header and replaced with a single "Admin" link that navigates to the platform admin URL
+- "Puzzles" is an xo.aiarena-specific link — keep it
+- "✦ Guide" pill replaced by the Guide orb component (new build)
+- Guide component needs to be wired into nav at the same position
+
+**Action**: strip admin links from xo.aiarena nav, add platform admin redirect, build Guide orb component.
+
+---
+
+#### 6. Guide / onboarding system
+
+This is the largest gap — a near-complete rebuild.
+
+**Current implementation:**
+| Component | What it does |
+|-----------|-------------|
+| `GettingStartedModal.jsx` | Renders `/getting-started.html` in a fullscreen iframe |
+| `WelcomeModal.jsx` | Pop-up shown to signed-out first-time visitors after 1.2s delay |
+| `AccomplishmentPopup.jsx` | One-at-a-time toast for tier upgrades and credit milestones |
+| `prefsStore.js` | Tracks `showGuideButton` flag and basic hint state |
+| `onboardingStore.js` | Checks if user has completed first training run |
+
+**Spec requirements:**
+| Component | What needs to exist |
+|-----------|---------------------|
+| Guide orb + panel | Floating panel opened by orb in header |
+| Slot system | 8 configurable quick-action slots; edit mode; slot picker overlay |
+| Notification stack | Flash, match_ready, admin, invite, room_invite cards |
+| Journey card | 7-step tracker, collapsed/expanded, orb progress ring |
+| Contextual spotlight | Amber pulse ring + label on target elements |
+| Cross-site actions | Slots that deep-link to gym, tournaments, bot creation |
+| Completion reward | Confetti + badge + 50 TC on step 7 |
+| Server-side state | Slot config + journey progress stored in `User.preferences` |
+
+**What can be reused:**
+- `AccomplishmentPopup.jsx` socket listener logic → migrate into Guide notification stack
+- `onboardingStore.js` training check → feeds into journey step 5 completion
+- `prefsStore.js` → can be subsumed into Guide store
+
+**What gets retired:**
+- `GettingStartedModal.jsx` (iframe approach replaced)
+- `WelcomeModal.jsx` (replaced by Guide auto-open on first login)
+- `/getting-started.html` (archived; SVG journey map may be repurposed as a decorative asset)
+
+**Action**: build the Guide as a new `GuidePanel` component. Wire it into `AppLayout`. Replace/retire the three current modals.
+
+---
+
+#### 7. Component library state
+
+**Current:** No centralised component library. Buttons, badges, and cards are styled inline with Tailwind + CSS variables. The only shared UI components are `UserAvatar`, `SearchBar`, `ListTable`, `ThemeToggle`, `MuteToggle`, `Skeleton`.
+
+**Spec:** `packages/ui` boundary — shared token names + base primitives (Button, Badge, Card, Avatar, Input). Site-specific: token values, background, variants.
+
+**Action**: this is a phased effort. In the near term, align inline components to spec tokens. After `packages/ui` is created (a separate milestone), migrate.
+
+---
+
+#### 8. Typography
+
+**Current fonts:** Inter 400/500/600/700 + Inter Tight 700/800 — **fully aligned with spec**. No changes needed.
+
+---
+
+#### 9. Mobile experience
+
+**Current:** Bottom tab bar (5 items) + hamburger slide-out. Responsive layouts on key pages.
+
+**Spec:** Bottom tab bar retained. Guide orb in top-right header replaces the "✦ Guide" button on mobile as well.
+
+**Action**: ensure Guide orb is tap-friendly on mobile (minimum 44px touch target). Guide panel should be full-screen or bottom-sheet on small viewports. Verify tournament list, profile, and game board remain usable at 375px.
+
+---
+
+#### 10. Admin
+
+**Current:** Admin links inline in the xo.aiarena nav, separate admin pages at `/admin/*` routes within the xo.aiarena app.
+
+**Spec:** Unified admin at `aiarena.callidity.com/admin`. xo.aiarena admin deprecated immediately; routes redirect.
+
+**Action**: replace xo.aiarena admin routes with a redirect to the platform admin URL. The existing admin page code may be migrated to the aiarena app or rebuilt there directly.
+
+---
+
+### Prioritised Implementation Plan
+
+Phases are ordered by dependency. Each phase can be a separate PR or sprint.
+
+#### Phase 1 — Token alignment (low risk, high leverage)
+
+*These are pure CSS changes. No component logic changes. Do this first so all subsequent work builds on correct tokens.*
+
+1. Add `--color-slate-{50–900}` ramp to `index.css`
+2. Add `--radius-sm / --radius-md / --radius-lg / --radius-pill` tokens to `index.css`
+3. Swap background image from `mountain-bg.jpg` to `colosseum-bg.jpg`, set opacity 0.25 (light) / 0.08 (dark), position `center 30%`
+4. Audit dark-mode shadow values; introduce tone elevation for cards in dark mode
+
+**Effort:** Small (half-day). **Risk:** Very low.
+
+---
+
+#### Phase 2 — Navigation cleanup
+
+*Remove admin links from xo.aiarena header; make room for Guide orb.*
+
+1. Remove admin nav links from `AppLayout.jsx`; add a single "Admin" external link to `aiarena.callidity.com/admin` (visible to admin role only)
+2. Remove the inline "✦ Guide" pill button — replaced by the Guide orb component (Phase 4)
+3. Audit nav link set: confirm Play / Gym / Puzzles / Tournaments / Rankings is the right set for xo.aiarena
+
+**Effort:** Small. **Risk:** Low.
+
+---
+
+#### Phase 3 — Guide component build (new)
+
+*The biggest single piece of new UI work. Build the Guide as a self-contained component.*
+
+Sub-tasks:
+1. **GuideOrb** — orb button with progress ring SVG, urgent pulse, badge count
+2. **GuidePanel** — slide-in panel with header, body sections, chat input
+3. **SlotGrid** — 8 configurable slots (add/remove/reorder in edit mode), onboarding slots with dashed border and expiry
+4. **SlotPicker** overlay — library of available actions organised by section (Platform / XO Arena / Onboarding)
+5. **NotificationStack** — card types: flash, match_ready, admin, invite, room_invite; dismiss; badge decrement
+6. **OnlineStrip** — 6 avatar slots, one-tap room invite
+7. **GuideStore** — Zustand store for panel open state, slot config, notification queue, journey progress (mirrors server-side `User.preferences`)
+8. Wire AccomplishmentPopup socket events into NotificationStack
+9. Wire Flash tournament socket events into NotificationStack (urgent)
+10. Server-side: add slot config + journey progress to `User.preferences` JSONB field; expose via GET/PATCH `/api/guide/preferences`
+
+**Effort:** Large (1–2 sprints). **Risk:** Medium — real-time notification wiring requires backend coordination.
+
+---
+
+#### Phase 4 — Onboarding journey
+
+*Build the Journey card inside the Guide panel. Requires Phase 3 complete.*
+
+1. **JourneyCard** component — collapsed and expanded states, orb progress ring, CTA per step
+2. **JourneyStore** — step completion state, server sync
+3. **Contextual auto-open** — page-load hook checks current route against incomplete step triggers; calls `guideStore.open()` if matched (never mid-game)
+4. **Spotlight** — `useSpotlight(stepIndex, targetRef)` hook; renders amber pulse ring + label
+5. **Completion celebration** — confetti, badge award, +50 TC deposit
+6. **Dismiss flow** — one-tap confirmation; server-side `dismissed: true` in journey state
+7. Retire `GettingStartedModal.jsx`, `WelcomeModal.jsx`, update `onboardingStore.js`
+8. Backend: journey step completion events (step detected server-side or reported from client); TC deposit on step 7
+
+**Effort:** Large (1 sprint). **Risk:** Medium — journey step 2, 4, 5, 6 require cross-site deep-links.
+
+---
+
+#### Phase 5 — Cross-site slot actions
+
+*Wire the Guide slot actions that jump to other aiarena sites.*
+
+1. Define the cross-site URL scheme: `aiarena.callidity.com/redirect?target=gym&action=start-training&userId=…`
+2. Implement "Play XO vs community bot" slot action (opens xo.aiarena game with bot pre-selected)
+3. Implement "Open Gym" cross-site slot (opens gym page with training flow ready)
+4. Implement "Enter tournament" cross-site slot (opens tournament lobby with registration modal pre-opened)
+
+**Effort:** Medium. **Risk:** Medium — requires coordination with the aiarena app shell.
+
+---
+
+#### Phase 6 — Component library alignment (ongoing)
+
+*Progressively migrate inline-styled components to shared token usage. Not a big-bang rewrite.*
+
+1. Buttons: define three variants (primary, secondary, danger) as CSS classes in `index.css` or as a `Button` component; replace inline gradient buttons site-wide
+2. Badges: define badge CSS classes; replace inline badge styling
+3. Cards: define card CSS class with correct radius, shadow, and border; audit pages
+4. Modals: build a `<Modal>` component with correct backdrop, animation, close behaviour; migrate existing modals
+5. Once `packages/ui` exists: migrate base primitives there
+
+**Effort:** Medium (can be broken into small PRs per component type). **Risk:** Low.
+
+---
+
+### Summary table
+
+| Phase | What | Effort | Risk | Dependency |
+|-------|------|--------|------|-----------|
+| 1 | Token alignment (palette, radius, background) | Small | Very low | None |
+| 2 | Nav cleanup (strip admin, remove Guide pill) | Small | Low | None |
+| 3 | Guide component build | Large | Medium | Phase 1, 2 |
+| 4 | Onboarding journey | Large | Medium | Phase 3 |
+| 5 | Cross-site slot actions | Medium | Medium | Phase 3, 4 |
+| 6 | Component library alignment | Medium | Low | Phase 1 (ongoing) |
+
+Phases 1 and 2 can land in the same PR. Phase 3 is the core new build and should be its own branch. Phases 4 and 5 follow naturally. Phase 6 is evergreen work that runs alongside everything else.

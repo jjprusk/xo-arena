@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Arena — Onboarding Journey (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Palette ───────────────────────────────────────────────────────── */
+:root {
+  --color-slate-50:  #EEF2F8;
+  --color-slate-100: #D6E0EF;
+  --color-slate-200: #B8CBE3;
+  --color-slate-500: #4A6FA5;
+  --color-slate-600: #3D5E8E;
+  --color-teal-50:   #E6F6F2;
+  --color-teal-500:  #24B587;
+  --color-teal-600:  #1D9E75;
+  --color-amber-50:  #FDF6E7;
+  --color-amber-100: #FAEEDA;
+  --color-amber-300: #F0C56A;
+  --color-amber-400: #E8A832;
+  --color-amber-500: #D4891E;
+  --color-amber-600: #BA7517;
+  --color-red-500:   #E85554;
+  --color-gray-50:  #F1EFE8;
+  --color-gray-100: #E5E3DC;
+  --color-gray-200: #D0CEC7;
+  --color-gray-300: #B8B6AF;
+  --color-gray-400: #9E9C96;
+  --color-gray-500: #83817B;
+  --color-gray-600: #676561;
+  --color-gray-700: #4E4C49;
+  --color-gray-800: #3A3836;
+  --color-gray-900: #2C2C2A;
+  --font-display: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Light theme (page background) ────────────────────────────────── */
+:root {
+  --bg-page:          #F5F7FA;
+  --bg-surface:       #ffffff;
+  --bg-surface-2:     var(--color-gray-50);
+  --bg-surface-hover: var(--color-slate-50);
+  --border-default:   var(--color-gray-200);
+  --text-primary:     var(--color-gray-900);
+  --text-secondary:   var(--color-gray-600);
+  --text-muted:       var(--color-gray-400);
+  --shadow-card:      0 2px 8px -1px rgb(0 0 0 / 0.08);
+  --shadow-nav:       0 1px 0 0 var(--color-gray-200);
+  /* Guide panel — dark surface */
+  --guide-bg:         #1E2537;
+  --guide-surface:    #242D42;
+  --guide-surface-2:  #2E3852;
+  --guide-border:     rgba(74,111,165,0.35);
+  --guide-text:       #E8EDF6;
+  --guide-text-2:     #9AA3BA;
+  --guide-text-muted: #5A6478;
+}
+
+/* ── Animations ────────────────────────────────────────────────────── */
+@keyframes guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,111,165,0.8), 0 0 12px 3px rgba(74,111,165,0.35); }
+  50%       { box-shadow: 0 0 0 7px rgba(74,111,165,0), 0 0 20px 6px rgba(74,111,165,0.45); }
+}
+@keyframes guide-pulse-onboarding {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.6), 0 0 10px 2px rgba(212,137,30,0.35); }
+  50%       { box-shadow: 0 0 0 6px rgba(212,137,30,0), 0 0 18px 5px rgba(212,137,30,0.3); }
+}
+@keyframes guide-pulse-urgent {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.9), 0 0 14px 3px rgba(212,137,30,0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(212,137,30,0), 0 0 24px 7px rgba(212,137,30,0.4); }
+}
+@keyframes spotlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.8), 0 0 0 4px rgba(212,137,30,0.15); }
+  50%       { box-shadow: 0 0 0 6px rgba(212,137,30,0.2), 0 0 0 4px rgba(212,137,30,0.15); }
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(120px) rotate(720deg); opacity: 0; }
+}
+@keyframes badge-pop {
+  0%   { transform: scale(0) rotate(-10deg); opacity: 0; }
+  60%  { transform: scale(1.15) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes fade-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+@keyframes slide-up { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+@keyframes celebrate-glow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.5); }
+  50%      { box-shadow: 0 0 0 12px rgba(212,137,30,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+a { color:inherit; text-decoration:none; }
+button { cursor:pointer; font-family:inherit; border:none; background:none; }
+
+/* ── Colosseum background ──────────────────────────────────────────── */
+.photo-bg {
+  position: fixed; inset: 0;
+  background: url('./colosseum-bg.jpg') center 30% / cover no-repeat;
+  pointer-events: none; z-index: 0; opacity: 0.15;
+}
+
+/* ── Nav ───────────────────────────────────────────────────────────── */
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  height: 52px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-nav);
+  display: flex; align-items: center;
+  padding: 0 1.25rem; gap: 1.25rem;
+}
+.nav-logo {
+  font-family: var(--font-display);
+  font-size: 1rem; font-weight: 800;
+  color: var(--color-slate-600);
+  letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.nav-logo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-slate-500); animation: guide-pulse 2.4s ease-in-out infinite; }
+.nav-links { display: flex; align-items: center; gap: 0.125rem; flex: 1; }
+.nav-link { font-size: 0.8125rem; font-weight: 500; color: var(--text-secondary); padding: 0.3rem 0.625rem; border-radius: 0.4rem; transition: color 0.15s, background 0.15s; }
+.nav-link:hover { color: var(--text-primary); background: var(--bg-surface-2); }
+.nav-link.active { color: var(--color-slate-600); background: var(--color-slate-50); font-weight: 600; }
+.nav-right { display: flex; align-items: center; gap: 0.625rem; margin-left: auto; }
+
+/* ── Guide trigger ─────────────────────────────────────────────────── */
+.guide-trigger {
+  display: flex; align-items: center; gap: 0.375rem;
+  padding: 0.3rem 0.75rem 0.3rem 0.375rem;
+  border-radius: 2rem;
+  border: 1.5px solid var(--color-slate-200);
+  background: var(--color-slate-50);
+  color: var(--color-slate-600);
+  font-size: 0.8125rem; font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.guide-trigger:hover { border-color: var(--color-slate-500); }
+
+/* ── Orb ───────────────────────────────────────────────────────────── */
+.guide-orb-wrap {
+  position: relative; width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+}
+.guide-orb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #7A9DD4, var(--color-slate-600));
+  box-shadow: 0 0 8px 2px rgba(74,111,165,0.4);
+  animation: guide-pulse 2.4s ease-in-out infinite;
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.5625rem;
+}
+.guide-orb.onboarding {
+  background: radial-gradient(circle at 35% 35%, #F0C56A, var(--color-amber-600));
+  box-shadow: 0 0 8px 2px rgba(212,137,30,0.4);
+  animation: guide-pulse-onboarding 2.8s ease-in-out infinite;
+}
+.guide-orb.complete {
+  background: radial-gradient(circle at 35% 35%, #6EE7B7, var(--color-teal-600));
+  box-shadow: 0 0 10px 3px rgba(36,181,135,0.5);
+  animation: guide-pulse 2.4s ease-in-out infinite;
+}
+.orb-ring-svg {
+  position: absolute; inset: -5px;
+  width: 30px; height: 30px;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.orb-ring-track { fill: none; stroke: rgba(212,137,30,0.2); stroke-width: 2.5; }
+.orb-ring-fill {
+  fill: none; stroke: var(--color-amber-500); stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+.guide-badge {
+  position: absolute; top: -5px; right: -5px;
+  background: var(--color-amber-500); color: white;
+  font-size: 0.5625rem; font-weight: 800;
+  width: 14px; height: 14px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--bg-surface);
+  z-index: 2;
+}
+
+/* ── Page layout ───────────────────────────────────────────────────── */
+.page-layout {
+  display: flex; min-height: calc(100vh - 52px);
+  position: relative; z-index: 1;
+}
+
+/* ── Page content (simulated tournament lobby) ─────────────────────── */
+.page-content {
+  flex: 1;
+  padding: 2rem 1.5rem;
+  position: relative;
+}
+.page-hero { margin-bottom: 1.5rem; }
+.page-hero h1 { font-family: var(--font-display); font-size: 1.75rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; }
+.page-hero p { color: var(--text-secondary); margin-top: 0.25rem; font-size: 0.875rem; }
+
+.filter-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 1.25rem; flex-wrap: wrap;
+}
+.filter-chip {
+  padding: 0.375rem 0.875rem; border-radius: 2rem;
+  font-size: 0.8125rem; font-weight: 500;
+  border: 1.5px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.filter-chip.active { background: var(--color-gray-900); color: white; border-color: var(--color-gray-900); }
+
+/* ── Spotlight wrapper ─────────────────────────────────────────────── */
+.spotlight-target {
+  position: relative; display: inline-flex;
+}
+.spotlight-ring {
+  position: absolute; inset: -4px;
+  border-radius: calc(0.5rem + 4px);
+  border: 2px solid var(--color-amber-500);
+  animation: spotlight-pulse 1.6s ease-in-out infinite;
+  pointer-events: none; z-index: 10;
+}
+.spotlight-label {
+  position: absolute; bottom: calc(100% + 10px); left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-amber-500); color: white;
+  font-size: 0.6875rem; font-weight: 700;
+  padding: 0.25rem 0.625rem; border-radius: 0.375rem;
+  white-space: nowrap; pointer-events: none; z-index: 11;
+}
+.spotlight-label::after {
+  content: '';
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--color-amber-500);
+}
+
+/* A sample card to wrap with spotlight */
+.sample-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; max-width: 700px; }
+.sample-card {
+  background: var(--bg-surface); border: 1.5px solid var(--border-default);
+  border-radius: 0.75rem; padding: 1rem; box-shadow: var(--shadow-card);
+}
+.sample-card-title { font-weight: 700; font-size: 0.9375rem; }
+.sample-card-meta { font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem; }
+.register-btn {
+  margin-top: 0.875rem; width: 100%;
+  padding: 0.5rem; border-radius: 0.5rem;
+  background: var(--color-slate-500); color: white;
+  font-size: 0.8125rem; font-weight: 700;
+  border: none; cursor: pointer;
+  transition: background 0.15s;
+}
+.register-btn:hover { background: var(--color-slate-600); }
+
+/* ── Guide panel ───────────────────────────────────────────────────── */
+.guide-panel {
+  width: 300px; flex-shrink: 0;
+  background: var(--guide-bg);
+  border-left: 1.5px solid var(--guide-border);
+  display: flex; flex-direction: column;
+  min-height: calc(100vh - 52px);
+  animation: fade-in 0.2s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.guide-panel-header {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.guide-panel-orb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #F0C56A, var(--color-amber-600));
+  animation: guide-pulse-onboarding 2.8s ease-in-out infinite;
+  position: relative; flex-shrink: 0;
+}
+.guide-panel-ring {
+  position: absolute; inset: -3px; width: 28px; height: 28px;
+  transform: rotate(-90deg); pointer-events: none;
+}
+.guide-panel-ring-track { fill:none; stroke:rgba(212,137,30,0.2); stroke-width:2.5; }
+.guide-panel-ring-fill  { fill:none; stroke:var(--color-amber-500); stroke-width:2.5; stroke-linecap:round; transition: stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1); }
+.guide-panel-title { font-family:var(--font-display); font-size:0.9375rem; font-weight:700; color:var(--guide-text); flex:1; }
+.guide-icon-btn {
+  width:28px; height:28px; border-radius:0.375rem;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.875rem; color:var(--guide-text-muted);
+  transition:color 0.15s, background 0.15s; cursor:pointer;
+}
+.guide-icon-btn:hover { color:var(--guide-text); background:var(--guide-surface-2); }
+
+.guide-body {
+  flex:1; overflow-y:auto;
+  padding:0.875rem;
+  display:flex; flex-direction:column; gap:0.875rem;
+}
+
+/* ── Journey card ──────────────────────────────────────────────────── */
+.journey-card {
+  background: rgba(212,137,30,0.07);
+  border: 1.5px solid rgba(212,137,30,0.28);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.journey-card.complete {
+  background: rgba(36,181,135,0.07);
+  border-color: rgba(36,181,135,0.4);
+}
+
+.journey-card-header {
+  padding: 0.75rem;
+  display: flex; align-items: flex-start; gap: 0.5rem;
+}
+.journey-progress-orb {
+  position: relative; width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.journey-progress-orb-inner {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #F0C56A, var(--color-amber-600));
+  animation: guide-pulse-onboarding 2.8s ease-in-out infinite;
+  font-size: 0.8125rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.journey-progress-orb-inner.complete {
+  background: radial-gradient(circle at 35% 35%, #6EE7B7, var(--color-teal-600));
+  animation: celebrate-glow 2s ease-in-out infinite;
+}
+.journey-orb-ring {
+  position: absolute; inset: 0;
+  transform: rotate(-90deg);
+}
+.journey-orb-ring-track { fill:none; stroke:rgba(212,137,30,0.2); stroke-width:3; }
+.journey-orb-ring-fill  { fill:none; stroke:var(--color-amber-500); stroke-width:3; stroke-linecap:round; transition:stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1); }
+.journey-orb-ring-fill.complete { stroke:var(--color-teal-500); }
+
+.journey-card-info { flex:1; }
+.journey-card-title { font-size:0.8125rem; font-weight:700; color:var(--guide-text); }
+.journey-card-sub { font-size:0.75rem; color:var(--color-amber-400); margin-top:0.125rem; }
+.journey-card-sub.complete { color:var(--color-teal-500); }
+
+.journey-progress-bar-wrap {
+  background: rgba(212,137,30,0.15);
+  border-radius: 999px; height: 3px;
+  overflow: hidden; margin: 0.5rem 0.75rem;
+}
+.journey-progress-bar {
+  height: 100%; background: var(--color-amber-500);
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+.journey-progress-bar.complete { background: var(--color-teal-500); }
+
+.journey-next {
+  padding: 0 0.75rem 0.5rem;
+  font-size: 0.75rem; color: var(--guide-text-2);
+}
+.journey-next strong { color: var(--color-amber-300); }
+
+.journey-cta {
+  margin: 0 0.75rem 0.75rem;
+  width: calc(100% - 1.5rem);
+  padding: 0.4375rem;
+  border-radius: 0.4375rem;
+  background: var(--color-amber-500); color: white;
+  font-size: 0.75rem; font-weight: 700;
+  border: none; cursor: pointer; font-family: inherit;
+  transition: background 0.12s;
+}
+.journey-cta:hover { background: var(--color-amber-600); }
+.journey-cta.teal { background: var(--color-teal-500); }
+.journey-cta.teal:hover { background: var(--color-teal-600); }
+
+.journey-expand-btn {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid rgba(212,137,30,0.15);
+  font-size: 0.75rem; color: var(--guide-text-muted);
+  cursor: pointer; background: none; border-left: none; border-right: none; border-bottom: none;
+  width: 100%; font-family: inherit;
+  transition: color 0.12s, background 0.12s;
+}
+.journey-expand-btn:hover { color: var(--guide-text); background: rgba(255,255,255,0.03); }
+.journey-expand-btn.open { border-top-color: rgba(212,137,30,0.15); }
+
+/* ── Journey steps list ────────────────────────────────────────────── */
+.journey-steps {
+  border-top: 1px solid rgba(212,137,30,0.12);
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.journey-step {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.journey-step:last-child { border-bottom: none; }
+.step-marker {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.625rem; font-weight: 800; flex-shrink: 0; margin-top: 0.0625rem;
+}
+.step-marker.done  { background: rgba(36,181,135,0.2); color: var(--color-teal-500); }
+.step-marker.current { background: rgba(212,137,30,0.2); color: var(--color-amber-500); animation: guide-pulse-onboarding 2s ease-in-out infinite; }
+.step-marker.todo  { background: rgba(255,255,255,0.05); color: var(--guide-text-muted); }
+.step-info { flex: 1; }
+.step-name {
+  font-size: 0.75rem; font-weight: 600; line-height: 1.3;
+  color: var(--guide-text-muted);
+}
+.step-name.done    { color: var(--guide-text-muted); text-decoration: line-through; }
+.step-name.current { color: var(--guide-text); }
+.step-action {
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-amber-500); color: white;
+  font-size: 0.6875rem; font-weight: 700; border-radius: 0.3rem;
+  cursor: pointer; border: none; font-family: inherit;
+  transition: background 0.12s;
+}
+.step-action:hover { background: var(--color-amber-600); }
+
+/* Journey steps footer */
+.journey-steps-footer {
+  display: flex; justify-content: flex-end; margin-top: 0.5rem;
+}
+.dismiss-link {
+  font-size: 0.6875rem; color: var(--guide-text-muted);
+  padding: 0.2rem 0.375rem; border-radius: 0.25rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer; transition: color 0.12s;
+  background: none; font-family: inherit;
+}
+.dismiss-link:hover { color: var(--guide-text); }
+
+/* ── Dismiss confirm overlay ───────────────────────────────────────── */
+.dismiss-confirm {
+  position: absolute; inset: 0;
+  background: rgba(30,37,55,0.92);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem; z-index: 20;
+  animation: fade-in 0.2s ease;
+}
+.dismiss-confirm-box {
+  background: var(--guide-surface);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 0.75rem;
+  padding: 1.25rem; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.dismiss-confirm-box h3 { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--guide-text); margin-bottom: 0.5rem; }
+.dismiss-confirm-box p { font-size: 0.8125rem; color: var(--guide-text-2); line-height: 1.5; margin-bottom: 1rem; }
+.dismiss-confirm-btns { display: flex; gap: 0.5rem; }
+.dismiss-confirm-btns button {
+  flex: 1; padding: 0.5rem; border-radius: 0.4375rem;
+  font-size: 0.8125rem; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.dismiss-cancel { background: var(--guide-surface-2); color: var(--guide-text); border: 1.5px solid rgba(255,255,255,0.1); }
+.dismiss-cancel:hover { background: rgba(255,255,255,0.08); }
+.dismiss-ok { background: var(--color-red-500); color: white; border: none; }
+.dismiss-ok:hover { filter: brightness(1.1); }
+
+/* ── Completion celebration ────────────────────────────────────────── */
+.celebration {
+  position: absolute; inset: 0;
+  background: var(--guide-bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 1.5rem; z-index: 30;
+  text-align: center;
+  overflow: hidden;
+  animation: fade-in 0.3s ease;
+}
+.celebration-orb {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #6EE7B7, var(--color-teal-600));
+  box-shadow: 0 0 0 0 rgba(36,181,135,0.5);
+  animation: celebrate-glow 1.5s ease-in-out infinite, badge-pop 0.5s ease both;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; margin-bottom: 1rem;
+}
+.celebration h2 {
+  font-family: var(--font-display); font-size: 1.25rem; font-weight: 800;
+  color: var(--guide-text); margin-bottom: 0.375rem;
+  animation: slide-up 0.4s ease 0.1s both;
+}
+.celebration p {
+  font-size: 0.8125rem; color: var(--guide-text-2); margin-bottom: 1.25rem;
+  animation: slide-up 0.4s ease 0.2s both; line-height: 1.5;
+}
+.celebrate-badge {
+  background: linear-gradient(135deg, #D4AF37, #F0C56A, #D4AF37);
+  color: #7A5A00;
+  font-size: 0.75rem; font-weight: 800; letter-spacing: 0.04em;
+  padding: 0.375rem 0.875rem; border-radius: 2rem;
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  margin-bottom: 0.875rem;
+  animation: badge-pop 0.5s ease 0.3s both;
+  box-shadow: 0 2px 8px rgba(212,175,55,0.4);
+}
+.celebrate-tc {
+  background: rgba(36,181,135,0.1);
+  border: 1.5px solid rgba(36,181,135,0.3);
+  border-radius: 0.625rem; padding: 0.625rem 1rem;
+  display: flex; align-items: center; gap: 0.75rem;
+  animation: slide-up 0.4s ease 0.4s both;
+  margin-bottom: 1.25rem;
+}
+.celebrate-tc-icon { font-size: 1.5rem; }
+.celebrate-tc-label { font-size: 0.75rem; color: var(--guide-text-2); }
+.celebrate-tc-amount { font-family: var(--font-display); font-size: 1.25rem; font-weight: 800; color: var(--color-teal-500); }
+.celebrate-btn {
+  width: 100%; padding: 0.625rem;
+  background: var(--color-teal-500); color: white;
+  font-size: 0.875rem; font-weight: 700; border-radius: 0.5rem;
+  border: none; cursor: pointer; font-family: inherit;
+  transition: background 0.12s;
+  animation: slide-up 0.4s ease 0.5s both;
+}
+.celebrate-btn:hover { background: var(--color-teal-600); }
+
+/* ── Confetti ──────────────────────────────────────────────────────── */
+.confetti-wrap {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+}
+.confetti-piece {
+  position: absolute;
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  animation: confetti-fall linear forwards;
+}
+
+/* ── Guide slots (small version) ──────────────────────────────────── */
+.slots-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0.375rem; }
+.slot {
+  background: rgba(74,111,165,0.10);
+  border: 1.5px solid rgba(74,111,165,0.20);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.2rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+  cursor: pointer; min-height: 52px; justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+.slot:hover { background: rgba(74,111,165,0.2); border-color: var(--color-slate-500); }
+.slot-icon { font-size: 1rem; }
+.slot-label { font-size: 0.5625rem; font-weight: 600; text-align: center; color: var(--guide-text-2); line-height: 1.2; }
+.slot.onboarding { border-style:dashed; border-color:rgba(212,137,30,0.4); background:rgba(212,137,30,0.06); }
+.slot.onboarding .slot-label { color:var(--color-amber-400); }
+.slot-expiry { font-size:0.5rem; color:var(--color-amber-600); }
+
+/* ── Section label ─────────────────────────────────────────────────── */
+.section-label {
+  font-size:0.6875rem; font-weight:700; letter-spacing:0.06em;
+  text-transform:uppercase; color:var(--guide-text-muted); margin-bottom:0.375rem;
+}
+
+/* ── Mockup controls ───────────────────────────────────────────────── */
+.mockup-controls {
+  position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
+  background: rgba(30,37,55,0.96);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 2rem;
+  padding: 0.5rem 1rem;
+  display: flex; align-items: center; gap: 0.625rem;
+  font-size: 0.75rem; color: var(--guide-text-muted);
+  backdrop-filter: blur(12px);
+  z-index: 999;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.ctrl-btn {
+  padding: 0.3rem 0.75rem;
+  border-radius: 1rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--guide-text-2);
+  font-size: 0.75rem; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.ctrl-btn:hover { background: rgba(255,255,255,0.1); color: var(--guide-text); }
+.ctrl-btn.active { background: var(--color-amber-500); color: white; border-color: transparent; }
+.ctrl-btn.teal   { }
+.ctrl-btn.teal.active { background: var(--color-teal-500); }
+.ctrl-sep { width:1px; height:16px; background:rgba(255,255,255,0.1); }
+</style>
+</head>
+<body>
+
+<div class="photo-bg" aria-hidden="true"></div>
+
+<!-- ── Nav ──────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-logo"><div class="nav-logo-dot"></div> AI Arena</div>
+  <div class="nav-links">
+    <a href="lobby.html" class="nav-link active">Tournaments</a>
+    <a href="#" class="nav-link">Rankings</a>
+    <a href="#" class="nav-link">Games</a>
+  </div>
+  <div class="nav-right">
+    <button class="guide-trigger" id="guideTriggerBtn">
+      <div class="guide-orb-wrap">
+        <!-- Ring: circumference of r=12 ≈ 75.4; 3/7 ≈ 42.8% → dashoffset = 75.4*(1-0.428) ≈ 43.1 -->
+        <svg class="orb-ring-svg" viewBox="0 0 30 30" aria-hidden="true">
+          <circle class="orb-ring-track" cx="15" cy="15" r="12"/>
+          <circle class="orb-ring-fill" id="navRingFill" cx="15" cy="15" r="12"
+            stroke-dasharray="75.4" stroke-dashoffset="43.1"/>
+        </svg>
+        <div class="guide-orb onboarding" id="navOrb">🤖</div>
+        <div class="guide-badge" id="navBadge" style="display:none">1</div>
+      </div>
+      Guide
+    </button>
+    <div style="width:30px;height:30px;border-radius:50%;background:var(--color-slate-500);color:white;font-size:0.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;position:relative">
+      JD
+      <span style="position:absolute;bottom:0;right:0;width:8px;height:8px;border-radius:50%;background:var(--color-teal-500);border:1.5px solid white"></span>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Page layout ───────────────────────────────────────────────────── -->
+<div class="page-layout">
+
+  <!-- ── Lobby page content ────────────────────────────────────────── -->
+  <div class="page-content">
+    <div class="page-hero">
+      <h1>Tournaments</h1>
+      <p>Compete, climb, and earn your place in the arena.</p>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-chip active">All games</div>
+      <div class="filter-chip">XO Arena</div>
+      <div class="filter-chip">PvP</div>
+      <div class="filter-chip">Bot vs Bot</div>
+    </div>
+
+    <!-- Cards with first card having the spotlight (shown in step 6) -->
+    <div class="sample-cards">
+      <div style="position:relative;display:inline-block">
+        <!-- Spotlight ring + label (visible in step 6 state) -->
+        <div class="spotlight-ring" id="spotlightRing" style="display:none"></div>
+        <div class="spotlight-label" id="spotlightLabel" style="display:none">Step 6: Enter a tournament →</div>
+        <div class="sample-card">
+          <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-teal-600);margin-bottom:0.5rem">Open · PvP</div>
+          <div class="sample-card-title">Gold League — Week 14</div>
+          <div class="sample-card-meta">Round Robin · Apr 15 · 6/8 spots</div>
+          <div class="spotlight-target">
+            <button class="register-btn" id="registerBtn">Register</button>
+          </div>
+        </div>
+      </div>
+      <div class="sample-card">
+        <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-teal-600);margin-bottom:0.5rem">Open · Bot vs Bot</div>
+        <div class="sample-card-title">Bot Championship #4</div>
+        <div class="sample-card-meta">Single Elim · Apr 12 · 11/32</div>
+        <button class="register-btn">Register</button>
+      </div>
+      <div class="sample-card">
+        <div style="font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-amber-600);margin-bottom:0.5rem">In Progress · PvP</div>
+        <div class="sample-card-title">Spring Open 2026</div>
+        <div class="sample-card-meta">Round Robin · Started · 8/8</div>
+        <button class="register-btn" style="background:var(--color-gray-300);cursor:not-allowed">Full</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Guide panel ────────────────────────────────────────────────── -->
+  <div class="guide-panel" id="guidePanel">
+
+    <!-- Guide header -->
+    <div class="guide-panel-header">
+      <div style="position:relative;width:28px;height:28px;flex-shrink:0">
+        <svg class="guide-panel-ring" viewBox="0 0 28 28" id="guideHeaderRingSvg" aria-hidden="true">
+          <circle class="guide-panel-ring-track" cx="14" cy="14" r="11"/>
+          <circle class="guide-panel-ring-fill" id="guideHeaderRingFill" cx="14" cy="14" r="11"
+            stroke-dasharray="69.1" stroke-dashoffset="39.6"/>
+        </svg>
+        <div style="position:absolute;inset:3px;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#F0C56A,var(--color-amber-600));animation:guide-pulse-onboarding 2.8s ease-in-out infinite" id="guidePanelOrb"></div>
+      </div>
+      <div class="guide-panel-title">Guide</div>
+      <div style="display:flex;align-items:center;gap:0.25rem">
+        <button class="guide-icon-btn" title="Settings">⚙️</button>
+        <button class="guide-icon-btn" title="Close" onclick="closeGuidePanel()">✕</button>
+      </div>
+    </div>
+
+    <!-- Guide body -->
+    <div class="guide-body">
+
+      <!-- Journey card (main focus of this mockup) -->
+      <div>
+        <div class="section-label">Journey</div>
+
+        <div class="journey-card" id="journeyCard">
+          <!-- Card header with mini progress orb -->
+          <div class="journey-card-header">
+            <div class="journey-progress-orb">
+              <svg class="journey-orb-ring" viewBox="0 0 36 36" aria-hidden="true">
+                <circle class="journey-orb-ring-track" cx="18" cy="18" r="15"/>
+                <circle class="journey-orb-ring-fill" id="journeyRingFill" cx="18" cy="18" r="15"
+                  stroke-dasharray="94.2" stroke-dashoffset="53.9"/>
+              </svg>
+              <div class="journey-progress-orb-inner" id="journeyOrbInner">🤖</div>
+            </div>
+            <div class="journey-card-info">
+              <div class="journey-card-title">Onboarding Journey</div>
+              <div class="journey-card-sub" id="journeyCardSub">3 of 7 steps complete</div>
+            </div>
+            <button class="guide-icon-btn" style="color:rgba(212,137,30,0.5)" onclick="showDismissConfirm()" title="Dismiss journey">✕</button>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="journey-progress-bar-wrap" style="margin:0 0.75rem 0.5rem">
+            <div class="journey-progress-bar" id="journeyProgressBar" style="width:42.8%"></div>
+          </div>
+
+          <!-- Next step -->
+          <div class="journey-next" id="journeyNext">
+            <strong>Next:</strong> Step 4 — Create your first bot
+          </div>
+
+          <!-- CTA -->
+          <button class="journey-cta" id="journeyCta">Create your first bot →</button>
+
+          <!-- Expand/collapse -->
+          <button class="journey-expand-btn" id="journeyExpandBtn" onclick="toggleSteps()">
+            <span id="journeyExpandLabel">Show all steps</span>
+            <span id="journeyExpandArrow">▾</span>
+          </button>
+
+          <!-- Steps (hidden by default) -->
+          <div class="journey-steps" id="journeySteps" style="display:none">
+            <!-- Steps rendered by JS based on state -->
+          </div>
+        </div>
+
+        <!-- Dismiss confirmation overlay -->
+        <div class="dismiss-confirm" id="dismissConfirm" style="display:none">
+          <div class="dismiss-confirm-box">
+            <h3>Dismiss your journey?</h3>
+            <p>Your progress is saved. You can restart from Settings → Account at any time.</p>
+            <div class="dismiss-confirm-btns">
+              <button class="dismiss-cancel" onclick="hideDismissConfirm()">Keep going</button>
+              <button class="dismiss-ok" onclick="hideDismissConfirm()">Yes, dismiss</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completion celebration -->
+        <div class="celebration" id="celebration" style="display:none">
+          <div class="confetti-wrap" id="confettiWrap"></div>
+          <div class="celebration-orb">🎉</div>
+          <h2>Journey Complete!</h2>
+          <p>You've mastered the platform. Time to compete!</p>
+          <div class="celebrate-badge">🏅 Onboarding Complete</div>
+          <div class="celebrate-tc">
+            <div class="celebrate-tc-icon">🪙</div>
+            <div style="text-align:left">
+              <div class="celebrate-tc-label">Tournament Credits deposited</div>
+              <div class="celebrate-tc-amount">+50 TC</div>
+            </div>
+          </div>
+          <button class="celebrate-btn" onclick="hideCelebration()">Go compete →</button>
+        </div>
+      </div>
+
+      <!-- Quick-action slots -->
+      <div>
+        <div class="section-label">Quick Actions</div>
+        <div class="slots-grid">
+          <button class="slot" onclick="window.location.href='lobby.html'">
+            <span class="slot-icon">🏆</span>
+            <span class="slot-label">Tournaments</span>
+          </button>
+          <button class="slot" onclick="window.location.href='player-profile.html'">
+            <span class="slot-icon">🎖️</span>
+            <span class="slot-label">My Tier</span>
+          </button>
+          <button class="slot">
+            <span class="slot-icon">⚔️</span>
+            <span class="slot-label">Invite</span>
+          </button>
+          <button class="slot">
+            <span class="slot-icon">⚡</span>
+            <span class="slot-label">Flash</span>
+          </button>
+          <button class="slot onboarding" title="Step 3: Learn how AI training works">
+            <span class="slot-icon">🤖</span>
+            <span class="slot-label">AI Training</span>
+            <span class="slot-expiry">⏱ Step 3</span>
+          </button>
+          <button class="slot onboarding" title="Step 4: Create your first bot">
+            <span class="slot-icon">➕</span>
+            <span class="slot-label">Create Bot</span>
+            <span class="slot-expiry">⏱ Step 4</span>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /guide-body -->
+  </div><!-- /guide-panel -->
+
+</div><!-- /page-layout -->
+
+<!-- ── Mockup controls ──────────────────────────────────────────────── -->
+<div class="mockup-controls">
+  <span style="font-weight:600;color:var(--guide-text-2)">Step:</span>
+  <button class="ctrl-btn" id="btn1" onclick="setStep(1)">1/7 — Start</button>
+  <button class="ctrl-btn active" id="btn3" onclick="setStep(3)">3/7 — Mid</button>
+  <button class="ctrl-btn" id="btn6" onclick="setStep(6)">6/7 — Spotlight</button>
+  <button class="ctrl-btn teal" id="btn7" onclick="setStep(7)">7/7 — Complete 🎉</button>
+  <div class="ctrl-sep"></div>
+  <button class="ctrl-btn" onclick="showDismissConfirm()">Dismiss prompt</button>
+  <div class="ctrl-sep"></div>
+  <a href="lobby.html" class="ctrl-btn">← Lobby</a>
+</div>
+
+<script>
+/* ── Journey data ───────────────────────────────────────────────────── */
+const STEPS = [
+  { name: "Welcome to XO Arena",            action: null,                    cross: false },
+  { name: "Play a game — see how it works", action: "Play vs community bot →", cross: true  },
+  { name: "Learn how AI training works",    action: "Open Training Guide →",   cross: true  },
+  { name: "Create your first bot",          action: "Create your first bot →", cross: true  },
+  { name: "Train your bot",                 action: "Open Gym →",              cross: true  },
+  { name: "Enter a tournament",             action: "Go to tournament lobby →",cross: true  },
+  { name: "Play your first tournament match",action: null,                     cross: false },
+];
+
+// circumference for journey orb ring (r=15): 2π×15 ≈ 94.2
+// circumference for guide header ring (r=11): 2π×11 ≈ 69.1
+// circumference for nav ring (r=12): 2π×12 ≈ 75.4
+
+let currentStep = 3; // number of completed steps (0-indexed: steps 0,1,2 done)
+let stepsExpanded = false;
+
+function computeRingOffset(completed, total, circumference) {
+  const frac = completed / total;
+  return circumference * (1 - frac);
+}
+
+function setStep(completedCount) {
+  currentStep = completedCount;
+  stepsExpanded = false;
+
+  // Update all ctrl buttons
+  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+  const btnMap = { 1:'btn1', 3:'btn3', 6:'btn6', 7:'btn7' };
+  if (btnMap[completedCount]) document.getElementById(btnMap[completedCount]).classList.add('active');
+
+  // Hide overlays
+  hideDismissConfirm();
+  hideCelebration();
+  document.getElementById('journeySteps').style.display = 'none';
+  document.getElementById('journeyExpandLabel').textContent = 'Show all steps';
+  document.getElementById('journeyExpandArrow').textContent = '▾';
+
+  // Show/hide spotlight
+  const ring = document.getElementById('spotlightRing');
+  const label = document.getElementById('spotlightLabel');
+  ring.style.display  = completedCount === 6 ? 'block' : 'none';
+  label.style.display = completedCount === 6 ? 'block' : 'none';
+
+  if (completedCount >= 7) {
+    showCelebration();
+    return;
+  }
+
+  const nextIdx = completedCount; // 0-based index of next step
+  const step = STEPS[nextIdx];
+
+  // Update sub-label
+  document.getElementById('journeyCardSub').textContent = completedCount + ' of 7 steps complete';
+  document.getElementById('journeyCardSub').className = 'journey-card-sub';
+
+  // Update next step hint
+  document.getElementById('journeyNext').innerHTML =
+    '<strong>Next:</strong> Step ' + (nextIdx + 1) + ' — ' + step.name;
+
+  // Update CTA
+  const cta = document.getElementById('journeyCta');
+  cta.textContent = step.action || 'Continue →';
+  cta.className = 'journey-cta';
+
+  // Update progress bar
+  const pct = (completedCount / 7) * 100;
+  document.getElementById('journeyProgressBar').style.width = pct + '%';
+  document.getElementById('journeyProgressBar').className = 'journey-progress-bar';
+
+  // Update journey orb ring
+  const journeyOffset = computeRingOffset(completedCount, 7, 94.2);
+  document.getElementById('journeyRingFill').setAttribute('stroke-dashoffset', journeyOffset.toFixed(1));
+  document.getElementById('journeyRingFill').className = 'journey-orb-ring-fill';
+  document.getElementById('journeyOrbInner').className = 'journey-progress-orb-inner';
+  document.getElementById('journeyOrbInner').textContent = '🤖';
+
+  // Update guide header ring
+  const headerOffset = computeRingOffset(completedCount, 7, 69.1);
+  document.getElementById('guideHeaderRingFill').setAttribute('stroke-dashoffset', headerOffset.toFixed(1));
+
+  // Update nav ring + orb
+  const navOffset = computeRingOffset(completedCount, 7, 75.4);
+  document.getElementById('navRingFill').setAttribute('stroke-dashoffset', navOffset.toFixed(1));
+  document.getElementById('navOrb').className = 'guide-orb onboarding';
+
+  // Render steps if expanded
+  renderSteps(completedCount);
+}
+
+function renderSteps(completedCount) {
+  const container = document.getElementById('journeySteps');
+  container.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const done = i < completedCount;
+    const current = i === completedCount;
+    const div = document.createElement('div');
+    div.className = 'journey-step';
+    const markerClass = done ? 'done' : current ? 'current' : 'todo';
+    const markerContent = done ? '✓' : current ? '→' : (i + 1);
+    const nameClass = done ? 'step-name done' : current ? 'step-name current' : 'step-name';
+    div.innerHTML = `
+      <div class="step-marker ${markerClass}">${markerContent}</div>
+      <div class="step-info">
+        <div class="${nameClass}">Step ${i+1}: ${s.name}${s.cross && !done ? ' <span style="font-size:0.6rem;color:var(--color-teal-500);font-weight:700">↗</span>' : ''}</div>
+        ${current && s.action ? `<button class="step-action">${s.action}</button>` : ''}
+      </div>
+    `;
+    container.appendChild(div);
+  });
+  // Footer
+  const footer = document.createElement('div');
+  footer.className = 'journey-steps-footer';
+  footer.innerHTML = `<button class="dismiss-link" onclick="showDismissConfirm()">Dismiss journey</button>`;
+  container.appendChild(footer);
+}
+
+function toggleSteps() {
+  stepsExpanded = !stepsExpanded;
+  const steps = document.getElementById('journeySteps');
+  const label = document.getElementById('journeyExpandLabel');
+  const arrow = document.getElementById('journeyExpandArrow');
+  if (stepsExpanded) {
+    renderSteps(currentStep);
+    steps.style.display = 'block';
+    label.textContent = 'Hide steps';
+    arrow.textContent = '▴';
+  } else {
+    steps.style.display = 'none';
+    label.textContent = 'Show all steps';
+    arrow.textContent = '▾';
+  }
+}
+
+/* ── Dismiss confirm ────────────────────────────────────────────────── */
+function showDismissConfirm() {
+  document.getElementById('dismissConfirm').style.display = 'flex';
+}
+function hideDismissConfirm() {
+  document.getElementById('dismissConfirm').style.display = 'none';
+}
+
+/* ── Celebration ────────────────────────────────────────────────────── */
+function showCelebration() {
+  const cel = document.getElementById('celebration');
+  cel.style.display = 'flex';
+
+  // Update nav orb → green complete
+  document.getElementById('navOrb').className = 'guide-orb complete';
+  document.getElementById('navOrb').textContent = '🏅';
+  const navOffset = computeRingOffset(7, 7, 75.4);
+  document.getElementById('navRingFill').setAttribute('stroke-dashoffset', navOffset.toFixed(1));
+  document.getElementById('navRingFill').style.stroke = 'var(--color-teal-500)';
+
+  // Spawn confetti
+  spawnConfetti();
+}
+function hideCelebration() {
+  document.getElementById('celebration').style.display = 'none';
+  document.getElementById('confettiWrap').innerHTML = '';
+  document.getElementById('navOrb').className = 'guide-orb onboarding';
+  document.getElementById('navOrb').textContent = '🤖';
+  document.getElementById('navRingFill').style.stroke = 'var(--color-amber-500)';
+}
+
+function spawnConfetti() {
+  const wrap = document.getElementById('confettiWrap');
+  wrap.innerHTML = '';
+  const colors = ['#D4891E','#24B587','#4A6FA5','#E85554','#7C5CBF','#D4AF37','#F0C56A'];
+  for (let i = 0; i < 40; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.left = (Math.random() * 100) + '%';
+    el.style.top  = (Math.random() * -20) + 'px';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.width  = (Math.random() * 8 + 4) + 'px';
+    el.style.height = (Math.random() * 8 + 4) + 'px';
+    el.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    el.style.animationDuration = (Math.random() * 1.5 + 1.2) + 's';
+    el.style.animationDelay    = (Math.random() * 0.8) + 's';
+    wrap.appendChild(el);
+  }
+}
+
+/* ── Guide open/close ───────────────────────────────────────────────── */
+function closeGuidePanel() {
+  document.getElementById('guidePanel').style.display = 'none';
+}
+document.getElementById('guideTriggerBtn').addEventListener('click', () => {
+  const p = document.getElementById('guidePanel');
+  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+});
+
+/* ── Init ───────────────────────────────────────────────────────────── */
+setStep(3);
+</script>
+</body>
+</html>
