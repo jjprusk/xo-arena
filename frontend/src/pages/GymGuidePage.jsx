@@ -76,6 +76,9 @@ export default function GymGuidePage() {
       .then(setContent)
   }, [])
 
+  // Close guide panel immediately so the page feels unobstructed
+  useEffect(() => { useGuideStore.getState().close() }, [])
+
   // Journey step 4: visiting the AI Training Guide page — update store directly so UI reflects completion without waiting for socket
   useEffect(() => {
     getToken().then(token => {

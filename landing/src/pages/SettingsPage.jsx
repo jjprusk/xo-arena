@@ -1,26 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? ''
-
-async function fetchPreferences(token) {
-  const res = await fetch(`${BACKEND_URL}/api/users/preferences`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) throw new Error('Failed to load preferences')
-  return res.json()
-}
-
-async function savePreferences(updates, token) {
-  const res = await fetch(`${BACKEND_URL}/api/users/preferences`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(updates),
-  })
-  if (!res.ok) throw new Error('Failed to save preferences')
-  return res.json()
-}
+import { api } from '../lib/api.js'
 
 export default function SettingsPage() {
   const { data: session, isPending } = useOptimisticSession()
@@ -33,7 +14,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!user) return
-    getToken().then(token => fetchPreferences(token)).then(data => {
+    getToken().then(token => api.users.getPreferences(token)).then(data => {
       setTournamentNotifPref(data.tournamentResultNotifPref ?? 'AS_PLAYED')
       setFlashStartAlerts(data.flashStartAlerts !== false)
     }).catch(() => {})
@@ -85,7 +66,7 @@ export default function SettingsPage() {
                       setSavingNotifPref(true)
                       try {
                         const token = await getToken()
-                        await savePreferences({ tournamentResultNotifPref: value }, token)
+                        await api.users.patchPreferences({ tournamentResultNotifPref: value }, token)
                         setTournamentNotifPref(value)
                       } finally {
                         setSavingNotifPref(false)
@@ -121,7 +102,7 @@ export default function SettingsPage() {
                   setSavingFlashAlerts(true)
                   try {
                     const token = await getToken()
-                    await savePreferences({ flashStartAlerts: next }, token)
+                    await api.users.patchPreferences({ flashStartAlerts: next }, token)
                     setFlashStartAlerts(next)
                   } finally {
                     setSavingFlashAlerts(false)

@@ -25,6 +25,7 @@ import supportRouter from './routes/support.js'
 import guideRouter from './routes/guide.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
+import { setIO as journeySetIO } from './services/journeyService.js'
 import { getSystemConfig } from './services/mlService.js'
 import { startActivityFlushJob } from './services/activityService.js'
 import { startTournamentBridge } from './lib/tournamentBridge.js'
@@ -98,6 +99,7 @@ attachSocketIO(server).then((io) => {
   app.set('io', io)
   mlSetIO(io)
   logSetIO(io)
+  journeySetIO(io)
   startTournamentBridge(io)
   server.listen(PORT, () => {
     logger.info(`XO Arena backend running on port ${PORT}`)

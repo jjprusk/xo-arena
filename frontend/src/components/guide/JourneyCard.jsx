@@ -11,7 +11,7 @@ const STEPS = [
   { index: 2, title: 'Read the FAQ',             cta: 'Read the FAQ',       href: '/faq'                            },
   { index: 3, title: 'Play your first game',     cta: 'Play now',           href: '/play?action=vs-community-bot'   },
   { index: 4, title: 'Explore AI Training',      cta: 'Open Gym Guide',     href: '/gym/guide'                      },
-  { index: 5, title: 'Create your first bot',    cta: 'Create a bot',       href: '/bots'                           },
+  { index: 5, title: 'Create your first bot',    cta: 'Create a bot',       href: '/profile?action=create-bot'      },
   { index: 6, title: 'Train your bot',           cta: 'Start training',     href: '/gym?action=start-training'      },
   { index: 7, title: 'Enter a tournament',       cta: 'Browse tournaments', href: '/tournaments', external: true },
   { index: 8, title: 'Play a tournament match',  cta: 'Check tournaments',  href: '/tournaments', external: true },

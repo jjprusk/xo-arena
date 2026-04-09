@@ -48,10 +48,12 @@ function GuideReturnTip({ onDismiss }) {
           <svg width="320" height="60" viewBox="0 0 320 60" fill="none" xmlns="http://www.w3.org/2000/svg"
             style={{ borderRadius: 10, display: 'block', boxShadow: '0 3px 16px rgba(0,0,0,0.5)' }}>
             <defs>
+              {/* Orb gradient — matches GuideOrb idle state */}
               <linearGradient id="orbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#5B82B8" />
                 <stop offset="100%" stopColor="#3A5E8E" />
               </linearGradient>
+              {/* User avatar teal */}
               <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#0d9488" />
                 <stop offset="100%" stopColor="#0f766e" />
@@ -62,12 +64,11 @@ function GuideReturnTip({ onDismiss }) {
             <rect width="320" height="60" rx="10" fill="#ffffff" />
             <line x1="0" y1="59.5" x2="320" y2="59.5" stroke="rgba(0,0,0,0.1)" />
 
-            {/* Grid logo */}
-            <rect x="12" y="12" width="36" height="36" rx="7" fill="#3B6FD4" />
-            <line x1="23" y1="16" x2="23" y2="44" stroke="white"   strokeWidth="2.8" strokeLinecap="round" />
-            <line x1="35" y1="16" x2="35" y2="44" stroke="#4DD9C0" strokeWidth="2.8" strokeLinecap="round" />
-            <line x1="16" y1="26" x2="44" y2="26" stroke="white"   strokeWidth="2.8" strokeLinecap="round" />
-            <line x1="16" y1="38" x2="44" y2="38" stroke="#4DD9C0" strokeWidth="2.8" strokeLinecap="round" />
+            {/* AI Arena brand — matches the real landing header */}
+            <foreignObject x="10" y="18" width="24" height="24">
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontSize: 20, lineHeight: 1 }}>⚔</div>
+            </foreignObject>
+            <text x="36" y="35" fontSize="11" fontWeight="700" fill="#64748b" fontFamily="system-ui, sans-serif">AI Arena</text>
 
 
             {/* ── Break marks — lightning bolt zigzags, full height, not-to-scale indicator ── */}
@@ -75,15 +76,21 @@ function GuideReturnTip({ onDismiss }) {
             <path d="M 163 0 L 170 26 L 162 26 L 169 60" stroke="rgba(0,0,0,0.22)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
             {/* ── Guide orb — exact replica of GuideOrb component (idle state) ── */}
+            {/* Outer glow */}
             <circle cx={ORB_X} cy="30" r="24" fill="rgba(91,130,184,0.12)" />
+            {/* Button fill — idle gradient */}
             <circle cx={ORB_X} cy="30" r="20" fill="url(#orbGrad)" />
+            {/* Box shadow ring */}
             <circle cx={ORB_X} cy="30" r="21" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="2" />
+            {/* Progress ring track */}
             <circle cx={ORB_X} cy="30" r="18" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5"
               transform={`rotate(-90 ${ORB_X} 30)`} />
+            {/* Progress arc — 1/8 done (step 1 complete) */}
             <circle cx={ORB_X} cy="30" r="18" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2.5"
               strokeDasharray={`${2 * Math.PI * 18 * (1/8)} ${2 * Math.PI * 18}`}
               strokeLinecap="round"
               transform={`rotate(-90 ${ORB_X} 30)`} />
+            {/* Robot emoji */}
             <foreignObject x={ORB_X - 11} y="19" width="22" height="22">
               <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontSize: 18, lineHeight: 1, textAlign: 'center' }}>🤖</div>
             </foreignObject>
@@ -93,7 +100,7 @@ function GuideReturnTip({ onDismiss }) {
             <text x="298" y="35" textAnchor="middle" fontSize="11" fill="white" fontWeight="700" fontFamily="system-ui, sans-serif">J</text>
           </svg>
 
-          {/* Animated pointing finger */}
+          {/* Animated pointing finger — positioned below the orb */}
           <div style={{
             position: 'absolute',
             top: '100%',
@@ -183,7 +190,7 @@ export default function FAQPage() {
   const [openSection, setOpenSection] = useState(() => {
     const store = useGuideStore.getState()
     if (store.uiHints?.faqAccordionOpened) return null
-    return 0  // open first section on first visit
+    return 0
   })
 
   // Show tip only the first time this page is visited during the journey (step 2 not yet complete)
@@ -262,7 +269,7 @@ export default function FAQPage() {
       <div className="flex items-center justify-between mb-6">
         {fromGuide && (
           <button
-            onClick={() => navigate('/play?open-guide=1')}
+            onClick={() => navigate('/?open-guide=1')}
             className="text-sm font-medium"
             style={{ color: 'var(--color-blue-600)' }}
           >

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 import { signOut } from '../../lib/auth-client.js'
-import { clearTokenCache } from '../../lib/getToken.js'
+import { getToken, clearTokenCache } from '../../lib/getToken.js'
 import { getSocket, connectSocket, disconnectSocket } from '../../lib/socket.js'
 import SignInModal from '../ui/SignInModal.jsx'
 import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
@@ -44,17 +44,33 @@ export default function AppLayout() {
 
   useJourneyAutoOpen()
 
-  // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out
+  // Close the mobile menu and guide panel whenever the user navigates
+  useEffect(() => {
+    setMenuOpen(false)
+    useGuideStore.getState().close()
+  }, [location.pathname])
+
+  // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out.
+  // Also subscribe the socket to the user's personal room so guide:journeyStep / guide:notification events arrive.
   useEffect(() => {
     if (session?.user?.id) {
-      getSocket()
       useGuideStore.getState().hydrate().then(() => {
+        // Don't auto-open on pages where the guide would obscure gameplay
+        if (window.location.pathname.startsWith('/play')) return
         const { journeyProgress } = useGuideStore.getState()
         const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
         if (!dismissedAt && completedSteps.length < 8) {
           useGuideStore.getState().open()
         }
       })
+      // Join the user's personal socket room for real-time guide/journey events
+      getToken().then(token => {
+        if (!token) return
+        const socket = connectSocket(token)
+        function subscribe() { socket.emit('user:subscribe', { authToken: token }) }
+        if (socket.connected) subscribe()
+        else socket.once('connect', subscribe)
+      }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
     }
@@ -71,6 +87,7 @@ export default function AppLayout() {
     }
     function onJourneyStep({ completedSteps }) {
       useGuideStore.getState().applyJourneyStep({ completedSteps })
+      useGuideStore.getState().open()
     }
     socket.on('guide:notification', onGuideNotification)
     socket.on('guide:journeyStep',  onJourneyStep)
@@ -126,22 +143,29 @@ export default function AppLayout() {
 
         {/* Nav links */}
         <div className="flex items-center gap-1 flex-1">
-          <NavLink
-            to="/tournaments"
-            className={({ isActive }) =>
-              `px-3 py-1.5 rounded-lg text-sm font-medium no-underline transition-colors ${
-                isActive
-                  ? 'text-white'
-                  : 'hover:bg-[var(--bg-surface-hover)]'
-              }`
-            }
-            style={({ isActive }) => isActive
-              ? { backgroundColor: 'var(--color-slate-500)', color: 'white' }
-              : { color: 'var(--text-secondary)' }
-            }
-          >
-            Tournaments
-          </NavLink>
+          {[
+            { to: '/tournaments', label: 'Tournaments' },
+            { to: '/faq',         label: 'FAQ'         },
+            { to: '/about',       label: 'About'       },
+          ].map(({ to, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `px-3 py-1.5 rounded-lg text-sm font-medium no-underline transition-colors ${
+                  isActive
+                    ? 'text-white'
+                    : 'hover:bg-[var(--bg-surface-hover)]'
+                }`
+              }
+              style={({ isActive }) => isActive
+                ? { backgroundColor: 'var(--color-slate-500)', color: 'white' }
+                : { color: 'var(--text-secondary)' }
+              }
+            >
+              {label}
+            </NavLink>
+          ))}
         </div>
 
         {/* Right side */}

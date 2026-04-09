@@ -9,6 +9,7 @@ function MLLimitsPanel() {
   const [form, setForm] = useState({
     maxEpisodesPerModel: '', maxEpisodesPerSession: '', maxConcurrentSessions: '', maxModelsPerUser: '',
     dqnDefaultHiddenLayers: '32', dqnMaxHiddenLayers: '3', dqnMaxUnitsPerLayer: '256',
+    epsBronze: '1000', epsSilver: '5000', epsGold: '20000', epsPlatinum: '50000', epsDiamond: '100000',
   })
 
   useEffect(() => {
@@ -25,6 +26,11 @@ function MLLimitsPanel() {
           dqnDefaultHiddenLayers: (l.dqnDefaultHiddenLayers ?? [32]).join(', '),
           dqnMaxHiddenLayers: l.dqnMaxHiddenLayers ?? 3,
           dqnMaxUnitsPerLayer: l.dqnMaxUnitsPerLayer ?? 256,
+          epsBronze:   l.episodesPerSessionTiers?.bronze   ?? 1000,
+          epsSilver:   l.episodesPerSessionTiers?.silver   ?? 5000,
+          epsGold:     l.episodesPerSessionTiers?.gold     ?? 20000,
+          epsPlatinum: l.episodesPerSessionTiers?.platinum ?? 50000,
+          epsDiamond:  l.episodesPerSessionTiers?.diamond  ?? 100000,
         })
       } catch { /* non-fatal */ }
     }
@@ -47,8 +53,23 @@ function MLLimitsPanel() {
         dqnDefaultHiddenLayers: parsedLayers.length > 0 ? parsedLayers : undefined,
         dqnMaxHiddenLayers: form.dqnMaxHiddenLayers,
         dqnMaxUnitsPerLayer: form.dqnMaxUnitsPerLayer,
+        episodesPerSessionTiers: {
+          bronze:   form.epsBronze,
+          silver:   form.epsSilver,
+          gold:     form.epsGold,
+          platinum: form.epsPlatinum,
+          diamond:  form.epsDiamond,
+        },
       }, token)
       setLimits(l)
+      setForm(f => ({
+        ...f,
+        epsBronze:   l.episodesPerSessionTiers?.bronze   ?? f.epsBronze,
+        epsSilver:   l.episodesPerSessionTiers?.silver   ?? f.epsSilver,
+        epsGold:     l.episodesPerSessionTiers?.gold     ?? f.epsGold,
+        epsPlatinum: l.episodesPerSessionTiers?.platinum ?? f.epsPlatinum,
+        epsDiamond:  l.episodesPerSessionTiers?.diamond  ?? f.epsDiamond,
+      }))
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch { /* non-fatal */ } finally {
@@ -154,6 +175,31 @@ function MLLimitsPanel() {
                   style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                 />
               </label>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
+            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Episodes per session — tier ladder</p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+              {[
+                { key: 'epsBronze',   label: 'Bronze'   },
+                { key: 'epsSilver',   label: 'Silver'   },
+                { key: 'epsGold',     label: 'Gold'     },
+                { key: 'epsPlatinum', label: 'Platinum' },
+                { key: 'epsDiamond',  label: 'Diamond'  },
+              ].map(({ key, label }) => (
+                <label key={key} className="space-y-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form[key]}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  />
+                </label>
+              ))}
             </div>
           </div>
 

@@ -533,7 +533,8 @@ router.delete('/ml/models/:id', async (req, res, next) => {
 router.get('/ml/limits', async (_req, res, next) => {
   try {
     const [maxEpisodes, maxConcurrent, maxModels, maxEpisodesPerModel,
-      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer] = await Promise.all([
+      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer,
+      epsBronze, epsSilver, epsGold, epsPlatinum, epsDiamond] = await Promise.all([
       getSystemConfig('ml.maxEpisodesPerSession', 100_000),
       getSystemConfig('ml.maxConcurrentSessions', 0),
       getSystemConfig('ml.maxModelsPerUser', 10),
@@ -541,6 +542,11 @@ router.get('/ml/limits', async (_req, res, next) => {
       getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
       getSystemConfig('ml.dqn.maxHiddenLayers', 3),
       getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
+      getSystemConfig('credits.limits.episodesPerSession.bronze',   1_000),
+      getSystemConfig('credits.limits.episodesPerSession.silver',   5_000),
+      getSystemConfig('credits.limits.episodesPerSession.gold',    20_000),
+      getSystemConfig('credits.limits.episodesPerSession.platinum', 50_000),
+      getSystemConfig('credits.limits.episodesPerSession.diamond', 100_000),
     ])
     res.json({ limits: {
       maxEpisodesPerSession: maxEpisodes,
@@ -550,6 +556,7 @@ router.get('/ml/limits', async (_req, res, next) => {
       dqnDefaultHiddenLayers,
       dqnMaxHiddenLayers,
       dqnMaxUnitsPerLayer,
+      episodesPerSessionTiers: { bronze: epsBronze, silver: epsSilver, gold: epsGold, platinum: epsPlatinum, diamond: epsDiamond },
     }})
   } catch (err) {
     next(err)
@@ -562,7 +569,8 @@ router.get('/ml/limits', async (_req, res, next) => {
 router.patch('/ml/limits', async (req, res, next) => {
   try {
     const { maxEpisodesPerSession, maxConcurrentSessions, maxModelsPerUser, maxEpisodesPerModel,
-      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer } = req.body
+      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer,
+      episodesPerSessionTiers } = req.body
     const updates = []
 
     if (maxEpisodesPerSession !== undefined) {
@@ -605,11 +613,23 @@ router.patch('/ml/limits', async (req, res, next) => {
       updates.push(setSystemConfig('ml.dqn.maxUnitsPerLayer', v))
     }
 
+    if (episodesPerSessionTiers !== undefined) {
+      const TIER_KEYS = { bronze: 1_000, silver: 5_000, gold: 20_000, platinum: 50_000, diamond: 100_000 }
+      for (const [tier, def] of Object.entries(TIER_KEYS)) {
+        if (episodesPerSessionTiers[tier] !== undefined) {
+          const v = parseInt(episodesPerSessionTiers[tier])
+          if (isNaN(v) || v < 0) return res.status(400).json({ error: `episodesPerSessionTiers.${tier} must be a non-negative integer` })
+          updates.push(setSystemConfig(`credits.limits.episodesPerSession.${tier}`, v))
+        }
+      }
+    }
+
     if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' })
     await Promise.all(updates)
 
     const [updatedMaxEpisodes, updatedMaxConcurrent, updatedMaxModels, updatedMaxEpisodesPerModel,
-      updatedDqnDefaultHiddenLayers, updatedDqnMaxHiddenLayers, updatedDqnMaxUnitsPerLayer] = await Promise.all([
+      updatedDqnDefaultHiddenLayers, updatedDqnMaxHiddenLayers, updatedDqnMaxUnitsPerLayer,
+      epsBronze, epsSilver, epsGold, epsPlatinum, epsDiamond] = await Promise.all([
       getSystemConfig('ml.maxEpisodesPerSession', 100_000),
       getSystemConfig('ml.maxConcurrentSessions', 0),
       getSystemConfig('ml.maxModelsPerUser', 10),
@@ -617,6 +637,11 @@ router.patch('/ml/limits', async (req, res, next) => {
       getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
       getSystemConfig('ml.dqn.maxHiddenLayers', 3),
       getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
+      getSystemConfig('credits.limits.episodesPerSession.bronze',    1_000),
+      getSystemConfig('credits.limits.episodesPerSession.silver',    5_000),
+      getSystemConfig('credits.limits.episodesPerSession.gold',     20_000),
+      getSystemConfig('credits.limits.episodesPerSession.platinum',  50_000),
+      getSystemConfig('credits.limits.episodesPerSession.diamond', 100_000),
     ])
     res.json({ limits: {
       maxEpisodesPerSession: updatedMaxEpisodes,
@@ -626,6 +651,7 @@ router.patch('/ml/limits', async (req, res, next) => {
       dqnDefaultHiddenLayers: updatedDqnDefaultHiddenLayers,
       dqnMaxHiddenLayers: updatedDqnMaxHiddenLayers,
       dqnMaxUnitsPerLayer: updatedDqnMaxUnitsPerLayer,
+      episodesPerSessionTiers: { bronze: epsBronze, silver: epsSilver, gold: epsGold, platinum: epsPlatinum, diamond: epsDiamond },
     }})
   } catch (err) {
     next(err)

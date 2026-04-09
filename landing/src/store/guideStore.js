@@ -7,6 +7,10 @@ export const useGuideStore = create((set, get) => ({
   slots: [],
   notifications: [],
   journeyProgress: { completedSteps: [], dismissedAt: null },
+
+  // One-time UI hint flags — stored server-side so they coordinate across sites
+  uiHints: {},
+
   hydrated: false,
 
   open()   { set({ panelOpen: true }) },
@@ -46,12 +50,36 @@ export const useGuideStore = create((set, get) => ({
     }).catch(() => {})
   },
 
+  // Marks step 8 complete, sets dismissedAt, and saves slots — all in one PATCH to avoid race.
+  async completeJourney(postJourneySlots) {
+    const { journeyProgress } = get()
+    const completedSteps = [...new Set([...(journeyProgress?.completedSteps ?? []), 8])]
+    const dismissedAt    = new Date().toISOString()
+    set({ journeyProgress: { completedSteps, dismissedAt }, slots: postJourneySlots })
+    try {
+      const token = await getToken()
+      if (token) await api.guide.patchPreferences({
+        journeyProgress: { completedSteps, dismissedAt },
+        guideSlots: postJourneySlots,
+      }, token)
+    } catch { /* non-fatal */ }
+  },
+
   async restartJourney() {
     try {
       const token = await getToken()
       if (token) await api.guide.restartJourney(token)
       set({ journeyProgress: { completedSteps: [], dismissedAt: null } })
     } catch { /* non-fatal */ }
+  },
+
+  // Mark a one-time hint as seen locally and persist to server (cross-site coordination)
+  setUiHint(key) {
+    const uiHints = { ...get().uiHints, [key]: true }
+    set({ uiHints })
+    getToken().then(token => {
+      if (token) api.guide.patchPreferences({ uiHints }, token).catch(() => {})
+    }).catch(() => {})
   },
 
   async updateSlots(slots) {
@@ -70,6 +98,7 @@ export const useGuideStore = create((set, get) => ({
       set({
         slots:           data.guideSlots        ?? [],
         journeyProgress: data.journeyProgress   ?? { completedSteps: [], dismissedAt: null },
+        uiHints:         data.uiHints           ?? {},
         hydrated:        true,
       })
     } catch { /* non-fatal */ }
@@ -81,6 +110,7 @@ export const useGuideStore = create((set, get) => ({
       slots:           [],
       notifications:   [],
       journeyProgress: { completedSteps: [], dismissedAt: null },
+      uiHints:         {},
       hydrated:        false,
     })
   },

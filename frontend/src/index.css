@@ -278,6 +278,18 @@
   display: inline-block;
 }
 
+@keyframes finger-bounce {
+  0%, 100% { transform: translateX(-62%) translateY(0);    }
+  40%       { transform: translateX(-62%) translateY(-10px); }
+  60%       { transform: translateX(-62%) translateY(-7px);  }
+}
+
+@keyframes tip-bounce {
+  0%, 100% { transform: translateX(0);   }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(4px); }
+}
+
 @keyframes guide-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(212, 137, 30, 0.7), 0 0 8px 2px rgba(212, 137, 30, 0.4); }
   50%       { box-shadow: 0 0 0 6px rgba(212, 137, 30, 0), 0 0 14px 5px rgba(212, 137, 30, 0.5); }

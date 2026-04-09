@@ -1,20 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useGuideStore } from '../../store/guideStore.js'
+import { POST_JOURNEY_SLOTS } from './slotActions.js'
 import NotificationStack from './NotificationStack.jsx'
 import JourneyCard from './JourneyCard.jsx'
 import SlotGrid from './SlotGrid.jsx'
 import SlotPicker from './SlotPicker.jsx'
 import OnlineStrip from './OnlineStrip.jsx'
+import JourneyCompletePopup from '../ui/JourneyCompletePopup.jsx'
 
 /**
  * GuidePanel — slide-in panel from the right.
  * 320px on desktop, full-width bottom-sheet on mobile.
  * Closes on Escape or clicking the backdrop.
  */
+function handleJourneyComplete() {
+  useGuideStore.getState().completeJourney(POST_JOURNEY_SLOTS)
+}
+
 export default function GuidePanel({ isAdmin = false }) {
   const { panelOpen, close } = useGuideStore()
-  const [editMode,     setEditMode]     = useState(false)
-  const [pickerOpen,   setPickerOpen]   = useState(false)
+  const [editMode,            setEditMode]            = useState(false)
+  const [pickerOpen,          setPickerOpen]          = useState(false)
+  const [journeyCompleteOpen, setJourneyCompleteOpen] = useState(false)
   const panelRef = useRef(null)
 
   // Escape key closes panel
@@ -32,7 +39,12 @@ export default function GuidePanel({ isAdmin = false }) {
     }
   }, [panelOpen])
 
-  if (!panelOpen) return null
+  if (!panelOpen) {
+    if (journeyCompleteOpen) {
+      return <JourneyCompletePopup onDismiss={() => { setJourneyCompleteOpen(false); handleJourneyComplete() }} />
+    }
+    return null
+  }
 
   return (
     <>
@@ -70,18 +82,22 @@ export default function GuidePanel({ isAdmin = false }) {
           className="flex items-center gap-2 px-4 py-3 shrink-0"
           style={{ borderBottom: '1px solid var(--border-default)' }}
         >
-          {/* Mini orb */}
-          <div
-            className="flex items-center justify-center rounded-full shrink-0"
+          {/* Mini orb — click to close */}
+          <button
+            onClick={close}
+            aria-label="Close Guide"
+            className="flex items-center justify-center rounded-full shrink-0 hover:opacity-70 transition-opacity"
             style={{
               width: 28,
               height: 28,
               background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))',
               fontSize: 14,
+              border: 'none',
+              cursor: 'pointer',
             }}
           >
             🤖
-          </div>
+          </button>
 
           <span className="flex-1 font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
             Guide
@@ -121,6 +137,7 @@ export default function GuidePanel({ isAdmin = false }) {
               editMode={editMode}
               onAddSlot={() => setPickerOpen(true)}
               isAdmin={isAdmin}
+              onSlotAction={key => { if (key === 'journey_complete') setJourneyCompleteOpen(true) }}
             />
             <OnlineStrip onlineUsers={[]} />
           </div>
@@ -146,6 +163,11 @@ export default function GuidePanel({ isAdmin = false }) {
       {/* Slot picker overlay */}
       {pickerOpen && (
         <SlotPicker onClose={() => setPickerOpen(false)} isAdmin={isAdmin} />
+      )}
+
+      {/* Journey complete popup */}
+      {journeyCompleteOpen && (
+        <JourneyCompletePopup onDismiss={() => { setJourneyCompleteOpen(false); handleJourneyComplete() }} />
       )}
     </>
   )

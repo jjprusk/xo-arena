@@ -10,10 +10,8 @@ import { useIsInGame } from './useIsInGame.js'
  */
 const STEP_ROUTES = {
   2: '/faq',
-  3: '/play',
   4: '/gym/guide',
   5: '/bots',
-  6: '/gym',
 }
 
 /**

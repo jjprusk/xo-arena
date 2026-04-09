@@ -40,18 +40,19 @@ export function journeyCommand(program) {
     .command('journey <username|email|pattern> [bits]')
     .description(
       'Show or set journey progress. Accepts a regex pattern to match multiple users.\n' +
-      '  [bits]  optional 7-char binary string e.g. 1100000 to set completed steps.\n' +
-      '          Use "0000000" to reset, "1111111" to mark all done.'
+      '  [bits]  optional 8-char binary string e.g. 11000000 to set completed steps.\n' +
+      '          Use "00000000" to reset, "11111111" to mark all done.'
     )
     .option('--dismiss', 'Mark journey as dismissed (sets dismissedAt to now)')
     .option('--undismiss', 'Clear dismissedAt so journey is active again')
+    .option('--reset', 'Reset all completed steps to 00000000')
     .action(async (usernameOrEmail, bits, opts) => {
       const users = await resolveUsers(db, usernameOrEmail)
       if (users.length === 0) fail(`no users found matching "${usernameOrEmail}"`)
 
       // Validate bits if provided
       if (bits !== undefined) {
-        if (!/^[01]{7}$/.test(bits)) fail(`bits must be exactly 7 characters of 0 or 1, e.g. 1100000`)
+        if (!/^[01]{8}$/.test(bits)) fail(`bits must be exactly 8 characters of 0 or 1, e.g. 11000000`)
       }
 
       for (const user of users) {
@@ -60,7 +61,7 @@ export function journeyCommand(program) {
         const current  = Array.isArray(progress.completedSteps) ? progress.completedSteps : []
 
         // Read-only mode
-        if (bits === undefined && !opts.dismiss && !opts.undismiss) {
+        if (bits === undefined && !opts.dismiss && !opts.undismiss && !opts.reset) {
           const binary     = toBinary(current)
           const pretty     = prettyBinary(current)
           const dismissed  = progress.dismissedAt
@@ -73,8 +74,13 @@ export function journeyCommand(program) {
         // Write mode
         const updated = { ...progress }
 
+        if (opts.reset) {
+          updated.completedSteps = []
+          updated.dismissedAt    = null
+        }
         if (bits !== undefined) {
           updated.completedSteps = fromBinary(bits)
+          if (bits !== '11111111') updated.dismissedAt = null
         }
         if (opts.dismiss) {
           updated.dismissedAt = new Date().toISOString()

@@ -21,11 +21,12 @@ export default function GuideOrb() {
   const badgeCount = notifications.length
   const hasUrgent  = badgeCount > 0
 
+  const journeyDone    = !!journeyProgress?.dismissedAt
   const completedSteps = journeyProgress?.completedSteps?.length ?? 0
   const totalSteps     = 8
   const dashOffset     = CIRCUMFERENCE * (1 - completedSteps / totalSteps)
 
-  const urgent   = hasUrgent || isInGame
+  const urgent   = hasUrgent
   const orbStyle = urgent
     ? { background: 'linear-gradient(135deg, var(--color-amber-500), var(--color-amber-700))', boxShadow: '0 0 0 2px rgba(212,137,30,0.4)' }
     : { background: 'linear-gradient(135deg, #5B82B8, #3A5E8E)', boxShadow: '0 0 0 2px rgba(255,255,255,0.15)' }
@@ -46,40 +47,42 @@ export default function GuideOrb() {
           flexShrink: 0,
         }}
       >
-        {/* SVG progress ring */}
-        <svg
-          width={BTN}
-          height={BTN}
-          viewBox={`0 0 ${BTN} ${BTN}`}
-          className="absolute inset-0"
-          aria-hidden="true"
-          style={{ transform: 'rotate(-90deg)' }}
-        >
-          {/* Track */}
-          <circle
-            cx={RING_C}
-            cy={RING_C}
-            r={RING_R}
-            fill="none"
-            stroke="rgba(255,255,255,0.2)"
-            strokeWidth={2.5}
-          />
-          {/* Progress arc */}
-          {completedSteps > 0 && (
+        {/* SVG progress ring — hidden after journey is dismissed */}
+        {!journeyDone && (
+          <svg
+            width={BTN}
+            height={BTN}
+            viewBox={`0 0 ${BTN} ${BTN}`}
+            className="absolute inset-0"
+            aria-hidden="true"
+            style={{ transform: 'rotate(-90deg)' }}
+          >
+            {/* Track */}
             <circle
               cx={RING_C}
               cy={RING_C}
               r={RING_R}
               fill="none"
-              stroke="rgba(255,255,255,0.9)"
+              stroke="rgba(255,255,255,0.2)"
               strokeWidth={2.5}
-              strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={dashOffset}
-              strokeLinecap="round"
-              style={{ transition: 'stroke-dashoffset 0.5s ease' }}
             />
-          )}
-        </svg>
+            {/* Progress arc */}
+            {completedSteps > 0 && (
+              <circle
+                cx={RING_C}
+                cy={RING_C}
+                r={RING_R}
+                fill="none"
+                stroke="rgba(255,255,255,0.9)"
+                strokeWidth={2.5}
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={dashOffset}
+                strokeLinecap="round"
+                style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+              />
+            )}
+          </svg>
+        )}
 
         {/* Robot emoji centre */}
         <span style={{ fontSize: 18, lineHeight: 1, position: 'relative', zIndex: 1 }}>🤖</span>

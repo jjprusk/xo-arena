@@ -32,6 +32,8 @@ export const api = {
   users: {
     stats: (id) => api.get(`/users/${id}/stats`),
     eloHistory: (id) => api.get(`/users/${id}/elo-history`),
+    getPreferences:   (token)       => api.get('/users/me/preferences', token),
+    patchPreferences: (body, token) => api.patch('/users/me/preferences', body, token),
   },
 
   guide: {

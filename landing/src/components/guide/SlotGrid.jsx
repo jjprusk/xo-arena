@@ -1,12 +1,26 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
 import { getActionByKey, JOURNEY_DEFAULT_SLOTS } from './slotActions.js'
 
 const TOTAL_SLOTS = 8
 
-export default function SlotGrid({ editMode, onAddSlot, isAdmin }) {
-  const { slots, updateSlots, journeyProgress } = useGuideStore()
+export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction }) {
+  const { slots, updateSlots, journeyProgress, close } = useGuideStore()
+
+  // Computed once on mount — prevents reactive feedback loop where setUiHint
+  // immediately flips showFaqPointer to false before the finger is ever rendered.
+  const [showFaqPointer] = useState(() => {
+    const store = useGuideStore.getState()
+    if (store.uiHints?.faqPointerShown) return false
+    const steps = store.journeyProgress?.completedSteps ?? []
+    return !steps.includes(2)
+  })
+
+  // Mark seen on first display — persists to server for cross-site coordination
+  useEffect(() => {
+    if (showFaqPointer) useGuideStore.getState().setUiHint('faqPointerShown')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function removeSlot(index) {
     const next = slots.filter((_, i) => i !== index)
@@ -28,7 +42,7 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin }) {
 
   return (
     <section aria-label="Quick actions">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, overflow: 'visible' }}>
         {cells.map((slot, i) => {
           if (!slot) {
             if (!editMode) return (
@@ -52,14 +66,13 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin }) {
 
           const stepDone    = slot._journey && completedSteps.includes(slot.stepIndex)
           const stepCurrent = slot._journey && slot.stepIndex === nextStepIndex
+          const stepTodo    = slot._journey && !stepDone && !stepCurrent
+          const showPointer = showFaqPointer && stepCurrent && slot.stepIndex === 2 && !editMode
 
           const content = (
             <>
               <span style={{ fontSize: 20, lineHeight: 1 }}>{action.icon}</span>
               <span style={{ fontSize: 10, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>{action.label}</span>
-              {isExternal && !editMode && !slot._journey && (
-                <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>↗</span>
-              )}
               {slot._journey && (
                 <span style={{ position: 'absolute', top: 3, right: 3, width: 13, height: 13, borderRadius: '50%', fontSize: 8, fontWeight: 800, lineHeight: '13px', textAlign: 'center', background: stepDone ? 'var(--color-teal-500)' : stepCurrent ? 'var(--color-amber-500)' : 'rgba(255,255,255,0.12)', color: stepDone || stepCurrent ? 'white' : 'var(--text-muted)' }}>
                   {stepDone ? '✓' : slot.stepIndex}
@@ -74,16 +87,46 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin }) {
             border: stepCurrent ? '1.5px solid var(--color-amber-500)' : stepDone ? '1px solid rgba(36,181,135,0.3)' : '1px solid var(--border-default)',
             boxShadow: stepCurrent ? '0 0 10px 2px rgba(212,137,30,0.45)' : undefined,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 4, color: 'var(--text-primary)', fontSize: 10, fontWeight: 500,
-            position: 'relative', textDecoration: 'none', transition: 'background 0.15s', cursor: 'pointer', padding: 4,
+            gap: 4, color: stepTodo ? 'var(--text-muted)' : 'var(--text-primary)', fontSize: 10, fontWeight: 500,
+            position: 'relative', textDecoration: 'none', transition: 'background 0.15s',
+            cursor: stepTodo ? 'default' : 'pointer', padding: 4,
+            opacity: stepTodo ? 0.45 : 1,
+            pointerEvents: stepTodo && !editMode ? 'none' : undefined,
           }
 
           return (
-            <div key={slot.key ?? i} style={{ position: 'relative' }}>
+            <div key={slot.key ?? i} style={{ position: 'relative', overflow: 'visible' }}>
+              {/* Animated finger — points from the left at the FAQ slot, first open only */}
+              {showPointer && (
+                <div style={{
+                  position: 'absolute',
+                  right: '100%',
+                  top: '5%',
+                  transform: 'translateY(-50%)',
+                  zIndex: 20,
+                  pointerEvents: 'none',
+                  paddingRight: 6,
+                  animation: 'tip-bounce 0.9s ease-in-out infinite',
+                }}>
+                  <div style={{
+                    fontSize: 56,
+                    lineHeight: 1,
+                    background: 'radial-gradient(circle, rgba(212,137,30,0.35) 30%, transparent 72%)',
+                    borderRadius: '50%',
+                    padding: 10,
+                    boxShadow: '0 0 18px 8px rgba(212,137,30,0.45)',
+                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.45))',
+                  }}>👉</div>
+                </div>
+              )}
+
               {!hasHref || isExternal || editMode ? (
                 <div
                   style={{ ...cellStyle, cursor: hasHref && !editMode ? 'pointer' : 'default' }}
-                  onClick={editMode ? undefined : () => { if (isExternal && hasHref) window.open(action.href, '_blank', 'noopener') }}
+                  onClick={editMode ? undefined : () => {
+                    if (isExternal && hasHref) { close(); window.location.href = action.href }
+                    else if (!hasHref && action.key && onSlotAction) { close(); onSlotAction(action.key) }
+                  }}
                   onMouseEnter={e => { if (!editMode && hasHref) e.currentTarget.style.background = 'var(--bg-surface-hover)' }}
                   onMouseLeave={e => { if (!editMode && hasHref) e.currentTarget.style.background = stepDone ? 'rgba(36,181,135,0.08)' : 'var(--bg-surface-2)' }}
                 >
@@ -91,6 +134,7 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin }) {
                 </div>
               ) : (
                 <Link to={action.href} style={cellStyle}
+                  onClick={close}
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-surface-hover)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-surface-2)' }}
                 >

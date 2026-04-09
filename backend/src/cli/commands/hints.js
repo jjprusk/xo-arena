@@ -1,48 +1,85 @@
 import db from '../lib/db.js'
 import { resolveUsers, ok, fail } from '../lib/safety.js'
 
+const GREEN = '\x1b[32m'
+const DIM   = '\x1b[2m'
+const RESET = '\x1b[0m'
+
+/**
+ * All known uiHints keys with human-readable labels.
+ * Stored at preferences.uiHints.<key>.
+ */
 const HINT_DEFS = {
-  faq:  { key: 'faqHintSeen',  label: 'Guide popup + FAQ finger',  when: 'next sign-in' },
-  play: { key: 'playHintSeen', label: 'play-page finger',          when: 'next visit'   },
+  faqTipShown:     'FAQ "Take your time" tip modal',
+  faqPointerShown: 'Guide slot finger pointer (Read the FAQ)',
 }
 
 export function hintsCommand(program) {
   program
     .command('hints <username|email|pattern>')
-    .description('Show or reset hint flags. Accepts a regex pattern to match multiple users.')
-    .option('--hint <name>', `Target a specific hint (${Object.keys(HINT_DEFS).join('|')}); omit for all`)
+    .description(
+      'Show, set, or reset uiHints flags. Accepts a regex pattern to match multiple users.\n' +
+      `  Known keys: ${Object.keys(HINT_DEFS).join(', ')}`
+    )
+    .option('--hint <key>', 'Target a specific hint key; omit for all')
+    .option('--set',   'Mark hint(s) as seen (true)')
     .option('--reset', 'Clear hint(s) so they show again')
     .action(async (usernameOrEmail, opts) => {
       const users = await resolveUsers(db, usernameOrEmail)
       if (users.length === 0) fail(`no users found matching "${usernameOrEmail}"`)
 
-      // Validate --hint value if provided
+      if (opts.set && opts.reset) fail('--set and --reset are mutually exclusive')
+
       if (opts.hint && !HINT_DEFS[opts.hint]) {
-        fail(`unknown hint "${opts.hint}" — valid values: ${Object.keys(HINT_DEFS).join(', ')}`)
+        const known = Object.keys(HINT_DEFS).join(', ')
+        fail(`unknown hint key "${opts.hint}" — known keys: ${known}`)
       }
 
-      const targets = opts.hint
-        ? { [opts.hint]: HINT_DEFS[opts.hint] }
-        : HINT_DEFS
-
       for (const user of users) {
-        const prefs = (user.preferences && typeof user.preferences === 'object')
-          ? user.preferences
-          : {}
+        const prefs    = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+        const uiHints  = (prefs.uiHints    && typeof prefs.uiHints    === 'object') ? prefs.uiHints    : {}
+
+        // ── Read-only ─────────────────────────────────────────────────
+        if (!opts.set && !opts.reset) {
+          const keys = opts.hint ? [opts.hint] : Object.keys(HINT_DEFS)
+          console.log(`"${user.username}" uiHints:`)
+          for (const key of keys) {
+            const val    = !!uiHints[key]
+            const label  = HINT_DEFS[key] ?? key
+            const status = val
+              ? `${GREEN}seen${RESET}    — will NOT show again`
+              : `${DIM}unseen${RESET}  — will show`
+            console.log(`  ${key.padEnd(20)} ${status}   ${DIM}(${label})${RESET}`)
+          }
+
+          // Also surface any unknown keys stored in uiHints
+          const unknown = Object.keys(uiHints).filter(k => !HINT_DEFS[k])
+          if (unknown.length) {
+            for (const k of unknown) {
+              console.log(`  ${k.padEnd(20)} ${DIM}(unrecognised key: ${JSON.stringify(uiHints[k])})${RESET}`)
+            }
+          }
+          continue
+        }
+
+        // ── Write mode ────────────────────────────────────────────────
+        const targetKeys = opts.hint ? [opts.hint] : Object.keys(HINT_DEFS)
+        const updatedHints = { ...uiHints }
 
         if (opts.reset) {
-          const updated = { ...prefs }
-          for (const { key } of Object.values(targets)) delete updated[key]
-          await db.user.update({ where: { id: user.id }, data: { preferences: updated } })
-          const names = Object.values(targets).map(d => d.label).join(', ')
-          ok(`"${user.username}" reset — ${names} will show again`)
+          for (const k of targetKeys) delete updatedHints[k]
         } else {
-          console.log(`"${user.username}" hints:`)
-          for (const [name, { key, label, when }] of Object.entries(targets)) {
-            const seen = !!prefs[key]
-            console.log(`  ${name.padEnd(6)} (${key}): ${String(seen).padEnd(5)} — ${label} will ${seen ? 'NOT show' : 'show'} on ${when}`)
-          }
+          for (const k of targetKeys) updatedHints[k] = true
         }
+
+        await db.user.update({
+          where: { id: user.id },
+          data:  { preferences: { ...prefs, uiHints: updatedHints } },
+        })
+
+        const verb  = opts.reset ? 'reset' : 'set'
+        const names = targetKeys.map(k => HINT_DEFS[k] ?? k).join(', ')
+        ok(`"${user.username}" ${verb} — ${names}`)
       }
     })
 }

@@ -8,10 +8,10 @@ const XO = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
 
 const STEPS = [
   { index: 1, title: 'Welcome to the Arena',    cta: null,                  href: null,                                    external: false },
-  { index: 2, title: 'Read the FAQ',             cta: 'Read the FAQ',       href: `${XO}/faq`,                             external: true  },
+  { index: 2, title: 'Read the FAQ',             cta: 'Read the FAQ',       href: '/faq',                                  external: false },
   { index: 3, title: 'Play your first game',     cta: 'Play now',           href: `${XO}/play?action=vs-community-bot`,    external: true  },
   { index: 4, title: 'Explore AI Training',      cta: 'Open Gym Guide',     href: `${XO}/gym/guide`,                       external: true  },
-  { index: 5, title: 'Create your first bot',    cta: 'Create a bot',       href: `${XO}/bots`,                            external: true  },
+  { index: 5, title: 'Create your first bot',    cta: 'Create a bot',       href: `${XO}/profile?action=create-bot`,       external: true  },
   { index: 6, title: 'Train your bot',           cta: 'Start training',     href: `${XO}/gym?action=start-training`,       external: true  },
   { index: 7, title: 'Enter a tournament',       cta: 'Browse tournaments', href: '/tournaments',                          external: false },
   { index: 8, title: 'Play a tournament match',  cta: 'Check tournaments',  href: '/tournaments',                          external: false },
@@ -115,7 +115,7 @@ export default function JourneyCard() {
     if (!step.href) return null
     if (step.external) {
       return (
-        <a href={step.href} target="_blank" rel="noopener noreferrer" onClick={close}
+        <a href={step.href} onClick={e => { e.preventDefault(); close(); window.location.href = step.href }}
           style={{ display: 'inline-block', marginTop: '0.25rem', padding: '0.25rem 0.5rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.6875rem', fontWeight: 700, borderRadius: '0.3rem', textDecoration: 'none' }}>
           {step.cta}
         </a>
@@ -176,7 +176,7 @@ export default function JourneyCard() {
       {nextStep?.href && (
         <div style={{ margin: '0.5rem 0.75rem 0.75rem' }}>
           {nextStep.external ? (
-            <a href={nextStep.href} target="_blank" rel="noopener noreferrer" onClick={close}
+            <a href={nextStep.href} onClick={e => { e.preventDefault(); close(); window.location.href = nextStep.href }}
               style={{ display: 'block', width: '100%', textAlign: 'center', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
               {nextStep.cta}
             </a>
@@ -206,7 +206,7 @@ export default function JourneyCard() {
             const current = !done && step.index === nextStep?.index
             return (
               <div key={step.index} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', padding: '0.375rem 0', borderBottom: step.index < TOTAL ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-                <div style={{ width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.625rem', fontWeight: 800, flexShrink: 0, marginTop: '0.0625rem', background: done ? 'var(--color-teal-500)' : current ? 'var(--color-amber-500)' : 'rgba(255,255,255,0.05)', color: done || current ? 'white' : 'var(--guide-text-muted, #5A6478)' }}>
+                <div style={{ width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.625rem', fontWeight: 800, flexShrink: 0, background: done ? 'var(--color-teal-500)' : current ? 'var(--color-amber-500)' : 'rgba(255,255,255,0.05)', color: done || current ? 'white' : 'var(--guide-text-muted, #5A6478)' }}>
                   {done ? '✓' : step.index}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

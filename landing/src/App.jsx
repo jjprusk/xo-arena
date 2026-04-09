@@ -8,6 +8,8 @@ import TournamentDetailPage from './pages/TournamentDetailPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import PlayPage from './pages/PlayPage.jsx'
+import FAQPage from './pages/FAQPage.jsx'
+import AboutPage from './pages/AboutPage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminTournamentsPage from './pages/admin/AdminTournamentsPage.jsx'
 import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
@@ -30,6 +32,8 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/play" element={<PlayPage />} />
+          <Route path="/faq" element={<FAQPage />} />
+          <Route path="/about" element={<AboutPage />} />
 
           {/* Admin routes — all guarded by AdminRoute */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

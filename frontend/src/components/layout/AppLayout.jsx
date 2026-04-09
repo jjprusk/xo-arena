@@ -22,7 +22,7 @@ import AccomplishmentPopup from '../AccomplishmentPopup.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
-import { getSocket } from '../../lib/socket.js'
+import { getSocket, connectSocket } from '../../lib/socket.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -115,8 +115,11 @@ export default function AppLayout() {
 
   useJourneyAutoOpen()
 
-  // Close the mobile menu whenever the user navigates
-  useEffect(() => { setMenuOpen(false) }, [location.pathname])
+  // Close the mobile menu and guide panel whenever the user navigates
+  useEffect(() => {
+    setMenuOpen(false)
+    useGuideStore.getState().close()
+  }, [location.pathname])
 
   // Fetch roles when user signs in; clear on sign-out
   useEffect(() => {
@@ -194,16 +197,27 @@ export default function AppLayout() {
       .catch(() => {})
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hydrate GuideStore on sign-in; open panel if journey is incomplete; reset on sign-out
+  // Hydrate GuideStore on sign-in; open panel if journey is incomplete; reset on sign-out.
+  // Also subscribe the socket to the user's personal room so guide:journeyStep / guide:notification events arrive.
   useEffect(() => {
     if (session?.user?.id) {
       useGuideStore.getState().hydrate().then(() => {
+        // Don't auto-open on pages where the guide would obscure gameplay
+        if (window.location.pathname.startsWith('/play')) return
         const { journeyProgress } = useGuideStore.getState()
         const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
         if (!dismissedAt && completedSteps.length < 8) {
           useGuideStore.getState().open()
         }
       })
+      // Join the user's personal socket room for real-time guide/journey events
+      getToken().then(token => {
+        if (!token) return
+        const socket = connectSocket(token)
+        function subscribe() { socket.emit('user:subscribe', { authToken: token }) }
+        if (socket.connected) subscribe()
+        else socket.once('connect', subscribe)
+      }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
     }
@@ -227,6 +241,12 @@ export default function AppLayout() {
 
     function onJourneyStep({ completedSteps }) {
       useGuideStore.getState().applyJourneyStep({ completedSteps })
+      // Open the guide to celebrate the completed step — game is already over (won/draw)
+      // so we're not interrupting active play
+      const { status: pvaiStatus } = useGameStore.getState()
+      const { status: pvpStatus } = usePvpStore.getState()
+      const inGame = pvaiStatus === 'playing' || pvpStatus === 'playing'
+      if (!inGame) useGuideStore.getState().open()
     }
     socket.on('guide:journeyStep', onJourneyStep)
 
@@ -386,7 +406,7 @@ export default function AppLayout() {
           <AuthModal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setAuthModalView('sign-in') }} defaultView={authModalView} />
           <SignedIn>
             <GuideOrb />
-            <UserButton afterSignOutUrl="/play" />
+            <UserButton afterSignOutUrl="/play" adminUrl={PLATFORM_ADMIN_URL} />
           </SignedIn>
         </div>
       </header>

@@ -33,6 +33,7 @@ router.get('/preferences', requireAuth, async (req, res, next) => {
         guideSlots:             prefs.guideSlots             ?? [],
         guideNotificationPrefs: prefs.guideNotificationPrefs ?? {},
         journeyProgress:        updated,
+        uiHints:                prefs.uiHints                ?? {},
       })
     }
 
@@ -40,6 +41,7 @@ router.get('/preferences', requireAuth, async (req, res, next) => {
       guideSlots:             prefs.guideSlots             ?? [],
       guideNotificationPrefs: prefs.guideNotificationPrefs ?? {},
       journeyProgress:        progress,
+      uiHints:                prefs.uiHints                ?? {},
     })
   } catch (err) {
     next(err)
@@ -54,7 +56,7 @@ router.patch('/preferences', requireAuth, async (req, res, next) => {
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
 
-    const { guideSlots, guideNotificationPrefs, journeyProgress } = req.body
+    const { guideSlots, guideNotificationPrefs, journeyProgress, uiHints } = req.body
 
     if (guideSlots !== undefined) {
       if (!Array.isArray(guideSlots))    return res.status(400).json({ error: 'guideSlots must be an array' })
@@ -66,6 +68,7 @@ router.patch('/preferences', requireAuth, async (req, res, next) => {
       ...(guideSlots             !== undefined && { guideSlots }),
       ...(guideNotificationPrefs !== undefined && { guideNotificationPrefs }),
       ...(journeyProgress        !== undefined && { journeyProgress }),
+      ...(uiHints                !== undefined && { uiHints }),
     }
 
     await db.user.update({ where: { id: user.id }, data: { preferences: updated } })

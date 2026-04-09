@@ -4,6 +4,7 @@ import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
 import { useGameStore } from '../../store/gameStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
+import { useGuideStore } from '../../store/guideStore.js'
 import { api } from '../../lib/api.js'
 import { loadModel, getLocalMove, isModelCached, evictModel } from '../../lib/mlInference.js'
 
@@ -222,6 +223,15 @@ export default function GameBoard({ roomName }) {
     if (gameRecordedRef.current) return  // already recorded for this round
     gameRecordedRef.current = true
 
+    function advanceJourneyStep3() {
+      const { journeyProgress } = useGuideStore.getState()
+      const steps = journeyProgress?.completedSteps ?? []
+      if (steps.includes(3)) return
+      const updated = [...steps, 3]
+      useGuideStore.getState().applyJourneyStep({ completedSteps: updated })
+      useGuideStore.getState().open()
+    }
+
     async function recordGame() {
       const token = await getToken()
       if (!token) return
@@ -243,7 +253,7 @@ export default function GameBoard({ roomName }) {
           totalMoves,
           durationMs,
           startedAt,
-        }, token).catch(() => {})
+        }, token).then(() => advanceJourneyStep3()).catch(() => {})
 
         if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
           api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
@@ -261,7 +271,7 @@ export default function GameBoard({ roomName }) {
           totalMoves,
           durationMs,
           startedAt,
-        }, token).catch(() => {})
+        }, token).then(() => advanceJourneyStep3()).catch(() => {})
 
         if (aiImplementation === 'ml' && mlModelId && isSignedIn && user?.id) {
           api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
