@@ -59,4 +59,8 @@ export const tournamentApi = {
   recurringRegister:            (templateId, token) => request('POST',   `/api/recurring/${templateId}/register`, {}, token),
   recurringWithdraw:            (templateId, token) => request('DELETE', `/api/recurring/${templateId}/register`, undefined, token),
   listRecurringRegistrations:   (templateId, token) => request('GET',    `/api/recurring/${templateId}/registrations`, undefined, token),
+
+  getBotMatchConfig:    (token)       => request('GET',   '/api/bot-matches/config', undefined, token),
+  updateBotMatchConfig: (data, token) => request('PATCH', '/api/bot-matches/config', data, token),
+  getBotMatchStatus:    (token)       => request('GET',   '/api/bot-matches/status', undefined, token),
 }

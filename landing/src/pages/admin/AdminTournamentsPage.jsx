@@ -721,7 +721,11 @@ export default function AdminTournamentsPage() {
 
   useEffect(() => { if (token) load(page) }, [token, page, load])
 
-  if (isPending) return null
+  if (isPending) return (
+    <div className="flex items-center justify-center py-24">
+      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--color-slate-400)', borderTopColor: 'transparent' }} />
+    </div>
+  )
   if (!isAdmin) return <Navigate to="/" replace />
 
   async function performAction(action, tournament, label) {

@@ -2,9 +2,10 @@ import React from 'react'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useIsInGame } from '../../lib/useIsInGame.js'
 
-const RING_R = 15
-const RING_C = RING_R + 3          // cx/cy — centre of SVG viewBox
-const CIRCUMFERENCE = 2 * Math.PI * RING_R  // ≈ 94.2
+const BTN   = 44                   // button diameter (px)
+const RING_R = 19                  // radius — leaves ~3px margin for 2.5px stroke
+const RING_C = BTN / 2             // cx/cy = 22 (true centre of 44×44)
+const CIRCUMFERENCE = 2 * Math.PI * RING_R
 
 /**
  * GuideOrb — circular nav button with SVG journey-progress ring.
@@ -26,8 +27,8 @@ export default function GuideOrb() {
 
   const urgent   = hasUrgent || isInGame
   const orbStyle = urgent
-    ? { background: 'linear-gradient(135deg, var(--color-amber-500), var(--color-amber-700))' }
-    : { background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))' }
+    ? { background: 'linear-gradient(135deg, var(--color-amber-500), var(--color-amber-700))', boxShadow: '0 0 0 2px rgba(212,137,30,0.4)' }
+    : { background: 'linear-gradient(135deg, #5B82B8, #3A5E8E)', boxShadow: '0 0 0 2px rgba(255,255,255,0.15)' }
 
   return (
     <div className="relative" style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -47,9 +48,9 @@ export default function GuideOrb() {
       >
         {/* SVG progress ring */}
         <svg
-          width={RING_C * 2}
-          height={RING_C * 2}
-          viewBox={`0 0 ${RING_C * 2} ${RING_C * 2}`}
+          width={BTN}
+          height={BTN}
+          viewBox={`0 0 ${BTN} ${BTN}`}
           className="absolute inset-0"
           aria-hidden="true"
           style={{ transform: 'rotate(-90deg)' }}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
 import { api } from '../../lib/api.js'
@@ -12,8 +12,8 @@ const STEPS = [
   { index: 3, title: 'Explore AI Training',      cta: 'Open Gym Guide',     href: '/gym/guide'                      },
   { index: 4, title: 'Create your first bot',    cta: 'Create a bot',       href: '/bots'                           },
   { index: 5, title: 'Train your bot',           cta: 'Start training',     href: '/gym?action=start-training'      },
-  { index: 6, title: 'Enter a tournament',       cta: 'Browse tournaments', href: '/tournaments'                    },
-  { index: 7, title: 'Play a tournament match',  cta: 'Check tournaments',  href: '/tournaments'                    },
+  { index: 6, title: 'Enter a tournament',       cta: 'Browse tournaments', href: '/tournaments', external: true },
+  { index: 7, title: 'Play a tournament match',  cta: 'Check tournaments',  href: '/tournaments', external: true },
 ]
 
 const TOTAL = 7
@@ -109,17 +109,28 @@ function DismissConfirm({ onCancel, onConfirm }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function JourneyCard() {
-  const { journeyProgress, dismissJourney, close } = useGuideStore()
+  const { journeyProgress, dismissJourney, close, applyJourneyStep } = useGuideStore()
   const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-  const [expanded, setExpanded]       = useState(false)
+  const [expanded, setExpanded]       = useState(true)
   const [confirming, setConfirming]   = useState(false)
+
+  // Step 1 "Welcome" is passive — auto-complete it on first render
+  useEffect(() => {
+    if (dismissedAt || completedSteps.includes(1)) return
+    const next = [...completedSteps, 1]
+    applyJourneyStep({ completedSteps: next })
+    getToken().then(token => {
+      if (token) api.guide.patchPreferences({ journeyProgress: { completedSteps: next, dismissedAt: null } }, token).catch(() => {})
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Don't render when dismissed
   if (dismissedAt) return null
 
   const completed      = completedSteps.length
   const isComplete     = completed >= TOTAL
-  const nextStep       = STEPS.find(s => !completedSteps.includes(s.index)) ?? null
+  // Skip steps with no action (e.g. step 1 "Welcome") for the Next/CTA display
+  const nextStep       = STEPS.find(s => !completedSteps.includes(s.index) && s.href) ?? null
 
   function handleDismissConfirm() {
     setConfirming(false)
@@ -202,10 +213,10 @@ export default function JourneyCard() {
 
         {/* Title + step count */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--guide-text, #E8EDF6)', lineHeight: 1.3 }}>
+          <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>
             Your Journey
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-amber-400)', marginTop: '0.125rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-amber-700)', marginTop: '0.125rem' }}>
             {completed}/{TOTAL} steps completed
           </div>
         </div>
@@ -223,26 +234,50 @@ export default function JourneyCard() {
 
       {/* Next step */}
       {nextStep && (
-        <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--guide-text-2, #9AA3BA)' }}>
-          Next: <strong style={{ color: 'var(--color-amber-300)' }}>{nextStep.title}</strong>
+        <div style={{
+          padding: '0.375rem 0.75rem',
+          fontSize: '0.75rem',
+          color: 'var(--text-secondary)',
+          margin: '0.375rem 0.75rem 0',
+          borderRadius: 'var(--radius-sm, 6px)',
+          background: 'rgba(212,137,30,0.1)',
+          border: '1px solid rgba(212,137,30,0.3)',
+          boxShadow: '0 0 8px 1px rgba(212,137,30,0.25)',
+        }}>
+          Next: <strong style={{ color: 'var(--color-amber-700)' }}>{nextStep.title}</strong>
         </div>
       )}
 
       {/* CTA button */}
       {nextStep?.href && (
         <div style={{ margin: '0 0.75rem 0.75rem' }}>
-          <Link
-            to={nextStep.href}
-            onClick={close}
-            style={{
-              display: 'block', width: '100%', textAlign: 'center',
-              padding: '0.4375rem', borderRadius: '0.4375rem',
-              background: 'var(--color-amber-500)', color: 'white',
-              fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none',
-            }}
-          >
-            {nextStep.cta}
-          </Link>
+          {nextStep.external ? (
+            <a
+              href={`${import.meta.env.VITE_PLATFORM_URL ?? 'https://aiarena.callidity.com'}${nextStep.href}`}
+              onClick={close}
+              style={{
+                display: 'block', width: '100%', textAlign: 'center',
+                padding: '0.4375rem', borderRadius: '0.4375rem',
+                background: 'var(--color-amber-500)', color: 'white',
+                fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none',
+              }}
+            >
+              {nextStep.cta}
+            </a>
+          ) : (
+            <Link
+              to={nextStep.href}
+              onClick={close}
+              style={{
+                display: 'block', width: '100%', textAlign: 'center',
+                padding: '0.4375rem', borderRadius: '0.4375rem',
+                background: 'var(--color-amber-500)', color: 'white',
+                fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none',
+              }}
+            >
+              {nextStep.cta}
+            </Link>
+          )}
         </div>
       )}
 
@@ -254,14 +289,14 @@ export default function JourneyCard() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0.5rem 0.75rem',
           borderTop: '1px solid rgba(212,137,30,0.15)',
-          fontSize: '0.75rem', color: 'var(--guide-text-muted, #5A6478)',
+          fontSize: '0.8125rem', color: 'var(--guide-text-muted, #5A6478)',
           cursor: 'pointer', background: 'none',
           border: 'none',
           width: '100%', fontFamily: 'inherit',
         }}
       >
         <span>{expanded ? 'Hide steps' : 'Show all steps'}</span>
-        <span style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>▾</span>
+        <span style={{ fontSize: '1.75rem', transform: expanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>▾</span>
       </button>
 
       {/* Expanded step list */}
@@ -283,8 +318,8 @@ export default function JourneyCard() {
                   width: 20, height: 20, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '0.625rem', fontWeight: 800, flexShrink: 0, marginTop: '0.0625rem',
-                  background: done ? 'rgba(36,181,135,0.2)' : current ? 'rgba(212,137,30,0.2)' : 'rgba(255,255,255,0.05)',
-                  color: done ? 'var(--color-teal-500)' : current ? 'var(--color-amber-500)' : 'var(--guide-text-muted, #5A6478)',
+                  background: done ? 'var(--color-teal-500)' : current ? 'var(--color-amber-500)' : 'rgba(255,255,255,0.05)',
+                  color: done || current ? 'white' : 'var(--guide-text-muted, #5A6478)',
                 }}>
                   {done ? '✓' : step.index}
                 </div>
@@ -293,27 +328,41 @@ export default function JourneyCard() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.3,
-                    color: done ? 'var(--guide-text-muted, #5A6478)'
-                         : current ? 'var(--guide-text, #E8EDF6)'
-                         : 'var(--guide-text-muted, #5A6478)',
+                    color: current ? 'var(--text-primary)' : 'var(--text-secondary)',
                     textDecoration: done ? 'line-through' : 'none',
                   }}>
                     {step.title}
                   </div>
                   {current && step.href && (
-                    <Link
-                      to={step.href}
-                      onClick={close}
-                      style={{
-                        display: 'inline-block', marginTop: '0.25rem',
-                        padding: '0.25rem 0.5rem',
-                        background: 'var(--color-amber-500)', color: 'white',
-                        fontSize: '0.6875rem', fontWeight: 700, borderRadius: '0.3rem',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      {step.cta}
-                    </Link>
+                    step.external ? (
+                      <a
+                        href={`${import.meta.env.VITE_PLATFORM_URL ?? 'https://aiarena.callidity.com'}${step.href}`}
+                        onClick={close}
+                        style={{
+                          display: 'inline-block', marginTop: '0.25rem',
+                          padding: '0.25rem 0.5rem',
+                          background: 'var(--color-amber-500)', color: 'white',
+                          fontSize: '0.6875rem', fontWeight: 700, borderRadius: '0.3rem',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        {step.cta}
+                      </a>
+                    ) : (
+                      <Link
+                        to={step.href}
+                        onClick={close}
+                        style={{
+                          display: 'inline-block', marginTop: '0.25rem',
+                          padding: '0.25rem 0.5rem',
+                          background: 'var(--color-amber-500)', color: 'white',
+                          fontSize: '0.6875rem', fontWeight: 700, borderRadius: '0.3rem',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        {step.cta}
+                      </Link>
+                    )
                   )}
                 </div>
               </div>

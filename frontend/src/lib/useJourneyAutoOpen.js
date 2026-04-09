@@ -13,8 +13,6 @@ const STEP_ROUTES = {
   3: '/gym/guide',
   4: '/bots',
   5: '/gym',
-  6: '/tournaments',
-  7: '/tournaments',
 }
 
 /**

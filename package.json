@@ -6,14 +6,17 @@
     "frontend",
     "backend",
     "landing",
+    "tournament",
     "e2e",
     "packages/*"
   ],
   "scripts": {
     "dev:all": "concurrently \"npm run dev --workspace=frontend\" \"npm run dev --workspace=backend\"",
+    "dev:tournament": "npm run dev --workspace=tournament",
     "test": "npm run test --workspace=frontend --workspace=backend",
     "test:frontend": "npm run test --workspace=frontend",
     "test:backend": "npm run test --workspace=backend",
+    "test:tournament": "npm run test --workspace=tournament",
     "test:e2e": "npm run test --workspace=e2e",
     "prepare": "husky"
   },

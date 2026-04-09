@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const BACKEND_URL     = process.env.BACKEND_URL     || 'http://localhost:3000'
 const TOURNAMENT_URL  = process.env.TOURNAMENT_URL  || 'http://localhost:3001'
@@ -11,6 +14,17 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.js',
     exclude: ['**/.claude/**', '**/node_modules/**'],
+  },
+  resolve: {
+    alias: {
+      // Direct path so Docker can resolve this without the workspace symlink.
+      // Host:   __dirname = .../landing  →  ../packages/xo/src/index.js  ✓
+      // Docker: __dirname = /app          →  /packages/xo/src/index.js    ✓ (see docker-compose mount)
+      '@xo-arena/xo': resolve(__dirname, '../packages/xo/src/index.js'),
+    },
+    // Force packages/xo's imports to resolve from the project root's node_modules.
+    // Without this, Node resolution from /packages/xo/ can't find /app/node_modules/.
+    dedupe: ['react', 'react-dom', 'zustand'],
   },
   plugins: [
     react({ jsxRuntime: 'automatic' }),
@@ -28,6 +42,15 @@ export default defineConfig({
   },
   server: {
     host: true,
+    port: 5174,
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
+    fs: {
+      // Allow serving files from parent directory so /packages/xo can be served.
+      allow: ['..'],
+    },
     proxy: {
       // Tournament service endpoints
       '/api/tournaments':    { target: TOURNAMENT_URL, changeOrigin: true },

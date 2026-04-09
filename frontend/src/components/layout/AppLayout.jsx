@@ -30,14 +30,12 @@ const NAV_LINKS = [
   { to: '/play', label: 'Play' },
   { to: '/gym', label: 'Gym' },
   { to: '/puzzles', label: 'Puzzles' },
-  { to: '/tournaments', label: 'Tournaments' },
   { to: '/leaderboard', label: 'Rankings', desktopOnly: true },
 ]
 
 const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
   { to: '/gym', label: 'Gym', icon: '⚡' },
-  { to: '/tournaments', label: 'Tourney', icon: '⊕' },
   { to: '/leaderboard', label: 'Ranks', icon: '★' },
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
@@ -46,7 +44,6 @@ const MENU_LINKS = [
   { to: '/play',        label: 'Play',         icon: '⊞' },
   { to: '/gym',         label: 'Gym',          icon: '⚡' },
   { to: '/puzzles',     label: 'Puzzles',       icon: '◈' },
-  { to: '/tournaments', label: 'Tournaments',   icon: '⊕' },
   { to: '/leaderboard', label: 'Rankings',      icon: '★' },
   { to: '/stats',       label: 'Stats',         icon: '◎' },
   { to: '/profile',     label: 'Profile',       icon: '◉' },
@@ -55,7 +52,8 @@ const MENU_LINKS = [
   { to: '/settings',    label: 'Settings',      icon: '⚙' },
 ]
 
-const PLATFORM_ADMIN_URL = 'https://aiarena.callidity.com/admin'
+const PLATFORM_URL       = import.meta.env.VITE_PLATFORM_URL ?? 'https://aiarena.callidity.com'
+const PLATFORM_ADMIN_URL = `${PLATFORM_URL}/admin`
 
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
 const PREFETCH_MAP = {
@@ -330,23 +328,6 @@ export default function AppLayout() {
             About
           </NavLink>
 
-          {/* Admin — single link to unified platform admin */}
-          {isAdmin && (
-            <>
-              <span className="w-px h-4 mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
-              <a
-                href={PLATFORM_ADMIN_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium px-2 py-1 rounded-md transition-colors"
-                style={{ color: 'var(--color-amber-600)' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--color-amber-50)'}
-                onMouseLeave={e => e.currentTarget.style.background = ''}
-              >
-                Admin ↗
-              </a>
-            </>
-          )}
         </nav>
 
         {/* Controls */}
@@ -439,22 +420,6 @@ export default function AppLayout() {
                 </NavLink>
               ))}
 
-              {/* Admin — single external link to unified platform admin */}
-              {isAdmin && (
-                <>
-                  <div className="my-2 h-px mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
-                  <a
-                    href={PLATFORM_ADMIN_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-[var(--color-amber-50)]"
-                    style={{ color: 'var(--color-amber-600)' }}
-                  >
-                    <span className="text-base w-5 text-center leading-none">⚙</span>
-                    Platform Admin ↗
-                  </a>
-                </>
-              )}
             </nav>
           </div>
         </div>

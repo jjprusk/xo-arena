@@ -98,7 +98,7 @@ export default function GuidePanel({ isAdmin = false }) {
               background: editMode ? 'var(--color-blue-50)' : 'none',
             }}
           >
-            {editMode ? 'Done' : '⚙'}
+            {editMode ? 'Done' : <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>⚙</span>}
           </button>
 
           {/* Close */}

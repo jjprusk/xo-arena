@@ -7,7 +7,7 @@ export const SLOT_ACTIONS = [
   // Platform
   { key: 'play',            label: 'Play vs Bot',        icon: '⊞',  href: '/play?action=vs-community-bot', section: 'Platform',  crossSite: false },
   { key: 'find_room',       label: 'Find a Room',        icon: '🔗', href: '/play',                         section: 'Platform',  crossSite: false },
-  { key: 'tournaments',     label: 'Tournaments',        icon: '⊕',  href: '/tournaments',                  section: 'Platform',  crossSite: false },
+  { key: 'tournaments',     label: 'Tournaments',        icon: '⊕',  href: `${import.meta.env.VITE_PLATFORM_URL ?? 'https://aiarena.callidity.com'}/tournaments`, section: 'Platform',  crossSite: true },
   { key: 'rankings',        label: 'Rankings',           icon: '★',  href: '/leaderboard',                  section: 'Platform',  crossSite: false },
   { key: 'profile',         label: 'My Profile',         icon: '◉',  href: '/profile',                      section: 'Platform',  crossSite: false },
   { key: 'stats',           label: 'Stats',              icon: '◎',  href: '/stats',                        section: 'Platform',  crossSite: false },
@@ -26,3 +26,17 @@ export const SLOT_SECTIONS = ['Platform', 'XO Arena', 'Admin']
 export function getActionByKey(key) {
   return SLOT_ACTIONS.find(a => a.key === key) ?? null
 }
+
+/**
+ * Default slots shown during active onboarding (journey not dismissed, no custom slots set).
+ * Each entry maps a slot action key to the journey step it represents.
+ */
+export const JOURNEY_DEFAULT_SLOTS = [
+  { actionKey: null,          stepIndex: 1, label: 'Welcome',     icon: '🎉', href: null },
+  { actionKey: 'play',        stepIndex: 2 },
+  { actionKey: 'gym_guide',   stepIndex: 3 },
+  { actionKey: 'profile',     stepIndex: 4 },
+  { actionKey: 'gym',         stepIndex: 5 },
+  { actionKey: 'tournaments', stepIndex: 6 },
+  { actionKey: 'tournaments', stepIndex: 7 },
+]

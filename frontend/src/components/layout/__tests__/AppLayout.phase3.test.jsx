@@ -274,7 +274,7 @@ describe('AppLayout — Phase 3: FeedbackToast', () => {
     stubFetch(1)
     await act(async () => { render(<AppLayout />) })
     await waitFor(() => expect(screen.getByText(/1 new feedback/i)).toBeDefined())
-    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^dismiss$/i }))
     expect(screen.queryByText(/new feedback/i)).toBeNull()
   })
 })

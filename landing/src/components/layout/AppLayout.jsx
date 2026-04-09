@@ -1,14 +1,18 @@
 import React, { useState } from 'react'
-import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 import { signOut } from '../../lib/auth-client.js'
 import { clearTokenCache } from '../../lib/getToken.js'
 import SignInModal from '../ui/SignInModal.jsx'
 
+const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
+
 export default function AppLayout() {
   const { data: session, isPending } = useOptimisticSession()
   const user = session?.user ?? null
   const navigate = useNavigate()
+  const location = useLocation()
+  const isAdmin = location.pathname.startsWith('/admin')
   const [showSignIn, setShowSignIn] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -111,6 +115,16 @@ export default function AppLayout() {
                   >
                     Settings
                   </Link>
+                  {user?.role === 'admin' && (
+                    <Link
+                      to="/admin"
+                      className="block px-4 py-2 text-sm no-underline hover:bg-[var(--bg-surface-hover)] transition-colors"
+                      style={{ color: 'var(--color-amber-700)' }}
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Admin
+                    </Link>
+                  )}
                   <hr style={{ borderColor: 'var(--border-default)' }} className="my-1" />
                   <button
                     onClick={() => { setMenuOpen(false); handleSignOut() }}
@@ -126,6 +140,48 @@ export default function AppLayout() {
         </div>
       </nav>
 
+      {/* ── Admin sub-nav ────────────────────────────────────── */}
+      {isAdmin && (
+        <nav
+          className="flex items-center gap-1 px-4 overflow-x-auto"
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderBottom: '1px solid var(--border-default)',
+            minHeight: '38px',
+          }}
+        >
+          {[
+            { to: '/admin',             label: 'Dashboard'   },
+            { to: '/admin/users',       label: 'Users'       },
+            { to: '/admin/games',       label: 'Games'       },
+            { to: '/admin/tournaments', label: 'Tournaments' },
+            { to: '/admin/ml-models',   label: 'ML Models'   },
+            { to: '/admin/bots',        label: 'Bots'        },
+            { to: '/admin/feedback',    label: 'Feedback'    },
+            { to: '/admin/logs',        label: 'Logs'        },
+            { to: '/admin/health',      label: 'Health'      },
+          ].map(({ to, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/admin'}
+              className={({ isActive }) =>
+                `px-3 py-2 text-xs font-medium whitespace-nowrap no-underline border-b-2 transition-colors ${
+                  isActive
+                    ? 'border-[var(--color-amber-500)]'
+                    : 'border-transparent hover:border-[var(--border-default)]'
+                }`
+              }
+              style={({ isActive }) => ({
+                color: isActive ? 'var(--color-amber-700)' : 'var(--text-secondary)',
+              })}
+            >
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+      )}
+
       {/* ── Page content ─────────────────────────────────────── */}
       <main className="flex-1">
         <Outlet />
@@ -139,7 +195,7 @@ export default function AppLayout() {
         © 2026 AI Arena · callidity.com
         <span className="mx-2">·</span>
         <a
-          href="https://xo.aiarena.callidity.com"
+          href={XO_URL}
           className="no-underline hover:underline"
           style={{ color: 'var(--text-muted)' }}
         >
@@ -151,7 +207,7 @@ export default function AppLayout() {
 
       {/* Close menu on outside click */}
       {menuOpen && (
-        <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+        <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
       )}
     </div>
   )

@@ -1,5 +1,34 @@
 import React, { useRef, useEffect, useState } from 'react'
 
+export function UserAvatar({ user, size = 'md' }) {
+  const sizeClass = { xs: 'w-5 h-5 text-[9px]', sm: 'w-7 h-7 text-xs', md: 'w-8 h-8 text-xs', lg: 'w-10 h-10 text-sm' }[size] ?? 'w-8 h-8 text-xs'
+  return (
+    <div className={`${sizeClass} rounded-full shrink-0 flex items-center justify-center overflow-hidden font-bold select-none`}
+      style={{ backgroundColor: 'var(--color-blue-50)', border: '1.5px solid var(--color-blue-100)', color: 'var(--color-blue-600)' }}>
+      {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : (user?.displayName?.[0] ?? '?').toUpperCase()}
+    </div>
+  )
+}
+
+export function SearchBar({ value, onChange, placeholder = 'Search…', className = '' }) {
+  return (
+    <div className={`relative ${className}`}>
+      <svg className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-muted)' }}>
+        <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full pl-8 pr-8 py-2 rounded-lg border text-sm focus:outline-none transition-colors"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+      {value && (
+        <button type="button" onClick={() => onChange('')}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full transition-colors hover:bg-[var(--bg-surface-hover)]"
+          style={{ color: 'var(--text-muted)' }} aria-label="Clear search">✕</button>
+      )}
+    </div>
+  )
+}
+
 export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, topOffset = 0, className = '', columns }) {
   const outerRef = useRef(null)
   const [dynamicMax, setDynamicMax] = useState(null)

@@ -2,12 +2,14 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 
+const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
+
 const GAMES = [
   {
     icon: '✕ ○',
     name: 'XO Arena',
     description: 'Tic-tac-toe with ML-driven AI, ELO rankings, live PvP rooms, and tournament play.',
-    href: 'https://xo.aiarena.callidity.com',
+    href: XO_URL,
     badge: 'Play now',
     live: true,
   },
@@ -59,7 +61,7 @@ export default function HomePage() {
               View Tournaments
             </Link>
             {!user && (
-              <a href="https://xo.aiarena.callidity.com" className="btn btn-secondary">
+              <a href={XO_URL} className="btn btn-secondary">
                 Play XO Arena
               </a>
             )}
