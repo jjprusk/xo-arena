@@ -64,6 +64,7 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app
+      - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
       - /app/node_modules
     depends_on:
       - backend

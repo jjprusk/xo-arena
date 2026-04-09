@@ -2,12 +2,23 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'))
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(version),
+  },
+  resolve: {
+    alias: {
+      // Direct path so Docker can resolve this without the workspace symlink.
+      // Host:   __dirname = .../frontend  →  ../packages/xo/src/index.js  ✓
+      // Docker: __dirname = /app          →  /packages/xo/src/index.js    ✓ (see docker-compose mount)
+      '@xo-arena/xo': resolve(__dirname, '../packages/xo/src/index.js'),
+    },
   },
   plugins: [
     react({
