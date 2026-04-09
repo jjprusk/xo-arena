@@ -41,6 +41,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
       REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:5173,http://localhost:5174
     ports:
       - "3000:3000"
     volumes:
@@ -60,6 +61,8 @@ services:
       dockerfile: Dockerfile.dev
     restart: unless-stopped
     # API uses relative URLs via Vite proxy — no VITE_API_URL needed
+    environment:
+      VITE_PLATFORM_URL: http://localhost:5174
     ports:
       - "5173:5173"
     volumes:
@@ -68,6 +71,47 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+
+  landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:3000
+      TOURNAMENT_URL: http://tournament:3001
+      VITE_XO_URL: http://localhost:5173
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./landing:/app
+      - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  tournament:
+    build:
+      context: .
+      dockerfile: tournament/Dockerfile.dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:5174,http://localhost:5173
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./tournament:/app/tournament
+      - ./packages/db:/app/packages/db
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:

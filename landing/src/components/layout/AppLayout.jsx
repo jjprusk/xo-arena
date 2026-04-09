@@ -1,9 +1,15 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 import { signOut } from '../../lib/auth-client.js'
 import { clearTokenCache } from '../../lib/getToken.js'
+import { getSocket, connectSocket, disconnectSocket } from '../../lib/socket.js'
 import SignInModal from '../ui/SignInModal.jsx'
+import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
+import GuideOrb from '../guide/GuideOrb.jsx'
+import GuidePanel from '../guide/GuidePanel.jsx'
+import { useGuideStore } from '../../store/guideStore.js'
+import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
 const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
 
@@ -16,15 +22,88 @@ export default function AppLayout() {
   const [showSignIn, setShowSignIn] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
+  // Guest welcome modal — shown once to non-authenticated first-time visitors
+  const [guestWelcomeOpen, setGuestWelcomeOpen] = useState(false)
+  useEffect(() => {
+    if (isPending) return
+    if (user) return
+    if (localStorage.getItem('aiarena_guest_welcome_seen')) return
+    setGuestWelcomeOpen(true)
+  }, [isPending, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function closeGuestWelcome() {
+    localStorage.setItem('aiarena_guest_welcome_seen', '1')
+    setGuestWelcomeOpen(false)
+  }
+
+  function openSignInFromWelcome() {
+    localStorage.setItem('aiarena_guest_welcome_seen', '1')
+    setGuestWelcomeOpen(false)
+    setShowSignIn(true)
+  }
+
+  useJourneyAutoOpen()
+
+  // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out
+  useEffect(() => {
+    if (session?.user?.id) {
+      getSocket()
+      useGuideStore.getState().hydrate().then(() => {
+        const { journeyProgress } = useGuideStore.getState()
+        const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+        if (!dismissedAt && completedSteps.length < 8) {
+          useGuideStore.getState().open()
+        }
+      })
+    } else {
+      useGuideStore.getState().reset()
+    }
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Socket guide listeners
+  useEffect(() => {
+    const socket = getSocket()
+    function onGuideNotification(notif) {
+      useGuideStore.getState().addNotification(notif)
+      if (notif.type === 'flash' || notif.type === 'match_ready') {
+        if (!useGuideStore.getState().panelOpen) useGuideStore.getState().open()
+      }
+    }
+    function onJourneyStep({ completedSteps }) {
+      useGuideStore.getState().applyJourneyStep({ completedSteps })
+    }
+    socket.on('guide:notification', onGuideNotification)
+    socket.on('guide:journeyStep',  onJourneyStep)
+    return () => {
+      socket.off('guide:notification', onGuideNotification)
+      socket.off('guide:journeyStep',  onJourneyStep)
+    }
+  }, [])
+
   async function handleSignOut() {
     await signOut()
     clearSessionCache()
     clearTokenCache()
+    disconnectSocket()
     navigate('/')
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--bg-page)' }}>
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: 'var(--bg-page)' }}>
+
+      {/* Colosseum background — aiarena platform visual identity */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none select-none"
+        style={{
+          zIndex: 0,
+          opacity: 'var(--photo-opacity)',
+          backgroundImage: 'url(/colosseum-bg.jpg)',
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center 40%',
+        }}
+      />
 
       {/* ── Nav ──────────────────────────────────────────────── */}
       <nav
@@ -67,6 +146,7 @@ export default function AppLayout() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {user && <GuideOrb />}
           {!isPending && !user && (
             <button
               onClick={() => setShowSignIn(true)}
@@ -85,7 +165,7 @@ export default function AppLayout() {
               >
                 <span
                   className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  style={{ backgroundColor: 'var(--color-slate-500)' }}
+                  style={{ backgroundColor: 'var(--color-teal-600)' }}
                 >
                   {(user.name ?? user.email ?? '?')[0].toUpperCase()}
                 </span>
@@ -183,13 +263,14 @@ export default function AppLayout() {
       )}
 
       {/* ── Page content ─────────────────────────────────────── */}
-      <main className="flex-1">
+      <main className="flex-1 relative" style={{ zIndex: 1 }}>
         <Outlet />
       </main>
 
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer
-        className="text-center py-6 text-xs"
+        className="relative text-center py-6 text-xs"
+        style={{ zIndex: 1 }}
         style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}
       >
         © 2026 AI Arena · callidity.com
@@ -203,6 +284,13 @@ export default function AppLayout() {
         </a>
       </footer>
 
+      <GuidePanel isAdmin={user?.role === 'admin'} />
+
+      <GuestWelcomeModal
+        isOpen={guestWelcomeOpen}
+        onClose={closeGuestWelcome}
+        onSignIn={openSignInFromWelcome}
+      />
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
 
       {/* Close menu on outside click */}

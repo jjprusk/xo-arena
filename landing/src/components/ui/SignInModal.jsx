@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { signIn } from '../../lib/auth-client.js'
+import GoogleSignInButton from './GoogleSignInButton.jsx'
+import AppleSignInButton from './AppleSignInButton.jsx'
 
 export default function SignInModal({ onClose }) {
   const [email, setEmail]       = useState('')
@@ -39,6 +41,17 @@ export default function SignInModal({ onClose }) {
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             One account across all games and tournaments.
           </p>
+        </div>
+
+        <div className="space-y-2">
+          <GoogleSignInButton callbackURL="/" />
+          <AppleSignInButton callbackURL="/" />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <hr style={{ flex: 1, borderColor: 'var(--border-default)' }} />
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>or</span>
+          <hr style={{ flex: 1, borderColor: 'var(--border-default)' }} />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">

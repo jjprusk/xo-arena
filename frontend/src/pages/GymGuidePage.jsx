@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
+import { useGuideStore } from '../store/guideStore.js'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -75,10 +76,17 @@ export default function GymGuidePage() {
       .then(setContent)
   }, [])
 
-  // Journey step 4: visiting the AI Training Guide page (fire-and-forget)
+  // Journey step 4: visiting the AI Training Guide page — update store directly so UI reflects completion without waiting for socket
   useEffect(() => {
     getToken().then(token => {
-      if (token) api.guide.triggerStep(4, token).catch(() => {})
+      if (!token) return
+      api.guide.triggerStep(4, token).then(() => {
+        const store = useGuideStore.getState()
+        const current = store.journeyProgress?.completedSteps ?? []
+        if (!current.includes(4)) {
+          store.applyJourneyStep({ completedSteps: [...current, 4] })
+        }
+      }).catch(() => {})
     }).catch(() => {})
   }, [])
 

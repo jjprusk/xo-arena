@@ -194,10 +194,16 @@ export default function AppLayout() {
       .catch(() => {})
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hydrate GuideStore on sign-in; reset on sign-out
+  // Hydrate GuideStore on sign-in; open panel if journey is incomplete; reset on sign-out
   useEffect(() => {
     if (session?.user?.id) {
-      useGuideStore.getState().hydrate()
+      useGuideStore.getState().hydrate().then(() => {
+        const { journeyProgress } = useGuideStore.getState()
+        const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+        if (!dismissedAt && completedSteps.length < 8) {
+          useGuideStore.getState().open()
+        }
+      })
     } else {
       useGuideStore.getState().reset()
     }
@@ -278,22 +284,16 @@ export default function AppLayout() {
         {/* Logo + Getting Started guide button */}
         <div className="flex items-center gap-2">
           <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
-            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="XO Arena">
               <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
-              <text x="2" y="23" fontSize="19" fontWeight="800" fill="white" fontFamily="var(--font-display), system-ui, sans-serif">X</text>
-              <text x="16" y="23" fontSize="19" fontWeight="800" fill="var(--color-teal-500)" fontFamily="var(--font-display), system-ui, sans-serif">O</text>
+              {/* Tic-tac-toe grid (octothorpe) */}
+              <line x1="11" y1="5"  x2="11" y2="27" stroke="white"                    strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="21" y1="5"  x2="21" y2="27" stroke="var(--color-teal-400)"    strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="5"  y1="11" x2="27" y2="11" stroke="white"                    strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="5"  y1="21" x2="27" y2="21" stroke="var(--color-teal-400)"    strokeWidth="2.5" strokeLinecap="round" />
             </svg>
-            <span
-              className="text-xl font-bold tracking-tight"
-              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-blue-600)' }}
-            >
-              XO Arena
-            </span>
           </Link>
           {/* Guide orb — shown to signed-in users */}
-          <SignedIn>
-            <GuideOrb />
-          </SignedIn>
         </div>
 
         {/* Desktop nav links */}
@@ -385,6 +385,7 @@ export default function AppLayout() {
           </SignedOut>
           <AuthModal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setAuthModalView('sign-in') }} defaultView={authModalView} />
           <SignedIn>
+            <GuideOrb />
             <UserButton afterSignOutUrl="/play" />
           </SignedIn>
         </div>

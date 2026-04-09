@@ -4,9 +4,21 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 
 const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
 
+function XOIcon() {
+  return (
+    <svg width="36" height="36" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="XO Arena">
+      <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
+      <line x1="11" y1="5"  x2="11" y2="27" stroke="white"                 strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="21" y1="5"  x2="21" y2="27" stroke="var(--color-teal-400)" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="5"  y1="11" x2="27" y2="11" stroke="white"                 strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="5"  y1="21" x2="27" y2="21" stroke="var(--color-teal-400)" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const GAMES = [
   {
-    icon: '✕ ○',
+    icon: <XOIcon />,
     name: 'XO Arena',
     description: 'Tic-tac-toe with ML-driven AI, ELO rankings, live PvP rooms, and tournament play.',
     href: XO_URL,
@@ -39,7 +51,7 @@ export default function HomePage() {
     <div className="flex flex-col">
 
       {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="colosseum-bg relative px-6 py-20 text-center">
+      <section className="relative px-6 py-20 text-center">
         <div className="relative z-10 max-w-2xl mx-auto animate-fade-up">
           <h1
             className="text-4xl sm:text-5xl font-bold tracking-tight"
@@ -128,7 +140,7 @@ export default function HomePage() {
 function GameCardContent({ game }) {
   return (
     <>
-      <div className="text-2xl">{game.icon}</div>
+      <div className="text-2xl leading-none">{game.icon}</div>
       <p className="text-sm font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
         {game.name}
       </p>

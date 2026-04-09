@@ -34,6 +34,13 @@ export const api = {
     eloHistory: (id) => api.get(`/users/${id}/elo-history`),
   },
 
+  guide: {
+    getPreferences:   (token)       => api.get('/guide/preferences', token),
+    patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),
+    triggerStep:      (step, token) => api.post('/guide/journey/step', { step }, token),
+    restartJourney:   (token)       => api.post('/guide/journey/restart', {}, token),
+  },
+
   bots: {
     list: (params = {}) => {
       const p = new URLSearchParams()
