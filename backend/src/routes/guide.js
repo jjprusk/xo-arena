@@ -89,7 +89,7 @@ router.post('/journey/step', requireAuth, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
 
     const { step } = req.body
-    const CLIENT_TRIGGERABLE = [3]   // only client-side steps
+    const CLIENT_TRIGGERABLE = [2, 4]   // only client-side steps
     if (!CLIENT_TRIGGERABLE.includes(step)) {
       return res.status(400).json({ error: 'Step cannot be triggered client-side' })
     }

@@ -4,20 +4,21 @@
  * Step index  Title
  * ─────────────────────────────────────────────────────────────
  *    1        Welcome (auto-complete on first hydration)
- *    2        Play your first game
- *    3        Explore AI Training Guide (client-side trigger)
- *    4        Create your first bot
- *    5        Train your bot (first training run > 0 episodes)
- *    6        Enter a tournament (first registration)
- *    7        Play in a tournament match
+ *    2        Read the FAQ (client-side trigger on /faq visit)
+ *    3        Play your first game
+ *    4        Explore AI Training Guide (client-side trigger)
+ *    5        Create your first bot
+ *    6        Train your bot (first training run > 0 episodes)
+ *    7        Enter a tournament (first registration)
+ *    8        Play in a tournament match
  *
- * On step 7 completion: +50 TC awarded; guide:notification emitted.
+ * On step 8 completion: +50 TC awarded; guide:notification emitted.
  */
 
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
-const TOTAL_STEPS = 7
+const TOTAL_STEPS = 8
 const JOURNEY_COMPLETE_TC = 50
 
 let _io = null
@@ -83,8 +84,8 @@ export async function completeStep(userId, stepIndex, io) {
 
     logger.info({ userId, stepIndex, completedSteps }, 'Journey step completed')
 
-    // Step 7 completion reward
-    if (stepIndex === 7) {
+    // Step 8 completion reward
+    if (stepIndex === 8) {
       await _handleJourneyComplete(userId, ioRef)
     }
 

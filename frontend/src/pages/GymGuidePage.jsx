@@ -75,10 +75,10 @@ export default function GymGuidePage() {
       .then(setContent)
   }, [])
 
-  // Journey step 3: visiting the AI Training Guide page (fire-and-forget)
+  // Journey step 4: visiting the AI Training Guide page (fire-and-forget)
   useEffect(() => {
     getToken().then(token => {
-      if (token) api.guide.triggerStep(3, token).catch(() => {})
+      if (token) api.guide.triggerStep(4, token).catch(() => {})
     }).catch(() => {})
   }, [])
 

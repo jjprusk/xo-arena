@@ -108,7 +108,7 @@ export function listCommand(program) {
         col('VERIFIED',  8),
         col('IDLE',      7),
         col('SIGNED IN', 9),
-        col('HINTS',     14),
+        col('JOURNEY',   9),
         col('ROLES',     20),
         col('CREATED',   12),
       ].join('  ')
@@ -122,10 +122,12 @@ export function listCommand(program) {
         const created  = u.createdAt.toISOString().slice(0, 10)
         const verified = u.emailVerified == null ? '?' : u.emailVerified ? 'yes' : 'no'
         const prefs    = (u.preferences && typeof u.preferences === 'object') ? u.preferences : {}
-        const hints = [
-          prefs.faqHintSeen  ? 'faq✓'  : 'faq',
-          prefs.playHintSeen ? 'play✓' : 'play',
-        ].join(', ')
+        const progress = prefs.journeyProgress
+        const journey  = progress
+          ? Array.from({ length: 8 }, (_, i) =>
+              progress.completedSteps?.includes(i + 1) ? '1' : '0'
+            ).join('') + (progress.dismissedAt ? 'D' : '')
+          : '--------'
 
         // Colour the dot based on idle status (only for signed-in users).
         // We can't use col() on the dot because ANSI codes inflate the byte
@@ -148,7 +150,7 @@ export function listCommand(program) {
           col(verified,                   8),
           col(u.online ? formatIdle(u.lastActiveAt) : '—', 7),
           col(u.signedInAt ? formatIdle(u.signedInAt) : '—', 9),
-          col(hints,                     14),
+          col(journey,                    9),
           col(roles,                     20),
           col(created,                   12),
         ].join('  '))

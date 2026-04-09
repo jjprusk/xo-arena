@@ -81,8 +81,8 @@ router.post('/', requireAuth, async (req, res, next) => {
     const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl, ownerBaId: baId })
     cache.invalidate(BOTS_CACHE_KEY)
 
-    // Journey step 4: first bot created (fire-and-forget)
-    completeStep(userId, 4).catch(() => {})
+    // Journey step 5: first bot created (fire-and-forget)
+    completeStep(userId, 5).catch(() => {})
 
     res.status(201).json({ bot })
   } catch (err) {

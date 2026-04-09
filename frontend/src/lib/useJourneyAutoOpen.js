@@ -9,10 +9,11 @@ import { useIsInGame } from './useIsInGame.js'
  * the Guide panel opens automatically (unless the user is mid-game).
  */
 const STEP_ROUTES = {
-  2: '/play',
-  3: '/gym/guide',
-  4: '/bots',
-  5: '/gym',
+  2: '/faq',
+  3: '/play',
+  4: '/gym/guide',
+  5: '/bots',
+  6: '/gym',
 }
 
 /**
@@ -30,7 +31,7 @@ export function useJourneyAutoOpen() {
 
     const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
     if (dismissedAt) return
-    if (completedSteps.length >= 7) return
+    if (completedSteps.length >= 8) return
 
     for (const [stepStr, route] of Object.entries(STEP_ROUTES)) {
       const step = Number(stepStr)

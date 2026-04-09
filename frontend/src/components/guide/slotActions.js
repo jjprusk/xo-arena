@@ -6,6 +6,7 @@
 export const SLOT_ACTIONS = [
   // Platform
   { key: 'play',            label: 'Play vs Bot',        icon: '⊞',  href: '/play?action=vs-community-bot', section: 'Platform',  crossSite: false },
+  { key: 'faq',             label: 'Read the FAQ',       icon: '❓', href: '/faq',                          section: 'Platform',  crossSite: false },
   { key: 'find_room',       label: 'Find a Room',        icon: '🔗', href: '/play',                         section: 'Platform',  crossSite: false },
   { key: 'tournaments',     label: 'Tournaments',        icon: '⊕',  href: `${import.meta.env.VITE_PLATFORM_URL ?? 'https://aiarena.callidity.com'}/tournaments`, section: 'Platform',  crossSite: true },
   { key: 'rankings',        label: 'Rankings',           icon: '★',  href: '/leaderboard',                  section: 'Platform',  crossSite: false },
@@ -33,10 +34,11 @@ export function getActionByKey(key) {
  */
 export const JOURNEY_DEFAULT_SLOTS = [
   { actionKey: null,          stepIndex: 1, label: 'Welcome',     icon: '🎉', href: null },
-  { actionKey: 'play',        stepIndex: 2 },
-  { actionKey: 'gym_guide',   stepIndex: 3 },
-  { actionKey: 'profile',     stepIndex: 4 },
-  { actionKey: 'gym',         stepIndex: 5 },
-  { actionKey: 'tournaments', stepIndex: 6 },
+  { actionKey: 'faq',         stepIndex: 2 },
+  { actionKey: 'play',        stepIndex: 3 },
+  { actionKey: 'gym_guide',   stepIndex: 4 },
+  { actionKey: 'profile',     stepIndex: 5 },
+  { actionKey: 'gym',         stepIndex: 6 },
   { actionKey: 'tournaments', stepIndex: 7 },
+  { actionKey: 'tournaments', stepIndex: 8 },
 ]

@@ -7,6 +7,7 @@ import { api, prefetch } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
 import AuthModal from '../auth/AuthModal.jsx'
+import GuestWelcomeModal from '../auth/GuestWelcomeModal.jsx'
 import UserButton from '../auth/UserButton.jsx'
 import SignedIn from '../auth/SignedIn.jsx'
 import SignedOut from '../auth/SignedOut.jsx'
@@ -79,16 +80,38 @@ function usePrefetchHandler(to) {
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: session } = useOptimisticSession()
+  const { data: session, isPending: sessionPending } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
   const rolesStore = useRolesStore()
   const isSupport = !isAdmin && rolesStore.hasRole('SUPPORT')
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authModalView, setAuthModalView] = useState('sign-in')
   const [menuOpen, setMenuOpen] = useState(false)
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const [accomplishments, setAccomplishments] = useState([])
   const prevUserId = useRef(null)
+
+  // Guest welcome modal — shown once to non-authenticated first-time visitors
+  const [guestWelcomeOpen, setGuestWelcomeOpen] = useState(false)
+  useEffect(() => {
+    if (sessionPending) return
+    if (session?.user) return
+    if (localStorage.getItem('xo_guest_welcome_seen')) return
+    setGuestWelcomeOpen(true)
+  }, [sessionPending, session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function closeGuestWelcome() {
+    localStorage.setItem('xo_guest_welcome_seen', '1')
+    setGuestWelcomeOpen(false)
+  }
+
+  function openRegisterFromWelcome() {
+    localStorage.setItem('xo_guest_welcome_seen', '1')
+    setGuestWelcomeOpen(false)
+    setAuthModalView('sign-up')
+    setAuthModalOpen(true)
+  }
 
   useJourneyAutoOpen()
 
@@ -360,7 +383,7 @@ export default function AppLayout() {
               Sign in
             </button>
           </SignedOut>
-          <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+          <AuthModal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setAuthModalView('sign-in') }} defaultView={authModalView} />
           <SignedIn>
             <UserButton afterSignOutUrl="/play" />
           </SignedIn>
@@ -464,6 +487,11 @@ export default function AppLayout() {
         />
       )}
 
+      <GuestWelcomeModal
+        isOpen={guestWelcomeOpen}
+        onClose={closeGuestWelcome}
+        onRegister={openRegisterFromWelcome}
+      />
       <NamePromptModal
         isOpen={!!namePrompt}
         userId={namePrompt?.userId}

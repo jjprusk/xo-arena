@@ -849,7 +849,7 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
       .then(async model => {
         if (!model?.createdBy) return
         const user = await db.user.findUnique({ where: { betterAuthId: model.createdBy }, select: { id: true } })
-        if (user) completeJourneyStep(user.id, 5).catch(() => {})
+        if (user) completeJourneyStep(user.id, 6).catch(() => {})
       })
       .catch(() => {})
   }

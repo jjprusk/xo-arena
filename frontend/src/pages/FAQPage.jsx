@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
+import { api } from '../lib/api.js'
+import { getToken } from '../lib/getToken.js'
 
 function slugify(text) {
   return String(text)
@@ -70,6 +72,13 @@ export default function FAQPage() {
     fetch('/faq.md', { cache: 'no-store' })
       .then(r => r.text())
       .then(setContent)
+  }, [])
+
+  // Journey step 2: visiting the FAQ page (fire-and-forget)
+  useEffect(() => {
+    getToken().then(token => {
+      if (token) api.guide.triggerStep(2, token).catch(() => {})
+    }).catch(() => {})
   }, [])
 
   // Parse markdown into preamble (H1) + sections (H2 blocks)

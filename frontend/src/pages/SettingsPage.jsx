@@ -33,7 +33,7 @@ export default function SettingsPage() {
     }).catch(() => {})
   }, [session?.user])
   const journeyDismissed = !!journeyProgress?.dismissedAt
-  const journeyComplete  = (journeyProgress?.completedSteps?.length ?? 0) >= 7
+  const journeyComplete  = (journeyProgress?.completedSteps?.length ?? 0) >= 8
   const location = useLocation()
   const fromProfile = location.state?.from === '/profile'
 

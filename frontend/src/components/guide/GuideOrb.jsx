@@ -22,7 +22,7 @@ export default function GuideOrb() {
   const hasUrgent  = badgeCount > 0
 
   const completedSteps = journeyProgress?.completedSteps?.length ?? 0
-  const totalSteps     = 7
+  const totalSteps     = 8
   const dashOffset     = CIRCUMFERENCE * (1 - completedSteps / totalSteps)
 
   const urgent   = hasUrgent || isInGame

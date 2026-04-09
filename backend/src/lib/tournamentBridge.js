@@ -112,8 +112,8 @@ export async function handleEvent(io, channel, data) {
       for (const userId of userIds) {
         io.to(`user:${userId}`).emit('tournament:match:ready', { tournamentId, matchId, bestOfN: bestOfN ?? 1 })
         await queueNotification(userId, 'tournament_match_ready', { tournamentId, matchId })
-        // Journey step 6: first tournament registration detected at match-ready time (fire-and-forget)
-        completeStep(userId, 6, io).catch(() => {})
+        // Journey step 7: first tournament registration detected at match-ready time (fire-and-forget)
+        completeStep(userId, 7, io).catch(() => {})
         // Push into Guide notification stack
         io.to(`user:${userId}`).emit('guide:notification', {
           id:        `tmr-${matchId}-${userId}`,
@@ -151,8 +151,8 @@ export async function handleEvent(io, channel, data) {
           if (pref === 'AS_PLAYED') {
             io.to(`user:${userId}`).emit('tournament:match:result', { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames })
           }
-          // Journey step 7: first tournament match played (fire-and-forget)
-          completeStep(userId, 7, io).catch(() => {})
+          // Journey step 8: first tournament match played (fire-and-forget)
+          completeStep(userId, 8, io).catch(() => {})
         }
       } catch (err) {
         logger.error({ err, matchId }, 'Failed to deliver match result')
