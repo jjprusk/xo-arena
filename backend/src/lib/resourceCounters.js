@@ -136,8 +136,15 @@ function checkForLeaks() {
 }
 
 async function notifyAdmins(key) {
+  // baRole lives in BetterAuth's user table — look up admin baUsers first,
+  // then find the corresponding domain User rows by betterAuthId.
+  const baAdmins = await db.baUser.findMany({
+    where: { role: 'admin' },
+    select: { id: true },
+  })
+  const baAdminIds = baAdmins.map(b => b.id)
   const admins = await db.user.findMany({
-    where: { baRole: 'admin' },
+    where: { betterAuthId: { in: baAdminIds } },
     select: { id: true },
   })
 
