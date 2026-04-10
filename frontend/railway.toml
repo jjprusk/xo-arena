@@ -1,4 +1,5 @@
 [build]
+builder = "DOCKERFILE"
 dockerfilePath = "frontend/Dockerfile"
 
 [deploy]
