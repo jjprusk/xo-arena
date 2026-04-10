@@ -1,16 +1,15 @@
 FROM node:22-slim AS builder
-WORKDIR /app/landing
+WORKDIR /app
 
-# Install deps (no workspace packages in package.json — xo resolved via Vite alias)
 COPY package.json ./
-RUN npm install --no-package-lock --ignore-scripts
+COPY landing/package.json ./landing/
+RUN npm install --workspace=landing --no-package-lock --ignore-scripts
 
-# Copy vendored xo to /app/packages/xo so Vite alias '../packages/xo' resolves correctly
-COPY packages/xo/ /app/packages/xo/
+# Shared package — Vite alias resolves '../packages/xo' to /app/packages/xo
+COPY packages/xo/ ./packages/xo/
+COPY landing/ ./landing/
 
-# Copy landing source
-COPY . .
-
+WORKDIR /app/landing
 RUN npm run build
 
 FROM node:22-slim

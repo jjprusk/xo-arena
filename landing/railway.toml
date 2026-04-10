@@ -1,0 +1,7 @@
+[build]
+dockerfilePath = "landing/Dockerfile"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 30
+watchPatterns = ["landing/**", "packages/xo/**"]
