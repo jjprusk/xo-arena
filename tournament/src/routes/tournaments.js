@@ -366,9 +366,24 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
 // POST /api/tournaments/:id/register
 router.post('/:id/register', requireAuth, async (req, res, next) => {
   try {
-    const { resultNotifPref } = req.body
+    const { resultNotifPref, participantUserId } = req.body
     const tournamentId = req.params.id
-    const userId = req.auth.dbUserId
+    const requestingUserId = req.auth.dbUserId
+
+    // participantUserId lets the owner register a bot they own.
+    // If not provided, register the requesting user themselves.
+    let userId = requestingUserId
+    if (participantUserId && participantUserId !== requestingUserId) {
+      // Verify the requesting user owns this bot
+      const bot = await db.user.findUnique({
+        where: { id: participantUserId },
+        select: { id: true, isBot: true, botOwnerId: true },
+      })
+      if (!bot || !bot.isBot || bot.botOwnerId !== requestingUserId) {
+        return res.status(403).json({ error: 'You do not own this bot' })
+      }
+      userId = participantUserId
+    }
 
     const tournament = await db.tournament.findUnique({ where: { id: tournamentId } })
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' })

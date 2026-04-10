@@ -9,6 +9,7 @@ import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
+import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
 const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
@@ -81,6 +82,7 @@ export default function AppLayout() {
     const socket = getSocket()
     function onGuideNotification(notif) {
       useGuideStore.getState().addNotification(notif)
+      useNotifSoundStore.getState().play()
       if (notif.type === 'flash' || notif.type === 'match_ready') {
         if (!useGuideStore.getState().panelOpen) useGuideStore.getState().open()
       }

@@ -22,6 +22,7 @@ import AccomplishmentPopup from '../AccomplishmentPopup.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
+import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { getSocket, connectSocket } from '../../lib/socket.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
@@ -228,6 +229,7 @@ export default function AppLayout() {
     const socket = getSocket()
     function onGuideNotification(notif) {
       useGuideStore.getState().addNotification(notif)
+      useNotifSoundStore.getState().play()
       // Auto-open panel for urgent types if not mid-game
       if (notif.type === 'flash' || notif.type === 'match_ready') {
         const { panelOpen } = useGuideStore.getState()

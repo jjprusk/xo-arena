@@ -6,7 +6,7 @@ import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { ListTable, ListTh, ListTd, ListTr } from '../../components/ui/ListTable.jsx'
 import TournamentForm from '../../components/tournament/TournamentForm.jsx'
 
-const LIMIT = 25
+const LIMIT = 4
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
@@ -713,7 +713,13 @@ export default function AdminTournamentsPage() {
     try {
       const params = filter ? { status: filter } : {}
       const data = await tournamentApi.list(params, token)
-      const list = Array.isArray(data) ? data : (data.tournaments ?? [])
+      let list = Array.isArray(data) ? data : (data.tournaments ?? [])
+      // Hide cancelled-before-publish drafts unless explicitly viewing Cancelled
+      if (filter !== 'CANCELLED') {
+        list = list.filter(t =>
+          t.status !== 'CANCELLED' || (t._count?.participants ?? 0) > 0
+        )
+      }
       setTotal(list.length)
       const start = (p - 1) * LIMIT
       setTournaments(list.slice(start, start + LIMIT))
@@ -781,7 +787,7 @@ export default function AdminTournamentsPage() {
         {error && <ErrorMsg>{error}</ErrorMsg>}
 
         {!loading && (
-          <ListTable maxHeight="65vh">
+          <ListTable fitViewport bottomPadding={160}>
             <thead>
               <tr>
                 <ListTh>Name</ListTh>
@@ -833,9 +839,11 @@ export default function AdminTournamentsPage() {
                     </ListTd>
                     <ListTd align="right">
                       <div className="flex items-center gap-1 justify-end flex-wrap">
-                        <Link to={`/tournaments/${t.id}`}
-                          className="text-xs px-2 py-1 rounded border no-underline transition-colors hover:bg-[var(--bg-surface-hover)]"
-                          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>View</Link>
+                        {t.status !== 'DRAFT' && (
+                          <Link to={`/tournaments/${t.id}`}
+                            className="text-xs px-2 py-1 rounded border no-underline transition-colors hover:bg-[var(--bg-surface-hover)]"
+                            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>View</Link>
+                        )}
                         {canEdit && (
                           <button onClick={() => setModal({ tournament: t })}
                             className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"

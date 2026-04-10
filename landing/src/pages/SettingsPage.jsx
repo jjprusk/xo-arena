@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
+import { useNotifSoundStore, NOTIF_SOUND_TYPES } from '../store/notifSoundStore.js'
 
 export default function SettingsPage() {
   const { data: session, isPending } = useOptimisticSession()
   const user = session?.user ?? null
+
+  const { enabled: notifSoundEnabled, type: notifSoundType, setEnabled: setNotifSoundEnabled, setType: setNotifSoundType, play: previewSound } = useNotifSoundStore()
 
   const [tournamentNotifPref, setTournamentNotifPref] = useState(null)
   const [savingNotifPref, setSavingNotifPref]         = useState(false)
@@ -37,6 +40,65 @@ export default function SettingsPage() {
           Settings
         </h1>
       </div>
+
+      {/* Notification sounds — client-side preference, always shown when signed in */}
+      {user && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            Notifications
+          </h2>
+          <div
+            className="rounded-xl border p-5 space-y-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            {/* Sound on/off toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium" style={{ color: 'var(--text-primary)' }}>Notification sound</div>
+                <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                  Play a sound when a new guide message arrives.
+                </div>
+              </div>
+              <button
+                onClick={() => setNotifSoundEnabled(!notifSoundEnabled)}
+                className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${
+                  notifSoundEnabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-gray-300)]'
+                }`}
+                aria-label={notifSoundEnabled ? 'Disable notification sound' : 'Enable notification sound'}
+              >
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${notifSoundEnabled ? 'left-7' : 'left-1'}`} />
+              </button>
+            </div>
+
+            {/* Sound type picker */}
+            {notifSoundEnabled && (
+              <>
+                <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+                <div>
+                  <div className="font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Sound type</div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {NOTIF_SOUND_TYPES.map(({ id, label, description }) => (
+                      <button
+                        key={id}
+                        onClick={() => { setNotifSoundType(id); previewSound() }}
+                        className={`flex-1 text-left p-3 rounded-xl border-2 transition-all active:scale-[0.98] ${
+                          notifSoundType === id
+                            ? 'border-[var(--color-primary)] bg-[var(--color-slate-50)]'
+                            : 'border-[var(--border-default)] bg-[var(--bg-base)] hover:border-[var(--color-gray-400)]'
+                        }`}
+                      >
+                        <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</div>
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{description}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Clicking a sound type plays a preview.</p>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {user && tournamentNotifPref !== null && (
         <section className="space-y-3">

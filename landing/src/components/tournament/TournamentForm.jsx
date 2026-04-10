@@ -6,16 +6,16 @@ const FIELD_STYLE = {
   color: 'var(--text-primary)',
 }
 
-function Field({ label, hint, children, required }) {
+function Field({ label, hint, children, required, as: As = 'label' }) {
   return (
-    <label className="flex flex-col gap-1">
+    <As className="flex flex-col gap-1">
       <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
         {label}
         {required && <span className="ml-0.5" style={{ color: 'var(--color-red-500)' }}>*</span>}
       </span>
       {children}
       {hint && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{hint}</span>}
-    </label>
+    </As>
   )
 }
 
@@ -281,7 +281,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Start Time" hint="Required before publishing">
+        <Field label="Start Time" hint="Required before publishing" as="div">
           {form.startTime ? (
             <div className="flex flex-col gap-1">
               <DateTimePicker value={form.startTime} onChange={v => set('startTime', v)} />
@@ -297,7 +297,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
           )}
           {errors.startTime && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.startTime}</span>}
         </Field>
-        <Field label="Registration Opens At" hint="Optional">
+        <Field label="Registration Opens At" hint="Optional" as="div">
           {form.registrationOpenAt ? (
             <div className="flex flex-col gap-1">
               <DateTimePicker value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
@@ -312,7 +312,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
             </button>
           )}
         </Field>
-        <Field label="Registration Closes At" hint="Optional">
+        <Field label="Registration Closes At" hint="Optional" as="div">
           {form.registrationCloseAt ? (
             <div className="flex flex-col gap-1">
               <DateTimePicker value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />

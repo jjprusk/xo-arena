@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
 
 const TYPE_CONFIG = {
@@ -15,15 +16,23 @@ const MAX_VISIBLE = 3
 function NotificationCard({ notif, onDismiss }) {
   const [leaving, setLeaving] = useState(false)
   const cfg = TYPE_CONFIG[notif.type] ?? TYPE_CONFIG.match_ready
+  const navigate = useNavigate()
 
   function handleDismiss() {
     setLeaving(true)
     setTimeout(() => onDismiss(notif.id), 220)
   }
 
+  function handleClick() {
+    if (!notif.href) return
+    handleDismiss()
+    navigate(notif.href)
+  }
+
   return (
     <div
       role="listitem"
+      onClick={notif.href ? handleClick : undefined}
       style={{
         borderLeft: `3px solid ${cfg.color}`,
         backgroundColor: 'var(--bg-surface)',
@@ -36,6 +45,7 @@ function NotificationCard({ notif, onDismiss }) {
         transition: 'opacity 0.2s, transform 0.2s',
         opacity: leaving ? 0 : 1,
         transform: leaving ? 'translateX(16px)' : 'translateX(0)',
+        cursor: notif.href ? 'pointer' : 'default',
       }}
     >
       {/* Type chip */}
@@ -56,11 +66,16 @@ function NotificationCard({ notif, onDismiss }) {
             {notif.body}
           </p>
         )}
+        {notif.href && (
+          <p className="text-[10px] mt-1 font-medium" style={{ color: cfg.color }}>
+            View →
+          </p>
+        )}
       </div>
 
       {/* Dismiss */}
       <button
-        onClick={handleDismiss}
+        onClick={e => { e.stopPropagation(); handleDismiss() }}
         aria-label="Dismiss notification"
         className="shrink-0 text-lg leading-none hover:opacity-60 transition-opacity"
         style={{ color: 'var(--text-muted)', marginTop: -2 }}
@@ -74,21 +89,27 @@ function NotificationCard({ notif, onDismiss }) {
 export default function NotificationStack() {
   const { notifications, dismissNotification } = useGuideStore()
 
-  if (notifications.length === 0) return null
-
   const visible  = notifications.slice(0, MAX_VISIBLE)
   const overflow = notifications.length - MAX_VISIBLE
 
   return (
     <section aria-label="Notifications">
       <div className="flex flex-col gap-2">
-        {visible.map(n => (
-          <NotificationCard key={n.id} notif={n} onDismiss={dismissNotification} />
-        ))}
-        {overflow > 0 && (
-          <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-            +{overflow} more notification{overflow !== 1 ? 's' : ''}
+        {notifications.length === 0 ? (
+          <p className="text-xs text-center py-1" style={{ color: 'var(--text-muted)' }}>
+            — no messages —
           </p>
+        ) : (
+          <>
+            {visible.map(n => (
+              <NotificationCard key={n.id} notif={n} onDismiss={dismissNotification} />
+            ))}
+            {overflow > 0 && (
+              <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                +{overflow} more notification{overflow !== 1 ? 's' : ''}
+              </p>
+            )}
+          </>
         )}
       </div>
     </section>

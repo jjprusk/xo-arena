@@ -79,7 +79,7 @@ export async function handleEvent(io, channel, data) {
         type:  'tournament',
         title: `New Tournament: ${name}`,
         body:  `${formatLabel} · ${modeLabel} — Registration is open!`,
-        href:  '/tournaments',
+        href:  `/tournaments/${tournamentId}`,
         tournamentId,
       })
       logger.info({ tournamentId }, 'Tournament published — notified all connected clients')

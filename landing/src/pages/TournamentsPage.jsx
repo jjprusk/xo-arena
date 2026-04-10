@@ -5,6 +5,17 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
 
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
+
+async function fetchMyBots(token, dbUserId) {
+  const res = await fetch(`${API_BASE}/api/v1/bots?ownerId=${dbUserId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.bots ?? []).filter(b => b.active)
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 const STATUS_META = {
@@ -58,35 +69,50 @@ const NOTIF_PREF_OPTIONS = [
   { value: 'END_OF_TOURNAMENT', label: 'When tournament ends' },
 ]
 
-function RegisterButton({ tournament, token, onSuccess }) {
-  const [step, setStep] = useState('idle')
+function RegisterButton({ tournament, token, dbUserId, onSuccess }) {
+  const [step, setStep]           = useState('idle')   // idle | who | options | busy
+  const [bots, setBots]           = useState([])
+  const [participantId, setParticipantId] = useState('self')  // 'self' or bot db userId
   const [notifPref, setNotifPref] = useState('AS_PLAYED')
-  const [err, setErr] = useState(null)
+  const [err, setErr]             = useState(null)
+
+  const needsBotPicker = tournament.mode === 'BOT_VS_BOT' || tournament.mode === 'MIXED'
+
+  async function openPicker(e) {
+    e.preventDefault(); e.stopPropagation()
+    if (needsBotPicker && bots.length === 0) {
+      const fetched = await fetchMyBots(token, dbUserId).catch(() => [])
+      setBots(fetched)
+      // For BOT_VS_BOT default to first bot if available, otherwise leave as 'self'
+      if (fetched.length > 0 && tournament.mode === 'BOT_VS_BOT') {
+        setParticipantId(fetched[0].id)
+      }
+    }
+    setStep('options')
+  }
 
   async function handleConfirm(e) {
-    e.preventDefault()
-    e.stopPropagation()
-    setStep('busy')
-    setErr(null)
+    e.preventDefault(); e.stopPropagation()
+    setStep('busy'); setErr(null)
     try {
-      await tournamentApi.register(tournament.id, token, { resultNotifPref: notifPref })
+      const body = { resultNotifPref: notifPref }
+      if (participantId !== 'self') body.participantUserId = participantId
+      await tournamentApi.register(tournament.id, token, body)
       onSuccess()
     } catch (error) {
       setErr(error.message || 'Failed')
-      setStep('picking')
+      setStep('options')
     }
   }
 
   if (step === 'idle') {
     return (
-      <div>
-        <button
-          onClick={e => { e.preventDefault(); e.stopPropagation(); setStep('picking') }}
-          className="btn-primary text-xs px-4 py-2 rounded-lg font-semibold text-white transition-all hover:brightness-110"
-        >
-          Register
-        </button>
-      </div>
+      <button
+        onClick={openPicker}
+        className="btn-primary text-xs px-4 py-2 rounded-lg font-semibold text-white transition-all hover:brightness-110"
+      >
+        Register
+      </button>
     )
   }
 
@@ -96,38 +122,62 @@ function RegisterButton({ tournament, token, onSuccess }) {
       style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)' }}
       onClick={e => e.preventDefault()}
     >
+      {/* Who to register */}
+      {needsBotPicker && (
+        <>
+          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Register as:
+          </p>
+          <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
+            {tournament.mode === 'MIXED' && (
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name={`who-${tournament.id}`} value="self"
+                  checked={participantId === 'self'} onChange={() => setParticipantId('self')}
+                  className="accent-[var(--color-primary)]" />
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Myself (human)</span>
+              </label>
+            )}
+            {bots.length === 0 && (
+              <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
+                {tournament.mode === 'BOT_VS_BOT' ? 'You have no active bots.' : 'No active bots.'}
+              </p>
+            )}
+            {bots.map(bot => (
+              <label key={bot.id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name={`who-${tournament.id}`} value={bot.id}
+                  checked={participantId === bot.id} onChange={() => setParticipantId(bot.id)}
+                  className="accent-[var(--color-primary)]" />
+                <span className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>{bot.displayName}</span>
+              </label>
+            ))}
+          </div>
+          <hr style={{ borderColor: 'var(--border-default)' }} />
+        </>
+      )}
+
+      {/* Notification preference */}
       <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
         Notify me:
       </p>
       <div className="flex flex-col gap-1">
         {NOTIF_PREF_OPTIONS.map(opt => (
           <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="radio"
-              name={`notif-${tournament.id}`}
-              value={opt.value}
-              checked={notifPref === opt.value}
-              onChange={() => setNotifPref(opt.value)}
-              className="accent-[var(--color-primary)]"
-            />
+            <input type="radio" name={`notif-${tournament.id}`} value={opt.value}
+              checked={notifPref === opt.value} onChange={() => setNotifPref(opt.value)}
+              className="accent-[var(--color-primary)]" />
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{opt.label}</span>
           </label>
         ))}
       </div>
+
       <div className="flex gap-1.5">
-        <button
-          onClick={handleConfirm}
-          disabled={step === 'busy'}
-          className="btn-primary text-xs px-3 py-1.5 rounded-lg font-semibold text-white flex-1 disabled:opacity-50"
-        >
+        <button onClick={handleConfirm} disabled={step === 'busy' || (tournament.mode === 'BOT_VS_BOT' && participantId === 'self' && bots.length > 0)}
+          className="btn-primary text-xs px-3 py-1.5 rounded-lg font-semibold text-white flex-1 disabled:opacity-50">
           {step === 'busy' ? 'Joining…' : 'Confirm'}
         </button>
-        <button
-          onClick={e => { e.preventDefault(); setStep('idle'); setErr(null) }}
-          disabled={step === 'busy'}
+        <button onClick={e => { e.preventDefault(); setStep('idle'); setErr(null) }} disabled={step === 'busy'}
           className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
-          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-        >
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
           Cancel
         </button>
       </div>
@@ -138,7 +188,7 @@ function RegisterButton({ tournament, token, onSuccess }) {
 
 // ── Tournament card ───────────────────────────────────────────────────────────
 
-function TournamentCard({ tournament, token, onRegistered }) {
+function TournamentCard({ tournament, token, dbUserId, onRegistered }) {
   const participantCount = tournament.participants?.length ?? tournament._count?.participants ?? 0
   const max  = tournament.maxParticipants
   const isOpen = tournament.status === 'REGISTRATION_OPEN'
@@ -190,7 +240,7 @@ function TournamentCard({ tournament, token, onRegistered }) {
 
         {isOpen && token && (
           <div onClick={e => e.preventDefault()}>
-            <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
+            <RegisterButton tournament={tournament} token={token} dbUserId={dbUserId} onSuccess={onRegistered} />
           </div>
         )}
       </div>
@@ -223,6 +273,7 @@ export default function TournamentsPage() {
   const [error, setError]             = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [token, setToken]             = useState(null)
+  const [dbUserId, setDbUserId]       = useState(null)
   const [autoRegisterId, setAutoRegisterId] = useState(
     searchParams.get('action') === 'register' ? searchParams.get('tournamentId') : null
   )
@@ -230,11 +281,25 @@ export default function TournamentsPage() {
   const { lastEvent } = useTournamentSocket()
 
   useEffect(() => {
-    if (session?.user?.id) {
-      getToken().then(setToken).catch(() => {})
-    } else {
-      setToken(null)
-    }
+    if (!session?.user?.id) { setToken(null); setDbUserId(null); return }
+    getToken().then(async t => {
+      setToken(t)
+      // Resolve the DB user ID (different from BetterAuth session user.id)
+      try {
+        const cacheKey = `aiarena_dbuser_${session.user.id}`
+        const cached = sessionStorage.getItem(cacheKey)
+        if (cached) { setDbUserId(JSON.parse(cached).id); return }
+        const res = await fetch(`${API_BASE}/api/v1/users/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        })
+        if (res.ok) {
+          const { user } = await res.json()
+          setDbUserId(user.id)
+          sessionStorage.setItem(cacheKey, JSON.stringify(user))
+        }
+      } catch {}
+    }).catch(() => {})
   }, [session?.user?.id])
 
   const load = useCallback(async (filter) => {
@@ -298,6 +363,7 @@ export default function TournamentsPage() {
               key={t.id}
               tournament={t}
               token={token}
+              dbUserId={dbUserId}
               onRegistered={() => load(statusFilter)}
             />
           ))}

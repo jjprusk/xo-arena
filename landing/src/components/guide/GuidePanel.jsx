@@ -129,14 +129,18 @@ export default function GuidePanel({ isAdmin = false }) {
           </button>
         </div>
 
-        {/* Online strip — fixed between header and scroll body */}
+        {/* Notifications — always visible above who's online */}
+        <div className="shrink-0 px-4 pt-3 pb-2" style={{ borderBottom: '1px solid var(--border-default)' }}>
+          <NotificationStack />
+        </div>
+
+        {/* Online strip — fixed between notifications and scroll body */}
         <OnlineStrip onlineUsers={[]} />
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 p-4">
             <JourneyCard />
-            <NotificationStack />
             <SlotGrid
               editMode={editMode}
               onAddSlot={() => setPickerOpen(true)}
