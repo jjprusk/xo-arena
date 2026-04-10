@@ -1,11 +1,13 @@
 import React, { Suspense, useEffect, useState, useCallback, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import { evictModel, isModelCached } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
+import { useGuideStore } from '../store/guideStore.js'
+import TrainingCompletePopup from '../components/ui/TrainingCompletePopup.jsx'
 import { Skeleton } from '../components/ui/Skeleton.jsx'
 import {
   MODES, DIFFICULTIES, ALGORITHMS, STATUS_COLOR, SESSION_COLOR,
@@ -39,7 +41,11 @@ export default function GymPage() {
   const [selectedBotId, setSelectedBotId] = useState(null)
   const [botModels, setBotModels]         = useState({})   // { botId: mlModel }
   const [modelLoading, setModelLoading]   = useState(false)
-  const [activeTab, setActiveTab]         = useState('train')
+  const [showTrainingCompletePopup, setShowTrainingCompletePopup] = useState(false)
+  const [searchParams] = useSearchParams()
+  // ?action=start-training — land on the train tab (already the default, but explicit for clarity)
+  const initialTab = searchParams.get('action') === 'start-training' ? 'train' : 'train'
+  const [activeTab, setActiveTab]         = useState(initialTab)
   const [regressions, setRegressions]     = useState(new Set())
   const [toasts, setToasts]               = useState([])
   const [sessions, setSessions]           = useState([])    // shared across tabs
@@ -98,10 +104,21 @@ export default function GymPage() {
       .catch(() => {})
   }, [selectedModel?.id])
 
-  // Auto-select first bot
+  // Auto-select: prefer the newly created bot (from journey), fall back to first bot.
+  // Check xo_new_bot_id first on every bots change — the stale cache may have loaded
+  // before the new bot was in the list, so we must re-check on the fresh fetch too.
   useEffect(() => {
-    if (bots.length > 0 && !selectedBotId) setSelectedBotId(bots[0].id)
-  }, [bots, selectedBotId])
+    if (bots.length === 0) return
+    try {
+      const newBotId = sessionStorage.getItem('xo_new_bot_id')
+      if (newBotId && bots.some(b => b.id === newBotId)) {
+        sessionStorage.removeItem('xo_new_bot_id')
+        setSelectedBotId(newBotId)
+        return
+      }
+    } catch {}
+    if (!selectedBotId) setSelectedBotId(bots[0].id)
+  }, [bots])
 
   // Load ML model when an ML bot is selected for the first time
   useEffect(() => {
@@ -163,6 +180,21 @@ export default function GymPage() {
     setBotModels(prev => ({ ...prev, [botId]: model }))
     evictModel(modelId)
   }, [])
+
+  function handleTrainingComplete(botId, modelId) {
+    refreshModel(botId, modelId)
+    setShowTrainingCompletePopup(true)
+    // Stash trained bot name so the play page can search for it
+    const trainedBot = bots.find(b => b.id === botId)
+    if (trainedBot) {
+      try { sessionStorage.setItem('xo_trained_bot_name', trainedBot.displayName) } catch {}
+    }
+    const { journeyProgress } = useGuideStore.getState()
+    const steps = journeyProgress?.completedSteps ?? []
+    if (!steps.includes(6)) {
+      useGuideStore.getState().applyJourneyStep({ completedSteps: [...steps, 6] })
+    }
+  }
 
   // Add current tab to visited set before render so it shows immediately
   visitedTabsRef.current.add(activeTab)
@@ -321,7 +353,7 @@ export default function GymPage() {
                 {/* Tab panels — keep-alive via visited set + display:none */}
                 {(() => {
                   const TAB_PANELS = [
-                    { id: 'train',          el: <TrainTab model={selectedModel} sessions={sessions} onSessionsChange={setSessions} onComplete={() => refreshModel(selectedBotId, selectedModel.id)} /> },
+                    { id: 'train',          el: <TrainTab model={selectedModel} sessions={sessions} onSessionsChange={setSessions} onComplete={() => handleTrainingComplete(selectedBotId, selectedModel.id)} /> },
                     { id: 'analytics',      el: <AnalyticsTab model={selectedModel} sessions={sessions} /> },
                     { id: 'evaluation',     el: <EvaluationTab model={selectedModel} models={allLoadedModels} domainUserId={domainUserId} currentUserName={currentUserName} /> },
                     { id: 'explainability', el: <ExplainabilityTab model={selectedModel} domainUserId={domainUserId} currentUserName={currentUserName} /> },
@@ -367,6 +399,13 @@ export default function GymPage() {
           </div>
         ))}
       </div>
+
+      {showTrainingCompletePopup && (
+        <TrainingCompletePopup onDismiss={() => {
+          setShowTrainingCompletePopup(false)
+          useGuideStore.getState().open()
+        }} />
+      )}
     </div>
   )
 }

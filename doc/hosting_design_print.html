@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hosting Design — AI Arena</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --text:        #1a1f2e;
+    --text-muted:  #5a6478;
+    --border:      #d8dde8;
+    --bg-code:     #f4f6fa;
+    --bg-table:    #f8f9fc;
+    --accent:      #2563eb;
+    --accent-light:#eff6ff;
+    --green:       #16a34a;
+    --amber:       #d97706;
+  }
+
+  html { font-size: 13px; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--text);
+    line-height: 1.65;
+    background: #fff;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* ── Page layout ── */
+  .page-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 56px 64px;
+  }
+
+  /* ── Cover ── */
+  .cover {
+    padding: 72px 0 56px;
+    border-bottom: 3px solid var(--accent);
+    margin-bottom: 48px;
+  }
+  .cover-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .cover h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+  .cover-meta {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  /* ── Headings ── */
+  h1, h2, h3, h4 {
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--text);
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    margin: 44px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    margin: 28px 0 10px;
+    color: var(--accent);
+  }
+
+  h4 {
+    font-size: 0.9rem;
+    margin: 20px 0 8px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Body text ── */
+  p {
+    margin-bottom: 12px;
+  }
+
+  ul, ol {
+    margin: 8px 0 14px 20px;
+  }
+
+  li {
+    margin-bottom: 5px;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+
+  strong { font-weight: 600; }
+
+  /* ── Code ── */
+  code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.82em;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: #c7254e;
+  }
+
+  pre {
+    background: #1e2233;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin: 12px 0 18px;
+    overflow-x: auto;
+    page-break-inside: avoid;
+  }
+
+  pre code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #e2e8f0;
+    line-height: 1.6;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 0.85rem;
+    page-break-inside: avoid;
+  }
+
+  thead tr {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  thead th {
+    padding: 9px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+  }
+
+  tbody tr:nth-child(even) { background: var(--bg-table); }
+  tbody tr:hover { background: var(--accent-light); }
+
+  tbody td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  /* ── Blockquotes / callouts ── */
+  blockquote {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-light);
+    padding: 10px 16px;
+    margin: 12px 0 16px;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.88rem;
+    color: #1e3a6e;
+    page-break-inside: avoid;
+  }
+
+  blockquote p { margin: 0; }
+
+  /* ── Horizontal rule ── */
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 36px 0;
+  }
+
+  /* ── Print ── */
+  @media print {
+    html { font-size: 12px; }
+    .page-wrap { padding: 0 40px; }
+    .cover { padding: 48px 0 40px; }
+    h2 { page-break-before: auto; }
+    pre, table, blockquote { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+<div class="cover">
+  <div class="cover-label">AI Arena Platform</div>
+  <h1>Hosting Design</h1>
+  <div class="cover-meta">Architecture &amp; Operations Reference &nbsp;·&nbsp; April 2026</div>
+</div>
+
+<h2>Architecture Overview</h2>
+
+<pre><code>GoDaddy / Cloudflare:
+  aiarena.callidity.com          → Railway landing-prod service
+  staging.aiarena.callidity.com  → Railway landing-staging service
+
+Railway services (prod):
+  landing-prod       ← aiarena.callidity.com          (platform + path-based proxy)
+  backend-prod       ← Railway private network only   (no public custom domain)
+  xo-prod            ← Railway private network only   (no public custom domain)
+  tournament-prod    ← Railway private network only   (no public custom domain)
+
+Railway services (staging):
+  landing-staging    ← staging.aiarena.callidity.com  (platform + path-based proxy)
+  backend-staging    ← Railway private network only
+  xo-staging         ← Railway private network only
+  tournament-staging ← Railway private network only</code></pre>
+
+<h3>URL Structure (prod)</h3>
+<pre><code>aiarena.callidity.com/          → platform (tournaments, rankings, admin)
+aiarena.callidity.com/xo/       → XO game (static files proxied from xo-prod)
+aiarena.callidity.com/reversi/  → Reversi game (future)
+aiarena.callidity.com/api/      → backend API (proxied from backend-prod)</code></pre>
+
+<h3>URL Structure (staging)</h3>
+<pre><code>staging.aiarena.callidity.com/       → platform
+staging.aiarena.callidity.com/xo/    → XO game
+staging.aiarena.callidity.com/api/   → backend API</code></pre>
+
+<h3>Key Principles</h3>
+<ul>
+  <li>One domain per environment. No wildcards, no subdomains per game.</li>
+  <li>The landing service is the single entry point — it proxies all paths to the appropriate Railway private service: <code>/xo/</code> → xo service, <code>/api/</code> → backend.</li>
+  <li>Auth lives on the root domain. Everything is same-origin — sign in once, works everywhere.</li>
+  <li>Adding a new game = deploy a Railway service + one proxy rule in landing. No DNS changes, no Railway Pro plan.</li>
+  <li>All backend and game services use Railway private networking — not reachable from the public internet.</li>
+  <li>Each game is an independent Railway service with its own deploy lifecycle, resource allocation, and failure isolation.</li>
+</ul>
+
+<hr>
+
+<h2>Monorepo Structure</h2>
+
+<table>
+  <thead><tr><th>Railway Service</th><th>Source directory</th><th>Dockerfile</th></tr></thead>
+  <tbody>
+    <tr><td><code>landing</code></td><td><code>landing/</code></td><td><code>landing/Dockerfile</code></td></tr>
+    <tr><td><code>backend</code></td><td><code>backend/</code></td><td><code>backend/Dockerfile</code></td></tr>
+    <tr><td><code>xo</code></td><td><code>frontend/</code></td><td><code>frontend/Dockerfile</code></td></tr>
+    <tr><td><code>tournament</code></td><td><code>tournament/</code></td><td><code>tournament/Dockerfile</code></td></tr>
+  </tbody>
+</table>
+
+<p>Railway's watch paths ensure only the affected service redeploys on a commit:</p>
+<ul>
+  <li>Commit touches <code>frontend/</code> → only XO service redeploys</li>
+  <li>Commit touches <code>landing/</code> → only landing redeploys</li>
+  <li>Commit touches <code>backend/</code> → only backend redeploys</li>
+  <li>Commit touches <code>packages/</code> → all services redeploy (shared code changed)</li>
+</ul>
+
+<hr>
+
+<h2>Branch → Environment Mapping</h2>
+
+<table>
+  <thead><tr><th>Branch</th><th>Environment</th><th>Domain</th></tr></thead>
+  <tbody>
+    <tr><td><code>main</code></td><td>Production</td><td><code>aiarena.callidity.com</code></td></tr>
+    <tr><td><code>staging</code></td><td>Staging</td><td><code>staging.aiarena.callidity.com</code></td></tr>
+    <tr><td><code>dev</code></td><td>Local only</td><td><code>localhost</code></td></tr>
+  </tbody>
+</table>
+
+<p>Promotion flow: <code>dev</code> → <code>staging</code> → <code>main</code></p>
+
+<hr>
+
+<h2>GoDaddy DNS Records</h2>
+
+<p>Root domain in GoDaddy is <code>callidity.com</code>.</p>
+
+<table>
+  <thead><tr><th>Host</th><th>Type</th><th>Points To</th></tr></thead>
+  <tbody>
+    <tr><td><code>aiarena</code></td><td>CNAME</td><td>Railway landing-prod CNAME target</td></tr>
+    <tr><td><code>staging.aiarena</code></td><td>CNAME</td><td>Railway landing-staging CNAME target</td></tr>
+  </tbody>
+</table>
+
+<p>2 records total. Never changes regardless of how many games are added.</p>
+
+<blockquote><p><strong>Recommended:</strong> Point GoDaddy nameservers to Cloudflare (free tier) for faster global DNS resolution, DDoS protection, WAF, and caching rules. With Cloudflare, static game assets (<code>/xo/*</code>, <code>/reversi/*</code>) can be cached at the edge, eliminating proxy load entirely. See the Cloudflare section below.</p></blockquote>
+
+<hr>
+
+<h2>Railway — Custom Domain Config</h2>
+
+<p>Only the landing services need custom domains. All other services use Railway private networking.</p>
+
+<table>
+  <thead><tr><th>Railway Service</th><th>Custom Domain</th></tr></thead>
+  <tbody>
+    <tr><td><code>landing-prod</code></td><td><code>aiarena.callidity.com</code></td></tr>
+    <tr><td><code>landing-staging</code></td><td><code>staging.aiarena.callidity.com</code></td></tr>
+  </tbody>
+</table>
+
+<blockquote><p>No Railway Pro plan required — wildcard domains are not used. Enable Railway private networking for backend, xo, and tournament services so they are only reachable by other services within the same Railway environment.</p></blockquote>
+
+<hr>
+
+<h2>Landing Service — Path-Based Proxy</h2>
+
+<p>The landing service is the single entry point for all traffic. It proxies both game static files and API calls to the appropriate private Railway service.</p>
+
+<pre><code>const PROXY_RULES = {
+  '/api':     process.env.BACKEND_PRIVATE_URL,   // e.g. http://backend.railway.internal:3000
+  '/xo':      process.env.XO_PRIVATE_URL,        // e.g. http://xo.railway.internal:80
+  '/reversi': process.env.REVERSI_PRIVATE_URL,   // future
+}</code></pre>
+
+<blockquote><p><strong>Port note:</strong> Railway private URLs use the format <code>http://&lt;service&gt;.railway.internal</code> or <code>http://&lt;service&gt;.railway.internal:PORT</code> if the internal port is not 80. Check each service's Railway settings and include the port explicitly.</p></blockquote>
+
+<h3>What the Proxy Handles</h3>
+<ul>
+  <li><code>/api/*</code> → backend (all API calls, OAuth callbacks, WebSocket upgrades)</li>
+  <li><code>/xo/*</code> → XO static file server (HTML, JS, CSS bundles)</li>
+  <li><code>/reversi/*</code> → Reversi static file server (future)</li>
+</ul>
+
+<h3>Required Proxy Headers</h3>
+<pre><code>'X-Forwarded-For':   req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+'X-Forwarded-Host':  req.headers.host,
+'X-Forwarded-Proto': 'https',</code></pre>
+
+<h3>Proxy Robustness</h3>
+<ul>
+  <li>Set sensible timeouts (connect: 5s, response: 30s) so a slow upstream doesn't hang the landing service</li>
+  <li>Use connection pooling (<code>keepAlive: true</code> in http-proxy)</li>
+  <li>Consider a circuit breaker so a crashed game service returns a clean error page rather than hanging connections</li>
+</ul>
+
+<h3>WebSocket Proxying</h3>
+<p>WebSocket connections go through the landing proxy. The proxy must handle the HTTP → WebSocket upgrade:</p>
+<pre><code>// Example using http-proxy
+proxy.ws(req, socket, head, { target: BACKEND_PRIVATE_URL })</code></pre>
+
+<h3>SPA Fallback Routing</h3>
+<p>The XO app is a React SPA — only <code>index.html</code> exists on the static file server. Any unmatched path under <code>/xo/*</code> must serve <code>/xo/index.html</code> so React Router handles client-side navigation. Without this, any page refresh or direct URL returns a 404.</p>
+<pre><code>// If the XO service returns 404, serve its index.html instead
+if (res.statusCode === 404 && req.path.startsWith('/xo')) {
+  return proxyTo(XO_PRIVATE_URL, '/xo/index.html')
+}</code></pre>
+
+<hr>
+
+<h2>Required Code Changes — XO Frontend</h2>
+
+<p>Two changes are required in the XO Vite app before this design can work. These only apply to production builds; local dev is unaffected.</p>
+
+<h3>1. Vite Base Path</h3>
+<p>The built <code>index.html</code> must reference assets relative to <code>/xo/</code>, not <code>/</code>. Without this, all JS/CSS bundles 404 immediately.</p>
+<pre><code>// frontend/vite.config.js
+export default defineConfig({
+  base: process.env.VITE_BASE_PATH ?? '/',
+  // ...
+})</code></pre>
+<p>Set <code>VITE_BASE_PATH=/xo/</code> in the Railway xo-prod and xo-staging environment variables at build time.</p>
+
+<h3>2. React Router Basename</h3>
+<p>React Router must know it is mounted at <code>/xo/</code> so navigation resolves correctly.</p>
+<pre><code>// frontend/src/main.jsx
+&lt;BrowserRouter basename={import.meta.env.VITE_BASE_PATH ?? '/'}&gt;
+  &lt;App /&gt;
+&lt;/BrowserRouter&gt;</code></pre>
+
+<hr>
+
+<h2>Cloudflare Setup (Recommended)</h2>
+
+<p>Point GoDaddy nameservers to Cloudflare for the <code>callidity.com</code> zone. The free tier provides DDoS protection, WAF, and caching.</p>
+
+<h3>DNS Records in Cloudflare</h3>
+<table>
+  <thead><tr><th>Name</th><th>Type</th><th>Content</th><th>Proxy</th></tr></thead>
+  <tbody>
+    <tr><td><code>aiarena.callidity.com</code></td><td>CNAME</td><td>Railway landing-prod target</td><td>Orange cloud (proxied)</td></tr>
+    <tr><td><code>staging.aiarena.callidity.com</code></td><td>CNAME</td><td>Railway landing-staging target</td><td>Grey cloud (DNS only)</td></tr>
+  </tbody>
+</table>
+
+<blockquote><p>Proxy staging through DNS only (grey cloud) to avoid Cloudflare cache interfering with testing.</p></blockquote>
+
+<h3>Cloudflare Cache Rules (prod only)</h3>
+<pre><code>If URI path matches /xo/*    → Cache everything, TTL 1 day
+If URI path matches /api/*   → Bypass cache</code></pre>
+
+<hr>
+
+<h2>Environment Variables</h2>
+
+<h3>Landing Service</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Prod value</th><th>Staging value</th></tr></thead>
+  <tbody>
+    <tr><td><code>BACKEND_PRIVATE_URL</code></td><td><code>http://backend.railway.internal:3000</code></td><td><code>http://backend-staging.railway.internal:3000</code></td></tr>
+    <tr><td><code>XO_PRIVATE_URL</code></td><td><code>http://xo.railway.internal:80</code></td><td><code>http://xo-staging.railway.internal:80</code></td></tr>
+    <tr><td><code>TOURNAMENT_PRIVATE_URL</code></td><td><code>http://tournament.railway.internal:3001</code></td><td><code>http://tournament-staging.railway.internal:3001</code></td></tr>
+  </tbody>
+</table>
+
+<h3>XO Service (build-time)</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td><code>VITE_BASE_PATH</code></td><td><code>/xo/</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Backend Service</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Prod value</th><th>Staging value</th></tr></thead>
+  <tbody>
+    <tr><td><code>BETTER_AUTH_URL</code></td><td><code>https://aiarena.callidity.com</code></td><td><code>https://staging.aiarena.callidity.com</code></td></tr>
+    <tr><td><code>FRONTEND_URL</code></td><td><code>https://aiarena.callidity.com</code></td><td><code>https://staging.aiarena.callidity.com</code></td></tr>
+    <tr><td><code>NODE_ENV</code></td><td><code>production</code></td><td><code>production</code></td></tr>
+    <tr><td><code>GOOGLE_CLIENT_ID</code></td><td colspan="2">shared across environments</td></tr>
+    <tr><td><code>GOOGLE_CLIENT_SECRET</code></td><td colspan="2">shared across environments</td></tr>
+    <tr><td><code>APPLE_CLIENT_ID</code></td><td colspan="2"><code>com.callidity.aiarena.web</code></td></tr>
+    <tr><td><code>APPLE_PRIVATE_KEY</code></td><td colspan="2">contents of .p8 file</td></tr>
+    <tr><td><code>APPLE_KEY_ID</code></td><td colspan="2">10-char key ID</td></tr>
+    <tr><td><code>APPLE_TEAM_ID</code></td><td colspan="2">10-char team ID</td></tr>
+  </tbody>
+</table>
+
+<blockquote><p>No <code>BETTER_AUTH_COOKIE_DOMAIN</code> needed — everything is same-origin. No CORS configuration needed — all browser requests arrive via the landing proxy. The backend never receives direct browser requests.</p></blockquote>
+
+<hr>
+
+<h2>Google OAuth (Google Cloud Console)</h2>
+
+<h4>Authorized JavaScript Origins</h4>
+<pre><code>https://aiarena.callidity.com
+https://staging.aiarena.callidity.com
+http://localhost:5174</code></pre>
+
+<h4>Authorized Redirect URIs</h4>
+<pre><code>https://aiarena.callidity.com/api/auth/callback/google
+https://staging.aiarena.callidity.com/api/auth/callback/google
+http://localhost:5174/api/auth/callback/google</code></pre>
+
+<hr>
+
+<h2>Apple OAuth (Apple Developer Console)</h2>
+
+<p>Apple requires domain ownership verification and only works on live HTTPS domains. Configure this after the custom domains are live on Railway.</p>
+
+<h3>Step 1 — App ID</h3>
+<p>In <em>Certificates, Identifiers &amp; Profiles → Identifiers</em>, confirm <strong>Sign In with Apple</strong> is enabled on your App ID.</p>
+
+<h3>Step 2 — Service ID</h3>
+<ul>
+  <li><strong>Identifier:</strong> <code>com.callidity.aiarena.web</code></li>
+  <li>Enable <strong>Sign In with Apple</strong> → Configure:
+    <ul>
+      <li><strong>Domains:</strong> <code>aiarena.callidity.com</code>, <code>staging.aiarena.callidity.com</code></li>
+      <li><strong>Return URLs:</strong> <code>https://aiarena.callidity.com/api/auth/callback/apple</code> and staging equivalent</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Step 3 — Domain Verification File</h3>
+<p>Deploy the file Apple provides to:</p>
+<pre><code>landing/public/.well-known/apple-developer-domain-association.txt</code></pre>
+<p>The static middleware serves <code>public/</code> automatically — no code changes needed.</p>
+
+<h3>Step 4 — Private Key</h3>
+<p>Create a key in <em>Keys</em> with <strong>Sign In with Apple</strong> enabled. Download the <code>.p8</code> file — <strong>Apple only lets you download it once.</strong> Store it securely and set as <code>APPLE_PRIVATE_KEY</code> in Railway.</p>
+
+<hr>
+
+<h2>Local Dev</h2>
+
+<p>All services run via <code>docker compose up</code>:</p>
+
+<table>
+  <thead><tr><th>Service</th><th>Port</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>postgres</td><td>5432</td><td>Shared database</td></tr>
+    <tr><td>redis</td><td>6379</td><td>Pub/sub + caching</td></tr>
+    <tr><td>backend</td><td>3000</td><td>Auth, API, WebSockets</td></tr>
+    <tr><td>tournament</td><td>3001</td><td>Tournament CRUD and matches</td></tr>
+    <tr><td>frontend (xo)</td><td>5173</td><td>XO game UI</td></tr>
+    <tr><td>landing</td><td>5174</td><td>Platform UI + proxy</td></tr>
+  </tbody>
+</table>
+
+<p>In local dev the two UIs run on separate ports for simplicity. The path-based proxy is only active in the production landing build. <code>VITE_BASE_PATH</code> is not set in dev — the XO app runs at <code>/</code> with no adjustment needed.</p>
+
+<hr>
+
+<h2>Adding a New Game</h2>
+
+<ol>
+  <li>Build the game and add it to the monorepo (e.g. <code>reversi/</code>)</li>
+  <li>Add a <code>reversi/Dockerfile</code></li>
+  <li>Create a Railway service with watch paths <code>reversi/**,packages/**</code></li>
+  <li>Enable Railway private networking on the new service</li>
+  <li>Add <code>REVERSI_PRIVATE_URL</code> env var to landing-prod and landing-staging</li>
+  <li>Add one proxy rule to landing: <code>'/reversi': process.env.REVERSI_PRIVATE_URL</code></li>
+  <li>Set <code>VITE_BASE_PATH=/reversi/</code> on the Reversi Railway service</li>
+  <li>Add SPA fallback rule for <code>/reversi/*</code> in the landing proxy</li>
+  <li>Redeploy landing</li>
+</ol>
+
+<p><strong>No DNS changes. No GoDaddy. No Cloudflare changes. No Railway custom domain config. No Railway Pro plan.</strong></p>
+
+<hr>
+
+<h2>Risks and Mitigations</h2>
+
+<table>
+  <thead><tr><th>Risk</th><th>Likelihood</th><th>Impact</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Landing service outage (SPOF)</td><td>Medium</td><td>High</td>
+      <td>Enable Railway replicas (2–3) on landing-prod; add health-check monitoring and alerts</td>
+    </tr>
+    <tr>
+      <td>Brief downtime during landing redeploys</td><td>Low</td><td>Medium</td>
+      <td>Acceptable at current scale; use Railway staged deploys if it becomes a concern</td>
+    </tr>
+    <tr>
+      <td>Proxy misconfiguration (WebSocket, SPA fallback)</td><td>Low</td><td>High</td>
+      <td>Thorough end-to-end testing on staging before prod cutover, including deep links and auth flows</td>
+    </tr>
+    <tr>
+      <td>Future high traffic overwhelming proxy</td><td>Low</td><td>Medium</td>
+      <td>Add Cloudflare — caches static <code>/xo/*</code> and <code>/reversi/*</code> at the edge, eliminating proxy load</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Order of Operations (First Production Deploy)</h2>
+
+<ol>
+  <li>Deploy all Railway services — enable private networking on backend, xo, tournament</li>
+  <li>Note each service's private Railway URL and port</li>
+  <li>Set env vars on each service (see sections above)</li>
+  <li>Add custom domains to <code>landing-prod</code> and <code>landing-staging</code> in Railway dashboard</li>
+  <li>Point GoDaddy nameservers to Cloudflare; add the 2 CNAME records in Cloudflare</li>
+  <li>Wait for DNS propagation (verify with <code>dig aiarena.callidity.com</code>)</li>
+  <li>Confirm Railway shows domains verified with valid SSL</li>
+  <li>Enable Railway replicas (2–3) on landing-prod</li>
+  <li>Deploy Apple domain verification file to landing, redeploy</li>
+  <li>Configure Apple Service ID (domain must be live with HTTPS first)</li>
+  <li>Configure Google OAuth origins and redirect URIs</li>
+  <li>Redeploy backend with final env vars</li>
+  <li>Set up basic monitoring (Railway metrics + Sentry or Railway log alerts)</li>
+  <li>Test full auth and game flow end-to-end on staging, including Apple Sign In on a real device</li>
+  <li>Promote to prod; verify sign in, <code>/xo/</code> navigation, WebSocket connection, and a complete game session</li>
+</ol>
+
+<hr>
+
+<h2>When Traffic Grows</h2>
+
+<p>These steps are not needed now but are straightforward when the time comes:</p>
+<ul>
+  <li><strong>Enable Cloudflare caching rules</strong> for <code>/xo/*</code> and <code>/reversi/*</code> — eliminates almost all proxy load for static assets</li>
+  <li><strong>Add Railway autoscaling</strong> on landing-prod — handles traffic spikes without manual intervention</li>
+  <li><strong>Split game backends</strong> — if a specific game's backend becomes a bottleneck, extract it to its own Railway service; the landing proxy updates one env var</li>
+</ul>
+
+<hr>
+
+<h2>Appendix — Architecture Tradeoffs</h2>
+
+<h3>Chosen Approach: Path-Based Routing via Landing Proxy</h3>
+
+<table>
+  <thead><tr><th>Pros</th><th>Cons</th></tr></thead>
+  <tbody>
+    <tr><td>2 DNS records total, never changes</td><td>Landing is a single point of failure (mitigated by replicas)</td></tr>
+    <tr><td>No Railway Pro plan needed</td><td>Redeploying landing briefly disrupts the platform</td></tr>
+    <tr><td>No wildcard domains</td><td>Game URLs are paths not subdomains (cosmetic)</td></tr>
+    <tr><td>Same-origin — no CORS, no cross-site auth complexity</td><td></td></tr>
+    <tr><td>Sign in once, works everywhere automatically</td><td></td></tr>
+    <tr><td>Backend and game services are fully private</td><td></td></tr>
+    <tr><td>Adding a game = one proxy rule + one env var</td><td></td></tr>
+    <tr><td>Each game still an independent Railway service</td><td></td></tr>
+    <tr><td>Static files browser-cached — proxy load minimal</td><td></td></tr>
+    <tr><td>Cloudflare CDN eliminates proxy load when needed</td><td></td></tr>
+  </tbody>
+</table>
+
+<h3>Alternatives Considered</h3>
+
+<h4>Option A — Game Subdomains with Gateway Service</h4>
+<pre><code>aiarena.callidity.com         → platform
+xo.aiarena.callidity.com      → gateway → XO Railway service
+reversi.aiarena.callidity.com → gateway → Reversi Railway service</code></pre>
+<table>
+  <thead><tr><th>Pros</th><th>Cons</th></tr></thead>
+  <tbody>
+    <tr><td>Each game on its own subdomain</td><td>Requires Railway Pro plan (wildcard custom domains)</td></tr>
+    <tr><td>Gateway failure doesn't take down platform</td><td>4+ DNS records, grows with each game</td></tr>
+    <tr><td></td><td>Extra gateway service to build and maintain</td></tr>
+    <tr><td></td><td>Cross-site auth requires <code>BETTER_AUTH_COOKIE_DOMAIN</code></td></tr>
+  </tbody>
+</table>
+
+<h4>Option B — Game Subdomains, Direct Custom Domains</h4>
+<table>
+  <thead><tr><th>Pros</th><th>Cons</th></tr></thead>
+  <tbody>
+    <tr><td>No gateway service</td><td>One new DNS record + Railway custom domain per game</td></tr>
+    <tr><td>Each game fully isolated</td><td>Requires Railway Pro plan per custom domain</td></tr>
+    <tr><td></td><td>Same cross-site auth complexity as Option A</td></tr>
+    <tr><td></td><td>Manual work every time a game is added</td></tr>
+  </tbody>
+</table>
+
+<h4>Option C — Railway Internal URLs, No Custom Game Domains</h4>
+<table>
+  <thead><tr><th>Pros</th><th>Cons</th></tr></thead>
+  <tbody>
+    <tr><td>Zero DNS setup for games</td><td>Cross-origin auth — cookies don't carry</td></tr>
+    <tr><td>No Railway Pro plan</td><td>Requires server-side token denylist for sign-out</td></tr>
+    <tr><td></td><td>Railway <code>.up.railway.app</code> URLs are publicly accessible</td></tr>
+    <tr><td></td><td>Ugly, unstable URLs</td></tr>
+  </tbody>
+</table>
+
+<h3>Why the Chosen Approach Wins</h3>
+<p>At current scale the proxy load is negligible — only static files, cached after first visit. The auth story is the simplest possible (same origin, no extra config). The operational story is the simplest possible (2 DNS records, set once). Backend and game services are fully private. The only real risk is landing being a single point of failure, mitigated cheaply with Railway replicas. The database and backend are far more likely bottlenecks in practice.</p>
+
+</div>
+</body>
+</html>

@@ -254,6 +254,148 @@ describe('POST /api/v1/users/me/notifications/deliver', () => {
   })
 })
 
+describe('GET /api/v1/users/me/preferences', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns defaults when preferences are empty', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: {} })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.showGuideButton).toBe(true)
+    expect(res.body.tournamentResultNotifPref).toBe('AS_PLAYED')
+  })
+
+  it('returns stored tournamentResultNotifPref', async () => {
+    db.user.findUnique.mockResolvedValue({
+      preferences: { tournamentResultNotifPref: 'END_OF_TOURNAMENT' },
+    })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.tournamentResultNotifPref).toBe('END_OF_TOURNAMENT')
+  })
+
+  it('returns false for showGuideButton when explicitly set', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: { showGuideButton: false } })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.showGuideButton).toBe(false)
+  })
+
+  it('returns flashStartAlerts=true by default', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: {} })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.flashStartAlerts).toBe(true)
+  })
+
+  it('returns flashStartAlerts=false when explicitly disabled', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: { flashStartAlerts: false } })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.flashStartAlerts).toBe(false)
+  })
+
+  it('returns 404 when user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('PATCH /api/v1/users/me/preferences', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('saves AS_PLAYED tournamentResultNotifPref', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'AS_PLAYED' })
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { preferences: expect.objectContaining({ tournamentResultNotifPref: 'AS_PLAYED' }) },
+      })
+    )
+  })
+
+  it('saves END_OF_TOURNAMENT tournamentResultNotifPref', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'END_OF_TOURNAMENT' })
+    expect(res.status).toBe(200)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { preferences: expect.objectContaining({ tournamentResultNotifPref: 'END_OF_TOURNAMENT' }) },
+      })
+    )
+  })
+
+  it('ignores invalid tournamentResultNotifPref values', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'INVALID' })
+    expect(res.status).toBe(200)
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences).not.toHaveProperty('tournamentResultNotifPref')
+  })
+
+  it('merges with existing preferences', async () => {
+    db.user.findUnique.mockResolvedValue({
+      id: 'usr_1',
+      preferences: { showGuideButton: false, faqHintSeen: true },
+    })
+    db.user.update.mockResolvedValue({})
+    await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'END_OF_TOURNAMENT' })
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences).toMatchObject({
+      showGuideButton: false,
+      faqHintSeen: true,
+      tournamentResultNotifPref: 'END_OF_TOURNAMENT',
+    })
+  })
+
+  it('saves flashStartAlerts=false', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ flashStartAlerts: false })
+    expect(res.status).toBe(200)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { preferences: expect.objectContaining({ flashStartAlerts: false }) },
+      })
+    )
+  })
+
+  it('saves flashStartAlerts=true', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: { flashStartAlerts: false } })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ flashStartAlerts: true })
+    expect(res.status).toBe(200)
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences.flashStartAlerts).toBe(true)
+  })
+
+  it('returns 404 when user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'AS_PLAYED' })
+    expect(res.status).toBe(404)
+  })
+})
+
 describe('PATCH /api/v1/users/me/settings', () => {
   beforeEach(() => vi.clearAllMocks())
 

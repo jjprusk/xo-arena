@@ -6,7 +6,6 @@ import {
 } from 'recharts'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
-import { useOnboardingStore } from '../../store/onboardingStore.js'
 import { getSocket } from '../../lib/socket.js'
 import { runTrainingSession } from '../../services/trainingService.js'
 import { useGymStore } from '../../store/gymStore.js'
@@ -215,7 +214,6 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
         samples:    result.samples,
       }, finishToken)
 
-      useOnboardingStore.getState().markDone()
       stopRunning()
       onComplete()
     } catch (err) {
@@ -244,8 +242,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
               <select
                 value={mode}
                 onChange={e => { setMode(e.target.value); setCurriculum(false) }}
-                className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
-                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                className="form-select"
               >
                 {MODES.map(m => <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>)}
               </select>
@@ -263,8 +260,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
                     value={curriculum ? 'novice' : difficulty}
                     onChange={e => setDifficulty(e.target.value)}
                     disabled={curriculum}
-                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    className="form-select"
                   >
                     {DIFFICULTIES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
                   </select>
@@ -605,11 +601,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
             <div className="flex items-center gap-3">
               <SectionLabel>{sessionId ? 'Training in Progress' : 'Starting…'}</SectionLabel>
               {curriculumDifficulty && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize"
-                  style={{
-                    backgroundColor: curriculumDifficulty === 'novice' ? 'var(--color-teal-100)' : curriculumDifficulty === 'intermediate' ? 'var(--color-amber-100)' : curriculumDifficulty === 'advanced' ? 'var(--color-orange-100)' : 'var(--color-red-100)',
-                    color:           curriculumDifficulty === 'novice' ? 'var(--color-teal-700)' : curriculumDifficulty === 'intermediate' ? 'var(--color-amber-700)' : curriculumDifficulty === 'advanced' ? 'var(--color-orange-700)' : 'var(--color-red-700)',
-                  }}>
+                <span className={`badge capitalize ${{novice:'badge-bot',intermediate:'badge-closed',advanced:'badge-cancelled'}[curriculumDifficulty] || 'badge-cancelled'}`}>
                   {curriculumDifficulty}
                 </span>
               )}

@@ -2,12 +2,27 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'))
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
+  // In production the XO app is served at /xo/ via the landing proxy.
+  // Set VITE_BASE_PATH=/xo/ in the Railway build environment.
+  // In local dev VITE_BASE_PATH is not set, so the app runs at /.
+  base: process.env.VITE_BASE_PATH ?? '/',
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(version),
+  },
+  resolve: {
+    alias: {
+      // Direct path so Docker can resolve this without the workspace symlink.
+      // Host:   __dirname = .../frontend  →  ../packages/xo/src/index.js  ✓
+      // Docker: __dirname = /app          →  /packages/xo/src/index.js    ✓ (see docker-compose mount)
+      '@xo-arena/xo': resolve(__dirname, '../packages/xo/src/index.js'),
+    },
   },
   plugins: [
     react({
@@ -33,6 +48,13 @@ export default defineConfig({
       interval: 300,
     },
     proxy: {
+      // Tournament service routes — must come before the generic /api catch-all
+      '/api/tournaments': { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/matches':     { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/classification': { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/recurring':   { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/bot-matches': { target: 'http://tournament:3001', changeOrigin: true },
+      // All other /api routes go to the main backend
       '/api': {
         target: 'http://backend:3000',
         changeOrigin: true,

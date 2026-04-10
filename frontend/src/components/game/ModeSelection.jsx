@@ -1,18 +1,20 @@
 import React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
+import { useGuideStore } from '../../store/guideStore.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { api, cachedFetch } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { ListTr, ListTd, SearchBar } from '../ui/ListTable.jsx'
-import { usePrefsStore } from '../../store/prefsStore.js'
+import JourneyCompletePopup from '../ui/JourneyCompletePopup.jsx'
+import { POST_JOURNEY_SLOTS } from '../guide/slotActions.js'
 
 // ── BotAccordion ─────────────────────────────────────────────────────────────
 // Two-section accordion (Built-in / Community) using ListTr/ListTd for rows.
 // Only one section open at a time; built-in is open by default.
 // Community section includes a live search bar and a scrollable list.
 
-function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch, showPlayHint, onPlayHintDismiss }) {
+function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSection, communitySearch, setCommunitySearch }) {
   const BUILTIN_ORDER = { Rusty: 0, Copper: 1, Sterling: 2, Magnus: 3 }
   const builtIn = bots.filter(b => !b.botOwnerId).sort((a, b) => {
     const oa = BUILTIN_ORDER[a.displayName] ?? 99
@@ -47,7 +49,7 @@ function BotAccordion({ bots, isSignedIn, onChallenge, openSection, setOpenSecti
                   <BotRow
                     bot={bot}
                     isSignedIn={isSignedIn}
-                    onChallenge={(b) => { onPlayHintDismiss?.(); onChallenge(b) }}
+                    onChallenge={onChallenge}
                   />
                 </ListTd>
               </ListTr>
@@ -203,7 +205,7 @@ const BOARD_THEMES = [
   { id: 'retro',   label: 'Retro' },
 ]
 
-export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName, guestChallengeHint = false }) {
+export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName, autoAction }) {
   const {
     setMode, setDifficulty, setAIImplementation, setMLModelId, setPvbotModelId,
     setAI2Implementation, setAI2Difficulty, setAI2ModelId,
@@ -215,31 +217,11 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
 
   const { data: session } = useOptimisticSession()
   const isSignedIn = !!session?.user
-  const { playHintSeen, setPlayHintSeen, setPrefs } = usePrefsStore()
-  const showPlayHint = isSignedIn && !playHintSeen
-  const [showGuestHint, setShowGuestHint] = useState(guestChallengeHint)
-  const showHintFinger = showPlayHint || showGuestHint
-
-  // Auto-open Challenge a Bot + Built-in for first-visit guest flow
-  useEffect(() => {
-    if (!guestChallengeHint) return
-    setBotExpanded(true)
-    setOpenSection('builtin')
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Re-fetch playHintSeen on every visit so a CLI reset is reflected immediately
-  useEffect(() => {
-    if (!isSignedIn) return
-    getToken().then(token => {
-      if (!token) return
-      api.users.getHints(token)
-        .then(({ playHintSeen: fresh }) => setPrefs({ playHintSeen: !!fresh }))
-        .catch(() => {})
-    })
-  }, [isSignedIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [aivaiExpanded, setAivaiExpanded] = useState(false)
   const [botExpanded, setBotExpanded] = useState(false)
+  const [showMyBotHint, setShowMyBotHint] = useState(false)
+  const [showJourneyComplete, setShowJourneyComplete] = useState(false)
   const [selectedMark, setSelectedMark] = useState('alternate')
   const [playerName, setPlayerNameLocal] = useState('')
   const [joinInput, setJoinInput] = useState('')
@@ -322,6 +304,56 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
     return () => { cancelled = true }
   }, [botExpanded, aivaiExpanded])
 
+  // Auto-action: ?action=vs-community-bot — expand bot section then challenge Rusty
+  useEffect(() => {
+    if (autoAction !== 'vs-community-bot') return
+    setBotExpanded(true)
+  }, [autoAction])
+
+  useEffect(() => {
+    if (autoAction !== 'vs-community-bot') return
+    if (!botExpanded || bots.length === 0) return
+    // Challenge "Rusty" (easiest built-in) or first available bot
+    const BUILTIN_ORDER = { Rusty: 0, Copper: 1, Sterling: 2, Magnus: 3 }
+    const builtIn = bots
+      .filter(b => !b.botOwnerId)
+      .sort((a, b) => (BUILTIN_ORDER[a.displayName] ?? 99) - (BUILTIN_ORDER[b.displayName] ?? 99))
+    const target = builtIn[0] ?? bots[0]
+    if (target) handleChallengeBot(target)
+  }, [autoAction, botExpanded, bots]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-action: ?action=vs-my-bot
+  // First visit: expand community bots, pre-fill search, show hint.
+  // Returning after a game (hint already seen): advance journey step 7 + show congrats popup.
+  useEffect(() => {
+    if (autoAction !== 'vs-my-bot') return
+    const store = useGuideStore.getState()
+    const alreadySeen = !!store.uiHints?.myBotHintShown
+    if (!alreadySeen) {
+      // First time — show the hint
+      store.setUiHint('myBotHintShown')
+      setBotExpanded(true)
+      try {
+        const name = sessionStorage.getItem('xo_trained_bot_name')
+        if (name) setCommunitySearch(name)
+      } catch {}
+      setShowMyBotHint(true)
+    } else {
+      // Returning after playing a game — complete step 7 and show journey congrats
+      const steps = store.journeyProgress?.completedSteps ?? []
+      if (!steps.includes(7)) {
+        store.applyJourneyStep({ completedSteps: [...steps, 7] })
+      }
+      setShowJourneyComplete(true)
+    }
+  }, [autoAction]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (autoAction !== 'vs-my-bot') return
+    if (!botExpanded) return
+    setOpenSection('community')
+  }, [autoAction, botExpanded])
+
   // Apply options to store
   function applyOptions() {
     setTimerEnabled(localTimerEnabled)
@@ -329,12 +361,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
     setBestOf(localBestOf)
     setMisereMode(localMisere)
     setBoardTheme(localTheme)
-  }
-
-  function handlePlayHintDismiss() {
-    setPlayHintSeen()
-    setShowGuestHint(false)
-    getToken().then(token => { if (token) api.users.markPlayHint(token).catch(() => {}) })
   }
 
   function handleChallengeBot(bot) {
@@ -393,6 +419,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
   }
 
   return (
+    <>
     <div className="flex flex-col gap-4 max-w-sm mx-auto w-full">
       <h1 className="text-3xl font-bold text-center" style={{ fontFamily: 'var(--font-display)' }}>
         {roomName || <span style={{ color: 'var(--text-muted)' }}>…</span>}
@@ -400,33 +427,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
 
       {/* ── Challenge a Bot ─────────────────────────────────── */}
       <div className="relative">
-        {showPlayHint && !botExpanded && (
-          <div
-            className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-6px', top: '50%', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
-          >
-            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
-          </div>
-        )}
-        {showHintFinger && botExpanded && openSection !== 'builtin' && (
-          <div
-            className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-6px', top: '108px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
-          >
-            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
-          </div>
-        )}
-        {showHintFinger && botExpanded && openSection === 'builtin' && (
-          <div
-            className="pointer-events-none absolute flex flex-col items-center justify-center"
-            style={{ right: '-6px', top: '148px', transform: 'translateY(-50%)', gap: '2px', zIndex: 10 }}
-          >
-            <span className="hint-bob text-4xl" style={{ lineHeight: 1 }}>👈</span>
-            <span className="text-xs font-semibold" style={{ color: '#f5c542', textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>Try me!</span>
-          </div>
-        )}
         <div
           className="rounded-xl border-2 overflow-hidden transition-colors"
           style={{
@@ -471,8 +471,6 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
                 setOpenSection={setOpenSection}
                 communitySearch={communitySearch}
                 setCommunitySearch={setCommunitySearch}
-                showPlayHint={showHintFinger}
-                onPlayHintDismiss={handlePlayHintDismiss}
               />
             )}
 
@@ -832,5 +830,69 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
         </div>
       </div>
     </div>
+
+    {/* My-bot hint popup */}
+    {showMyBotHint && (
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 70,
+          backgroundColor: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(2px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem',
+        }}
+        onClick={() => setShowMyBotHint(false)}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1.5px solid var(--color-purple-400)',
+            borderRadius: '1rem',
+            padding: '2rem 2rem 1.75rem',
+            maxWidth: '22rem',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 8px 48px rgba(0,0,0,0.55)',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ fontSize: 48, lineHeight: 1, marginBottom: '0.75rem' }}>🎮</div>
+          <h2 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.1rem',
+            fontWeight: 700,
+            color: 'var(--text-primary)',
+            margin: '0 0 0.625rem',
+          }}>
+            Try out your new bot!
+          </h2>
+          <p style={{
+            fontSize: '0.875rem',
+            color: 'var(--text-secondary)',
+            lineHeight: 1.65,
+            margin: '0 0 1.5rem',
+          }}>
+            Just click the <strong>Challenge</strong> button next to your new bot and play a game.
+          </p>
+          <button
+            onClick={() => setShowMyBotHint(false)}
+            className="btn btn-primary"
+            style={{ minWidth: '8rem', fontSize: '0.9375rem' }}
+          >
+            Got it!
+          </button>
+        </div>
+      </div>
+    )}
+
+    {showJourneyComplete && (
+      <JourneyCompletePopup onDismiss={() => {
+        setShowJourneyComplete(false)
+        useGuideStore.getState().completeJourney(POST_JOURNEY_SLOTS)
+      }} />
+    )}
+    </>
   )
 }

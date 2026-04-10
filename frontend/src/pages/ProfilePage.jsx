@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useOptimisticSession, clearSessionCache } from '../lib/useOptimisticSession.js'
 import { getToken, clearTokenCache } from '../lib/getToken.js'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { signOut } from '../lib/auth-client.js'
 import { disconnectSocket } from '../lib/socket.js'
+import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
-
+import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
 const BOT_MODEL_LABELS = {
   ml: 'ML',
   minimax: 'Minimax',
@@ -22,6 +23,7 @@ const BOT_MODEL_LABELS = {
 
 export default function ProfilePage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { data: session, isPending } = useOptimisticSession()
   const clerkUser = session?.user ?? null
   const isSignedIn = !!clerkUser
@@ -45,7 +47,8 @@ export default function ProfilePage() {
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null) // { id, value }
-  const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: false })
+  const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: true })
+  const [showBotCreatedPopup, setShowBotCreatedPopup] = useState(false)
   const [creatingBot, setCreatingBot] = useState(false)
 
   // Credits & tier
@@ -53,14 +56,33 @@ export default function ProfilePage() {
   const [emailAchievements, setEmailAchievements] = useState(false)
   const [savingEmailPref, setSavingEmailPref] = useState(false)
 
-  // Accordion open state
-  const [openSections, setOpenSections] = useState({ profile: false, stats: true, credits: true, bots: false, danger: false })
+  // Accordion open state — auto-open bots section when coming from journey create-bot action
+  const [openSections, setOpenSections] = useState(() => ({
+    profile: false, stats: true, credits: true,
+    bots: searchParams.get('action') === 'create-bot' || searchParams.get('section') === 'bots',
+    danger: false,
+  }))
   const toggle = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
 
   // Account deletion
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
+
+  // ?action=create-bot — close guide, open form with default name once dbUser loads
+  useEffect(() => {
+    if (searchParams.get('action') !== 'create-bot') return
+    useGuideStore.getState().close()
+    if (!dbUser) return
+    setShowCreateBot(true)
+    setCreateForm(f => f.name ? f : { ...f, name: `${dbUser.username}-bot` })
+  }, [dbUser]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ?section=bots — close guide, bots accordion already open via lazy initializer
+  useEffect(() => {
+    if (searchParams.get('section') !== 'bots') return
+    useGuideStore.getState().close()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!clerkUser) return
@@ -259,14 +281,26 @@ export default function ProfilePage() {
       const { bot: newBot } = await api.bots.create(payload, token)
       setBots(prev => [newBot, ...prev])
       setLimitInfo(prev => prev ? { ...prev, count: prev.count + 1 } : prev)
-      setCreateForm({ name: '', modelType: 'Q_LEARNING', competitive: false })
+      setCreateForm({ name: '', modelType: 'Q_LEARNING', competitive: true })
       setShowCreateBot(false)
+      setShowBotCreatedPopup(true)
+
+      // Stash new bot ID so Gym can pre-select it
+      try { sessionStorage.setItem('xo_new_bot_id', newBot.id) } catch {}
+
+      // Advance journey step 5 client-side (server does the same via bots route)
+      const { journeyProgress } = useGuideStore.getState()
+      const steps = journeyProgress?.completedSteps ?? []
+      if (!steps.includes(5)) {
+        useGuideStore.getState().applyJourneyStep({ completedSteps: [...steps, 5] })
+      }
     } catch (err) {
       setBotActionError(err.message || 'Create failed.')
     } finally {
       setCreatingBot(false)
     }
   }
+
 
   async function handleDeleteAccount() {
     setDeleting(true)
@@ -367,10 +401,10 @@ export default function ProfilePage() {
             {(dbUser.baRole === 'admin' || (dbUser.roles ?? []).length > 0) && (
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                 {dbUser.baRole === 'admin' && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-purple-100)', color: 'var(--color-purple-700)' }}>admin</span>
+                  <span className="badge badge-mixed">admin</span>
                 )}
                 {(dbUser.roles ?? []).map(role => (
-                  <span key={role} className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-orange-100)', color: 'var(--color-orange-700)' }}>{role}</span>
+                  <span key={role} className="badge badge-closed">{role}</span>
                 ))}
               </div>
             )}
@@ -397,8 +431,7 @@ export default function ProfilePage() {
             setShowCreateBot(true)
             setOpenSections(prev => ({ ...prev, bots: true }))
           }}
-          className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white flex-shrink-0 transition-all hover:brightness-110"
-          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+          className="btn btn-primary btn-sm flex-shrink-0"
         >
           Create Bot
         </button>
@@ -553,8 +586,10 @@ export default function ProfilePage() {
                   required
                   autoFocus
                   maxLength={40}
+                  placeholder={dbUser?.username ? `${dbUser.username}-bot` : 'my-bot'}
                   value={createForm.name}
-                  onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
+                  onInvalid={e => e.target.setCustomValidity('Enter your Bot name')}
+                  onChange={e => { e.target.setCustomValidity(''); setCreateForm(f => ({ ...f, name: e.target.value })) }}
                   className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
                   style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                 />
@@ -590,8 +625,7 @@ export default function ProfilePage() {
                 <button
                   type="submit"
                   disabled={creatingBot}
-                  className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+                  className="btn btn-primary btn-sm"
                 >
                   {creatingBot ? 'Creating…' : 'Create'}
                 </button>
@@ -666,10 +700,10 @@ export default function ProfilePage() {
                             {bot.displayName}
                           </Link>
                           {bot.botProvisional && (
-                            <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}>provisional</span>
+                            <span className="badge badge-closed">provisional</span>
                           )}
                           {!bot.botActive && (
-                            <span className="text-xs px-1.5 py-0 rounded-full font-medium" style={{ backgroundColor: 'var(--color-gray-100)', color: 'var(--text-muted)' }}>inactive</span>
+                            <span className="badge badge-done">inactive</span>
                           )}
                         </div>
                       )}
@@ -680,7 +714,7 @@ export default function ProfilePage() {
                       )}
                     </ListTd>
                     <ListTd>
-                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}>
+                      <span className="badge badge-live">
                         {BOT_MODEL_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'}
                       </span>
                     </ListTd>
@@ -780,6 +814,10 @@ export default function ProfilePage() {
             )}
           </div>
         </AccordionSection>
+      )}
+
+      {showBotCreatedPopup && (
+        <BotCreatedPopup onDismiss={() => { setShowBotCreatedPopup(false); useGuideStore.getState().open(); navigate('/gym') }} />
       )}
     </div>
   )

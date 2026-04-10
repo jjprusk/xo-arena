@@ -511,6 +511,8 @@ export async function createGame({
   durationMs,
   startedAt,
   roomName = null,
+  tournamentId = null,
+  tournamentMatchId = null,
 }) {
   return db.game.create({
     data: {
@@ -526,6 +528,8 @@ export async function createGame({
       startedAt: new Date(startedAt),
       endedAt: new Date(),
       roomName,
+      tournamentId,
+      tournamentMatchId,
     },
   })
 }

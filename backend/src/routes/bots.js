@@ -5,6 +5,7 @@ import { createBot, listBots } from '../services/userService.js'
 import { getSystemConfig } from '../services/mlService.js'
 import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
+import { completeStep } from '../services/journeyService.js'
 import cache from '../utils/cache.js'
 
 const BOTS_CACHE_KEY = 'bots:public'
@@ -79,6 +80,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     const { name, modelType, competitive, avatarUrl } = req.body
     const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl, ownerBaId: baId })
     cache.invalidate(BOTS_CACHE_KEY)
+
+    // Journey step 5: first bot created (fire-and-forget)
+    completeStep(userId, 5).catch(() => {})
+
     res.status(201).json({ bot })
   } catch (err) {
     if (err.code === 'RESERVED_NAME') return res.status(400).json({ error: err.message, code: err.code })

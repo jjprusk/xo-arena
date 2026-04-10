@@ -10,16 +10,40 @@ import { roomManager } from './roomManager.js'
 import { botGameRunner } from './botGameRunner.js'
 import { auth } from '../lib/auth.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
+import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
 import { getSystemConfig } from '../services/mlService.js'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
+import {
+  getPendingPvpMatch,
+  setPendingPvpMatchSlug,
+  deletePendingPvpMatch,
+} from '../lib/tournamentBridge.js'
 import {
   incrementSocket, decrementSocket,
   incrementRedis, decrementRedis,
   trackedOn, startSnapshotInterval,
 } from '../lib/resourceCounters.js'
 import logger from '../logger.js'
+
+const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
+
+async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGames) {
+  try {
+    const res = await fetch(`${TOURNAMENT_SERVICE_URL}/api/matches/${matchId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winnerId, p1Wins, p2Wins, drawGames }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      logger.warn({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response')
+    }
+  } catch (err) {
+    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed')
+  }
+}
 
 const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
 
@@ -301,6 +325,73 @@ export async function attachSocketIO(httpServer) {
       socket.to(slug).emit('game:reaction', { emoji, fromMark })
     })
 
+    // ── Tournament PVP room join ─────────────────────────────────────
+    //
+    // When a tournament:match:ready event is received, both players can
+    // request to join a dedicated tournament game room via this event.
+    // The first caller creates the room; the second caller joins it.
+
+    on('tournament:room:join', async ({ matchId, authToken } = {}) => {
+      if (!matchId) return socket.emit('error', { message: 'matchId required' })
+
+      const user = await resolveSocketUser(authToken)
+      if (!socket.connected) return
+      if (!user) return socket.emit('error', { message: 'Authentication required' })
+
+      const pending = getPendingPvpMatch(matchId)
+      if (!pending) return socket.emit('error', { message: 'Tournament match not found or already started' })
+
+      const { tournamentId, participant1UserId, participant2UserId, bestOfN } = pending
+
+      // Verify the caller is one of the two participants (by betterAuthId)
+      if (user.betterAuthId !== participant1UserId && user.betterAuthId !== participant2UserId) {
+        return socket.emit('error', { message: 'You are not a participant in this match' })
+      }
+
+      let slug = pending.slug
+      let mark
+
+      if (!slug) {
+        // First player to arrive — create the room
+        const room = roomManager.createRoom({
+          hostSocketId: socket.id,
+          hostUserId: user.id,
+          spectatorAllowed: false,
+          tournamentMatchId: matchId,
+          tournamentId,
+          bestOfN,
+        })
+        room.hostUserDisplayName = user.displayName ?? null
+        room.hostUserElo = user.eloRating ?? null
+        socket.join(room.slug)
+        slug = room.slug
+        mark = 'X'
+        setPendingPvpMatchSlug(matchId, slug)
+        socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })
+      } else {
+        // Second player — join as guest
+        const result = roomManager.joinRoom({ slug, guestSocketId: socket.id, guestUserId: user.id })
+        if (result.error) return socket.emit('error', { message: result.error })
+
+        const room = result.room
+        room.guestUserDisplayName = user.displayName ?? null
+        room.guestUserElo = user.eloRating ?? null
+        mark = 'O'
+        socket.join(slug)
+        socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })
+        // Notify host that guest joined (same as normal room join)
+        io.to(slug).emit('room:guestJoined', { room: sanitizeRoom(room) })
+        io.to(slug).emit('game:start', { board: room.board, currentTurn: room.currentTurn, round: room.round })
+
+        // Start idle timers for both players
+        const { warnMs, graceMs } = await getIdleConfig()
+        const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+        for (const pid of [room.hostId, room.guestId]) {
+          roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
+        }
+      }
+    })
+
     // ── Support room ─────────────────────────────────────────────────
 
     on('support:join', () => {
@@ -315,6 +406,14 @@ export async function attachSocketIO(httpServer) {
 
     on('ml:unwatch', ({ sessionId }) => {
       if (sessionId) socket.leave(`ml:session:${sessionId}`)
+    })
+
+    // ── User-specific room (for tournament and other personal events) ─────────
+    on('user:subscribe', async ({ authToken } = {}) => {
+      const user = await resolveSocketUser(authToken)
+      if (!user) return
+      socket.join(`user:${user.id}`)
+      logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
     })
 
     // ── Disconnect ──────────────────────────────────────────────────
@@ -362,13 +461,15 @@ export async function attachSocketIO(httpServer) {
 }
 
 /**
- * Record a finished PvP game for any authenticated players.
+ * Record a finished PvP game (one round within a match) for any authenticated players.
  * Skipped silently if neither player has a DB user.
+ * For tournament rooms: skips ELO, links game to tournament, checks series completion.
  * Fires credit recording and emits accomplishment events via Socket.IO.
  */
 async function recordPvpGame(room, io) {
   if (!room.hostUserId && !room.guestUserId) return
 
+  const isTournamentRoom = !!room.tournamentMatchId
   const totalMoves = room.board.filter(Boolean).length
   const durationMs = room.lastActivityAt ? room.lastActivityAt - room.createdAt : 0
 
@@ -383,7 +484,6 @@ async function recordPvpGame(room, io) {
   // Determine winnerId
   let winnerId = null
   if (room.winner === 'X') {
-    // Find which userId has X
     winnerId = Object.entries(room.playerMarks).find(([, m]) => m === 'X')?.[0] === room.hostId
       ? room.hostUserId : room.guestUserId
   } else if (room.winner === 'O') {
@@ -403,15 +503,62 @@ async function recordPvpGame(room, io) {
       durationMs,
       startedAt: new Date(room.createdAt),
       roomName: room.name,
+      tournamentId: room.tournamentId ?? null,
+      tournamentMatchId: room.tournamentMatchId ?? null,
     })
   }
 
-  // Update ELO for both authenticated players (fire-and-forget)
-  if (room.hostUserId && room.guestUserId) {
+  // ELO update: skip for tournament games (design requirement)
+  if (!isTournamentRoom && room.hostUserId && room.guestUserId) {
     updatePlayersEloAfterPvP(room.hostUserId, room.guestUserId, outcome).catch(() => {})
   }
 
-  // Record credits and emit accomplishment events to connected sockets (fire-and-forget)
+  // Tournament series completion check
+  if (isTournamentRoom) {
+    const xWins = room.scores.X
+    const oWins = room.scores.O
+    const drawGames = room.round - xWins - oWins
+    const required = Math.ceil((room.bestOfN ?? 1) / 2)
+    const seriesDone = xWins >= required || oWins >= required
+
+    if (seriesDone) {
+      // Determine which userId won the series
+      const seriesWinnerMark = xWins >= required ? 'X' : 'O'
+      const seriesWinnerUserId = Object.entries(room.playerMarks)
+        .find(([, m]) => m === seriesWinnerMark)?.[0] === room.hostId
+        ? room.hostUserId : room.guestUserId
+
+      // Look up the TournamentParticipant ID for the winner (needed by tournament service)
+      let winnerParticipantId = null
+      try {
+        const participant = await db.tournamentParticipant.findFirst({
+          where: { tournamentId: room.tournamentId, userId: seriesWinnerUserId },
+          select: { id: true },
+        })
+        winnerParticipantId = participant?.id ?? null
+      } catch (err) {
+        logger.warn({ err, tournamentMatchId: room.tournamentMatchId }, 'Could not look up winner participant ID')
+      }
+
+      completeTournamentMatch(room.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames).catch(() => {})
+
+      // Clean up pending match registry
+      deletePendingPvpMatch(room.tournamentMatchId)
+
+      // Notify both players the series is over
+      io.to(room.slug).emit('tournament:series:complete', {
+        tournamentId: room.tournamentId,
+        matchId: room.tournamentMatchId,
+        p1Wins: xWins,
+        p2Wins: oWins,
+        seriesWinnerUserId,
+      })
+    }
+    // Don't record credits for tournament games
+    return
+  }
+
+  // Record credits and emit accomplishment events (free-play only)
   const pvpParticipants = [
     room.hostUserId  ? { userId: room.hostUserId,  isBot: false, botOwnerId: null } : null,
     room.guestUserId ? { userId: room.guestUserId, isBot: false, botOwnerId: null } : null,
@@ -424,6 +571,20 @@ async function recordPvpGame(room, io) {
         for (const notif of notifications) {
           const socketId = notif.userId === room.hostUserId ? room.hostId : room.guestId
           if (socketId) io.to(socketId).emit('accomplishment', notif)
+          // Also push into Guide notification stack
+          const guideType = notif.type === 'tier_upgrade' ? 'admin' : 'match_ready'
+          const guideTitle = notif.type === 'tier_upgrade'
+            ? 'Tier Upgrade!'
+            : notif.type === 'credit_milestone'
+              ? 'Milestone Reached!'
+              : 'Achievement Unlocked'
+          io.to(`user:${notif.userId}`).emit('guide:notification', {
+            id:        notif.id,
+            type:      guideType,
+            title:     guideTitle,
+            body:      notif.payload?.description ?? notif.payload?.message ?? '',
+            createdAt: (notif.createdAt ?? new Date()).toISOString(),
+          })
         }
       })
       .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))

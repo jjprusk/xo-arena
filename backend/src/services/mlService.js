@@ -20,6 +20,7 @@ import {
   proportionPValue, twoProportionPValue,
 } from '@xo-arena/ai'
 import logger from '../logger.js'
+import { completeStep as completeJourneyStep } from './journeyService.js'
 
 // ─── Socket.io reference ────────────────────────────────────────────────────
 let _io = null
@@ -841,6 +842,17 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
 
   engineCache.delete(modelId)
   logger.info({ sessionId, modelId, status, samples: episodeRecords.length, ...summary }, 'Frontend training finished')
+
+  // Journey step 5: first training run (fire-and-forget)
+  if (safeIterations > 0) {
+    db.mLModel.findUnique({ where: { id: modelId }, select: { createdBy: true } })
+      .then(async model => {
+        if (!model?.createdBy) return
+        const user = await db.user.findUnique({ where: { betterAuthId: model.createdBy }, select: { id: true } })
+        if (user) completeJourneyStep(user.id, 6).catch(() => {})
+      })
+      .catch(() => {})
+  }
 
   // ELO calibration — non-blocking background task
   setImmediate(async () => {

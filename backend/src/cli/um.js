@@ -14,6 +14,7 @@ import { sessionCommand } from './commands/session.js'
 import { renameCommand }  from './commands/rename.js'
 import { statusCommand }  from './commands/status.js'
 import { hintsCommand }        from './commands/hints.js'
+import { journeyCommand }      from './commands/journey.js'
 import { sessionConfigCommand } from './commands/sessionconfig.js'
 import { envCommand }          from './commands/env.js'
 
@@ -65,6 +66,7 @@ sessionCommand(program)
 renameCommand(program)
 statusCommand(program)
 hintsCommand(program)
+journeyCommand(program)
 sessionConfigCommand(program)
 envCommand(program)
 

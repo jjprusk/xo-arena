@@ -172,41 +172,33 @@ xo-arena/
 
 ---
 
+## User Interface
+
+Platform-wide UI design — including the Guide, notification system, design language, shared packages, navigation model, and cross-site concerns — is documented in **[UI_Design.md](./UI_Design.md)**.
+
+This section covers only tournament-specific UI pages and surfaces.
+
+### Tournament Pages
+
+| Page | Description |
+|------|-------------|
+| **Tournament lobby** | Browse, filter, and search tournaments. Tab bar (Upcoming / In Progress / Completed), filter chips by mode and game, search by name, card grid with load-more pagination. Mockup: `doc/mockups/lobby.html`. |
+| **Tournament detail** | Bracket view, round and match status, registration panel with notification preference selector. Not yet mocked. |
+| **Admin — tournament list** | Paginated list of all tournaments with status filters, bulk actions, quick-edit. Not yet mocked. |
+| **Admin — create / edit** | Tournament creation and editing form: mode, format, schedule, participant limits, recurring config, bot eligibility settings. Not yet mocked. |
+| **Admin — classification config** | Tier thresholds, merit values, demotion settings — all admin-configurable. Not yet mocked. |
+
+### Tournament Notifications via Guide
+
+Flash tournament announcements and match-ready alerts surface in the Guide notification stack (see UI_Design.md). Both aiarena and xo.aiarena subscribe to the `tournament:flash:announced` and `tournament:match:ready` Socket.io events via the existing tournament bridge. No separate page-level banner exists.
+
+---
+
 ## Landing Page (Deferred — Post Phase 5)
 
 The landing page (`aiarena.callidity.com`) is the long-term front door to the entire AI Arena platform. For Phases 1–5, tournament management UI is delivered through the existing XO Arena admin panel. The landing page is deferred until the tournament engine is proven and stable.
 
-When built, it will be a new `landing/` workspace using the same React + Vite + Tailwind stack as the XO Arena frontend, deployed as a fourth Railway service.
-
-### Page Structure
-
-```
-aiarena.callidity.com/
-├── /                  ← Platform home (featured tournaments, news, highlights)
-├── /tournaments       ← Tournament hub (browse, register, watch, results)
-├── /rankings          ← Cross-game leaderboards
-├── /replays           ← Game replay browser
-├── /games             ← Directory of available games
-└── /profile           ← Platform-level player profile
-```
-
-### Authentication
-
-The landing page shares the same BetterAuth instance as all game sites. Users sign in once and are authenticated across the entire platform. Guest users may view tournaments, rankings, and replays without an account. Registration is required to enter tournaments or play games.
-
-### Player Profile Hierarchy
-
-| Level | URL | Content |
-|---------------|-------------------------------|------------------------------------------------------|
-| Platform | aiarena.callidity.com/profile | Cross-game overview, tournament classification, credits, links to game profiles |
-| Game-specific | xo-arena.callidity.com/profile | XO ELO, XO stats, XO bots, XO game history |
-
-### Rankings
-
-The `/rankings` page provides two views:
-
-- **Overall** — cross-game leaderboard ranked by tournament classification tier (primary), activity score (secondary), combined ELO (tertiary)
-- **By game** — per-game leaderboard with a game selector; mirrors the leaderboard on each game site
+When built, the current `landing/` workspace will be replaced in place with a full React + Vite + Tailwind application. Page structure, authentication model, player profile hierarchy, and rankings are documented in **[UI_Design.md](./UI_Design.md)**.
 
 ---
 
@@ -674,220 +666,220 @@ The work moves the Prisma schema out of `backend/` into a shared `packages/db` w
 **Repository layer:** `packages/db` exports the raw PrismaClient for service-specific queries, and additionally exports typed repository functions for operations that will be shared across services — looking up users, recording game results, reading system config. Keeping shared query logic here prevents each service from writing its own version of the same query with subtle variations, and makes cross-service test mocking straightforward. The repository layer starts thin and grows as shared access patterns emerge.
 
 **Workspace setup**
-- [ ] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (exports PrismaClient and shared repository functions)
-- [ ] Copy `backend/prisma/schema.prisma` into `packages/db/prisma/schema.prisma` (content unchanged)
-- [ ] Copy existing migration history (`backend/prisma/migrations/`) into `packages/db/prisma/migrations/`
-- [ ] Update root `package.json` to include `packages/db` as a workspace
-- [ ] Add `packages/db` as a dependency in `backend/package.json` and verify Prisma client generates correctly
-- [ ] Implement initial repository functions for shared operations: `getUser(id)`, `getUserByBetterAuthId(id)`, `recordGame({...})`, `getSystemConfig(key)`
+- [x] Create `packages/db/` workspace — `package.json`, `prisma/schema.prisma`, `src/index.js` (exports PrismaClient and shared repository functions)
+- [x] Copy `backend/prisma/schema.prisma` into `packages/db/prisma/schema.prisma` (content unchanged)
+- [x] Copy existing migration history (`backend/prisma/migrations/`) into `packages/db/prisma/migrations/`
+- [x] Update root `package.json` to include `packages/db` as a workspace
+- [x] Add `packages/db` as a dependency in `backend/package.json` and verify Prisma client generates correctly
+- [x] Implement initial repository functions for shared operations: `getUser(id)`, `getUserByBetterAuthId(id)`, `recordGame({...})`, `getSystemConfig(key)`
 
 **Backend wiring**
-- [ ] Update `backend/src/lib/db.js` to import PrismaClient from `packages/db` instead of the local generated path
-- [ ] Update all other backend files that import from `../generated/prisma` to use the shared package
-- [ ] Remove `backend/prisma/` directory (schema, migrations, and generated client now live in `packages/db`)
-- [ ] Update `backend/package.json` scripts — `prisma migrate deploy`, `prisma generate`, `prisma studio` — to run from `packages/db`
+- [x] Update `backend/src/lib/db.js` to import PrismaClient from `packages/db` instead of the local generated path
+- [x] Update all other backend files that import from `../generated/prisma` to use the shared package
+- [x] Remove `backend/prisma/` directory (schema, migrations, and generated client now live in `packages/db`)
+- [x] Update `backend/package.json` scripts — `prisma migrate deploy`, `prisma generate`, `prisma studio` — to run from `packages/db`
 
 **Railway / deployment**
-- [ ] Update backend `Dockerfile` — `prisma migrate deploy` on startup points to `packages/db`; backend remains the sole service that runs this command
-- [ ] Tournament service `Dockerfile` (Phase 1) must NOT run `prisma migrate deploy` — document this constraint explicitly
-- [ ] Confirm Railway staging deploy runs migrations successfully from the new path
-- [ ] Confirm backend service starts and all existing API endpoints and tests pass against the migrated schema
+- [x] Update backend `Dockerfile` — `prisma migrate deploy` on startup points to `packages/db`; backend remains the sole service that runs this command
+- [x] Tournament service `Dockerfile` (Phase 1) must NOT run `prisma migrate deploy` — document this constraint explicitly
+- [x] Confirm Railway staging deploy runs migrations successfully from the new path
+- [x] Confirm backend service starts and all existing API endpoints and tests pass against the migrated schema
 
 **Verification**
-- [ ] All existing backend tests pass unchanged
-- [ ] `prisma migrate deploy` runs cleanly from `packages/db` in CI
-- [ ] Staging smoke tests pass
-- [ ] Production deploy confirmed stable before Phase 1 begins
+- [x] All existing backend tests pass unchanged
+- [x] `prisma migrate deploy` runs cleanly from `packages/db` in CI
+- [x] Staging smoke tests pass
+- [x] Production deploy confirmed stable before Phase 1 begins
 
 ---
 
 ### Phase 1 — Planned Tournaments, PVP, Single Elimination
 
 **Infrastructure**
-- [ ] Apply Phase 1 migration from `packages/db` (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
-- [ ] Scaffold `packages/tournament` service (Express, Prisma client from `packages/db`, Redis client, BetterAuth middleware)
-- [ ] Deploy tournament service to Railway (staging, then production)
-- [ ] Wire Redis pub/sub: tournament service publishes → backend service subscribes and forwards via Socket.io
+- [x] Apply Phase 1 migration from `packages/db` (Tournament, TournamentParticipant, TournamentRound, TournamentMatch, Game FK additions)
+- [x] Scaffold `packages/tournament` service (Express, Prisma client from `packages/db`, Redis client, BetterAuth middleware)
+- [x] Deploy tournament service to Railway (staging, then production)
+- [x] Wire Redis pub/sub: tournament service publishes → backend service subscribes and forwards via Socket.io
 
 **Tournament Management**
-- [ ] Create tournament (PLANNED format, PVP mode, SINGLE_ELIM bracket)
-- [ ] Publish tournament (DRAFT → REGISTRATION_OPEN)
-- [ ] Registration open/close window enforcement
-- [ ] Participant registration and withdrawal
-- [ ] Minimum participant check — auto-cancel if not met at start time
-- [ ] Bracket seeding by ELO at registration close
-- [ ] Single elimination bracket generation (rounds + matches)
-- [ ] BYE handling for non-power-of-2 fields
+- [x] Create tournament (PLANNED format, PVP mode, SINGLE_ELIM bracket)
+- [x] Publish tournament (DRAFT → REGISTRATION_OPEN)
+- [x] Registration open/close window enforcement
+- [x] Participant registration and withdrawal
+- [x] Minimum participant check — auto-cancel if not met at start time
+- [x] Bracket seeding by ELO at registration close
+- [x] Single elimination bracket generation (rounds + matches)
+- [x] BYE handling for non-power-of-2 fields
 
 **Match Execution**
-- [ ] Match lifecycle: PENDING → IN_PROGRESS → COMPLETED
-- [ ] Series win tracking (p1Wins, p2Wins, drawGames)
-- [ ] Draw resolution cascade for single elimination (total wins → ELO → random), all steps logged
-- [ ] Advance winner, eliminate loser
-- [ ] Tournament completion — final standings recorded
-- [ ] Game rows linked to tournament via `tournamentId` and `tournamentMatchId`
-- [ ] Confirm ELO is NOT updated for tournament games
+- [x] Match lifecycle: PENDING → IN_PROGRESS → COMPLETED
+- [x] Series win tracking (p1Wins, p2Wins, drawGames)
+- [x] Draw resolution cascade for single elimination (total wins → ELO → random), all steps logged
+- [x] Advance winner, eliminate loser
+- [x] Tournament completion — final standings recorded
+- [x] Game rows linked to tournament via `tournamentId` and `tournamentMatchId`
+- [x] Confirm ELO is NOT updated for tournament games
 
 **Notifications (basic)**
-- [ ] Planned tournament starts in 1 hour — notify registered participants (in-app)
-- [ ] Planned tournament starts in 15 min — notify registered participants (real-time)
-- [ ] Match ready — notify participant (real-time)
-- [ ] Match result — notify participant (real-time + persistent)
-- [ ] Tournament completed — notify all participants (in-app)
+- [x] Planned tournament starts in 1 hour — notify registered participants (in-app)
+- [x] Planned tournament starts in 15 min — notify registered participants (real-time)
+- [x] Match ready — notify participant (real-time)
+- [x] Match result — notify participant (real-time + persistent)
+- [x] Tournament completed — notify all participants (in-app)
 
 **Admin**
-- [ ] Create / edit / cancel tournament (tournament role or admin)
-- [ ] View tournament bracket and match status
-- [ ] `tournament.admin` role enforcement on all management endpoints
+- [x] Create / edit / cancel tournament (tournament role or admin)
+- [x] View tournament bracket and match status
+- [x] `tournament.admin` role enforcement on all management endpoints
 
 **Tests**
-- [ ] Bracket generation — seeding, round structure, BYE placement
-- [ ] Draw resolution cascade — all three steps, audit log entries
-- [ ] Series completion — correct winner advancement
-- [ ] Auto-cancel on minimum participant not met
-- [ ] ELO not modified for tournament game records
-- [ ] Registration open/close window enforcement
-- [ ] Role-based access control on management endpoints
+- [x] Bracket generation — seeding, round structure, BYE placement
+- [x] Draw resolution cascade — all three steps, audit log entries
+- [x] Series completion — correct winner advancement
+- [x] Auto-cancel on minimum participant not met
+- [x] ELO not modified for tournament game records
+- [x] Registration open/close window enforcement
+- [x] Role-based access control on management endpoints
 
 ---
 
 ### Phase 2 — Player Classification
 
 **Infrastructure**
-- [ ] Apply Phase 2 migration (PlayerClassification, MeritTransaction, ClassificationHistory, MeritThreshold)
-- [ ] Seed MeritThreshold table with default values (3–9, 10–19, 20–49, 50+)
-- [ ] Seed SystemConfig with default classification thresholds and demotion parameters
+- [x] Apply Phase 2 migration (PlayerClassification, MeritTransaction, ClassificationHistory, MeritThreshold)
+- [x] Seed MeritThreshold table with default values (3–9, 10–19, 20–49, 50+)
+- [x] Seed SystemConfig with default classification thresholds and demotion parameters
 
 **Classification**
-- [ ] Create PlayerClassification record on first tournament registration (RECRUIT, 0 merits)
-- [ ] Create PlayerClassification for bots independently from their owner's record
+- [x] Create PlayerClassification record on first tournament registration (RECRUIT, 0 merits)
+- [x] Create PlayerClassification for bots independently from their owner's record
 
 **Merit Awards**
-- [ ] Calculate tier-peer count (players of same tier in same tournament) at tournament end
-- [ ] Look up correct MeritThreshold band and award merits by finish position
-- [ ] Handle ties at same finish position — shared merit award
-- [ ] Best Overall bonus — award 1 merit to the player with `finalPosition = 1` in the tournament (minimum 10 total participants); ties for 1st in round robin each receive the bonus
-- [ ] Write MeritTransaction row for every award
-- [ ] Promotion check after merit award — advance tier, reset merits to 0, write ClassificationHistory
+- [x] Calculate tier-peer count (players of same tier in same tournament) at tournament end
+- [x] Look up correct MeritThreshold band and award merits by finish position
+- [x] Handle ties at same finish position — shared merit award
+- [x] Best Overall bonus — award 1 merit to the player with `finalPosition = 1` in the tournament (minimum 10 total participants); ties for 1st in round robin each receive the bonus
+- [x] Write MeritTransaction row for every award
+- [x] Promotion check after merit award — advance tier, reset merits to 0, write ClassificationHistory
 
 **Demotion**
-- [ ] Periodic demotion review job — configurable cadence
-- [ ] Finish Ratio calculation across qualifying matches in review period
-- [ ] Demotion eligibility check (did not promote, minimum matches, FR above threshold)
-- [ ] Apply demotion — drop one tier, reset merits, write ClassificationHistory
-- [ ] Per-player opt-out of demotion (once per review period)
+- [x] Periodic demotion review job — configurable cadence
+- [x] Finish Ratio calculation across qualifying matches in review period
+- [x] Demotion eligibility check (did not promote, minimum matches, FR above threshold)
+- [x] Apply demotion — drop one tier, reset merits, write ClassificationHistory
+- [x] Per-player opt-out of demotion (once per review period)
 
 **Admin**
-- [ ] View and edit player classification in admin panel
-- [ ] Configure merit thresholds, promotion thresholds, demotion parameters via admin UI
-- [ ] Admin override: manually promote or demote a player
+- [x] View and edit player classification in admin panel
+- [x] Configure merit thresholds, promotion thresholds, demotion parameters via admin UI
+- [x] Admin override: manually promote or demote a player
 
 **Tests**
-- [ ] Merit award — each band size, each position, ties
-- [ ] Best Overall bonus — awarded to `finalPosition = 1`, minimum 10 participant threshold enforced, round robin ties each receive the bonus
-- [ ] Promotion — triggers at correct merit count, resets merits, writes history
-- [ ] Demotion — Finish Ratio calculation, eligibility conditions, opt-out
-- [ ] Bot classification is independent of owner classification
-- [ ] SystemConfig overrides apply correctly to all thresholds
+- [x] Merit award — each band size, each position, ties
+- [x] Best Overall bonus — awarded to `finalPosition = 1`, minimum 10 participant threshold enforced, round robin ties each receive the bonus
+- [x] Promotion — triggers at correct merit count, resets merits, writes history
+- [x] Demotion — Finish Ratio calculation, eligibility conditions, opt-out
+- [x] Bot classification is independent of owner classification
+- [x] SystemConfig overrides apply correctly to all thresholds
 
 ---
 
 ### Phase 3 — BOT_VS_BOT Mode
 
 **Infrastructure**
-- [ ] Redis list-based job queue in tournament service
-- [ ] Background worker: pull jobs, execute bot match, write results, acknowledge job
-- [ ] Startup reconciliation: re-queue IN_PROGRESS matches with no active worker on service start
-- [ ] Seed SystemConfig: `tournament.botMatch.globalConcurrencyLimit`, `tournament.botMatch.defaultPaceMs`
+- [x] Redis list-based job queue in tournament service
+- [x] Background worker: pull jobs, execute bot match, write results, acknowledge job
+- [x] Startup reconciliation: re-queue IN_PROGRESS matches with no active worker on service start
+- [x] Seed SystemConfig: `tournament.botMatch.globalConcurrencyLimit`, `tournament.botMatch.defaultPaceMs`
 
 **Bot Eligibility**
-- [ ] Enforce bot eligibility at registration: active, available, non-provisional, min games played, and competitive (unless `allowNonCompetitiveBots = true`)
-- [ ] `botMinGamesPlayed` per tournament — read from Tournament config, fall back to SystemConfig default
-- [ ] `allowNonCompetitiveBots` — admin-configurable per tournament; defaults to false; when true, casual bots (`botCompetitive = false`) may register alongside competitive bots
+- [x] Enforce bot eligibility at registration: active, available, non-provisional, min games played, and competitive (unless `allowNonCompetitiveBots = true`)
+- [x] `botMinGamesPlayed` per tournament — read from Tournament config, fall back to SystemConfig default
+- [x] `allowNonCompetitiveBots` — admin-configurable per tournament; defaults to false; when true, casual bots (`botCompetitive = false`) may register alongside competitive bots
 
 **Match Execution**
-- [ ] Server-side bot match execution using shared `packages/ai` inference
-- [ ] Global concurrency limit enforcement across all concurrent bot tournaments
-- [ ] Per-tournament pace control (configurable delay between job dispatches)
-- [ ] Match result written to TournamentMatch and Game with tournament linkage
-- [ ] Worker crash resilience — job remains on queue until explicitly acknowledged
+- [x] Server-side bot match execution using shared `packages/ai` inference
+- [x] Global concurrency limit enforcement across all concurrent bot tournaments
+- [x] Per-tournament pace control (configurable delay between job dispatches)
+- [x] Match result written to TournamentMatch and Game with tournament linkage
+- [x] Worker crash resilience — job remains on queue until explicitly acknowledged
 
 **Admin**
-- [ ] Configure global concurrency limit and default pace via admin UI
-- [ ] Live view of active bot match jobs and queue depth
+- [x] Configure global concurrency limit and default pace via admin UI
+- [x] Live view of active bot match jobs and queue depth
 
 **Tests**
-- [ ] Bot eligibility checks — each condition independently, including `botCompetitive` gate and `allowNonCompetitiveBots` override
-- [ ] Concurrency limit — worker respects global cap
-- [ ] Startup reconciliation — IN_PROGRESS matches re-queued correctly
-- [ ] Job acknowledgement — job not removed until match confirmed written
-- [ ] Pace control — dispatch delay applied between jobs within a tournament
+- [x] Bot eligibility checks — each condition independently, including `botCompetitive` gate and `allowNonCompetitiveBots` override
+- [x] Concurrency limit — worker respects global cap
+- [x] Startup reconciliation — IN_PROGRESS matches re-queued correctly
+- [x] Job acknowledgement — job not removed until match confirmed written
+- [x] Pace control — dispatch delay applied between jobs within a tournament
 
 ---
 
 ### Phase 4 — Open Tournaments, Flash Tournaments, Round Robin, Recurring
 
 **Open Tournaments**
-- [ ] Tournament starts at scheduled time with no REGISTRATION_CLOSED state
-- [ ] Organizer early-start override (minimum participants must be met)
-- [ ] Registration closes implicitly when tournament starts; late entry rejected
+- [x] Tournament starts at scheduled time with no REGISTRATION_CLOSED state
+- [x] Organizer early-start override (minimum participants must be met)
+- [x] Registration closes implicitly when tournament starts; late entry rejected
 
 **Flash Tournaments**
-- [ ] Flash tournament creation with notice period and duration parameters
-- [ ] Broadcast notification to all logged-in users on creation (real-time + in-app banner)
-- [ ] "Starting in 2 min" notification to opted-in users
-- [ ] Auto-start at T+N, auto-close at T+N+M
-- [ ] Incomplete match resolution at close time — current series score; draw cascade if level
+- [x] Flash tournament creation with notice period and duration parameters
+- [x] Broadcast notification to all logged-in users on creation (real-time + in-app banner)
+- [x] "Starting in 2 min" notification to opted-in users
+- [x] Auto-start at T+N, auto-close at T+N+M
+- [x] Incomplete match resolution at close time — current series score; draw cascade if level
 
 **Round Robin Bracket**
-- [ ] Round robin bracket generation — all participants play all others
-- [ ] Draw recorded as draw (1 point each); win = 2 points, loss = 0
-- [ ] Final standings by total points
-- [ ] Handle ties in final standings
+- [x] Round robin bracket generation — all participants play all others
+- [x] Draw recorded as draw (1 point each); win = 2 points, loss = 0
+- [x] Final standings by total points
+- [x] Handle ties in final standings
 
 **Recurring Tournaments**
-- [ ] Apply Phase 4 migration (RecurringTournamentRegistration, registrationMode on TournamentParticipant)
-- [ ] SINGLE vs RECURRING registration mode at enrollment
-- [ ] Auto-enroll RECURRING participants in each new occurrence
-- [ ] Occurrence generation on schedule (DAILY, WEEKLY, MONTHLY, CUSTOM)
-- [ ] Auto-opt-out after N consecutive missed occurrences (configurable)
-- [ ] Participant opt-out at any time
+- [x] Apply Phase 4 migration (RecurringTournamentRegistration, registrationMode on TournamentParticipant)
+- [x] SINGLE vs RECURRING registration mode at enrollment
+- [x] Auto-enroll RECURRING participants in each new occurrence
+- [x] Occurrence generation on schedule (DAILY, WEEKLY, MONTHLY, CUSTOM)
+- [x] Auto-opt-out after N consecutive missed occurrences (configurable)
+- [x] Participant opt-out at any time
 
 **Tests**
-- [ ] Flash tournament lifecycle — creation to auto-close
-- [ ] Incomplete match resolution at flash tournament close time
-- [ ] Round robin bracket generation and scoring
-- [ ] Round robin final standings with tiebreakers
-- [ ] Recurring enrollment — SINGLE and RECURRING modes
-- [ ] Auto-opt-out after missed occurrences threshold
-- [ ] Open tournament early-start enforcement
+- [x] Flash tournament lifecycle — creation to auto-close
+- [x] Incomplete match resolution at flash tournament close time
+- [x] Round robin bracket generation and scoring
+- [x] Round robin final standings with tiebreakers
+- [x] Recurring enrollment — SINGLE and RECURRING modes
+- [x] Auto-opt-out after missed occurrences threshold
+- [x] Open tournament early-start enforcement
 
 ---
 
 ### Phase 5 — MIXED Mode, Notification Preferences, Replay Retention
 
 **MIXED Mode**
-- [ ] MIXED tournament accepts both human and bot registrations
-- [ ] Client-side match execution when human plays a bot
-- [ ] All MIXED match results recorded to Game with tournament linkage (identical to BOT_VS_BOT)
+- [x] MIXED tournament accepts both human and bot registrations
+- [x] Client-side match execution when human plays a bot
+- [x] All MIXED match results recorded to Game with tournament linkage (identical to BOT_VS_BOT)
 
 **Notification Preferences**
-- [ ] `AS_PLAYED` delivery — emit match result immediately via Redis pub/sub → Socket.io
-- [ ] `END_OF_TOURNAMENT` delivery — queue results internally, flush batch at COMPLETED
-- [ ] User-level default preference (stored in User preferences JSON)
-- [ ] Per-tournament preference override at registration time
-- [ ] Email delivery for match results (respects `emailAchievements` preference)
+- [x] `AS_PLAYED` delivery — emit match result immediately via Redis pub/sub → Socket.io
+- [x] `END_OF_TOURNAMENT` delivery — queue results internally, flush batch at COMPLETED
+- [x] User-level default preference (stored in User preferences JSON)
+- [x] Per-tournament preference override at registration time
+- [x] Email delivery for match results (respects `emailAchievements` preference)
 
 **Replay Retention**
-- [ ] Background job — archive or remove Game and Move records after `replayRetentionDays`
-- [ ] Retention job runs per-tournament after COMPLETED status
-- [ ] Seed SystemConfig: `tournament.replay.defaultRetentionDays`
+- [x] Background job — archive or remove Game and Move records after `replayRetentionDays`
+- [x] Retention job runs per-tournament after COMPLETED status
+- [x] Seed SystemConfig: `tournament.replay.defaultRetentionDays`
 
 **Tests**
-- [ ] MIXED match recorded correctly regardless of execution side
-- [ ] AS_PLAYED vs END_OF_TOURNAMENT delivery — correct timing for each
-- [ ] Per-tournament preference override takes precedence over global default
-- [ ] Replay retention job — records removed after window, not before
+- [x] MIXED match recorded correctly regardless of execution side
+- [x] AS_PLAYED vs END_OF_TOURNAMENT delivery — correct timing for each
+- [x] Per-tournament preference override takes precedence over global default
+- [x] Replay retention job — records removed after window, not before
 
 ---
 

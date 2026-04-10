@@ -36,7 +36,7 @@ class RoomManager {
   /**
    * Create a new room. Returns the room object.
    */
-  createRoom({ hostSocketId, hostUserId = null, spectatorAllowed = true } = {}) {
+  createRoom({ hostSocketId, hostUserId = null, spectatorAllowed = true, tournamentMatchId = null, tournamentId = null, bestOfN = null } = {}) {
     // If this socket already owns a waiting room (e.g. StrictMode double-invoke),
     // close the old one cleanly before creating a new one.
     const existingSlug = this._socketToRoom.get(hostSocketId)
@@ -69,6 +69,10 @@ class RoomManager {
       idleTimers: {},
       createdAt: now,
       lastActivityAt: now,
+      // Tournament match context (null for free-play rooms)
+      tournamentMatchId,
+      tournamentId,
+      bestOfN,
     }
 
     this._rooms.set(slug, room)

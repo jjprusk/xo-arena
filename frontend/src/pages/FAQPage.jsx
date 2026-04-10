@@ -3,6 +3,122 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
+import { api } from '../lib/api.js'
+import { getToken } from '../lib/getToken.js'
+import { useGuideStore } from '../store/guideStore.js'
+
+
+// x-position of the orb centre in the 320-wide nav SVG
+const ORB_X = 258
+
+function GuideReturnTip({ onDismiss }) {
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 60,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(3px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1rem',
+      }}
+    >
+      <div
+        role="dialog" aria-modal="true" aria-label="Continue your journey"
+        style={{
+          background: '#e8eaed',
+          border: '1.5px solid var(--color-amber-400)',
+          borderRadius: '1rem',
+          padding: '2rem 2rem 1.75rem',
+          maxWidth: '28rem',
+          width: '100%',
+          boxShadow: '0 8px 48px rgba(0,0,0,0.55)',
+          textAlign: 'center',
+        }}
+      >
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.5rem' }}>
+          Take your time
+        </h2>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.65, margin: '0 0 1.75rem' }}>
+          When you're done reading the FAQ, press the <strong style={{ color: 'var(--color-amber-500)' }}>Guide Button</strong> in
+          the header above as illustrated to continue your journey.
+        </p>
+
+        {/* Nav bar illustration + animated finger */}
+        <div style={{ position: 'relative', display: 'inline-block', width: 320 }}>
+          <svg width="320" height="60" viewBox="0 0 320 60" fill="none" xmlns="http://www.w3.org/2000/svg"
+            style={{ borderRadius: 10, display: 'block', boxShadow: '0 3px 16px rgba(0,0,0,0.5)' }}>
+            <defs>
+              <linearGradient id="orbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#5B82B8" />
+                <stop offset="100%" stopColor="#3A5E8E" />
+              </linearGradient>
+              <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#0d9488" />
+                <stop offset="100%" stopColor="#0f766e" />
+              </linearGradient>
+            </defs>
+
+            {/* Nav bar background — white, matching the real header */}
+            <rect width="320" height="60" rx="10" fill="#ffffff" />
+            <line x1="0" y1="59.5" x2="320" y2="59.5" stroke="rgba(0,0,0,0.1)" />
+
+            {/* Grid logo */}
+            <rect x="12" y="12" width="36" height="36" rx="7" fill="#3B6FD4" />
+            <line x1="23" y1="16" x2="23" y2="44" stroke="white"   strokeWidth="2.8" strokeLinecap="round" />
+            <line x1="35" y1="16" x2="35" y2="44" stroke="#4DD9C0" strokeWidth="2.8" strokeLinecap="round" />
+            <line x1="16" y1="26" x2="44" y2="26" stroke="white"   strokeWidth="2.8" strokeLinecap="round" />
+            <line x1="16" y1="38" x2="44" y2="38" stroke="#4DD9C0" strokeWidth="2.8" strokeLinecap="round" />
+
+
+            {/* ── Break marks — lightning bolt zigzags, full height, not-to-scale indicator ── */}
+            <path d="M 151 0 L 158 26 L 150 26 L 157 60" stroke="rgba(0,0,0,0.22)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M 163 0 L 170 26 L 162 26 L 169 60" stroke="rgba(0,0,0,0.22)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+            {/* ── Guide orb — exact replica of GuideOrb component (idle state) ── */}
+            <circle cx={ORB_X} cy="30" r="24" fill="rgba(91,130,184,0.12)" />
+            <circle cx={ORB_X} cy="30" r="20" fill="url(#orbGrad)" />
+            <circle cx={ORB_X} cy="30" r="21" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="2" />
+            <circle cx={ORB_X} cy="30" r="18" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5"
+              transform={`rotate(-90 ${ORB_X} 30)`} />
+            <circle cx={ORB_X} cy="30" r="18" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2.5"
+              strokeDasharray={`${2 * Math.PI * 18 * (1/8)} ${2 * Math.PI * 18}`}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${ORB_X} 30)`} />
+            <foreignObject x={ORB_X - 11} y="19" width="22" height="22">
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontSize: 18, lineHeight: 1, textAlign: 'center' }}>🤖</div>
+            </foreignObject>
+
+            {/* User avatar */}
+            <circle cx="298" cy="30" r="13" fill="url(#avatarGrad)" />
+            <text x="298" y="35" textAnchor="middle" fontSize="11" fill="white" fontWeight="700" fontFamily="system-ui, sans-serif">J</text>
+          </svg>
+
+          {/* Animated pointing finger */}
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: `${(ORB_X / 320) * 100}%`,
+            transform: 'translateX(-50%)',
+            animation: 'finger-bounce 1.1s ease-in-out infinite',
+            marginTop: 6,
+          }}>
+            <span style={{ fontSize: 48, lineHeight: 1, display: 'block' }}>☝️</span>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '3.5rem' }}>
+          <button
+            onClick={onDismiss}
+            className="btn btn-primary"
+            style={{ minWidth: '9rem', fontSize: '0.9375rem' }}
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function slugify(text) {
   return String(text)
@@ -64,12 +180,50 @@ export default function FAQPage() {
   const [content, setContent] = useState(null)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
-  const [openSection, setOpenSection] = useState(null)
+  const [openSection, setOpenSection] = useState(() => {
+    const store = useGuideStore.getState()
+    if (store.uiHints?.faqAccordionOpened) return null
+    return 0  // open first section on first visit
+  })
+
+  // Show tip only the first time this page is visited during the journey (step 2 not yet complete)
+  const [showTip, setShowTip] = useState(() => {
+    const store = useGuideStore.getState()
+    if (store.uiHints?.faqTipShown) return false
+    const completedSteps = store.journeyProgress?.completedSteps ?? []
+    return !completedSteps.includes(2)
+  })
+
+  function dismissTip() {
+    useGuideStore.getState().setUiHint('faqTipShown')
+    setShowTip(false)
+  }
+
+  useEffect(() => {
+    useGuideStore.getState().setUiHint('faqAccordionOpened')
+  }, [])
 
   useEffect(() => {
     fetch('/faq.md', { cache: 'no-store' })
       .then(r => r.text())
       .then(setContent)
+  }, [])
+
+  // Close guide panel immediately so the page feels unobstructed
+  useEffect(() => { useGuideStore.getState().close() }, [])
+
+  // Journey step 2: visiting the FAQ page — update store directly so UI reflects completion without waiting for socket
+  useEffect(() => {
+    getToken().then(token => {
+      if (!token) return
+      api.guide.triggerStep(2, token).then(() => {
+        const store = useGuideStore.getState()
+        const current = store.journeyProgress?.completedSteps ?? []
+        if (!current.includes(2)) {
+          store.applyJourneyStep({ completedSteps: [...current, 2] })
+        }
+      }).catch(() => {})
+    }).catch(() => {})
   }, [])
 
   // Parse markdown into preamble (H1) + sections (H2 blocks)
@@ -125,6 +279,9 @@ export default function FAQPage() {
           </Link>
         )}
       </div>
+
+      {/* First-visit guide tip */}
+      {showTip && <GuideReturnTip onDismiss={dismissTip} />}
 
       {/* Search bar */}
       {content != null && (

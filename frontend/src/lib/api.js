@@ -150,12 +150,20 @@ export const api = {
     getHints: (token) => api.get('/users/me/hints', token),
     markFaqHint: (token) => api.post('/users/me/hints/faq', {}, token),
     markPlayHint: (token) => api.post('/users/me/hints/play', {}, token),
+    getPreferences:    (token)        => api.get('/users/me/preferences', token),
     updatePreferences: (prefs, token) => api.patch('/users/me/preferences', prefs, token),
     emailByUsername: (username) => api.get(`/users/by-username/${encodeURIComponent(username)}`),
     credits: (id) => api.get(`/users/${id}/credits`),
     notifications: (token) => api.get('/users/me/notifications', token),
     deliverNotifications: (ids, token) => api.post('/users/me/notifications/deliver', { ids }, token),
     updateSettings: (body, token) => api.patch('/users/me/settings', body, token),
+  },
+
+  guide: {
+    getPreferences:   (token)       => api.get('/guide/preferences', token),
+    patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),
+    triggerStep:      (step, token) => api.post('/guide/journey/step', { step }, token),
+    restartJourney:   (token)       => api.post('/guide/journey/restart', {}, token),
   },
 
   games: {

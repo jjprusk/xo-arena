@@ -99,7 +99,7 @@ function BenchmarkPanel({ model }) {
                         {pct}%
                       </span>
                       {r.pValue !== undefined && (
-                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${sig ? 'bg-[var(--color-teal-100)] text-[var(--color-teal-700)]' : 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'}`}>
+                        <span className={`badge ${sig ? 'badge-open' : 'badge-closed'}`}>
                           {sig ? `p=${r.pValue}` : `p=${r.pValue} ns`}
                         </span>
                       )}
@@ -263,7 +263,7 @@ function VersusPanel({ model, models }) {
                 <span style={{ color: 'var(--text-secondary)' }}>
                   {model.name} win rate: <b style={{ color: 'var(--color-blue-600)' }}>{Math.round(result.winRateA * 100)}%</b>
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${result.pValue <= 0.05 ? 'bg-[var(--color-teal-100)] text-[var(--color-teal-700)]' : 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'}`}>
+                <span className={`badge ${result.pValue <= 0.05 ? 'badge-open' : 'badge-closed'}`}>
                   {result.pValue <= 0.05 ? `Significant (p=${result.pValue})` : `Not significant (p=${result.pValue})`}
                 </span>
               </div>

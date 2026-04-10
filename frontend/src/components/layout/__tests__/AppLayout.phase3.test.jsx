@@ -56,13 +56,17 @@ vi.mock('../../../store/rolesStore.js', () => ({
   useRolesStore: vi.fn(),
 }))
 
-vi.mock('../../../store/gameStore.js', () => ({
-  useGameStore: { getState: vi.fn(() => ({ newGame: vi.fn() })) },
-}))
+vi.mock('../../../store/gameStore.js', () => {
+  const hook = vi.fn((sel) => sel ? sel({ status: 'idle', newGame: vi.fn() }) : undefined)
+  hook.getState = vi.fn(() => ({ newGame: vi.fn() }))
+  return { useGameStore: hook }
+})
 
-vi.mock('../../../store/pvpStore.js', () => ({
-  usePvpStore: { getState: vi.fn(() => ({ reset: vi.fn() })) },
-}))
+vi.mock('../../../store/pvpStore.js', () => {
+  const hook = vi.fn((sel) => sel ? sel({ status: 'idle', reset: vi.fn() }) : undefined)
+  hook.getState = vi.fn(() => ({ reset: vi.fn() }))
+  return { usePvpStore: hook }
+})
 
 vi.mock('../../../lib/api.js', () => ({
   api:      { users: { sync: vi.fn(() => Promise.resolve()) } },
@@ -270,7 +274,7 @@ describe('AppLayout — Phase 3: FeedbackToast', () => {
     stubFetch(1)
     await act(async () => { render(<AppLayout />) })
     await waitFor(() => expect(screen.getByText(/1 new feedback/i)).toBeDefined())
-    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^dismiss$/i }))
     expect(screen.queryByText(/new feedback/i)).toBeNull()
   })
 })

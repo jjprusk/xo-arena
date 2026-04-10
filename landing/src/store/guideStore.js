@@ -1,0 +1,117 @@
+import { create } from 'zustand'
+import { api } from '../lib/api.js'
+import { getToken } from '../lib/getToken.js'
+
+export const useGuideStore = create((set, get) => ({
+  panelOpen: false,
+  slots: [],
+  notifications: [],
+  journeyProgress: { completedSteps: [], dismissedAt: null },
+
+  // One-time UI hint flags — stored server-side so they coordinate across sites
+  uiHints: {},
+
+  hydrated: false,
+
+  open()   { set({ panelOpen: true }) },
+  close()  { set({ panelOpen: false }) },
+  toggle() { set(s => ({ panelOpen: !s.panelOpen })) },
+
+  addNotification(notif) {
+    set(s => {
+      if (s.notifications.some(n => n.id === notif.id)) return {}
+      return { notifications: [notif, ...s.notifications] }
+    })
+  },
+
+  dismissNotification(id) {
+    set(s => ({ notifications: s.notifications.filter(n => n.id !== id) }))
+  },
+
+  clearNotifications() {
+    set({ notifications: [] })
+  },
+
+  get badgeCount() {
+    return get().notifications.length
+  },
+
+  applyJourneyStep({ completedSteps }) {
+    set(s => ({
+      journeyProgress: { ...s.journeyProgress, completedSteps },
+    }))
+  },
+
+  dismissJourney() {
+    const dismissedAt = new Date().toISOString()
+    set(s => ({ journeyProgress: { ...s.journeyProgress, dismissedAt } }))
+    getToken().then(token => {
+      if (token) api.guide.patchPreferences({ journeyProgress: { ...get().journeyProgress } }, token).catch(() => {})
+    }).catch(() => {})
+  },
+
+  // Marks step 8 complete, sets dismissedAt, and saves slots — all in one PATCH to avoid race.
+  async completeJourney(postJourneySlots) {
+    const { journeyProgress } = get()
+    const completedSteps = [...new Set([...(journeyProgress?.completedSteps ?? []), 8])]
+    const dismissedAt    = new Date().toISOString()
+    set({ journeyProgress: { completedSteps, dismissedAt }, slots: postJourneySlots })
+    try {
+      const token = await getToken()
+      if (token) await api.guide.patchPreferences({
+        journeyProgress: { completedSteps, dismissedAt },
+        guideSlots: postJourneySlots,
+      }, token)
+    } catch { /* non-fatal */ }
+  },
+
+  async restartJourney() {
+    try {
+      const token = await getToken()
+      if (token) await api.guide.restartJourney(token)
+      set({ journeyProgress: { completedSteps: [], dismissedAt: null } })
+    } catch { /* non-fatal */ }
+  },
+
+  // Mark a one-time hint as seen locally and persist to server (cross-site coordination)
+  setUiHint(key) {
+    const uiHints = { ...get().uiHints, [key]: true }
+    set({ uiHints })
+    getToken().then(token => {
+      if (token) api.guide.patchPreferences({ uiHints }, token).catch(() => {})
+    }).catch(() => {})
+  },
+
+  async updateSlots(slots) {
+    set({ slots })
+    try {
+      const token = await getToken()
+      if (token) await api.guide.patchPreferences({ guideSlots: slots }, token)
+    } catch { /* non-fatal */ }
+  },
+
+  async hydrate() {
+    try {
+      const token = await getToken()
+      if (!token) return
+      const data = await api.guide.getPreferences(token)
+      set({
+        slots:           data.guideSlots        ?? [],
+        journeyProgress: data.journeyProgress   ?? { completedSteps: [], dismissedAt: null },
+        uiHints:         data.uiHints           ?? {},
+        hydrated:        true,
+      })
+    } catch { /* non-fatal */ }
+  },
+
+  reset() {
+    set({
+      panelOpen:       false,
+      slots:           [],
+      notifications:   [],
+      journeyProgress: { completedSteps: [], dismissedAt: null },
+      uiHints:         {},
+      hydrated:        false,
+    })
+  },
+}))

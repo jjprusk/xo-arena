@@ -9,9 +9,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const dist = join(__dirname, 'dist')
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
+const TOURNAMENT_URL = process.env.TOURNAMENT_URL || 'http://localhost:3001'
 
 // Gzip all responses
 app.use(compression())
+
+// Proxy tournament API paths to the tournament service (must be before the backend proxy).
+const tournamentProxy = createProxyMiddleware({
+  target: TOURNAMENT_URL,
+  changeOrigin: true,
+  pathFilter: ['/api/tournaments', '/api/matches'],
+})
+app.use(tournamentProxy)
 
 // Proxy /api/* and /socket.io/* to the backend, preserving the full path.
 // pathFilter keeps the prefix intact (unlike app.use('/api', proxy) which strips it).

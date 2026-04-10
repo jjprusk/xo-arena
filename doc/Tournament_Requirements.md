@@ -309,6 +309,130 @@ Players may opt out of demotion once per review period. Demotion drops the playe
 
 ---
 
+## User Interface
+
+### Platform Architecture
+
+All tournament UI — player-facing and admin — lives at **aiarena.callidity.com**, the platform-level site. Individual game applications (e.g., xo.aiarena.callidity.com) handle free play and game-specific features only; they do not host tournament pages.
+
+**Authentication is seamless across all sites.** A single BetterAuth token covers the entire platform. Logging into any site authenticates the user everywhere — no second sign-in is required when moving between aiarena and a game app.
+
+**The XO game component is extracted to a shared package** (`packages/xo`) importable by both the aiarena app and the xo.aiarena app. When a tournament match requires game play, the board renders inline at aiarena — the player never leaves. PVP tournament matches use the existing xo.aiarena backend room infrastructure; the tournament service creates the room and hands the slug to both players.
+
+**Tournament admin** (create/manage tournaments, classification configuration, merit thresholds, demotion settings) lives at aiarena, not in the xo.aiarena admin panel.
+
+---
+
+### Tournament Lobby
+
+The lobby is the primary entry point for all tournament activity, accessible to all users including guests.
+
+**Layout**
+- A filterable list of tournaments organized into tabs or sections: **Upcoming**, **In Progress**, **Completed**.
+- Each tournament card shows: name, game, mode, format, bracket type, status, participant count (current / max), start time, and a tier requirement badge if applicable.
+- Filters: game, mode (PVP / BOT_VS_BOT / MIXED), format (Open / Planned / Flash), status.
+- Flash tournaments appear at the top of the lobby with a countdown timer and a prominent "Join now" call to action.
+
+**Access**
+- Guests may browse the lobby and view tournament details but cannot register.
+- Logged-in users may register, withdraw, and view their registration status inline on each card.
+
+---
+
+### Tournament Detail Page
+
+Each tournament has a dedicated detail page reachable from the lobby.
+
+**Header**
+- Tournament name, game, mode, format, bracket type, status badge, and organizer name.
+- Start time (with countdown if upcoming), end time if applicable.
+- Registration status for the current user: not registered / registered (with their notification preference shown) / ineligible (with reason).
+
+**Registration Panel**
+- Register / Withdraw button for eligible logged-in users.
+- At registration time, the user selects their **match result notification preference**: *After each match* (`AS_PLAYED`) or *Summary at end* (`END_OF_TOURNAMENT`).
+- For recurring tournaments, the user selects their **registration mode**: *This occurrence only* (`SINGLE`) or *All future occurrences* (`RECURRING`).
+- Registered participants list (avatar, display name, tier badge, ELO). Collapsed by default for large fields.
+
+**Bracket / Standings View**
+- *Single elimination:* visual bracket tree. Completed matches show scores. The current user's path is highlighted.
+- *Round robin:* standings table (rank, player, wins, draws, losses, points). Completed matches shown in a collapsible match results section.
+- Bracket is visible to all users (guests included) once the tournament is IN_PROGRESS or COMPLETED.
+
+**Match Panel (active participant)**
+- When a match is ready for the current user, a prominent banner appears: *"Your match is ready — Round N."*
+- PVP and MIXED human-vs-bot matches: the game board renders inline on the page — the player never leaves aiarena. The game component is sourced from `packages/xo`.
+- The panel clears once the match result has been recorded.
+
+---
+
+### Player Classification Profile
+
+Each authenticated user has a classification profile page at aiarena.
+
+**Content**
+- Current tier (displayed as a color-coded badge: Recruit → Legend).
+- Merit progress bar: current merits / merits required for next promotion.
+- Tier history: a timeline of promotions and demotions with dates and reasons.
+- Recent tournament results: last N tournaments entered, finish position, merits earned.
+
+Visible to the authenticated user. Admin users may view any player's classification via the tournament admin panel.
+
+---
+
+### Flash Tournament Banner
+
+When a flash tournament is announced, all logged-in users receive a real-time, dismissible banner at the top of the page regardless of which page they are on:
+
+> **Flash Tournament — [Name]** — Starting in N minutes. [Join now →]
+
+The banner includes a countdown. Tapping/clicking navigates to the tournament detail page. The banner auto-dismisses when the tournament starts or when the user dismisses it manually. The banner must appear on both aiarena and xo.aiarena pages, since users may be active on either site when a flash tournament fires.
+
+---
+
+### Notification Preferences (Settings Page)
+
+The aiarena Settings page includes a **Tournament Notifications** section:
+
+- **Match result delivery** — global default: *After each match* / *Summary at end*. This default applies to any tournament registration where the user does not override it at enrollment.
+- **Flash tournament alerts** — toggle: receive the real-time flash announcement banner.
+- **Planned tournament reminders** — toggle: receive 1-hour and 15-minute reminders for registered tournaments.
+
+---
+
+### Navigation
+
+- The aiarena main navigation includes: Tournaments, My Profile, Settings, and a sign-in/account control.
+- An unread badge on the navigation indicates pending tournament notifications (match ready, results available, etc.).
+- A notification bell surfaces tournament notifications inline.
+- A **Play** link or game launcher navigates users to the appropriate game app (xo.aiarena, etc.) for free play outside of tournaments.
+
+---
+
+### Shared Packages
+
+The following packages are extracted from the xo.aiarena frontend and made available across both sites:
+
+| Package | Contents |
+|---------|----------|
+| `packages/xo` | XO game board component, game logic, PvP socket integration |
+| `packages/auth` | BetterAuth client config, `getToken()`, `useSession()` hook |
+| `packages/ui` | Shared design foundation: Tailwind preset, spacing/type scale, base component primitives |
+
+Each site applies its own theme on top of the shared foundation. aiarena has a distinct visual identity from xo.aiarena.
+
+---
+
+### Responsive Design
+
+All tournament UI must be fully functional on mobile (phones and tablets) as well as desktop. Key constraints:
+- Bracket trees on mobile: horizontally scrollable or collapsed to a list view.
+- Round robin standings table: horizontally scrollable on narrow viewports.
+- The inline game board must be playable on touch screens.
+- Flash tournament banners must be visible and dismissible on all viewport sizes.
+
+---
+
 ## Addendum — Deferred Features
 
 The following items have been considered but are explicitly out of scope for the initial implementation. They are noted here for future reference.

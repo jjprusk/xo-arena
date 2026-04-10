@@ -4,12 +4,9 @@ import { signOut } from '../../lib/auth-client.js'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 import { clearTokenCache } from '../../lib/getToken.js'
 import { disconnectSocket } from '../../lib/socket.js'
-import GettingStartedModal from '../GettingStartedModal.jsx'
-
-export default function UserButton({ afterSignOutUrl = '/play' }) {
+export default function UserButton({ afterSignOutUrl = '/play', adminUrl = null }) {
   const { data: session } = useOptimisticSession()
   const [open, setOpen] = useState(false)
-  const [gettingStartedOpen, setGettingStartedOpen] = useState(false)
   const containerRef = useRef(null)
   const navigate = useNavigate()
 
@@ -52,14 +49,22 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
       {/* Avatar trigger */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-600)]"
-        style={{ backgroundColor: 'var(--color-blue-100)', color: 'var(--color-blue-700)' }}
+        className="flex items-center gap-2 px-2 py-1 rounded-lg text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
+        style={{ color: 'var(--text-secondary)' }}
       >
-        {user?.image ? (
-          <img src={user.image} alt="" className="w-full h-full object-cover" style={{ backgroundColor: 'white' }} />
-        ) : (
-          user?.name?.[0]?.toUpperCase() || '?'
-        )}
+        <span
+          className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold text-white"
+          style={{ backgroundColor: 'var(--color-teal-600)' }}
+        >
+          {user?.image ? (
+            <img src={user.image} alt="" className="w-full h-full object-cover" />
+          ) : (
+            (user?.name ?? user?.email ?? '?')[0].toUpperCase()
+          )}
+        </span>
+        <span className="hidden sm:inline max-w-28 truncate">
+          {user?.name ?? user?.email}
+        </span>
       </button>
 
       {/* Popover */}
@@ -89,14 +94,6 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
           {/* Menu items */}
           <div className="py-1">
             <button
-              onClick={() => { setOpen(false); setGettingStartedOpen(true) }}
-              className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              Guide
-              <span style={{ color: 'var(--text-muted)' }}>?</span>
-            </button>
-            <button
               onClick={() => { setOpen(false); navigate('/profile') }}
               className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
               style={{ color: 'var(--text-primary)' }}
@@ -115,7 +112,7 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
 
             {isAdmin && (
               <button
-                onClick={() => { setOpen(false); navigate('/admin') }}
+                onClick={() => { setOpen(false); if (adminUrl) window.location.href = adminUrl; else navigate('/admin') }}
                 className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
                 style={{ color: 'var(--text-primary)' }}
               >
@@ -138,7 +135,6 @@ export default function UserButton({ afterSignOutUrl = '/play' }) {
         </div>
       )}
 
-      <GettingStartedModal isOpen={gettingStartedOpen} onClose={() => setGettingStartedOpen(false)} />
     </div>
   )
 }

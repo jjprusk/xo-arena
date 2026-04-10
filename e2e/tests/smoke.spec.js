@@ -66,6 +66,14 @@ test.describe('Smoke — frontend', () => {
     await expect(page.getByRole('heading', { name: /leaderboard/i })).toBeVisible()
   })
 
+  test('tournaments page loads and shows filter bar', async ({ page }) => {
+    await page.goto('/tournaments')
+    await expect(page.getByRole('heading', { name: /tournaments/i })).toBeVisible()
+    // Filter bar buttons: All, Open, In Progress, Completed
+    await expect(page.getByRole('button', { name: 'All' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Open' })).toBeVisible()
+  })
+
 })
 
 // ── Backend API smoke ─────────────────────────────────────────────────────────
@@ -86,5 +94,25 @@ test.describe('Smoke — backend API', () => {
   test('feedback submit endpoint exists (not 404)', async ({ request }) => {
     const res = await request.post('/api/v1/feedback', { data: {} })
     expect(res.status()).not.toBe(404)
+  })
+
+  test('tournament list endpoint is reachable', async ({ request }) => {
+    const res = await request.get('/api/tournaments')
+    expect(res.ok()).toBe(true)
+    const body = await res.json()
+    // May be an array or { tournaments: [] } — either way it must be an object/array
+    expect(typeof body === 'object' && body !== null).toBe(true)
+  })
+
+  test('tournament registration requires auth (401, not 404)', async ({ request }) => {
+    // Confirm the register endpoint is mounted — unauthenticated POST should 401, not 404
+    const res = await request.post('/api/tournaments/smoke-check/register', { data: {} })
+    expect(res.status()).toBe(401)
+  })
+
+  test('GET /classification/me requires auth (401, not 404)', async ({ request }) => {
+    // Confirms classificationMeRouter is mounted and requireAuth fires
+    const res = await request.get('/api/classification/me')
+    expect(res.status()).toBe(401)
   })
 })

@@ -7,6 +7,7 @@ import { api, prefetch } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
 import AuthModal from '../auth/AuthModal.jsx'
+import GuestWelcomeModal from '../auth/GuestWelcomeModal.jsx'
 import UserButton from '../auth/UserButton.jsx'
 import SignedIn from '../auth/SignedIn.jsx'
 import SignedOut from '../auth/SignedOut.jsx'
@@ -16,12 +17,14 @@ import { useRolesStore } from '../../store/rolesStore.js'
 import { useSoundStore } from '../../store/soundStore.js'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import NamePromptModal from '../NamePromptModal.jsx'
-import GettingStartedModal from '../GettingStartedModal.jsx'
-import WelcomeModal from '../WelcomeModal.jsx'
 import IdleLogoutManager from './IdleLogoutManager.jsx'
 import AccomplishmentPopup from '../AccomplishmentPopup.jsx'
-import { usePrefsStore } from '../../store/prefsStore.js'
-import { getSocket } from '../../lib/socket.js'
+import GuideOrb from '../guide/GuideOrb.jsx'
+import GuidePanel from '../guide/GuidePanel.jsx'
+import { useGuideStore } from '../../store/guideStore.js'
+import { useNotifSoundStore } from '../../store/notifSoundStore.js'
+import { getSocket, connectSocket } from '../../lib/socket.js'
+import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -36,29 +39,23 @@ const BOTTOM_NAV = [
   { to: '/play', label: 'Play', icon: '⊞' },
   { to: '/gym', label: 'Gym', icon: '⚡' },
   { to: '/leaderboard', label: 'Ranks', icon: '★' },
-  { to: '/stats', label: 'Stats', icon: '◎' },
   { to: '/profile', label: 'Profile', icon: '◉' },
 ]
 
 const MENU_LINKS = [
-  { to: '/play',        label: 'Play',        icon: '⊞' },
-  { to: '/gym',         label: 'Gym',         icon: '⚡' },
-  { to: '/puzzles',     label: 'Puzzles',      icon: '◈' },
-  { to: '/leaderboard', label: 'Rankings',     icon: '★' },
-  { to: '/stats',       label: 'Stats',        icon: '◎' },
-  { to: '/profile',     label: 'Profile',      icon: '◉' },
-  { to: '/about',       label: 'About',        icon: '○' },
-  { to: '/faq',         label: 'FAQ',          icon: '?' },
-  { to: '/settings',    label: 'Settings',     icon: '⚙' },
+  { to: '/play',        label: 'Play',         icon: '⊞' },
+  { to: '/gym',         label: 'Gym',          icon: '⚡' },
+  { to: '/puzzles',     label: 'Puzzles',       icon: '◈' },
+  { to: '/leaderboard', label: 'Rankings',      icon: '★' },
+  { to: '/stats',       label: 'Stats',         icon: '◎' },
+  { to: '/profile',     label: 'Profile',       icon: '◉' },
+  { to: '/about',       label: 'About',         icon: '○' },
+  { to: '/faq',         label: 'FAQ',           icon: '?' },
+  { to: '/settings',    label: 'Settings',      icon: '⚙' },
 ]
 
-const ADMIN_MENU_LINKS = [
-  { to: '/admin',           label: 'Dashboard', end: true },
-  { to: '/admin/users',     label: 'Users' },
-  { to: '/admin/ml-models', label: 'Bots' },
-  { to: '/admin/ai',        label: 'AI' },
-  { to: '/admin/logs',      label: 'Logs' },
-]
+const PLATFORM_URL       = import.meta.env.VITE_PLATFORM_URL ?? 'https://aiarena.callidity.com'
+const PLATFORM_ADMIN_URL = `${PLATFORM_URL}/admin`
 
 // Endpoints/chunks to prefetch when hovering the corresponding nav link.
 const PREFETCH_MAP = {
@@ -84,23 +81,46 @@ function usePrefetchHandler(to) {
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: session } = useOptimisticSession()
+  const { data: session, isPending: sessionPending } = useOptimisticSession()
   const isAdmin = session?.user?.role === 'admin'
   const rolesStore = useRolesStore()
   const isSupport = !isAdmin && rolesStore.hasRole('SUPPORT')
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authModalView, setAuthModalView] = useState('sign-in')
   const [menuOpen, setMenuOpen] = useState(false)
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const [accomplishments, setAccomplishments] = useState([])
-  const [guideOpen, setGuideOpen] = useState(false)
-  const [guideHint, setGuideHint] = useState(null)
-  const [welcomeOpen, setWelcomeOpen] = useState(false)
-  const { showGuideButton, setPrefs } = usePrefsStore()
   const prevUserId = useRef(null)
 
-  // Close the mobile menu whenever the user navigates
-  useEffect(() => { setMenuOpen(false) }, [location.pathname])
+  // Guest welcome modal — shown once to non-authenticated first-time visitors
+  const [guestWelcomeOpen, setGuestWelcomeOpen] = useState(false)
+  useEffect(() => {
+    if (sessionPending) return
+    if (session?.user) return
+    if (localStorage.getItem('xo_guest_welcome_seen')) return
+    setGuestWelcomeOpen(true)
+  }, [sessionPending, session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function closeGuestWelcome() {
+    localStorage.setItem('xo_guest_welcome_seen', '1')
+    setGuestWelcomeOpen(false)
+  }
+
+  function openRegisterFromWelcome() {
+    localStorage.setItem('xo_guest_welcome_seen', '1')
+    setGuestWelcomeOpen(false)
+    setAuthModalView('sign-up')
+    setAuthModalOpen(true)
+  }
+
+  useJourneyAutoOpen()
+
+  // Close the mobile menu and guide panel whenever the user navigates
+  useEffect(() => {
+    setMenuOpen(false)
+    useGuideStore.getState().close()
+  }, [location.pathname])
 
   // Fetch roles when user signs in; clear on sign-out
   useEffect(() => {
@@ -113,47 +133,6 @@ export default function AppLayout() {
       prevUserId.current = null
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load preferences and auto-open guide on first ever sign-in
-  useEffect(() => {
-    const userId = session?.user?.id
-    if (!userId) return
-    async function maybeAutoOpen() {
-      try {
-        const token = await getToken()
-        const { faqHintSeen, playHintSeen, showGuideButton: sgb } = await api.users.getHints(token)
-        setPrefs({ showGuideButton: sgb, playHintSeen: !!playHintSeen })
-        if (!faqHintSeen) {
-          api.users.markFaqHint(token).catch(() => {})
-          setGuideHint('faq')
-          setGuideOpen(true)
-        }
-      } catch { /* non-fatal */ }
-    }
-    maybeAutoOpen()
-  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Re-open guide when navigated back from FAQ with ?open-guide=1
-  useEffect(() => {
-    if (!location.search?.includes('open-guide=1')) return
-    const { playHintSeen } = usePrefsStore.getState()
-    setGuideHint(playHintSeen ? null : 'play')
-    setGuideOpen(true)
-    navigate(location.pathname, { replace: true })
-  }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Show welcome popup once to first-time visitors (signed-out only).
-  // ?reset-welcome=1 clears the seen flag for testing.
-  useEffect(() => {
-    if (location.search?.includes('reset-welcome=1')) {
-      localStorage.removeItem('xo_welcome_seen')
-      navigate(location.pathname, { replace: true })
-    }
-    if (session) return // already signed in — skip
-    if (localStorage.getItem('xo_welcome_seen')) return
-    const id = setTimeout(() => setWelcomeOpen(true), 1200)
-    return () => clearTimeout(id)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll unread-count every 60s to seed the badge on sign-in (no chime — only socket chimes)
   useEffect(() => {
@@ -219,6 +198,66 @@ export default function AppLayout() {
       .catch(() => {})
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Hydrate GuideStore on sign-in; open panel if journey is incomplete; reset on sign-out.
+  // Also subscribe the socket to the user's personal room so guide:journeyStep / guide:notification events arrive.
+  useEffect(() => {
+    if (session?.user?.id) {
+      useGuideStore.getState().hydrate().then(() => {
+        // Don't auto-open on pages where the guide would obscure gameplay
+        if (window.location.pathname.startsWith('/play')) return
+        const { journeyProgress } = useGuideStore.getState()
+        const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+        if (!dismissedAt && completedSteps.length < 8) {
+          useGuideStore.getState().open()
+        }
+      })
+      // Join the user's personal socket room for real-time guide/journey events
+      getToken().then(token => {
+        if (!token) return
+        const socket = connectSocket(token)
+        function subscribe() { socket.emit('user:subscribe', { authToken: token }) }
+        if (socket.connected) subscribe()
+        else socket.once('connect', subscribe)
+      }).catch(() => {})
+    } else {
+      useGuideStore.getState().reset()
+    }
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Real-time guide:notification events → GuideStore
+  useEffect(() => {
+    const socket = getSocket()
+    function onGuideNotification(notif) {
+      useGuideStore.getState().addNotification(notif)
+      useNotifSoundStore.getState().play()
+      // Auto-open panel for urgent types if not mid-game
+      if (notif.type === 'flash' || notif.type === 'match_ready') {
+        const { panelOpen } = useGuideStore.getState()
+        const { status: pvaiStatus } = useGameStore.getState()
+        const { status: pvpStatus } = usePvpStore.getState()
+        const inGame = pvaiStatus === 'playing' || pvpStatus === 'playing'
+        if (!panelOpen && !inGame) useGuideStore.getState().open()
+      }
+    }
+    socket.on('guide:notification', onGuideNotification)
+
+    function onJourneyStep({ completedSteps }) {
+      useGuideStore.getState().applyJourneyStep({ completedSteps })
+      // Open the guide to celebrate the completed step — game is already over (won/draw)
+      // so we're not interrupting active play
+      const { status: pvaiStatus } = useGameStore.getState()
+      const { status: pvpStatus } = usePvpStore.getState()
+      const inGame = pvaiStatus === 'playing' || pvpStatus === 'playing'
+      if (!inGame) useGuideStore.getState().open()
+    }
+    socket.on('guide:journeyStep', onJourneyStep)
+
+    return () => {
+      socket.off('guide:notification', onGuideNotification)
+      socket.off('guide:journeyStep', onJourneyStep)
+    }
+  }, [])
+
   // Real-time accomplishment events pushed from the server over Socket.IO
   useEffect(() => {
     const socket = getSocket()
@@ -245,17 +284,18 @@ export default function AppLayout() {
 
   return (
     <div className="flex flex-col min-h-dvh relative">
-      {/* Mountain background */}
+      {/* Mountain background — xo.aiarena game site has its own visual identity distinct from the aiarena platform */}
+      {/* The Colosseum background applies to aiarena.callidity.com (platform + admin), not the game sites */}
       <div
         aria-hidden="true"
         className="fixed inset-0 pointer-events-none select-none"
         style={{
           zIndex: 0,
-          opacity: 0.30,
+          opacity: 'var(--photo-opacity)',
           backgroundImage: 'url(/mountain-bg.jpg)',
           backgroundSize: 'cover',
           backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center center',
+          backgroundPosition: 'center 30%',
         }}
       />
       {/* Top nav bar */}
@@ -266,37 +306,16 @@ export default function AppLayout() {
         {/* Logo + Getting Started guide button */}
         <div className="flex items-center gap-2">
           <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
-            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="XO Arena">
               <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
-              <text x="2" y="23" fontSize="19" fontWeight="800" fill="white" fontFamily="var(--font-display), system-ui, sans-serif">X</text>
-              <text x="16" y="23" fontSize="19" fontWeight="800" fill="var(--color-teal-500)" fontFamily="var(--font-display), system-ui, sans-serif">O</text>
+              {/* Tic-tac-toe grid (octothorpe) */}
+              <line x1="11" y1="5"  x2="11" y2="27" stroke="white"                    strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="21" y1="5"  x2="21" y2="27" stroke="var(--color-teal-400)"    strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="5"  y1="11" x2="27" y2="11" stroke="white"                    strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="5"  y1="21" x2="27" y2="21" stroke="var(--color-teal-400)"    strokeWidth="2.5" strokeLinecap="round" />
             </svg>
-            <span
-              className="text-xl font-bold tracking-tight"
-              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-blue-600)' }}
-            >
-              XO Arena
-            </span>
           </Link>
-          {session && showGuideButton && (
-            <button
-              onClick={() => {
-                const { playHintSeen } = usePrefsStore.getState()
-                setGuideHint(playHintSeen ? null : 'play')
-                setGuideOpen(true)
-              }}
-              aria-label="Guide"
-              title="Guide"
-              className="guide-pulse flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
-              style={{
-                background: 'linear-gradient(135deg, var(--color-blue-500), #6366f1)',
-                color: 'white',
-              }}
-            >
-              <span>✦</span>
-              <span>Guide</span>
-            </button>
-          )}
+          {/* Guide orb — shown to signed-in users */}
         </div>
 
         {/* Desktop nav links */}
@@ -354,34 +373,6 @@ export default function AppLayout() {
             About
           </NavLink>
 
-          {/* Admin section — amber-tinted, desktop-only, admins only */}
-          {isAdmin && (
-            <>
-              <span className="w-px h-4 mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
-              {[
-                { to: '/admin', label: 'Admin' },
-                { to: '/admin/users', label: 'Users' },
-                { to: '/admin/ml-models', label: 'Bots' },
-                { to: '/admin/ai', label: 'AI' },
-                { to: '/admin/logs', label: 'Logs' },
-              ].map(({ to, label }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={to === '/admin'}
-                  className={({ isActive }) =>
-                    `text-xs font-medium px-2 py-1 rounded-md transition-colors relative ${
-                      isActive
-                        ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
-                        : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
-            </>
-          )}
         </nav>
 
         {/* Controls */}
@@ -414,9 +405,10 @@ export default function AppLayout() {
               Sign in
             </button>
           </SignedOut>
-          <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+          <AuthModal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setAuthModalView('sign-in') }} defaultView={authModalView} />
           <SignedIn>
-            <UserButton afterSignOutUrl="/play" />
+            <GuideOrb />
+            <UserButton afterSignOutUrl="/play" adminUrl={PLATFORM_ADMIN_URL} />
           </SignedIn>
         </div>
       </header>
@@ -474,29 +466,6 @@ export default function AppLayout() {
                 </NavLink>
               ))}
 
-              {/* Admin section */}
-              {isAdmin && (
-                <>
-                  <div className="my-2 h-px mx-1" style={{ backgroundColor: 'var(--border-default)' }} />
-                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-amber-600)' }}>Admin</p>
-                  {ADMIN_MENU_LINKS.map(({ to, label, end }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={end}
-                      className={({ isActive }) =>
-                        `relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-[var(--color-amber-100)] text-[var(--color-amber-700)]'
-                            : 'text-[var(--color-amber-600)] hover:bg-[var(--color-amber-50)]'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                </>
-              )}
             </nav>
           </div>
         </div>
@@ -541,6 +510,11 @@ export default function AppLayout() {
         />
       )}
 
+      <GuestWelcomeModal
+        isOpen={guestWelcomeOpen}
+        onClose={closeGuestWelcome}
+        onRegister={openRegisterFromWelcome}
+      />
       <NamePromptModal
         isOpen={!!namePrompt}
         userId={namePrompt?.userId}
@@ -548,34 +522,15 @@ export default function AppLayout() {
         onSave={() => setNamePrompt(null)}
         onSkip={() => setNamePrompt(null)}
       />
-      <GettingStartedModal
-        isOpen={guideOpen}
-        hint={guideHint}
-        onClose={() => { setGuideOpen(false); setGuideHint(null) }}
-      />
-      <WelcomeModal
-        isOpen={welcomeOpen}
-        onClose={() => {
-          const isFirst = !localStorage.getItem('xo_welcome_seen')
-          localStorage.setItem('xo_welcome_seen', '1')
-          setWelcomeOpen(false)
-          if (isFirst) {
-            sessionStorage.setItem('xo_guest_challenge_hint', '1')
-            navigate('/play')
-          }
-        }}
-        onSignIn={() => {
-          localStorage.setItem('xo_welcome_seen', '1')
-          setWelcomeOpen(false)
-          setAuthModalOpen(true)
-        }}
-      />
       {accomplishments.length > 0 && (
         <AccomplishmentPopup
           notification={accomplishments[0]}
           onDismiss={() => handleDismissAccomplishment(accomplishments[0].id)}
         />
       )}
+      <SignedIn>
+        <GuidePanel isAdmin={isAdmin} />
+      </SignedIn>
       <IdleLogoutManager />
     </div>
   )

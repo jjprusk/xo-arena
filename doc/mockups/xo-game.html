@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XO Arena — Active Game + Guide (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Palette ───────────────────────────────────────────────────────── */
+:root {
+  --color-slate-50:  #EEF2F8;
+  --color-slate-100: #D6E0EF;
+  --color-slate-200: #B8CBE3;
+  --color-slate-500: #4A6FA5;
+  --color-slate-600: #3D5E8E;
+  --color-slate-700: #304D77;
+  --color-teal-50:   #E6F6F2;
+  --color-teal-500:  #24B587;
+  --color-teal-600:  #1D9E75;
+  --color-amber-50:  #FDF6E7;
+  --color-amber-100: #FAEEDA;
+  --color-amber-500: #D4891E;
+  --color-amber-600: #BA7517;
+  --color-red-500:   #E85554;
+  --color-purple-500:#7C5CBF;
+  --color-gray-50:  #F1EFE8;
+  --color-gray-100: #E5E3DC;
+  --color-gray-200: #D0CEC7;
+  --color-gray-300: #B8B6AF;
+  --color-gray-400: #9E9C96;
+  --color-gray-500: #83817B;
+  --color-gray-600: #676561;
+  --color-gray-700: #4E4C49;
+  --color-gray-800: #3A3836;
+  --color-gray-900: #2C2C2A;
+  --font-display: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root, .light {
+  --bg-page:          #1A1F2B;
+  --bg-surface:       #242936;
+  --bg-surface-2:     #2E3446;
+  --bg-surface-hover: #353D52;
+  --border-default:   rgba(255,255,255,0.10);
+  --border-strong:    rgba(255,255,255,0.16);
+  --text-primary:     #F0F2F7;
+  --text-secondary:   #9AA3BA;
+  --text-muted:       #5F6880;
+  --shadow-card:      0 4px 16px rgb(0 0 0 / 0.35);
+  --shadow-nav:       0 1px 0 rgba(255,255,255,0.06);
+  --guide-bg:         #1E2537;
+  --guide-border:     rgba(74,111,165,0.35);
+  --slot-bg:          rgba(74,111,165,0.10);
+  --slot-border:      rgba(74,111,165,0.20);
+  --slot-bg-hover:    rgba(74,111,165,0.20);
+}
+
+/* ── Animations ────────────────────────────────────────────────────── */
+@keyframes guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,111,165,0.8), 0 0 12px 3px rgba(74,111,165,0.4); }
+  50%       { box-shadow: 0 0 0 7px rgba(74,111,165,0), 0 0 20px 6px rgba(74,111,165,0.5); }
+}
+@keyframes guide-pulse-urgent {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.9), 0 0 14px 3px rgba(212,137,30,0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(212,137,30,0), 0 0 24px 7px rgba(212,137,30,0.4); }
+}
+@keyframes onboarding-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.7); }
+  50%       { box-shadow: 0 0 0 6px rgba(212,137,30,0); }
+}
+@keyframes flash-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+@keyframes fade-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+@keyframes slide-in { from{opacity:0;transform:translateX(12px)} to{opacity:1;transform:translateX(0)} }
+@keyframes notif-in { from{opacity:0;transform:translateY(-8px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes orb-ring-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes timer-urgent { 0%,100%{color:#F0F2F7} 50%{color:var(--color-amber-500)} }
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+a { color:inherit; text-decoration:none; }
+button { cursor:pointer; font-family:inherit; border:none; background:none; }
+
+/* ── Nav ───────────────────────────────────────────────────────────── */
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  height: 52px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-nav);
+  display: flex; align-items: center;
+  padding: 0 1.25rem; gap: 1.25rem;
+  flex-shrink: 0;
+}
+.nav-logo {
+  font-family: var(--font-display);
+  font-size: 1rem; font-weight: 800;
+  color: #EEF2F8;
+  letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 0.5rem;
+  white-space: nowrap;
+}
+.nav-logo-sub { font-weight: 400; opacity: 0.5; font-size: 0.875rem; }
+.nav-logo-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-slate-500);
+  animation: guide-pulse 2.4s ease-in-out infinite;
+}
+.nav-links { display: flex; align-items: center; gap: 0.125rem; flex: 1; }
+.nav-link {
+  font-size: 0.8125rem; font-weight: 500;
+  color: var(--text-secondary);
+  padding: 0.3rem 0.625rem;
+  border-radius: 0.4rem;
+  transition: color 0.15s, background 0.15s;
+}
+.nav-link:hover { color: var(--text-primary); background: var(--bg-surface-2); }
+.nav-link.active { color: #EEF2F8; background: rgba(74,111,165,0.2); font-weight:600; }
+.nav-right { display: flex; align-items: center; gap: 0.625rem; margin-left: auto; }
+
+/* ── Guide orb button ──────────────────────────────────────────────── */
+.guide-trigger {
+  display: flex; align-items: center; gap: 0.375rem;
+  padding: 0.3rem 0.75rem 0.3rem 0.375rem;
+  border-radius: 2rem;
+  border: 1.5px solid rgba(74,111,165,0.4);
+  background: rgba(74,111,165,0.12);
+  color: #B8CBE3;
+  font-size: 0.8125rem; font-weight: 600;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.guide-trigger:hover { border-color: var(--color-slate-500); box-shadow: 0 0 0 3px rgba(74,111,165,0.15); }
+.guide-trigger.urgent {
+  border-color: rgba(212,137,30,0.5);
+  background: rgba(212,137,30,0.10);
+  color: var(--color-amber-100);
+}
+
+/* Orb with optional progress ring */
+.guide-orb-wrap {
+  position: relative; width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+}
+.guide-orb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #7A9DD4, var(--color-slate-600));
+  box-shadow: 0 0 8px 2px rgba(74,111,165,0.4);
+  animation: guide-pulse 2.4s ease-in-out infinite;
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.625rem;
+}
+.guide-orb.urgent {
+  background: radial-gradient(circle at 35% 35%, #F0B050, var(--color-amber-600));
+  box-shadow: 0 0 8px 2px rgba(212,137,30,0.5);
+  animation: guide-pulse-urgent 1.4s ease-in-out infinite;
+}
+/* Progress ring SVG overlay */
+.orb-ring {
+  position: absolute; inset: -4px;
+  width: 28px; height: 28px;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.orb-ring-track { fill: none; stroke: rgba(212,137,30,0.2); stroke-width: 2.5; }
+.orb-ring-fill  { fill: none; stroke: var(--color-amber-500); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dashoffset 0.4s; }
+
+.guide-badge {
+  position: absolute; top: -5px; right: -5px;
+  background: var(--color-amber-500); color: white;
+  font-size: 0.625rem; font-weight: 800;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--bg-surface);
+  z-index: 2;
+}
+
+.nav-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--color-slate-600);
+  color: white; font-size: 0.75rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.nav-avatar .online-dot {
+  position: absolute; bottom: 0; right: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--color-teal-500);
+  border: 1.5px solid var(--bg-surface);
+}
+
+/* ── Page layout ───────────────────────────────────────────────────── */
+.page-layout {
+  display: flex; flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.game-area {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 2rem 1.5rem;
+  min-height: calc(100vh - 52px);
+  position: relative;
+}
+
+/* ── Game UI ───────────────────────────────────────────────────────── */
+.match-header {
+  width: 100%; max-width: 480px;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.25rem;
+  gap: 0.75rem;
+}
+.match-player {
+  display: flex; flex-direction: column; align-items: center; gap: 0.375rem;
+  min-width: 80px;
+}
+.match-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 0.9375rem; font-weight: 800;
+  color: white;
+  position: relative;
+}
+.match-avatar.you { background: var(--color-slate-500); box-shadow: 0 0 0 3px rgba(74,111,165,0.4); }
+.match-avatar.opp { background: #7C3F9E; }
+.match-player-name { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+.match-player-tier { font-size: 0.75rem; color: var(--text-muted); }
+
+.match-vs {
+  display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+}
+.vs-label { font-family: var(--font-display); font-size: 0.8125rem; font-weight: 700; color: var(--text-muted); }
+.timer {
+  font-family: var(--font-display); font-size: 1.75rem; font-weight: 800;
+  color: var(--color-amber-500);
+  letter-spacing: -0.02em;
+  animation: timer-urgent 1s ease-in-out infinite;
+}
+.timer.normal { color: var(--text-primary); animation: none; }
+.turn-indicator {
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--color-amber-500);
+  background: rgba(212,137,30,0.12);
+  border-radius: 2rem; padding: 0.2rem 0.625rem;
+  border: 1px solid rgba(212,137,30,0.25);
+}
+
+/* ── XO Board ──────────────────────────────────────────────────────── */
+.board-wrap {
+  position: relative;
+}
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 1rem;
+  padding: 6px;
+  margin-bottom: 1.25rem;
+  width: 312px; height: 312px;
+}
+.cell {
+  background: var(--bg-surface);
+  border-radius: 0.5rem;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-size: 2.5rem; font-weight: 800;
+  cursor: pointer;
+  transition: background 0.12s;
+  border: 1.5px solid var(--border-default);
+}
+.cell:hover:not(.taken) { background: var(--bg-surface-2); }
+.cell.taken { cursor: default; }
+.cell .x { color: var(--color-slate-200); }
+.cell .o { color: #C084FC; }
+.cell.highlight { background: rgba(74,111,165,0.15); border-color: rgba(74,111,165,0.4); }
+
+/* Notification overlay badge on game area */
+.game-notif-banner {
+  position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
+  background: rgba(212,137,30,0.12);
+  border: 1.5px solid rgba(212,137,30,0.4);
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  display: flex; align-items: center; gap: 0.625rem;
+  font-size: 0.8125rem; font-weight: 600; color: var(--color-amber-100);
+  white-space: nowrap;
+  animation: flash-pulse 2s ease-in-out infinite;
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+.game-notif-banner .orb-mini {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--color-amber-500);
+  animation: guide-pulse-urgent 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ── Guide panel ───────────────────────────────────────────────────── */
+.guide-panel {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--guide-bg);
+  border-left: 1.5px solid var(--guide-border);
+  display: flex; flex-direction: column;
+  min-height: calc(100vh - 52px);
+  animation: slide-in 0.2s ease;
+  overflow: hidden;
+}
+.guide-panel.hidden { display: none; }
+
+.guide-header {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border-default);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.guide-header-orb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #F0B050, var(--color-amber-600));
+  box-shadow: 0 0 8px 2px rgba(212,137,30,0.5);
+  animation: guide-pulse-urgent 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+  position: relative;
+}
+/* Progress ring inside guide header */
+.guide-header-ring {
+  position: absolute; inset: -3px;
+  width: 28px; height: 28px; transform: rotate(-90deg);
+}
+.guide-header-ring-track { fill:none; stroke:rgba(212,137,30,0.2); stroke-width:2.5; }
+.guide-header-ring-fill  { fill:none; stroke:var(--color-amber-500); stroke-width:2.5; stroke-linecap:round; }
+
+.guide-title {
+  font-family: var(--font-display);
+  font-size: 0.9375rem; font-weight: 700;
+  color: var(--text-primary); flex: 1;
+}
+.guide-header-actions {
+  display: flex; align-items: center; gap: 0.25rem;
+}
+.guide-icon-btn {
+  width: 28px; height: 28px; border-radius: 0.375rem;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.875rem; color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+.guide-icon-btn:hover { color: var(--text-primary); background: var(--bg-surface-2); }
+
+.guide-body {
+  flex: 1; overflow-y: auto;
+  padding: 0.875rem;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+
+/* ── Context banner ────────────────────────────────────────────────── */
+.guide-context-banner {
+  background: rgba(232,85,84,0.08);
+  border: 1px solid rgba(232,85,84,0.2);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem; color: #FCA5A5;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+
+/* ── Notifications section ─────────────────────────────────────────── */
+.guide-section-label {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: 0.375rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.guide-notif-stack { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.notif-card {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-default);
+  border-radius: 0.625rem;
+  padding: 0.75rem;
+  animation: notif-in 0.25s ease;
+}
+.notif-card.urgent {
+  border-color: rgba(212,137,30,0.4);
+  background: rgba(212,137,30,0.06);
+}
+.notif-card.match-ready {
+  border-color: rgba(74,111,165,0.4);
+  background: rgba(74,111,165,0.06);
+}
+.notif-card-header {
+  display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;
+}
+.notif-icon {
+  width: 28px; height: 28px; border-radius: 0.375rem;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.875rem; flex-shrink: 0;
+}
+.notif-icon.flash { background: rgba(212,137,30,0.15); }
+.notif-icon.match { background: rgba(74,111,165,0.15); }
+.notif-icon.invite { background: rgba(36,181,135,0.15); }
+.notif-title { font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
+.notif-body  { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.125rem; line-height: 1.4; }
+.notif-time  { font-size: 0.6875rem; color: var(--text-muted); margin-left: auto; white-space: nowrap; flex-shrink: 0; }
+.notif-dismiss {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bg-surface-2); color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.625rem; font-weight: 700;
+  transition: background 0.12s, color 0.12s;
+  cursor: pointer; flex-shrink: 0;
+}
+.notif-dismiss:hover { background: var(--border-default); color: var(--text-primary); }
+.notif-actions { display: flex; gap: 0.375rem; margin-top: 0.5rem; }
+.notif-btn {
+  flex: 1; padding: 0.375rem 0.625rem;
+  font-size: 0.75rem; font-weight: 700;
+  border-radius: 0.375rem;
+  cursor: pointer; border: none; font-family: inherit;
+  transition: background 0.12s, opacity 0.12s;
+}
+.notif-btn-primary { background: var(--color-amber-500); color: white; }
+.notif-btn-primary:hover { background: var(--color-amber-600); }
+.notif-btn-primary.blue { background: var(--color-slate-500); }
+.notif-btn-primary.blue:hover { background: var(--color-slate-600); }
+.notif-btn-secondary { background: var(--bg-surface-2); color: var(--text-secondary); }
+.notif-btn-secondary:hover { background: var(--border-default); color: var(--text-primary); }
+
+/* ── Slots grid ────────────────────────────────────────────────────── */
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.375rem;
+}
+.slot {
+  background: var(--slot-bg);
+  border: 1.5px solid var(--slot-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.25rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  min-height: 58px; justify-content: center;
+}
+.slot:hover { background: var(--slot-bg-hover); border-color: var(--color-slate-500); transform: translateY(-1px); }
+.slot:active { transform: translateY(0); }
+.slot-icon { font-size: 1.125rem; line-height: 1; }
+.slot-label { font-size: 0.6rem; font-weight: 600; text-align: center; color: var(--text-secondary); line-height: 1.2; }
+.slot.onboarding {
+  border-style: dashed;
+  border-color: rgba(212,137,30,0.4);
+  background: rgba(212,137,30,0.06);
+  animation: onboarding-pulse 2.5s ease-in-out infinite;
+}
+.slot.onboarding .slot-label { color: var(--color-amber-500); }
+.slot-expiry { font-size: 0.5625rem; color: var(--color-amber-600); margin-top: 1px; }
+.slots-edit-row {
+  display: flex; justify-content: flex-end;
+}
+.slots-edit-btn {
+  font-size: 0.6875rem; color: var(--text-muted);
+  display: flex; align-items: center; gap: 0.25rem;
+  padding: 0.2rem 0.375rem; border-radius: 0.25rem;
+  transition: color 0.12s, background 0.12s;
+}
+.slots-edit-btn:hover { color: var(--text-primary); background: var(--bg-surface-2); }
+
+/* ── Chat / input ──────────────────────────────────────────────────── */
+.guide-chat {
+  border-top: 1px solid var(--border-default);
+  padding: 0.75rem;
+}
+.guide-chat-history {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+.chat-msg {
+  font-size: 0.8125rem; line-height: 1.4;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  max-width: 90%;
+}
+.chat-msg.from-guide {
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  align-self: flex-start;
+}
+.chat-msg.from-user {
+  background: rgba(74,111,165,0.15);
+  color: var(--text-primary);
+  align-self: flex-end;
+  border: 1px solid rgba(74,111,165,0.2);
+}
+.guide-input-row {
+  display: flex; gap: 0.375rem; align-items: flex-end;
+}
+.guide-input {
+  flex: 1;
+  background: var(--bg-surface-2);
+  border: 1.5px solid var(--border-default);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem; color: var(--text-primary);
+  outline: none; resize: none;
+  transition: border-color 0.15s;
+  font-family: var(--font-body);
+  line-height: 1.4;
+  min-height: 36px; max-height: 80px;
+}
+.guide-input:focus { border-color: var(--color-slate-500); }
+.guide-input::placeholder { color: var(--text-muted); }
+.guide-send {
+  width: 34px; height: 34px; border-radius: 0.5rem;
+  background: var(--color-slate-500); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.875rem; flex-shrink: 0;
+  transition: background 0.12s;
+}
+.guide-send:hover { background: var(--color-slate-600); }
+
+/* ── Online strip ──────────────────────────────────────────────────── */
+.online-strip {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-default);
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.75rem;
+}
+.online-strip-label {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  display: flex; align-items: center; gap: 0.375rem;
+}
+.online-dot-sm {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--color-teal-500);
+  animation: flash-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.online-avatars {
+  display: flex; gap: 0.375rem; flex-wrap: wrap;
+}
+.online-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6875rem; font-weight: 800; color: white;
+  cursor: pointer; position: relative;
+  transition: transform 0.12s, box-shadow 0.12s;
+  border: 2px solid transparent;
+}
+.online-avatar:hover { transform: scale(1.1); box-shadow: 0 0 0 3px rgba(36,181,135,0.4); }
+.online-avatar .odot {
+  position: absolute; bottom: 0; right: 0;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-teal-500);
+  border: 1.5px solid var(--guide-bg);
+}
+.online-avatar .in-game {
+  background: var(--color-amber-500);
+}
+.online-more {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--bg-surface-2); color: var(--text-muted);
+  font-size: 0.6875rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+
+/* ── Mockup controls ───────────────────────────────────────────────── */
+.mockup-controls {
+  position: fixed; bottom: 1.25rem; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30,37,55,0.95);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 2rem;
+  padding: 0.5rem 1rem;
+  display: flex; align-items: center; gap: 0.75rem;
+  font-size: 0.75rem; color: var(--text-muted);
+  backdrop-filter: blur(12px);
+  z-index: 999;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.ctrl-btn {
+  padding: 0.3rem 0.75rem;
+  border-radius: 1rem;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: 0.75rem; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.ctrl-btn:hover { background: var(--border-default); color: var(--text-primary); }
+.ctrl-btn.active { background: var(--color-slate-500); color: white; border-color: transparent; }
+.ctrl-sep { width: 1px; height: 16px; background: var(--border-default); }
+</style>
+</head>
+<body>
+
+<!-- ── Nav ──────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-logo">
+    <div class="nav-logo-dot"></div>
+    XO Arena
+  </div>
+  <div class="nav-links">
+    <a href="lobby.html" class="nav-link">Tournaments</a>
+    <a href="#" class="nav-link active">Play</a>
+    <a href="#" class="nav-link">Gym</a>
+    <a href="#" class="nav-link">Rankings</a>
+  </div>
+  <div class="nav-right">
+    <!-- Guide trigger — urgent state (flash notification pending) -->
+    <button class="guide-trigger urgent" id="guideTrigger" aria-expanded="true" aria-haspopup="dialog">
+      <div class="guide-orb-wrap">
+        <!-- Progress ring: 3 of 7 steps = 3/7 = ~42.8% of circumference -->
+        <!-- Circumference of r=12 circle = 2π×12 ≈ 75.4 -->
+        <svg class="orb-ring" viewBox="0 0 28 28" aria-hidden="true">
+          <circle class="orb-ring-track" cx="14" cy="14" r="11"/>
+          <circle class="orb-ring-fill" cx="14" cy="14" r="11"
+            stroke-dasharray="69.1"
+            stroke-dashoffset="39.6"/>
+        </svg>
+        <div class="guide-orb urgent" id="guideOrb">🤖</div>
+        <div class="guide-badge" id="guideBadge">2</div>
+      </div>
+      Guide
+    </button>
+    <div class="nav-avatar" style="background:var(--color-slate-600)">
+      JD
+      <span class="online-dot"></span>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Page layout ───────────────────────────────────────────────────── -->
+<div class="page-layout">
+
+  <!-- ── Game area ──────────────────────────────────────────────────── -->
+  <div class="game-area" id="gameArea">
+
+    <!-- Notification banner (shown mid-game — Guide hasn't auto-opened) -->
+    <div class="game-notif-banner" id="gameNotifBanner">
+      <div class="orb-mini"></div>
+      ⚡ Flash tournament starting — 8 spots left!
+      <button style="margin-left:0.5rem;font-size:0.6875rem;font-weight:700;color:var(--color-amber-500);background:rgba(212,137,30,0.15);border:1px solid rgba(212,137,30,0.3);border-radius:0.375rem;padding:0.2rem 0.5rem;cursor:pointer" onclick="openGuide()">Open Guide</button>
+    </div>
+
+    <!-- Match header -->
+    <div class="match-header">
+      <div class="match-player">
+        <div class="match-avatar you">JD</div>
+        <div class="match-player-name">jdoe</div>
+        <div class="match-player-tier">Gold · 1412 ELO</div>
+      </div>
+
+      <div class="match-vs">
+        <div class="vs-label">VS</div>
+        <div class="timer" id="timerDisplay">0:08</div>
+        <div class="turn-indicator" id="turnIndicator">Your turn</div>
+      </div>
+
+      <div class="match-player">
+        <div class="match-avatar opp">NX</div>
+        <div class="match-player-name">NeuralX_Pro</div>
+        <div class="match-player-tier">Platinum · 1847 ELO</div>
+      </div>
+    </div>
+
+    <!-- Board -->
+    <div class="board-wrap">
+      <div class="board" id="board" aria-label="XO game board">
+        <!-- row 1 -->
+        <div class="cell taken"><span class="x">✕</span></div>
+        <div class="cell taken"><span class="o">○</span></div>
+        <div class="cell taken"><span class="x">✕</span></div>
+        <!-- row 2 -->
+        <div class="cell taken"><span class="o">○</span></div>
+        <div class="cell taken highlight"><span class="x">✕</span></div>
+        <div class="cell" onclick="this.innerHTML='<span class=\'o\'>○</span>';this.classList.add('taken')" aria-label="Cell 6, empty"></div>
+        <!-- row 3 -->
+        <div class="cell" onclick="this.innerHTML='<span class=\'o\'>○</span>';this.classList.add('taken')" aria-label="Cell 7, empty"></div>
+        <div class="cell taken"><span class="o">○</span></div>
+        <div class="cell" onclick="this.innerHTML='<span class=\'o\'>○</span>';this.classList.add('taken')" aria-label="Cell 9, empty"></div>
+      </div>
+    </div>
+
+    <!-- Match info -->
+    <div style="display:flex;gap:1.5rem;font-size:0.8125rem;color:var(--text-muted);align-items:center">
+      <span>Round Robin · Spring Open 2026</span>
+      <span>·</span>
+      <span>Match 4 of 6</span>
+      <span>·</span>
+      <button style="color:var(--color-red-500);font-size:0.8125rem;font-weight:600;padding:0.2rem 0.5rem;border-radius:0.375rem;border:1px solid rgba(232,85,84,0.3);background:rgba(232,85,84,0.08)">Resign</button>
+    </div>
+
+  </div>
+
+  <!-- ── Guide panel ────────────────────────────────────────────────── -->
+  <div class="guide-panel" id="guidePanel" role="dialog" aria-label="Guide" aria-modal="false">
+
+    <!-- Header -->
+    <div class="guide-header">
+      <div style="position:relative;width:28px;height:28px;flex-shrink:0">
+        <svg class="guide-header-ring" viewBox="0 0 28 28" aria-hidden="true">
+          <circle class="guide-header-ring-track" cx="14" cy="14" r="11"/>
+          <circle class="guide-header-ring-fill" cx="14" cy="14" r="11"
+            stroke-dasharray="69.1" stroke-dashoffset="39.6"/>
+        </svg>
+        <div class="guide-header-orb" style="position:absolute;inset:3px;width:22px;height:22px"></div>
+      </div>
+      <div class="guide-title">Guide</div>
+      <div class="guide-header-actions">
+        <button class="guide-icon-btn" title="Settings" aria-label="Guide settings">⚙️</button>
+        <button class="guide-icon-btn" title="Close Guide" aria-label="Close Guide" onclick="closeGuide()">✕</button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="guide-body">
+
+      <!-- Active-game context warning -->
+      <div class="guide-context-banner">
+        <span>🎮</span>
+        <span>You're in an active match — Guide won't auto-open while you play.</span>
+      </div>
+
+      <!-- Notifications -->
+      <div>
+        <div class="guide-section-label">
+          Notifications
+          <span style="font-size:0.6875rem;font-weight:700;background:var(--color-amber-500);color:white;padding:0.1rem 0.375rem;border-radius:2rem">2</span>
+        </div>
+        <div class="guide-notif-stack">
+
+          <!-- Flash tournament notification -->
+          <div class="notif-card urgent" id="notifFlash">
+            <div class="notif-card-header">
+              <div class="notif-icon flash">⚡</div>
+              <div style="flex:1">
+                <div class="notif-title">Flash Tournament Starting</div>
+                <div class="notif-body">Tuesday Blitz — 8 player PvP · 7 spots left · closes in <strong style="color:var(--color-amber-500)">04:12</strong></div>
+              </div>
+              <div class="notif-time">Just now</div>
+              <button class="notif-dismiss" onclick="dismissNotif('notifFlash')" aria-label="Dismiss">✕</button>
+            </div>
+            <div class="notif-actions">
+              <button class="notif-btn notif-btn-primary" onclick="dismissNotif('notifFlash')">⚡ Join after match</button>
+              <button class="notif-btn notif-btn-secondary" onclick="dismissNotif('notifFlash')">Dismiss</button>
+            </div>
+          </div>
+
+          <!-- Match invite notification -->
+          <div class="notif-card" id="notifInvite" style="border-color:rgba(36,181,135,0.3);background:rgba(36,181,135,0.04)">
+            <div class="notif-card-header">
+              <div class="notif-icon invite">⚔️</div>
+              <div style="flex:1">
+                <div class="notif-title">Game Invite from sandstorm</div>
+                <div class="notif-body">sandstorm challenged you to a game · expires in <strong>4:31</strong></div>
+              </div>
+              <div class="notif-time">2m ago</div>
+              <button class="notif-dismiss" onclick="dismissNotif('notifInvite')" aria-label="Dismiss">✕</button>
+            </div>
+            <div class="notif-actions">
+              <button class="notif-btn notif-btn-primary blue" onclick="dismissNotif('notifInvite')">Accept</button>
+              <button class="notif-btn notif-btn-secondary" onclick="dismissNotif('notifInvite')">Decline</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Quick action slots -->
+      <div>
+        <div class="guide-section-label">
+          Quick Actions
+          <button class="slots-edit-btn" title="Edit slots" aria-label="Edit quick action slots">⚙ Edit</button>
+        </div>
+        <div class="slots-grid">
+          <!-- Cross-site slots -->
+          <button class="slot" title="Go to Tournaments" onclick="window.location.href='lobby.html'">
+            <span class="slot-icon">🏆</span>
+            <span class="slot-label">Tournaments</span>
+          </button>
+          <button class="slot" title="My Tier &amp; Profile" onclick="window.location.href='player-profile.html'">
+            <span class="slot-icon">🎖️</span>
+            <span class="slot-label">My Tier</span>
+          </button>
+          <button class="slot" title="Rankings">
+            <span class="slot-icon">📊</span>
+            <span class="slot-label">Rankings</span>
+          </button>
+          <button class="slot" title="Invite a player">
+            <span class="slot-icon">⚔️</span>
+            <span class="slot-label">Invite</span>
+          </button>
+          <!-- Flash slot (cross-site action) -->
+          <button class="slot" title="Flash tournaments">
+            <span class="slot-icon">⚡</span>
+            <span class="slot-label">Flash</span>
+          </button>
+          <!-- Cross-site to Gym -->
+          <button class="slot" title="Open Gym (bot training)">
+            <span class="slot-icon">🏋️</span>
+            <span class="slot-label">Open Gym</span>
+          </button>
+          <!-- Onboarding slot — dashed amber border + expiry -->
+          <button class="slot onboarding" title="Step 3: Learn how AI training works">
+            <span class="slot-icon">🤖</span>
+            <span class="slot-label" style="color:var(--color-amber-500)">AI Training</span>
+            <span class="slot-expiry">⏱ Step 3</span>
+          </button>
+          <!-- Onboarding slot -->
+          <button class="slot onboarding" title="Step 4: Create your first bot">
+            <span class="slot-icon">➕</span>
+            <span class="slot-label" style="color:var(--color-amber-500)">Create Bot</span>
+            <span class="slot-expiry">⏱ Step 4</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Onboarding journey card (collapsed) -->
+      <div>
+        <div class="guide-section-label">Journey</div>
+        <div style="background:rgba(212,137,30,0.07);border:1.5px solid rgba(212,137,30,0.25);border-radius:0.625rem;padding:0.75rem">
+          <div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem">
+            <div style="flex:1">
+              <div style="font-size:0.8125rem;font-weight:700;color:var(--color-amber-100)">Onboarding Journey</div>
+              <div style="font-size:0.75rem;color:var(--color-amber-500);margin-top:0.125rem">3 of 7 steps complete</div>
+            </div>
+            <button style="font-size:0.75rem;color:var(--text-muted);padding:0.2rem 0.375rem;border-radius:0.25rem;background:rgba(255,255,255,0.06)" id="journeyExpandBtn" onclick="toggleJourney()">Expand ▾</button>
+          </div>
+          <div style="background:rgba(212,137,30,0.15);border-radius:999px;height:4px;overflow:hidden;margin-bottom:0.625rem">
+            <div style="height:100%;width:42.8%;background:var(--color-amber-500);border-radius:999px"></div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem">
+            <strong style="color:var(--color-amber-400)">Next:</strong> Step 4 — Create your first bot
+          </div>
+          <button style="width:100%;padding:0.4rem;border-radius:0.375rem;background:var(--color-amber-500);color:white;font-size:0.75rem;font-weight:700;border:none;cursor:pointer">
+            Create your first bot →
+          </button>
+
+          <!-- Expanded steps (hidden by default) -->
+          <div id="journeySteps" style="display:none;margin-top:0.75rem;border-top:1px solid rgba(212,137,30,0.2);padding-top:0.625rem">
+            <div style="display:flex;flex-direction:column;gap:0.375rem">
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem">
+                <span style="color:var(--color-teal-500);font-weight:700">✓</span>
+                <span style="text-decoration:line-through;color:var(--text-muted)">1. Welcome to XO Arena</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem">
+                <span style="color:var(--color-teal-500);font-weight:700">✓</span>
+                <span style="text-decoration:line-through;color:var(--text-muted)">2. Play a game — see how it works</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem">
+                <span style="color:var(--color-teal-500);font-weight:700">✓</span>
+                <span style="text-decoration:line-through;color:var(--text-muted)">3. Learn how AI training works</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem">
+                <span style="color:var(--color-amber-500);font-weight:700;font-size:0.875rem">→</span>
+                <span style="color:var(--color-amber-200);font-weight:600">4. Create your first bot</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;opacity:0.5">
+                <span style="color:var(--text-muted)">◦</span>
+                <span style="color:var(--text-muted)">5. Train your bot</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;opacity:0.5">
+                <span style="color:var(--text-muted)">◦</span>
+                <span style="color:var(--text-muted)">6. Enter a tournament</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;opacity:0.5">
+                <span style="color:var(--text-muted)">◦</span>
+                <span style="color:var(--text-muted)">7. Play your first tournament match</span>
+              </div>
+            </div>
+            <div style="margin-top:0.625rem;display:flex;justify-content:flex-end">
+              <button style="font-size:0.6875rem;color:var(--text-muted);padding:0.2rem 0.375rem;border-radius:0.25rem;background:none;border:1px solid var(--border-default);cursor:pointer">Dismiss journey</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Online strip -->
+      <div>
+        <div class="guide-section-label">Online Now</div>
+        <div class="online-strip">
+          <div class="online-strip-label">
+            <span class="online-dot-sm"></span>
+            47 players online · tap to invite
+          </div>
+          <div class="online-avatars">
+            <div class="online-avatar" style="background:#7C3F9E" title="NeuralX_Pro — in match">
+              NX
+              <span class="odot in-game"></span>
+            </div>
+            <div class="online-avatar" style="background:#1D9E75" title="AlphaQ — browsing">
+              AQ
+              <span class="odot"></span>
+            </div>
+            <div class="online-avatar" style="background:#2E86E0" title="ByteMind — browsing">
+              BM
+              <span class="odot"></span>
+            </div>
+            <div class="online-avatar" style="background:#D4881E" title="DragonBot_v7 — in match">
+              D7
+              <span class="odot in-game"></span>
+            </div>
+            <div class="online-avatar" style="background:#52525B" title="StrategistTX — browsing">
+              ST
+              <span class="odot"></span>
+            </div>
+            <div class="online-avatar" style="background:#71717A" title="sandstorm — in lobby">
+              SS
+              <span class="odot"></span>
+            </div>
+            <div class="online-more" title="View all 47 online players">+41</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /guide-body -->
+
+    <!-- Chat input -->
+    <div class="guide-chat">
+      <div class="guide-chat-history">
+        <div class="chat-msg from-guide">Hi jdoe! I see you're mid-match. Flash tournament just opened — want me to queue you after this game?</div>
+      </div>
+      <div class="guide-input-row">
+        <textarea class="guide-input" placeholder="Ask Guide anything…" rows="1" aria-label="Message Guide"></textarea>
+        <button class="guide-send" aria-label="Send message">➤</button>
+      </div>
+    </div>
+
+  </div><!-- /guide-panel -->
+
+</div><!-- /page-layout -->
+
+<!-- ── Mockup controls ──────────────────────────────────────────────── -->
+<div class="mockup-controls">
+  <span style="font-weight:600;color:var(--text-secondary)">Mockup state:</span>
+  <button class="ctrl-btn" onclick="setStateMidGame()">Guide closed · orb urgent</button>
+  <button class="ctrl-btn active" id="btnGuideOpen" onclick="setStateGuideOpen()">Guide open · notifications</button>
+  <button class="ctrl-btn" onclick="setStateSlotPicker()">Slot picker overlay</button>
+  <div class="ctrl-sep"></div>
+  <a href="lobby.html" class="ctrl-btn">← Lobby</a>
+  <a href="tournament-detail.html" class="ctrl-btn">Tournament</a>
+</div>
+
+<!-- ── Slot picker overlay ──────────────────────────────────────────── -->
+<div id="slotPickerOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--guide-bg);border:1.5px solid var(--guide-border);border-radius:1rem;width:360px;max-height:80vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.5)">
+    <div style="padding:1rem;border-bottom:1px solid var(--border-default);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:var(--font-display);font-size:1rem;font-weight:700">Add Action Slot</div>
+      <button onclick="closeSlotPicker()" style="color:var(--text-muted);font-size:1rem">✕</button>
+    </div>
+    <div style="padding:1rem;display:flex;flex-direction:column;gap:1rem">
+
+      <div>
+        <div style="font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.5rem">Platform</div>
+        <div style="display:flex;flex-direction:column;gap:0.25rem">
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:var(--bg-surface);border:1.5px solid var(--border-default);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">🏆</span>
+            <div><div style="font-weight:600">Tournaments</div><div style="font-size:0.75rem;color:var(--text-muted)">Go to tournament lobby</div></div>
+          </button>
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:var(--bg-surface);border:1.5px solid var(--border-default);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">📊</span>
+            <div><div style="font-weight:600">Rankings</div><div style="font-size:0.75rem;color:var(--text-muted)">View leaderboard</div></div>
+          </button>
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:var(--bg-surface);border:1.5px solid var(--border-default);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">⚔️</span>
+            <div><div style="font-weight:600">Invite Player</div><div style="font-size:0.75rem;color:var(--text-muted)">Challenge anyone on the platform</div></div>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.5rem">XO Arena</div>
+        <div style="display:flex;flex-direction:column;gap:0.25rem">
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:var(--bg-surface);border:1.5px solid var(--border-default);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">⚡</span>
+            <div><div style="font-weight:600">Flash Tournaments</div><div style="font-size:0.75rem;color:var(--text-muted)">Join the next flash event instantly</div></div>
+          </button>
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:var(--bg-surface);border:1.5px solid var(--border-default);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">🏋️</span>
+            <div><div style="font-weight:600">Open Gym</div><div style="font-size:0.75rem;color:var(--text-muted)">Cross-site: jump to bot training</div><div style="font-size:0.625rem;color:var(--color-teal-500);font-weight:600;margin-top:1px">↗ Cross-site</div></div>
+          </button>
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:var(--bg-surface);border:1.5px solid var(--border-default);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">🎖️</span>
+            <div><div style="font-weight:600">My Tier</div><div style="font-size:0.75rem;color:var(--text-muted)">View classification and merit</div></div>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.5rem">Onboarding</div>
+        <div style="display:flex;flex-direction:column;gap:0.25rem">
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:rgba(212,137,30,0.07);border:1.5px dashed rgba(212,137,30,0.3);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">🤖</span>
+            <div><div style="font-weight:600;color:var(--color-amber-300)">AI Training Guide</div><div style="font-size:0.75rem;color:var(--color-amber-600)">Step 3 of your journey · ⏱ 27d left</div></div>
+          </button>
+          <button style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.625rem;border-radius:0.5rem;background:rgba(212,137,30,0.07);border:1.5px dashed rgba(212,137,30,0.3);color:var(--text-primary);font-size:0.8125rem;cursor:pointer;text-align:left" onclick="closeSlotPicker()">
+            <span style="font-size:1.25rem">➕</span>
+            <div><div style="font-weight:600;color:var(--color-amber-300)">Create First Bot</div><div style="font-size:0.75rem;color:var(--color-amber-600)">Step 4 of your journey · ⏱ 27d left</div></div>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Guide open/close ───────────────────────────────────────────────── */
+const guidePanel = document.getElementById('guidePanel');
+const guideTrigger = document.getElementById('guideTrigger');
+const gameNotifBanner = document.getElementById('gameNotifBanner');
+
+function openGuide() {
+  guidePanel.classList.remove('hidden');
+  guideTrigger.setAttribute('aria-expanded', 'true');
+  gameNotifBanner.style.display = 'none';
+  updateCtrlButtons('btnGuideOpen');
+}
+
+function closeGuide() {
+  guidePanel.classList.add('hidden');
+  guideTrigger.setAttribute('aria-expanded', 'false');
+  updateCtrlButtons('btnMidGame');
+}
+
+guideTrigger.addEventListener('click', () => {
+  if (guidePanel.classList.contains('hidden')) openGuide();
+  else closeGuide();
+});
+
+/* ── Dismiss notifications ──────────────────────────────────────────── */
+function dismissNotif(id) {
+  const card = document.getElementById(id);
+  if (card) {
+    card.style.animation = 'none';
+    card.style.opacity = '0';
+    card.style.transform = 'scale(0.95)';
+    card.style.transition = 'opacity 0.2s, transform 0.2s';
+    setTimeout(() => card.remove(), 200);
+    // Decrement badge
+    const badge = document.getElementById('guideBadge');
+    const count = parseInt(badge.textContent) - 1;
+    if (count <= 0) {
+      badge.style.display = 'none';
+      // Switch orb back to normal
+      document.getElementById('guideOrb').classList.remove('urgent');
+      guideTrigger.classList.remove('urgent');
+    } else {
+      badge.textContent = count;
+    }
+  }
+}
+
+/* ── Journey expand ─────────────────────────────────────────────────── */
+function toggleJourney() {
+  const steps = document.getElementById('journeySteps');
+  const btn = document.getElementById('journeyExpandBtn');
+  const expanded = steps.style.display === 'block';
+  steps.style.display = expanded ? 'none' : 'block';
+  btn.textContent = expanded ? 'Expand ▾' : 'Collapse ▴';
+}
+
+/* ── Slot picker ────────────────────────────────────────────────────── */
+const slotPickerOverlay = document.getElementById('slotPickerOverlay');
+function closeSlotPicker() {
+  slotPickerOverlay.style.display = 'none';
+  updateCtrlButtons('btnGuideOpen');
+}
+
+/* ── Mockup state controls ──────────────────────────────────────────── */
+function updateCtrlButtons(activeId) {
+  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(activeId);
+  if (btn) btn.classList.add('active');
+}
+
+function setStateMidGame() {
+  guidePanel.classList.add('hidden');
+  slotPickerOverlay.style.display = 'none';
+  gameNotifBanner.style.display = 'flex';
+  guideTrigger.classList.add('urgent');
+  updateCtrlButtons('btnMidGame');
+  // Re-add btnMidGame id to first ctrl-btn
+  document.querySelectorAll('.ctrl-btn')[0].id = 'btnMidGame';
+}
+
+function setStateGuideOpen() {
+  guidePanel.classList.remove('hidden');
+  slotPickerOverlay.style.display = 'none';
+  gameNotifBanner.style.display = 'none';
+  updateCtrlButtons('btnGuideOpen');
+}
+
+function setStateSlotPicker() {
+  guidePanel.classList.remove('hidden');
+  slotPickerOverlay.style.display = 'flex';
+  gameNotifBanner.style.display = 'none';
+  updateCtrlButtons('');
+  // Mark slot picker button active
+  document.querySelectorAll('.ctrl-btn')[2].classList.add('active');
+}
+
+// Add id to first ctrl-btn
+document.querySelectorAll('.ctrl-btn')[0].id = 'btnMidGame';
+</script>
+</body>
+</html>

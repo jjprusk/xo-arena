@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Arena — Tournament Detail (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Palette ───────────────────────────────────────────────────────── */
+:root {
+  --color-primary-50:  #EEF3FA;
+  --color-primary-100: #D5E2F3;
+  --color-primary-200: #AABFE6;
+  --color-primary-300: #7A9DD4;
+  --color-primary-400: #5580BC;
+  --color-primary-500: #4A6FA5;
+  --color-primary-600: #3D5D8A;
+  --color-primary-700: #304A6E;
+  --color-primary-800: #233653;
+  --color-primary-900: #162338;
+  --color-teal-50:   #E6F6F2;
+  --color-teal-100:  #C0E9DC;
+  --color-teal-500:  #24B587;
+  --color-teal-600:  #1D9E75;
+  --color-amber-50:  #FDF6E7;
+  --color-amber-100: #FAEEDA;
+  --color-amber-500: #D4891E;
+  --color-amber-600: #BA7517;
+  --color-red-500:   #EF4444;
+  --color-red-600:   #C23B3A;
+  --color-purple-500:#A855F7;
+  --color-zinc-50:  #FAFAFA;
+  --color-zinc-100: #F4F4F5;
+  --color-zinc-200: #E4E4E7;
+  --color-zinc-300: #D4D4D8;
+  --color-zinc-400: #A1A1AA;
+  --color-zinc-500: #71717A;
+  --color-zinc-600: #52525B;
+  --color-zinc-700: #3F3F46;
+  --color-zinc-800: #27272A;
+  --color-zinc-900: #18181B;
+  --color-zinc-950: #09090B;
+  --font-display: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+}
+
+/* ── Light theme ───────────────────────────────────────────────────── */
+:root, .light {
+  --bg-page:          var(--color-zinc-50);
+  --bg-surface:       #ffffff;
+  --bg-surface-2:     var(--color-zinc-100);
+  --bg-surface-hover: var(--color-primary-50);
+  --border-default:   var(--color-zinc-200);
+  --border-strong:    var(--color-zinc-300);
+  --text-primary:     var(--color-zinc-900);
+  --text-secondary:   var(--color-zinc-600);
+  --text-muted:       var(--color-zinc-400);
+  --shadow-sm:        0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:        0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-nav:       0 1px 0 0 var(--color-zinc-200);
+  --guide-bg:         #ffffff;
+  --guide-border:     var(--color-primary-200);
+  --slot-bg:          var(--color-primary-50);
+  --slot-border:      var(--color-primary-100);
+  --slot-bg-hover:    var(--color-primary-100);
+}
+
+/* ── Dark theme ────────────────────────────────────────────────────── */
+.dark {
+  --bg-page:          var(--color-zinc-950);
+  --bg-surface:       var(--color-zinc-900);
+  --bg-surface-2:     var(--color-zinc-800);
+  --bg-surface-hover: rgba(74,111,165,0.1);
+  --border-default:   var(--color-zinc-800);
+  --border-strong:    var(--color-zinc-700);
+  --text-primary:     var(--color-zinc-50);
+  --text-secondary:   var(--color-zinc-400);
+  --text-muted:       var(--color-zinc-600);
+  --shadow-sm:        none;
+  --shadow-md:        none;
+  --shadow-nav:       0 1px 0 0 var(--color-zinc-800);
+  --guide-bg:         var(--color-zinc-900);
+  --guide-border:     var(--color-primary-700);
+  --slot-bg:          rgba(74,111,165,0.1);
+  --slot-border:      rgba(74,111,165,0.2);
+  --slot-bg-hover:    rgba(74,111,165,0.2);
+}
+
+/* ── Animations ────────────────────────────────────────────────────── */
+@keyframes guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,111,165,0.7), 0 0 10px 2px rgba(74,111,165,0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(74,111,165,0), 0 0 16px 5px rgba(74,111,165,0.5); }
+}
+@keyframes guide-pulse-urgent {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.9), 0 0 12px 3px rgba(212,137,30,0.5); }
+  50%       { box-shadow: 0 0 0 7px rgba(212,137,30,0), 0 0 20px 6px rgba(212,137,30,0.4); }
+}
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.6); }
+  50%       { box-shadow: 0 0 0 5px rgba(212,137,30,0); }
+}
+@keyframes flash-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+@keyframes badge-pop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
+@keyframes fade-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+@keyframes slide-up { from{opacity:0;transform:translateY(12px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background 0.2s, color 0.2s;
+}
+a { color:inherit; text-decoration:none; }
+button { cursor:pointer; font-family:inherit; border:none; background:none; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border-width:0; }
+
+/* ── Colosseum background ──────────────────────────────────────────── */
+.photo-bg {
+  position: fixed; inset: 0;
+  background: url('./colosseum-bg.jpg') center 30% / cover no-repeat;
+  pointer-events: none; user-select: none;
+  z-index: 0; opacity: 0.15;
+}
+.dark .photo-bg { opacity: 0.08; }
+
+/* ── Skip nav ──────────────────────────────────────────────────────── */
+.skip-nav {
+  position:absolute; top:-100%; left:0;
+  background:var(--color-primary-600); color:white;
+  padding:0.5rem 1rem; font-size:0.875rem; font-weight:600;
+  border-radius:0 0 var(--radius-sm) 0; z-index:9999; transition:top 0.1s;
+}
+.skip-nav:focus { top:0; }
+
+/* ── Navigation ────────────────────────────────────────────────────── */
+.nav {
+  position:sticky; top:0; z-index:100;
+  background:var(--bg-surface);
+  box-shadow:var(--shadow-nav);
+  height:56px;
+  display:flex; align-items:center;
+  padding:0 1.5rem; gap:1.5rem;
+}
+.nav-logo {
+  font-family:var(--font-display);
+  font-size:1.125rem; font-weight:800;
+  color:var(--color-primary-600);
+  letter-spacing:-0.02em; white-space:nowrap;
+  display:flex; align-items:center; gap:0.5rem;
+}
+.nav-logo-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--color-primary-500);
+  animation:guide-pulse 2.4s ease-in-out infinite;
+}
+.dark .nav-logo { color:var(--color-primary-200); }
+.nav-links { display:flex; align-items:center; gap:0.25rem; flex:1; }
+.nav-link {
+  font-size:0.875rem; font-weight:500;
+  color:var(--text-secondary);
+  padding:0.375rem 0.75rem;
+  border-radius:var(--radius-md);
+  transition:color 0.15s, background 0.15s;
+}
+.nav-link:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+.nav-link.active { color:var(--color-primary-600); background:var(--color-primary-50); font-weight:600; }
+.dark .nav-link.active { color:var(--color-primary-200); background:rgba(74,111,165,0.15); }
+.nav-right { display:flex; align-items:center; gap:0.75rem; margin-left:auto; }
+.theme-toggle {
+  width:32px; height:32px; border-radius:var(--radius-md);
+  color:var(--text-muted);
+  display:flex; align-items:center; justify-content:center;
+  transition:color 0.15s, background 0.15s; font-size:1rem;
+}
+.theme-toggle:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+.guide-trigger {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.375rem 0.875rem 0.375rem 0.5rem;
+  border-radius:var(--radius-full);
+  border:1.5px solid var(--color-primary-200);
+  background:var(--color-primary-50);
+  color:var(--color-primary-600);
+  font-size:0.8125rem; font-weight:600;
+  transition:border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  position:relative;
+}
+.dark .guide-trigger { border-color:var(--color-primary-700); background:rgba(74,111,165,0.12); color:var(--color-primary-200); }
+.guide-trigger:hover { border-color:var(--color-primary-500); box-shadow:0 0 0 3px rgba(74,111,165,0.12); }
+.guide-trigger[aria-expanded="true"] { border-color:var(--color-primary-500); background:var(--color-primary-100); }
+.guide-orb {
+  width:20px; height:20px; border-radius:50%;
+  background:linear-gradient(135deg, var(--color-primary-500), var(--color-primary-700));
+  animation:guide-pulse 2.4s ease-in-out infinite;
+  flex-shrink:0;
+}
+.guide-trigger.urgent .guide-orb {
+  background:linear-gradient(135deg, var(--color-amber-500), var(--color-amber-600));
+  animation:guide-pulse-urgent 1.1s ease-in-out infinite;
+}
+.guide-orb-badge {
+  position:absolute; top:-4px; right:-4px;
+  min-width:16px; height:16px; border-radius:8px;
+  background:var(--color-amber-500); color:white;
+  font-size:0.6rem; font-weight:800; line-height:16px; text-align:center;
+  padding:0 3px; border:2px solid var(--bg-surface);
+  animation:badge-pop 0.3s cubic-bezier(0.175,0.885,0.32,1.275) both;
+}
+.nav-avatar {
+  width:32px; height:32px; border-radius:50%;
+  background:var(--color-primary-500); color:white;
+  font-size:0.75rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* ── Page layout ───────────────────────────────────────────────────── */
+.page { max-width:1200px; margin:0 auto; padding:1.5rem 1.5rem 4rem; position:relative; z-index:1; }
+
+/* ── Breadcrumb ────────────────────────────────────────────────────── */
+.breadcrumb {
+  display:flex; align-items:center; gap:0.5rem;
+  font-size:0.8125rem; color:var(--text-muted);
+  margin-bottom:1.25rem;
+}
+.breadcrumb a { color:var(--color-primary-500); transition:color 0.15s; }
+.breadcrumb a:hover { color:var(--color-primary-600); }
+.breadcrumb-sep { color:var(--text-muted); }
+
+/* ── Tournament header ─────────────────────────────────────────────── */
+.t-header {
+  background:var(--bg-surface); border:1.5px solid var(--border-default);
+  border-radius:var(--radius-lg); padding:1.5rem;
+  box-shadow:var(--shadow-md);
+  margin-bottom:1rem; animation:fade-in 0.25s ease-out;
+}
+.t-header-top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1rem; flex-wrap:wrap; }
+.t-title-block {}
+.t-title {
+  font-family:var(--font-display); font-size:1.75rem; font-weight:800;
+  color:var(--text-primary); letter-spacing:-0.03em; line-height:1.15;
+  margin-bottom:0.5rem;
+}
+.t-badges { display:flex; flex-wrap:wrap; gap:0.375rem; }
+.badge {
+  display:inline-flex; align-items:center; gap:0.25rem;
+  font-size:0.6875rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.05em; padding:0.2rem 0.5rem;
+  border-radius:var(--radius-sm); white-space:nowrap;
+}
+.badge-progress { background:var(--color-primary-50); color:var(--color-primary-600); }
+.badge-open     { background:var(--color-teal-50); color:var(--color-teal-600); }
+.badge-flash    { background:var(--color-amber-50); color:var(--color-amber-600); }
+.badge-pvp      { background:#EBF3FC; color:#2E86E0; }
+.badge-rr       { background:var(--color-primary-50); color:var(--color-primary-600); }
+.badge-tier     { background:#F0EBF9; color:#7C3F9E; }
+.dark .badge-progress { background:rgba(74,111,165,0.2); color:var(--color-primary-200); }
+.dark .badge-open     { background:rgba(36,181,135,0.15); color:#4ecca8; }
+.dark .badge-pvp      { background:rgba(46,134,224,0.12); color:#7AB8F0; }
+.dark .badge-rr       { background:rgba(74,111,165,0.15); color:var(--color-primary-200); }
+.dark .badge-tier     { background:rgba(168,85,247,0.15); color:#C084FC; }
+.t-meta-row {
+  display:flex; flex-wrap:wrap; gap:1.5rem;
+  font-size:0.875rem; color:var(--text-secondary);
+}
+.t-meta-item { display:flex; align-items:center; gap:0.4rem; }
+.t-meta-label { color:var(--text-muted); font-size:0.8125rem; }
+.t-meta-value { font-weight:500; color:var(--text-primary); }
+.t-countdown-block { text-align:right; flex-shrink:0; }
+.t-countdown-label { font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem; }
+.t-countdown {
+  font-family:var(--font-display); font-size:1.5rem; font-weight:800;
+  color:var(--color-primary-600); letter-spacing:0.04em;
+}
+.dark .t-countdown { color:var(--color-primary-300); }
+.t-countdown-sub { font-size:0.75rem; color:var(--text-muted); margin-top:0.15rem; }
+
+/* ── Match ready banner ────────────────────────────────────────────── */
+.match-ready-banner {
+  display:flex; align-items:center; gap:0.875rem;
+  background:linear-gradient(135deg, #3E1F7A, #6240AD);
+  border-radius:var(--radius-lg); padding:1rem 1.25rem;
+  margin-bottom:1rem; color:white;
+  animation:fade-in 0.3s ease-out;
+  box-shadow:0 4px 20px rgba(98,64,173,0.35);
+}
+.match-ready-icon { font-size:1.75rem; flex-shrink:0; animation:flash-pulse 1.6s ease-in-out infinite; }
+.match-ready-text { flex:1; }
+.match-ready-title {
+  font-family:var(--font-display); font-size:1rem; font-weight:800;
+  letter-spacing:-0.01em; margin-bottom:0.15rem;
+}
+.match-ready-sub { font-size:0.8125rem; color:rgba(255,255,255,0.78); }
+.match-ready-actions { display:flex; gap:0.5rem; flex-shrink:0; }
+.btn-play {
+  font-family:var(--font-display); font-size:0.875rem; font-weight:700;
+  padding:0.5rem 1.25rem; border-radius:var(--radius-md);
+  background:white; color:#5832A0;
+  transition:background 0.15s, transform 0.1s;
+  white-space:nowrap;
+}
+.btn-play:hover { background:#F0EBFF; transform:translateY(-1px); }
+.btn-dismiss-match {
+  font-size:0.8125rem; font-weight:600;
+  padding:0.5rem 0.875rem; border-radius:var(--radius-md);
+  background:rgba(255,255,255,0.15); color:white;
+  border:1px solid rgba(255,255,255,0.25);
+  transition:background 0.15s;
+}
+.btn-dismiss-match:hover { background:rgba(255,255,255,0.25); }
+
+/* ── Main layout ───────────────────────────────────────────────────── */
+.t-layout { display:grid; grid-template-columns:1fr 300px; gap:1rem; align-items:start; }
+@media (max-width:860px) { .t-layout { grid-template-columns:1fr; } }
+
+/* ── Panel (shared card style) ─────────────────────────────────────── */
+.panel {
+  background:var(--bg-surface); border:1.5px solid var(--border-default);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-md);
+  overflow:hidden; animation:fade-in 0.3s ease-out;
+}
+.panel-header {
+  padding:0.875rem 1.25rem;
+  border-bottom:1px solid var(--border-default);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.panel-title { font-family:var(--font-display); font-size:0.9375rem; font-weight:700; color:var(--text-primary); }
+.panel-body { padding:1.25rem; }
+
+/* ── Tabs ──────────────────────────────────────────────────────────── */
+.tabs-bar {
+  display:flex; align-items:center;
+  border-bottom:2px solid var(--border-default);
+  padding:0 1.25rem;
+}
+.tab {
+  font-size:0.9rem; font-weight:500; color:var(--text-secondary);
+  padding:0.75rem 0.875rem; border-bottom:2px solid transparent;
+  margin-bottom:-2px; white-space:nowrap;
+  transition:color 0.15s, border-color 0.15s; cursor:pointer;
+}
+.tab:hover { color:var(--text-primary); }
+.tab.active { color:var(--color-primary-600); border-bottom-color:var(--color-primary-500); font-weight:600; }
+.dark .tab.active { color:var(--color-primary-200); }
+
+/* ── Standings table ───────────────────────────────────────────────── */
+.standings-table {
+  width:100%; border-collapse:collapse; font-size:0.875rem;
+}
+.standings-table th {
+  font-size:0.75rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.05em; color:var(--text-muted);
+  padding:0.625rem 1rem; text-align:left;
+  border-bottom:1.5px solid var(--border-default);
+  background:var(--bg-surface-2);
+}
+.standings-table th.num { text-align:center; }
+.standings-table td {
+  padding:0.75rem 1rem; border-bottom:1px solid var(--border-default);
+  vertical-align:middle;
+}
+.standings-table td.num { text-align:center; color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+.standings-table tr:last-child td { border-bottom:none; }
+.standings-table tr:hover td { background:var(--bg-surface-hover); }
+/* Current user row */
+.standings-table tr.me td { background:var(--color-primary-50); }
+.dark .standings-table tr.me td { background:rgba(74,111,165,0.12); }
+.standings-table tr.me td:first-child { border-left:3px solid var(--color-primary-500); }
+
+.rank-num { font-family:var(--font-display); font-weight:800; font-size:1rem; color:var(--text-muted); }
+.rank-1 { color:#D4991E; }
+.rank-2 { color:var(--color-zinc-500); }
+.rank-3 { color:#B07040; }
+.player-cell { display:flex; align-items:center; gap:0.625rem; }
+.player-avatar {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.6875rem; font-weight:700; color:white; flex-shrink:0;
+}
+.player-name { font-weight:500; color:var(--text-primary); text-decoration:none; }
+a.player-name:hover { color:var(--color-primary-500); text-decoration:underline; }
+.player-you { font-size:0.6875rem; font-weight:700; color:var(--color-primary-500); margin-left:0.25rem; }
+.pts-cell { font-family:var(--font-display); font-weight:800; font-size:1rem; color:var(--text-primary); text-align:center; }
+.match-status-dot {
+  display:inline-block; width:7px; height:7px; border-radius:50%;
+  background:var(--color-amber-500); margin-right:0.3rem;
+  animation:flash-pulse 1.3s ease-in-out infinite;
+}
+.tier-badge {
+  display:inline-flex; align-items:center;
+  font-size:0.625rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.04em; padding:0.1rem 0.35rem;
+  border-radius:var(--radius-sm);
+}
+.tier-gold     { background:#FEF3C7; color:#92400E; }
+.tier-silver   { background:#F4F4F5; color:#52525B; }
+.tier-platinum { background:#EDE9FE; color:#5B21B6; }
+
+/* ── Sidebar ───────────────────────────────────────────────────────── */
+.sidebar { display:flex; flex-direction:column; gap:1rem; }
+
+/* Registration card */
+.reg-card {
+  background:var(--bg-surface); border:1.5px solid var(--border-default);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-md);
+  overflow:hidden; animation:fade-in 0.3s ease-out 0.05s both;
+}
+.reg-status {
+  display:flex; align-items:center; gap:0.625rem;
+  padding:0.875rem 1rem;
+  background:var(--color-teal-50);
+  border-bottom:1px solid var(--color-teal-100);
+}
+.dark .reg-status { background:rgba(36,181,135,0.1); border-color:rgba(36,181,135,0.2); }
+.reg-status-dot { width:8px; height:8px; border-radius:50%; background:var(--color-teal-500); flex-shrink:0; }
+.reg-status-text { font-size:0.875rem; font-weight:600; color:var(--color-teal-600); }
+.dark .reg-status-text { color:#4DD9A8; }
+.reg-body { padding:1rem; display:flex; flex-direction:column; gap:0.875rem; }
+.reg-field-label { font-size:0.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.35rem; }
+.reg-pref-options { display:flex; flex-direction:column; gap:0.35rem; }
+.reg-pref-option {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.45rem 0.625rem; border-radius:var(--radius-md);
+  border:1.5px solid var(--border-default);
+  cursor:pointer; font-size:0.8125rem; color:var(--text-secondary);
+  transition:all 0.15s;
+}
+.reg-pref-option.selected {
+  border-color:var(--color-primary-500);
+  background:var(--color-primary-50); color:var(--color-primary-700);
+}
+.dark .reg-pref-option.selected { background:rgba(74,111,165,0.15); color:var(--color-primary-200); }
+.reg-pref-radio {
+  width:14px; height:14px; border-radius:50%;
+  border:2px solid var(--border-strong); flex-shrink:0;
+}
+.reg-pref-option.selected .reg-pref-radio {
+  border-color:var(--color-primary-500);
+  background:var(--color-primary-500);
+  box-shadow:inset 0 0 0 2px var(--bg-surface);
+}
+.reg-pref-text { flex:1; line-height:1.35; }
+.reg-pref-desc { font-size:0.6875rem; color:var(--text-muted); margin-top:0.1rem; }
+.btn-withdraw {
+  width:100%; padding:0.5rem; border-radius:var(--radius-md);
+  border:1.5px solid var(--border-default); color:var(--text-muted);
+  font-size:0.8125rem; font-weight:500;
+  transition:all 0.15s; text-align:center;
+}
+.btn-withdraw:hover { border-color:var(--color-red-500); color:var(--color-red-500); background:rgba(239,68,68,0.05); }
+
+/* About card */
+.about-card {
+  background:var(--bg-surface); border:1.5px solid var(--border-default);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-md);
+  overflow:hidden; animation:fade-in 0.3s ease-out 0.1s both;
+}
+.about-header { padding:0.75rem 1rem; border-bottom:1px solid var(--border-default); }
+.about-title { font-family:var(--font-display); font-size:0.875rem; font-weight:700; color:var(--text-primary); }
+.about-body { padding:1rem; display:flex; flex-direction:column; gap:0.625rem; }
+.about-row { display:flex; align-items:baseline; justify-content:space-between; gap:0.5rem; font-size:0.8125rem; }
+.about-key { color:var(--text-muted); flex-shrink:0; }
+.about-val { font-weight:500; color:var(--text-primary); text-align:right; }
+.about-divider { height:1px; background:var(--border-default); margin:0.25rem 0; }
+
+/* ── Guide panel ───────────────────────────────────────────────────── */
+.guide-panel {
+  position:fixed; bottom:1.5rem; right:1.5rem; width:348px;
+  background:var(--guide-bg); border:1.5px solid var(--guide-border);
+  border-radius:var(--radius-lg);
+  box-shadow:0 8px 32px -4px rgba(74,111,165,0.2), 0 2px 8px -2px rgba(0,0,0,0.12);
+  display:flex; flex-direction:column; overflow:hidden;
+  animation:slide-up 0.22s cubic-bezier(0.34,1.2,0.64,1) both;
+  z-index:200; max-height:calc(100vh - 4rem);
+}
+.guide-panel[hidden] { display:none; }
+.guide-header {
+  display:flex; align-items:center; gap:0.625rem;
+  padding:0.875rem 0.875rem 0.75rem 1rem;
+  border-bottom:1px solid var(--border-default); flex-shrink:0;
+}
+.guide-header-orb {
+  width:28px; height:28px; border-radius:50%;
+  background:linear-gradient(135deg, var(--color-primary-500), var(--color-primary-700));
+  flex-shrink:0;
+}
+.guide-header-title { font-family:var(--font-display); font-size:0.9375rem; font-weight:700; color:var(--text-primary); flex:1; }
+.guide-header-sub { font-size:0.6875rem; color:var(--text-muted); margin-top:0.05rem; }
+.guide-icon-btn {
+  width:28px; height:28px; border-radius:0.4rem;
+  color:var(--text-muted); font-size:0.9375rem;
+  display:flex; align-items:center; justify-content:center;
+  transition:color 0.15s, background 0.15s; flex-shrink:0;
+}
+.guide-icon-btn:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+
+/* Notification stack */
+.guide-notif-stack { display:flex; flex-direction:column; gap:0.5rem; margin:0.75rem 0.875rem 0; flex-shrink:0; }
+.guide-notif-stack:empty { display:none; }
+.guide-notif { border-radius:0.625rem; color:white; overflow:hidden; animation:slide-up 0.25s ease-out; }
+.guide-notif[data-type="match_ready"] { background:linear-gradient(135deg,#3E1F7A,#6240AD); }
+.guide-notif-top { display:flex; align-items:center; gap:0.5rem; padding:0.55rem 0.75rem 0.25rem; }
+.guide-notif-icon { font-size:1rem; flex-shrink:0; animation:flash-pulse 1.6s ease-in-out infinite; }
+.guide-notif-title { font-family:var(--font-display); font-weight:700; font-size:0.8125rem; flex:1; line-height:1.25; }
+.guide-notif-dismiss { color:rgba(255,255,255,0.55); font-size:0.9rem; padding:0.2rem; transition:color 0.15s; flex-shrink:0; line-height:1; }
+.guide-notif-dismiss:hover { color:white; }
+.guide-notif-bottom { display:flex; align-items:center; justify-content:space-between; padding:0.2rem 0.75rem 0.55rem; gap:0.5rem; }
+.guide-notif-meta { font-size:0.7125rem; color:rgba(255,255,255,0.72); flex:1; line-height:1.35; }
+.guide-notif-actions { display:flex; gap:0.375rem; flex-shrink:0; }
+.guide-notif-btn { background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.32); color:white; font-size:0.75rem; font-weight:600; padding:0.25rem 0.625rem; border-radius:0.35rem; transition:background 0.15s; white-space:nowrap; cursor:pointer; }
+.guide-notif-btn:hover { background:rgba(255,255,255,0.34); }
+
+/* Slots */
+.guide-slots-section { padding:0.875rem 0.875rem 0.625rem; border-bottom:1px solid var(--border-default); flex-shrink:0; }
+.guide-slots-label { font-size:0.625rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-muted); margin-bottom:0.625rem; }
+.guide-slots-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0.5rem; }
+.guide-slot { display:flex; flex-direction:column; align-items:center; gap:0.3rem; padding:0.5rem 0.25rem 0.4rem; border-radius:0.625rem; background:var(--slot-bg); border:1px solid var(--slot-border); transition:background 0.15s, border-color 0.15s, transform 0.1s; cursor:pointer; }
+.guide-slot:hover { background:var(--slot-bg-hover); border-color:var(--color-primary-300); transform:translateY(-1px); }
+.guide-slot:active { transform:scale(0.95); }
+.guide-slot-icon { font-size:1.375rem; line-height:1; }
+.guide-slot-label { font-size:0.5625rem; font-weight:600; text-align:center; color:var(--text-secondary); line-height:1.25; max-width:100%; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+
+/* Online strip */
+.guide-online-strip { padding:0.6rem 0.875rem 0.5rem; border-bottom:1px solid var(--border-default); flex-shrink:0; }
+.guide-online-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.45rem; }
+.guide-online-label { font-size:0.6875rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:0.35rem; }
+.guide-online-dot { width:6px; height:6px; border-radius:50%; background:#22c55e; animation:flash-pulse 2.5s ease-in-out infinite; }
+.guide-online-avatars { display:flex; align-items:center; gap:0.4rem; }
+.guide-online-avatar { position:relative; width:34px; height:34px; border-radius:50%; color:white; font-size:0.7rem; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; border:2px solid var(--bg-surface); transition:transform 0.15s, box-shadow 0.15s; flex-shrink:0; }
+.guide-online-avatar:hover { transform:scale(1.12); box-shadow:0 0 0 3px rgba(74,111,165,0.3); }
+.guide-online-avatar::after { content:''; position:absolute; bottom:0; right:0; width:9px; height:9px; border-radius:50%; background:#22c55e; border:2px solid var(--bg-surface); }
+.guide-online-more { font-size:0.75rem; color:var(--text-muted); white-space:nowrap; padding:0 0.25rem; }
+
+/* Input */
+.guide-input-row { display:flex; align-items:center; gap:0.5rem; padding:0.625rem 0.875rem 0.75rem; border-top:1px solid var(--border-default); flex-shrink:0; }
+.guide-input { flex:1; font-family:var(--font-body); font-size:0.875rem; padding:0.4rem 0.625rem; border-radius:var(--radius-md); border:1.5px solid var(--border-default); background:var(--bg-page); color:var(--text-primary); outline:none; transition:border-color 0.15s; }
+.guide-input:focus { border-color:var(--color-primary-500); }
+.guide-input::placeholder { color:var(--text-muted); }
+.guide-send { width:32px; height:32px; border-radius:var(--radius-md); background:var(--color-primary-500); color:white; display:flex; align-items:center; justify-content:center; font-size:0.9rem; transition:background 0.15s; flex-shrink:0; }
+.guide-send:hover { background:var(--color-primary-600); }
+</style>
+</head>
+<body>
+<div class="photo-bg" aria-hidden="true"></div>
+<a href="#main" class="skip-nav">Skip to main content</a>
+
+<!-- Navigation -->
+<nav class="nav" role="navigation" aria-label="Main navigation">
+  <a href="#" class="nav-logo" aria-label="AI Arena home">
+    <span class="nav-logo-dot" aria-hidden="true"></span>
+    AI Arena
+  </a>
+  <div class="nav-links">
+    <a href="lobby.html"          class="nav-link active" aria-current="page">Tournaments</a>
+    <a href="#rankings"           class="nav-link">Rankings</a>
+    <a href="#replays"            class="nav-link">Replays</a>
+    <a href="#games"              class="nav-link">Games</a>
+  </div>
+  <div class="nav-right">
+    <button class="theme-toggle" id="themeBtn" aria-label="Toggle dark mode">🌙</button>
+    <button class="guide-trigger urgent" id="guideBtn" aria-expanded="false" aria-controls="guidePanel" aria-label="Open Guide">
+      <span class="guide-orb" aria-hidden="true"></span>
+      Guide
+      <span class="guide-orb-badge" aria-label="1 alert">1</span>
+    </button>
+    <a href="player-profile.html" class="nav-avatar" aria-label="Your profile" style="display:flex;align-items:center;justify-content:center;text-decoration:none;">JD</a>
+  </div>
+</nav>
+
+<!-- Main content -->
+<main id="main" class="page">
+
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="lobby.html">Tournaments</a>
+    <span class="breadcrumb-sep" aria-hidden="true">›</span>
+    <span>Spring Open 2026</span>
+  </nav>
+
+  <!-- Tournament header -->
+  <div class="t-header" role="region" aria-label="Tournament details">
+    <div class="t-header-top">
+      <div class="t-title-block">
+        <h1 class="t-title">Spring Open 2026</h1>
+        <div class="t-badges" role="list" aria-label="Tournament attributes">
+          <span class="badge badge-progress" role="listitem">In Progress</span>
+          <span class="badge badge-pvp" role="listitem">PVP</span>
+          <span class="badge badge-rr" role="listitem">Round Robin</span>
+          <span class="badge badge-tier" role="listitem">Gold+</span>
+        </div>
+      </div>
+      <div class="t-countdown-block" aria-label="Round 2 ends in">
+        <div class="t-countdown-label">Round 2 ends in</div>
+        <div class="t-countdown" aria-live="off">01:42:18</div>
+        <div class="t-countdown-sub">Round 2 of 3</div>
+      </div>
+    </div>
+    <div class="t-meta-row" role="list" aria-label="Tournament information">
+      <div class="t-meta-item" role="listitem">
+        <span class="t-meta-label">Game</span>
+        <span class="t-meta-value">XO Arena</span>
+      </div>
+      <div class="t-meta-item" role="listitem">
+        <span class="t-meta-label">Format</span>
+        <span class="t-meta-value">Planned</span>
+      </div>
+      <div class="t-meta-item" role="listitem">
+        <span class="t-meta-label">Participants</span>
+        <span class="t-meta-value">8 / 8</span>
+      </div>
+      <div class="t-meta-item" role="listitem">
+        <span class="t-meta-label">Started</span>
+        <span class="t-meta-value">Apr 8, 09:00</span>
+      </div>
+      <div class="t-meta-item" role="listitem">
+        <span class="t-meta-label">Organiser</span>
+        <span class="t-meta-value">Arena Admin</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Match ready banner -->
+  <div class="match-ready-banner" role="alert" aria-live="assertive" aria-label="Match ready">
+    <div class="match-ready-icon" aria-hidden="true">⚔️</div>
+    <div class="match-ready-text">
+      <div class="match-ready-title">Your match is ready — Round 2</div>
+      <div class="match-ready-sub">vs. DragonBot_v7 · Best of 3 games · Timer started</div>
+    </div>
+    <div class="match-ready-actions">
+      <button class="btn-play">Play now</button>
+      <button class="btn-dismiss-match" aria-label="Dismiss match alert">Later</button>
+    </div>
+  </div>
+
+  <!-- Two-column layout -->
+  <div class="t-layout">
+
+    <!-- Main: tabs + standings -->
+    <div class="panel" role="region" aria-label="Tournament standings">
+      <div class="tabs-bar" role="tablist" aria-label="Tournament views">
+        <button class="tab active" role="tab" aria-selected="true" id="tab-standings" aria-controls="panel-standings">Standings</button>
+        <button class="tab" role="tab" aria-selected="false" id="tab-matches" aria-controls="panel-matches">Matches</button>
+        <button class="tab" role="tab" aria-selected="false" id="tab-participants" aria-controls="panel-participants">Participants <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.25rem;">(8)</span></button>
+      </div>
+
+      <!-- Standings tab -->
+      <div role="tabpanel" id="panel-standings" aria-labelledby="tab-standings">
+        <table class="standings-table" aria-label="Round robin standings">
+          <thead>
+            <tr>
+              <th style="width:40px;">#</th>
+              <th>Player</th>
+              <th class="num">W</th>
+              <th class="num">D</th>
+              <th class="num">L</th>
+              <th class="num">Pts</th>
+              <th class="num">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="rank-num rank-1">1</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:#7C3F9E;" aria-hidden="true">NX</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">NeuralX_Pro</a>
+                    <span class="tier-badge tier-platinum">Platinum</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">5</td><td class="num">1</td><td class="num">0</td>
+              <td class="pts-cell">16</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--text-muted);">Done</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank-num rank-2">2</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:#D4881E;" aria-hidden="true">D7</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">DragonBot_v7</a>
+                    <span class="tier-badge tier-gold">Gold</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">4</td><td class="num">1</td><td class="num">1</td>
+              <td class="pts-cell">13</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--color-amber-500);"><span class="match-status-dot" aria-hidden="true"></span>Playing</span></td>
+            </tr>
+            <tr class="me" aria-label="Your row">
+              <td><span class="rank-num rank-3">3</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:var(--color-primary-500);" aria-hidden="true">JD</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">jdoe <span class="player-you">(you)</span></a>
+                    <span class="tier-badge tier-gold">Gold</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">4</td><td class="num">0</td><td class="num">2</td>
+              <td class="pts-cell">12</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--color-amber-500);"><span class="match-status-dot" aria-hidden="true"></span>Playing</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank-num">4</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:#1D9E75;" aria-hidden="true">AQ</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">AlphaQ</a>
+                    <span class="tier-badge tier-gold">Gold</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">3</td><td class="num">2</td><td class="num">1</td>
+              <td class="pts-cell">11</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--text-muted);">Done</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank-num">5</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:#2E86E0;" aria-hidden="true">BM</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">ByteMind</a>
+                    <span class="tier-badge tier-silver">Silver</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">2</td><td class="num">1</td><td class="num">3</td>
+              <td class="pts-cell">7</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--color-amber-500);"><span class="match-status-dot" aria-hidden="true"></span>Playing</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank-num">6</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:#52525B;" aria-hidden="true">ST</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">StrategistTX</a>
+                    <span class="tier-badge tier-silver">Silver</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">2</td><td class="num">0</td><td class="num">4</td>
+              <td class="pts-cell">6</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--text-muted);">Done</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank-num">7</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:#71717A;" aria-hidden="true">QR</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">QuantumRook</a>
+                    <span class="tier-badge tier-silver">Silver</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">1</td><td class="num">1</td><td class="num">4</td>
+              <td class="pts-cell">4</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--color-amber-500);"><span class="match-status-dot" aria-hidden="true"></span>Playing</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank-num">8</span></td>
+              <td>
+                <div class="player-cell">
+                  <div class="player-avatar" style="background:#A1A1AA;" aria-hidden="true">LB</div>
+                  <div>
+                    <a href="player-profile.html" class="player-name">LogicByte</a>
+                    <span class="tier-badge tier-silver">Silver</span>
+                  </div>
+                </div>
+              </td>
+              <td class="num">0</td><td class="num">0</td><td class="num">6</td>
+              <td class="pts-cell">0</td>
+              <td class="num"><span style="font-size:0.75rem;color:var(--text-muted);">Done</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:0.625rem 1rem;font-size:0.75rem;color:var(--text-muted);border-top:1px solid var(--border-default);">
+          Points: Win = 3 · Draw = 1 · Loss = 0
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Registration -->
+      <div class="reg-card" role="region" aria-label="Your registration">
+        <div class="reg-status" aria-label="Registration status: registered">
+          <div class="reg-status-dot" aria-hidden="true"></div>
+          <span class="reg-status-text">You're registered</span>
+        </div>
+        <div class="reg-body">
+          <div>
+            <div class="reg-field-label">Result notifications</div>
+            <div class="reg-pref-options" role="radiogroup" aria-label="Notification preference">
+              <div class="reg-pref-option selected" role="radio" aria-checked="true" tabindex="0">
+                <div class="reg-pref-radio" aria-hidden="true"></div>
+                <div class="reg-pref-text">
+                  After each match
+                  <div class="reg-pref-desc">Get notified as results come in</div>
+                </div>
+              </div>
+              <div class="reg-pref-option" role="radio" aria-checked="false" tabindex="0">
+                <div class="reg-pref-radio" aria-hidden="true"></div>
+                <div class="reg-pref-text">
+                  Summary at end
+                  <div class="reg-pref-desc">Single digest when tournament finishes</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="btn-withdraw" aria-label="Withdraw from tournament">Withdraw</button>
+        </div>
+      </div>
+
+      <!-- About -->
+      <div class="about-card" role="region" aria-label="Tournament information">
+        <div class="about-header">
+          <div class="about-title">About this tournament</div>
+        </div>
+        <div class="about-body">
+          <div class="about-row">
+            <span class="about-key">Game</span>
+            <span class="about-val">XO Arena</span>
+          </div>
+          <div class="about-row">
+            <span class="about-key">Mode</span>
+            <span class="about-val">PVP</span>
+          </div>
+          <div class="about-row">
+            <span class="about-key">Format</span>
+            <span class="about-val">Round Robin</span>
+          </div>
+          <div class="about-row">
+            <span class="about-key">Match format</span>
+            <span class="about-val">Best of 3</span>
+          </div>
+          <div class="about-divider" role="separator"></div>
+          <div class="about-row">
+            <span class="about-key">Tier requirement</span>
+            <span class="about-val">Gold and above</span>
+          </div>
+          <div class="about-row">
+            <span class="about-key">Max participants</span>
+            <span class="about-val">8</span>
+          </div>
+          <div class="about-divider" role="separator"></div>
+          <div class="about-row">
+            <span class="about-key">Started</span>
+            <span class="about-val">Apr 8, 09:00</span>
+          </div>
+          <div class="about-row">
+            <span class="about-key">Est. end</span>
+            <span class="about-val">Apr 8, 14:00</span>
+          </div>
+          <div class="about-row">
+            <span class="about-key">Organiser</span>
+            <span class="about-val">Arena Admin</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+  </div><!-- /t-layout -->
+</main>
+
+<!-- Guide Panel -->
+<div class="guide-panel" id="guidePanel" role="dialog" aria-modal="true" aria-label="Guide" hidden>
+  <div class="guide-header">
+    <div class="guide-header-orb" aria-hidden="true"></div>
+    <div>
+      <div class="guide-header-title">Guide</div>
+      <div class="guide-header-sub">AI Arena assistant</div>
+    </div>
+    <button class="guide-icon-btn" aria-label="Settings">⚙</button>
+    <button class="guide-icon-btn" id="guideClose" aria-label="Close Guide">✕</button>
+  </div>
+
+  <!-- Match ready notification in Guide -->
+  <div class="guide-notif-stack" aria-live="polite" aria-label="Notifications">
+    <div class="guide-notif" data-type="match_ready" role="alert">
+      <div class="guide-notif-top">
+        <span class="guide-notif-icon" aria-hidden="true">⚔️</span>
+        <span class="guide-notif-title">Match ready — Round 2</span>
+        <button class="guide-notif-dismiss" aria-label="Dismiss">✕</button>
+      </div>
+      <div class="guide-notif-bottom">
+        <span class="guide-notif-meta">Spring Open 2026 · vs. DragonBot_v7</span>
+        <div class="guide-notif-actions">
+          <button class="guide-notif-btn">Play now</button>
+          <button class="guide-notif-btn secondary">Later</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Online strip -->
+  <div class="guide-online-strip" aria-label="Players online">
+    <div class="guide-online-header">
+      <span class="guide-online-label">
+        <span class="guide-online-dot" aria-hidden="true"></span>
+        Online now
+      </span>
+      <span class="guide-online-count" aria-label="9 players online">9 players</span>
+    </div>
+    <div class="guide-online-avatars" role="list" aria-label="Online players">
+      <button class="guide-online-avatar" style="background:#7C3F9E;" role="listitem" aria-label="Invite NeuralX_Pro to your room">NX</button>
+      <button class="guide-online-avatar" style="background:#1D9E75;" role="listitem" aria-label="Invite AlphaQ to your room">AQ</button>
+      <button class="guide-online-avatar" style="background:#2E86E0;" role="listitem" aria-label="Invite ByteMind to your room">BM</button>
+      <button class="guide-online-avatar" style="background:#D4881E;" role="listitem" aria-label="Invite swift_ai to your room">SA</button>
+      <button class="guide-online-avatar" style="background:#A855F7;" role="listitem" aria-label="Invite echo_net to your room">EN</button>
+      <span class="guide-online-more" aria-label="4 more players online">+4 more</span>
+    </div>
+  </div>
+
+  <!-- Slots -->
+  <div class="guide-slots-section">
+    <div class="guide-slots-label" aria-label="Quick actions">Quick actions</div>
+    <div class="guide-slots-grid" role="list" aria-label="Guide slots">
+      <button class="guide-slot" role="listitem" aria-label="Go to tournament lobby">
+        <span class="guide-slot-icon" aria-hidden="true">🏆</span>
+        <span class="guide-slot-label">Tournaments</span>
+      </button>
+      <button class="guide-slot" role="listitem" aria-label="Play XO vs community bots">
+        <span class="guide-slot-icon" aria-hidden="true">🎮</span>
+        <span class="guide-slot-label">Play XO</span>
+      </button>
+      <button class="guide-slot" role="listitem" aria-label="View rankings">
+        <span class="guide-slot-icon" aria-hidden="true">📊</span>
+        <span class="guide-slot-label">Rankings</span>
+      </button>
+      <button class="guide-slot" role="listitem" aria-label="Invite a user to play">
+        <span class="guide-slot-icon" aria-hidden="true">⚔️</span>
+        <span class="guide-slot-label">Invite</span>
+      </button>
+      <button class="guide-slot" role="listitem" aria-label="Open the Gym to train your bot">
+        <span class="guide-slot-icon" aria-hidden="true">🧠</span>
+        <span class="guide-slot-label">Open Gym</span>
+      </button>
+      <button class="guide-slot" role="listitem" aria-label="View my tier and merit progress">
+        <span class="guide-slot-icon" aria-hidden="true">🎖️</span>
+        <span class="guide-slot-label">My Tier</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="guide-input-row">
+    <label class="sr-only" for="guideInput">Ask Guide</label>
+    <input class="guide-input" id="guideInput" type="text" placeholder="Ask Guide anything…" autocomplete="off">
+    <button class="guide-send" aria-label="Send message">➤</button>
+  </div>
+</div>
+
+<script>
+// Theme toggle
+const root = document.documentElement;
+const themeBtn = document.getElementById('themeBtn');
+let dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+function applyTheme() {
+  root.classList.toggle('dark', dark);
+  themeBtn.textContent = dark ? '☀️' : '🌙';
+  themeBtn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+}
+applyTheme();
+themeBtn.addEventListener('click', () => { dark = !dark; applyTheme(); });
+
+// Guide open/close
+const guideBtn = document.getElementById('guideBtn');
+const guidePanel = document.getElementById('guidePanel');
+const guideClose = document.getElementById('guideClose');
+function openGuide() {
+  guidePanel.hidden = false;
+  guideBtn.setAttribute('aria-expanded', 'true');
+  guideClose.focus();
+}
+function closeGuide() {
+  guidePanel.hidden = true;
+  guideBtn.setAttribute('aria-expanded', 'false');
+  guideBtn.focus();
+}
+guideBtn.addEventListener('click', () => guidePanel.hidden ? openGuide() : closeGuide());
+guideClose.addEventListener('click', closeGuide);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !guidePanel.hidden) closeGuide(); });
+
+// Guide slot navigation
+document.querySelectorAll('.guide-slot').forEach(slot => {
+  slot.addEventListener('click', () => {
+    const label = slot.querySelector('.guide-slot-label')?.textContent.trim();
+    const routes = { 'Tournaments': 'lobby.html', 'My Tier': 'player-profile.html', 'Rankings': '#' };
+    if (routes[label] && routes[label] !== '#') location.href = routes[label];
+  });
+});
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected','true');
+  });
+});
+
+// Notification preference toggle
+document.querySelectorAll('.reg-pref-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    document.querySelectorAll('.reg-pref-option').forEach(o => { o.classList.remove('selected'); o.setAttribute('aria-checked','false'); });
+    opt.classList.add('selected');
+    opt.setAttribute('aria-checked','true');
+  });
+  opt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opt.click(); } });
+});
+
+// Dismiss notifications
+document.querySelectorAll('.guide-notif-dismiss').forEach(btn => {
+  btn.addEventListener('click', () => btn.closest('.guide-notif').remove());
+});
+
+// Countdown timer (decorative)
+let secs = 1*3600 + 42*60 + 18;
+const countdown = document.querySelector('.t-countdown');
+setInterval(() => {
+  if (secs <= 0) return;
+  secs--;
+  const h = String(Math.floor(secs/3600)).padStart(2,'0');
+  const m = String(Math.floor((secs%3600)/60)).padStart(2,'0');
+  const s = String(secs%60).padStart(2,'0');
+  countdown.textContent = `${h}:${m}:${s}`;
+}, 1000);
+</script>
+</body>
+</html>

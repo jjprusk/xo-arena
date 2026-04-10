@@ -22,10 +22,13 @@ import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
 import supportRouter from './routes/support.js'
+import guideRouter from './routes/guide.js'
 import { setIO as mlSetIO } from './services/mlService.js'
 import { setIO as logSetIO } from './routes/logs.js'
+import { setIO as journeySetIO } from './services/journeyService.js'
 import { getSystemConfig } from './services/mlService.js'
 import { startActivityFlushJob } from './services/activityService.js'
+import { startTournamentBridge } from './lib/tournamentBridge.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -44,6 +47,7 @@ registerRoutes(app, {
   '/bot-games': botGamesRouter,
   '/feedback': feedbackRouter,
   '/support': supportRouter,
+  '/guide': guideRouter,
 })
 
 // Public version endpoint — no auth required
@@ -95,6 +99,8 @@ attachSocketIO(server).then((io) => {
   app.set('io', io)
   mlSetIO(io)
   logSetIO(io)
+  journeySetIO(io)
+  startTournamentBridge(io)
   server.listen(PORT, () => {
     logger.info(`XO Arena backend running on port ${PORT}`)
   })

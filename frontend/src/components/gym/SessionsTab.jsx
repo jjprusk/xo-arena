@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Card, SectionLabel, SESSION_COLOR } from './gymShared.jsx'
+import { Card, SectionLabel, SESSION_COLOR, SESSION_BADGE } from './gymShared.jsx'
 
 function StatCell({ label, value }) {
   return (
@@ -71,13 +71,7 @@ export default function SessionsTab({ model, sessions }) {
                       borderBottom: vItem.index < sessions.length - 1 ? '1px solid var(--border-default)' : 'none',
                     }}
                   >
-                    <span
-                      className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                      style={{
-                        backgroundColor: `var(--color-${color}-100)`,
-                        color: `var(--color-${color}-700)`,
-                      }}
-                    >
+                    <span className={`badge ${SESSION_BADGE[s.status] || 'badge-draft'} shrink-0`}>
                       {s.status}
                     </span>
                     <span className="text-xs truncate flex-1" style={{ color: isSelected ? 'var(--color-blue-700)' : 'var(--text-secondary)' }}>
@@ -95,11 +89,7 @@ export default function SessionsTab({ model, sessions }) {
               style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold">{sel.mode.replace(/_/g, ' ')}</span>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full`}
-                  style={{
-                    backgroundColor: `var(--color-${SESSION_COLOR[sel.status] || 'gray'}-100)`,
-                    color: `var(--color-${SESSION_COLOR[sel.status] || 'gray'}-700)`,
-                  }}>{sel.status}</span>
+                <span className={`badge ${SESSION_BADGE[sel.status] || 'badge-draft'}`}>{sel.status}</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <StatCell label="Episodes" value={sel.iterations.toLocaleString()} />
