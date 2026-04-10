@@ -44,6 +44,13 @@ export default defineConfig({
       interval: 300,
     },
     proxy: {
+      // Tournament service routes — must come before the generic /api catch-all
+      '/api/tournaments': { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/matches':     { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/classification': { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/recurring':   { target: 'http://tournament:3001', changeOrigin: true },
+      '/api/bot-matches': { target: 'http://tournament:3001', changeOrigin: true },
+      // All other /api routes go to the main backend
       '/api': {
         target: 'http://backend:3000',
         changeOrigin: true,

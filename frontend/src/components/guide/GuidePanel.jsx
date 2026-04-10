@@ -99,9 +99,10 @@ export default function GuidePanel({ isAdmin = false }) {
             🤖
           </button>
 
-          <span className="flex-1 font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-            Guide
-          </span>
+          <div className="flex-1 flex flex-col">
+            <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Guide</span>
+            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Ready to help</span>
+          </div>
 
           {/* Edit mode toggle */}
           <button
@@ -128,6 +129,9 @@ export default function GuidePanel({ isAdmin = false }) {
           </button>
         </div>
 
+        {/* Online strip — fixed between header and scroll body */}
+        <OnlineStrip onlineUsers={[]} />
+
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 p-4">
@@ -139,7 +143,6 @@ export default function GuidePanel({ isAdmin = false }) {
               isAdmin={isAdmin}
               onSlotAction={key => { if (key === 'journey_complete') setJourneyCompleteOpen(true) }}
             />
-            <OnlineStrip onlineUsers={[]} />
           </div>
         </div>
 

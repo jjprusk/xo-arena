@@ -697,7 +697,8 @@ export default function AdminTournamentsPage() {
   const [error, setError]     = useState(null)
   const [actionError, setActionError] = useState(null)
   const [token, setToken]     = useState(null)
-  const [modal, setModal]     = useState(null)
+  const [modal, setModal]         = useState(null)
+  const [statusFilter, setStatusFilter] = useState('')
 
   const totalPages = Math.ceil(total / LIMIT)
   const isAdmin = session?.user?.role === 'admin'
@@ -706,11 +707,12 @@ export default function AdminTournamentsPage() {
     getToken().then(setToken).catch(() => {})
   }, [])
 
-  const load = useCallback(async (p) => {
+  const load = useCallback(async (p, filter) => {
     if (!token) return
     setLoading(true); setError(null)
     try {
-      const data = await tournamentApi.list({}, token)
+      const params = filter ? { status: filter } : {}
+      const data = await tournamentApi.list(params, token)
       const list = Array.isArray(data) ? data : (data.tournaments ?? [])
       setTotal(list.length)
       const start = (p - 1) * LIMIT
@@ -719,7 +721,7 @@ export default function AdminTournamentsPage() {
     finally { setLoading(false) }
   }, [token])
 
-  useEffect(() => { if (token) load(page) }, [token, page, load])
+  useEffect(() => { if (token) load(page, statusFilter) }, [token, page, statusFilter, load])
 
   if (isPending) return (
     <div className="flex items-center justify-center py-24">
@@ -731,7 +733,7 @@ export default function AdminTournamentsPage() {
   async function performAction(action, tournament, label) {
     if (!confirm(`${label} "${tournament.name}"?`)) return
     setActionError(null)
-    try { await tournamentApi[action](tournament.id, token); load(page) }
+    try { await tournamentApi[action](tournament.id, token); load(page, statusFilter) }
     catch (e) { setActionError(e.message || `${label} failed.`) }
   }
 
@@ -741,9 +743,34 @@ export default function AdminTournamentsPage() {
 
       {/* Tournament list */}
       <div className="space-y-4">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Status filter chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: 'All',         value: '' },
+              { label: 'Draft',       value: 'DRAFT' },
+              { label: 'Open',        value: 'REGISTRATION_OPEN' },
+              { label: 'Reg Closed',  value: 'REGISTRATION_CLOSED' },
+              { label: 'In Progress', value: 'IN_PROGRESS' },
+              { label: 'Completed',   value: 'COMPLETED' },
+              { label: 'Cancelled',   value: 'CANCELLED' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => { setStatusFilter(opt.value); setPage(1) }}
+                className="px-3 py-1 rounded-full text-xs font-semibold border transition-colors"
+                style={{
+                  backgroundColor: statusFilter === opt.value ? 'var(--color-slate-700)' : 'var(--bg-surface)',
+                  color:           statusFilter === opt.value ? '#fff'                    : 'var(--text-secondary)',
+                  borderColor:     statusFilter === opt.value ? 'var(--color-slate-700)' : 'var(--border-default)',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <button onClick={() => setModal('create')}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 shrink-0"
             style={{ background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))' }}>
             + Create Tournament
           </button>
@@ -876,7 +903,7 @@ export default function AdminTournamentsPage() {
         <TournamentModal
           tournament={modal === 'create' ? null : modal.tournament}
           token={token}
-          onSaved={() => { setModal(null); load(page) }}
+          onSaved={() => { setModal(null); load(page, statusFilter) }}
           onClose={() => setModal(null)}
         />
       )}

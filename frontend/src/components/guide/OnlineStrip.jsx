@@ -2,66 +2,101 @@ import React from 'react'
 
 const MAX_AVATARS = 6
 
-/**
- * OnlineStrip — row of online player avatars.
- * amber dot = in-match, green dot = available.
- * Tapping an available player sends a room invite (Phase 4+).
- *
- * For Phase 3 the online list is fetched from the existing leaderboard/users
- * socket presence data. Passed in as `onlineUsers` prop by GuidePanel.
- */
-export default function OnlineStrip({ onlineUsers = [] }) {
-  if (onlineUsers.length === 0) return null
+// Distinct avatar background colors cycling by index
+const AVATAR_COLORS = [
+  '#4A6FA5', '#24B587', '#7C5CBF', '#E85554', '#D4891E', '#304D77',
+]
 
+export default function OnlineStrip({ onlineUsers = [] }) {
   const visible  = onlineUsers.slice(0, MAX_AVATARS)
   const overflow = onlineUsers.length - MAX_AVATARS
 
   return (
-    <section aria-label="Online players">
-      <p className="text-xs font-semibold uppercase tracking-wider mb-2"
-         style={{ color: 'var(--text-muted)' }}>
-        Online
-      </p>
-      <div className="flex items-center gap-2 flex-wrap">
-        {visible.map(user => (
-          <div key={user.id} className="relative" title={user.displayName}>
-            {/* Avatar circle */}
-            <div
-              className="flex items-center justify-center rounded-full text-xs font-bold"
+    <section
+      aria-label="Online players"
+      className="shrink-0 px-4 py-2"
+      style={{ borderBottom: '1px solid var(--border-default)' }}
+    >
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          {/* Pulsing green dot */}
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'inline-block',
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: '#22c55e',
+              animation: 'guide-online-pulse 2.5s ease-in-out infinite',
+            }}
+          />
+          Online now
+        </span>
+        {onlineUsers.length > 0 && (
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {onlineUsers.length} {onlineUsers.length === 1 ? 'player' : 'players'}
+          </span>
+        )}
+      </div>
+
+      {/* Avatars or empty state */}
+      {onlineUsers.length === 0 ? (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>— nobody online —</p>
+      ) : (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {visible.map((user, i) => (
+            <button
+              key={user.id}
+              title={`@${user.username ?? user.displayName}`}
+              aria-label={`Invite ${user.displayName} to your room`}
+              className="relative shrink-0 rounded-full flex items-center justify-center text-white font-bold"
               style={{
-                width: 32,
-                height: 32,
-                background: 'var(--color-slate-500)',
-                color: 'white',
-                fontSize: 12,
+                width: 34,
+                height: 34,
+                fontSize: '0.7rem',
+                background: user.avatarColor ?? AVATAR_COLORS[i % AVATAR_COLORS.length],
+                border: '2px solid var(--bg-surface)',
+                cursor: 'pointer',
+                transition: 'transform 0.15s, box-shadow 0.15s',
               }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.12)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(74,111,165,0.3)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
             >
               {user.avatarUrl
                 ? <img src={user.avatarUrl} alt={user.displayName} className="rounded-full w-full h-full object-cover" />
                 : (user.displayName?.[0] ?? '?').toUpperCase()
               }
-            </div>
-            {/* Status dot */}
-            <span
-              aria-label={user.inMatch ? 'In match' : 'Available'}
-              className="absolute rounded-full border-2"
-              style={{
-                width: 10,
-                height: 10,
-                bottom: 0,
-                right: 0,
-                backgroundColor: user.inMatch ? 'var(--color-amber-500)' : 'var(--color-teal-500)',
-                borderColor: 'var(--bg-surface)',
-              }}
-            />
-          </div>
-        ))}
-        {overflow > 0 && (
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            +{overflow}
-          </span>
-        )}
-      </div>
+              {/* Green status dot */}
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  background: user.inMatch ? 'var(--color-amber-500)' : '#22c55e',
+                  border: '2px solid var(--bg-surface)',
+                }}
+              />
+            </button>
+          ))}
+          {overflow > 0 && (
+            <span className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>+{overflow} more</span>
+          )}
+        </div>
+      )}
+
+      {/* Keyframe injected once */}
+      <style>{`
+        @keyframes guide-online-pulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.4; }
+        }
+      `}</style>
     </section>
   )
 }

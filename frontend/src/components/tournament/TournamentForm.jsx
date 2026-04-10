@@ -24,6 +24,45 @@ function Field({ label, hint, children, required }) {
 const INPUT_CLASS = 'w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors'
 const SELECT_CLASS = INPUT_CLASS
 
+/**
+ * Separate date + time inputs that combine into a YYYY-MM-DDTHH:mm value.
+ * Avoids Safari's broken datetime-local behavior.
+ */
+function DateTimePicker({ value, onChange }) {
+  const datePart = value ? value.slice(0, 10) : ''
+  const timePart = value ? value.slice(11, 16) : ''
+
+  function handleDate(e) {
+    const d = e.target.value
+    if (!d) { onChange(''); return }
+    onChange(`${d}T${timePart || '00:00'}`)
+  }
+
+  function handleTime(e) {
+    const t = e.target.value
+    if (datePart) onChange(`${datePart}T${t || '00:00'}`)
+  }
+
+  return (
+    <div className="flex gap-2">
+      <input
+        type="date"
+        value={datePart}
+        onChange={handleDate}
+        className={INPUT_CLASS}
+        style={FIELD_STYLE}
+      />
+      <input
+        type="time"
+        value={timePart}
+        onChange={handleTime}
+        className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors w-32 shrink-0"
+        style={FIELD_STYLE}
+      />
+    </div>
+  )
+}
+
 // Convert a Date or ISO string to a value usable in datetime-local inputs
 function toLocalDatetimeValue(val) {
   if (!val) return ''
@@ -111,7 +150,6 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
   function validate() {
     const errs = {}
     if (!form.name.trim()) errs.name = 'Name is required.'
-    if (!form.startTime)   errs.startTime = 'Start time is required.'
     if (form.registrationOpenAt && form.registrationCloseAt) {
       if (new Date(form.registrationOpenAt) >= new Date(form.registrationCloseAt)) {
         errs.registrationCloseAt = 'Registration close must be after open.'
@@ -426,37 +464,58 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
 
       {/* Dates */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Start Time" required>
-          <input
-            type="datetime-local"
-            value={form.startTime}
-            onChange={e => set('startTime', e.target.value)}
-            className={INPUT_CLASS}
-            style={FIELD_STYLE}
-          />
+        <Field label="Start Time" hint="Required before publishing">
+          {form.startTime ? (
+            <div className="flex flex-col gap-1">
+              <DateTimePicker value={form.startTime} onChange={v => set('startTime', v)} />
+              <button type="button" onClick={() => set('startTime', '')}
+                className="text-[10px] text-left hover:opacity-70 w-fit"
+                style={{ color: 'var(--text-muted)' }}>Clear</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => set('startTime', toLocalDatetimeValue(new Date()))}
+              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+              — not set —
+            </button>
+          )}
           {errors.startTime && (
             <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.startTime}</span>
           )}
         </Field>
 
         <Field label="Registration Opens At" hint="Optional">
-          <input
-            type="datetime-local"
-            value={form.registrationOpenAt}
-            onChange={e => set('registrationOpenAt', e.target.value)}
-            className={INPUT_CLASS}
-            style={FIELD_STYLE}
-          />
+          {form.registrationOpenAt ? (
+            <div className="flex flex-col gap-1">
+              <DateTimePicker value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
+              <button type="button" onClick={() => set('registrationOpenAt', '')}
+                className="text-[10px] text-left hover:opacity-70 w-fit"
+                style={{ color: 'var(--text-muted)' }}>Clear</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => set('registrationOpenAt', toLocalDatetimeValue(new Date()))}
+              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+              — not set —
+            </button>
+          )}
         </Field>
 
         <Field label="Registration Closes At" hint="Optional">
-          <input
-            type="datetime-local"
-            value={form.registrationCloseAt}
-            onChange={e => set('registrationCloseAt', e.target.value)}
-            className={INPUT_CLASS}
-            style={FIELD_STYLE}
-          />
+          {form.registrationCloseAt ? (
+            <div className="flex flex-col gap-1">
+              <DateTimePicker value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
+              <button type="button" onClick={() => set('registrationCloseAt', '')}
+                className="text-[10px] text-left hover:opacity-70 w-fit"
+                style={{ color: 'var(--text-muted)' }}>Clear</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => set('registrationCloseAt', toLocalDatetimeValue(new Date()))}
+              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+              — not set —
+            </button>
+          )}
           {errors.registrationCloseAt && (
             <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.registrationCloseAt}</span>
           )}

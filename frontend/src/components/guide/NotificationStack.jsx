@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useGuideStore } from '../../store/guideStore.js'
 
 const TYPE_CONFIG = {
+  tournament:  { label: 'Tournament',  color: 'var(--color-blue-600)',   bg: 'var(--color-blue-50)',   darkBg: '#1a2535' },
   flash:       { label: 'Flash',       color: 'var(--color-amber-600)',  bg: 'var(--color-amber-50)',  darkBg: '#3a2e1a' },
   match_ready: { label: 'Match',       color: 'var(--color-slate-500)',  bg: 'var(--color-slate-50)',  darkBg: '#1e2535' },
   admin:       { label: 'Admin',       color: 'var(--color-blue-500)',   bg: 'var(--color-blue-50)',   darkBg: '#1a2535' },

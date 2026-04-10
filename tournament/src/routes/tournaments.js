@@ -201,6 +201,14 @@ router.post('/:id/publish', requireTournamentAdmin, async (req, res, next) => {
       })
     }
 
+    // Notify all connected users that a new tournament is open
+    await publish('tournament:published', {
+      tournamentId: tournament.id,
+      name: tournament.name,
+      format: tournament.format,
+      mode: tournament.mode,
+    })
+
     res.json({ tournament })
   } catch (e) {
     next(e)

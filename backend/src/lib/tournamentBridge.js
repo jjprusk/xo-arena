@@ -31,6 +31,7 @@ export function deletePendingPvpMatch(matchId) {
 
 // Channels to subscribe to
 const CHANNELS = [
+  'tournament:published',
   'tournament:flash:announced',
   'tournament:match:ready',
   'tournament:match:result',
@@ -70,6 +71,20 @@ export function startTournamentBridge(io) {
 
 export async function handleEvent(io, channel, data) {
   switch (channel) {
+    case 'tournament:published': {
+      const { tournamentId, name, format, mode } = data
+      const formatLabel = format === 'FLASH' ? '⚡ Flash' : format === 'OPEN' ? 'Open' : 'Planned'
+      const modeLabel   = mode  === 'BOT_VS_BOT' ? 'Bot vs Bot' : mode === 'MIXED' ? 'Mixed' : 'PvP'
+      io.emit('guide:notification', {
+        type:  'tournament',
+        title: `New Tournament: ${name}`,
+        body:  `${formatLabel} · ${modeLabel} — Registration is open!`,
+        href:  '/tournaments',
+        tournamentId,
+      })
+      logger.info({ tournamentId }, 'Tournament published — notified all connected clients')
+      break
+    }
     case 'tournament:flash:announced': {
       // Broadcast to all connected sockets — flash tournaments are live events.
       // No UserNotification row: if you're not online, the window has likely passed.

@@ -1,0 +1,179 @@
+/**
+ * Tournament sweep job — runs every 60 seconds.
+ *
+ * For every REGISTRATION_OPEN or REGISTRATION_CLOSED tournament whose
+ * startTime is in the past:
+ *   - participants >= minParticipants → auto-start (generate bracket + publish events)
+ *   - participants <  minParticipants → auto-cancel  (publish cancelled event)
+ */
+
+import db from './db.js'
+import { publish } from './redis.js'
+import logger from '../logger.js'
+
+const SWEEP_INTERVAL_MS = 60_000
+
+export function startTournamentSweep() {
+  logger.info('Tournament sweep job started (60s interval)')
+  sweep()
+  return setInterval(sweep, SWEEP_INTERVAL_MS)
+}
+
+async function sweep() {
+  const now = new Date()
+
+  let overdue
+  try {
+    overdue = await db.tournament.findMany({
+      where: {
+        status: { in: ['REGISTRATION_OPEN', 'REGISTRATION_CLOSED'] },
+        startTime: { not: null, lte: now },
+      },
+      include: {
+        participants: {
+          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+          include: { user: { select: { id: true } } },
+        },
+      },
+    })
+  } catch (err) {
+    logger.error({ err }, 'Tournament sweep — DB query failed')
+    return
+  }
+
+  if (overdue.length === 0) return
+  logger.info({ count: overdue.length }, 'Tournament sweep — processing overdue tournaments')
+
+  for (const t of overdue) {
+    const count = t.participants.length
+
+    if (count < t.minParticipants) {
+      await autoCancel(t, count)
+    } else {
+      await autoStart(t)
+    }
+  }
+}
+
+// ─── Auto-cancel ──────────────────────────────────────────────────────────────
+
+async function autoCancel(tournament, count) {
+  try {
+    await db.tournament.update({
+      where: { id: tournament.id },
+      data: { status: 'CANCELLED' },
+    })
+
+    const participantUserIds = tournament.participants.map(p => p.userId)
+    await publish('tournament:cancelled', {
+      tournamentId: tournament.id,
+      participantUserIds,
+    })
+
+    logger.info(
+      { tournamentId: tournament.id, name: tournament.name, participants: count, min: tournament.minParticipants },
+      'Tournament sweep — auto-cancelled (insufficient participants)'
+    )
+  } catch (err) {
+    logger.warn({ tournamentId: tournament.id, err: err.message }, 'Tournament sweep — auto-cancel failed')
+  }
+}
+
+// ─── Auto-start ───────────────────────────────────────────────────────────────
+
+async function autoStart(tournament) {
+  try {
+    await db.tournament.update({
+      where: { id: tournament.id },
+      data: { status: 'IN_PROGRESS' },
+    })
+
+    const participants = tournament.participants
+
+    if (tournament.bracketType === 'SINGLE_ELIM') {
+      const shuffled = [...participants].sort(() => Math.random() - 0.5)
+
+      const round = await db.tournamentRound.create({
+        data: { tournamentId: tournament.id, roundNumber: 1, status: 'IN_PROGRESS' },
+      })
+
+      for (let i = 0; i < shuffled.length; i += 2) {
+        const p1 = shuffled[i]
+        const p2 = shuffled[i + 1]
+
+        if (!p2) {
+          // Bye
+          await db.tournamentMatch.create({
+            data: {
+              tournamentId: tournament.id,
+              roundId: round.id,
+              participant1Id: p1.id,
+              participant2Id: null,
+              winnerId: p1.id,
+              status: 'COMPLETED',
+              completedAt: new Date(),
+            },
+          })
+        } else {
+          const match = await db.tournamentMatch.create({
+            data: {
+              tournamentId: tournament.id,
+              roundId: round.id,
+              participant1Id: p1.id,
+              participant2Id: p2.id,
+              status: 'PENDING',
+            },
+          })
+
+          if (tournament.mode === 'PVP') {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.id,
+              participant2UserId: p2.user.id,
+              bestOfN: tournament.bestOfN,
+            })
+          }
+        }
+      }
+    } else if (tournament.bracketType === 'ROUND_ROBIN') {
+      const round = await db.tournamentRound.create({
+        data: { tournamentId: tournament.id, roundNumber: 1, status: 'IN_PROGRESS' },
+      })
+
+      for (let i = 0; i < participants.length; i++) {
+        for (let j = i + 1; j < participants.length; j++) {
+          const p1 = participants[i]
+          const p2 = participants[j]
+
+          const match = await db.tournamentMatch.create({
+            data: {
+              tournamentId: tournament.id,
+              roundId: round.id,
+              participant1Id: p1.id,
+              participant2Id: p2.id,
+              status: 'PENDING',
+            },
+          })
+
+          if (tournament.mode === 'PVP') {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.id,
+              participant2UserId: p2.user.id,
+              bestOfN: tournament.bestOfN,
+            })
+          }
+        }
+      }
+    }
+
+    logger.info(
+      { tournamentId: tournament.id, name: tournament.name, participants: participants.length },
+      'Tournament sweep — auto-started'
+    )
+  } catch (err) {
+    logger.warn({ tournamentId: tournament.id, err: err.message }, 'Tournament sweep — auto-start failed')
+  }
+}

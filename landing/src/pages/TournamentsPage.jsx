@@ -245,7 +245,7 @@ export default function TournamentsPage() {
       if (filter) params.status = filter
       const data = await tournamentApi.list(params, token)
       const list = Array.isArray(data) ? data : (data.tournaments ?? [])
-      setTournaments(list.filter(t => t.status !== 'DRAFT'))
+      setTournaments(list.filter(t => t.status !== 'DRAFT' && t.status !== 'CANCELLED'))
     } catch {
       setError('Failed to load tournaments.')
     } finally {

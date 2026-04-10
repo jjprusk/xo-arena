@@ -11,6 +11,7 @@ import matchesRouter from './routes/matches.js'
 import classificationRouter from './routes/classification.js'
 import recurringRouter from './routes/recurring.js'
 import botMatchesRouter from './routes/botMatches.js'
+import { startTournamentSweep } from './lib/tournamentSweep.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const { version } = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
@@ -34,6 +35,7 @@ db.$connect().catch(err => logger.warn('DB pre-connect failed', { err }))
 
 server.listen(PORT, () => {
   logger.info(`Tournament service running on port ${PORT}`)
+  startTournamentSweep()
 })
 
 export default server
