@@ -1,5 +1,6 @@
 # Build stage — Docker build context is the repo root.
 # Only the packages needed by the landing are copied in.
+# cache-bust: 2026-04-10
 FROM node:22-slim AS builder
 WORKDIR /app
 

@@ -1,3 +1,4 @@
+# cache-bust: 2026-04-10
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_OPTIONS=--experimental-transform-types
