@@ -2,15 +2,14 @@ FROM node:22-alpine
 WORKDIR /app/backend
 ENV NODE_OPTIONS=--experimental-transform-types
 
-# Copy package.json and vendored workspace packages
-COPY package.json ./
+# Build context = repo root
+COPY backend/package.json ./
 COPY packages/ai/ /app/packages/ai/
 COPY packages/db/ /app/packages/db/
 
 RUN npm install --no-package-lock --omit=dev --ignore-scripts
 
-# Copy backend source
-COPY src/ ./src/
+COPY backend/src/ ./src/
 
 RUN npx prisma generate --schema=/app/packages/db/prisma/schema.prisma
 

@@ -1,15 +1,15 @@
 FROM node:22-slim AS builder
 WORKDIR /app/frontend
 
-# Install deps (no workspace packages in package.json — xo resolved via Vite alias)
-COPY package.json ./
+# Build context = repo root
+COPY frontend/package.json ./
 RUN npm install --no-package-lock --ignore-scripts
 
-# Copy vendored xo to /app/packages/xo so Vite alias '../packages/xo' resolves correctly
+# Shared package — Vite alias resolves '../packages/xo' to /app/packages/xo
 COPY packages/xo/ /app/packages/xo/
 
-# Copy frontend source
-COPY . .
+# Frontend source
+COPY frontend/ ./
 
 RUN npm run build
 
