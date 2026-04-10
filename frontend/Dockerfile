@@ -6,7 +6,7 @@ COPY package.json ./
 RUN npm install --no-package-lock --ignore-scripts
 
 # Copy vendored xo to /app/packages/xo so Vite alias '../packages/xo' resolves correctly
-COPY packages/xo/ ../packages/xo/
+COPY packages/xo/ /app/packages/xo/
 
 # Copy frontend source
 COPY . .
