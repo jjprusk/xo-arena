@@ -1,0 +1,8 @@
+[build]
+dockerfilePath = "landing/Dockerfile"
+
+[deploy]
+startCommand = "node server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+watchPatterns = ["landing/**", "packages/**"]

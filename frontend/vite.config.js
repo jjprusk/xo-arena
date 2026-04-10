@@ -9,6 +9,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
+  // In production the XO app is served at /xo/ via the landing proxy.
+  // Set VITE_BASE_PATH=/xo/ in the Railway build environment.
+  // In local dev VITE_BASE_PATH is not set, so the app runs at /.
+  base: process.env.VITE_BASE_PATH ?? '/',
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(version),
   },

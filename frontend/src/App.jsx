@@ -24,7 +24,8 @@ export default function App() {
   }, [])
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.VITE_BASE_PATH ?? '/'}>
+
       <Routes>
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<AppLayout />}>
