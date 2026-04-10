@@ -1,16 +1,15 @@
 FROM node:22-slim AS builder
-WORKDIR /app/landing
+WORKDIR /app
 
-# Build context = repo root
-COPY landing/package.json ./
-RUN npm install --no-package-lock --ignore-scripts
+COPY package.json ./
+COPY landing/package.json ./landing/
+RUN npm install --workspace=landing --no-package-lock --ignore-scripts
 
 # Shared package — Vite alias resolves '../packages/xo' to /app/packages/xo
-COPY packages/xo/ /app/packages/xo/
+COPY packages/xo/ ./packages/xo/
+COPY landing/ ./landing/
 
-# Landing source
-COPY landing/ ./
-
+WORKDIR /app/landing
 RUN npm run build
 
 FROM node:22-slim

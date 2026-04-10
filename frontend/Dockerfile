@@ -1,16 +1,15 @@
 FROM node:22-slim AS builder
-WORKDIR /app/frontend
+WORKDIR /app
 
-# Build context = repo root
-COPY frontend/package.json ./
-RUN npm install --no-package-lock --ignore-scripts
+COPY package.json ./
+COPY frontend/package.json ./frontend/
+RUN npm install --workspace=frontend --no-package-lock --ignore-scripts
 
 # Shared package — Vite alias resolves '../packages/xo' to /app/packages/xo
-COPY packages/xo/ /app/packages/xo/
+COPY packages/xo/ ./packages/xo/
+COPY frontend/ ./frontend/
 
-# Frontend source
-COPY frontend/ ./
-
+WORKDIR /app/frontend
 RUN npm run build
 
 FROM node:22-slim

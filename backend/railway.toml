@@ -1,0 +1,7 @@
+[build]
+dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+watchPatterns = ["backend/**", "packages/ai/**", "packages/db/**"]
