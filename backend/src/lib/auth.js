@@ -103,6 +103,8 @@ export const auth = betterAuth({
       apple: {
         clientId: process.env.APPLE_CLIENT_ID,
         clientSecret: process.env.APPLE_CLIENT_SECRET,
+        keyId: process.env.APPLE_KEY_ID,
+        teamId: process.env.APPLE_TEAM_ID,
       },
     }),
   },

@@ -3,7 +3,10 @@ import { signIn } from '../../lib/auth-client.js'
 
 export default function AppleSignInButton({ callbackURL = '/play' }) {
   async function handleClick() {
-    await signIn.social({ provider: 'apple', callbackURL })
+    const absoluteCallback = callbackURL.startsWith('http')
+      ? callbackURL
+      : `${window.location.origin}${callbackURL}`
+    await signIn.social({ provider: 'apple', callbackURL: absoluteCallback })
   }
 
   return (
