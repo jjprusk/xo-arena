@@ -1,19 +1,23 @@
 import React from 'react'
 
 const TYPE_TITLES = {
-  tier_upgrade:     'Tier Upgrade!',
-  first_hpc:        'First PvP Credit',
-  first_bpc:        'First Bot Credit',
-  first_tc:         'First Tournament Credit',
-  credit_milestone: 'Activity Milestone',
+  tier_upgrade:        'Tier Upgrade!',
+  first_hpc:           'First PvP Credit',
+  first_bpc:           'First Bot Credit',
+  first_tc:            'First Tournament Credit',
+  credit_milestone:    'Activity Milestone',
+  system_alert:        'System Alert',
+  tournament_match_result: 'Match Result',
 }
 
 const TYPE_ICONS = {
-  tier_upgrade:     null,  // use payload.tierIcon
-  first_hpc:        '🎮',
-  first_bpc:        '🤖',
-  first_tc:         '🏆',
-  credit_milestone: '⭐',
+  tier_upgrade:        null,  // use payload.tierIcon
+  first_hpc:           '🎮',
+  first_bpc:           '🤖',
+  first_tc:            '🏆',
+  credit_milestone:    '⭐',
+  system_alert:        '⚠️',
+  tournament_match_result: '🏆',
 }
 
 /**
