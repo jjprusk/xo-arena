@@ -150,21 +150,7 @@ export default function GuidePanel({ isAdmin = false }) {
           </div>
         </div>
 
-        {/* Chat input footer (placeholder — Phase 4+) */}
-        <div
-          className="shrink-0 px-4 py-3"
-          style={{ borderTop: '1px solid var(--border-default)' }}
-        >
-          <div
-            className="flex items-center gap-2 rounded-full px-3 py-2"
-            style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border-default)' }}
-          >
-            <span style={{ fontSize: 16 }}>🤖</span>
-            <span className="flex-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-              Ask Guide anything…
-            </span>
-          </div>
-        </div>
+        {/* Chat input footer — hidden until help subsystem is implemented */}
       </div>
 
       {/* Slot picker overlay */}

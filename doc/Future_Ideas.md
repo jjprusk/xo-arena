@@ -84,6 +84,22 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ---
 
+## Guide Help Subsystem (Chat Interface)
+
+**What:** Wire up the "Ask Guide anything…" input at the bottom of the Guide panel so users can ask natural-language questions and get contextual answers from an LLM.
+
+**Why deferred:** The panel footer placeholder exists but is not connected to any backend. Building it well requires deciding on context injection strategy, conversation persistence, and cost controls.
+
+**What it would take:**
+- **Backend endpoint:** `POST /api/guide/chat` — accepts `{ message, context }` and streams or returns an LLM response. Context should include the user's journey progress, current page, bot name/config, and recent activity so answers are relevant.
+- **Conversation state:** local component state (or `guideStore`) to hold message history for the current session. No persistence needed initially.
+- **UI:** replace the placeholder `div` in `GuidePanel.jsx:153–167` with a real `<textarea>` + send button, and a scrollable message thread above it inside the panel body.
+- **Rate limiting / cost control:** per-user request throttle on the backend to prevent runaway LLM spend.
+
+**Complexity:** Medium (~2 days). The panel, orb, and store are all wired up — chat is the only missing piece.
+
+---
+
 ## Guide as Navigation System (Command Palette Evolution)
 
 **What:** Add a ⌘K command palette — a keyboard-invokable search overlay (Spotlight / Linear-style) that lets users jump anywhere in the app by typing rather than clicking through the nav.

@@ -12,6 +12,14 @@ const COUNTER_LABELS = {
   memoryMb:         'Memory (MB)',
 }
 
+const BUS_COUNTER_LABELS = {
+  notifQueueDepth: 'Notif Queue Depth',
+  schedulerPending: 'Scheduler Pending',
+  schedulerRunning: 'Scheduler Running',
+  schedulerFailed:  'Scheduler Failed',
+  pvpMatchMapSize:  'PvP Match Map',
+}
+
 function counterStatus(key, alerts, history) {
   if (alerts?.[key]) return 'red'
   if (history && history.length >= 2) {
@@ -21,10 +29,25 @@ function counterStatus(key, alerts, history) {
   return 'green'
 }
 
+function boolStatus(value) { return value > 0 ? 'red' : 'green' }
+function queueStatus(value) {
+  if (value > 100) return 'red'
+  if (value > 20)  return 'amber'
+  return 'green'
+}
+
+function busCounterStatus(key, value, alerts) {
+  if (alerts?.[key]) return 'red'
+  if (key === 'notifQueueDepth') return queueStatus(value ?? 0)
+  if (key === 'schedulerFailed') return boolStatus(value ?? 0)
+  if (key === 'schedulerRunning') return boolStatus(value ?? 0)
+  return 'green'
+}
+
 const STATUS_COLORS = {
   green: { dot: 'var(--color-teal-600)',  label: 'Stable'  },
   amber: { dot: 'var(--color-amber-600)', label: 'Rising'  },
-  red:   { dot: 'var(--color-red-600)',   label: 'Leaking' },
+  red:   { dot: 'var(--color-red-600)',   label: 'Alert'   },
 }
 
 function CounterTile({ label, value, status }) {
@@ -49,6 +72,28 @@ function CounterTile({ label, value, status }) {
         {value ?? '—'}
       </div>
     </div>
+  )
+}
+
+function DispatcherHeartbeat({ tickAt }) {
+  if (!tickAt) {
+    return (
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        Dispatcher last tick: <span style={{ color: 'var(--color-amber-600)' }}>no tick recorded yet</span>
+      </p>
+    )
+  }
+  const ageMs = Date.now() - new Date(tickAt).getTime()
+  const ageSec = Math.round(ageMs / 1000)
+  const color = ageMs > 90_000
+    ? 'var(--color-red-600)'
+    : ageMs > 60_000
+      ? 'var(--color-amber-600)'
+      : 'var(--color-teal-600)'
+  return (
+    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+      Last dispatch tick: <span style={{ color, fontWeight: 600 }}>{ageSec}s ago</span>
+    </p>
   )
 }
 
@@ -171,6 +216,21 @@ export default function AdminHealthPage() {
                 />
               ))}
             </div>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Notification Bus</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {Object.keys(BUS_COUNTER_LABELS).map(key => (
+                <CounterTile
+                  key={key}
+                  label={BUS_COUNTER_LABELS[key]}
+                  value={data.latest?.[key] ?? '—'}
+                  status={busCounterStatus(key, data.latest?.[key], data.alerts)}
+                />
+              ))}
+            </div>
+            <DispatcherHeartbeat tickAt={data.latest?.dispatcherLastTickAt} />
           </section>
 
           <section className="space-y-2">

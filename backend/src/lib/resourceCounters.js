@@ -16,6 +16,9 @@
 
 import db from './db.js'
 import logger from '../logger.js'
+import { dispatch, getDispatchCounters } from './notificationBus.js'
+import { getDispatcherHeartbeat } from './scheduledJobs.js'
+import { getPendingPvpMatchCount } from './tournamentBridge.js'
 
 // ── Counters ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +82,15 @@ const LEAK_MIN = {
   memoryMb:        150,   // heap below 150 MB rising slightly is fine
 }
 
+// Minimum total growth across the window before alerting.
+// Filters out slow natural drift where each tick rises by just 1.
+const LEAK_MIN_GROWTH = {
+  sockets:          3,
+  rooms:            2,
+  redisConnections: 3,
+  memoryMb:        20,   // MB
+}
+
 const _snapshots = []          // circular, newest last
 const _alerts = {}             // { sockets: bool, rooms: bool, redisConnections: bool, memoryMb: bool }
 let _roomCountFn = null        // injected by startSnapshotInterval to avoid circular import
@@ -95,19 +107,39 @@ export function startSnapshotInterval(getRoomCount) {
   _roomCountFn = getRoomCount
   // Take one immediately so the health endpoint always returns non-null data
   takeSnapshot()
-  const id = setInterval(takeSnapshot, SNAPSHOT_INTERVAL_MS)
+  const id = setInterval(() => takeSnapshot(), SNAPSHOT_INTERVAL_MS)
   // Don't block process exit
   if (id.unref) id.unref()
   return id
 }
 
-function takeSnapshot() {
+async function takeBusSnapshot() {
+  const [queueDepth, pending, running, failed] = await Promise.all([
+    db.userNotification.count({ where: { deliveredAt: null } }),
+    db.scheduledJob.count({ where: { status: 'PENDING' } }),
+    db.scheduledJob.count({ where: { status: 'RUNNING' } }),
+    db.scheduledJob.count({ where: { status: 'FAILED'  } }),
+  ])
+  return {
+    notifQueueDepth:      queueDepth,
+    schedulerPending:     pending,
+    schedulerRunning:     running,
+    schedulerFailed:      failed,
+    pvpMatchMapSize:      getPendingPvpMatchCount(),
+    dispatcherLastTickAt: getDispatcherHeartbeat(),
+    dispatchCounters:     getDispatchCounters(),
+  }
+}
+
+async function takeSnapshot() {
+  const busSnap = await takeBusSnapshot().catch(() => ({}))
   const snap = {
     ts: Date.now(),
     sockets: _socketCount,
     rooms: _roomCountFn ? _roomCountFn() : 0,
     redisConnections: _redisConnectionCount,
     memoryMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    ...busSnap,
   }
 
   _snapshots.push(snap)
@@ -127,8 +159,10 @@ function checkForLeaks() {
 
   for (const key of ['sockets', 'rooms', 'redisConnections', 'memoryMb']) {
     const latest = window.at(-1)[key]
+    const first  = window[0][key]
     const rising = window.every((s, i) => i === 0 || s[key] > window[i - 1][key])
                    && latest >= (LEAK_MIN[key] ?? 0)
+                   && (latest - first) >= (LEAK_MIN_GROWTH[key] ?? 1)
 
     if (rising && !_alerts[key]) {
       _alerts[key] = true
@@ -142,33 +176,80 @@ function checkForLeaks() {
     if (!rising && _alerts[key]) {
       _alerts[key] = false
       logger.info({ key }, `Resource alert cleared: ${key} is no longer climbing`)
+      notifyAdminsCleared(key).catch(err => logger.warn({ err }, 'Failed to notify admins of alert cleared'))
     }
+  }
+
+  // Bus queue depth
+  const queueDepth = window.at(-1)['notifQueueDepth'] ?? 0
+  const queueFirst = window[0]['notifQueueDepth'] ?? 0
+  if (
+    queueDepth !== undefined &&
+    window.every((s, i) => i === 0 || (s.notifQueueDepth ?? 0) > (window[i-1].notifQueueDepth ?? 0)) &&
+    queueDepth >= 50 &&
+    (queueDepth - queueFirst) >= 10 &&
+    !_alerts['notifQueueDepth']
+  ) {
+    _alerts['notifQueueDepth'] = true
+    logger.warn({ queueDepth }, 'Resource leak: notification queue depth rising')
+    notifyAdmins('notifQueueDepth').catch(() => {})
+  }
+
+  // Scheduler FAILED jobs
+  const failedJobs = window.at(-1)['schedulerFailed'] ?? 0
+  if (failedJobs > 0 && !_alerts['schedulerFailed']) {
+    _alerts['schedulerFailed'] = true
+    logger.warn({ failedJobs }, 'Resource alert: scheduled jobs have failed')
+    notifyAdmins('schedulerFailed').catch(() => {})
+  }
+  if (failedJobs === 0 && _alerts['schedulerFailed']) {
+    _alerts['schedulerFailed'] = false
+    logger.info('Resource alert cleared: no more failed scheduled jobs')
+    notifyAdminsCleared('schedulerFailed').catch(() => {})
+  }
+
+  // Dispatcher heartbeat stale (>90s)
+  const lastTick = getDispatcherHeartbeat()
+  const heartbeatStale = lastTick && (Date.now() - lastTick.getTime()) > 90_000
+  if (heartbeatStale && !_alerts['dispatcherHeartbeat']) {
+    _alerts['dispatcherHeartbeat'] = true
+    logger.warn({ lastTick }, 'Resource alert: dispatcher heartbeat stale (>90s)')
+    notifyAdmins('dispatcherHeartbeat').catch(() => {})
+  }
+  if (!heartbeatStale && _alerts['dispatcherHeartbeat']) {
+    _alerts['dispatcherHeartbeat'] = false
+    logger.info('Resource alert cleared: dispatcher heartbeat is healthy')
+    notifyAdminsCleared('dispatcherHeartbeat').catch(() => {})
   }
 }
 
 async function notifyAdmins(key) {
-  // baRole lives in BetterAuth's user table — look up admin baUsers first,
-  // then find the corresponding domain User rows by betterAuthId.
-  const baAdmins = await db.baUser.findMany({
-    where: { role: 'admin' },
-    select: { id: true },
-  })
+  const baAdmins = await db.baUser.findMany({ where: { role: 'admin' }, select: { id: true } })
   const baAdminIds = baAdmins.map(b => b.id)
   const admins = await db.user.findMany({
     where: { betterAuthId: { in: baAdminIds } },
     select: { id: true },
   })
+  const adminIds = admins.map(a => a.id)
+  if (adminIds.length === 0) return
+  await dispatch({
+    type: 'system.alert',
+    targets: { cohort: adminIds },
+    payload: { key, message: `Resource counter "${key}" has risen for ${LEAK_WINDOW} consecutive snapshots. Check the health dashboard.` },
+  })
+}
 
-  await Promise.all(admins.map(({ id }) =>
-    db.userNotification.create({
-      data: {
-        userId: id,
-        type: 'system_alert',
-        payload: {
-          key,
-          message: `Resource counter "${key}" has risen for ${LEAK_WINDOW} consecutive snapshots. Check the health dashboard.`,
-        },
-      },
-    }).catch(() => {}) // non-fatal per admin
-  ))
+async function notifyAdminsCleared(key) {
+  const baAdmins = await db.baUser.findMany({ where: { role: 'admin' }, select: { id: true } })
+  const admins = await db.user.findMany({
+    where: { betterAuthId: { in: baAdmins.map(b => b.id) } },
+    select: { id: true },
+  })
+  const adminIds = admins.map(a => a.id)
+  if (adminIds.length === 0) return
+  await dispatch({
+    type: 'system.alert.cleared',
+    targets: { cohort: adminIds },
+    payload: { key, message: `Resource alert cleared: "${key}" is no longer climbing.` },
+  })
 }

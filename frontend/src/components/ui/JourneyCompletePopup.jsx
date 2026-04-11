@@ -1,29 +1,139 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 
-const BURSTS = [
-  { left:  '5%', top: '10%', emoji: '🎆', size: 52, dur: 1.4, delay: 0    },
-  { left: '22%', top:  '4%', emoji: '🎇', size: 44, dur: 1.6, delay: 0.2  },
-  { left: '50%', top:  '2%', emoji: '🎆', size: 60, dur: 1.3, delay: 0.05 },
-  { left: '75%', top:  '5%', emoji: '🎇', size: 48, dur: 1.5, delay: 0.15 },
-  { left: '93%', top: '12%', emoji: '🎆', size: 50, dur: 1.4, delay: 0.1  },
-  { left:  '8%', top: '50%', emoji: '✨', size: 40, dur: 1.7, delay: 0.3  },
-  { left: '90%', top: '48%', emoji: '✨', size: 40, dur: 1.7, delay: 0.25 },
-  { left: '35%', top:  '6%', emoji: '🎉', size: 44, dur: 1.5, delay: 0.35 },
-  { left: '65%', top:  '8%', emoji: '🎉', size: 42, dur: 1.6, delay: 0.4  },
-  { left: '15%', top: '25%', emoji: '🎆', size: 36, dur: 1.8, delay: 0.45 },
-  { left: '82%', top: '28%', emoji: '🎆', size: 38, dur: 1.7, delay: 0.2  },
-]
+// Real fireworks rendered on a canvas
+function FireworksCanvas() {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    let animId
+
+    function resize() {
+      canvas.width  = canvas.offsetWidth
+      canvas.height = canvas.offsetHeight
+    }
+    resize()
+    window.addEventListener('resize', resize)
+
+    const COLORS = [
+      '#f97316','#facc15','#4ade80','#60a5fa','#c084fc',
+      '#fb7185','#ffffff','#34d399','#f472b6','#38bdf8',
+    ]
+
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x; this.y = y; this.color = color
+        const angle = Math.random() * Math.PI * 2
+        const speed = 3 + Math.random() * 7
+        this.vx = Math.cos(angle) * speed
+        this.vy = Math.sin(angle) * speed - 1
+        this.alpha = 1
+        this.decay = 0.008 + Math.random() * 0.01
+        this.radius = 2.5 + Math.random() * 3
+        this.trail = []
+      }
+      update() {
+        this.trail.push({ x: this.x, y: this.y })
+        if (this.trail.length > 6) this.trail.shift()
+        this.vy += 0.06  // gravity
+        this.vx *= 0.98
+        this.x += this.vx; this.y += this.vy
+        this.alpha -= this.decay
+      }
+      draw(ctx) {
+        // Trail
+        for (let i = 0; i < this.trail.length; i++) {
+          const a = (i / this.trail.length) * this.alpha * 0.4
+          ctx.beginPath()
+          ctx.arc(this.trail[i].x, this.trail[i].y, this.radius * 0.5, 0, Math.PI * 2)
+          ctx.fillStyle = this.color
+          ctx.globalAlpha = a
+          ctx.fill()
+        }
+        ctx.beginPath()
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2)
+        ctx.fillStyle = this.color
+        ctx.globalAlpha = this.alpha
+        ctx.fill()
+        ctx.globalAlpha = 1
+      }
+    }
+
+    class Rocket {
+      constructor() { this.reset() }
+      reset() {
+        this.x  = 0.05 * canvas.width + Math.random() * 0.9 * canvas.width
+        this.y  = canvas.height
+        this.vy = -(10 + Math.random() * 8)
+        this.targetY = 0.05 * canvas.height + Math.random() * 0.55 * canvas.height
+        this.color = COLORS[Math.floor(Math.random() * COLORS.length)]
+        this.trail = []
+        this.done = false
+      }
+      update(particles) {
+        this.trail.push({ x: this.x, y: this.y })
+        if (this.trail.length > 10) this.trail.shift()
+        this.y += this.vy
+        this.vy *= 0.98
+        if (this.y <= this.targetY) {
+          const count = 100 + Math.floor(Math.random() * 80)
+          const c2 = COLORS[Math.floor(Math.random() * COLORS.length)]
+          for (let i = 0; i < count; i++)
+            particles.push(new Particle(this.x, this.y, i % 3 === 0 ? c2 : this.color))
+          this.done = true
+        }
+      }
+      draw(ctx) {
+        for (let i = 0; i < this.trail.length; i++) {
+          ctx.beginPath()
+          ctx.arc(this.trail[i].x, this.trail[i].y, 2, 0, Math.PI * 2)
+          ctx.fillStyle = this.color
+          ctx.globalAlpha = (i / this.trail.length) * 0.8
+          ctx.fill()
+        }
+        ctx.globalAlpha = 1
+      }
+    }
+
+    let rockets = [], particles = []
+    let lastLaunch = 0
+    const INTERVAL = 400 // ms between launches
+
+    function loop(ts) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      if (ts - lastLaunch > INTERVAL && rockets.length < 8) {
+        rockets.push(new Rocket())
+        lastLaunch = ts
+      }
+
+      rockets = rockets.filter(r => { r.update(particles); r.draw(ctx); return !r.done })
+      particles = particles.filter(p => { p.update(); p.draw(ctx); return p.alpha > 0 })
+
+      animId = requestAnimationFrame(loop)
+    }
+    animId = requestAnimationFrame(loop)
+
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+    />
+  )
+}
 
 export default function JourneyCompletePopup({ onDismiss }) {
   return (
     <>
       <style>{`
-        @keyframes jc-burst {
-          0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
-          25%  { opacity: 1; }
-          65%  { transform: scale(1.4) rotate(10deg); opacity: 1; }
-          100% { transform: scale(0.9) rotate(-5deg); opacity: 0; }
-        }
         @keyframes jc-fade-in {
           from { opacity: 0; transform: scale(0.9) translateY(12px); }
           to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -33,8 +143,8 @@ export default function JourneyCompletePopup({ onDismiss }) {
       <div
         style={{
           position: 'fixed', inset: 0, zIndex: 70,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(3px)',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(2px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '1rem',
           overflow: 'hidden',
@@ -42,17 +152,7 @@ export default function JourneyCompletePopup({ onDismiss }) {
         onClick={onDismiss}
       >
         {/* Fireworks */}
-        {BURSTS.map((b, i) => (
-          <div key={i} style={{
-            position: 'absolute',
-            left: b.left,
-            top: b.top,
-            fontSize: b.size,
-            lineHeight: 1,
-            pointerEvents: 'none',
-            animation: `jc-burst ${b.dur}s ease-out ${b.delay}s both`,
-          }}>{b.emoji}</div>
-        ))}
+        <FireworksCanvas />
 
         {/* Card */}
         <div
@@ -67,7 +167,7 @@ export default function JourneyCompletePopup({ onDismiss }) {
             maxWidth: '24rem',
             width: '100%',
             textAlign: 'center',
-            boxShadow: '0 8px 64px rgba(212,137,30,0.4), 0 0 0 1px rgba(212,137,30,0.15)',
+            boxShadow: '0 8px 48px rgba(0,0,0,0.55)',
             position: 'relative',
             zIndex: 1,
             animation: 'jc-fade-in 0.35s ease-out both',
@@ -101,6 +201,7 @@ export default function JourneyCompletePopup({ onDismiss }) {
             Now you can:
           </p>
           <ul style={{
+            listStyleType: 'disc',
             fontSize: '0.8125rem',
             color: 'var(--text-secondary)',
             lineHeight: 1.75,
@@ -108,9 +209,55 @@ export default function JourneyCompletePopup({ onDismiss }) {
             textAlign: 'left',
             paddingLeft: '1.25rem',
           }}>
-            <li>Use the guide liberally by pressing the header icon</li>
-            <li>Play against your bot and/or put your bot against other bots</li>
-            <li>Enter your bot in a tournament by pressing Tournaments in the guide</li>
+            <li style={{ marginBottom: '1.25rem' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', verticalAlign: 'middle' }}>
+                <span style={{ display: 'inline-flex', position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
+                  <span style={{
+                    position: 'absolute', inset: 0, borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #5B82B8, #3A5E8E)',
+                    boxShadow: '0 0 0 1px rgba(255,255,255,0.15)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: 17, lineHeight: 1, position: 'relative', zIndex: 1 }}>🤖</span>
+                  </span>
+                  <svg width={34} height={34} viewBox="0 0 34 34" style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }} aria-hidden="true">
+                    <circle cx={17} cy={17} r={15} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={2} />
+                    <circle cx={17} cy={17} r={15} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2} strokeDasharray={94.2} strokeDashoffset={0} strokeLinecap="round" />
+                  </svg>
+                </span>
+                Use the Guide liberally
+              </span>
+            </li>
+            <li style={{ marginBottom: '1.25rem' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', verticalAlign: 'middle' }}>
+                <span style={{
+                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  width: 34, height: 34, borderRadius: 6, flexShrink: 0,
+                  background: 'var(--bg-surface-2)',
+                  border: '1px solid var(--border-default)',
+                  gap: 2, padding: 2,
+                }}>
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>⊞</span>
+                  <span style={{ fontSize: 7, lineHeight: 1, color: 'var(--text-primary)', fontWeight: 500 }}>Play</span>
+                </span>
+                Play other humans or bots
+              </span>
+            </li>
+            <li style={{ marginBottom: '1.25rem' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', verticalAlign: 'middle' }}>
+                <span style={{
+                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  width: 34, height: 34, borderRadius: 6, flexShrink: 0,
+                  background: 'var(--bg-surface-2)',
+                  border: '1px solid var(--border-default)',
+                  gap: 2, padding: 2,
+                }}>
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>⊕</span>
+                  <span style={{ fontSize: 7, lineHeight: 1, color: 'var(--text-primary)', fontWeight: 500 }}>Tournaments</span>
+                </span>
+                Enter a tournament
+              </span>
+            </li>
           </ul>
           <button
             onClick={onDismiss}

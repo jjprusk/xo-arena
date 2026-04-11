@@ -559,4 +559,91 @@ router.get('/:id/games', async (req, res, next) => {
   }
 })
 
+// ── Notification preferences ──────────────────────────────────────────────────
+
+const NOTIF_REGISTRY_KEYS = [
+  'tournament.published', 'tournament.flash_announced', 'tournament.registration_closing',
+  'tournament.starting_soon', 'tournament.started', 'tournament.cancelled', 'tournament.completed',
+  'match.ready', 'match.result',
+  'achievement.tier_upgrade', 'achievement.milestone',
+  'admin.announcement', 'system.alert', 'system.alert.cleared',
+]
+
+const NOTIF_DEFAULTS = {
+  'tournament.published':            { inApp: true, email: false },
+  'tournament.flash_announced':      { inApp: true, email: false },
+  'tournament.registration_closing': { inApp: true, email: false },
+  'tournament.starting_soon':        { inApp: true, email: false },
+  'tournament.started':              { inApp: true, email: false },
+  'tournament.cancelled':            { inApp: true, email: true  },
+  'tournament.completed':            { inApp: true, email: true  },
+  'match.ready':                     { inApp: true, email: true  },
+  'match.result':                    { inApp: true, email: false },
+  'achievement.tier_upgrade':        { inApp: true, email: false },
+  'achievement.milestone':           { inApp: true, email: false },
+  'admin.announcement':              { inApp: true, email: false },
+  'system.alert':                    { inApp: true, email: false },
+  'system.alert.cleared':            { inApp: true, email: false },
+}
+
+/**
+ * GET /api/v1/users/notification-preferences
+ * Returns full preference list — all registry types, defaults filled in.
+ */
+router.get('/notification-preferences', requireAuth, async (req, res, next) => {
+  try {
+    const domainUser = await db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { id: true } })
+    if (!domainUser) return res.status(404).json({ error: 'User not found' })
+
+    const rows = await db.notificationPreference.findMany({ where: { userId: domainUser.id } })
+    const rowMap = {}
+    for (const row of rows) rowMap[row.eventType] = row
+
+    const result = NOTIF_REGISTRY_KEYS.map(eventType => {
+      const row = rowMap[eventType]
+      const def = NOTIF_DEFAULTS[eventType] ?? { inApp: true, email: false }
+      return {
+        eventType,
+        inApp: row ? row.inApp : def.inApp,
+        email: row ? row.email : def.email,
+      }
+    })
+
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PUT /api/v1/users/notification-preferences/:eventType
+ * Upserts a single preference row.
+ */
+router.put('/notification-preferences/:eventType', requireAuth, async (req, res, next) => {
+  try {
+    const { eventType } = req.params
+    if (!NOTIF_REGISTRY_KEYS.includes(eventType)) {
+      return res.status(400).json({ error: `Unknown event type: ${eventType}` })
+    }
+
+    const domainUser = await db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { id: true } })
+    if (!domainUser) return res.status(404).json({ error: 'User not found' })
+
+    const { inApp, email } = req.body
+    const data = {}
+    if (typeof inApp === 'boolean') data.inApp = inApp
+    if (typeof email === 'boolean') data.email = email
+
+    const pref = await db.notificationPreference.upsert({
+      where:  { userId_eventType: { userId: domainUser.id, eventType } },
+      update: data,
+      create: { userId: domainUser.id, eventType, ...data },
+    })
+
+    res.json({ eventType: pref.eventType, inApp: pref.inApp, email: pref.email })
+  } catch (err) {
+    next(err)
+  }
+})
+
 export default router

@@ -7,6 +7,32 @@ import { useGuideStore } from '../store/guideStore.js'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 
+const NOTIF_GROUPS = [
+  { label: 'Tournaments', types: ['tournament.published', 'tournament.flash_announced', 'tournament.registration_closing', 'tournament.starting_soon', 'tournament.started', 'tournament.cancelled', 'tournament.completed'] },
+  { label: 'Matches', types: ['match.ready', 'match.result'] },
+  { label: 'Achievements', types: ['achievement.tier_upgrade', 'achievement.milestone'] },
+  { label: 'System', types: ['admin.announcement', 'system.alert', 'system.alert.cleared'] },
+]
+
+const NOTIF_LABELS = {
+  'tournament.published':            'New tournament published',
+  'tournament.flash_announced':      'Flash tournament announced',
+  'tournament.registration_closing': 'Registration closing soon',
+  'tournament.starting_soon':        'Tournament starting soon',
+  'tournament.started':              'Tournament started',
+  'tournament.cancelled':            'Tournament cancelled',
+  'tournament.completed':            'Tournament completed',
+  'match.ready':                     'Match ready to play',
+  'match.result':                    'Match result',
+  'achievement.tier_upgrade':        'Tier upgrade',
+  'achievement.milestone':           'Activity milestone',
+  'admin.announcement':              'Admin announcement',
+  'system.alert':                    'System alert',
+  'system.alert.cleared':            'System alert cleared',
+}
+
+const SYSTEM_CRITICAL = new Set(['match.ready', 'system.alert', 'system.alert.cleared'])
+
 const THEMES = [
   { value: 'light', label: 'Light', preview: '☀' },
   { value: 'dark', label: 'Dark', preview: '☾' },
@@ -24,6 +50,8 @@ export default function SettingsPage() {
   const [savingNotifPref, setSavingNotifPref] = useState(false)
   const [flashStartAlerts, setFlashStartAlerts] = useState(null)
   const [savingFlashAlerts, setSavingFlashAlerts] = useState(false)
+  const [notifPrefs, setNotifPrefs] = useState(null)
+  const [notifLoading, setNotifLoading] = useState(false)
 
   useEffect(() => {
     if (!session?.user) return
@@ -31,6 +59,10 @@ export default function SettingsPage() {
       setTournamentNotifPref(data.tournamentResultNotifPref ?? 'AS_PLAYED')
       setFlashStartAlerts(data.flashStartAlerts !== false)
     }).catch(() => {})
+    setNotifLoading(true)
+    getToken().then(token => api.users.getNotificationPreferences(token)).then(prefs => {
+      setNotifPrefs(prefs)
+    }).catch(() => {}).finally(() => setNotifLoading(false))
   }, [session?.user])
   const journeyDismissed = !!journeyProgress?.dismissedAt
   const journeyComplete  = (journeyProgress?.completedSteps?.length ?? 0) >= 8
@@ -224,6 +256,106 @@ export default function SettingsPage() {
                 <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${flashStartAlerts ? 'left-7' : 'left-1'}`} />
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* Notification preferences */}
+      {session?.user && (notifPrefs !== null || notifLoading) && (
+        <section className="space-y-3">
+          <SectionLabel>Notifications</SectionLabel>
+          <div
+            className="rounded-xl border"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            {notifLoading && !notifPrefs ? (
+              <div className="p-5 text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</div>
+            ) : (
+              <>
+                {/* Column headers */}
+                <div className="flex items-center px-5 pt-4 pb-2 gap-2">
+                  <div className="flex-1" />
+                  <div className="w-14 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>In-App</div>
+                  <div className="w-14 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Email</div>
+                </div>
+
+                {NOTIF_GROUPS.map((group, gi) => {
+                  const prefsMap = {}
+                  for (const p of (notifPrefs ?? [])) prefsMap[p.eventType] = p
+
+                  return (
+                    <div key={group.label}>
+                      {gi > 0 && <div className="h-px mx-5" style={{ backgroundColor: 'var(--border-default)' }} />}
+                      <div className="px-5 pt-3 pb-1">
+                        <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>
+                          {group.label}
+                        </div>
+                        <div className="space-y-1">
+                          {group.types.map((eventType) => {
+                            const pref = prefsMap[eventType]
+                            const inApp = pref ? pref.inApp : true
+                            const email = pref ? pref.email : false
+                            const critical = SYSTEM_CRITICAL.has(eventType)
+
+                            const toggle = async (field, current) => {
+                              const next = !current
+                              // Optimistic update
+                              setNotifPrefs(prev => prev.map(p =>
+                                p.eventType === eventType ? { ...p, [field]: next } : p
+                              ))
+                              try {
+                                const token = await getToken()
+                                await api.users.updateNotificationPreference(eventType, { [field]: next }, token)
+                              } catch {
+                                // Revert on error
+                                setNotifPrefs(prev => prev.map(p =>
+                                  p.eventType === eventType ? { ...p, [field]: current } : p
+                                ))
+                              }
+                            }
+
+                            return (
+                              <div key={eventType} className="flex items-center gap-2 py-1.5">
+                                <div className="flex-1 text-sm" style={{ color: 'var(--text-primary)' }}>
+                                  {NOTIF_LABELS[eventType] ?? eventType}
+                                </div>
+                                {/* In-App toggle */}
+                                <div className="w-14 flex justify-center">
+                                  <button
+                                    disabled={critical}
+                                    onClick={() => toggle('inApp', inApp)}
+                                    title={critical ? 'Always on — cannot be disabled' : undefined}
+                                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                                      inApp ? 'bg-[var(--color-blue-600)]' : 'bg-[var(--color-gray-300)]'
+                                    } ${critical ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    aria-label={`${inApp ? 'Disable' : 'Enable'} in-app notifications for ${NOTIF_LABELS[eventType]}`}
+                                  >
+                                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${inApp ? 'left-5' : 'left-0.5'}`} />
+                                  </button>
+                                </div>
+                                {/* Email toggle */}
+                                <div className="w-14 flex justify-center">
+                                  <button
+                                    onClick={() => toggle('email', email)}
+                                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                                      email ? 'bg-[var(--color-blue-600)]' : 'bg-[var(--color-gray-300)]'
+                                    }`}
+                                    aria-label={`${email ? 'Disable' : 'Enable'} email notifications for ${NOTIF_LABELS[eventType]}`}
+                                  >
+                                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${email ? 'left-5' : 'left-0.5'}`} />
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className="h-3" />
+              </>
+            )}
           </div>
         </section>
       )}
