@@ -97,6 +97,11 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
         },
       })
       if (result?.error) { setError(result.error.message || 'Sign up failed.'); return }
+      if (result?.user?.emailVerified) {
+        setError('An account with this email already exists. Please sign in.')
+        switchView('sign-in')
+        return
+      }
       setView('verify-email')
     } catch (err) {
       setError(err?.message || 'Sign up failed.')
