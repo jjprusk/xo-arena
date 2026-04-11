@@ -8,9 +8,38 @@ import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { jwt } from 'better-auth/plugins'
 import { admin } from 'better-auth/plugins'
 import { Resend } from 'resend'
+import crypto from 'node:crypto'
 import db from './db.js'
 import logger from '../logger.js'
 import { syncUser } from '../services/userService.js'
+
+/**
+ * Generate an Apple client secret JWT signed with the .p8 private key.
+ * Valid for 6 months (Apple's maximum). Called once at startup.
+ */
+function generateAppleClientSecret() {
+  const privateKey = process.env.APPLE_PRIVATE_KEY
+  const keyId      = process.env.APPLE_KEY_ID
+  const teamId     = process.env.APPLE_TEAM_ID
+  const clientId   = process.env.APPLE_CLIENT_ID
+  if (!privateKey || !keyId || !teamId || !clientId) return process.env.APPLE_CLIENT_SECRET ?? null
+
+  const header  = Buffer.from(JSON.stringify({ alg: 'ES256', kid: keyId })).toString('base64url')
+  const now     = Math.floor(Date.now() / 1000)
+  const payload = Buffer.from(JSON.stringify({
+    iss: teamId,
+    iat: now,
+    exp: now + 15_777_000, // ~6 months
+    aud: 'https://appleid.apple.com',
+    sub: clientId,
+  })).toString('base64url')
+
+  const signingInput = `${header}.${payload}`
+  const sign = crypto.createSign('SHA256')
+  sign.update(signingInput)
+  const sig = sign.sign({ key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url')
+  return `${signingInput}.${sig}`
+}
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -102,9 +131,7 @@ export const auth = betterAuth({
     ...(process.env.APPLE_CLIENT_ID && {
       apple: {
         clientId: process.env.APPLE_CLIENT_ID,
-        clientSecret: process.env.APPLE_CLIENT_SECRET,
-        keyId: process.env.APPLE_KEY_ID,
-        teamId: process.env.APPLE_TEAM_ID,
+        clientSecret: generateAppleClientSecret(),
       },
     }),
   },
