@@ -12,7 +12,7 @@ import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
+const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
 export default function AppLayout() {
   const { data: session, isPending } = useOptimisticSession()

@@ -3,7 +3,7 @@
  * xo-arena routes use VITE_XO_URL; platform routes are internal.
  */
 
-const XO = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
+const XO = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
 export const SLOT_ACTIONS = [
   // Platform (internal)
