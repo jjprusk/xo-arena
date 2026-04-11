@@ -1,5 +1,7 @@
 import { config as dotenvConfig } from 'dotenv'
 import { existsSync } from 'fs'
+import { spawn } from 'child_process'
+import net from 'net'
 import { fileURLToPath } from 'url'
 import { resolve, dirname } from 'path'
 
@@ -37,6 +39,43 @@ export function guardProduction() {
     console.error('um: refuses to run in production')
     process.exit(1)
   }
+}
+
+function portOpen(port) {
+  return new Promise(resolve => {
+    const sock = net.createConnection(port, '127.0.0.1')
+    sock.setTimeout(500)
+    sock.on('connect', () => { sock.destroy(); resolve(true) })
+    sock.on('error',   () => resolve(false))
+    sock.on('timeout', () => { sock.destroy(); resolve(false) })
+  })
+}
+
+/**
+ * If the .env file specifies FLY_PROXY_APP, ensure the flyctl proxy is running.
+ * Starts it automatically if the port isn't open yet.
+ */
+export async function ensureProxy() {
+  const app        = process.env.FLY_PROXY_APP
+  const localPort  = parseInt(process.env.FLY_PROXY_LOCAL_PORT  || '5454')
+  const remotePort = parseInt(process.env.FLY_PROXY_REMOTE_PORT || '5432')
+  if (!app) return
+
+  if (await portOpen(localPort)) return  // already running
+
+  process.stderr.write(`Starting flyctl proxy ${localPort}:${remotePort} -a ${app}...\n`)
+  const proc = spawn('flyctl', ['proxy', `${localPort}:${remotePort}`, '-a', app], {
+    detached: true,
+    stdio: 'ignore',
+  })
+  proc.unref()
+
+  // Poll up to 8 s for the proxy to be ready
+  for (let i = 0; i < 16; i++) {
+    await new Promise(r => setTimeout(r, 500))
+    if (await portOpen(localPort)) return
+  }
+  process.stderr.write('Warning: proxy may not be ready — proceeding anyway\n')
 }
 
 /**

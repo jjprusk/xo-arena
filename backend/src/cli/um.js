@@ -1,6 +1,6 @@
 #!/usr/bin/env node --experimental-transform-types --no-warnings
 import { Command } from 'commander'
-import { guardProduction, umEnv } from './lib/safety.js'
+import { guardProduction, umEnv, ensureProxy } from './lib/safety.js'
 import { disconnect } from './lib/db.js'
 import { createCommand }  from './commands/create.js'
 import { cloneCommand }   from './commands/clone.js'
@@ -19,6 +19,7 @@ import { sessionConfigCommand } from './commands/sessionconfig.js'
 import { envCommand }          from './commands/env.js'
 
 guardProduction()
+await ensureProxy()
 
 // ── Environment banner ────────────────────────────────────────────────────────
 const RESET  = '\x1b[0m'
