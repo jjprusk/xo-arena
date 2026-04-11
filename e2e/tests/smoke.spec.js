@@ -24,6 +24,7 @@ const { version: EXPECTED_VERSION } = JSON.parse(
 
 const BACKEND_URL    = process.env.BACKEND_URL    || process.env.BASE_URL || 'http://localhost:3000'
 const TOURNAMENT_URL = process.env.TOURNAMENT_URL || 'http://localhost:3001'
+const LANDING_URL    = process.env.LANDING_URL    || process.env.BASE_URL || 'http://localhost:5174'
 
 // ── Wait for deploy ───────────────────────────────────────────────────────────
 
@@ -61,10 +62,12 @@ test.describe('Smoke — frontend', () => {
   })
 
   test('sign-in modal can be opened', async ({ page }) => {
-    await page.goto('/')
-    const signInBtn = page.getByRole('button', { name: /sign in/i }).first()
-    await signInBtn.waitFor({ state: 'visible', timeout: 10_000 })
-    await signInBtn.click()
+    await page.goto(LANDING_URL)
+    // Fresh browser has empty localStorage, so the guest welcome modal always appears.
+    // Its "Sign in" button opens the auth form directly.
+    const welcomeSignIn = page.getByRole('dialog').getByRole('button', { name: /sign in/i })
+    await welcomeSignIn.waitFor({ state: 'visible', timeout: 10_000 })
+    await welcomeSignIn.click()
     await expect(page.locator('input[autocomplete="email"]')).toBeVisible({ timeout: 15_000 })
   })
 
@@ -74,7 +77,7 @@ test.describe('Smoke — frontend', () => {
   })
 
   test('tournaments page loads and shows filter bar', async ({ page }) => {
-    await page.goto('/tournaments')
+    await page.goto(`${LANDING_URL}/tournaments`)
     await expect(page.getByRole('heading', { name: /tournaments/i })).toBeVisible()
     // Filter bar buttons: All, Open, In Progress, Completed
     await expect(page.getByRole('button', { name: 'All' })).toBeVisible()
