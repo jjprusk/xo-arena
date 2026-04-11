@@ -1,7 +1,0 @@
-[build]
-dockerfilePath = "frontend/Dockerfile"
-
-[deploy]
-healthcheckPath = "/xo/"
-healthcheckTimeout = 30
-watchPatterns = ["frontend/**", "packages/xo/**"]

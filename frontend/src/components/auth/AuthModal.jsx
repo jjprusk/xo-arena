@@ -88,6 +88,7 @@ export default function AuthModal({ isOpen, onClose, defaultView = 'sign-in' }) 
       const displayName = name.trim() || email.split('@')[0]
       const result = await signUp.email({
         email, password, name: displayName,
+        callbackURL: window.location.origin,
         fetchOptions: {
           headers: {
             'x-hp':  honeypot,
