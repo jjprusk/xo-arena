@@ -172,7 +172,7 @@ export async function handleEvent(io, channel, data) {
           const pending = await db.userNotification.findMany({
             where: {
               userId,
-              type: 'tournament_match_result',
+              type: 'match.result',
               deliveredAt: null,
               payload: { path: ['tournamentId'], equals: tournamentId },
             },

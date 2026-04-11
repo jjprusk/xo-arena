@@ -19,11 +19,11 @@ const mockDb = {
 
 vi.mock('../db.js', () => ({ default: mockDb }))
 
-// ─── Mock notificationService ─────────────────────────────────────────────────
+// ─── Mock notificationBus ─────────────────────────────────────────────────────
 
-const mockQueueNotification = vi.fn().mockResolvedValue({ id: 'notif_1' })
-vi.mock('../../services/notificationService.js', () => ({
-  queueNotification: mockQueueNotification,
+const mockDispatch = vi.fn().mockResolvedValue(undefined)
+vi.mock('../notificationBus.js', () => ({
+  dispatch: mockDispatch,
 }))
 
 // ─── Mock ioredis (required by tournamentBridge module-level import) ──────────
@@ -40,6 +40,12 @@ vi.mock('ioredis', () => {
 
 vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}))
+
+// ─── Mock journeyService (completeStep is fire-and-forget) ───────────────────
+
+vi.mock('../../services/journeyService.js', () => ({
+  completeStep: vi.fn().mockResolvedValue(undefined),
 }))
 
 // ─── Import handleEvent directly (exported for testability) ──────────────────
@@ -70,7 +76,7 @@ function makeMatch() {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  mockQueueNotification.mockResolvedValue({ id: 'notif_1' })
+  mockDispatch.mockResolvedValue(undefined)
   mockDb.userNotification.findMany.mockResolvedValue([])
   mockDb.userNotification.updateMany.mockResolvedValue({ count: 0 })
   mockDb.tournamentParticipant.findMany.mockResolvedValue([])
@@ -81,7 +87,7 @@ beforeEach(() => {
 // ─── Flash broadcast ─────────────────────────────────────────────────────────
 
 describe('tournament:flash:announced — global broadcast', () => {
-  it('emits guide:notification to all connected sockets', async () => {
+  it('dispatches tournament.flash_announced as broadcast', async () => {
     const io = makeIo()
 
     await handleEvent(io, 'tournament:flash:announced', {
@@ -92,14 +98,11 @@ describe('tournament:flash:announced — global broadcast', () => {
       startTime: new Date().toISOString(),
     })
 
-    expect(io.emit).toHaveBeenCalledOnce()
-    const [event, payload] = io.emit.mock.calls[0]
-    expect(event).toBe('guide:notification')
-    expect(payload.type).toBe('flash')
-    expect(payload.title).toBe('Flash Tournament: Midday Blitz')
-    expect(payload.body).toContain('5 min')
-    expect(payload.href).toBe('/tournaments')
-    expect(payload.tournamentId).toBe('tour_flash')
+    expect(mockDispatch).toHaveBeenCalledOnce()
+    const [args] = mockDispatch.mock.calls[0]
+    expect(args.type).toBe('tournament.flash_announced')
+    expect(args.targets).toEqual({ broadcast: true })
+    expect(args.payload).toMatchObject({ tournamentId: 'tour_flash', name: 'Midday Blitz', noticePeriodMinutes: 5 })
   })
 
   it('does not emit to individual user rooms', async () => {
@@ -127,16 +130,14 @@ describe('tournament:flash:announced — global broadcast', () => {
       startTime: null,
     })
 
-    expect(io.emit).toHaveBeenCalledOnce()
-    const [, payload] = io.emit.mock.calls[0]
-    // Body should not contain "null" or crash
-    expect(payload.body).not.toContain('null')
-    expect(payload.body).toContain('Register now')
+    expect(mockDispatch).toHaveBeenCalledOnce()
+    const [args] = mockDispatch.mock.calls[0]
+    expect(args.payload.noticePeriodMinutes).toBeNull()
   })
 })
 
 describe('tournament:warning — 2-min warning persistence', () => {
-  it('persists a UserNotification for minutesUntilStart=2', async () => {
+  it('dispatches tournament.starting_soon for minutesUntilStart=2', async () => {
     const io = makeIo()
 
     await handleEvent(io, 'tournament:warning', {
@@ -145,12 +146,20 @@ describe('tournament:warning — 2-min warning persistence', () => {
       participantUserIds: ['user_1', 'user_2'],
     })
 
-    expect(mockQueueNotification).toHaveBeenCalledTimes(2)
-    expect(mockQueueNotification).toHaveBeenCalledWith('user_1', 'tournament_starting_soon', { tournamentId: 'tour_1', minutesUntilStart: 2 })
-    expect(mockQueueNotification).toHaveBeenCalledWith('user_2', 'tournament_starting_soon', { tournamentId: 'tour_1', minutesUntilStart: 2 })
+    expect(mockDispatch).toHaveBeenCalledTimes(2)
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'tournament.starting_soon',
+      targets: { userId: 'user_1' },
+      payload: expect.objectContaining({ tournamentId: 'tour_1', minutesUntilStart: 2 }),
+    })
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'tournament.starting_soon',
+      targets: { userId: 'user_2' },
+      payload: expect.objectContaining({ tournamentId: 'tour_1', minutesUntilStart: 2 }),
+    })
   })
 
-  it('persists for 60-min but NOT for 15-min', async () => {
+  it('dispatches for 60-min but NOT for 15-min', async () => {
     const io = makeIo()
 
     await handleEvent(io, 'tournament:warning', {
@@ -159,9 +168,10 @@ describe('tournament:warning — 2-min warning persistence', () => {
       participantUserIds: ['user_1'],
     })
 
-    expect(mockQueueNotification).not.toHaveBeenCalled()
+    expect(mockDispatch).not.toHaveBeenCalled()
 
     vi.clearAllMocks()
+    mockDispatch.mockResolvedValue(undefined)
 
     await handleEvent(io, 'tournament:warning', {
       tournamentId: 'tour_1',
@@ -169,7 +179,12 @@ describe('tournament:warning — 2-min warning persistence', () => {
       participantUserIds: ['user_1'],
     })
 
-    expect(mockQueueNotification).toHaveBeenCalledOnce()
+    expect(mockDispatch).toHaveBeenCalledOnce()
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'tournament.starting_soon',
+      targets: { userId: 'user_1' },
+      payload: expect.objectContaining({ minutesUntilStart: 60 }),
+    })
   })
 
   it('emits real-time socket event for all warning tiers', async () => {
@@ -190,18 +205,11 @@ describe('tournament:warning — 2-min warning persistence', () => {
 })
 
 // ─── Per-registration pref takes precedence over global default ───────────────
-//
-// The bridge reads resultNotifPref from the TournamentParticipant row, which is
-// stamped at registration from the user's global default at that moment.
-// Changing the global default afterwards does NOT affect existing registrations.
 
 describe('tournament:match:result — per-registration pref takes precedence over global default', () => {
-  it('delivers AS_PLAYED for a participant registered with AS_PLAYED even when the user later prefers END_OF_TOURNAMENT', async () => {
+  it('delivers AS_PLAYED for a participant registered with AS_PLAYED', async () => {
     const io = makeIo()
 
-    // Participant row has AS_PLAYED stamped at registration time.
-    // The user may have since changed their global to END_OF_TOURNAMENT, but
-    // the bridge only reads from the participant row — no live user lookup.
     mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
     mockDb.tournamentParticipant.findUnique
       .mockResolvedValueOnce({ userId: 'user_1', resultNotifPref: 'AS_PLAYED' })
@@ -216,9 +224,15 @@ describe('tournament:match:result — per-registration pref takes precedence ove
 
     // Real-time emit fired immediately (AS_PLAYED behaviour)
     expect(io.to).toHaveBeenCalledWith('user:user_1')
+    // Notification dispatched via bus
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'match.result',
+      targets: { userId: 'user_1' },
+      payload: expect.any(Object),
+    })
   })
 
-  it('withholds real-time for a participant registered with END_OF_TOURNAMENT even when the user later prefers AS_PLAYED', async () => {
+  it('withholds real-time for a participant registered with END_OF_TOURNAMENT', async () => {
     const io = makeIo()
 
     mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
@@ -237,7 +251,11 @@ describe('tournament:match:result — per-registration pref takes precedence ove
     const toCallArgs = io.to.mock.calls.map(c => c[0])
     expect(toCallArgs).not.toContain('user:user_1')
     // But notification is still queued for the end-of-tournament flush
-    expect(mockQueueNotification).toHaveBeenCalledWith('user_1', 'tournament_match_result', expect.any(Object))
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'match.result',
+      targets: { userId: 'user_1' },
+      payload: expect.any(Object),
+    })
   })
 })
 
@@ -262,8 +280,17 @@ describe('tournament:match:result — notification preference gating', () => {
     // Both AS_PLAYED participants should get real-time emit
     expect(io.to).toHaveBeenCalledWith('user:user_1')
     expect(io.to).toHaveBeenCalledWith('user:user_2')
-    expect(mockQueueNotification).toHaveBeenCalledWith('user_1', 'tournament_match_result', expect.any(Object))
-    expect(mockQueueNotification).toHaveBeenCalledWith('user_2', 'tournament_match_result', expect.any(Object))
+    // Both dispatched via bus
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'match.result',
+      targets: { userId: 'user_1' },
+      payload: expect.any(Object),
+    })
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'match.result',
+      targets: { userId: 'user_2' },
+      payload: expect.any(Object),
+    })
   })
 
   it('does NOT emit real-time for END_OF_TOURNAMENT participant but queues notification', async () => {
@@ -290,9 +317,17 @@ describe('tournament:match:result — notification preference gating', () => {
     // user_2 is AS_PLAYED: should get real-time emit
     expect(toCallArgs).toContain('user:user_2')
 
-    // Both should have their notification queued
-    expect(mockQueueNotification).toHaveBeenCalledWith('user_1', 'tournament_match_result', expect.any(Object))
-    expect(mockQueueNotification).toHaveBeenCalledWith('user_2', 'tournament_match_result', expect.any(Object))
+    // Both should have their notification dispatched via bus
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'match.result',
+      targets: { userId: 'user_1' },
+      payload: expect.any(Object),
+    })
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'match.result',
+      targets: { userId: 'user_2' },
+      payload: expect.any(Object),
+    })
   })
 })
 
