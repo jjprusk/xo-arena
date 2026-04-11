@@ -1,7 +1,0 @@
-[build]
-dockerfilePath = "tournament/Dockerfile"
-
-[deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 30
-watchPatterns = ["tournament/**", "packages/**"]
