@@ -22,7 +22,8 @@ const { version: EXPECTED_VERSION } = JSON.parse(
   readFileSync(join(__dirname, '../../package.json'), 'utf-8')
 )
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.BASE_URL || 'http://localhost:3000'
+const BACKEND_URL    = process.env.BACKEND_URL    || process.env.BASE_URL || 'http://localhost:3000'
+const TOURNAMENT_URL = process.env.TOURNAMENT_URL || 'http://localhost:3001'
 
 // ── Wait for deploy ───────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ test.describe('Smoke — backend API', () => {
   })
 
   test('tournament list endpoint is reachable', async ({ request }) => {
-    const res = await request.get(`${BACKEND_URL}/api/tournaments`)
+    const res = await request.get(`${TOURNAMENT_URL}/api/tournaments`)
     expect(res.ok()).toBe(true)
     const body = await res.json()
     // May be an array or { tournaments: [] } — either way it must be an object/array
@@ -112,13 +113,13 @@ test.describe('Smoke — backend API', () => {
 
   test('tournament registration requires auth (401, not 404)', async ({ request }) => {
     // Confirm the register endpoint is mounted — unauthenticated POST should 401, not 404
-    const res = await request.post(`${BACKEND_URL}/api/tournaments/smoke-check/register`, { data: {} })
+    const res = await request.post(`${TOURNAMENT_URL}/api/tournaments/smoke-check/register`, { data: {} })
     expect(res.status()).toBe(401)
   })
 
   test('GET /classification/me requires auth (401, not 404)', async ({ request }) => {
     // Confirms classificationMeRouter is mounted and requireAuth fires
-    const res = await request.get(`${BACKEND_URL}/api/classification/me`)
+    const res = await request.get(`${TOURNAMENT_URL}/api/classification/me`)
     expect(res.status()).toBe(401)
   })
 })
