@@ -10,13 +10,19 @@ import { dirname, join } from 'node:path'
  * then verifies key surfaces load and reports the deployed version.
  *
  * Run with:
- *   BASE_URL=https://xo.aiarena.callidity.com npx playwright test smoke --project=chromium
+ *   BASE_URL=https://xo-frontend-staging.fly.dev \
+ *   BACKEND_URL=https://xo-backend-staging.fly.dev \
+ *   npx playwright test smoke --project=chromium
+ *
+ * BACKEND_URL defaults to BASE_URL when running locally (Vite proxies /api/).
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const { version: EXPECTED_VERSION } = JSON.parse(
   readFileSync(join(__dirname, '../../package.json'), 'utf-8')
 )
+
+const BACKEND_URL = process.env.BACKEND_URL || process.env.BASE_URL || 'http://localhost:3000'
 
 // ── Wait for deploy ───────────────────────────────────────────────────────────
 
@@ -27,7 +33,7 @@ test('wait for deploy — /api/version matches expected version', async ({ reque
 
   while (Date.now() < deadline) {
     try {
-      const res = await request.get('/api/version')
+      const res = await request.get(`${BACKEND_URL}/api/version`)
       if (res.ok()) {
         const { version } = await res.json()
         if (version === EXPECTED_VERSION) {
@@ -80,24 +86,24 @@ test.describe('Smoke — frontend', () => {
 
 test.describe('Smoke — backend API', () => {
   test('/api/version returns expected version', async ({ request }) => {
-    const res = await request.get('/api/version')
+    const res = await request.get(`${BACKEND_URL}/api/version`)
     expect(res.ok()).toBe(true)
     const { version } = await res.json()
     expect(version).toBe(EXPECTED_VERSION)
   })
 
   test('auth session endpoint responds (not 500)', async ({ request }) => {
-    const res = await request.get('/api/auth/get-session')
+    const res = await request.get(`${BACKEND_URL}/api/auth/get-session`)
     expect(res.status()).not.toBe(500)
   })
 
   test('feedback submit endpoint exists (not 404)', async ({ request }) => {
-    const res = await request.post('/api/v1/feedback', { data: {} })
+    const res = await request.post(`${BACKEND_URL}/api/v1/feedback`, { data: {} })
     expect(res.status()).not.toBe(404)
   })
 
   test('tournament list endpoint is reachable', async ({ request }) => {
-    const res = await request.get('/api/tournaments')
+    const res = await request.get(`${BACKEND_URL}/api/tournaments`)
     expect(res.ok()).toBe(true)
     const body = await res.json()
     // May be an array or { tournaments: [] } — either way it must be an object/array
@@ -106,13 +112,13 @@ test.describe('Smoke — backend API', () => {
 
   test('tournament registration requires auth (401, not 404)', async ({ request }) => {
     // Confirm the register endpoint is mounted — unauthenticated POST should 401, not 404
-    const res = await request.post('/api/tournaments/smoke-check/register', { data: {} })
+    const res = await request.post(`${BACKEND_URL}/api/tournaments/smoke-check/register`, { data: {} })
     expect(res.status()).toBe(401)
   })
 
   test('GET /classification/me requires auth (401, not 404)', async ({ request }) => {
     // Confirms classificationMeRouter is mounted and requireAuth fires
-    const res = await request.get('/api/classification/me')
+    const res = await request.get(`${BACKEND_URL}/api/classification/me`)
     expect(res.status()).toBe(401)
   })
 })

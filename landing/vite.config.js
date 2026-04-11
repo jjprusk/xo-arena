@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 
 const BACKEND_URL     = process.env.BACKEND_URL     || 'http://localhost:3000'
 const TOURNAMENT_URL  = process.env.TOURNAMENT_URL  || 'http://localhost:3001'
@@ -25,6 +27,9 @@ export default defineConfig({
     // Force packages/xo's imports to resolve from the project root's node_modules.
     // Without this, Node resolution from /packages/xo/ can't find /app/node_modules/.
     dedupe: ['react', 'react-dom', 'zustand'],
+  },
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(version),
   },
   plugins: [
     react({ jsxRuntime: 'automatic' }),
