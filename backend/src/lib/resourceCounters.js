@@ -70,6 +70,15 @@ const SNAPSHOT_BUFFER_SIZE = 20
 const LEAK_WINDOW = 3          // consecutive rising snapshots before alerting
 const SNAPSHOT_INTERVAL_MS = 60_000
 
+// Minimum absolute value before a rising trend is considered a leak.
+// Low counts rising from near-zero are normal startup/idle behaviour.
+const LEAK_MIN = {
+  sockets:          10,   // fewer than 10 open sockets is idle noise
+  rooms:             5,   // a handful of rooms is normal
+  redisConnections:  5,   // adapter creates a few connections on startup
+  memoryMb:        150,   // heap below 150 MB rising slightly is fine
+}
+
 const _snapshots = []          // circular, newest last
 const _alerts = {}             // { sockets: bool, rooms: bool, redisConnections: bool, memoryMb: bool }
 let _roomCountFn = null        // injected by startSnapshotInterval to avoid circular import
@@ -117,7 +126,9 @@ function checkForLeaks() {
   const window = _snapshots.slice(-LEAK_WINDOW)
 
   for (const key of ['sockets', 'rooms', 'redisConnections', 'memoryMb']) {
+    const latest = window.at(-1)[key]
     const rising = window.every((s, i) => i === 0 || s[key] > window[i - 1][key])
+                   && latest >= (LEAK_MIN[key] ?? 0)
 
     if (rising && !_alerts[key]) {
       _alerts[key] = true
