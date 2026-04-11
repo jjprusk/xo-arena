@@ -11,9 +11,11 @@ RUN npm install --workspace=backend --workspace=packages/ai --workspace=packages
 COPY packages/ai/ ./packages/ai/
 COPY packages/db/ ./packages/db/
 COPY backend/src/ ./backend/src/
+COPY backend/prisma/ ./backend/prisma/
+COPY backend/prisma.config.ts ./backend/
 
 WORKDIR /app/backend
 RUN npx prisma generate --schema=../packages/db/prisma/schema.prisma
 
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=../packages/db/prisma/schema.prisma && node src/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]

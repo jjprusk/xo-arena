@@ -10,4 +10,4 @@ COPY tournament/ ./tournament/
 WORKDIR /app/tournament
 RUN npx prisma generate --schema=../packages/db/prisma/schema.prisma
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=../packages/db/prisma/schema.prisma && node src/index.js"]
+CMD ["node", "src/index.js"]
