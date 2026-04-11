@@ -2,7 +2,7 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
+const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
 function XOIcon() {
   return (

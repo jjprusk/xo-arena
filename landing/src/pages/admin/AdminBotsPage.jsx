@@ -8,7 +8,7 @@ import {
 } from '../../components/ui/ListTable.jsx'
 
 const LIMIT = 25
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
+const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
 const ALGO_COLORS = {
   minimax:    { bg: 'var(--color-blue-50)',   text: 'var(--color-blue-700)'   },

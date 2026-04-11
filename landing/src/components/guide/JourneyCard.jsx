@@ -4,7 +4,7 @@ import { useGuideStore } from '../../store/guideStore.js'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 
-const XO = import.meta.env.VITE_XO_URL ?? 'https://xo.aiarena.callidity.com'
+const XO = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
 const STEPS = [
   { index: 1, title: 'Welcome to the Arena',    cta: null,                  href: null,                                    external: false },
