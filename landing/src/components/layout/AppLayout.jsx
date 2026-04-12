@@ -108,7 +108,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: 'var(--bg-page)' }}>
+    <div className="min-h-screen flex flex-col relative overflow-x-hidden" style={{ backgroundColor: 'var(--bg-page)' }}>
 
       {/* Colosseum background — aiarena platform visual identity */}
       <div
@@ -296,8 +296,7 @@ export default function AppLayout() {
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer
         className="relative text-center py-6 text-xs"
-        style={{ zIndex: 1 }}
-        style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}
+        style={{ zIndex: 1, color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}
       >
         © 2026 AI Arena · callidity.com
         <span className="mx-2">·</span>
