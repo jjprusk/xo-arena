@@ -12,13 +12,31 @@ import { botGameRunner } from '../realtime/botGameRunner.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
 // Stores state for PVP tournament matches waiting for players to join a room.
-// matchId → { tournamentId, participant1UserId, participant2UserId, bestOfN, slug }
+// matchId → { tournamentId, participant1UserId, participant2UserId, bestOfN, slug, expiresAt }
 // "slug" is null until the first player requests the room via tournament:room:join.
+// Entries expire after PENDING_MATCH_TTL_MS to prevent unbounded growth.
 
 const _pendingPvpMatches = new Map()
+const PENDING_MATCH_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
+
+function _pruneStalePendingMatches() {
+  const now = Date.now()
+  for (const [matchId, entry] of _pendingPvpMatches) {
+    if (entry.expiresAt < now) {
+      _pendingPvpMatches.delete(matchId)
+      logger.warn({ matchId }, 'Pruned stale pending PVP match (TTL expired)')
+    }
+  }
+}
 
 export function getPendingPvpMatch(matchId) {
-  return _pendingPvpMatches.get(matchId) ?? null
+  const entry = _pendingPvpMatches.get(matchId)
+  if (!entry) return null
+  if (entry.expiresAt < Date.now()) {
+    _pendingPvpMatches.delete(matchId)
+    return null
+  }
+  return entry
 }
 
 export function setPendingPvpMatchSlug(matchId, slug) {
@@ -96,12 +114,14 @@ export async function handleEvent(io, channel, data) {
 
       // Store pending PVP match so socketHandler can create/join the room on demand
       if (participant1UserId && participant2UserId) {
+        _pruneStalePendingMatches()
         _pendingPvpMatches.set(matchId, {
           tournamentId,
           participant1UserId,
           participant2UserId,
           bestOfN: bestOfN ?? 1,
           slug: null,
+          expiresAt: Date.now() + PENDING_MATCH_TTL_MS,
         })
       }
 

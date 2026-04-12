@@ -40,19 +40,29 @@ function broadcastOnlineUsers(io) {
   io.emit('guide:onlineUsers', { users })
 }
 
+/**
+ * Report a completed tournament match to the tournament service.
+ * Returns true on success, false on failure (caller decides whether to clean up).
+ */
 async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGames) {
   try {
     const res = await fetch(`${TOURNAMENT_SERVICE_URL}/api/matches/${matchId}/complete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.INTERNAL_SECRET ? { 'x-internal-secret': process.env.INTERNAL_SECRET } : {}),
+      },
       body: JSON.stringify({ winnerId, p1Wins, p2Wins, drawGames }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      logger.warn({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response')
+      logger.error({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response — bracket will not advance')
+      return false
     }
+    return true
   } catch (err) {
-    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed')
+    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed — bracket will not advance')
+    return false
   }
 }
 
@@ -607,10 +617,10 @@ async function recordPvpGame(room, io) {
         logger.warn({ err, tournamentMatchId: room.tournamentMatchId }, 'Could not look up winner participant ID')
       }
 
-      completeTournamentMatch(room.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames).catch(() => {})
-
-      // Clean up pending match registry
-      deletePendingPvpMatch(room.tournamentMatchId)
+      // Only remove pending entry after confirmed success — if it fails the entry
+      // remains so an admin retry or future reconciliation can find the match context.
+      const completed = await completeTournamentMatch(room.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames)
+      if (completed) deletePendingPvpMatch(room.tournamentMatchId)
 
       // Notify both players the series is over
       io.to(room.slug).emit('tournament:series:complete', {

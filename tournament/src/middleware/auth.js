@@ -85,3 +85,18 @@ export async function requireTournamentAdmin(req, res, next) {
     next()
   })
 }
+
+/**
+ * Accepts either:
+ *   - A valid tournament-admin JWT (human admin via browser), OR
+ *   - The X-Internal-Secret header matching INTERNAL_SECRET env var (backend service calls)
+ *
+ * Used on endpoints called by the backend service (e.g. match completion from game results).
+ */
+export async function requireTournamentAdminOrInternal(req, res, next) {
+  const secret = process.env.INTERNAL_SECRET
+  if (secret && req.headers['x-internal-secret'] === secret) {
+    return next()
+  }
+  return requireTournamentAdmin(req, res, next)
+}

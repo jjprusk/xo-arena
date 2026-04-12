@@ -94,6 +94,10 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
       recurrenceEndDate, autoOptOutAfterMissed,
     } = req.body
 
+    if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
+      return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
+    }
+
     const tournament = await db.tournament.create({
       data: {
         name,
@@ -142,6 +146,10 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
       recurrenceEndDate, autoOptOutAfterMissed,
     } = req.body
+
+    if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
+      return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
+    }
 
     // status is intentionally excluded — use dedicated endpoints
     const data = {
@@ -256,12 +264,23 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       include: {
         participants: {
           where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
-          include: { user: { select: { id: true, displayName: true, botModelId: true, isBot: true } } },
+          include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true, isBot: true } } },
         },
       },
     })
 
     if (!existing) return res.status(404).json({ error: 'Tournament not found' })
+
+    if (!['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'DRAFT'].includes(existing.status)) {
+      return res.status(400).json({ error: `Cannot start a tournament with status ${existing.status}` })
+    }
+
+    const participants = existing.participants
+    if (participants.length < existing.minParticipants) {
+      return res.status(400).json({
+        error: `Not enough participants — need ${existing.minParticipants}, have ${participants.length}`,
+      })
+    }
 
     const updateData = { status: 'IN_PROGRESS' }
     if (!existing.startTime) updateData.startTime = new Date()
@@ -271,7 +290,6 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       data: updateData,
     })
 
-    const participants = existing.participants
     const isPvp = existing.mode === 'PVP'
 
     if (existing.bracketType === 'SINGLE_ELIM') {
@@ -312,8 +330,8 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
-              participant1UserId: p1.user.id,
-              participant2UserId: p2.user.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
               bestOfN: tournament.bestOfN,
             })
           } else {
@@ -350,8 +368,8 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
-              participant1UserId: p1.user.id,
-              participant2UserId: p2.user.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
               bestOfN: tournament.bestOfN,
             })
           } else {

@@ -20,7 +20,10 @@ async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGa
   try {
     const res = await fetch(`${TOURNAMENT_SERVICE_URL}/api/matches/${matchId}/complete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.INTERNAL_SECRET ? { 'x-internal-secret': process.env.INTERNAL_SECRET } : {}),
+      },
       body: JSON.stringify({ winnerId, p1Wins, p2Wins, drawGames }),
     })
     if (!res.ok) {
@@ -110,6 +113,14 @@ class BotGameRunner {
 
     this._games.set(slug, game)
     logger.info({ slug, bot1: bot1.displayName, bot2: bot2.displayName, tournamentMatchId }, 'Bot game started')
+
+    // Mark bots as in-tournament so they can't be trained mid-match
+    if (tournamentMatchId) {
+      await db.user.updateMany({
+        where: { id: { in: [bot1.id, bot2.id] } },
+        data: { botInTournament: true },
+      }).catch(err => logger.warn({ err }, 'Failed to set botInTournament flag'))
+    }
 
     // Run the game loop asynchronously
     this._runGameLoop(slug).catch((err) => {
@@ -222,6 +233,8 @@ class BotGameRunner {
 
     const isTournamentGame = !!(game.tournamentMatchId)
 
+    // Bug #11: separate DB record write from tournament completion so a DB error
+    // can't silently prevent bracket advancement.
     await createGame({
       player1Id: game.bot1.id,
       player2Id: game.bot2.id,
@@ -233,9 +246,8 @@ class BotGameRunner {
       startedAt: new Date(game.createdAt),
       tournamentId: game.tournamentId ?? null,
       tournamentMatchId: game.tournamentMatchId ?? null,
-    })
+    }).catch(err => logger.warn({ err, slug }, 'Failed to write bot game record — will still attempt tournament completion'))
 
-    // Skip ELO and botInTournament cleanup for tournament games — tournament service handles those
     if (!isTournamentGame) {
       await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})
       await db.user.updateMany({
@@ -258,6 +270,12 @@ class BotGameRunner {
       } catch (err) {
         logger.warn({ err, tournamentMatchId: game.tournamentMatchId }, 'Failed to report bot tournament match result')
       }
+
+      // Clear botInTournament flag after tournament game completes
+      await db.user.updateMany({
+        where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
+        data: { botInTournament: false },
+      }).catch(err => logger.warn({ err }, 'Failed to clear botInTournament flag after tournament game'))
     }
 
     logger.info({ slug, outcome, winner: game.winner, tournamentMatchId: game.tournamentMatchId ?? null }, 'Bot game recorded')

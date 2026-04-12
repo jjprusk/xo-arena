@@ -77,7 +77,7 @@ async function sweep() {
       include: {
         participants: {
           where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
-          include: { user: { select: { id: true, displayName: true, botModelId: true } } },
+          include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true } } },
         },
       },
     })
@@ -174,8 +174,8 @@ async function autoStart(tournament) {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
-              participant1UserId: p1.user.id,
-              participant2UserId: p2.user.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
               bestOfN: tournament.bestOfN,
             })
           } else {
@@ -212,8 +212,8 @@ async function autoStart(tournament) {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
-              participant1UserId: p1.user.id,
-              participant2UserId: p2.user.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
               bestOfN: tournament.bestOfN,
             })
           } else {
