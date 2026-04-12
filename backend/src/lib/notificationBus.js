@@ -115,18 +115,30 @@ export async function dispatch({ type, targets, payload = {} }) {
         if (!pref.inApp && !entry.systemCritical) return
 
         // Dedup: skip if undelivered row already exists for same type+key
+        let notifId = null
         if (entry.persist === 'persistent') {
           const dedupFilter = buildDedupFilter(type, payload)
           const existing = await db.userNotification.findFirst({
             where: { userId, type, deliveredAt: null, ...dedupFilter },
           })
           if (existing) return
-          await db.userNotification.create({ data: { userId, type, payload } })
+          const notif = await db.userNotification.create({ data: { userId, type, payload } })
+          notifId = notif.id
         }
 
-        // Emit to socket room
+        // Emit to socket room; mark delivered immediately if the user is connected
+        // so the reconnect flush doesn't re-send what was already received live.
         if (_io) {
-          _io.to(`user:${userId}`).emit('guide:notification', { type, payload })
+          const sockets = await _io.in(`user:${userId}`).fetchSockets()
+          if (sockets.length > 0) {
+            _io.to(`user:${userId}`).emit('guide:notification', { type, payload })
+            if (notifId) {
+              await db.userNotification.update({
+                where: { id: notifId },
+                data:  { deliveredAt: new Date() },
+              })
+            }
+          }
         }
 
         // TODO: email delivery (Phase 4 — notificationService.js refactor will wire this)

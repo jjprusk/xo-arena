@@ -97,6 +97,7 @@ export const usePvpStore = create((set, get) => ({
       currentTurn: oppTurn,
       _optimisticSnapshot: { board, currentTurn },
     })
+    pvpCfg.playSound('move')
     pvpCfg.getSocket().emit('game:move', { cellIndex })
   },
 
