@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.2.0-alpha-1.06",
+    "date": "2026-04-12",
+    "description": "Miscellaneous minor fixes"
+  },
+  {
     "version": "1.2.0-alpha-1.05",
     "date": "2026-04-11",
     "description": "Added message bus"
