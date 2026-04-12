@@ -48,6 +48,9 @@ vi.mock('../../services/journeyService.js', () => ({
   completeStep: vi.fn().mockResolvedValue(undefined),
 }))
 
+// Capture reference so we can re-set implementation after vi.resetAllMocks()
+import { completeStep as mockCompleteStep } from '../../services/journeyService.js'
+
 // ─── Import handleEvent directly (exported for testability) ──────────────────
 
 const { handleEvent } = await import('../tournamentBridge.js')
@@ -77,6 +80,8 @@ function makeMatch() {
 beforeEach(() => {
   vi.resetAllMocks()
   mockDispatch.mockResolvedValue(undefined)
+  // vi.resetAllMocks() clears the implementation — must restore so .catch() doesn't throw
+  mockCompleteStep.mockResolvedValue(undefined)
   mockDb.userNotification.findMany.mockResolvedValue([])
   mockDb.userNotification.updateMany.mockResolvedValue({ count: 0 })
   mockDb.tournamentParticipant.findMany.mockResolvedValue([])
