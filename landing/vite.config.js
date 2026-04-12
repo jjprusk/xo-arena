@@ -10,7 +10,7 @@ const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 
 const BACKEND_URL     = process.env.BACKEND_URL     || 'http://localhost:3000'
 const TOURNAMENT_URL  = process.env.TOURNAMENT_URL  || 'http://localhost:3001'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   test: {
     environment: 'jsdom',
     globals: true,
@@ -29,7 +29,11 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'zustand'],
   },
   define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(version),
+    // Append '+' in dev/staging builds so it's clear the image may have
+    // unreleased changes beyond the tagged version.
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(
+      mode === 'production' ? version : `${version}+`
+    ),
   },
   plugins: [
     react({ jsxRuntime: 'automatic' }),
@@ -68,4 +72,4 @@ export default defineConfig({
       '/socket.io': { target: BACKEND_URL, changeOrigin: true, ws: true },
     },
   },
-})
+}))

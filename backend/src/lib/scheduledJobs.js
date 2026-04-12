@@ -108,7 +108,7 @@ export async function startDispatcher() {
   return id
 }
 
-async function runDispatcherTick() {
+export async function runDispatcherTick() {
   _lastTickAt = new Date()
   try {
     // Claim PENDING jobs due now with capacity for retries
