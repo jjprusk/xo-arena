@@ -9,7 +9,9 @@ const COUNTER_LABELS = {
   sockets:          'Sockets',
   rooms:            'Rooms',
   redisConnections: 'Redis Connections',
-  memoryMb:         'Memory (MB)',
+  memoryMb:         'Heap Used (MB)',
+  heapTotalMb:      'Heap Total (MB)',
+  rssMb:            'RSS (MB)',
 }
 
 function counterStatus(key, alerts, history) {
@@ -57,7 +59,7 @@ function HistoryTable({ history }) {
     return <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No snapshots yet — first snapshot fires 60 s after backend start.</p>
   }
 
-  const keys = ['sockets', 'rooms', 'redisConnections', 'memoryMb']
+  const keys = ['sockets', 'rooms', 'redisConnections', 'memoryMb', 'heapTotalMb', 'rssMb']
   const rows = [...history].reverse()
 
   return (

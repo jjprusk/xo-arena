@@ -14,6 +14,48 @@ import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 
 const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
+/**
+ * Map a raw bus notification { type, payload } to the shape NotificationCard expects:
+ * { id, type (UI category), uiType, title, body, href }
+ */
+function normalizeBusNotification(type, payload = {}) {
+  const id = `${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`
+  const tid = payload.tournamentId
+  const tname = payload.name ?? 'Tournament'
+
+  switch (type) {
+    case 'tournament.published':
+    case 'tournament.flash_announced':
+      return { id, uiType: 'flash',       type: 'flash',       title: `${tname} — registration open`, body: 'New tournament announced', href: '/tournaments' }
+    case 'tournament.registration_closing':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} — registration closing`, body: 'Last chance to register', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+    case 'tournament.starting_soon':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} starts in ${payload.minutesUntilStart}m`, body: 'Your match is coming up', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+    case 'tournament.started':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} has started!`, body: 'Check your first match', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+    case 'tournament.cancelled':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} cancelled`, body: 'The tournament was cancelled', href: '/tournaments' }
+    case 'tournament.completed':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} complete`, body: 'See the final results', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+    case 'match.ready':
+      return { id, uiType: 'match_ready', type: 'match_ready', title: 'Match Ready!', body: `Your match in ${tname} is ready`, href: tid ? `/tournaments/${tid}` : '/tournaments' }
+    case 'match.result':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: 'Match Result', body: `Result recorded for ${tname}`, href: tid ? `/tournaments/${tid}` : '/tournaments' }
+    case 'achievement.tier_upgrade':
+      return { id, uiType: 'admin',       type: 'admin',       title: `Tier upgrade — ${payload.tier ?? ''}`, body: payload.message }
+    case 'achievement.milestone':
+      return { id, uiType: 'admin',       type: 'admin',       title: `Milestone reached`, body: payload.message }
+    case 'admin.announcement':
+      return { id, uiType: 'admin',       type: 'admin',       title: 'Announcement', body: payload.message }
+    case 'system.alert':
+      return { id, uiType: 'admin',       type: 'admin',       title: 'System Alert', body: payload.message }
+    case 'system.alert.cleared':
+      return { id, uiType: 'admin',       type: 'admin',       title: 'Alert Cleared', body: payload.message }
+    default:
+      return { id, uiType: 'admin',       type: 'admin',       title: type, body: payload.message ?? '' }
+  }
+}
+
 export default function AppLayout() {
   const { data: session, isPending } = useOptimisticSession()
   const user = session?.user ?? null
@@ -80,10 +122,11 @@ export default function AppLayout() {
   // Socket guide listeners
   useEffect(() => {
     const socket = getSocket()
-    function onGuideNotification(notif) {
+    function onGuideNotification({ type, payload = {} }) {
+      const notif = normalizeBusNotification(type, payload)
       useGuideStore.getState().addNotification(notif)
       useNotifSoundStore.getState().play()
-      if (notif.type === 'flash' || notif.type === 'match_ready') {
+      if (notif.uiType === 'flash' || notif.uiType === 'match_ready') {
         if (!useGuideStore.getState().panelOpen) useGuideStore.getState().open()
       }
     }
@@ -108,7 +151,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: 'var(--bg-page)' }}>
+    <div className="min-h-screen flex flex-col relative overflow-x-hidden" style={{ backgroundColor: 'var(--bg-page)' }}>
 
       {/* Colosseum background — aiarena platform visual identity */}
       <div
@@ -296,8 +339,7 @@ export default function AppLayout() {
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer
         className="relative text-center py-6 text-xs"
-        style={{ zIndex: 1 }}
-        style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}
+        style={{ zIndex: 1, color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}
       >
         © 2026 AI Arena · callidity.com
         <span className="mx-2">·</span>

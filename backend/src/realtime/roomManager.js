@@ -27,11 +27,16 @@ class RoomManager {
     this._rooms = new Map()
     /** @type {Map<string, string>} socketId → slug */
     this._socketToRoom = new Map()
+    /** @type {((room: object) => void) | null} — called whenever a room is fully closed */
+    this._onRoomClosed = null
 
     // Periodic sweep: remove stale rooms every 5 minutes
     this._cleanupInterval = setInterval(() => this._sweepStaleRooms(), 5 * 60 * 1000)
     this._cleanupInterval.unref?.() // don't block process exit
   }
+
+  /** Register a callback fired whenever closeRoom() runs (used for external cleanup). */
+  onRoomClosed(fn) { this._onRoomClosed = fn }
 
   /**
    * Create a new room. Returns the room object.
@@ -344,6 +349,7 @@ class RoomManager {
 
     this._rooms.delete(slug)
     this._pool.release(room.name)
+    this._onRoomClosed?.(room)
   }
 
   /**

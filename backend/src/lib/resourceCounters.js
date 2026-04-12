@@ -133,12 +133,15 @@ async function takeBusSnapshot() {
 
 async function takeSnapshot() {
   const busSnap = await takeBusSnapshot().catch(() => ({}))
+  const mem = process.memoryUsage()
   const snap = {
     ts: Date.now(),
     sockets: _socketCount,
     rooms: _roomCountFn ? _roomCountFn() : 0,
     redisConnections: _redisConnectionCount,
-    memoryMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    memoryMb:      Math.round(mem.heapUsed  / 1024 / 1024),
+    heapTotalMb:   Math.round(mem.heapTotal / 1024 / 1024),
+    rssMb:         Math.round(mem.rss       / 1024 / 1024),
     ...busSnap,
   }
 
