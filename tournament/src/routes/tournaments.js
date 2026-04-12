@@ -104,6 +104,9 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
     if (startMode === 'SCHEDULED' && !startTime) {
       return res.status(400).json({ error: 'SCHEDULED mode requires a startTime' })
     }
+    if (registrationCloseAt && startTime && new Date(registrationCloseAt) > new Date(startTime)) {
+      return res.status(400).json({ error: 'registrationCloseAt must be before startTime' })
+    }
 
     const tournament = await db.tournament.create({
       data: {
@@ -161,6 +164,9 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
     const VALID_START_MODES = ['AUTO', 'SCHEDULED', 'MANUAL']
     if (startMode !== undefined && !VALID_START_MODES.includes(startMode)) {
       return res.status(400).json({ error: 'startMode must be AUTO, SCHEDULED, or MANUAL' })
+    }
+    if (registrationCloseAt && startTime && new Date(registrationCloseAt) > new Date(startTime)) {
+      return res.status(400).json({ error: 'registrationCloseAt must be before startTime' })
     }
 
     // status is intentionally excluded — use dedicated endpoints
@@ -284,7 +290,9 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
 
     if (!existing) return res.status(404).json({ error: 'Tournament not found' })
 
-    if (!['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'DRAFT'].includes(existing.status)) {
+    // Disallow starting from DRAFT — it was never published so participants were
+    // never notified. Require REGISTRATION_OPEN or REGISTRATION_CLOSED first.
+    if (!['REGISTRATION_OPEN', 'REGISTRATION_CLOSED'].includes(existing.status)) {
       return res.status(400).json({ error: `Cannot start a tournament with status ${existing.status}` })
     }
 
@@ -292,6 +300,14 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
     if (participants.length < existing.minParticipants) {
       return res.status(400).json({
         error: `Not enough participants — need ${existing.minParticipants}, have ${participants.length}`,
+      })
+    }
+
+    // Guard: ROUND_ROBIN with too many participants creates N*(N-1)/2 matches —
+    // cap at 128 to prevent a single start from flooding Redis with thousands of events.
+    if (existing.bracketType === 'ROUND_ROBIN' && participants.length > 128) {
+      return res.status(400).json({
+        error: `Round-robin tournaments are limited to 128 participants (have ${participants.length})`,
       })
     }
 
@@ -416,7 +432,9 @@ router.post('/:id/fill-test-players', requireTournamentAdmin, async (req, res, n
 
     const tournament = await db.tournament.findUnique({ where: { id: tournamentId } })
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
-    if (tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED') {
+    // Disallow adding test players once the tournament is running — they'd appear
+    // in the participant list but have no bracket slot.
+    if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(tournament.status)) {
       return res.status(400).json({ error: `Cannot add players to a ${tournament.status.toLowerCase()} tournament` })
     }
 

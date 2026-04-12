@@ -111,7 +111,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
     if (form.startMode === 'SCHEDULED' && !form.startTime) {
       errs.startTime = 'A start time is required for Scheduled mode.'
     }
-    if (form.registrationCloseAt && form.startTime && form.startMode !== 'AUTO') {
+    if (form.registrationCloseAt && form.startTime) {
       if (new Date(form.registrationCloseAt) > new Date(form.startTime))
         errs.startTime = 'Start time must be at or after registration close.'
     }

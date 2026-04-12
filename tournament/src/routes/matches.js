@@ -25,8 +25,6 @@ router.post('/:matchId/complete', requireTournamentAdminOrInternal, async (req, 
     // ── Phase 1: Update match, eliminate loser, award points ─────────────────
     // Kept in its own transaction so it commits quickly before we check round
     // completion. Bracket advancement happens in Phase 2, outside this tx.
-    const matchPublishes = []
-
     await db.$transaction(async (tx) => {
       await tx.tournamentMatch.update({
         where: { id: matchId },
@@ -65,27 +63,20 @@ router.post('/:matchId/complete', requireTournamentAdminOrInternal, async (req, 
     })
 
     // Publish match result immediately after Phase 1 commits
-    matchPublishes.push(['tournament:match:result', {
+    await publish('tournament:match:result', {
       tournamentId: match.tournamentId,
       matchId,
       winnerId,
       p1Wins,
       p2Wins,
       drawGames,
-    }])
-    for (const [channel, payload] of matchPublishes) {
-      await publish(channel, payload).catch(err =>
-        logger.warn({ err, channel }, 'Failed to publish match:result event')
-      )
-    }
+    }).catch(err => logger.warn({ err }, 'Failed to publish match:result event'))
 
     res.json({ match: { id: matchId, status: 'COMPLETED' } })
 
     // ── Phase 2: Bracket advancement — runs AFTER Phase 1 commits ────────────
     // Fresh read of all round matches so we see committed state from concurrent
-    // requests. Atomic updateMany gate (WHERE status = IN_PROGRESS) ensures
-    // only one concurrent call performs the advancement even if multiple matches
-    // complete at the same instant.
+    // requests. Atomic updateMany gate ensures only one caller advances.
     setImmediate(() => advanceBracketIfReady(match).catch(err =>
       logger.error({ err, matchId, roundId: match.roundId }, 'Bracket advancement failed')
     ))
@@ -115,6 +106,16 @@ async function advanceBracketIfReady(match) {
 
   if (tournament.bracketType === 'SINGLE_ELIM') {
     const winners = roundMatches.filter(m => m.winnerId).map(m => m.winnerId)
+
+    // Guard: all matches drew with no tiebreaker — bracket cannot advance
+    if (winners.length === 0) {
+      logger.error(
+        { tournamentId: tournament.id, roundId: match.roundId },
+        'No winners in round — all matches have null winnerId. Bracket cannot advance.'
+      )
+      return
+    }
+
     const loserPosition = winners.length + 1
 
     const loserIds = roundMatches
@@ -141,10 +142,11 @@ async function advanceBracketIfReady(match) {
       })
 
       if (loserIds[0]) {
+        // Fix: runner-up gets finalPosition: 2 (was missing — caused null in standings)
         const runnerUpPct = totalParticipants > 1 ? 1 / (totalParticipants - 1) : 0
         await db.tournamentParticipant.update({
           where: { id: loserIds[0] },
-          data: { finalPositionPct: runnerUpPct },
+          data: { finalPosition: 2, finalPositionPct: runnerUpPct },
         })
       }
 
@@ -198,6 +200,7 @@ async function advanceBracketIfReady(match) {
       }
 
       const participantMap = Object.fromEntries(winnerParticipants.map(p => [p.id, p]))
+      let pendingMatchCount = 0
 
       for (let i = 0; i < winners.length; i += 2) {
         const p1Id = winners[i]
@@ -230,6 +233,7 @@ async function advanceBracketIfReady(match) {
               status: 'PENDING',
             },
           })
+          pendingMatchCount++
 
           const p1 = participantMap[p1Id]
           const p2 = participantMap[p2Id]
@@ -253,6 +257,17 @@ async function advanceBracketIfReady(match) {
           }
         }
       }
+
+      // Defensive: if the new round has no pending matches (all byes — shouldn't
+      // happen with valid winner counts but guard against data edge cases) trigger
+      // advancement for the new round immediately.
+      if (pendingMatchCount === 0) {
+        logger.warn({ tournamentId: tournament.id, roundId: nextRound.id }, 'New round has no pending matches — triggering immediate advancement')
+        const syntheticMatch = { roundId: nextRound.id, tournamentId: tournament.id }
+        setImmediate(() => advanceBracketIfReady(syntheticMatch).catch(err =>
+          logger.error({ err }, 'Immediate advancement for all-bye round failed')
+        ))
+      }
     }
 
   } else if (tournament.bracketType === 'ROUND_ROBIN') {
@@ -263,16 +278,23 @@ async function advanceBracketIfReady(match) {
     const allRoundsDone = allRounds.every(r => r.matches.every(m => m.status === 'COMPLETED'))
 
     if (allRoundsDone) {
+      // Order by points DESC, then eloAtRegistration DESC, then registeredAt ASC
+      // to ensure a fully deterministic ranking even when scores tie.
       const participants = await db.tournamentParticipant.findMany({
         where: { tournamentId: tournament.id },
         include: { user: { select: { id: true } } },
-        orderBy: [{ points: 'desc' }, { eloAtRegistration: 'desc' }],
+        orderBy: [
+          { points: 'desc' },
+          { eloAtRegistration: 'desc' },
+          { registeredAt: 'asc' },
+        ],
       })
 
       const total = participants.length
 
       for (let i = 0; i < participants.length; i++) {
         const position = i + 1
+        // finalPositionPct: 0 = best (1st), 1 = worst (last). Lower is better.
         const finalPositionPct = total > 1 ? (position - 1) / (total - 1) : 0
         await db.tournamentParticipant.update({
           where: { id: participants[i].id },

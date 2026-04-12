@@ -349,8 +349,8 @@ describe('tournament:completed — END_OF_TOURNAMENT flush', () => {
 
     // Two pending match result notifications for this user
     mockDb.userNotification.findMany.mockResolvedValue([
-      { id: 'n1', payload: { tournamentId: 'tour_1', matchId: 'match_1' } },
-      { id: 'n2', payload: { tournamentId: 'tour_1', matchId: 'match_2' } },
+      { id: 'n1', userId: 'user_eot', payload: { tournamentId: 'tour_1', matchId: 'match_1' } },
+      { id: 'n2', userId: 'user_eot', payload: { tournamentId: 'tour_1', matchId: 'match_2' } },
     ])
     mockDb.userNotification.updateMany.mockResolvedValue({ count: 2 })
 

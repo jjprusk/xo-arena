@@ -63,6 +63,7 @@ function parseBotModelId(botModelId) {
   }
 
   // ML model ID or unknown — fall back to minimax master
+  logger.warn({ botModelId }, 'Unknown botModelId format — falling back to minimax/master')
   return { impl: 'minimax', difficulty: 'master' }
 }
 
@@ -148,6 +149,12 @@ class BotGameRunner {
   async _runGameLoop(slug) {
     const game = this._games.get(slug)
     if (!game) return
+
+    // Validate bestOfN — must be a positive odd integer
+    if (!game.bestOfN || game.bestOfN < 1 || game.bestOfN % 2 === 0) {
+      logger.error({ slug, bestOfN: game.bestOfN }, 'Invalid bestOfN — must be a positive odd number. Defaulting to 1.')
+      game.bestOfN = 1
+    }
 
     const winsNeeded = Math.ceil(game.bestOfN / 2)
     // Hard cap: maximum possible games in a best-of-N series (e.g. best-of-3 → 5 max)
@@ -275,9 +282,15 @@ class BotGameRunner {
     } else if (game.seriesBot2Wins > game.seriesBot1Wins) {
       seriesWinnerId = game.bot2.id
     } else if (isTournamentGame) {
-      // Tied after hard cap — random tiebreaker so bracket can advance
-      seriesWinnerId = Math.random() < 0.5 ? game.bot1.id : game.bot2.id
-      logger.info({ slug, tournamentMatchId: game.tournamentMatchId }, 'Bot series tied — random tiebreaker applied')
+      // Tied after hard cap — deterministic tiebreaker derived from matchId
+      // so the same match always resolves the same way (auditable, reproducible).
+      const idSum = game.tournamentMatchId
+        .split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+      seriesWinnerId = idSum % 2 === 0 ? game.bot1.id : game.bot2.id
+      logger.info(
+        { slug, tournamentMatchId: game.tournamentMatchId, winner: seriesWinnerId === game.bot1.id ? game.bot1.displayName : game.bot2.displayName },
+        'Bot series tied at hard cap — deterministic tiebreaker applied'
+      )
     }
 
     // Outcome from bot1 (X) perspective for the last game (used for single-game ELO)

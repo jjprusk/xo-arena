@@ -93,6 +93,11 @@ export function startTournamentBridge(io) {
       logger.error({ err, channel }, 'Tournament bridge message error')
     }
   })
+
+  // Periodically prune stale pending PVP match entries so the in-memory map
+  // doesn't accumulate entries from matches that never started.
+  const pruneTimer = setInterval(() => _pruneStalePendingMatches(), 30 * 60_000)
+  pruneTimer.unref()
 }
 
 export async function handleEvent(io, channel, data) {
@@ -252,32 +257,47 @@ export async function handleEvent(io, channel, data) {
         await dispatch({ type: 'tournament.completed', targets: { userId: notifyUserId }, payload: { tournamentId, name, position } })
       }
 
-      // Flush pending match result notifications for END_OF_TOURNAMENT participants
+      // Flush pending match result notifications for END_OF_TOURNAMENT participants.
+      // Batched: one findMany for all EOT users instead of N individual queries.
       try {
         const eotParticipants = await db.tournamentParticipant.findMany({
           where: { tournamentId, resultNotifPref: 'END_OF_TOURNAMENT' },
           select: { userId: true },
         })
-        for (const { userId } of eotParticipants) {
-          const pending = await db.userNotification.findMany({
+        if (eotParticipants.length > 0) {
+          const eotUserIds = eotParticipants.map(p => p.userId)
+
+          const allPending = await db.userNotification.findMany({
             where: {
-              userId,
+              userId: { in: eotUserIds },
               type: 'match.result',
               deliveredAt: null,
               payload: { path: ['tournamentId'], equals: tournamentId },
             },
           })
-          if (pending.length === 0) continue
 
-          // Emit all pending match results in a single batch
-          const matchIds = pending.map(n => n.payload?.matchId).filter(Boolean)
-          io.to(`user:${userId}`).emit('tournament:match:results:batch', { tournamentId, matchIds })
+          // Group by userId
+          const byUser = {}
+          for (const n of allPending) {
+            if (!byUser[n.userId]) byUser[n.userId] = []
+            byUser[n.userId].push(n)
+          }
 
-          // Mark them delivered
-          await db.userNotification.updateMany({
-            where: { id: { in: pending.map(n => n.id) } },
-            data: { deliveredAt: new Date() },
-          })
+          const deliveredIds = []
+          for (const userId of eotUserIds) {
+            const pending = byUser[userId] ?? []
+            if (pending.length === 0) continue
+            const matchIds = pending.map(n => n.payload?.matchId).filter(Boolean)
+            io.to(`user:${userId}`).emit('tournament:match:results:batch', { tournamentId, matchIds })
+            deliveredIds.push(...pending.map(n => n.id))
+          }
+
+          if (deliveredIds.length > 0) {
+            await db.userNotification.updateMany({
+              where: { id: { in: deliveredIds } },
+              data: { deliveredAt: new Date() },
+            })
+          }
         }
       } catch (err) {
         logger.error({ err, tournamentId }, 'Failed to flush END_OF_TOURNAMENT match results')
