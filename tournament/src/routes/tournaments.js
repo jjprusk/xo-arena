@@ -351,6 +351,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
+              bestOfN: tournament.bestOfN,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
             })
@@ -389,6 +390,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
+              bestOfN: tournament.bestOfN,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
             })
@@ -397,6 +399,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       }
     }
 
+    await publish('tournament:started', { tournamentId: tournament.id, name: tournament.name }).catch(() => {})
     res.json({ tournament })
   } catch (e) {
     next(e)

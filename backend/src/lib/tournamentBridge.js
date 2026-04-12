@@ -54,6 +54,7 @@ export function getPendingPvpMatchCount() { return _pendingPvpMatches.size }
 const CHANNELS = [
   'tournament:published',
   'tournament:flash:announced',
+  'tournament:started',
   'tournament:match:ready',
   'tournament:bot:match:ready',
   'tournament:match:result',
@@ -97,6 +98,12 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, name, format, mode } = data
       await dispatch({ type: 'tournament.published', targets: { broadcast: true }, payload: { tournamentId, name, format, mode } })
       logger.info({ tournamentId }, 'Tournament published — notified all connected clients')
+      break
+    }
+    case 'tournament:started': {
+      const { tournamentId, name } = data
+      io.emit('tournament:started', { tournamentId, name })
+      logger.info({ tournamentId }, 'Tournament started — notified all connected clients')
       break
     }
     case 'tournament:flash:announced': {

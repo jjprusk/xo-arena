@@ -320,6 +320,7 @@ async function autoStartTournament(tournament) {
       }
     }
 
+    await publish('tournament:started', { tournamentId: tournament.id, name: tournament.name }).catch(() => {})
     logger.info(
       { tournamentId: tournament.id, name: tournament.name, participants: participants.length },
       'Tournament sweep — auto-started'

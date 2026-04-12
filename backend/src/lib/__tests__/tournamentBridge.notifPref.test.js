@@ -15,6 +15,7 @@ const mockDb = {
   tournamentMatch: { findUnique: vi.fn() },
   tournamentParticipant: { findUnique: vi.fn(), findMany: vi.fn() },
   userNotification: { findMany: vi.fn(), updateMany: vi.fn() },
+  user: { findUnique: vi.fn() },
 }
 
 vi.mock('../db.js', () => ({ default: mockDb }))
@@ -85,6 +86,7 @@ beforeEach(() => {
   mockDb.userNotification.findMany.mockResolvedValue([])
   mockDb.userNotification.updateMany.mockResolvedValue({ count: 0 })
   mockDb.tournamentParticipant.findMany.mockResolvedValue([])
+  mockDb.user.findUnique.mockResolvedValue(null) // non-bot by default
 })
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

@@ -3,6 +3,8 @@ import { connectSocket } from '../lib/socket.js'
 import { getToken } from '../lib/getToken.js'
 
 const TOURNAMENT_EVENTS = [
+  'tournament:published',
+  'tournament:started',
   'tournament:match:ready',
   'tournament:match:result',
   'tournament:warning',
