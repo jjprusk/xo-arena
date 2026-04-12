@@ -5,6 +5,7 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
 import { connectSocket } from '../lib/socket.js'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -734,58 +735,39 @@ function ParticipantTable({ participants }) {
   const sorted = [...participants].sort((a, b) => (a.seedPosition ?? 999) - (b.seedPosition ?? 999))
 
   return (
-    <div
-      className="rounded-xl border overflow-hidden"
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-    >
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr>
-              {['Seed', 'Player', 'ELO', 'Status'].map(col => (
-                <th
-                  key={col}
-                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
-                  style={{ backgroundColor: 'var(--bg-surface)', borderBottom: '2px solid var(--border-default)', color: 'var(--text-muted)' }}
-                >
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((p, i) => (
-              <tr
-                key={p.id}
-                className="transition-colors hover:bg-[var(--bg-surface-hover)]"
-                style={{
-                  borderBottom: i < sorted.length - 1 ? '1px solid var(--border-default)' : 'none',
-                  opacity: p.status === 'WITHDRAWN' || p.status === 'ELIMINATED' ? 0.55 : 1,
-                }}
-              >
-                <td className="px-4 py-3 text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>{p.seedPosition ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
-                  </span>
-                  {p.finalPosition && (
-                    <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
-                      #{p.finalPosition}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
-                  {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <ListTable>
+      <ListTh>Seed</ListTh>
+      <ListTh>Player</ListTh>
+      <ListTh>ELO</ListTh>
+      <ListTh>Status</ListTh>
+      {sorted.map((p, i) => (
+        <ListTr
+          key={p.id}
+          last={i === sorted.length - 1}
+          dimmed={p.status === 'WITHDRAWN' || p.status === 'ELIMINATED'}
+        >
+          <ListTd className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+            {p.seedPosition ?? '—'}
+          </ListTd>
+          <ListTd>
+            <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
+            </span>
+            {p.finalPosition && (
+              <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
+                #{p.finalPosition}
+              </span>
+            )}
+          </ListTd>
+          <ListTd className="text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
+            {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
+          </ListTd>
+          <ListTd>
+            <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
+          </ListTd>
+        </ListTr>
+      ))}
+    </ListTable>
   )
 }
 

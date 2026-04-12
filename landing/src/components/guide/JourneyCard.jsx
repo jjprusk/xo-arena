@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
+import { POST_JOURNEY_SLOTS } from './slotActions.js'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 
@@ -105,10 +106,7 @@ export default function JourneyCard() {
 
   function handleDismissConfirm() {
     setConfirming(false)
-    dismissJourney()
-    getToken().then(token => {
-      if (token) api.guide.patchPreferences({ journeyProgress: { completedSteps, dismissedAt: new Date().toISOString() } }, token).catch(() => {})
-    }).catch(() => {})
+    dismissJourney(POST_JOURNEY_SLOTS)
   }
 
   function StepCta({ step }) {
@@ -137,7 +135,7 @@ export default function JourneyCard() {
         <p style={{ fontSize: '0.75rem', color: 'var(--guide-text-2, #9AA3BA)', marginBottom: '0.75rem', lineHeight: 1.5 }}>
           You've earned the <strong style={{ color: 'var(--color-amber-400)' }}>Arena Graduate</strong> badge and +50 TC.
         </p>
-        <button onClick={() => dismissJourney()} style={{ width: '100%', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-teal-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+        <button onClick={() => dismissJourney(POST_JOURNEY_SLOTS)} style={{ width: '100%', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-teal-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
           Continue
         </button>
       </div>

@@ -47,11 +47,16 @@ export const useGuideStore = create((set, get) => ({
     }))
   },
 
-  dismissJourney() {
+  dismissJourney(slots) {
     const dismissedAt = new Date().toISOString()
-    set(s => ({ journeyProgress: { ...s.journeyProgress, dismissedAt } }))
+    const updates = { journeyProgress: { ...get().journeyProgress, dismissedAt } }
+    if (slots) updates.slots = slots
+    set(updates)
     getToken().then(token => {
-      if (token) api.guide.patchPreferences({ journeyProgress: { ...get().journeyProgress } }, token).catch(() => {})
+      if (!token) return
+      const patch = { journeyProgress: get().journeyProgress }
+      if (slots) patch.guideSlots = slots
+      api.guide.patchPreferences(patch, token).catch(() => {})
     }).catch(() => {})
   },
 

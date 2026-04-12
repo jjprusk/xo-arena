@@ -212,13 +212,9 @@ export default function AppLayout() {
           useGuideStore.getState().open()
         }
       })
-      // Join the user's personal socket room for real-time guide/journey events
+      // Connect the socket — re-subscription on reconnect is handled by the 'connect' listener below
       getToken().then(token => {
-        if (!token) return
-        const socket = connectSocket(token)
-        function subscribe() { socket.emit('user:subscribe', { authToken: token }) }
-        if (socket.connected) subscribe()
-        else socket.once('connect', subscribe)
+        if (token) connectSocket(token)
       }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
@@ -228,6 +224,21 @@ export default function AppLayout() {
   // Real-time guide:notification events → GuideStore
   useEffect(() => {
     const socket = getSocket()
+
+    // Persistent connect handler — fires on every connect/reconnect so user:subscribe
+    // is re-sent after backend restarts without needing a page reload.
+    async function onConnect() {
+      const token = await getToken()
+      if (token) socket.emit('user:subscribe', { authToken: token })
+    }
+    socket.on('connect', onConnect)
+    if (socket.connected) onConnect()
+
+    function onOnlineUsers({ users }) {
+      useGuideStore.getState().setOnlineUsers(users)
+    }
+    socket.on('guide:onlineUsers', onOnlineUsers)
+
     function onGuideNotification(notif) {
       useGuideStore.getState().addNotification(notif)
       useNotifSoundStore.getState().play()
@@ -254,6 +265,8 @@ export default function AppLayout() {
     socket.on('guide:journeyStep', onJourneyStep)
 
     return () => {
+      socket.off('connect',           onConnect)
+      socket.off('guide:onlineUsers', onOnlineUsers)
       socket.off('guide:notification', onGuideNotification)
       socket.off('guide:journeyStep', onJourneyStep)
     }
