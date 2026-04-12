@@ -60,6 +60,7 @@ const CHANNELS = [
   'tournament:participant:left',
   'tournament:match:ready',
   'tournament:bot:match:ready',
+  'tournament:round:started',
   'tournament:match:result',
   'tournament:warning',
   'tournament:completed',
@@ -166,6 +167,11 @@ export async function handleEvent(io, channel, data) {
       } catch (err) {
         logger.warn({ err, tournamentId, matchId }, 'Failed to start bot tournament match')
       }
+      break
+    }
+    case 'tournament:round:started': {
+      const { tournamentId, roundNumber } = data
+      io.emit('tournament:round:started', { tournamentId, roundNumber })
       break
     }
     case 'tournament:match:result': {

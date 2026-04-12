@@ -97,7 +97,7 @@ async function sweep() {
       },
       include: {
         participants: {
-          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+          where: { status: { in: ['REGISTERED'] } },
           include: { user: { select: { id: true } } },
         },
       },
@@ -132,7 +132,7 @@ async function sweep() {
         where: { id: t.id },
         include: {
           participants: {
-            where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+            where: { status: { in: ['REGISTERED'] } },
             include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true } } },
           },
         },
@@ -156,7 +156,7 @@ async function sweep() {
       },
       include: {
         participants: {
-          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+          where: { status: { in: ['REGISTERED'] } },
           include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true } } },
         },
       },

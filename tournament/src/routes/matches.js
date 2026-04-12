@@ -187,6 +187,11 @@ async function advanceBracketIfReady(match) {
         },
       })
 
+      pendingPublishes.push(['tournament:round:started', {
+        tournamentId: tournament.id,
+        roundNumber: nextRound.roundNumber,
+      }])
+
       const winnerParticipants = await db.tournamentParticipant.findMany({
         where: { id: { in: winners } },
         include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true } } },

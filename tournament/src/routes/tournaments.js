@@ -249,7 +249,7 @@ router.post('/:id/cancel', requireTournamentAdmin, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         participants: {
-          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+          where: { status: { in: ['REGISTERED'] } },
           select: { userId: true },
         },
       },
@@ -282,7 +282,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         participants: {
-          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+          where: { status: { in: ['REGISTERED'] } },
           include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true, isBot: true } } },
         },
       },

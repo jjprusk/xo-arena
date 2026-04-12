@@ -8,6 +8,7 @@ const TOURNAMENT_EVENTS = [
   'tournament:registration_closed',
   'tournament:participant:joined',
   'tournament:participant:left',
+  'tournament:round:started',
   'tournament:match:ready',
   'tournament:match:result',
   'tournament:warning',
