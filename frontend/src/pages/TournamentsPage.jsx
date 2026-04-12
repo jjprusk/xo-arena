@@ -119,7 +119,7 @@ function RegisterButton({ tournament, token, onSuccess }) {
     <div
       className="space-y-2 p-2 rounded-lg border"
       style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)' }}
-      onClick={e => { e.preventDefault(); e.stopPropagation() }}
+      onClick={e => e.stopPropagation()}
     >
       {isBotTournament && (
         <>
@@ -251,7 +251,7 @@ function TournamentCard({ tournament, token, onRegistered, spotlitRegister = fal
 
         {/* Register button */}
         {isOpen && token && (
-          <div onClick={e => { e.preventDefault(); e.stopPropagation() }}>
+          <div onClick={e => e.stopPropagation()}>
             {spotlitRegister ? (
               <SpotlightRing label="Step 6: Enter a tournament →">
                 <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
