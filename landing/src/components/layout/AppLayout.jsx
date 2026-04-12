@@ -96,7 +96,6 @@ export default function AppLayout() {
   }, [location.pathname])
 
   // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out.
-  // Also subscribe the socket to the user's personal room so guide:journeyStep / guide:notification events arrive.
   useEffect(() => {
     if (session?.user?.id) {
       useGuideStore.getState().hydrate().then(() => {
@@ -108,22 +107,25 @@ export default function AppLayout() {
           useGuideStore.getState().open()
         }
       })
-      // Join the user's personal socket room for real-time guide/journey events
+      // Trigger initial socket connection (re-subscription is handled by the 'connect' listener below)
       getToken().then(token => {
-        if (!token) return
-        const socket = connectSocket(token)
-        function subscribe() { socket.emit('user:subscribe', { authToken: token }) }
-        if (socket.connected) subscribe()
-        else socket.once('connect', subscribe)
+        if (token) connectSocket(token)
       }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Socket guide listeners
+  // Socket guide listeners — registered once on mount.
+  // The 'connect' handler fires on EVERY connect/reconnect, ensuring user:subscribe
+  // is re-sent after backend restarts without needing a page reload.
   useEffect(() => {
     const socket = getSocket()
+
+    async function onConnect() {
+      const token = await getToken()
+      if (token) socket.emit('user:subscribe', { authToken: token })
+    }
     function onGuideNotification({ type, payload = {}, expiresAt = null }) {
       const notif = normalizeBusNotification(type, payload, expiresAt)
       useGuideStore.getState().addNotification(notif)
@@ -139,10 +141,17 @@ export default function AppLayout() {
     function onOnlineUsers({ users }) {
       useGuideStore.getState().setOnlineUsers(users)
     }
+
+    socket.on('connect',           onConnect)
     socket.on('guide:notification', onGuideNotification)
     socket.on('guide:journeyStep',  onJourneyStep)
     socket.on('guide:onlineUsers',  onOnlineUsers)
+
+    // If already connected when this effect runs, subscribe immediately
+    if (socket.connected) onConnect()
+
     return () => {
+      socket.off('connect',           onConnect)
       socket.off('guide:notification', onGuideNotification)
       socket.off('guide:journeyStep',  onJourneyStep)
       socket.off('guide:onlineUsers',  onOnlineUsers)
