@@ -197,19 +197,25 @@ export async function handleEvent(io, channel, data) {
     }
     case 'tournament:completed': {
       const { tournamentId, name, finalStandings } = data
-      for (const { userId, position } of finalStandings) {
-        io.to(`user:${userId}`).emit('tournament:completed', { tournamentId, position })
-        await dispatch({ type: 'tournament.completed', targets: { userId }, payload: { tournamentId, name, position } })
 
-        // Also notify the human owner of any bot participant
+      // Build a map of notifyUserId → best position across all their bots.
+      // A single owner may own multiple bot participants; send one notification
+      // with their best-placed bot's position rather than one per bot.
+      const ownerPositionMap = new Map() // notifyUserId → position | null
+
+      // Walk finalStandings first (positioned participants)
+      for (const { userId, position } of finalStandings) {
         const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
-        if (botUser?.isBot && botUser.botOwnerId) {
-          io.to(`user:${botUser.botOwnerId}`).emit('tournament:completed', { tournamentId, position })
-          await dispatch({ type: 'tournament.completed', targets: { userId: botUser.botOwnerId }, payload: { tournamentId, name, position } })
+        const notifyUserId = botUser?.isBot && botUser.botOwnerId ? botUser.botOwnerId : userId
+
+        const current = ownerPositionMap.get(notifyUserId)
+        // Keep the best (lowest) position
+        if (current === undefined || (position != null && (current == null || position < current))) {
+          ownerPositionMap.set(notifyUserId, position)
         }
       }
 
-      // Notify ALL remaining participants (not just standings) so every bot owner hears about completion
+      // Also include participants not in finalStandings (eliminated early)
       try {
         const allParticipants = await db.tournamentParticipant.findMany({
           where: { tournamentId },
@@ -217,14 +223,21 @@ export async function handleEvent(io, channel, data) {
         })
         const standingUserIds = new Set(finalStandings.map(s => s.userId))
         for (const { userId } of allParticipants) {
-          if (standingUserIds.has(userId)) continue  // already notified above
-          // Participant not in finalStandings (e.g. eliminated earlier) — still notify owner
+          if (standingUserIds.has(userId)) continue
           const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
           const notifyUserId = botUser?.isBot && botUser.botOwnerId ? botUser.botOwnerId : userId
-          await dispatch({ type: 'tournament.completed', targets: { userId: notifyUserId }, payload: { tournamentId, name, position: null } })
+          if (!ownerPositionMap.has(notifyUserId)) {
+            ownerPositionMap.set(notifyUserId, null)
+          }
         }
       } catch (err) {
-        logger.warn({ err, tournamentId }, 'Failed to notify all participants of tournament completion')
+        logger.warn({ err, tournamentId }, 'Failed to collect all participants for completion notification')
+      }
+
+      // Emit once per unique owner/participant
+      for (const [notifyUserId, position] of ownerPositionMap) {
+        io.to(`user:${notifyUserId}`).emit('tournament:completed', { tournamentId, position })
+        await dispatch({ type: 'tournament.completed', targets: { userId: notifyUserId }, payload: { tournamentId, name, position } })
       }
 
       // Flush pending match result notifications for END_OF_TOURNAMENT participants
