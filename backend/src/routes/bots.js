@@ -54,6 +54,22 @@ router.get('/', async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/bots/mine
+ * Return the authenticated user's own bots. Used by registration UIs.
+ */
+router.get('/mine', requireAuth, async (req, res, next) => {
+  try {
+    const baId = req.auth.userId
+    const caller = await db.user.findUnique({ where: { betterAuthId: baId }, select: { id: true } })
+    if (!caller) return res.status(401).json({ error: 'Unauthorized' })
+    const bots = await listBots({ ownerId: caller.id })
+    res.json({ bots })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * POST /api/v1/bots
  * Create a new bot. Auth required. Enforces bot limit for non-admin/bot_admin users.
  */

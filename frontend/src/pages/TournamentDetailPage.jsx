@@ -20,7 +20,6 @@ const STATUS_STYLES = {
 
 const PARTICIPANT_STATUS_STYLES = {
   REGISTERED:  { bg: 'var(--color-blue-50)',   text: 'var(--color-blue-700)',  label: 'Registered' },
-  ACTIVE:      { bg: 'var(--color-teal-50)',   text: 'var(--color-teal-700)', label: 'Active' },
   ELIMINATED:  { bg: 'var(--color-gray-100)',  text: 'var(--text-muted)',     label: 'Eliminated' },
   WITHDRAWN:   { bg: 'var(--color-red-50)',    text: 'var(--color-red-500)',  label: 'Withdrawn' },
 }
@@ -776,18 +775,19 @@ function ParticipantTable({ participants }) {
       className="rounded-xl border overflow-hidden"
       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
     >
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" style={{ maxHeight: '400px', overflowY: 'auto' }}>
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr>
               {['Seed', 'Player', 'ELO', 'Status'].map(col => (
                 <th
                   key={col}
-                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky top-0"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderBottom: '2px solid var(--border-default)',
                     color: 'var(--text-muted)',
+                    zIndex: 1,
                   }}
                 >
                   {col}
@@ -812,17 +812,73 @@ function ParticipantTable({ participants }) {
                   <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                     {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
                   </span>
-                  {p.finalPosition && (
-                    <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
-                      #{p.finalPosition}
-                    </span>
-                  )}
                 </td>
                 <td className="px-4 py-3 text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
                   {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function FinalStandingsTable({ participants }) {
+  const placed = [...participants]
+    .filter(p => p.finalPosition != null)
+    .sort((a, b) => a.finalPosition - b.finalPosition)
+
+  if (placed.length === 0) return null
+
+  const MEDALS = ['🥇', '🥈', '🥉']
+
+  return (
+    <div
+      className="rounded-xl border overflow-hidden"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      <div className="overflow-x-auto" style={{ maxHeight: '320px', overflowY: 'auto' }}>
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr>
+              {['Place', 'Player', 'ELO at Start'].map(col => (
+                <th
+                  key={col}
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky top-0"
+                  style={{
+                    backgroundColor: 'var(--bg-surface)',
+                    borderBottom: '2px solid var(--border-default)',
+                    color: 'var(--text-muted)',
+                    zIndex: 1,
+                  }}
+                >
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {placed.map((p, i) => (
+              <tr
+                key={p.id}
+                className="transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ borderBottom: i < placed.length - 1 ? '1px solid var(--border-default)' : 'none' }}
+              >
+                <td className="px-4 py-3 text-sm font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                  {MEDALS[p.finalPosition - 1] ?? `#${p.finalPosition}`}
+                </td>
+                <td className="px-4 py-3">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
+                  {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
                 </td>
               </tr>
             ))}
@@ -1012,6 +1068,13 @@ export default function TournamentDetailPage() {
               participants={t.participants ?? []}
             />
           </div>
+        </Section>
+      )}
+
+      {/* Final Standings */}
+      {t.status === 'COMPLETED' && (
+        <Section title="Final Standings">
+          <FinalStandingsTable participants={t.participants ?? []} />
         </Section>
       )}
 

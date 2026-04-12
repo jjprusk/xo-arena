@@ -5,6 +5,7 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
 import { useSpotlight, SpotlightRing } from '../lib/useSpotlight.jsx'
+import api from '../lib/api.js'
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
@@ -62,15 +63,41 @@ const NOTIF_PREF_OPTIONS = [
 function RegisterButton({ tournament, token, onSuccess }) {
   const [step, setStep] = useState('idle')   // 'idle' | 'picking' | 'busy'
   const [notifPref, setNotifPref] = useState('AS_PLAYED')
+  const [myBots, setMyBots] = useState([])
+  const [selectedBotId, setSelectedBotId] = useState(null)
   const [err, setErr] = useState(null)
+
+  const isBotTournament = tournament.mode === 'BOT_VS_BOT'
+
+  async function handleOpen(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    setStep('picking')
+    if (isBotTournament) {
+      try {
+        const { bots } = await api.bots.mine(token)
+        const active = (bots ?? []).filter(b => b.botActive !== false)
+        setMyBots(active)
+        if (active.length > 0) setSelectedBotId(active[0].id)
+      } catch {
+        setMyBots([])
+      }
+    }
+  }
 
   async function handleConfirm(e) {
     e.preventDefault()
     e.stopPropagation()
+    if (isBotTournament && !selectedBotId) {
+      setErr('Select a bot to register')
+      return
+    }
     setStep('busy')
     setErr(null)
     try {
-      await tournamentApi.register(tournament.id, token, { resultNotifPref: notifPref })
+      const body = { resultNotifPref: notifPref }
+      if (isBotTournament && selectedBotId) body.participantUserId = selectedBotId
+      await tournamentApi.register(tournament.id, token, body)
       onSuccess()
     } catch (error) {
       setErr(error.message || 'Failed')
@@ -81,10 +108,7 @@ function RegisterButton({ tournament, token, onSuccess }) {
   if (step === 'idle') {
     return (
       <div>
-        <button
-          onClick={e => { e.preventDefault(); e.stopPropagation(); setStep('picking') }}
-          className="btn btn-teal btn-sm"
-        >
+        <button onClick={handleOpen} className="btn btn-teal btn-sm">
           Register
         </button>
       </div>
@@ -95,8 +119,34 @@ function RegisterButton({ tournament, token, onSuccess }) {
     <div
       className="space-y-2 p-2 rounded-lg border"
       style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)' }}
-      onClick={e => e.preventDefault()}
+      onClick={e => { e.preventDefault(); e.stopPropagation() }}
     >
+      {isBotTournament && (
+        <>
+          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Register as:
+          </p>
+          {myBots.length === 0 ? (
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>No active bots found. Create a bot first.</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {myBots.map(bot => (
+                <label key={bot.id} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name={`bot-${tournament.id}`}
+                    value={bot.id}
+                    checked={selectedBotId === bot.id}
+                    onChange={() => setSelectedBotId(bot.id)}
+                    className="accent-[var(--color-teal-500)]"
+                  />
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{bot.displayName}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </>
+      )}
       <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
         Notify me:
       </p>
@@ -118,13 +168,13 @@ function RegisterButton({ tournament, token, onSuccess }) {
       <div className="flex gap-1.5">
         <button
           onClick={handleConfirm}
-          disabled={step === 'busy'}
+          disabled={step === 'busy' || (isBotTournament && myBots.length === 0)}
           className="btn btn-teal btn-sm flex-1"
         >
           {step === 'busy' ? 'Joining…' : 'Confirm'}
         </button>
         <button
-          onClick={e => { e.preventDefault(); setStep('idle'); setErr(null) }}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); setStep('idle'); setErr(null) }}
           disabled={step === 'busy'}
           className="btn btn-sm"
           style={{ color: 'var(--text-secondary)' }}
@@ -201,7 +251,7 @@ function TournamentCard({ tournament, token, onRegistered, spotlitRegister = fal
 
         {/* Register button */}
         {isOpen && token && (
-          <div onClick={e => e.preventDefault()}>
+          <div onClick={e => { e.preventDefault(); e.stopPropagation() }}>
             {spotlitRegister ? (
               <SpotlightRing label="Step 6: Enter a tournament →">
                 <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
