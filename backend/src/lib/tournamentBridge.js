@@ -8,6 +8,7 @@ import db from './db.js'
 import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
 import { completeStep } from '../services/journeyService.js'
+import { botGameRunner } from '../realtime/botGameRunner.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
 // Stores state for PVP tournament matches waiting for players to join a room.
@@ -36,6 +37,7 @@ const CHANNELS = [
   'tournament:published',
   'tournament:flash:announced',
   'tournament:match:ready',
+  'tournament:bot:match:ready',
   'tournament:match:result',
   'tournament:warning',
   'tournament:completed',
@@ -108,6 +110,17 @@ export async function handleEvent(io, channel, data) {
         await dispatch({ type: 'match.ready', targets: { userId }, payload: { tournamentId, matchId } })
         // Journey step 7: first tournament registration detected at match-ready time (fire-and-forget)
         completeStep(userId, 7, io).catch(() => {})
+      }
+      break
+    }
+    case 'tournament:bot:match:ready': {
+      // Start a bot vs bot game for this tournament match
+      const { tournamentId, matchId, bot1, bot2 } = data
+      try {
+        await botGameRunner.startGame({ bot1, bot2, tournamentId, tournamentMatchId: matchId })
+        logger.info({ tournamentId, matchId, bot1: bot1.displayName, bot2: bot2.displayName }, 'Bot tournament match started')
+      } catch (err) {
+        logger.warn({ err, tournamentId, matchId }, 'Failed to start bot tournament match')
       }
       break
     }

@@ -14,6 +14,24 @@ import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
+const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
+
+async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGames) {
+  try {
+    const res = await fetch(`${TOURNAMENT_SERVICE_URL}/api/matches/${matchId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winnerId, p1Wins, p2Wins, drawGames }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      logger.warn({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response')
+    }
+  } catch (err) {
+    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed')
+  }
+}
+
 const DEFAULT_MOVE_DELAY_MS = 800
 
 /**
@@ -60,9 +78,11 @@ class BotGameRunner {
    * @param {{ id, displayName, botModelId }} opts.bot1 - plays X
    * @param {{ id, displayName, botModelId }} opts.bot2 - plays O
    * @param {number} [opts.moveDelayMs]
+   * @param {string|null} [opts.tournamentId]
+   * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, moveDelayMs = DEFAULT_MOVE_DELAY_MS }) {
+  async startGame({ bot1, bot2, moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null }) {
     const name = mountainPool.acquire()
     if (!name) throw new Error('No mountain names available for bot game')
 
@@ -84,10 +104,12 @@ class BotGameRunner {
       createdAt: now,
       lastActivityAt: now,
       moveDelayMs,
+      tournamentId,
+      tournamentMatchId,
     }
 
     this._games.set(slug, game)
-    logger.info({ slug, bot1: bot1.displayName, bot2: bot2.displayName }, 'Bot game started')
+    logger.info({ slug, bot1: bot1.displayName, bot2: bot2.displayName, tournamentMatchId }, 'Bot game started')
 
     // Run the game loop asynchronously
     this._runGameLoop(slug).catch((err) => {
@@ -198,6 +220,8 @@ class BotGameRunner {
     if (game.winner === 'X') winnerId = game.bot1.id
     else if (game.winner === 'O') winnerId = game.bot2.id
 
+    const isTournamentGame = !!(game.tournamentMatchId)
+
     await createGame({
       player1Id: game.bot1.id,
       player2Id: game.bot2.id,
@@ -207,18 +231,36 @@ class BotGameRunner {
       totalMoves,
       durationMs,
       startedAt: new Date(game.createdAt),
+      tournamentId: game.tournamentId ?? null,
+      tournamentMatchId: game.tournamentMatchId ?? null,
     })
 
-    // Update ELO for both bots
-    await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})
+    // Skip ELO and botInTournament cleanup for tournament games — tournament service handles those
+    if (!isTournamentGame) {
+      await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})
+      await db.user.updateMany({
+        where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
+        data: { botInTournament: false },
+      }).catch(() => {})
+    }
 
-    // Clear botInTournament flag for both bots (no-op if neither was in tournament)
-    await db.user.updateMany({
-      where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
-      data: { botInTournament: false },
-    }).catch(() => {})
+    // Report result to tournament service for bracket progression
+    if (isTournamentGame) {
+      try {
+        // Look up winner's TournamentParticipant ID
+        const winnerParticipant = winnerId
+          ? await db.tournamentParticipant.findFirst({
+              where: { tournamentId: game.tournamentId, userId: winnerId },
+              select: { id: true },
+            })
+          : null
+        await completeTournamentMatch(game.tournamentMatchId, winnerParticipant?.id ?? null, 1, 0, 0)
+      } catch (err) {
+        logger.warn({ err, tournamentMatchId: game.tournamentMatchId }, 'Failed to report bot tournament match result')
+      }
+    }
 
-    logger.info({ slug, outcome, winner: game.winner }, 'Bot game recorded')
+    logger.info({ slug, outcome, winner: game.winner, tournamentMatchId: game.tournamentMatchId ?? null }, 'Bot game recorded')
   }
 
   /**

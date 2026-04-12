@@ -256,7 +256,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       include: {
         participants: {
           where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
-          include: { user: { select: { id: true } } },
+          include: { user: { select: { id: true, displayName: true, botModelId: true, isBot: true } } },
         },
       },
     })
@@ -272,17 +272,13 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
     })
 
     const participants = existing.participants
+    const isPvp = existing.mode === 'PVP'
 
-    if (existing.bracketType === 'SINGLE_ELIM' && existing.mode === 'PVP') {
-      // Shuffle participants
+    if (existing.bracketType === 'SINGLE_ELIM') {
       const shuffled = [...participants].sort(() => Math.random() - 0.5)
 
       const round = await db.tournamentRound.create({
-        data: {
-          tournamentId: tournament.id,
-          roundNumber: 1,
-          status: 'IN_PROGRESS',
-        },
+        data: { tournamentId: tournament.id, roundNumber: 1, status: 'IN_PROGRESS' },
       })
 
       for (let i = 0; i < shuffled.length; i += 2) {
@@ -290,7 +286,6 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
         const p2 = shuffled[i + 1]
 
         if (!p2) {
-          // Bye — p1 advances automatically
           await db.tournamentMatch.create({
             data: {
               tournamentId: tournament.id,
@@ -313,22 +308,27 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             },
           })
 
-          await publish('tournament:match:ready', {
-            tournamentId: tournament.id,
-            matchId: match.id,
-            participant1UserId: p1.user.id,
-            participant2UserId: p2.user.id,
-            bestOfN: tournament.bestOfN,
-          })
+          if (isPvp) {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.id,
+              participant2UserId: p2.user.id,
+              bestOfN: tournament.bestOfN,
+            })
+          } else {
+            await publish('tournament:bot:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
+              bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          }
         }
       }
-    } else if (existing.bracketType === 'ROUND_ROBIN' && existing.mode === 'PVP') {
+    } else if (existing.bracketType === 'ROUND_ROBIN') {
       const round = await db.tournamentRound.create({
-        data: {
-          tournamentId: tournament.id,
-          roundNumber: 1,
-          status: 'IN_PROGRESS',
-        },
+        data: { tournamentId: tournament.id, roundNumber: 1, status: 'IN_PROGRESS' },
       })
 
       for (let i = 0; i < participants.length; i++) {
@@ -346,13 +346,22 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             },
           })
 
-          await publish('tournament:match:ready', {
-            tournamentId: tournament.id,
-            matchId: match.id,
-            participant1UserId: p1.user.id,
-            participant2UserId: p2.user.id,
-            bestOfN: tournament.bestOfN,
-          })
+          if (isPvp) {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.id,
+              participant2UserId: p2.user.id,
+              bestOfN: tournament.bestOfN,
+            })
+          } else {
+            await publish('tournament:bot:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
+              bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          }
         }
       }
     }
