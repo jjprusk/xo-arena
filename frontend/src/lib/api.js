@@ -157,6 +157,10 @@ export const api = {
     notifications: (token) => api.get('/users/me/notifications', token),
     deliverNotifications: (ids, token) => api.post('/users/me/notifications/deliver', { ids }, token),
     updateSettings: (body, token) => api.patch('/users/me/settings', body, token),
+    getNotificationPreferences: (token) =>
+      api.get('/users/notification-preferences', token),
+    updateNotificationPreference: (eventType, data, token) =>
+      request('PUT', `/users/notification-preferences/${encodeURIComponent(eventType)}`, data, token),
   },
 
   guide: {

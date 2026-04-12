@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
+const LANDING_URL = import.meta.env.VITE_LANDING_URL || 'http://localhost:5174'
 import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
@@ -305,16 +306,11 @@ export default function AppLayout() {
       >
         {/* Logo + Getting Started guide button */}
         <div className="flex items-center gap-2">
-          <Link to="/play" onClick={handleLogoClick} className="flex items-center gap-2 select-none no-underline">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="XO Arena">
-              <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
-              {/* Tic-tac-toe grid (octothorpe) */}
-              <line x1="11" y1="5"  x2="11" y2="27" stroke="white"                    strokeWidth="2.5" strokeLinecap="round" />
-              <line x1="21" y1="5"  x2="21" y2="27" stroke="var(--color-teal-400)"    strokeWidth="2.5" strokeLinecap="round" />
-              <line x1="5"  y1="11" x2="27" y2="11" stroke="white"                    strokeWidth="2.5" strokeLinecap="round" />
-              <line x1="5"  y1="21" x2="27" y2="21" stroke="var(--color-teal-400)"    strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
-          </Link>
+          <a href={LANDING_URL} className="flex items-center gap-2 select-none no-underline font-bold text-base"
+            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-slate-500)' }}>
+            <span className="text-lg">⚔</span>
+            <span className="hidden sm:inline">AI Arena</span>
+          </a>
           {/* Guide orb — shown to signed-in users */}
         </div>
 

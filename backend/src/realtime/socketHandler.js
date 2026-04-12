@@ -414,6 +414,27 @@ export async function attachSocketIO(httpServer) {
       if (!user) return
       socket.join(`user:${user.id}`)
       logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
+
+      // Flush undelivered persistent notifications (cap at 20 most recent)
+      try {
+        const unread = await db.userNotification.findMany({
+          where:   { userId: user.id, deliveredAt: null },
+          orderBy: { createdAt: 'asc' },
+          take:    20,
+        })
+        if (unread.length > 0) {
+          for (const n of unread) {
+            socket.emit('guide:notification', { type: n.type, payload: n.payload })
+          }
+          await db.userNotification.updateMany({
+            where: { id: { in: unread.map(n => n.id) } },
+            data:  { deliveredAt: new Date() },
+          })
+          logger.info({ userId: user.id, count: unread.length }, 'Flushed queued notifications on reconnect')
+        }
+      } catch (err) {
+        logger.warn({ err, userId: user.id }, 'Failed to flush queued notifications (non-fatal)')
+      }
     })
 
     // ── Disconnect ──────────────────────────────────────────────────

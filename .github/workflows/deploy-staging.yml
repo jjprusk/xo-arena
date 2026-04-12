@@ -19,7 +19,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy frontend
-        run: flyctl deploy --config frontend/fly.toml --app xo-frontend-staging --remote-only
+        run: flyctl deploy --config frontend/fly.toml --app xo-frontend-staging --remote-only --build-arg VITE_LANDING_URL=https://xo-landing-staging.fly.dev
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 

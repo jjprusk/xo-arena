@@ -1,6 +1,6 @@
 #!/usr/bin/env node --experimental-transform-types --no-warnings
 import { Command } from 'commander'
-import { guardProduction } from './lib/safety.js'
+import { guardProduction, umEnv, ensureProxy } from './lib/safety.js'
 import { disconnect } from './lib/db.js'
 import { createCommand }  from './commands/create.js'
 import { cloneCommand }   from './commands/clone.js'
@@ -19,6 +19,7 @@ import { sessionConfigCommand } from './commands/sessionconfig.js'
 import { envCommand }          from './commands/env.js'
 
 guardProduction()
+await ensureProxy()
 
 // ── Environment banner ────────────────────────────────────────────────────────
 const RESET  = '\x1b[0m'
@@ -36,9 +37,8 @@ function dbHost() {
 }
 
 function printEnvBanner() {
-  const railwayEnv = process.env.RAILWAY_ENVIRONMENT
-  if (railwayEnv) {
-    const label = railwayEnv.toUpperCase().padEnd(8)
+  if (umEnv) {
+    const label = umEnv.toUpperCase().padEnd(8)
     process.stderr.write(`${BOLD}${YELLOW}[ ${label}]${RESET} db @ ${dbHost()}\n`)
   } else {
     process.stderr.write(`${BOLD}${GREEN}[ LOCAL   ]${RESET} db @ ${dbHost()}\n`)
@@ -51,6 +51,7 @@ program
   .name('um')
   .description('XO Arena dev user manager')
   .version('1.0.0')
+  .option('--env <name>', 'load .env.<name> and connect to that environment (e.g. staging)')
 
 program.hook('preAction', printEnvBanner)
 

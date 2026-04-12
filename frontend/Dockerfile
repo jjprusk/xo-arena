@@ -10,6 +10,8 @@ COPY packages/xo/ ./packages/xo/
 COPY frontend/ ./frontend/
 
 WORKDIR /app/frontend
+ARG VITE_LANDING_URL
+ENV VITE_LANDING_URL=$VITE_LANDING_URL
 RUN npm run build
 
 FROM node:22-slim

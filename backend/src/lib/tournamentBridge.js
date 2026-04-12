@@ -6,7 +6,7 @@
 import Redis from 'ioredis'
 import db from './db.js'
 import logger from '../logger.js'
-import { queueNotification } from '../services/notificationService.js'
+import { dispatch } from './notificationBus.js'
 import { completeStep } from '../services/journeyService.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
@@ -28,6 +28,8 @@ export function setPendingPvpMatchSlug(matchId, slug) {
 export function deletePendingPvpMatch(matchId) {
   _pendingPvpMatches.delete(matchId)
 }
+
+export function getPendingPvpMatchCount() { return _pendingPvpMatches.size }
 
 // Channels to subscribe to
 const CHANNELS = [
@@ -73,15 +75,7 @@ export async function handleEvent(io, channel, data) {
   switch (channel) {
     case 'tournament:published': {
       const { tournamentId, name, format, mode } = data
-      const formatLabel = format === 'FLASH' ? '⚡ Flash' : format === 'OPEN' ? 'Open' : 'Planned'
-      const modeLabel   = mode  === 'BOT_VS_BOT' ? 'Bot vs Bot' : mode === 'MIXED' ? 'Mixed' : 'PvP'
-      io.emit('guide:notification', {
-        type:  'tournament',
-        title: `New Tournament: ${name}`,
-        body:  `${formatLabel} · ${modeLabel} — Registration is open!`,
-        href:  `/tournaments/${tournamentId}`,
-        tournamentId,
-      })
+      await dispatch({ type: 'tournament.published', targets: { broadcast: true }, payload: { tournamentId, name, format, mode } })
       logger.info({ tournamentId }, 'Tournament published — notified all connected clients')
       break
     }
@@ -89,14 +83,7 @@ export async function handleEvent(io, channel, data) {
       // Broadcast to all connected sockets — flash tournaments are live events.
       // No UserNotification row: if you're not online, the window has likely passed.
       const { tournamentId, name, noticePeriodMinutes } = data
-      const minuteText = noticePeriodMinutes != null ? ` — starting in ${noticePeriodMinutes} min` : ''
-      io.emit('guide:notification', {
-        type:         'flash',
-        title:        `Flash Tournament: ${name}`,
-        body:         `Registration is open${minuteText}. Register now!`,
-        href:         '/tournaments',
-        tournamentId,
-      })
+      await dispatch({ type: 'tournament.flash_announced', targets: { broadcast: true }, payload: { tournamentId, name, noticePeriodMinutes } })
       logger.info({ tournamentId }, 'Flash tournament announced to all connected clients')
       break
     }
@@ -116,28 +103,11 @@ export async function handleEvent(io, channel, data) {
         })
       }
 
-      // Look up tournament type to decide Guide notification style (flash vs match_ready)
-      let tournamentType = null
-      try {
-        const t = await db.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } })
-        tournamentType = t?.format ?? null
-      } catch { /* non-fatal */ }
-      const guideType = tournamentType === 'FLASH' ? 'flash' : 'match_ready'
-
       for (const userId of userIds) {
         io.to(`user:${userId}`).emit('tournament:match:ready', { tournamentId, matchId, bestOfN: bestOfN ?? 1 })
-        await queueNotification(userId, 'tournament_match_ready', { tournamentId, matchId })
+        await dispatch({ type: 'match.ready', targets: { userId }, payload: { tournamentId, matchId } })
         // Journey step 7: first tournament registration detected at match-ready time (fire-and-forget)
         completeStep(userId, 7, io).catch(() => {})
-        // Push into Guide notification stack
-        io.to(`user:${userId}`).emit('guide:notification', {
-          id:        `tmr-${matchId}-${userId}`,
-          type:      guideType,
-          title:     guideType === 'flash' ? 'Flash Tournament Match Ready' : 'Tournament Match Ready',
-          body:      'Your next match is ready to play.',
-          createdAt: new Date().toISOString(),
-          meta:      { tournamentId, matchId },
-        })
       }
       break
     }
@@ -161,7 +131,7 @@ export async function handleEvent(io, channel, data) {
         for (const { userId, resultNotifPref } of participants) {
           const pref = resultNotifPref ?? 'AS_PLAYED'
           // Always persist notification so it can be flushed at tournament end
-          await queueNotification(userId, 'tournament_match_result', { tournamentId, matchId })
+          await dispatch({ type: 'match.result', targets: { userId }, payload: { tournamentId, matchId } })
           // Only emit real-time immediately for AS_PLAYED preference
           if (pref === 'AS_PLAYED') {
             io.to(`user:${userId}`).emit('tournament:match:result', { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames })
@@ -178,9 +148,9 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, minutesUntilStart, participantUserIds } = data
       for (const userId of participantUserIds) {
         io.to(`user:${userId}`).emit('tournament:warning', { tournamentId, minutesUntilStart })
-        // Persist 60-min and 2-min warnings; 15-min is real-time only
+        // Persist 60-min and 2-min warnings via dispatch; 15-min is real-time only
         if (minutesUntilStart === 60 || minutesUntilStart === 2) {
-          await queueNotification(userId, 'tournament_starting_soon', { tournamentId, minutesUntilStart })
+          await dispatch({ type: 'tournament.starting_soon', targets: { userId }, payload: { tournamentId, minutesUntilStart } })
         }
       }
       break
@@ -189,7 +159,7 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, finalStandings } = data
       for (const { userId, position } of finalStandings) {
         io.to(`user:${userId}`).emit('tournament:completed', { tournamentId, position })
-        await queueNotification(userId, 'tournament_completed', { tournamentId, position })
+        await dispatch({ type: 'tournament.completed', targets: { userId }, payload: { tournamentId, position } })
       }
 
       // Flush pending match result notifications for END_OF_TOURNAMENT participants
@@ -202,7 +172,7 @@ export async function handleEvent(io, channel, data) {
           const pending = await db.userNotification.findMany({
             where: {
               userId,
-              type: 'tournament_match_result',
+              type: 'match.result',
               deliveredAt: null,
               payload: { path: ['tournamentId'], equals: tournamentId },
             },
@@ -228,7 +198,7 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, participantUserIds } = data
       for (const userId of participantUserIds) {
         io.to(`user:${userId}`).emit('tournament:cancelled', { tournamentId })
-        await queueNotification(userId, 'tournament_cancelled', { tournamentId })
+        await dispatch({ type: 'tournament.cancelled', targets: { userId }, payload: { tournamentId } })
       }
       break
     }

@@ -1,5 +1,25 @@
 [
   {
+    "version": "1.2.0-alpha-1.05",
+    "date": "2026-04-11",
+    "description": "Added message bus"
+  },
+  {
+    "version": "1.2.0-alpha-1.03",
+    "date": "2026-04-11",
+    "description": "Apple Sign In (OAuth integration)"
+  },
+  {
+    "version": "1.2.0-alpha-1.02",
+    "date": "2026-04-11",
+    "description": "Fix system alert popup title; resource leak detector false-positive guard"
+  },
+  {
+    "version": "1.2.0-alpha-1.01",
+    "date": "2026-04-11",
+    "description": "Sign-up flow fixes: already-verified email message, email verification redirect, landing auth modal sign-up tab"
+  },
+  {
     "version": "1.2.0-alpha-1.0",
     "date": "2026-04-11",
     "description": "Platform migration to Fly.io; tournament system, sign-up flow, and infrastructure overhaul"

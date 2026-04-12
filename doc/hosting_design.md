@@ -1,5 +1,17 @@
 # Hosting Design
 
+> **External review rating: 9.5/10** — Reviewed April 2026.
+> *"One of the cleanest, most operationally thoughtful hosting architectures for a
+> multi-game platform on Railway. Prioritizes simplicity, security, cost control,
+> and developer velocity without sacrificing scalability. The decision to use a
+> single path-based landing proxy + private networking is exactly the right
+> trade-off for current scale and growth plans."*
+>
+> Minor deductions only: single point of failure (acknowledged and mitigated by
+> replicas) and a couple of forward-looking optimizations documented below.
+
+---
+
 ## Architecture Overview
 
 ```
@@ -139,6 +151,10 @@ const PROXY_RULES = {
 > `http://<service-name>.railway.internal:PORT` if the service's internal port
 > is not 80. Check each service's Railway settings and include the port
 > explicitly in the env var if needed.
+>
+> **2026 DNS note:** Railway private networking now supports both IPv4 and IPv6
+> on private DNS — an improvement over older IPv6-only setups. No config change
+> needed; just be aware if debugging connectivity between services.
 
 **What the proxy handles:**
 - `/api/*` → backend (all API calls, OAuth callbacks, WebSocket upgrades)
@@ -487,6 +503,15 @@ These steps are not needed now but are straightforward when the time comes:
   almost all proxy load for static assets
 - **Add Railway autoscaling** on landing-prod — handles traffic spikes without
   manual intervention
+- **Swap Node proxy for Nginx or Caddy** — if the landing service's proxy ever
+  becomes a CPU or memory bottleneck, replace the Node http-proxy implementation
+  with Nginx or Caddy inside the same container. Both have ready Railway templates,
+  handle WebSocket upgrades natively, and require zero architecture changes — just
+  a Dockerfile swap and config file. Not needed at current traffic levels.
+- **Railway edge proxy (2026)** — Railway is rolling out platform-level path
+  routing that may eventually let you do some of this routing at the platform
+  layer rather than in the landing service. Worth revisiting when it matures, but
+  the app-level proxy is simpler and more portable today.
 - **Split game backends** — if a specific game's backend becomes a bottleneck,
   extract it to its own Railway service; the landing proxy just updates one env var
 

@@ -1,23 +1,38 @@
 import React from 'react'
 
 const TYPE_TITLES = {
-  tier_upgrade:        'Tier Upgrade!',
-  first_hpc:           'First PvP Credit',
-  first_bpc:           'First Bot Credit',
-  first_tc:            'First Tournament Credit',
-  credit_milestone:    'Activity Milestone',
-  system_alert:        'System Alert',
-  tournament_match_result: 'Match Result',
+  // New registry keys (bus)
+  'achievement.tier_upgrade':    'Tier Upgrade!',
+  'achievement.milestone':       'Activity Milestone',
+  'system.alert':                'System Alert',
+  'system.alert.cleared':        'All Clear',
+  'match.ready':                 'Match Ready',
+  'match.result':                'Match Result',
+  // Legacy keys (persisted notifications before bus migration)
+  'tier_upgrade':                'Tier Upgrade!',
+  'first_hpc':                   'First PvP Credit',
+  'first_bpc':                   'First Bot Credit',
+  'first_tc':                    'First Tournament Credit',
+  'credit_milestone':            'Activity Milestone',
+  'system_alert':                'System Alert',
+  'tournament_match_result':     'Match Result',
 }
 
 const TYPE_ICONS = {
-  tier_upgrade:        null,  // use payload.tierIcon
-  first_hpc:           '🎮',
-  first_bpc:           '🤖',
-  first_tc:            '🏆',
-  credit_milestone:    '⭐',
-  system_alert:        '⚠️',
-  tournament_match_result: '🏆',
+  'achievement.tier_upgrade':    null,   // use payload.tierIcon
+  'achievement.milestone':       '⭐',
+  'system.alert':                '⚠️',
+  'system.alert.cleared':        '✅',
+  'match.ready':                 '🎮',
+  'match.result':                '🏆',
+  // Legacy
+  'tier_upgrade':                null,
+  'first_hpc':                   '🎮',
+  'first_bpc':                   '🤖',
+  'first_tc':                    '🏆',
+  'credit_milestone':            '⭐',
+  'system_alert':                '⚠️',
+  'tournament_match_result':     '🏆',
 }
 
 /**
@@ -28,7 +43,9 @@ export default function AccomplishmentPopup({ notification, onDismiss }) {
   if (!notification) return null
 
   const { type, payload } = notification
-  const icon  = type === 'tier_upgrade' ? payload.tierIcon : (TYPE_ICONS[type] ?? '🎉')
+  const icon  = (type === 'tier_upgrade' || type === 'achievement.tier_upgrade')
+    ? payload.tierIcon
+    : (TYPE_ICONS[type] ?? '🎉')
   const title = TYPE_TITLES[type] ?? 'Achievement Unlocked'
   const message = payload?.message ?? ''
 
