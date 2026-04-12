@@ -22,11 +22,12 @@ export default defineConfig(({ mode }) => ({
       // Direct path so Docker can resolve this without the workspace symlink.
       // Host:   __dirname = .../landing  →  ../packages/xo/src/index.js  ✓
       // Docker: __dirname = /app          →  /packages/xo/src/index.js    ✓ (see docker-compose mount)
-      '@xo-arena/xo': resolve(__dirname, '../packages/xo/src/index.js'),
+      '@xo-arena/xo':  resolve(__dirname, '../packages/xo/src/index.js'),
+      '@xo-arena/nav': resolve(__dirname, '../packages/nav/src/index.js'),
     },
     // Force packages/xo's imports to resolve from the project root's node_modules.
     // Without this, Node resolution from /packages/xo/ can't find /app/node_modules/.
-    dedupe: ['react', 'react-dom', 'zustand'],
+    dedupe: ['react', 'react-dom', 'react-router-dom', 'zustand'],
   },
   define: {
     // Append '+' in dev/staging builds so it's clear the image may have

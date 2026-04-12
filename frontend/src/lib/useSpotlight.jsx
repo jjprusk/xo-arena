@@ -27,7 +27,8 @@ export function useSpotlight(stepIndex) {
  * Renders an amber pulsing ring + tooltip around children.
  * Wrap the target element with this component when `active` is true.
  */
-export function SpotlightRing({ label, children }) {
+export function SpotlightRing({ label, children, active = true }) {
+  if (!active) return children
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }}>
       {children}

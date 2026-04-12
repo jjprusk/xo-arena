@@ -4,6 +4,8 @@ import { signOut } from '../../lib/auth-client.js'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
 import { clearTokenCache } from '../../lib/getToken.js'
 import { disconnectSocket } from '../../lib/socket.js'
+const LANDING_URL = import.meta.env.VITE_LANDING_URL ?? 'https://aiarena.callidity.com'
+
 export default function UserButton({ afterSignOutUrl = '/play', adminUrl = null }) {
   const { data: session } = useOptimisticSession()
   const [open, setOpen] = useState(false)
@@ -94,7 +96,7 @@ export default function UserButton({ afterSignOutUrl = '/play', adminUrl = null 
           {/* Menu items */}
           <div className="py-1">
             <button
-              onClick={() => { setOpen(false); navigate('/profile') }}
+              onClick={() => { setOpen(false); window.location.href = `${LANDING_URL}/profile` }}
               className="w-full text-left px-4 py-2 text-sm flex items-center justify-between hover:bg-[var(--bg-surface-hover)]"
               style={{ color: 'var(--text-primary)' }}
             >

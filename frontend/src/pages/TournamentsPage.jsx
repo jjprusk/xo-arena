@@ -257,13 +257,9 @@ function TournamentCard({ tournament, token, onRegistered, spotlitRegister = fal
       {/* Register form — outside the Link so radio/button clicks never trigger navigation */}
       {isOpen && token && (
         <div className="px-4 pb-4 pt-1 border-t" style={{ borderColor: 'var(--border-default)' }}>
-          {spotlitRegister ? (
-            <SpotlightRing label="Step 6: Enter a tournament →">
-              <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
-            </SpotlightRing>
-          ) : (
+          <SpotlightRing active={spotlitRegister} label="Step 6: Enter a tournament →">
             <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
-          )}
+          </SpotlightRing>
         </div>
       )}
     </div>

@@ -70,6 +70,7 @@ services:
     volumes:
       - ./frontend:/app
       - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
+      - ./packages/nav:/packages/nav  # resolve alias: __dirname(/app)/../packages/nav
       - /app/node_modules
     depends_on:
       - backend
@@ -88,6 +89,7 @@ services:
     volumes:
       - ./landing:/app
       - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
+      - ./packages/nav:/packages/nav  # resolve alias: __dirname(/app)/../packages/nav
       - /app/node_modules
     depends_on:
       - backend

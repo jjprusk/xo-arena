@@ -11,8 +11,11 @@ import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
+import { AppNav } from '@xo-arena/nav'
 
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
+const XO_URL      = import.meta.env.VITE_XO_URL      ?? 'https://xo-frontend-prod.fly.dev'
+const LANDING_URL = import.meta.env.VITE_LANDING_URL  ?? 'https://aiarena.callidity.com'
+const APP_URLS    = { landing: LANDING_URL, xo: XO_URL }
 
 /**
  * Map a raw bus notification { type, payload } to the shape NotificationCard expects:
@@ -65,7 +68,7 @@ export default function AppLayout() {
   const location = useLocation()
   const isAdmin = location.pathname.startsWith('/admin')
   const [showSignIn, setShowSignIn] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   // Tracks the DB userId confirmed by the server after user:subscribe.
   // Used to detect when the server dropped us from the online list.
   const myPresenceIdRef = useRef(null)
@@ -92,9 +95,9 @@ export default function AppLayout() {
 
   useJourneyAutoOpen()
 
-  // Close the mobile menu and guide panel whenever the user navigates
+  // Close user dropdown and guide panel whenever the user navigates
   useEffect(() => {
-    setMenuOpen(false)
+    setUserMenuOpen(false)
     useGuideStore.getState().close()
   }, [location.pathname])
 
@@ -216,127 +219,64 @@ export default function AppLayout() {
         }}
       />
 
-      {/* ── Nav ──────────────────────────────────────────────── */}
-      <nav
-        className="sticky top-0 z-40 flex items-center gap-4 px-4 h-14"
-        style={{
-          backgroundColor: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-default)',
-          boxShadow: 'var(--shadow-nav)',
-        }}
-      >
-        {/* Brand */}
-        <Link
-          to="/"
-          className="flex items-center gap-2 font-bold text-base no-underline mr-2"
-          style={{ fontFamily: 'var(--font-display)', color: 'var(--color-slate-500)' }}
-        >
-          <span className="text-lg">⚔</span>
-          <span>AI Arena</span>
-        </Link>
-
-        {/* Nav links */}
-        <div className="flex items-center gap-1 flex-1">
-          {[
-            { to: '/tournaments', label: 'Tournaments' },
-            { to: '/faq',         label: 'FAQ'         },
-            { to: '/about',       label: 'About'       },
-          ].map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-lg text-sm font-medium no-underline transition-colors ${
-                  isActive
-                    ? 'text-white'
-                    : 'hover:bg-[var(--bg-surface-hover)]'
-                }`
-              }
-              style={({ isActive }) => isActive
-                ? { backgroundColor: 'var(--color-slate-500)', color: 'white' }
-                : { color: 'var(--text-secondary)' }
-              }
-            >
-              {label}
-            </NavLink>
-          ))}
-        </div>
-
-        {/* Right side */}
-        <div className="flex items-center gap-2">
-          {user && <GuideOrb />}
-          {!isPending && !user && (
-            <button
-              onClick={() => setShowSignIn(true)}
-              className="btn btn-primary btn-sm"
-            >
-              Sign in
-            </button>
-          )}
-
-          {user && (
-            <div className="relative">
-              <button
-                onClick={() => setMenuOpen(o => !o)}
-                className="flex items-center gap-2 px-2 py-1 rounded-lg text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  style={{ backgroundColor: 'var(--color-teal-600)' }}
-                >
-                  {(user.name ?? user.email ?? '?')[0].toUpperCase()}
-                </span>
-                <span className="hidden sm:inline max-w-28 truncate">
-                  {user.name ?? user.email}
-                </span>
+      {/* ── Primary nav ──────────────────────────────────────── */}
+      <AppNav
+        appId="landing"
+        appUrls={APP_URLS}
+        subnav={null}
+        rightSlot={
+          <div className="flex items-center gap-2">
+            {user && <GuideOrb />}
+            {!isPending && !user && (
+              <button onClick={() => setShowSignIn(true)} className="btn btn-primary btn-sm">
+                Sign in
               </button>
-
-              {menuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-1 w-44 rounded-xl border py-1 z-50"
-                  style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+            )}
+            {user && (
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(o => !o)}
+                  className="flex items-center gap-2 px-2 py-1 rounded-lg text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
+                  style={{ color: 'var(--text-secondary)' }}
                 >
-                  <Link
-                    to="/profile"
-                    className="block px-4 py-2 text-sm no-underline hover:bg-[var(--bg-surface-hover)] transition-colors"
-                    style={{ color: 'var(--text-primary)' }}
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    My Profile
-                  </Link>
-                  <Link
-                    to="/settings"
-                    className="block px-4 py-2 text-sm no-underline hover:bg-[var(--bg-surface-hover)] transition-colors"
-                    style={{ color: 'var(--text-primary)' }}
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Settings
-                  </Link>
-                  {user?.role === 'admin' && (
-                    <Link
-                      to="/admin"
-                      className="block px-4 py-2 text-sm no-underline hover:bg-[var(--bg-surface-hover)] transition-colors"
-                      style={{ color: 'var(--color-amber-700)' }}
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      Admin
+                  <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                    style={{ backgroundColor: 'var(--color-teal-600)' }}>
+                    {(user.name ?? user.email ?? '?')[0].toUpperCase()}
+                  </span>
+                  <span className="hidden sm:inline max-w-28 truncate">{user.name ?? user.email}</span>
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border py-1 z-50"
+                    style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}>
+                    <Link to="/profile" className="block px-4 py-2 text-sm no-underline hover:bg-[var(--bg-surface-hover)] transition-colors"
+                      style={{ color: 'var(--text-primary)' }} onClick={() => setUserMenuOpen(false)}>
+                      My Profile
                     </Link>
-                  )}
-                  <hr style={{ borderColor: 'var(--border-default)' }} className="my-1" />
-                  <button
-                    onClick={() => { setMenuOpen(false); handleSignOut() }}
-                    className="w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </nav>
+                    <Link to="/settings" className="block px-4 py-2 text-sm no-underline hover:bg-[var(--bg-surface-hover)] transition-colors"
+                      style={{ color: 'var(--text-primary)' }} onClick={() => setUserMenuOpen(false)}>
+                      Settings
+                    </Link>
+                    {user?.role === 'admin' && (
+                      <Link to="/admin" className="block px-4 py-2 text-sm no-underline hover:bg-[var(--bg-surface-hover)] transition-colors"
+                        style={{ color: 'var(--color-amber-700)' }} onClick={() => setUserMenuOpen(false)}>
+                        Admin
+                      </Link>
+                    )}
+                    <hr style={{ borderColor: 'var(--border-default)' }} className="my-1" />
+                    <button
+                      onClick={() => { setUserMenuOpen(false); handleSignOut() }}
+                      className="w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[var(--bg-surface-hover)]"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        }
+      />
 
       {/* ── Admin sub-nav ────────────────────────────────────── */}
       {isAdmin && (
@@ -410,9 +350,9 @@ export default function AppLayout() {
       />
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
 
-      {/* Close menu on outside click */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+      {/* Close user dropdown on outside click */}
+      {userMenuOpen && (
+        <div className="fixed inset-0 z-30" onClick={() => setUserMenuOpen(false)} />
       )}
     </div>
   )

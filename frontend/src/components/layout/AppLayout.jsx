@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
 const LANDING_URL = import.meta.env.VITE_LANDING_URL || 'http://localhost:5174'
-import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { getToken } from '../../lib/getToken.js'
-import { api, prefetch } from '../../lib/api.js'
+import { api } from '../../lib/api.js'
 import ThemeToggle from '../ui/ThemeToggle.jsx'
 import MuteToggle from '../ui/MuteToggle.jsx'
 import AuthModal from '../auth/AuthModal.jsx'
@@ -26,58 +26,22 @@ import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { getSocket, connectSocket } from '../../lib/socket.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
+import { AppNav } from '@xo-arena/nav'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
-
-const NAV_LINKS = [
-  { to: '/play', label: 'Play' },
-  { to: '/gym', label: 'Gym' },
-  { to: '/puzzles', label: 'Puzzles' },
-  { to: '/leaderboard', label: 'Rankings', desktopOnly: true },
-]
+const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
 const BOTTOM_NAV = [
-  { to: '/play', label: 'Play', icon: '⊞' },
-  { to: '/gym', label: 'Gym', icon: '⚡' },
-  { to: '/leaderboard', label: 'Ranks', icon: '★' },
-  { to: '/profile', label: 'Profile', icon: '◉' },
-]
-
-const MENU_LINKS = [
-  { to: '/play',        label: 'Play',         icon: '⊞' },
-  { to: '/gym',         label: 'Gym',          icon: '⚡' },
-  { to: '/puzzles',     label: 'Puzzles',       icon: '◈' },
-  { to: '/leaderboard', label: 'Rankings',      icon: '★' },
-  { to: '/stats',       label: 'Stats',         icon: '◎' },
-  { to: '/profile',     label: 'Profile',       icon: '◉' },
-  { to: '/about',       label: 'About',         icon: '○' },
-  { to: '/faq',         label: 'FAQ',           icon: '?' },
-  { to: '/settings',    label: 'Settings',      icon: '⚙' },
+  { to: '/play',        label: 'Play',    icon: '⊞' },
+  { to: '/gym',         label: 'Gym',     icon: '⚡' },
+  { to: '/leaderboard', label: 'Ranks',   icon: '★' },
+  { to: '/puzzles',     label: 'Puzzles', icon: '◈' },
 ]
 
 const PLATFORM_URL       = import.meta.env.VITE_PLATFORM_URL ?? 'https://aiarena.callidity.com'
 const PLATFORM_ADMIN_URL = `${PLATFORM_URL}/admin`
 
-// Endpoints/chunks to prefetch when hovering the corresponding nav link.
-const PREFETCH_MAP = {
-  '/play':        () => prefetch('/bots'),
-  '/leaderboard': () => prefetch('/leaderboard?period=all&mode=all&includeBots=false'),
-  '/gym':         () => {
-    // Preload the Gym's shared helpers + TrainTab (which pulls in vendor-charts)
-    import('../gym/gymShared.jsx').catch(() => {})
-    import('../gym/TrainTab.jsx').catch(() => {})
-  },
-}
-
-function usePrefetchHandler(to) {
-  const timerRef = React.useRef(null)
-  const handler = PREFETCH_MAP[to]
-  if (!handler) return {}
-  return {
-    onMouseEnter: () => { timerRef.current = setTimeout(handler, 80) },
-    onMouseLeave: () => { clearTimeout(timerRef.current) },
-  }
-}
+const APP_URLS = { landing: LANDING_URL, xo: XO_URL }
 
 export default function AppLayout() {
   const navigate = useNavigate()
@@ -88,7 +52,6 @@ export default function AppLayout() {
   const isSupport = !isAdmin && rolesStore.hasRole('SUPPORT')
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalView, setAuthModalView] = useState('sign-in')
-  const [menuOpen, setMenuOpen] = useState(false)
   const [namePrompt, setNamePrompt] = useState(null) // { userId, currentName } | null
   const [unreadCount, setUnreadCount] = useState(0)
   const [accomplishments, setAccomplishments] = useState([])
@@ -118,9 +81,8 @@ export default function AppLayout() {
 
   useJourneyAutoOpen()
 
-  // Close the mobile menu and guide panel whenever the user navigates
+  // Close the guide panel whenever the user navigates
   useEffect(() => {
-    setMenuOpen(false)
     useGuideStore.getState().close()
   }, [location.pathname])
 
@@ -319,13 +281,6 @@ export default function AppLayout() {
     setAccomplishments(prev => prev.filter(n => n.id !== id))
   }
 
-  function handleLogoClick(e) {
-    e.preventDefault()
-    useGameStore.getState().newGame()
-    usePvpStore.getState().reset()
-    navigate('/play')
-  }
-
   return (
     <div className="flex flex-col min-h-dvh relative">
       {/* Mountain background — xo.aiarena game site has its own visual identity distinct from the aiarena platform */}
@@ -342,175 +297,38 @@ export default function AppLayout() {
           backgroundPosition: 'center 30%',
         }}
       />
-      {/* Top nav bar */}
-      <header
-        className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-6 md:px-8 h-14 border-b"
-        style={{ backgroundColor: isStaging ? '#b45309' : 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
-      >
-        {/* Logo + Getting Started guide button */}
-        <div className="flex items-center gap-2">
-          <a href={LANDING_URL} className="flex items-center gap-2 select-none no-underline font-bold text-base"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-slate-500)' }}>
-            <span className="text-lg">⚔</span>
-            <span className="hidden sm:inline">AI Arena</span>
-          </a>
-          {/* Guide orb — shown to signed-in users */}
-        </div>
-
-        {/* Desktop nav links */}
-        <nav className="hidden md:flex items-center gap-6">
-          {NAV_LINKS.map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-[var(--color-blue-600)]'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`
-              }
-              {...usePrefetchHandler(to)}
-            >
-              {label}
-            </NavLink>
-          ))}
-          <NavLink
-            to="/stats"
-            className={({ isActive }) =>
-              `text-sm font-medium transition-colors ${
-                isActive
-                  ? 'text-[var(--color-blue-600)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`
-            }
-          >
-            Stats
-          </NavLink>
-          <NavLink
-            to="/profile"
-            className={({ isActive }) =>
-              `text-sm font-medium transition-colors ${
-                isActive
-                  ? 'text-[var(--color-blue-600)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`
-            }
-          >
-            Profile
-          </NavLink>
-          <NavLink
-            to="/about"
-            className={({ isActive }) =>
-              `text-sm font-medium transition-colors ${
-                isActive
-                  ? 'text-[var(--color-blue-600)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`
-            }
-          >
-            About
-          </NavLink>
-
-        </nav>
-
-        {/* Controls */}
-        <div className="flex items-center gap-2">
-          <MuteToggle />
-          <ThemeToggle />
-          {/* Hamburger — mobile only */}
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            aria-label="Open menu"
-            className="md:hidden p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-surface-hover)]"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            {menuOpen ? (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="3" y1="5" x2="17" y2="5" /><line x1="3" y1="10" x2="17" y2="10" /><line x1="3" y1="15" x2="17" y2="15" />
-              </svg>
-            )}
-          </button>
-          <SignedOut>
-            <button
-              onClick={() => setAuthModalOpen(true)}
-              className="text-sm font-medium px-3 py-1.5 rounded-lg transition-all hover:brightness-110 active:scale-[0.97]"
-              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', color: 'white' }}
-            >
-              Sign in
-            </button>
-          </SignedOut>
-          <AuthModal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setAuthModalView('sign-in') }} defaultView={authModalView} />
-          <SignedIn>
-            <GuideOrb />
-            <UserButton afterSignOutUrl="/play" adminUrl={PLATFORM_ADMIN_URL} />
-          </SignedIn>
-        </div>
-      </header>
+      <AppNav
+        appId="xo"
+        appUrls={APP_URLS}
+        subnav="xo"
+        isStaging={isStaging}
+        extrasSlot={<><MuteToggle /><ThemeToggle /></>}
+        rightSlot={
+          <>
+            <SignedOut>
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="text-sm font-medium px-3 py-1.5 rounded-lg transition-all hover:brightness-110 active:scale-[0.97]"
+                style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))', color: 'white' }}
+              >
+                Sign in
+              </button>
+            </SignedOut>
+            <AuthModal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setAuthModalView('sign-in') }} defaultView={authModalView} />
+            <SignedIn>
+              <GuideOrb />
+              <UserButton afterSignOutUrl="/play" adminUrl={PLATFORM_ADMIN_URL} />
+            </SignedIn>
+          </>
+        }
+      />
 
       {/* Main content */}
       <main key={location.key} className="xo-page-transition flex-1 px-6 md:px-8 py-6 pb-20 md:pb-6 relative" style={{ zIndex: 1 }}>
         <Outlet />
       </main>
 
-      {/* Mobile hamburger menu drawer */}
-      {menuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop */}
-          <div
-            className="flex-1 bg-black/50"
-            onClick={() => setMenuOpen(false)}
-            aria-hidden="true"
-          />
-          {/* Panel */}
-          <div
-            className="w-64 h-full flex flex-col overflow-y-auto border-l"
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
-          >
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
-              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Menu</span>
-              <button
-                onClick={() => setMenuOpen(false)}
-                className="p-1 rounded-lg hover:bg-[var(--bg-surface-hover)]"
-                aria-label="Close menu"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="3" y1="3" x2="13" y2="13" /><line x1="13" y1="3" x2="3" y2="13" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Nav links */}
-            <nav className="flex-1 px-2 py-3 space-y-0.5">
-              {MENU_LINKS.map(({ to, label, icon }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-[var(--color-blue-50)] text-[var(--color-blue-600)]'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]'
-                    }`
-                  }
-                >
-                  <span className="text-base w-5 text-center leading-none">{icon}</span>
-                  {label}
-                </NavLink>
-              ))}
-
-            </nav>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — XO game-site specific shortcuts */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t"
         style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', paddingBottom: 'env(safe-area-inset-bottom)' }}
@@ -521,12 +339,9 @@ export default function AppLayout() {
             to={to}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-2 text-xs gap-0.5 transition-colors ${
-                isActive
-                  ? 'text-[var(--color-blue-600)]'
-                  : 'text-[var(--text-secondary)]'
+                isActive ? 'text-[var(--color-blue-600)]' : 'text-[var(--text-secondary)]'
               }`
             }
-            {...usePrefetchHandler(to)}
           >
             <span className="text-lg leading-none">{icon}</span>
             {label}
