@@ -63,9 +63,12 @@ function NotificationCard({ notif, onDismiss }) {
           </p>
         )}
         {notif.href && (
-          <p className="text-[10px] mt-1 font-medium" style={{ color: cfg.color }}>
+          <span
+            className="inline-block mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: cfg.bg, color: cfg.color }}
+          >
             View →
-          </p>
+          </span>
         )}
       </div>
 
