@@ -136,11 +136,16 @@ export default function AppLayout() {
       useGuideStore.getState().applyJourneyStep({ completedSteps })
       useGuideStore.getState().open()
     }
+    function onOnlineUsers({ users }) {
+      useGuideStore.getState().setOnlineUsers(users)
+    }
     socket.on('guide:notification', onGuideNotification)
     socket.on('guide:journeyStep',  onJourneyStep)
+    socket.on('guide:onlineUsers',  onOnlineUsers)
     return () => {
       socket.off('guide:notification', onGuideNotification)
       socket.off('guide:journeyStep',  onJourneyStep)
+      socket.off('guide:onlineUsers',  onOnlineUsers)
     }
   }, [])
 

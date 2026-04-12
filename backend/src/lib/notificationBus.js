@@ -16,7 +16,7 @@ export function getDispatchCounters() { return { ..._dispatchCounters } }
 // persist: 'ephemeral' | 'persistent'
 // ttlMs: optional default TTL in ms from creation; null = never expires
 const REGISTRY = {
-  'tournament.published':            { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
+  'tournament.published':            { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h
   'tournament.flash_announced':      { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
   'tournament.registration_closing': { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  2 * 60 * 60 * 1000 },  // 2h
   'tournament.starting_soon':        { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
@@ -99,12 +99,20 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
 
     if (userIds.length === 0) return
 
-    // For broadcast+persistent: use createMany for efficiency
+    // For broadcast+persistent: respect preferences, then use createMany for efficiency
     if (targets?.broadcast && entry.persist === 'persistent') {
-      await db.userNotification.createMany({
-        data: userIds.map(userId => ({ userId, type, payload, ...(expiresAt && { expiresAt }) })),
-        skipDuplicates: true,
+      const optedOut = await db.notificationPreference.findMany({
+        where: { userId: { in: userIds }, eventType: type, inApp: false },
+        select: { userId: true },
       })
+      const optedOutSet = new Set(optedOut.map(r => r.userId))
+      const eligible = userIds.filter(id => !optedOutSet.has(id))
+      if (eligible.length > 0) {
+        await db.userNotification.createMany({
+          data: eligible.map(userId => ({ userId, type, payload, ...(expiresAt && { expiresAt }) })),
+          skipDuplicates: true,
+        })
+      }
       return
     }
 

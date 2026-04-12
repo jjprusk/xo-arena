@@ -18,7 +18,7 @@ function handleJourneyComplete() {
 }
 
 export default function GuidePanel({ isAdmin = false }) {
-  const { panelOpen, close } = useGuideStore()
+  const { panelOpen, close, onlineUsers } = useGuideStore()
   const [editMode,            setEditMode]            = useState(false)
   const [pickerOpen,          setPickerOpen]          = useState(false)
   const [journeyCompleteOpen, setJourneyCompleteOpen] = useState(false)
@@ -135,7 +135,7 @@ export default function GuidePanel({ isAdmin = false }) {
         </div>
 
         {/* Online strip — fixed between notifications and scroll body */}
-        <OnlineStrip onlineUsers={[]} />
+        <OnlineStrip onlineUsers={onlineUsers} />
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">

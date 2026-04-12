@@ -2,8 +2,9 @@
  * Tournament sweep job — runs every 60 seconds.
  *
  * Phase 1 — close registration:
- *   For every REGISTRATION_OPEN tournament whose registrationCloseAt is in the past,
- *   transition to REGISTRATION_CLOSED.
+ *   For every REGISTRATION_OPEN tournament whose registrationCloseAt is in the past:
+ *   - participants < minParticipants → auto-cancel immediately
+ *   - participants >= minParticipants → transition to REGISTRATION_CLOSED
  *
  * Phase 2 — start or cancel:
  *   For every REGISTRATION_OPEN or REGISTRATION_CLOSED tournament whose
@@ -28,20 +29,35 @@ async function sweep() {
   const now = new Date()
 
   // Phase 1: close registration for tournaments past their registrationCloseAt
+  // If participant count < minParticipants at close time, cancel immediately.
   try {
     const toClose = await db.tournament.findMany({
       where: {
         status: 'REGISTRATION_OPEN',
         registrationCloseAt: { not: null, lte: now },
       },
-      select: { id: true, name: true },
+      include: {
+        participants: {
+          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+          include: { user: { select: { id: true } } },
+        },
+      },
     })
-    if (toClose.length > 0) {
+    const insufficient = toClose.filter(t => t.participants.length < t.minParticipants)
+    const sufficient   = toClose.filter(t => t.participants.length >= t.minParticipants)
+
+    // Cancel tournaments that closed with too few participants
+    for (const t of insufficient) {
+      await autoCancel(t, t.participants.length)
+    }
+
+    // Close registration for the rest
+    if (sufficient.length > 0) {
       await db.tournament.updateMany({
-        where: { id: { in: toClose.map(t => t.id) } },
+        where: { id: { in: sufficient.map(t => t.id) } },
         data: { status: 'REGISTRATION_CLOSED' },
       })
-      for (const t of toClose) {
+      for (const t of sufficient) {
         logger.info({ tournamentId: t.id, name: t.name }, 'Tournament sweep — registration closed')
         await publish('tournament:registration_closed', { tournamentId: t.id, name: t.name }).catch(() => {})
       }

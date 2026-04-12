@@ -29,6 +29,17 @@ import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
 
+// ── Online presence ───────────────────────────────────────────────────────────
+// socketId → { userId, displayName, avatarUrl }
+const _onlineBySocket = new Map()
+
+function broadcastOnlineUsers(io) {
+  const users = [...new Map(
+    [..._onlineBySocket.values()].map(u => [u.userId, u])
+  ).values()]
+  io.emit('guide:onlineUsers', { users })
+}
+
 async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGames) {
   try {
     const res = await fetch(`${TOURNAMENT_SERVICE_URL}/api/matches/${matchId}/complete`, {
@@ -415,6 +426,16 @@ export async function attachSocketIO(httpServer) {
       socket.join(`user:${user.id}`)
       logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
 
+      // Register presence and broadcast updated online list
+      if (!user.isBot) {
+        _onlineBySocket.set(socket.id, {
+          userId:      user.id,
+          displayName: user.displayName ?? user.username ?? 'Player',
+          avatarUrl:   user.avatarUrl ?? null,
+        })
+        broadcastOnlineUsers(io)
+      }
+
       // Flush undelivered, non-expired persistent notifications (cap at 20 most recent)
       try {
         const now = new Date()
@@ -458,6 +479,12 @@ export async function attachSocketIO(httpServer) {
         logger.warn({ socketId: socket.id, remaining: socket._trackedListenerCount }, 'socket disconnected with uncleaned listeners')
       }
       logger.info({ socketId: socket.id }, 'socket disconnected')
+
+      // Remove from online presence and broadcast if this socket was subscribed
+      if (_onlineBySocket.has(socket.id)) {
+        _onlineBySocket.delete(socket.id)
+        broadcastOnlineUsers(io)
+      }
 
       const result = roomManager.handleDisconnect({
         socketId: socket.id,
