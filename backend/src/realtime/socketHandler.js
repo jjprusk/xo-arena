@@ -6,9 +6,9 @@
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import Redis from 'ioredis'
+import { jwtVerify, importJWK } from 'jose'
 import { roomManager } from './roomManager.js'
 import { botGameRunner } from './botGameRunner.js'
-import { auth } from '../lib/auth.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
@@ -32,12 +32,26 @@ const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://loc
 // ── Online presence ───────────────────────────────────────────────────────────
 // socketId → { userId, displayName, avatarUrl }
 const _onlineBySocket = new Map()
+// socketId → timeoutId — grace period before removing a disconnected socket
+const _pendingRemovals = new Map()
+const PRESENCE_GRACE_MS = 8_000
 
 function broadcastOnlineUsers(io) {
   const users = [...new Map(
     [..._onlineBySocket.values()].map(u => [u.userId, u])
   ).values()]
   io.emit('guide:onlineUsers', { users })
+}
+
+/** Cancel any pending grace-period removal for a given userId (called on re-subscribe). */
+function cancelPendingRemoval(userId) {
+  for (const [sid, timer] of _pendingRemovals) {
+    if (_onlineBySocket.get(sid)?.userId === userId) {
+      clearTimeout(timer)
+      _pendingRemovals.delete(sid)
+      _onlineBySocket.delete(sid)
+    }
+  }
 }
 
 /**
@@ -104,11 +118,21 @@ function makeIdleCallbacks(io) {
 async function resolveSocketUser(token) {
   if (!token) return null
   try {
-    // Verify the Bearer JWT via Better Auth's JWT plugin
-    const result = await auth.api.verifyToken({ body: { token } })
-    if (!result?.user?.id) return null
-    return await getUserByBetterAuthId(result.user.id)
-  } catch {
+    // Verify the JWT using the same approach as the HTTP middleware (jose + JWKS DB lookup)
+    const [rawHeader] = token.split('.')
+    const { kid } = JSON.parse(Buffer.from(rawHeader, 'base64url').toString())
+    if (!kid) return null
+
+    const jwk = await db.jwks.findUnique({ where: { id: kid } })
+    if (!jwk) return null
+
+    const cryptoKey = await importJWK(JSON.parse(jwk.publicKey), 'EdDSA')
+    const { payload } = await jwtVerify(token, cryptoKey)
+    if (!payload?.sub) return null
+
+    return await getUserByBetterAuthId(payload.sub)
+  } catch (err) {
+    logger.warn({ err: err.message }, 'resolveSocketUser: JWT verification failed')
     return null
   }
 }
@@ -438,12 +462,22 @@ export async function attachSocketIO(httpServer) {
 
       // Register presence and broadcast updated online list
       if (!user.isBot) {
+        // Cancel any grace-period removal for this user (handles reconnect after brief disconnect)
+        cancelPendingRemoval(user.id)
         _onlineBySocket.set(socket.id, {
           userId:      user.id,
           displayName: user.displayName ?? user.username ?? 'Player',
           avatarUrl:   user.avatarUrl ?? null,
         })
         broadcastOnlineUsers(io)
+      }
+      // Always send the current list directly to the subscriber (catches up
+      // even if the broadcast is dropped or arrives out of order)
+      {
+        const users = [...new Map(
+          [..._onlineBySocket.values()].map(u => [u.userId, u])
+        ).values()]
+        socket.emit('guide:onlineUsers', { users })
       }
 
       // Flush undelivered, non-expired persistent notifications (cap at 20 most recent)
@@ -490,10 +524,16 @@ export async function attachSocketIO(httpServer) {
       }
       logger.info({ socketId: socket.id }, 'socket disconnected')
 
-      // Remove from online presence and broadcast if this socket was subscribed
+      // Remove from online presence after a grace period (allows brief reconnects
+      // to cancel the removal without causing a visible drop in the online list)
       if (_onlineBySocket.has(socket.id)) {
-        _onlineBySocket.delete(socket.id)
-        broadcastOnlineUsers(io)
+        const sid = socket.id
+        const timer = setTimeout(() => {
+          _onlineBySocket.delete(sid)
+          _pendingRemovals.delete(sid)
+          broadcastOnlineUsers(io)
+        }, PRESENCE_GRACE_MS)
+        _pendingRemovals.set(sid, timer)
       }
 
       const result = roomManager.handleDisconnect({
@@ -534,6 +574,11 @@ export async function attachSocketIO(httpServer) {
   })
 
   startSnapshotInterval(() => roomManager.roomCount)
+
+  // Periodic re-broadcast so clients that missed the event-driven update
+  // catch up within 30 seconds (handles reconnect races, proxy drops, etc.)
+  setInterval(() => broadcastOnlineUsers(io), 30_000)
+
   return io
 }
 

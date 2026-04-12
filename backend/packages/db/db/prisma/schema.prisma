@@ -600,6 +600,12 @@ enum TournamentStatus {
   CANCELLED
 }
 
+enum TournamentStartMode {
+  AUTO
+  SCHEDULED
+  MANUAL
+}
+
 enum ParticipantStatus {
   REGISTERED
   ACTIVE
@@ -651,6 +657,7 @@ model Tournament {
   paceMs                    Int?               @map("pace_ms")
   allowSpectators           Boolean            @default(true)
   replayRetentionDays       Int                @default(30)
+  startMode                 TournamentStartMode @default(AUTO)
   startTime                 DateTime?
   endTime                   DateTime?
   registrationOpenAt        DateTime?

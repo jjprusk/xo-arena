@@ -17,6 +17,7 @@ import { hintsCommand }        from './commands/hints.js'
 import { journeyCommand }      from './commands/journey.js'
 import { sessionConfigCommand } from './commands/sessionconfig.js'
 import { envCommand }          from './commands/env.js'
+import { testbotsCommand }     from './commands/testbots.js'
 
 guardProduction()
 await ensureProxy()
@@ -70,6 +71,7 @@ hintsCommand(program)
 journeyCommand(program)
 sessionConfigCommand(program)
 envCommand(program)
+testbotsCommand(program)
 
 program.hook('postAction', () => disconnect())
 program.parse()

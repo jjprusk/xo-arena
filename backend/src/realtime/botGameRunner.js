@@ -49,6 +49,11 @@ function parseBotModelId(botModelId) {
     return { impl: 'minimax', difficulty: diff }
   }
 
+  if (botModelId.startsWith('testbot:')) {
+    const diff = botModelId.split(':')[2] || 'novice'
+    return { impl: 'minimax', difficulty: diff }
+  }
+
   if (botModelId.startsWith('user:')) {
     const parts = botModelId.split(':')
     const algo = parts[2] || 'minimax'

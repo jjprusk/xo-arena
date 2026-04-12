@@ -209,10 +209,28 @@ function AdminControls({ tournament, token, onRefresh }) {
     }
   }
 
-  const { status } = tournament
-  const canPublish = status === 'DRAFT'
-  const canStart   = status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED'
-  const canCancel  = status !== 'COMPLETED' && status !== 'CANCELLED'
+  const { status, startMode } = tournament
+  const canPublish  = status === 'DRAFT'
+  const canStart    = (status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED') && startMode === 'MANUAL'
+  const canCancel   = status !== 'COMPLETED' && status !== 'CANCELLED'
+  const canFillBots = status === 'DRAFT' || status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED'
+
+  async function fillBots() {
+    if (!confirm('Fill empty slots with test bots?')) return
+    setBusy('fillBots')
+    setErr(null)
+    setSuccess(null)
+    try {
+      const result = await tournamentApi.fillTestPlayers(tournament.id, token)
+      setSuccess(`Added ${result.added} test bot(s).`)
+      setTimeout(() => setSuccess(null), 3000)
+      onRefresh()
+    } catch (e) {
+      setErr(e.message || 'Fill failed.')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   return (
     <div
@@ -249,6 +267,16 @@ function AdminControls({ tournament, token, onRefresh }) {
             {busy === 'start' ? 'Starting…' : 'Start Tournament'}
           </button>
         )}
+        {canFillBots && (
+          <button
+            onClick={fillBots}
+            disabled={!!busy}
+            className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, var(--color-emerald-500), var(--color-emerald-700))' }}
+          >
+            {busy === 'fillBots' ? 'Filling…' : 'Fill with test bots'}
+          </button>
+        )}
         {canCancel && (
           <button
             onClick={() => act('cancel', 'Cancel')}
@@ -260,6 +288,15 @@ function AdminControls({ tournament, token, onRefresh }) {
           </button>
         )}
       </div>
+      {(status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED') && startMode !== 'MANUAL' && (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          {startMode === 'AUTO'
+            ? 'Auto mode — will start automatically when registration closes.'
+            : tournament.startTime
+              ? `Scheduled — will start at ${new Date(tournament.startTime).toLocaleString()}.`
+              : 'Scheduled mode — no start time set yet.'}
+        </p>
+      )}
       {err     && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
       {success && <p className="text-xs" style={{ color: 'var(--color-slate-600)' }}>{success}</p>}
     </div>

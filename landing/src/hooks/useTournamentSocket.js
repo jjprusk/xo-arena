@@ -29,11 +29,10 @@ export function useTournamentSocket() {
         socket.emit('user:subscribe', { authToken: token })
       }
 
-      if (socket.connected) {
-        subscribe()
-      } else {
-        socket.once('connect', subscribe)
-      }
+      // Persistent connect handler — re-subscribes after backend restarts
+      function onConnect() { subscribe() }
+      socket.on('connect', onConnect)
+      if (socket.connected) subscribe()
 
       TOURNAMENT_EVENTS.forEach(channel => {
         socket.on(channel, (data) => {

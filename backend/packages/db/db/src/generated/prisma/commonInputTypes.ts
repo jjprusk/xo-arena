@@ -593,6 +593,13 @@ export type EnumTournamentStatusFilter<$PrismaModel = never> = {
   not?: Prisma.NestedEnumTournamentStatusFilter<$PrismaModel> | $Enums.TournamentStatus
 }
 
+export type EnumTournamentStartModeFilter<$PrismaModel = never> = {
+  equals?: $Enums.TournamentStartMode | Prisma.EnumTournamentStartModeFieldRefInput<$PrismaModel>
+  in?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumTournamentStartModeFilter<$PrismaModel> | $Enums.TournamentStartMode
+}
+
 export type EnumRecurrenceIntervalNullableFilter<$PrismaModel = never> = {
   equals?: $Enums.RecurrenceInterval | Prisma.EnumRecurrenceIntervalFieldRefInput<$PrismaModel> | null
   in?: $Enums.RecurrenceInterval[] | Prisma.ListEnumRecurrenceIntervalFieldRefInput<$PrismaModel> | null
@@ -638,6 +645,16 @@ export type EnumTournamentStatusWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumTournamentStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumTournamentStatusFilter<$PrismaModel>
+}
+
+export type EnumTournamentStartModeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.TournamentStartMode | Prisma.EnumTournamentStartModeFieldRefInput<$PrismaModel>
+  in?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumTournamentStartModeWithAggregatesFilter<$PrismaModel> | $Enums.TournamentStartMode
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumTournamentStartModeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumTournamentStartModeFilter<$PrismaModel>
 }
 
 export type EnumRecurrenceIntervalNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -1323,6 +1340,13 @@ export type NestedEnumTournamentStatusFilter<$PrismaModel = never> = {
   not?: Prisma.NestedEnumTournamentStatusFilter<$PrismaModel> | $Enums.TournamentStatus
 }
 
+export type NestedEnumTournamentStartModeFilter<$PrismaModel = never> = {
+  equals?: $Enums.TournamentStartMode | Prisma.EnumTournamentStartModeFieldRefInput<$PrismaModel>
+  in?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumTournamentStartModeFilter<$PrismaModel> | $Enums.TournamentStartMode
+}
+
 export type NestedEnumRecurrenceIntervalNullableFilter<$PrismaModel = never> = {
   equals?: $Enums.RecurrenceInterval | Prisma.EnumRecurrenceIntervalFieldRefInput<$PrismaModel> | null
   in?: $Enums.RecurrenceInterval[] | Prisma.ListEnumRecurrenceIntervalFieldRefInput<$PrismaModel> | null
@@ -1368,6 +1392,16 @@ export type NestedEnumTournamentStatusWithAggregatesFilter<$PrismaModel = never>
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumTournamentStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumTournamentStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumTournamentStartModeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.TournamentStartMode | Prisma.EnumTournamentStartModeFieldRefInput<$PrismaModel>
+  in?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.TournamentStartMode[] | Prisma.ListEnumTournamentStartModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumTournamentStartModeWithAggregatesFilter<$PrismaModel> | $Enums.TournamentStartMode
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumTournamentStartModeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumTournamentStartModeFilter<$PrismaModel>
 }
 
 export type NestedEnumRecurrenceIntervalNullableWithAggregatesFilter<$PrismaModel = never> = {

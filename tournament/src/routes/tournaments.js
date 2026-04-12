@@ -91,11 +91,18 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
       allowNonCompetitiveBots, paceMs, allowSpectators, replayRetentionDays,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed,
+      recurrenceEndDate, autoOptOutAfterMissed, startMode,
     } = req.body
 
     if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
       return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
+    }
+    const VALID_START_MODES = ['AUTO', 'SCHEDULED', 'MANUAL']
+    if (startMode !== undefined && !VALID_START_MODES.includes(startMode)) {
+      return res.status(400).json({ error: 'startMode must be AUTO, SCHEDULED, or MANUAL' })
+    }
+    if (startMode === 'SCHEDULED' && !startTime) {
+      return res.status(400).json({ error: 'SCHEDULED mode requires a startTime' })
     }
 
     const tournament = await db.tournament.create({
@@ -108,6 +115,7 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
         bracketType,
         status: 'DRAFT',
         createdById: req.auth.userId,
+        ...(startMode !== undefined && { startMode }),
         ...(minParticipants !== undefined && { minParticipants }),
         ...(maxParticipants !== undefined && { maxParticipants }),
         ...(bestOfN !== undefined && { bestOfN }),
@@ -144,15 +152,20 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       allowNonCompetitiveBots, paceMs, allowSpectators, replayRetentionDays,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed,
+      recurrenceEndDate, autoOptOutAfterMissed, startMode,
     } = req.body
 
     if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
       return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
     }
+    const VALID_START_MODES = ['AUTO', 'SCHEDULED', 'MANUAL']
+    if (startMode !== undefined && !VALID_START_MODES.includes(startMode)) {
+      return res.status(400).json({ error: 'startMode must be AUTO, SCHEDULED, or MANUAL' })
+    }
 
     // status is intentionally excluded — use dedicated endpoints
     const data = {
+      ...(startMode !== undefined && { startMode }),
       ...(name !== undefined && { name }),
       ...(description !== undefined && { description }),
       ...(game !== undefined && { game }),
@@ -385,6 +398,60 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
     }
 
     res.json({ tournament })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/:id/fill-test-players
+// Registers the 4 standard test bots into the tournament (idempotent, admin only).
+const TEST_BOT_USERNAMES = ['testbot-alpha', 'testbot-beta', 'testbot-gamma', 'testbot-delta']
+
+router.post('/:id/fill-test-players', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const tournamentId = req.params.id
+
+    const tournament = await db.tournament.findUnique({ where: { id: tournamentId } })
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
+    if (tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED') {
+      return res.status(400).json({ error: `Cannot add players to a ${tournament.status.toLowerCase()} tournament` })
+    }
+
+    // Look up test bots — they must be seeded first via `um test-bots`
+    const bots = await db.user.findMany({
+      where: { username: { in: TEST_BOT_USERNAMES }, isBot: true },
+      select: { id: true, username: true, displayName: true, eloRating: true },
+    })
+
+    if (bots.length === 0) {
+      return res.status(404).json({
+        error: 'Test bots not found — run `docker compose exec backend node backend/src/cli/um.js test-bots` first',
+      })
+    }
+
+    const registered = []
+    const skipped    = []
+
+    for (const bot of bots) {
+      const existing = await db.tournamentParticipant.findUnique({
+        where: { tournamentId_userId: { tournamentId, userId: bot.id } },
+      })
+
+      if (existing && existing.status !== 'WITHDRAWN') {
+        skipped.push(bot.username)
+        continue
+      }
+
+      await db.tournamentParticipant.upsert({
+        where: { tournamentId_userId: { tournamentId, userId: bot.id } },
+        create: { tournamentId, userId: bot.id, eloAtRegistration: bot.eloRating, status: 'REGISTERED' },
+        update: { status: 'REGISTERED', eloAtRegistration: bot.eloRating },
+      })
+
+      registered.push(bot.username)
+    }
+
+    res.json({ registered, skipped })
   } catch (e) {
     next(e)
   }

@@ -537,6 +537,7 @@ export const TournamentScalarFieldEnum = {
   paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
   replayRetentionDays: 'replayRetentionDays',
+  startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
   registrationOpenAt: 'registrationOpenAt',

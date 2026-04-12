@@ -194,6 +194,15 @@ export const TournamentStatus = {
 export type TournamentStatus = (typeof TournamentStatus)[keyof typeof TournamentStatus]
 
 
+export const TournamentStartMode = {
+  AUTO: 'AUTO',
+  SCHEDULED: 'SCHEDULED',
+  MANUAL: 'MANUAL'
+} as const
+
+export type TournamentStartMode = (typeof TournamentStartMode)[keyof typeof TournamentStartMode]
+
+
 export const ParticipantStatus = {
   REGISTERED: 'REGISTERED',
   ACTIVE: 'ACTIVE',

@@ -3574,6 +3574,7 @@ export const TournamentScalarFieldEnum = {
   paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
   replayRetentionDays: 'replayRetentionDays',
+  startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
   registrationOpenAt: 'registrationOpenAt',
@@ -4069,6 +4070,20 @@ export type EnumTournamentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<
  * Reference to a field of type 'TournamentStatus[]'
  */
 export type ListEnumTournamentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'TournamentStartMode'
+ */
+export type EnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode'>
+    
+
+
+/**
+ * Reference to a field of type 'TournamentStartMode[]'
+ */
+export type ListEnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode[]'>
     
 
 

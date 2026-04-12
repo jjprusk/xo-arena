@@ -212,9 +212,14 @@ export default function AppLayout() {
           useGuideStore.getState().open()
         }
       })
-      // Connect the socket — re-subscription on reconnect is handled by the 'connect' listener below
+      // Connect socket and explicitly subscribe — covers the case where the socket
+      // was already connected (so 'connect' won't fire) or reconnects mid-await.
       getToken().then(token => {
-        if (token) connectSocket(token)
+        if (!token) return
+        const socket = connectSocket(token)
+        // If already connected, 'connect' won't fire — subscribe directly.
+        // If not yet connected, the 'connect' handler in the effect below will do it.
+        if (socket.connected) socket.emit('user:subscribe', { authToken: token })
       }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
