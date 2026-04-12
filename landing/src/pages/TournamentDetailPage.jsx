@@ -762,6 +762,59 @@ function MixedMatchBanner({ tournament, userId, token, matchEvent, onDismiss }) 
   )
 }
 
+// ── Final standings ───────────────────────────────────────────────────────────
+
+function computeStandings(tournament) {
+  const { participants } = tournament
+  const active = (participants ?? []).filter(p => p.status !== 'WITHDRAWN')
+  if (active.length === 0) return []
+
+  // The backend sets finalPosition on each participant when the tournament completes.
+  // Use it directly — it's authoritative and handles all bracket types correctly.
+  const withPos = active.filter(p => p.finalPosition != null)
+  if (withPos.length > 0) {
+    const sorted = [...withPos].sort((a, b) => a.finalPosition - b.finalPosition)
+    const unranked = active.filter(p => p.finalPosition == null)
+    return [
+      ...sorted.map(p => ({ ...p, position: p.finalPosition })),
+      ...unranked.map(p => ({ ...p, position: null })),
+    ]
+  }
+
+  return []
+}
+
+const POSITION_LABELS = { 1: '1st', 2: '2nd', 3: '3rd' }
+function posLabel(n) { return POSITION_LABELS[n] ?? `${n}th` }
+
+function FinalStandings({ tournament }) {
+  const standings = computeStandings(tournament)
+  if (standings.length === 0) {
+    return <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No standings data available.</p>
+  }
+
+  return (
+    <div
+      className="rounded-xl border divide-y"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      {standings.map(s => (
+        <div key={s.id} className="flex items-center gap-3 px-4 py-3">
+          <span
+            className="text-xs font-bold tabular-nums w-8 text-center shrink-0"
+            style={{ color: s.position != null && s.position <= 3 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}
+          >
+            {s.position != null ? posLabel(s.position) : '—'}
+          </span>
+          <span className="text-sm font-medium flex-1" style={{ color: 'var(--text-primary)' }}>
+            {s.user?.displayName ?? `Participant ${s.id?.slice(0, 6)}`}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Participants table ────────────────────────────────────────────────────────
 
 function ParticipantTable({ participants }) {
@@ -945,6 +998,12 @@ export default function TournamentDetailPage() {
       {t.status === 'REGISTRATION_OPEN' && (!t.registrationCloseAt || new Date(t.registrationCloseAt) > new Date()) && (
         <Section title="Registration">
           <RegistrationPanel tournament={t} token={token} userId={dbUserId ?? userId} dbUserId={dbUserId} onRefresh={load} />
+        </Section>
+      )}
+
+      {t.status === 'COMPLETED' && (
+        <Section title="Final Standings">
+          <FinalStandings tournament={t} />
         </Section>
       )}
 

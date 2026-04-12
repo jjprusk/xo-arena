@@ -135,9 +135,9 @@ export async function handleEvent(io, channel, data) {
     }
     case 'tournament:bot:match:ready': {
       // Start a bot vs bot game for this tournament match
-      const { tournamentId, matchId, bot1, bot2 } = data
+      const { tournamentId, matchId, bot1, bot2, bestOfN } = data
       try {
-        await botGameRunner.startGame({ bot1, bot2, tournamentId, tournamentMatchId: matchId })
+        await botGameRunner.startGame({ bot1, bot2, tournamentId, tournamentMatchId: matchId, bestOfN: bestOfN ?? 1 })
         logger.info({ tournamentId, matchId, bot1: bot1.displayName, bot2: bot2.displayName }, 'Bot tournament match started')
       } catch (err) {
         logger.warn({ err, tournamentId, matchId }, 'Failed to start bot tournament match')
@@ -189,10 +189,35 @@ export async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:completed': {
-      const { tournamentId, finalStandings } = data
+      const { tournamentId, name, finalStandings } = data
       for (const { userId, position } of finalStandings) {
         io.to(`user:${userId}`).emit('tournament:completed', { tournamentId, position })
-        await dispatch({ type: 'tournament.completed', targets: { userId }, payload: { tournamentId, position } })
+        await dispatch({ type: 'tournament.completed', targets: { userId }, payload: { tournamentId, name, position } })
+
+        // Also notify the human owner of any bot participant
+        const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
+        if (botUser?.isBot && botUser.botOwnerId) {
+          io.to(`user:${botUser.botOwnerId}`).emit('tournament:completed', { tournamentId, position })
+          await dispatch({ type: 'tournament.completed', targets: { userId: botUser.botOwnerId }, payload: { tournamentId, name, position } })
+        }
+      }
+
+      // Notify ALL remaining participants (not just standings) so every bot owner hears about completion
+      try {
+        const allParticipants = await db.tournamentParticipant.findMany({
+          where: { tournamentId },
+          select: { userId: true },
+        })
+        const standingUserIds = new Set(finalStandings.map(s => s.userId))
+        for (const { userId } of allParticipants) {
+          if (standingUserIds.has(userId)) continue  // already notified above
+          // Participant not in finalStandings (e.g. eliminated earlier) — still notify owner
+          const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
+          const notifyUserId = botUser?.isBot && botUser.botOwnerId ? botUser.botOwnerId : userId
+          await dispatch({ type: 'tournament.completed', targets: { userId: notifyUserId }, payload: { tournamentId, name, position: null } })
+        }
+      } catch (err) {
+        logger.warn({ err, tournamentId }, 'Failed to notify all participants of tournament completion')
       }
 
       // Flush pending match result notifications for END_OF_TOURNAMENT participants
@@ -228,10 +253,17 @@ export async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:cancelled': {
-      const { tournamentId, participantUserIds } = data
+      const { tournamentId, name, participantUserIds } = data
       for (const userId of participantUserIds) {
         io.to(`user:${userId}`).emit('tournament:cancelled', { tournamentId })
-        await dispatch({ type: 'tournament.cancelled', targets: { userId }, payload: { tournamentId } })
+        await dispatch({ type: 'tournament.cancelled', targets: { userId }, payload: { tournamentId, name } })
+
+        // Also notify bot owners
+        const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
+        if (botUser?.isBot && botUser.botOwnerId) {
+          io.to(`user:${botUser.botOwnerId}`).emit('tournament:cancelled', { tournamentId })
+          await dispatch({ type: 'tournament.cancelled', targets: { userId: botUser.botOwnerId }, payload: { tournamentId, name } })
+        }
       }
       break
     }

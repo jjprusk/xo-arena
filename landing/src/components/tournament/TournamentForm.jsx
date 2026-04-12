@@ -336,7 +336,12 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
                 className="text-[10px] text-left hover:opacity-70 w-fit" style={{ color: 'var(--text-muted)' }}>Clear</button>
             </div>
           ) : (
-            <button type="button" onClick={() => set('registrationCloseAt', toLocalDatetimeValue(new Date()))}
+            <button type="button" onClick={() => {
+              // Default to 1 hour after Opens At (if set) to avoid AM/PM trap
+              const base = form.registrationOpenAt ? new Date(form.registrationOpenAt) : new Date()
+              base.setHours(base.getHours() + 1)
+              set('registrationCloseAt', toLocalDatetimeValue(base))
+            }}
               className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
               — not set —

@@ -153,6 +153,7 @@ router.post('/:matchId/complete', requireTournamentAdminOrInternal, async (req, 
 
           pendingPublishes.push(['tournament:completed', {
             tournamentId: tournament.id,
+            name: tournament.name,
             finalStandings,
           }])
         } else {
@@ -167,7 +168,7 @@ router.post('/:matchId/complete', requireTournamentAdminOrInternal, async (req, 
 
           const winnerParticipants = await tx.tournamentParticipant.findMany({
             where: { id: { in: winners } },
-            include: { user: { select: { id: true, betterAuthId: true } } },
+            include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true } } },
           })
 
           // Bug #12: validate all winner records were found
@@ -229,6 +230,7 @@ router.post('/:matchId/complete', requireTournamentAdminOrInternal, async (req, 
                 pendingPublishes.push(['tournament:bot:match:ready', {
                   tournamentId: tournament.id,
                   matchId: newMatch.id,
+                  bestOfN: tournament.bestOfN,
                   bot1: { id: p1?.user.id, displayName: p1?.user.displayName, botModelId: p1?.user.botModelId },
                   bot2: { id: p2?.user.id, displayName: p2?.user.displayName, botModelId: p2?.user.botModelId },
                 }])
@@ -277,6 +279,7 @@ router.post('/:matchId/complete', requireTournamentAdminOrInternal, async (req, 
 
           pendingPublishes.push(['tournament:completed', {
             tournamentId: tournament.id,
+            name: tournament.name,
             finalStandings,
           }])
         }

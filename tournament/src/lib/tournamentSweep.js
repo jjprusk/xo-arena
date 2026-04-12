@@ -70,6 +70,7 @@ async function recoverPendingBotMatches(onlyStale = false) {
         await publish('tournament:bot:match:ready', {
           tournamentId: t.id,
           matchId: match.id,
+          bestOfN: t.bestOfN,
           bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
           bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
         }).catch(() => {})
@@ -200,6 +201,7 @@ async function autoCancel(tournament, count) {
     const participantUserIds = tournament.participants.map(p => p.userId)
     await publish('tournament:cancelled', {
       tournamentId: tournament.id,
+      name: tournament.name,
       participantUserIds,
     })
 
@@ -270,6 +272,7 @@ async function autoStartTournament(tournament) {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
+              bestOfN: tournament.bestOfN,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
             })
@@ -308,6 +311,7 @@ async function autoStartTournament(tournament) {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
+              bestOfN: tournament.bestOfN,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
             })

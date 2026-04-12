@@ -90,7 +90,7 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null }) {
+  async startGame({ bot1, bot2, moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1 }) {
     const name = mountainPool.acquire()
     if (!name) throw new Error('No mountain names available for bot game')
 
@@ -114,6 +114,11 @@ class BotGameRunner {
       moveDelayMs,
       tournamentId,
       tournamentMatchId,
+      bestOfN: bestOfN ?? 1,
+      seriesBot1Wins: 0,
+      seriesBot2Wins: 0,
+      seriesDraws: 0,
+      seriesGamesPlayed: 0,
     }
 
     this._games.set(slug, game)
@@ -138,82 +143,115 @@ class BotGameRunner {
 
   /**
    * Async game loop — drives moves until terminal state.
+   * For best-of-N series, loops until a bot wins enough games or the hard cap is reached.
    */
   async _runGameLoop(slug) {
     const game = this._games.get(slug)
     if (!game) return
 
-    // Emit game:start to all spectators
-    this._io?.to(slug).emit('game:start', {
-      board: game.board,
-      currentTurn: game.currentTurn,
-      round: 1,
-      bot1: { displayName: game.bot1.displayName, mark: 'X' },
-      bot2: { displayName: game.bot2.displayName, mark: 'O' },
-    })
+    const winsNeeded = Math.ceil(game.bestOfN / 2)
+    // Hard cap: maximum possible games in a best-of-N series (e.g. best-of-3 → 5 max)
+    const hardCap = Math.max(game.bestOfN * 2 - 1, 1)
 
-    while (game.status === 'playing') {
-      await new Promise((r) => setTimeout(r, game.moveDelayMs))
+    // Series loop
+    while (true) {
+      // Emit game:start for each game in the series
+      this._io?.to(slug).emit('game:start', {
+        board: game.board,
+        currentTurn: game.currentTurn,
+        round: game.seriesGamesPlayed + 1,
+        bot1: { displayName: game.bot1.displayName, mark: 'X' },
+        bot2: { displayName: game.bot2.displayName, mark: 'O' },
+        seriesBot1Wins: game.seriesBot1Wins,
+        seriesBot2Wins: game.seriesBot2Wins,
+      })
 
-      // Re-fetch in case the game was closed externally
-      if (!this._games.has(slug)) return
+      // Play until terminal state
+      while (game.status === 'playing') {
+        await new Promise((r) => setTimeout(r, game.moveDelayMs))
 
-      const bot = game.currentTurn === 'X' ? game.bot1 : game.bot2
-      const { impl, difficulty } = parseBotModelId(bot.botModelId)
+        if (!this._games.has(slug)) return
 
-      let cellIndex
-      try {
-        const aiImpl = registry.get(impl)
-        cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn)
-      } catch (err) {
-        logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
-        // Forfeit: the erroring bot loses
-        game.winner = game.currentTurn === 'X' ? 'O' : 'X'
-        game.status = 'finished'
+        const bot = game.currentTurn === 'X' ? game.bot1 : game.bot2
+        const { impl, difficulty } = parseBotModelId(bot.botModelId)
+
+        let cellIndex
+        try {
+          const aiImpl = registry.get(impl)
+          cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn)
+        } catch (err) {
+          logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
+          game.winner = game.currentTurn === 'X' ? 'O' : 'X'
+          game.status = 'finished'
+          this._io?.to(slug).emit('game:moved', {
+            cellIndex: null,
+            board: game.board,
+            currentTurn: game.currentTurn,
+            status: game.status,
+            winner: game.winner,
+            winLine: null,
+            forfeit: true,
+          })
+          break
+        }
+
+        game.board[cellIndex] = game.currentTurn
+        game.lastActivityAt = Date.now()
+
+        const winner = getWinner(game.board)
+        const draw = !winner && isBoardFull(game.board)
+
+        if (winner) {
+          game.winner = winner
+          game.winLine = WIN_LINES.find(([a, b, c]) =>
+            game.board[a] === winner && game.board[b] === winner && game.board[c] === winner
+          ) || null
+          game.status = 'finished'
+        } else if (draw) {
+          game.status = 'finished'
+          game.winner = null
+        } else {
+          game.currentTurn = game.currentTurn === 'X' ? 'O' : 'X'
+        }
+
         this._io?.to(slug).emit('game:moved', {
-          cellIndex: null,
+          cellIndex,
           board: game.board,
           currentTurn: game.currentTurn,
           status: game.status,
           winner: game.winner,
-          winLine: null,
-          forfeit: true,
+          winLine: game.winLine,
         })
-        break
       }
 
-      // Apply move
-      game.board[cellIndex] = game.currentTurn
+      // Update series counters after this game
+      if (game.winner === 'X') game.seriesBot1Wins++
+      else if (game.winner === 'O') game.seriesBot2Wins++
+      else game.seriesDraws++
+      game.seriesGamesPlayed++
+
+      // Check if series is decided
+      const seriesDone =
+        game.seriesBot1Wins >= winsNeeded ||
+        game.seriesBot2Wins >= winsNeeded ||
+        game.seriesGamesPlayed >= hardCap
+
+      if (seriesDone) break
+
+      // Brief pause between games, then reset board for next game
+      await new Promise((r) => setTimeout(r, 2000))
+      if (!this._games.has(slug)) return
+
+      game.board = Array(9).fill(null)
+      game.currentTurn = 'X'
+      game.status = 'playing'
+      game.winner = null
+      game.winLine = null
+      game.createdAt = Date.now()
       game.lastActivityAt = Date.now()
-
-      const winner = getWinner(game.board)
-      const draw = !winner && isBoardFull(game.board)
-
-      if (winner) {
-        game.winner = winner
-        game.winLine = WIN_LINES.find(([a, b, c]) =>
-          game.board[a] === winner && game.board[b] === winner && game.board[c] === winner
-        ) || null
-        game.status = 'finished'
-      } else if (draw) {
-        game.status = 'finished'
-        game.winner = null
-      } else {
-        game.currentTurn = game.currentTurn === 'X' ? 'O' : 'X'
-      }
-
-      // Broadcast move
-      this._io?.to(slug).emit('game:moved', {
-        cellIndex,
-        board: game.board,
-        currentTurn: game.currentTurn,
-        status: game.status,
-        winner: game.winner,
-        winLine: game.winLine,
-      })
     }
 
-    // Record the finished game
+    // Record the finished series
     await this._recordGame(slug).catch((err) => logger.warn({ err, slug }, 'Failed to record bot game'))
 
     // Clean up after a short delay (so late-joining spectators still see the result)
@@ -222,30 +260,39 @@ class BotGameRunner {
 
   async _recordGame(slug) {
     const game = this._games.get(slug)
-    if (!game || game.status !== 'finished') return
+    if (!game) return
 
     const totalMoves = game.board.filter(Boolean).length
     const durationMs = game.lastActivityAt - game.createdAt
 
-    // Outcome from bot1 (X) perspective
+    const isTournamentGame = !!(game.tournamentMatchId)
+
+    // For series: derive winner from accumulated series counters.
+    // Random tiebreaker if still tied after hard cap (e.g. all draws).
+    let seriesWinnerId = null
+    if (game.seriesBot1Wins > game.seriesBot2Wins) {
+      seriesWinnerId = game.bot1.id
+    } else if (game.seriesBot2Wins > game.seriesBot1Wins) {
+      seriesWinnerId = game.bot2.id
+    } else if (isTournamentGame) {
+      // Tied after hard cap — random tiebreaker so bracket can advance
+      seriesWinnerId = Math.random() < 0.5 ? game.bot1.id : game.bot2.id
+      logger.info({ slug, tournamentMatchId: game.tournamentMatchId }, 'Bot series tied — random tiebreaker applied')
+    }
+
+    // Outcome from bot1 (X) perspective for the last game (used for single-game ELO)
     let outcome = 'DRAW'
     if (game.winner === 'X') outcome = 'PLAYER1_WIN'
     else if (game.winner === 'O') outcome = 'PLAYER2_WIN'
-
-    let winnerId = null
-    if (game.winner === 'X') winnerId = game.bot1.id
-    else if (game.winner === 'O') winnerId = game.bot2.id
-
-    const isTournamentGame = !!(game.tournamentMatchId)
 
     // Bug #11: separate DB record write from tournament completion so a DB error
     // can't silently prevent bracket advancement.
     await createGame({
       player1Id: game.bot1.id,
       player2Id: game.bot2.id,
-      winnerId,
+      winnerId: seriesWinnerId,
       mode: 'BOTVBOT',
-      outcome,
+      outcome: seriesWinnerId === game.bot1.id ? 'PLAYER1_WIN' : seriesWinnerId === game.bot2.id ? 'PLAYER2_WIN' : 'DRAW',
       totalMoves,
       durationMs,
       startedAt: new Date(game.createdAt),
@@ -261,29 +308,36 @@ class BotGameRunner {
       }).catch(() => {})
     }
 
-    // Report result to tournament service for bracket progression
+    // Report series result to tournament service for bracket progression
     if (isTournamentGame) {
       try {
-        // Look up winner's TournamentParticipant ID
-        const winnerParticipant = winnerId
+        const winnerParticipant = seriesWinnerId
           ? await db.tournamentParticipant.findFirst({
-              where: { tournamentId: game.tournamentId, userId: winnerId },
+              where: { tournamentId: game.tournamentId, userId: seriesWinnerId },
               select: { id: true },
             })
           : null
-        await completeTournamentMatch(game.tournamentMatchId, winnerParticipant?.id ?? null, 1, 0, 0)
+        await completeTournamentMatch(
+          game.tournamentMatchId,
+          winnerParticipant?.id ?? null,
+          game.seriesBot1Wins,
+          game.seriesBot2Wins,
+          game.seriesDraws,
+        )
       } catch (err) {
         logger.warn({ err, tournamentMatchId: game.tournamentMatchId }, 'Failed to report bot tournament match result')
       }
 
-      // Clear botInTournament flag after tournament game completes
       await db.user.updateMany({
         where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
         data: { botInTournament: false },
       }).catch(err => logger.warn({ err }, 'Failed to clear botInTournament flag after tournament game'))
     }
 
-    logger.info({ slug, outcome, winner: game.winner, tournamentMatchId: game.tournamentMatchId ?? null }, 'Bot game recorded')
+    logger.info(
+      { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null },
+      'Bot series recorded'
+    )
   }
 
   /**

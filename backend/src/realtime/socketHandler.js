@@ -469,6 +469,10 @@ export async function attachSocketIO(httpServer) {
           displayName: user.displayName ?? user.username ?? 'Player',
           avatarUrl:   user.avatarUrl ?? null,
         })
+        // Ack the subscription so the client knows its own presence userId.
+        // The client uses this to detect when it's been dropped from a broadcast
+        // and immediately re-subscribes — no page refresh needed.
+        socket.emit('guide:subscribed', { userId: user.id })
         broadcastOnlineUsers(io)
       }
       // Always send the current list directly to the subscriber (catches up

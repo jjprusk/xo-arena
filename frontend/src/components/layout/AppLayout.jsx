@@ -93,6 +93,7 @@ export default function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [accomplishments, setAccomplishments] = useState([])
   const prevUserId = useRef(null)
+  const myPresenceIdRef = useRef(null)
 
   // Guest welcome modal — shown once to non-authenticated first-time visitors
   const [guestWelcomeOpen, setGuestWelcomeOpen] = useState(false)
@@ -239,8 +240,30 @@ export default function AppLayout() {
     socket.on('connect', onConnect)
     if (socket.connected) onConnect()
 
+    // Presence keepalive — fallback re-subscribe in case no broadcast arrives
+    // for an extended period (e.g. no other users connecting or disconnecting).
+    const keepalive = setInterval(async () => {
+      if (!socket.connected) return
+      const token = await getToken()
+      if (token) socket.emit('user:subscribe', { authToken: token })
+    }, 3 * 60_000)
+
+    // Server confirms our presence DB userId — store it so we can detect self-removal.
+    function onSubscribed({ userId }) {
+      myPresenceIdRef.current = userId
+    }
+    socket.on('guide:subscribed', onSubscribed)
+
     function onOnlineUsers({ users }) {
       useGuideStore.getState().setOnlineUsers(users)
+      // If the server no longer has us in the broadcast, re-subscribe immediately.
+      // This self-heals any silent presence drop without requiring a page refresh.
+      const myId = myPresenceIdRef.current
+      if (myId && socket.connected && !users.some(u => u.userId === myId)) {
+        getToken().then(token => {
+          if (token) socket.emit('user:subscribe', { authToken: token })
+        }).catch(() => {})
+      }
     }
     socket.on('guide:onlineUsers', onOnlineUsers)
 
@@ -270,10 +293,12 @@ export default function AppLayout() {
     socket.on('guide:journeyStep', onJourneyStep)
 
     return () => {
-      socket.off('connect',           onConnect)
-      socket.off('guide:onlineUsers', onOnlineUsers)
+      clearInterval(keepalive)
+      socket.off('connect',            onConnect)
+      socket.off('guide:subscribed',   onSubscribed)
+      socket.off('guide:onlineUsers',  onOnlineUsers)
       socket.off('guide:notification', onGuideNotification)
-      socket.off('guide:journeyStep', onJourneyStep)
+      socket.off('guide:journeyStep',  onJourneyStep)
     }
   }, [])
 
