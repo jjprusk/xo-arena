@@ -119,7 +119,6 @@ function RegisterButton({ tournament, token, onSuccess }) {
     <div
       className="space-y-2 p-2 rounded-lg border"
       style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)' }}
-      onClick={e => e.stopPropagation()}
     >
       {isBotTournament && (
         <>
@@ -195,12 +194,16 @@ function TournamentCard({ tournament, token, onRegistered, spotlitRegister = fal
   const isOpen = tournament.status === 'REGISTRATION_OPEN'
 
   return (
-    <Link
-      to={`/tournaments/${tournament.id}`}
-      className="block rounded-xl border transition-colors hover:bg-[var(--bg-surface-hover)] no-underline"
+    <div
+      className="rounded-xl border"
       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
     >
-      <div className="p-4 space-y-3">
+      {/* Clickable card body — navigates to detail page */}
+      <Link
+        to={`/tournaments/${tournament.id}`}
+        className="block p-4 space-y-3 transition-colors hover:bg-[var(--bg-surface-hover)] no-underline rounded-t-xl"
+        style={{ borderRadius: isOpen && token ? '0.75rem 0.75rem 0 0' : '0.75rem' }}
+      >
         {/* Header row */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -248,21 +251,21 @@ function TournamentCard({ tournament, token, onRegistered, spotlitRegister = fal
             )}
           </p>
         )}
+      </Link>
 
-        {/* Register button */}
-        {isOpen && token && (
-          <div onClick={e => e.stopPropagation()}>
-            {spotlitRegister ? (
-              <SpotlightRing label="Step 6: Enter a tournament →">
-                <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
-              </SpotlightRing>
-            ) : (
+      {/* Register form — outside the Link so radio/button clicks never trigger navigation */}
+      {isOpen && token && (
+        <div className="px-4 pb-4 pt-1 border-t" style={{ borderColor: 'var(--border-default)' }}>
+          {spotlitRegister ? (
+            <SpotlightRing label="Step 6: Enter a tournament →">
               <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
-            )}
-          </div>
-        )}
-      </div>
-    </Link>
+            </SpotlightRing>
+          ) : (
+            <RegisterButton tournament={tournament} token={token} onSuccess={onRegistered} />
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
