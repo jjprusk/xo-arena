@@ -431,6 +431,7 @@ model UserNotification {
   type        String
   payload     Json
   createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
   deliveredAt DateTime?
   emailedAt   DateTime?
   readAt      DateTime?

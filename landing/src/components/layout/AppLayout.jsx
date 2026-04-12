@@ -18,41 +18,43 @@ const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
  * Map a raw bus notification { type, payload } to the shape NotificationCard expects:
  * { id, type (UI category), uiType, title, body, href }
  */
-function normalizeBusNotification(type, payload = {}) {
+function normalizeBusNotification(type, payload = {}, expiresAt = null) {
   const id = `${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`
   const tid = payload.tournamentId
   const tname = payload.name ?? 'Tournament'
+  const exp = expiresAt ?? null
 
   switch (type) {
     case 'tournament.published':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} — registration open`, body: 'New tournament announced', href: '/tournaments', expiresAt: exp }
     case 'tournament.flash_announced':
-      return { id, uiType: 'flash',       type: 'flash',       title: `${tname} — registration open`, body: 'New tournament announced', href: '/tournaments' }
+      return { id, uiType: 'flash',       type: 'flash',       title: `${tname} — registration open`, body: 'Flash tournament announced', href: '/tournaments', expiresAt: exp }
     case 'tournament.registration_closing':
-      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} — registration closing`, body: 'Last chance to register', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} — registration closing`, body: 'Last chance to register', href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'tournament.starting_soon':
-      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} starts in ${payload.minutesUntilStart}m`, body: 'Your match is coming up', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} starts in ${payload.minutesUntilStart}m`, body: 'Your match is coming up', href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'tournament.started':
-      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} has started!`, body: 'Check your first match', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} has started!`, body: 'Check your first match', href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'tournament.cancelled':
-      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} cancelled`, body: 'The tournament was cancelled', href: '/tournaments' }
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} cancelled`, body: 'The tournament was cancelled', href: '/tournaments', expiresAt: exp }
     case 'tournament.completed':
-      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} complete`, body: 'See the final results', href: tid ? `/tournaments/${tid}` : '/tournaments' }
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} complete`, body: 'See the final results', href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'match.ready':
-      return { id, uiType: 'match_ready', type: 'match_ready', title: 'Match Ready!', body: `Your match in ${tname} is ready`, href: tid ? `/tournaments/${tid}` : '/tournaments' }
+      return { id, uiType: 'match_ready', type: 'match_ready', title: 'Match Ready!', body: `Your match in ${tname} is ready`, href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'match.result':
-      return { id, uiType: 'tournament',  type: 'tournament',  title: 'Match Result', body: `Result recorded for ${tname}`, href: tid ? `/tournaments/${tid}` : '/tournaments' }
+      return { id, uiType: 'tournament',  type: 'tournament',  title: 'Match Result', body: `Result recorded for ${tname}`, href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'achievement.tier_upgrade':
-      return { id, uiType: 'admin',       type: 'admin',       title: `Tier upgrade — ${payload.tier ?? ''}`, body: payload.message }
+      return { id, uiType: 'admin',       type: 'admin',       title: `Tier upgrade — ${payload.tier ?? ''}`, body: payload.message, expiresAt: null }
     case 'achievement.milestone':
-      return { id, uiType: 'admin',       type: 'admin',       title: `Milestone reached`, body: payload.message }
+      return { id, uiType: 'admin',       type: 'admin',       title: `Milestone reached`, body: payload.message, expiresAt: null }
     case 'admin.announcement':
-      return { id, uiType: 'admin',       type: 'admin',       title: 'Announcement', body: payload.message }
+      return { id, uiType: 'admin',       type: 'admin',       title: 'Announcement', body: payload.message, expiresAt: null }
     case 'system.alert':
-      return { id, uiType: 'admin',       type: 'admin',       title: 'System Alert', body: payload.message }
+      return { id, uiType: 'admin',       type: 'admin',       title: 'System Alert', body: payload.message, expiresAt: null }
     case 'system.alert.cleared':
-      return { id, uiType: 'admin',       type: 'admin',       title: 'Alert Cleared', body: payload.message }
+      return { id, uiType: 'admin',       type: 'admin',       title: 'Alert Cleared', body: payload.message, expiresAt: null }
     default:
-      return { id, uiType: 'admin',       type: 'admin',       title: type, body: payload.message ?? '' }
+      return { id, uiType: 'admin',       type: 'admin',       title: type, body: payload.message ?? '', expiresAt: null }
   }
 }
 
@@ -122,8 +124,8 @@ export default function AppLayout() {
   // Socket guide listeners
   useEffect(() => {
     const socket = getSocket()
-    function onGuideNotification({ type, payload = {} }) {
-      const notif = normalizeBusNotification(type, payload)
+    function onGuideNotification({ type, payload = {}, expiresAt = null }) {
+      const notif = normalizeBusNotification(type, payload, expiresAt)
       useGuideStore.getState().addNotification(notif)
       useNotifSoundStore.getState().play()
       if (notif.uiType === 'flash' || notif.uiType === 'match_ready') {

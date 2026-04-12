@@ -4,6 +4,49 @@ import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 import { useNotifSoundStore, NOTIF_SOUND_TYPES } from '../store/notifSoundStore.js'
 
+// ── Guide notification toggle groups ─────────────────────────────────────────
+// Each group maps to one or more event types on the backend.
+// systemCritical events are never shown here — they can't be disabled.
+const NOTIF_GROUPS = [
+  {
+    key:    'new_tournaments',
+    label:  'New tournament announcements',
+    desc:   'Alert me when new tournaments open for registration.',
+    types:  ['tournament.published', 'tournament.flash_announced'],
+  },
+  {
+    key:    'my_tournament_updates',
+    label:  'My tournament reminders',
+    desc:   'Remind me before my tournaments start and notify me when they begin.',
+    types:  ['tournament.registration_closing', 'tournament.starting_soon', 'tournament.started'],
+  },
+  {
+    key:    'my_tournament_results',
+    label:  'My tournament results',
+    desc:   'Notify me when my tournaments finish or are cancelled.',
+    types:  ['tournament.completed', 'tournament.cancelled', 'match.result'],
+  },
+  {
+    key:    'achievements',
+    label:  'Achievements',
+    desc:   'Notify me when I reach a new tier or milestone.',
+    types:  ['achievement.tier_upgrade', 'achievement.milestone'],
+  },
+]
+
+function Toggle({ on, disabled, onChange, label }) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      aria-label={label}
+      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-50 ${on ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-gray-300)]'}`}
+    >
+      <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${on ? 'left-6' : 'left-1'}`} />
+    </button>
+  )
+}
+
 export default function SettingsPage() {
   const { data: session, isPending } = useOptimisticSession()
   const user = session?.user ?? null
@@ -15,6 +58,10 @@ export default function SettingsPage() {
   const [flashStartAlerts, setFlashStartAlerts]       = useState(null)
   const [savingFlashAlerts, setSavingFlashAlerts]     = useState(false)
 
+  // Guide notification preferences: { eventType → { inApp: bool } }
+  const [notifPrefs, setNotifPrefs]       = useState(null)   // null = loading
+  const [savingPrefs, setSavingPrefs]     = useState({})     // { groupKey → bool }
+
   useEffect(() => {
     if (!user) return
     getToken().then(token => api.users.getPreferences(token)).then(data => {
@@ -22,6 +69,50 @@ export default function SettingsPage() {
       setFlashStartAlerts(data.flashStartAlerts !== false)
     }).catch(() => {})
   }, [user?.id])
+
+  useEffect(() => {
+    if (!user) return
+    getToken()
+      .then(token => api.users.getNotifPrefs(token))
+      .then(rows => {
+        const map = {}
+        for (const r of rows) map[r.eventType] = r
+        setNotifPrefs(map)
+      })
+      .catch(() => setNotifPrefs({}))
+  }, [user?.id])
+
+  // A group is "on" if ANY of its types has inApp === true (or defaults true)
+  function groupIsOn(group) {
+    if (!notifPrefs) return true
+    return group.types.some(t => notifPrefs[t]?.inApp !== false)
+  }
+
+  async function toggleGroup(group, value) {
+    setSavingPrefs(p => ({ ...p, [group.key]: true }))
+    const token = await getToken()
+    try {
+      await Promise.all(
+        group.types.map(eventType =>
+          api.users.putNotifPref(eventType, { inApp: value }, token)
+        )
+      )
+      setNotifPrefs(prev => {
+        const next = { ...prev }
+        for (const t of group.types) next[t] = { ...(next[t] ?? {}), inApp: value }
+        return next
+      })
+    } catch {
+      // revert on error — just refetch
+      getToken().then(t => api.users.getNotifPrefs(t)).then(rows => {
+        const map = {}
+        for (const r of rows) map[r.eventType] = r
+        setNotifPrefs(map)
+      }).catch(() => {})
+    } finally {
+      setSavingPrefs(p => ({ ...p, [group.key]: false }))
+    }
+  }
 
   if (isPending) return null
 
@@ -177,6 +268,39 @@ export default function SettingsPage() {
               >
                 <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${flashStartAlerts ? 'left-7' : 'left-1'}`} />
               </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Guide notification preferences */}
+      {user && notifPrefs !== null && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            Guide Notifications
+          </h2>
+          <div
+            className="rounded-xl border divide-y"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            {NOTIF_GROUPS.map((group, i) => (
+              <div key={group.key} className={`flex items-center justify-between gap-4 p-4 ${i === 0 ? 'rounded-t-xl' : ''} ${i === NOTIF_GROUPS.length - 1 ? 'rounded-b-xl' : ''}`}>
+                <div className="min-w-0">
+                  <div className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{group.label}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{group.desc}</div>
+                </div>
+                <Toggle
+                  on={groupIsOn(group)}
+                  disabled={!!savingPrefs[group.key]}
+                  onChange={val => toggleGroup(group, val)}
+                  label={`${groupIsOn(group) ? 'Disable' : 'Enable'} ${group.label}`}
+                />
+              </div>
+            ))}
+            <div className="px-4 py-3 rounded-b-xl" style={{ backgroundColor: 'var(--bg-surface-hover)' }}>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Match ready alerts and system messages are always on and cannot be disabled.
+              </p>
             </div>
           </div>
         </section>

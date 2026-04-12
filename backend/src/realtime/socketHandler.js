@@ -415,20 +415,32 @@ export async function attachSocketIO(httpServer) {
       socket.join(`user:${user.id}`)
       logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
 
-      // Flush undelivered persistent notifications (cap at 20 most recent)
+      // Flush undelivered, non-expired persistent notifications (cap at 20 most recent)
       try {
+        const now = new Date()
         const unread = await db.userNotification.findMany({
-          where:   { userId: user.id, deliveredAt: null },
+          where: {
+            userId: user.id,
+            deliveredAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          },
           orderBy: { createdAt: 'asc' },
-          take:    20,
+          take: 20,
         })
+
+        // Mark expired notifications delivered so they don't pile up
+        await db.userNotification.updateMany({
+          where: { userId: user.id, deliveredAt: null, expiresAt: { lte: now } },
+          data:  { deliveredAt: now },
+        }).catch(() => {})
+
         if (unread.length > 0) {
           for (const n of unread) {
-            socket.emit('guide:notification', { type: n.type, payload: n.payload })
+            socket.emit('guide:notification', { type: n.type, payload: n.payload, expiresAt: n.expiresAt?.toISOString() ?? null })
           }
           await db.userNotification.updateMany({
             where: { id: { in: unread.map(n => n.id) } },
-            data:  { deliveredAt: new Date() },
+            data:  { deliveredAt: now },
           })
           logger.info({ userId: user.id, count: unread.length }, 'Flushed queued notifications on reconnect')
         }

@@ -34,6 +34,8 @@ export const api = {
     eloHistory: (id) => api.get(`/users/${id}/elo-history`),
     getPreferences:   (token)       => api.get('/users/me/preferences', token),
     patchPreferences: (body, token) => api.patch('/users/me/preferences', body, token),
+    getNotifPrefs:    (token)       => api.get('/users/notification-preferences', token),
+    putNotifPref:     (eventType, body, token) => request('PUT', `/users/notification-preferences/${eventType}`, body, token),
   },
 
   guide: {

@@ -923,7 +923,7 @@ export default function TournamentDetailPage() {
 
       {isAdmin && <AdminControls tournament={t} token={token} onRefresh={load} />}
 
-      {t.status === 'REGISTRATION_OPEN' && (
+      {t.status === 'REGISTRATION_OPEN' && (!t.registrationCloseAt || new Date(t.registrationCloseAt) > new Date()) && (
         <Section title="Registration">
           <RegistrationPanel tournament={t} token={token} userId={dbUserId ?? userId} dbUserId={dbUserId} onRefresh={load} />
         </Section>

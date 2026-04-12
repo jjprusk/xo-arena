@@ -392,6 +392,10 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Tournament registration is not open' })
     }
 
+    if (tournament.registrationCloseAt && new Date(tournament.registrationCloseAt) <= new Date()) {
+      return res.status(400).json({ error: 'Tournament registration has closed' })
+    }
+
     if (tournament.maxParticipants) {
       const count = await db.tournamentParticipant.count({
         where: { tournamentId, status: { not: 'WITHDRAWN' } },

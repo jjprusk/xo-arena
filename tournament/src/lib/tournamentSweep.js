@@ -1,8 +1,13 @@
 /**
  * Tournament sweep job — runs every 60 seconds.
  *
- * For every REGISTRATION_OPEN or REGISTRATION_CLOSED tournament whose
- * startTime is in the past:
+ * Phase 1 — close registration:
+ *   For every REGISTRATION_OPEN tournament whose registrationCloseAt is in the past,
+ *   transition to REGISTRATION_CLOSED.
+ *
+ * Phase 2 — start or cancel:
+ *   For every REGISTRATION_OPEN or REGISTRATION_CLOSED tournament whose
+ *   startTime is in the past:
  *   - participants >= minParticipants → auto-start (generate bracket + publish events)
  *   - participants <  minParticipants → auto-cancel  (publish cancelled event)
  */
@@ -22,6 +27,30 @@ export function startTournamentSweep() {
 async function sweep() {
   const now = new Date()
 
+  // Phase 1: close registration for tournaments past their registrationCloseAt
+  try {
+    const toClose = await db.tournament.findMany({
+      where: {
+        status: 'REGISTRATION_OPEN',
+        registrationCloseAt: { not: null, lte: now },
+      },
+      select: { id: true, name: true },
+    })
+    if (toClose.length > 0) {
+      await db.tournament.updateMany({
+        where: { id: { in: toClose.map(t => t.id) } },
+        data: { status: 'REGISTRATION_CLOSED' },
+      })
+      for (const t of toClose) {
+        logger.info({ tournamentId: t.id, name: t.name }, 'Tournament sweep — registration closed')
+        await publish('tournament:registration_closed', { tournamentId: t.id, name: t.name }).catch(() => {})
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'Tournament sweep — registration close phase failed')
+  }
+
+  // Phase 2: start or cancel tournaments past their startTime
   let overdue
   try {
     overdue = await db.tournament.findMany({

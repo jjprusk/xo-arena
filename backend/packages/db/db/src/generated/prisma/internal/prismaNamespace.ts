@@ -3520,6 +3520,7 @@ export const UserNotificationScalarFieldEnum = {
   type: 'type',
   payload: 'payload',
   createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
   deliveredAt: 'deliveredAt',
   emailedAt: 'emailedAt',
   readAt: 'readAt'
