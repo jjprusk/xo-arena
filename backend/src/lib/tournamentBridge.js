@@ -55,6 +55,9 @@ const CHANNELS = [
   'tournament:published',
   'tournament:flash:announced',
   'tournament:started',
+  'tournament:registration_closed',
+  'tournament:participant:joined',
+  'tournament:participant:left',
   'tournament:match:ready',
   'tournament:bot:match:ready',
   'tournament:match:result',
@@ -104,6 +107,15 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, name } = data
       io.emit('tournament:started', { tournamentId, name })
       logger.info({ tournamentId }, 'Tournament started — notified all connected clients')
+      break
+    }
+    case 'tournament:registration_closed': {
+      io.emit('tournament:registration_closed', { tournamentId: data.tournamentId })
+      break
+    }
+    case 'tournament:participant:joined':
+    case 'tournament:participant:left': {
+      io.emit(channel, { tournamentId: data.tournamentId })
       break
     }
     case 'tournament:flash:announced': {

@@ -540,6 +540,7 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
       },
     })
 
+    await publish('tournament:participant:joined', { tournamentId }).catch(() => {})
     res.status(201).json({ participant })
   } catch (e) {
     next(e)
@@ -569,6 +570,7 @@ router.delete('/:id/register', requireAuth, async (req, res, next) => {
       data: { status: 'WITHDRAWN' },
     })
 
+    await publish('tournament:participant:left', { tournamentId }).catch(() => {})
     res.status(204).send()
   } catch (e) {
     next(e)
