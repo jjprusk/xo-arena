@@ -13,7 +13,7 @@ async function fetchMyBots(token, dbUserId) {
   })
   if (!res.ok) return []
   const data = await res.json()
-  return (data.bots ?? []).filter(b => b.active)
+  return (data.bots ?? []).filter(b => b.botActive)
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────

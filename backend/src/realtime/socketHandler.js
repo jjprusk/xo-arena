@@ -477,6 +477,13 @@ export async function attachSocketIO(httpServer) {
   })
 
   botGameRunner.setIO(io)
+
+  // Clean up _pendingPvpMatches when any room closes (abandon, stale sweep, cancel, etc.)
+  // so the map doesn't accumulate entries for matches that ended abnormally.
+  roomManager.onRoomClosed((room) => {
+    if (room.tournamentMatchId) deletePendingPvpMatch(room.tournamentMatchId)
+  })
+
   startSnapshotInterval(() => roomManager.roomCount)
   return io
 }
