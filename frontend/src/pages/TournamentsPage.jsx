@@ -78,7 +78,8 @@ function RegisterButton({ tournament, token, onSuccess }) {
         const { bots } = await api.bots.mine(token)
         const active = (bots ?? []).filter(b => b.botActive !== false)
         setMyBots(active)
-        if (active.length > 0) setSelectedBotId(active[0].id)
+        // Only set default if nothing already selected (don't overwrite user's choice)
+        setSelectedBotId(prev => prev ?? (active.length > 0 ? active[0].id : null))
       } catch {
         setMyBots([])
       }
@@ -313,21 +314,20 @@ export default function TournamentsPage() {
     }
   }, [session?.user?.id])
 
-  const load = useCallback(async (filter) => {
-    setLoading(true)
+  // silent=true refreshes data in background without showing skeleton or unmounting cards
+  const load = useCallback(async (filter, silent = false) => {
+    if (!silent) setLoading(true)
     setError(null)
     try {
-      // Exclude DRAFT from the public list by either filtering server-side or client-side
       const params = {}
       if (filter) params.status = filter
       const data = await tournamentApi.list(params, token)
       const list = Array.isArray(data) ? data : (data.tournaments ?? [])
-      // Hide DRAFT tournaments on public page
       setTournaments(list.filter(t => t.status !== 'DRAFT'))
     } catch {
-      setError('Failed to load tournaments.')
+      if (!silent) setError('Failed to load tournaments.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [token])
 
@@ -339,13 +339,13 @@ export default function TournamentsPage() {
     const target = tournaments.find(t => t.id === autoRegisterId && t.status === 'REGISTRATION_OPEN')
     if (!target) return
     tournamentApi.register(autoRegisterId, token)
-      .then(() => { setAutoRegisterId(null); load(statusFilter) })
+      .then(() => { setAutoRegisterId(null); load(statusFilter, true) })
       .catch(() => setAutoRegisterId(null))
   }, [autoRegisterId, token, loading, tournaments]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh when a tournament event arrives
+  // Refresh silently on socket events — silent=true keeps cards mounted so registration state is preserved
   useEffect(() => {
-    if (lastEvent) load(statusFilter)
+    if (lastEvent) load(statusFilter, true)
   }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleFilterChange(val) {
