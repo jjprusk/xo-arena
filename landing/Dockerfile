@@ -5,8 +5,9 @@ COPY package.json ./
 COPY landing/package.json ./landing/
 RUN npm install --workspace=landing --no-package-lock --ignore-scripts
 
-# Shared package — Vite alias resolves '../packages/xo' to /app/packages/xo
+# Shared packages — Vite aliases resolve '../packages/*' to /app/packages/*
 COPY packages/xo/ ./packages/xo/
+COPY packages/nav/ ./packages/nav/
 COPY landing/ ./landing/
 
 WORKDIR /app/landing

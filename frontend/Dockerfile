@@ -5,8 +5,9 @@ COPY package.json ./
 COPY frontend/package.json ./frontend/
 RUN npm install --workspace=frontend --no-package-lock --ignore-scripts
 
-# Shared package — Vite alias resolves '../packages/xo' to /app/packages/xo
+# Shared packages — Vite aliases resolve '../packages/*' to /app/packages/*
 COPY packages/xo/ ./packages/xo/
+COPY packages/nav/ ./packages/nav/
 COPY frontend/ ./frontend/
 
 WORKDIR /app/frontend
