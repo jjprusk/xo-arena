@@ -328,17 +328,9 @@ export default function AppLayout() {
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer
         className="relative text-center py-6 text-xs"
-        style={{ zIndex: 1, color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}
+        style={{ zIndex: 1, color: 'var(--text-secondary)', borderTop: '1px solid var(--border-default)' }}
       >
         © 2026 AI Arena · callidity.com
-        <span className="mx-2">·</span>
-        <a
-          href={XO_URL}
-          className="no-underline hover:underline"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          XO Arena
-        </a>
       </footer>
 
       <GuidePanel isAdmin={user?.role === 'admin'} />

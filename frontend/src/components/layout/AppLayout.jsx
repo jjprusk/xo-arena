@@ -301,6 +301,7 @@ export default function AppLayout() {
         appId="xo"
         appUrls={APP_URLS}
         subnav="xo"
+        desktopNavKeys={['games', 'tournaments', 'rankings']}
         isStaging={isStaging}
         extrasSlot={<><MuteToggle /><ThemeToggle /></>}
         rightSlot={
@@ -382,6 +383,11 @@ export default function AppLayout() {
           onDismiss={() => handleDismissAccomplishment(accomplishments[0].id)}
         />
       )}
+      {/* Footer — hidden on mobile (bottom nav serves that role) */}
+      <footer className="hidden md:block relative text-center py-6 text-xs border-t" style={{ zIndex: 1, color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>
+        © 2026 AI Arena · callidity.com
+      </footer>
+
       <SignedIn>
         <GuidePanel isAdmin={isAdmin} />
       </SignedIn>

@@ -6,14 +6,16 @@ import { PRIMARY_NAV, XO_SUBNAV, resolveItem } from './navItems.js'
  * Shared primary navigation bar for the AI Arena platform.
  *
  * Props:
- *   appId      'landing' | 'xo'  — which site is rendering this nav
- *   appUrls    { landing, xo }   — base URLs for cross-site links
- *   subnav     null | 'xo'       — show the XO game subnav below the header
- *   rightSlot  ReactNode         — right-side controls (user button, sign-in)
- *   extrasSlot ReactNode         — extra controls before rightSlot (mute, theme toggles)
- *   isStaging  bool              — amber header background for staging
+ *   appId           'landing' | 'xo'  — which site is rendering this nav
+ *   appUrls         { landing, xo }   — base URLs for cross-site links
+ *   subnav          null | 'xo'       — show the XO game subnav below the header
+ *   desktopNavKeys  string[] | null   — if provided, only these keys appear in the desktop
+ *                                       primary nav (all keys still appear in the hamburger)
+ *   rightSlot       ReactNode         — right-side controls (user button, sign-in)
+ *   extrasSlot      ReactNode         — extra controls before rightSlot (mute, theme toggles)
+ *   isStaging       bool              — amber header background for staging
  */
-export default function AppNav({ appId, appUrls, subnav, rightSlot, extrasSlot, isStaging }) {
+export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSlot, extrasSlot, isStaging }) {
   const location = useLocation()
   const [menuOpen, setMenuOpen]   = useState(false)
   const [gamesOpen, setGamesOpen] = useState(false)
@@ -37,8 +39,13 @@ export default function AppNav({ appId, appUrls, subnav, rightSlot, extrasSlot, 
 
   const subnavItems = subnav === 'xo' ? XO_SUBNAV : null
 
-  // Items for the mobile drawer:
-  //   XO subnav section (if present) → then primary nav expanded
+  // Desktop primary nav: optionally filtered by desktopNavKeys
+  const desktopPrimaryNav = desktopNavKeys
+    ? PRIMARY_NAV.filter(item => desktopNavKeys.includes(item.key))
+    : PRIMARY_NAV
+
+  // Mobile drawer always shows everything:
+  //   XO subnav section (if present) → then full primary nav expanded
   const drawerSections = []
   if (subnavItems) {
     drawerSections.push({ title: 'XO Arena', items: subnavItems.map(i => ({ ...i, app: 'xo' })) })
@@ -136,8 +143,8 @@ export default function AppNav({ appId, appUrls, subnav, rightSlot, extrasSlot, 
 
         {/* Desktop primary nav */}
         <nav className="hidden md:flex items-center gap-5">
-          <GamesDropdown />
-          {PRIMARY_NAV.filter(i => !i.hasDropdown).map(item => (
+          {desktopPrimaryNav.some(i => i.hasDropdown) && <GamesDropdown />}
+          {desktopPrimaryNav.filter(i => !i.hasDropdown).map(item => (
             <DesktopNavItem key={item.key} item={item} />
           ))}
         </nav>
