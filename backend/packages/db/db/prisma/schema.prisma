@@ -431,6 +431,7 @@ model UserNotification {
   type        String
   payload     Json
   createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
   deliveredAt DateTime?
   emailedAt   DateTime?
   readAt      DateTime?
@@ -599,9 +600,14 @@ enum TournamentStatus {
   CANCELLED
 }
 
+enum TournamentStartMode {
+  AUTO
+  SCHEDULED
+  MANUAL
+}
+
 enum ParticipantStatus {
   REGISTERED
-  ACTIVE
   ELIMINATED
   WITHDRAWN
 }
@@ -650,6 +656,7 @@ model Tournament {
   paceMs                    Int?               @map("pace_ms")
   allowSpectators           Boolean            @default(true)
   replayRetentionDays       Int                @default(30)
+  startMode                 TournamentStartMode @default(AUTO)
   startTime                 DateTime?
   endTime                   DateTime?
   registrationOpenAt        DateTime?
@@ -683,6 +690,7 @@ model TournamentParticipant {
   status            ParticipantStatus @default(REGISTERED)
   resultNotifPref   ResultNotifPref   @default(AS_PLAYED)
   finalPosition     Int?
+  /// Normalised rank: 0.0 = winner (best), 1.0 = last place (worst). Null until tournament ends.
   finalPositionPct  Float?
   points           Int               @default(0)
   registrationMode RegistrationMode  @default(SINGLE)

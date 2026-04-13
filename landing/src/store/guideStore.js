@@ -6,6 +6,7 @@ export const useGuideStore = create((set, get) => ({
   panelOpen: false,
   slots: [],
   notifications: [],
+  onlineUsers: [],
   journeyProgress: { completedSteps: [], dismissedAt: null },
 
   // One-time UI hint flags — stored server-side so they coordinate across sites
@@ -16,6 +17,10 @@ export const useGuideStore = create((set, get) => ({
   open()   { set({ panelOpen: true }) },
   close()  { set({ panelOpen: false }) },
   toggle() { set(s => ({ panelOpen: !s.panelOpen })) },
+
+  setOnlineUsers(users) {
+    set({ onlineUsers: users ?? [] })
+  },
 
   addNotification(notif) {
     set(s => {
@@ -42,11 +47,16 @@ export const useGuideStore = create((set, get) => ({
     }))
   },
 
-  dismissJourney() {
+  dismissJourney(slots) {
     const dismissedAt = new Date().toISOString()
-    set(s => ({ journeyProgress: { ...s.journeyProgress, dismissedAt } }))
+    const updates = { journeyProgress: { ...get().journeyProgress, dismissedAt } }
+    if (slots) updates.slots = slots
+    set(updates)
     getToken().then(token => {
-      if (token) api.guide.patchPreferences({ journeyProgress: { ...get().journeyProgress } }, token).catch(() => {})
+      if (!token) return
+      const patch = { journeyProgress: get().journeyProgress }
+      if (slots) patch.guideSlots = slots
+      api.guide.patchPreferences(patch, token).catch(() => {})
     }).catch(() => {})
   },
 
@@ -109,6 +119,7 @@ export const useGuideStore = create((set, get) => ({
       panelOpen:       false,
       slots:           [],
       notifications:   [],
+      onlineUsers:     [],
       journeyProgress: { completedSteps: [], dismissedAt: null },
       uiHints:         {},
       hydrated:        false,

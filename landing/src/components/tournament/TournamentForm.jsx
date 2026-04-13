@@ -60,6 +60,7 @@ function toLocalDatetimeValue(val) {
 const DEFAULT_FORM = {
   name: '', description: '', game: 'xo', mode: 'PVP', format: 'PLANNED',
   bracketType: 'SINGLE_ELIM', bestOfN: 3, minParticipants: 2, maxParticipants: '',
+  startMode: 'AUTO',
   startTime: '', registrationOpenAt: '', registrationCloseAt: '', allowSpectators: true,
   botMinGamesPlayed: '', allowNonCompetitiveBots: false, paceMs: '',
   noticePeriodMinutes: '', durationMinutes: '',
@@ -75,6 +76,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       format: initialValues.format ?? 'PLANNED', bracketType: initialValues.bracketType ?? 'SINGLE_ELIM',
       bestOfN: initialValues.bestOfN ?? 3, minParticipants: initialValues.minParticipants ?? 2,
       maxParticipants: initialValues.maxParticipants ?? '',
+      startMode: initialValues.startMode ?? 'AUTO',
       startTime: toLocalDatetimeValue(initialValues.startTime),
       registrationOpenAt: toLocalDatetimeValue(initialValues.registrationOpenAt),
       registrationCloseAt: toLocalDatetimeValue(initialValues.registrationCloseAt),
@@ -106,6 +108,9 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       if (new Date(form.registrationOpenAt) >= new Date(form.registrationCloseAt))
         errs.registrationCloseAt = 'Registration close must be after open.'
     }
+    if (form.startMode === 'SCHEDULED' && !form.startTime) {
+      errs.startTime = 'A start time is required for Scheduled mode.'
+    }
     if (form.registrationCloseAt && form.startTime) {
       if (new Date(form.registrationCloseAt) > new Date(form.startTime))
         errs.startTime = 'Start time must be at or after registration close.'
@@ -126,6 +131,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
         name: form.name.trim(), game: form.game, mode: form.mode, format: form.format,
         bracketType: form.bracketType, bestOfN: Number(form.bestOfN),
         minParticipants: Number(form.minParticipants), allowSpectators: form.allowSpectators,
+        startMode: form.startMode,
       }
       if (form.description.trim())    payload.description         = form.description.trim()
       if (form.maxParticipants)       payload.maxParticipants     = Number(form.maxParticipants)
@@ -280,8 +286,17 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
         </Field>
       </div>
 
+      <Field label="Start Mode" hint="Controls how the tournament begins after registration closes">
+        <select value={form.startMode} onChange={e => set('startMode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+          <option value="AUTO">Auto — starts automatically when registration closes</option>
+          <option value="SCHEDULED">Scheduled — starts at a specific date and time</option>
+          <option value="MANUAL">Manual — admin clicks Start</option>
+        </select>
+      </Field>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Start Time" hint="Required before publishing" as="div">
+        {form.startMode !== 'AUTO' && (
+        <Field label="Start Time" hint={form.startMode === 'SCHEDULED' ? 'Required — tournament starts at this time' : 'Optional'} as="div">
           {form.startTime ? (
             <div className="flex flex-col gap-1">
               <DateTimePicker value={form.startTime} onChange={v => set('startTime', v)} />
@@ -297,6 +312,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
           )}
           {errors.startTime && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.startTime}</span>}
         </Field>
+        )}
         <Field label="Registration Opens At" hint="Optional" as="div">
           {form.registrationOpenAt ? (
             <div className="flex flex-col gap-1">
@@ -320,7 +336,12 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
                 className="text-[10px] text-left hover:opacity-70 w-fit" style={{ color: 'var(--text-muted)' }}>Clear</button>
             </div>
           ) : (
-            <button type="button" onClick={() => set('registrationCloseAt', toLocalDatetimeValue(new Date()))}
+            <button type="button" onClick={() => {
+              // Default to 1 hour after Opens At (if set) to avoid AM/PM trap
+              const base = form.registrationOpenAt ? new Date(form.registrationOpenAt) : new Date()
+              base.setHours(base.getHours() + 1)
+              set('registrationCloseAt', toLocalDatetimeValue(base))
+            }}
               className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
               — not set —

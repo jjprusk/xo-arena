@@ -483,6 +483,7 @@ export const UserNotificationScalarFieldEnum = {
   type: 'type',
   payload: 'payload',
   createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
   deliveredAt: 'deliveredAt',
   emailedAt: 'emailedAt',
   readAt: 'readAt'
@@ -536,6 +537,7 @@ export const TournamentScalarFieldEnum = {
   paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
   replayRetentionDays: 'replayRetentionDays',
+  startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
   registrationOpenAt: 'registrationOpenAt',

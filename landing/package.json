@@ -1,7 +1,7 @@
 {
   "name": "@xo-arena/landing",
   "private": true,
-  "version": "1.2.0-alpha-1.07",
+  "version": "1.2.0-alpha-1.08",
   "type": "module",
   "scripts": {
     "dev": "vite",

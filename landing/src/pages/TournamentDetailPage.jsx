@@ -5,6 +5,7 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
 import { connectSocket } from '../lib/socket.js'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -208,10 +209,28 @@ function AdminControls({ tournament, token, onRefresh }) {
     }
   }
 
-  const { status } = tournament
-  const canPublish = status === 'DRAFT'
-  const canStart   = status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED'
-  const canCancel  = status !== 'COMPLETED' && status !== 'CANCELLED'
+  const { status, startMode } = tournament
+  const canPublish  = status === 'DRAFT'
+  const canStart    = (status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED') && startMode === 'MANUAL'
+  const canCancel   = status !== 'COMPLETED' && status !== 'CANCELLED'
+  const canFillBots = status === 'DRAFT' || status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED'
+
+  async function fillBots() {
+    if (!confirm('Fill empty slots with test bots?')) return
+    setBusy('fillBots')
+    setErr(null)
+    setSuccess(null)
+    try {
+      const result = await tournamentApi.fillTestPlayers(tournament.id, token)
+      setSuccess(`Added ${result.added} test bot(s).`)
+      setTimeout(() => setSuccess(null), 3000)
+      onRefresh()
+    } catch (e) {
+      setErr(e.message || 'Fill failed.')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   return (
     <div
@@ -248,6 +267,16 @@ function AdminControls({ tournament, token, onRefresh }) {
             {busy === 'start' ? 'Starting…' : 'Start Tournament'}
           </button>
         )}
+        {canFillBots && (
+          <button
+            onClick={fillBots}
+            disabled={!!busy}
+            className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, var(--color-emerald-500), var(--color-emerald-700))' }}
+          >
+            {busy === 'fillBots' ? 'Filling…' : 'Fill with test bots'}
+          </button>
+        )}
         {canCancel && (
           <button
             onClick={() => act('cancel', 'Cancel')}
@@ -259,6 +288,15 @@ function AdminControls({ tournament, token, onRefresh }) {
           </button>
         )}
       </div>
+      {(status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED') && startMode !== 'MANUAL' && (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          {startMode === 'AUTO'
+            ? 'Auto mode — will start automatically when registration closes.'
+            : tournament.startTime
+              ? `Scheduled — will start at ${new Date(tournament.startTime).toLocaleString()}.`
+              : 'Scheduled mode — no start time set yet.'}
+        </p>
+      )}
       {err     && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
       {success && <p className="text-xs" style={{ color: 'var(--color-slate-600)' }}>{success}</p>}
     </div>
@@ -724,6 +762,59 @@ function MixedMatchBanner({ tournament, userId, token, matchEvent, onDismiss }) 
   )
 }
 
+// ── Final standings ───────────────────────────────────────────────────────────
+
+function computeStandings(tournament) {
+  const { participants } = tournament
+  const active = (participants ?? []).filter(p => p.status !== 'WITHDRAWN')
+  if (active.length === 0) return []
+
+  // The backend sets finalPosition on each participant when the tournament completes.
+  // Use it directly — it's authoritative and handles all bracket types correctly.
+  const withPos = active.filter(p => p.finalPosition != null)
+  if (withPos.length > 0) {
+    const sorted = [...withPos].sort((a, b) => a.finalPosition - b.finalPosition)
+    const unranked = active.filter(p => p.finalPosition == null)
+    return [
+      ...sorted.map(p => ({ ...p, position: p.finalPosition })),
+      ...unranked.map(p => ({ ...p, position: null })),
+    ]
+  }
+
+  return []
+}
+
+const POSITION_LABELS = { 1: '1st', 2: '2nd', 3: '3rd' }
+function posLabel(n) { return POSITION_LABELS[n] ?? `${n}th` }
+
+function FinalStandings({ tournament }) {
+  const standings = computeStandings(tournament)
+  if (standings.length === 0) {
+    return <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No standings data available.</p>
+  }
+
+  return (
+    <div
+      className="rounded-xl border divide-y"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+    >
+      {standings.map(s => (
+        <div key={s.id} className="flex items-center gap-3 px-4 py-3">
+          <span
+            className="text-xs font-bold tabular-nums w-8 text-center shrink-0"
+            style={{ color: s.position != null && s.position <= 3 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}
+          >
+            {s.position != null ? posLabel(s.position) : '—'}
+          </span>
+          <span className="text-sm font-medium flex-1" style={{ color: 'var(--text-primary)' }}>
+            {s.user?.displayName ?? `Participant ${s.id?.slice(0, 6)}`}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Participants table ────────────────────────────────────────────────────────
 
 function ParticipantTable({ participants }) {
@@ -734,58 +825,39 @@ function ParticipantTable({ participants }) {
   const sorted = [...participants].sort((a, b) => (a.seedPosition ?? 999) - (b.seedPosition ?? 999))
 
   return (
-    <div
-      className="rounded-xl border overflow-hidden"
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-    >
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr>
-              {['Seed', 'Player', 'ELO', 'Status'].map(col => (
-                <th
-                  key={col}
-                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
-                  style={{ backgroundColor: 'var(--bg-surface)', borderBottom: '2px solid var(--border-default)', color: 'var(--text-muted)' }}
-                >
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((p, i) => (
-              <tr
-                key={p.id}
-                className="transition-colors hover:bg-[var(--bg-surface-hover)]"
-                style={{
-                  borderBottom: i < sorted.length - 1 ? '1px solid var(--border-default)' : 'none',
-                  opacity: p.status === 'WITHDRAWN' || p.status === 'ELIMINATED' ? 0.55 : 1,
-                }}
-              >
-                <td className="px-4 py-3 text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>{p.seedPosition ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
-                  </span>
-                  {p.finalPosition && (
-                    <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
-                      #{p.finalPosition}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
-                  {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <ListTable>
+      <ListTh>Seed</ListTh>
+      <ListTh>Player</ListTh>
+      <ListTh>ELO</ListTh>
+      <ListTh>Status</ListTh>
+      {sorted.map((p, i) => (
+        <ListTr
+          key={p.id}
+          last={i === sorted.length - 1}
+          dimmed={p.status === 'WITHDRAWN' || p.status === 'ELIMINATED'}
+        >
+          <ListTd className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+            {p.seedPosition ?? '—'}
+          </ListTd>
+          <ListTd>
+            <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
+            </span>
+            {p.finalPosition && (
+              <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
+                #{p.finalPosition}
+              </span>
+            )}
+          </ListTd>
+          <ListTd className="text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
+            {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
+          </ListTd>
+          <ListTd>
+            <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
+          </ListTd>
+        </ListTr>
+      ))}
+    </ListTable>
   )
 }
 
@@ -923,9 +995,15 @@ export default function TournamentDetailPage() {
 
       {isAdmin && <AdminControls tournament={t} token={token} onRefresh={load} />}
 
-      {t.status === 'REGISTRATION_OPEN' && (
+      {t.status === 'REGISTRATION_OPEN' && (!t.registrationCloseAt || new Date(t.registrationCloseAt) > new Date()) && (
         <Section title="Registration">
           <RegistrationPanel tournament={t} token={token} userId={dbUserId ?? userId} dbUserId={dbUserId} onRefresh={load} />
+        </Section>
+      )}
+
+      {t.status === 'COMPLETED' && (
+        <Section title="Final Standings">
+          <FinalStandings tournament={t} />
         </Section>
       )}
 

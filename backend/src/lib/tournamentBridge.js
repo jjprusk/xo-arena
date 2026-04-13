@@ -8,16 +8,35 @@ import db from './db.js'
 import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
 import { completeStep } from '../services/journeyService.js'
+import { botGameRunner } from '../realtime/botGameRunner.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
 // Stores state for PVP tournament matches waiting for players to join a room.
-// matchId → { tournamentId, participant1UserId, participant2UserId, bestOfN, slug }
+// matchId → { tournamentId, participant1UserId, participant2UserId, bestOfN, slug, expiresAt }
 // "slug" is null until the first player requests the room via tournament:room:join.
+// Entries expire after PENDING_MATCH_TTL_MS to prevent unbounded growth.
 
 const _pendingPvpMatches = new Map()
+const PENDING_MATCH_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
+
+function _pruneStalePendingMatches() {
+  const now = Date.now()
+  for (const [matchId, entry] of _pendingPvpMatches) {
+    if (entry.expiresAt < now) {
+      _pendingPvpMatches.delete(matchId)
+      logger.warn({ matchId }, 'Pruned stale pending PVP match (TTL expired)')
+    }
+  }
+}
 
 export function getPendingPvpMatch(matchId) {
-  return _pendingPvpMatches.get(matchId) ?? null
+  const entry = _pendingPvpMatches.get(matchId)
+  if (!entry) return null
+  if (entry.expiresAt < Date.now()) {
+    _pendingPvpMatches.delete(matchId)
+    return null
+  }
+  return entry
 }
 
 export function setPendingPvpMatchSlug(matchId, slug) {
@@ -35,7 +54,13 @@ export function getPendingPvpMatchCount() { return _pendingPvpMatches.size }
 const CHANNELS = [
   'tournament:published',
   'tournament:flash:announced',
+  'tournament:started',
+  'tournament:registration_closed',
+  'tournament:participant:joined',
+  'tournament:participant:left',
   'tournament:match:ready',
+  'tournament:bot:match:ready',
+  'tournament:round:started',
   'tournament:match:result',
   'tournament:warning',
   'tournament:completed',
@@ -69,6 +94,11 @@ export function startTournamentBridge(io) {
       logger.error({ err, channel }, 'Tournament bridge message error')
     }
   })
+
+  // Periodically prune stale pending PVP match entries so the in-memory map
+  // doesn't accumulate entries from matches that never started.
+  const pruneTimer = setInterval(() => _pruneStalePendingMatches(), 30 * 60_000)
+  pruneTimer.unref()
 }
 
 export async function handleEvent(io, channel, data) {
@@ -77,6 +107,21 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, name, format, mode } = data
       await dispatch({ type: 'tournament.published', targets: { broadcast: true }, payload: { tournamentId, name, format, mode } })
       logger.info({ tournamentId }, 'Tournament published — notified all connected clients')
+      break
+    }
+    case 'tournament:started': {
+      const { tournamentId, name } = data
+      io.emit('tournament:started', { tournamentId, name })
+      logger.info({ tournamentId }, 'Tournament started — notified all connected clients')
+      break
+    }
+    case 'tournament:registration_closed': {
+      io.emit('tournament:registration_closed', { tournamentId: data.tournamentId })
+      break
+    }
+    case 'tournament:participant:joined':
+    case 'tournament:participant:left': {
+      io.emit(channel, { tournamentId: data.tournamentId })
       break
     }
     case 'tournament:flash:announced': {
@@ -94,12 +139,14 @@ export async function handleEvent(io, channel, data) {
 
       // Store pending PVP match so socketHandler can create/join the room on demand
       if (participant1UserId && participant2UserId) {
+        _pruneStalePendingMatches()
         _pendingPvpMatches.set(matchId, {
           tournamentId,
           participant1UserId,
           participant2UserId,
           bestOfN: bestOfN ?? 1,
           slug: null,
+          expiresAt: Date.now() + PENDING_MATCH_TTL_MS,
         })
       }
 
@@ -109,6 +156,22 @@ export async function handleEvent(io, channel, data) {
         // Journey step 7: first tournament registration detected at match-ready time (fire-and-forget)
         completeStep(userId, 7, io).catch(() => {})
       }
+      break
+    }
+    case 'tournament:bot:match:ready': {
+      // Start a bot vs bot game for this tournament match
+      const { tournamentId, matchId, bot1, bot2, bestOfN } = data
+      try {
+        await botGameRunner.startGame({ bot1, bot2, tournamentId, tournamentMatchId: matchId, bestOfN: bestOfN ?? 1 })
+        logger.info({ tournamentId, matchId, bot1: bot1.displayName, bot2: bot2.displayName }, 'Bot tournament match started')
+      } catch (err) {
+        logger.warn({ err, tournamentId, matchId }, 'Failed to start bot tournament match')
+      }
+      break
+    }
+    case 'tournament:round:started': {
+      const { tournamentId, roundNumber } = data
+      io.emit('tournament:round:started', { tournamentId, roundNumber })
       break
     }
     case 'tournament:match:result': {
@@ -156,38 +219,91 @@ export async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:completed': {
-      const { tournamentId, finalStandings } = data
+      const { tournamentId, name, finalStandings } = data
+
+      // Build a map of notifyUserId → best position across all their bots.
+      // A single owner may own multiple bot participants; send one notification
+      // with their best-placed bot's position rather than one per bot.
+      const ownerPositionMap = new Map() // notifyUserId → position | null
+
+      // Walk finalStandings first (positioned participants)
       for (const { userId, position } of finalStandings) {
-        io.to(`user:${userId}`).emit('tournament:completed', { tournamentId, position })
-        await dispatch({ type: 'tournament.completed', targets: { userId }, payload: { tournamentId, position } })
+        const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
+        const notifyUserId = botUser?.isBot && botUser.botOwnerId ? botUser.botOwnerId : userId
+
+        const current = ownerPositionMap.get(notifyUserId)
+        // Keep the best (lowest) position
+        if (current === undefined || (position != null && (current == null || position < current))) {
+          ownerPositionMap.set(notifyUserId, position)
+        }
       }
 
-      // Flush pending match result notifications for END_OF_TOURNAMENT participants
+      // Also include participants not in finalStandings (eliminated early)
+      try {
+        const allParticipants = await db.tournamentParticipant.findMany({
+          where: { tournamentId },
+          select: { userId: true },
+        })
+        const standingUserIds = new Set(finalStandings.map(s => s.userId))
+        for (const { userId } of allParticipants) {
+          if (standingUserIds.has(userId)) continue
+          const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
+          const notifyUserId = botUser?.isBot && botUser.botOwnerId ? botUser.botOwnerId : userId
+          if (!ownerPositionMap.has(notifyUserId)) {
+            ownerPositionMap.set(notifyUserId, null)
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, tournamentId }, 'Failed to collect all participants for completion notification')
+      }
+
+      // Emit once per unique owner/participant
+      for (const [notifyUserId, position] of ownerPositionMap) {
+        io.to(`user:${notifyUserId}`).emit('tournament:completed', { tournamentId, position })
+        await dispatch({ type: 'tournament.completed', targets: { userId: notifyUserId }, payload: { tournamentId, name, position } })
+      }
+
+      // Flush pending match result notifications for END_OF_TOURNAMENT participants.
+      // Batched: one findMany for all EOT users instead of N individual queries.
       try {
         const eotParticipants = await db.tournamentParticipant.findMany({
           where: { tournamentId, resultNotifPref: 'END_OF_TOURNAMENT' },
           select: { userId: true },
         })
-        for (const { userId } of eotParticipants) {
-          const pending = await db.userNotification.findMany({
+        if (eotParticipants.length > 0) {
+          const eotUserIds = eotParticipants.map(p => p.userId)
+
+          const allPending = await db.userNotification.findMany({
             where: {
-              userId,
+              userId: { in: eotUserIds },
               type: 'match.result',
               deliveredAt: null,
               payload: { path: ['tournamentId'], equals: tournamentId },
             },
           })
-          if (pending.length === 0) continue
 
-          // Emit all pending match results in a single batch
-          const matchIds = pending.map(n => n.payload?.matchId).filter(Boolean)
-          io.to(`user:${userId}`).emit('tournament:match:results:batch', { tournamentId, matchIds })
+          // Group by userId
+          const byUser = {}
+          for (const n of allPending) {
+            if (!byUser[n.userId]) byUser[n.userId] = []
+            byUser[n.userId].push(n)
+          }
 
-          // Mark them delivered
-          await db.userNotification.updateMany({
-            where: { id: { in: pending.map(n => n.id) } },
-            data: { deliveredAt: new Date() },
-          })
+          const deliveredIds = []
+          for (const userId of eotUserIds) {
+            const pending = byUser[userId] ?? []
+            if (pending.length === 0) continue
+            const matchIds = pending.map(n => n.payload?.matchId).filter(Boolean)
+            io.to(`user:${userId}`).emit('tournament:match:results:batch', { tournamentId, matchIds })
+            deliveredIds.push(...pending.map(n => n.id))
+          }
+
+          if (deliveredIds.length > 0) {
+            await db.userNotification.updateMany({
+              where: { id: { in: deliveredIds } },
+              data: { deliveredAt: new Date() },
+            })
+          }
         }
       } catch (err) {
         logger.error({ err, tournamentId }, 'Failed to flush END_OF_TOURNAMENT match results')
@@ -195,10 +311,17 @@ export async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:cancelled': {
-      const { tournamentId, participantUserIds } = data
+      const { tournamentId, name, participantUserIds } = data
       for (const userId of participantUserIds) {
         io.to(`user:${userId}`).emit('tournament:cancelled', { tournamentId })
-        await dispatch({ type: 'tournament.cancelled', targets: { userId }, payload: { tournamentId } })
+        await dispatch({ type: 'tournament.cancelled', targets: { userId }, payload: { tournamentId, name } })
+
+        // Also notify bot owners
+        const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
+        if (botUser?.isBot && botUser.botOwnerId) {
+          io.to(`user:${botUser.botOwnerId}`).emit('tournament:cancelled', { tournamentId })
+          await dispatch({ type: 'tournament.cancelled', targets: { userId: botUser.botOwnerId }, payload: { tournamentId, name } })
+        }
       }
       break
     }

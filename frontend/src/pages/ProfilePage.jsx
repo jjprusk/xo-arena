@@ -3,6 +3,7 @@ import { useOptimisticSession, clearSessionCache } from '../lib/useOptimisticSes
 import { getToken, clearTokenCache } from '../lib/getToken.js'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
+import { tournamentApi } from '../lib/tournamentApi.js'
 import { signOut } from '../lib/auth-client.js'
 import { disconnectSocket } from '../lib/socket.js'
 import { useGuideStore } from '../store/guideStore.js'
@@ -56,9 +57,13 @@ export default function ProfilePage() {
   const [emailAchievements, setEmailAchievements] = useState(false)
   const [savingEmailPref, setSavingEmailPref] = useState(false)
 
+  // Tournament classification / merits
+  const [classification, setClassification] = useState(null)
+  const [botClassifications, setBotClassifications] = useState({}) // keyed by bot user id
+
   // Accordion open state — auto-open bots section when coming from journey create-bot action
   const [openSections, setOpenSections] = useState(() => ({
-    profile: false, stats: true, credits: true,
+    profile: false, stats: true, credits: true, merits: true,
     bots: searchParams.get('action') === 'create-bot' || searchParams.get('section') === 'bots',
     danger: false,
   }))
@@ -112,11 +117,12 @@ export default function ProfilePage() {
         setNameInput(user.displayName)
 
         // All fetches in parallel — nothing depends on the others.
-        const [statsRes, eloRes, botsRes, creditsRes] = await Promise.allSettled([
+        const [statsRes, eloRes, botsRes, creditsRes, classificationRes] = await Promise.allSettled([
           api.users.stats(user.id),
           api.users.eloHistory(user.id),
           api.bots.list({ ownerId: user.id, includeInactive: true }),
           api.users.credits(user.id),
+          tournamentApi.getMyClassification(token),
         ])
 
         if (statsRes.status === 'fulfilled') setStats(statsRes.value.stats)
@@ -130,6 +136,26 @@ export default function ProfilePage() {
         if (creditsRes.status === 'fulfilled') {
           setCredits(creditsRes.value.credits)
           setEmailAchievements(creditsRes.value.credits.emailAchievements ?? false)
+        }
+        if (classificationRes.status === 'fulfilled' && classificationRes.value?.classification) {
+          setClassification(classificationRes.value.classification)
+        }
+
+        // Fetch bot classifications in parallel (public endpoint, no token needed)
+        if (botsRes.status === 'fulfilled') {
+          const botList = botsRes.value.bots ?? []
+          if (botList.length > 0) {
+            const botClassResults = await Promise.allSettled(
+              botList.map(b => tournamentApi.getPlayerClassification(b.id))
+            )
+            const map = {}
+            botList.forEach((b, i) => {
+              if (botClassResults[i].status === 'fulfilled' && botClassResults[i].value?.classification) {
+                map[b.id] = botClassResults[i].value.classification
+              }
+            })
+            setBotClassifications(map)
+          }
         }
       } catch {
         setError('Failed to load profile.')
@@ -562,6 +588,15 @@ export default function ProfilePage() {
         </AccordionSection>
       )}
 
+      {/* Tournament Ranking — always visible once profile loads */}
+      <MeritsSection
+        classification={classification}
+        bots={bots}
+        botClassifications={botClassifications}
+        open={openSections.merits}
+        onToggle={() => toggle('merits')}
+      />
+
       {/* My Bots */}
       <AccordionSection
         title="My Bots"
@@ -820,6 +855,178 @@ export default function ProfilePage() {
         <BotCreatedPopup onDismiss={() => { setShowBotCreatedPopup(false); useGuideStore.getState().open(); navigate('/gym') }} />
       )}
     </div>
+  )
+}
+
+// ── Tournament Ranking (Merits) ───────────────────────────────────────────────
+
+const TIER_META = [
+  { tier: 'RECRUIT',   label: 'Recruit',   icon: '⚪', required: 4  },
+  { tier: 'CONTENDER', label: 'Contender', icon: '🔵', required: 6  },
+  { tier: 'VETERAN',   label: 'Veteran',   icon: '🟢', required: 10 },
+  { tier: 'ELITE',     label: 'Elite',     icon: '🟡', required: 18 },
+  { tier: 'CHAMPION',  label: 'Champion',  icon: '🟠', required: 25 },
+  { tier: 'LEGEND',    label: 'Legend',    icon: '🔴', required: null },
+]
+
+function tierMeta(tier) {
+  const idx = TIER_META.findIndex(t => t.tier === tier)
+  return { meta: TIER_META[idx] ?? TIER_META[0], idx: idx === -1 ? 0 : idx }
+}
+
+
+function MeritsSection({ classification, bots, botClassifications, open, onToggle }) {
+  // Build roster: user first, then all bots
+  const roster = [
+    { id: 'me', label: 'You', classification: classification ?? null, isBot: false },
+    ...bots.map(b => ({
+      id: b.id,
+      label: b.displayName,
+      classification: botClassifications[b.id] ?? null,
+      isBot: true,
+      botId: b.id,
+    })),
+  ]
+
+  // Summary line
+  let summaryParts
+  if (classification) {
+    const { meta: userTier, idx: userIdx } = tierMeta(classification.tier)
+    const userNext = TIER_META[userIdx + 1] ?? null
+    const userMerits = classification.merits ?? 0
+    summaryParts = [`${userTier.icon} ${userTier.label} · ${userMerits} merit${userMerits !== 1 ? 's' : ''}`]
+    if (userNext) summaryParts.push(`${userTier.required - userMerits} to next`)
+    else summaryParts.push('Max tier')
+  } else {
+    summaryParts = ['No rank yet']
+  }
+  if (bots.length > 0) summaryParts.push(`${bots.length} bot${bots.length !== 1 ? 's' : ''}`)
+
+  return (
+    <AccordionSection
+      title="Tournament Ranking"
+      summary={summaryParts.join(' · ')}
+      open={open}
+      onToggle={onToggle}
+    >
+      <div className="space-y-4">
+        {/* Roster table: user + bots */}
+        <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-default)' }}>
+                <th className="px-3 py-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Player</th>
+                <th className="px-3 py-2 text-center font-semibold" style={{ color: 'var(--text-muted)' }}>Tier</th>
+                <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>Merits</th>
+                <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>To next</th>
+              </tr>
+            </thead>
+            <tbody>
+              {roster.map((row, i) => {
+                const cls = row.classification
+                if (!cls) {
+                  // No classification yet (user or bot)
+                  return (
+                    <tr key={row.id} style={{ borderTop: i > 0 ? '1px solid var(--border-default)' : undefined }}>
+                      <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
+                        {row.label}
+                        {row.isBot && <span className="ml-1.5 badge badge-done" style={{ fontSize: '9px' }}>bot</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center" style={{ color: 'var(--text-muted)' }}>—</td>
+                      <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>—</td>
+                      <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>—</td>
+                    </tr>
+                  )
+                }
+                const { meta: t, idx: tIdx } = tierMeta(cls.tier)
+                const nextT = TIER_META[tIdx + 1] ?? null
+                const m = cls.merits ?? 0
+                const toNext = nextT ? t.required - m : null
+                return (
+                  <tr
+                    key={row.id}
+                    style={{
+                      borderTop: i > 0 ? '1px solid var(--border-default)' : undefined,
+                      backgroundColor: !row.isBot ? 'var(--color-blue-50, rgba(59,130,246,0.06))' : 'transparent',
+                    }}
+                  >
+                    <td className="px-3 py-2 font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {row.isBot ? (
+                        <Link to={`/bots/${row.botId}`} className="hover:underline" style={{ color: 'var(--text-primary)' }}>
+                          {row.label}
+                        </Link>
+                      ) : row.label}
+                      {row.isBot && (
+                        <span className="ml-1.5 badge badge-done" style={{ fontSize: '9px' }}>bot</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span title={t.label}>{t.icon} {t.label}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: 'var(--color-blue-600)' }}>
+                      {m}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums" style={{ color: toNext === 0 ? 'var(--color-teal-600)' : 'var(--text-secondary)' }}>
+                      {toNext != null ? toNext : <span style={{ color: 'var(--text-muted)' }}>max</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Tier ladder reference */}
+        <details className="group">
+          <summary
+            className="text-[10px] font-semibold uppercase tracking-wide cursor-pointer select-none"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Tier ladder ▸
+          </summary>
+          <div className="mt-2 rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-default)' }}>
+                  <th className="px-3 py-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Tier</th>
+                  <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>Merits to promote</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TIER_META.map((t, i) => (
+                  <tr key={t.tier} style={{ borderTop: i > 0 ? '1px solid var(--border-default)' : undefined }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--text-primary)' }}>
+                      {t.icon} {t.label}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                      {t.required ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+
+        {/* User's recent tier history */}
+        {classification?.history?.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Your recent tier changes</p>
+            {classification.history.slice(0, 5).map((h, i) => (
+              <div key={i} className="flex items-center justify-between text-xs" style={{ color: 'var(--text-secondary)' }}>
+                <span>
+                  {h.fromTier ? `${h.fromTier} → ${h.toTier}` : h.toTier}
+                  {' '}<span style={{ color: 'var(--text-muted)' }}>({h.reason?.replace(/_/g, ' ')})</span>
+                </span>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {new Date(h.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </AccordionSection>
   )
 }
 

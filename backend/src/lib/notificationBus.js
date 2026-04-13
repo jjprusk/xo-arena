@@ -14,21 +14,22 @@ export function getDispatchCounters() { return { ..._dispatchCounters } }
 // ── Event registry ────────────────────────────────────────────────────────────
 // mode: 'personal' | 'cohort' | 'broadcast'
 // persist: 'ephemeral' | 'persistent'
+// ttlMs: optional default TTL in ms from creation; null = never expires
 const REGISTRY = {
-  'tournament.published':            { mode: 'broadcast', persist: 'ephemeral',  email: false },
-  'tournament.flash_announced':      { mode: 'broadcast', persist: 'ephemeral',  email: false },
-  'tournament.registration_closing': { mode: 'cohort',    persist: 'persistent', email: false },
-  'tournament.starting_soon':        { mode: 'cohort',    persist: 'persistent', email: false },
-  'tournament.started':              { mode: 'cohort',    persist: 'persistent', email: false },
-  'tournament.cancelled':            { mode: 'cohort',    persist: 'persistent', email: true  },
-  'tournament.completed':            { mode: 'cohort',    persist: 'persistent', email: true  },
-  'match.ready':                     { mode: 'personal',  persist: 'persistent', email: true,  systemCritical: true },
-  'match.result':                    { mode: 'personal',  persist: 'persistent', email: false },
-  'achievement.tier_upgrade':        { mode: 'personal',  persist: 'persistent', email: false },
-  'achievement.milestone':           { mode: 'personal',  persist: 'persistent', email: false },
-  'admin.announcement':              { mode: 'broadcast', persist: 'persistent', email: false },
-  'system.alert':                    { mode: 'personal',  persist: 'persistent', email: false, systemCritical: true },
-  'system.alert.cleared':            { mode: 'personal',  persist: 'persistent', email: false, systemCritical: true },
+  'tournament.published':            { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h
+  'tournament.flash_announced':      { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
+  'tournament.registration_closing': { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  2 * 60 * 60 * 1000 },  // 2h
+  'tournament.starting_soon':        { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
+  'tournament.started':              { mode: 'cohort',    persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 },  // 24h
+  'tournament.cancelled':            { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'tournament.completed':            { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'match.ready':                     { mode: 'personal',  persist: 'persistent', email: true,  ttlMs:  6 * 60 * 60 * 1000, systemCritical: true },  // 6h
+  'match.result':                    { mode: 'personal',  persist: 'persistent', email: false, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'achievement.tier_upgrade':        { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null },
+  'achievement.milestone':           { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null },
+  'admin.announcement':              { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: null },
+  'system.alert':                    { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null, systemCritical: true },
+  'system.alert.cleared':            { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null, systemCritical: true },
 }
 
 // ── Default preferences (used when no NotificationPreference row exists) ──────
@@ -58,7 +59,7 @@ const PREF_DEFAULTS = {
  *
  * Never throws — all errors are caught and logged.
  */
-export async function dispatch({ type, targets, payload = {} }) {
+export async function dispatch({ type, targets, payload = {}, expiresAt: explicitExpiresAt }) {
   try {
     // Increment dispatch counter for monitoring
     _dispatchCounters[type] = (_dispatchCounters[type] ?? 0) + 1
@@ -68,6 +69,14 @@ export async function dispatch({ type, targets, payload = {} }) {
       logger.warn({ type }, 'dispatch(): unknown event type — skipping')
       return
     }
+
+    // Compute expiresAt: explicit override > REGISTRY ttlMs > null
+    const expiresAt = explicitExpiresAt
+      ? new Date(explicitExpiresAt)
+      : entry.ttlMs
+        ? new Date(Date.now() + entry.ttlMs)
+        : null
+    const expiresAtIso = expiresAt?.toISOString() ?? null
 
     // Resolve target user IDs
     let userIds = []
@@ -79,7 +88,7 @@ export async function dispatch({ type, targets, payload = {} }) {
       }
       // Emit to all sockets regardless
       if (_io) {
-        _io.emit('guide:notification', { type, payload })
+        _io.emit('guide:notification', { type, payload, expiresAt: expiresAtIso })
       }
       if (entry.persist !== 'persistent') return  // ephemeral broadcast done
     } else if (targets?.cohort) {
@@ -90,12 +99,20 @@ export async function dispatch({ type, targets, payload = {} }) {
 
     if (userIds.length === 0) return
 
-    // For broadcast+persistent: use createMany for efficiency
+    // For broadcast+persistent: respect preferences, then use createMany for efficiency
     if (targets?.broadcast && entry.persist === 'persistent') {
-      await db.userNotification.createMany({
-        data: userIds.map(userId => ({ userId, type, payload })),
-        skipDuplicates: true,
+      const optedOut = await db.notificationPreference.findMany({
+        where: { userId: { in: userIds }, eventType: type, inApp: false },
+        select: { userId: true },
       })
+      const optedOutSet = new Set(optedOut.map(r => r.userId))
+      const eligible = userIds.filter(id => !optedOutSet.has(id))
+      if (eligible.length > 0) {
+        await db.userNotification.createMany({
+          data: eligible.map(userId => ({ userId, type, payload, ...(expiresAt && { expiresAt }) })),
+          skipDuplicates: true,
+        })
+      }
       return
     }
 
@@ -122,7 +139,7 @@ export async function dispatch({ type, targets, payload = {} }) {
             where: { userId, type, deliveredAt: null, ...dedupFilter },
           })
           if (existing) return
-          const notif = await db.userNotification.create({ data: { userId, type, payload } })
+          const notif = await db.userNotification.create({ data: { userId, type, payload, ...(expiresAt && { expiresAt }) } })
           notifId = notif.id
         }
 
@@ -131,7 +148,7 @@ export async function dispatch({ type, targets, payload = {} }) {
         if (_io) {
           const sockets = await _io.in(`user:${userId}`).fetchSockets()
           if (sockets.length > 0) {
-            _io.to(`user:${userId}`).emit('guide:notification', { type, payload })
+            _io.to(`user:${userId}`).emit('guide:notification', { type, payload, expiresAt: expiresAtIso })
             if (notifId) {
               await db.userNotification.update({
                 where: { id: notifId },

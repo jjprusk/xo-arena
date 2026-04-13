@@ -42,6 +42,8 @@ services:
       DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: http://localhost:5173,http://localhost:5174
+      TOURNAMENT_SERVICE_URL: http://tournament:3001
+      INTERNAL_SECRET: xo-arena-internal-dev-secret
     ports:
       - "3000:3000"
     volumes:
@@ -68,6 +70,7 @@ services:
     volumes:
       - ./frontend:/app
       - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
+      - ./packages/nav:/packages/nav  # resolve alias: __dirname(/app)/../packages/nav
       - /app/node_modules
     depends_on:
       - backend
@@ -86,6 +89,7 @@ services:
     volumes:
       - ./landing:/app
       - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
+      - ./packages/nav:/packages/nav  # resolve alias: __dirname(/app)/../packages/nav
       - /app/node_modules
     depends_on:
       - backend
@@ -101,6 +105,7 @@ services:
       DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: http://localhost:5174,http://localhost:5173
+      INTERNAL_SECRET: xo-arena-internal-dev-secret
     ports:
       - "3001:3001"
     volumes:

@@ -246,7 +246,7 @@ describe('ProfilePage — bot list', () => {
     renderPage()
     await openBotsAccordion()
     await waitFor(() => {
-      expect(screen.getByText('MyBot')).toBeDefined()
+      expect(screen.getAllByText('MyBot').length).toBeGreaterThan(0)
     })
   })
 

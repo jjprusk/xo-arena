@@ -563,7 +563,6 @@ enum TournamentStatus {
 
 enum ParticipantStatus {
   REGISTERED
-  ACTIVE
   ELIMINATED
   WITHDRAWN
 }
@@ -645,6 +644,7 @@ model TournamentParticipant {
   status            ParticipantStatus @default(REGISTERED)
   resultNotifPref   ResultNotifPref   @default(AS_PLAYED)
   finalPosition     Int?
+  /// Normalised rank: 0.0 = winner (best), 1.0 = last place (worst). Null until tournament ends.
   finalPositionPct  Float?
   points           Int               @default(0)
   registrationMode RegistrationMode  @default(SINGLE)

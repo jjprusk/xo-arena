@@ -1,21 +1,28 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
+import { POST_JOURNEY_SLOTS } from './slotActions.js'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 
 const XO = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
+// site: 'platform' = landing site (NavLink), 'xo' = game site (external link)
 const STEPS = [
-  { index: 1, title: 'Welcome to the Arena',    cta: null,                  href: null,                                    external: false },
-  { index: 2, title: 'Read the FAQ',             cta: 'Read the FAQ',       href: '/faq',                                  external: false },
-  { index: 3, title: 'Play your first game',     cta: 'Play now',           href: `${XO}/play?action=vs-community-bot`,    external: true  },
-  { index: 4, title: 'Explore AI Training',      cta: 'Open Gym Guide',     href: `${XO}/gym/guide`,                       external: true  },
-  { index: 5, title: 'Create your first bot',    cta: 'Create a bot',       href: `${XO}/profile?action=create-bot`,       external: true  },
-  { index: 6, title: 'Train your bot',           cta: 'Start training',     href: `${XO}/gym?action=start-training`,       external: true  },
-  { index: 7, title: 'Enter a tournament',       cta: 'Browse tournaments', href: '/tournaments',                          external: false },
-  { index: 8, title: 'Play a tournament match',  cta: 'Check tournaments',  href: '/tournaments',                          external: false },
+  { index: 1, title: 'Welcome to the Arena',   cta: null,                  href: null,                                    external: false, site: 'platform' },
+  { index: 2, title: 'Read the FAQ',            cta: 'Read the FAQ',       href: '/faq',                                  external: false, site: 'platform' },
+  { index: 3, title: 'Play your first game',    cta: 'Play now',           href: `${XO}/play?action=vs-community-bot`,    external: true,  site: 'xo'       },
+  { index: 4, title: 'Explore AI Training',     cta: 'Open Gym Guide',     href: `${XO}/gym/guide`,                       external: true,  site: 'xo'       },
+  { index: 5, title: 'Create your first bot',   cta: 'Create a bot',       href: '/profile?action=create-bot',            external: false, site: 'platform' },
+  { index: 6, title: 'Train your bot',          cta: 'Start training',     href: `${XO}/gym?action=start-training`,       external: true,  site: 'xo'       },
+  { index: 7, title: 'Enter a tournament',      cta: 'Browse tournaments', href: '/tournaments',                          external: false, site: 'platform' },
+  { index: 8, title: 'Play a tournament match', cta: 'Check tournaments',  href: '/tournaments',                          external: false, site: 'platform' },
 ]
+
+const SITE_BADGE = {
+  platform: { label: 'AI Arena', color: 'var(--color-slate-400)' },
+  xo:       { label: 'XO Arena', color: 'var(--color-teal-500)'  },
+}
 
 const TOTAL = 8
 
@@ -105,10 +112,7 @@ export default function JourneyCard() {
 
   function handleDismissConfirm() {
     setConfirming(false)
-    dismissJourney()
-    getToken().then(token => {
-      if (token) api.guide.patchPreferences({ journeyProgress: { completedSteps, dismissedAt: new Date().toISOString() } }, token).catch(() => {})
-    }).catch(() => {})
+    dismissJourney(POST_JOURNEY_SLOTS)
   }
 
   function StepCta({ step }) {
@@ -137,7 +141,7 @@ export default function JourneyCard() {
         <p style={{ fontSize: '0.75rem', color: 'var(--guide-text-2, #9AA3BA)', marginBottom: '0.75rem', lineHeight: 1.5 }}>
           You've earned the <strong style={{ color: 'var(--color-amber-400)' }}>Arena Graduate</strong> badge and +50 TC.
         </p>
-        <button onClick={() => dismissJourney()} style={{ width: '100%', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-teal-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+        <button onClick={() => dismissJourney(POST_JOURNEY_SLOTS)} style={{ width: '100%', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-teal-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
           Continue
         </button>
       </div>
@@ -210,8 +214,15 @@ export default function JourneyCard() {
                   {done ? '✓' : step.index}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.3, color: current ? 'var(--text-primary)' : 'var(--text-secondary)', textDecoration: done ? 'line-through' : 'none' }}>
-                    {step.title}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.3, color: current ? 'var(--text-primary)' : 'var(--text-secondary)', textDecoration: done ? 'line-through' : 'none' }}>
+                      {step.title}
+                    </span>
+                    {step.site && (
+                      <span style={{ fontSize: '0.5625rem', fontWeight: 700, lineHeight: 1, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', background: `${SITE_BADGE[step.site].color}22`, color: SITE_BADGE[step.site].color, border: `1px solid ${SITE_BADGE[step.site].color}44`, whiteSpace: 'nowrap' }}>
+                        {SITE_BADGE[step.site].label}
+                      </span>
+                    )}
                   </div>
                   {current && <StepCta step={step} />}
                 </div>

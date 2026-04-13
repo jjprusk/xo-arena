@@ -30,10 +30,15 @@ export const api = {
   delete: (path, token) => request('DELETE', path, null, token),
 
   users: {
-    stats: (id) => api.get(`/users/${id}/stats`),
-    eloHistory: (id) => api.get(`/users/${id}/elo-history`),
+    sync:        (token)        => api.post('/users/sync', {}, token),
+    stats:       (id)           => api.get(`/users/${id}/stats`),
+    eloHistory:  (id)           => api.get(`/users/${id}/elo-history`),
+    credits:     (id)           => api.get(`/users/${id}/credits`),
+    updateSettings: (body, token) => api.patch('/users/me/settings', body, token),
     getPreferences:   (token)       => api.get('/users/me/preferences', token),
     patchPreferences: (body, token) => api.patch('/users/me/preferences', body, token),
+    getNotifPrefs:    (token)       => api.get('/users/notification-preferences', token),
+    putNotifPref:     (eventType, body, token) => request('PUT', `/users/notification-preferences/${eventType}`, body, token),
   },
 
   guide: {
@@ -51,7 +56,11 @@ export const api = {
       const qs = p.toString()
       return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
     },
-    resetElo: (id, token) => request('POST', `/bots/${id}/reset-elo`, {}, token),
+    mine:     (token)              => request('GET',    '/bots/mine', null, token),
+    create:   (body, token)        => request('POST',   '/bots', body, token),
+    update:   (id, body, token)    => request('PATCH',  `/bots/${id}`, body, token),
+    delete:   (id, token)          => request('DELETE', `/bots/${id}`, null, token),
+    resetElo: (id, token)          => request('POST',   `/bots/${id}/reset-elo`, {}, token),
   },
 
   botGames: {

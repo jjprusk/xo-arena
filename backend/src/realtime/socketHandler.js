@@ -6,9 +6,9 @@
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import Redis from 'ioredis'
+import { jwtVerify, importJWK } from 'jose'
 import { roomManager } from './roomManager.js'
 import { botGameRunner } from './botGameRunner.js'
-import { auth } from '../lib/auth.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
@@ -29,19 +29,54 @@ import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
 
+// ── Online presence ───────────────────────────────────────────────────────────
+// socketId → { userId, displayName, avatarUrl }
+const _onlineBySocket = new Map()
+// socketId → timeoutId — grace period before removing a disconnected socket
+const _pendingRemovals = new Map()
+const PRESENCE_GRACE_MS = 8_000
+
+function broadcastOnlineUsers(io) {
+  const users = [...new Map(
+    [..._onlineBySocket.values()].map(u => [u.userId, u])
+  ).values()]
+  io.emit('guide:onlineUsers', { users })
+}
+
+/** Cancel any pending grace-period removal for a given userId (called on re-subscribe). */
+function cancelPendingRemoval(userId) {
+  for (const [sid, timer] of _pendingRemovals) {
+    if (_onlineBySocket.get(sid)?.userId === userId) {
+      clearTimeout(timer)
+      _pendingRemovals.delete(sid)
+      _onlineBySocket.delete(sid)
+    }
+  }
+}
+
+/**
+ * Report a completed tournament match to the tournament service.
+ * Returns true on success, false on failure (caller decides whether to clean up).
+ */
 async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGames) {
   try {
     const res = await fetch(`${TOURNAMENT_SERVICE_URL}/api/matches/${matchId}/complete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.INTERNAL_SECRET ? { 'x-internal-secret': process.env.INTERNAL_SECRET } : {}),
+      },
       body: JSON.stringify({ winnerId, p1Wins, p2Wins, drawGames }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      logger.warn({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response')
+      logger.error({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response — bracket will not advance')
+      return false
     }
+    return true
   } catch (err) {
-    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed')
+    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed — bracket will not advance')
+    return false
   }
 }
 
@@ -83,11 +118,21 @@ function makeIdleCallbacks(io) {
 async function resolveSocketUser(token) {
   if (!token) return null
   try {
-    // Verify the Bearer JWT via Better Auth's JWT plugin
-    const result = await auth.api.verifyToken({ body: { token } })
-    if (!result?.user?.id) return null
-    return await getUserByBetterAuthId(result.user.id)
-  } catch {
+    // Verify the JWT using the same approach as the HTTP middleware (jose + JWKS DB lookup)
+    const [rawHeader] = token.split('.')
+    const { kid } = JSON.parse(Buffer.from(rawHeader, 'base64url').toString())
+    if (!kid) return null
+
+    const jwk = await db.jwks.findUnique({ where: { id: kid } })
+    if (!jwk) return null
+
+    const cryptoKey = await importJWK(JSON.parse(jwk.publicKey), 'EdDSA')
+    const { payload } = await jwtVerify(token, cryptoKey)
+    if (!payload?.sub) return null
+
+    return await getUserByBetterAuthId(payload.sub)
+  } catch (err) {
+    logger.warn({ err: err.message }, 'resolveSocketUser: JWT verification failed')
     return null
   }
 }
@@ -415,20 +460,56 @@ export async function attachSocketIO(httpServer) {
       socket.join(`user:${user.id}`)
       logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
 
-      // Flush undelivered persistent notifications (cap at 20 most recent)
-      try {
-        const unread = await db.userNotification.findMany({
-          where:   { userId: user.id, deliveredAt: null },
-          orderBy: { createdAt: 'asc' },
-          take:    20,
+      // Register presence and broadcast updated online list
+      if (!user.isBot) {
+        // Cancel any grace-period removal for this user (handles reconnect after brief disconnect)
+        cancelPendingRemoval(user.id)
+        _onlineBySocket.set(socket.id, {
+          userId:      user.id,
+          displayName: user.displayName ?? user.username ?? 'Player',
+          avatarUrl:   user.avatarUrl ?? null,
         })
+        // Ack the subscription so the client knows its own presence userId.
+        // The client uses this to detect when it's been dropped from a broadcast
+        // and immediately re-subscribes — no page refresh needed.
+        socket.emit('guide:subscribed', { userId: user.id })
+        broadcastOnlineUsers(io)
+      }
+      // Always send the current list directly to the subscriber (catches up
+      // even if the broadcast is dropped or arrives out of order)
+      {
+        const users = [...new Map(
+          [..._onlineBySocket.values()].map(u => [u.userId, u])
+        ).values()]
+        socket.emit('guide:onlineUsers', { users })
+      }
+
+      // Flush undelivered, non-expired persistent notifications (cap at 20 most recent)
+      try {
+        const now = new Date()
+        const unread = await db.userNotification.findMany({
+          where: {
+            userId: user.id,
+            deliveredAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          },
+          orderBy: { createdAt: 'asc' },
+          take: 20,
+        })
+
+        // Mark expired notifications delivered so they don't pile up
+        await db.userNotification.updateMany({
+          where: { userId: user.id, deliveredAt: null, expiresAt: { lte: now } },
+          data:  { deliveredAt: now },
+        }).catch(() => {})
+
         if (unread.length > 0) {
           for (const n of unread) {
-            socket.emit('guide:notification', { type: n.type, payload: n.payload })
+            socket.emit('guide:notification', { type: n.type, payload: n.payload, expiresAt: n.expiresAt?.toISOString() ?? null })
           }
           await db.userNotification.updateMany({
             where: { id: { in: unread.map(n => n.id) } },
-            data:  { deliveredAt: new Date() },
+            data:  { deliveredAt: now },
           })
           logger.info({ userId: user.id, count: unread.length }, 'Flushed queued notifications on reconnect')
         }
@@ -446,6 +527,18 @@ export async function attachSocketIO(httpServer) {
         logger.warn({ socketId: socket.id, remaining: socket._trackedListenerCount }, 'socket disconnected with uncleaned listeners')
       }
       logger.info({ socketId: socket.id }, 'socket disconnected')
+
+      // Remove from online presence after a grace period (allows brief reconnects
+      // to cancel the removal without causing a visible drop in the online list)
+      if (_onlineBySocket.has(socket.id)) {
+        const sid = socket.id
+        const timer = setTimeout(() => {
+          _onlineBySocket.delete(sid)
+          _pendingRemovals.delete(sid)
+          broadcastOnlineUsers(io)
+        }, PRESENCE_GRACE_MS)
+        _pendingRemovals.set(sid, timer)
+      }
 
       const result = roomManager.handleDisconnect({
         socketId: socket.id,
@@ -485,6 +578,11 @@ export async function attachSocketIO(httpServer) {
   })
 
   startSnapshotInterval(() => roomManager.roomCount)
+
+  // Periodic re-broadcast so clients that missed the event-driven update
+  // catch up within 30 seconds (handles reconnect races, proxy drops, etc.)
+  setInterval(() => broadcastOnlineUsers(io), 30_000)
+
   return io
 }
 
@@ -568,10 +666,10 @@ async function recordPvpGame(room, io) {
         logger.warn({ err, tournamentMatchId: room.tournamentMatchId }, 'Could not look up winner participant ID')
       }
 
-      completeTournamentMatch(room.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames).catch(() => {})
-
-      // Clean up pending match registry
-      deletePendingPvpMatch(room.tournamentMatchId)
+      // Only remove pending entry after confirmed success — if it fails the entry
+      // remains so an admin retry or future reconciliation can find the match context.
+      const completed = await completeTournamentMatch(room.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames)
+      if (completed) deletePendingPvpMatch(room.tournamentMatchId)
 
       // Notify both players the series is over
       io.to(room.slug).emit('tournament:series:complete', {

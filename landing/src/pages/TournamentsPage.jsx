@@ -192,6 +192,7 @@ function TournamentCard({ tournament, token, dbUserId, onRegistered }) {
   const participantCount = tournament.participants?.length ?? tournament._count?.participants ?? 0
   const max  = tournament.maxParticipants
   const isOpen = tournament.status === 'REGISTRATION_OPEN'
+    && (!tournament.registrationCloseAt || new Date(tournament.registrationCloseAt) > new Date())
 
   return (
     <Link

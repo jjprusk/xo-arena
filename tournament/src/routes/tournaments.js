@@ -91,8 +91,22 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
       allowNonCompetitiveBots, paceMs, allowSpectators, replayRetentionDays,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed,
+      recurrenceEndDate, autoOptOutAfterMissed, startMode,
     } = req.body
+
+    if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
+      return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
+    }
+    const VALID_START_MODES = ['AUTO', 'SCHEDULED', 'MANUAL']
+    if (startMode !== undefined && !VALID_START_MODES.includes(startMode)) {
+      return res.status(400).json({ error: 'startMode must be AUTO, SCHEDULED, or MANUAL' })
+    }
+    if (startMode === 'SCHEDULED' && !startTime) {
+      return res.status(400).json({ error: 'SCHEDULED mode requires a startTime' })
+    }
+    if (registrationCloseAt && startTime && new Date(registrationCloseAt) > new Date(startTime)) {
+      return res.status(400).json({ error: 'registrationCloseAt must be before startTime' })
+    }
 
     const tournament = await db.tournament.create({
       data: {
@@ -104,6 +118,7 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
         bracketType,
         status: 'DRAFT',
         createdById: req.auth.userId,
+        ...(startMode !== undefined && { startMode }),
         ...(minParticipants !== undefined && { minParticipants }),
         ...(maxParticipants !== undefined && { maxParticipants }),
         ...(bestOfN !== undefined && { bestOfN }),
@@ -140,11 +155,23 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       allowNonCompetitiveBots, paceMs, allowSpectators, replayRetentionDays,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed,
+      recurrenceEndDate, autoOptOutAfterMissed, startMode,
     } = req.body
+
+    if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
+      return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
+    }
+    const VALID_START_MODES = ['AUTO', 'SCHEDULED', 'MANUAL']
+    if (startMode !== undefined && !VALID_START_MODES.includes(startMode)) {
+      return res.status(400).json({ error: 'startMode must be AUTO, SCHEDULED, or MANUAL' })
+    }
+    if (registrationCloseAt && startTime && new Date(registrationCloseAt) > new Date(startTime)) {
+      return res.status(400).json({ error: 'registrationCloseAt must be before startTime' })
+    }
 
     // status is intentionally excluded — use dedicated endpoints
     const data = {
+      ...(startMode !== undefined && { startMode }),
       ...(name !== undefined && { name }),
       ...(description !== undefined && { description }),
       ...(game !== undefined && { game }),
@@ -222,7 +249,7 @@ router.post('/:id/cancel', requireTournamentAdmin, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         participants: {
-          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
+          where: { status: { in: ['REGISTERED'] } },
           select: { userId: true },
         },
       },
@@ -255,13 +282,34 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         participants: {
-          where: { status: { in: ['REGISTERED', 'ACTIVE'] } },
-          include: { user: { select: { id: true } } },
+          where: { status: { in: ['REGISTERED'] } },
+          include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true, isBot: true } } },
         },
       },
     })
 
     if (!existing) return res.status(404).json({ error: 'Tournament not found' })
+
+    // Disallow starting from DRAFT — it was never published so participants were
+    // never notified. Require REGISTRATION_OPEN or REGISTRATION_CLOSED first.
+    if (!['REGISTRATION_OPEN', 'REGISTRATION_CLOSED'].includes(existing.status)) {
+      return res.status(400).json({ error: `Cannot start a tournament with status ${existing.status}` })
+    }
+
+    const participants = existing.participants
+    if (participants.length < existing.minParticipants) {
+      return res.status(400).json({
+        error: `Not enough participants — need ${existing.minParticipants}, have ${participants.length}`,
+      })
+    }
+
+    // Guard: ROUND_ROBIN with too many participants creates N*(N-1)/2 matches —
+    // cap at 128 to prevent a single start from flooding Redis with thousands of events.
+    if (existing.bracketType === 'ROUND_ROBIN' && participants.length > 128) {
+      return res.status(400).json({
+        error: `Round-robin tournaments are limited to 128 participants (have ${participants.length})`,
+      })
+    }
 
     const updateData = { status: 'IN_PROGRESS' }
     if (!existing.startTime) updateData.startTime = new Date()
@@ -271,18 +319,13 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       data: updateData,
     })
 
-    const participants = existing.participants
+    const isPvp = existing.mode === 'PVP'
 
-    if (existing.bracketType === 'SINGLE_ELIM' && existing.mode === 'PVP') {
-      // Shuffle participants
+    if (existing.bracketType === 'SINGLE_ELIM') {
       const shuffled = [...participants].sort(() => Math.random() - 0.5)
 
       const round = await db.tournamentRound.create({
-        data: {
-          tournamentId: tournament.id,
-          roundNumber: 1,
-          status: 'IN_PROGRESS',
-        },
+        data: { tournamentId: tournament.id, roundNumber: 1, status: 'IN_PROGRESS' },
       })
 
       for (let i = 0; i < shuffled.length; i += 2) {
@@ -290,7 +333,6 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
         const p2 = shuffled[i + 1]
 
         if (!p2) {
-          // Bye — p1 advances automatically
           await db.tournamentMatch.create({
             data: {
               tournamentId: tournament.id,
@@ -313,22 +355,28 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             },
           })
 
-          await publish('tournament:match:ready', {
-            tournamentId: tournament.id,
-            matchId: match.id,
-            participant1UserId: p1.user.id,
-            participant2UserId: p2.user.id,
-            bestOfN: tournament.bestOfN,
-          })
+          if (isPvp) {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
+              bestOfN: tournament.bestOfN,
+            })
+          } else {
+            await publish('tournament:bot:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              bestOfN: tournament.bestOfN,
+              bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
+              bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          }
         }
       }
-    } else if (existing.bracketType === 'ROUND_ROBIN' && existing.mode === 'PVP') {
+    } else if (existing.bracketType === 'ROUND_ROBIN') {
       const round = await db.tournamentRound.create({
-        data: {
-          tournamentId: tournament.id,
-          roundNumber: 1,
-          status: 'IN_PROGRESS',
-        },
+        data: { tournamentId: tournament.id, roundNumber: 1, status: 'IN_PROGRESS' },
       })
 
       for (let i = 0; i < participants.length; i++) {
@@ -346,18 +394,85 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             },
           })
 
-          await publish('tournament:match:ready', {
-            tournamentId: tournament.id,
-            matchId: match.id,
-            participant1UserId: p1.user.id,
-            participant2UserId: p2.user.id,
-            bestOfN: tournament.bestOfN,
-          })
+          if (isPvp) {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
+              bestOfN: tournament.bestOfN,
+            })
+          } else {
+            await publish('tournament:bot:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              bestOfN: tournament.bestOfN,
+              bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
+              bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          }
         }
       }
     }
 
+    await publish('tournament:started', { tournamentId: tournament.id, name: tournament.name }).catch(() => {})
     res.json({ tournament })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/:id/fill-test-players
+// Registers the 4 standard test bots into the tournament (idempotent, admin only).
+const TEST_BOT_USERNAMES = ['testbot-alpha', 'testbot-beta', 'testbot-gamma', 'testbot-delta']
+
+router.post('/:id/fill-test-players', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const tournamentId = req.params.id
+
+    const tournament = await db.tournament.findUnique({ where: { id: tournamentId } })
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
+    // Disallow adding test players once the tournament is running — they'd appear
+    // in the participant list but have no bracket slot.
+    if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(tournament.status)) {
+      return res.status(400).json({ error: `Cannot add players to a ${tournament.status.toLowerCase()} tournament` })
+    }
+
+    // Look up test bots — they must be seeded first via `um test-bots`
+    const bots = await db.user.findMany({
+      where: { username: { in: TEST_BOT_USERNAMES }, isBot: true },
+      select: { id: true, username: true, displayName: true, eloRating: true },
+    })
+
+    if (bots.length === 0) {
+      return res.status(404).json({
+        error: 'Test bots not found — run `docker compose exec backend node backend/src/cli/um.js test-bots` first',
+      })
+    }
+
+    const registered = []
+    const skipped    = []
+
+    for (const bot of bots) {
+      const existing = await db.tournamentParticipant.findUnique({
+        where: { tournamentId_userId: { tournamentId, userId: bot.id } },
+      })
+
+      if (existing && existing.status !== 'WITHDRAWN') {
+        skipped.push(bot.username)
+        continue
+      }
+
+      await db.tournamentParticipant.upsert({
+        where: { tournamentId_userId: { tournamentId, userId: bot.id } },
+        create: { tournamentId, userId: bot.id, eloAtRegistration: bot.eloRating, status: 'REGISTERED' },
+        update: { status: 'REGISTERED', eloAtRegistration: bot.eloRating },
+      })
+
+      registered.push(bot.username)
+    }
+
+    res.json({ registered, skipped })
   } catch (e) {
     next(e)
   }
@@ -390,6 +505,10 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
 
     if (tournament.status !== 'REGISTRATION_OPEN') {
       return res.status(400).json({ error: 'Tournament registration is not open' })
+    }
+
+    if (tournament.registrationCloseAt && new Date(tournament.registrationCloseAt) <= new Date()) {
+      return res.status(400).json({ error: 'Tournament registration has closed' })
     }
 
     if (tournament.maxParticipants) {
@@ -439,6 +558,7 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
       },
     })
 
+    await publish('tournament:participant:joined', { tournamentId }).catch(() => {})
     res.status(201).json({ participant })
   } catch (e) {
     next(e)
@@ -468,6 +588,7 @@ router.delete('/:id/register', requireAuth, async (req, res, next) => {
       data: { status: 'WITHDRAWN' },
     })
 
+    await publish('tournament:participant:left', { tournamentId }).catch(() => {})
     res.status(204).send()
   } catch (e) {
     next(e)

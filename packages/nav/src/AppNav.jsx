@@ -1,0 +1,268 @@
+import React, { useState, useEffect, useRef } from 'react'
+import { NavLink, Link, useLocation } from 'react-router-dom'
+import { PRIMARY_NAV, XO_SUBNAV, resolveItem } from './navItems.js'
+
+/**
+ * Shared primary navigation bar for the AI Arena platform.
+ *
+ * Props:
+ *   appId           'landing' | 'xo'  — which site is rendering this nav
+ *   appUrls         { landing, xo }   — base URLs for cross-site links
+ *   subnav          null | 'xo'       — show the XO game subnav below the header
+ *   desktopNavKeys  string[] | null   — if provided, only these keys appear in the desktop
+ *                                       primary nav (all keys still appear in the hamburger)
+ *   rightSlot       ReactNode         — right-side controls (user button, sign-in)
+ *   extrasSlot      ReactNode         — extra controls before rightSlot (mute, theme toggles)
+ *   isStaging       bool              — amber header background for staging
+ */
+export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSlot, extrasSlot, isStaging }) {
+  const location = useLocation()
+  const [menuOpen, setMenuOpen]   = useState(false)
+  const [gamesOpen, setGamesOpen] = useState(false)
+  const gamesRef = useRef(null)
+
+  // Close mobile drawer and games dropdown on route change
+  useEffect(() => {
+    setMenuOpen(false)
+    setGamesOpen(false)
+  }, [location.pathname])
+
+  // Close games dropdown on outside click
+  useEffect(() => {
+    if (!gamesOpen) return
+    function onDown(e) {
+      if (gamesRef.current && !gamesRef.current.contains(e.target)) setGamesOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [gamesOpen])
+
+  const subnavItems = subnav === 'xo' ? XO_SUBNAV : null
+
+  // Desktop primary nav: optionally filtered by desktopNavKeys
+  const desktopPrimaryNav = desktopNavKeys
+    ? PRIMARY_NAV.filter(item => desktopNavKeys.includes(item.key))
+    : PRIMARY_NAV
+
+  // Mobile drawer always shows everything:
+  //   XO subnav section (if present) → then full primary nav expanded
+  const drawerSections = []
+  if (subnavItems) {
+    drawerSections.push({ title: 'XO Arena', items: subnavItems.map(i => ({ ...i, app: 'xo' })) })
+  }
+  const platformItems = PRIMARY_NAV.flatMap(item =>
+    item.hasDropdown ? item.dropdown : [item]
+  )
+  drawerSections.push({ title: 'Platform', items: platformItems })
+
+  function DesktopNavItem({ item }) {
+    const { href, internal } = resolveItem(item, appId, appUrls)
+    const cls = ({ isActive }) =>
+      `text-sm font-medium transition-colors no-underline ${
+        isActive ? 'text-[var(--color-blue-600)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+      }`
+    if (internal) return <NavLink to={href} className={cls}>{item.label}</NavLink>
+    return (
+      <a href={href} className="text-sm font-medium transition-colors no-underline text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+        {item.label}
+      </a>
+    )
+  }
+
+  function GamesDropdown() {
+    const gamesItem = PRIMARY_NAV.find(n => n.key === 'games')
+    return (
+      <div ref={gamesRef} style={{ position: 'relative' }}>
+        <button
+          onClick={() => setGamesOpen(o => !o)}
+          className="text-sm font-medium transition-colors flex items-center gap-1 hover:text-[var(--text-primary)]"
+          style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          Games
+          <span style={{ fontSize: '0.6rem', display: 'inline-block', transition: 'transform 0.15s', transform: gamesOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+        </button>
+        {gamesOpen && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+            minWidth: 160, borderRadius: '0.625rem',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            boxShadow: 'var(--shadow-md)',
+            zIndex: 100, overflow: 'hidden',
+          }}>
+            {gamesItem.dropdown.map(game => {
+              const { href, internal } = resolveItem(game, appId, appUrls)
+              const itemCls = 'flex items-center gap-2 px-3 py-2.5 text-sm no-underline transition-colors hover:bg-[var(--bg-surface-hover)]'
+              return internal ? (
+                <Link key={game.key} to={href} onClick={() => setGamesOpen(false)}
+                  className={itemCls} style={{ color: 'var(--text-primary)' }}>
+                  {game.icon && <span>{game.icon}</span>}
+                  {game.label}
+                </Link>
+              ) : (
+                <a key={game.key} href={href}
+                  className={itemCls} style={{ color: 'var(--text-primary)', display: 'flex' }}>
+                  {game.icon && <span>{game.icon}</span>}
+                  {game.label}
+                </a>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {/* ── Primary header ────────────────────────── */}
+      <header
+        className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-6 h-14 border-b"
+        style={{
+          backgroundColor: isStaging ? '#b45309' : 'var(--bg-surface)',
+          borderColor: 'var(--border-default)',
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
+        {/* Logo */}
+        <div className="flex items-center gap-3 shrink-0">
+          {appId === 'landing' ? (
+            <Link to="/" className="flex items-center gap-2 font-bold text-base no-underline select-none"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-slate-500)' }}>
+              <span className="text-lg">⚔</span>
+              <span>AI Arena</span>
+            </Link>
+          ) : (
+            <a href={appUrls.landing} className="flex items-center gap-2 font-bold text-base no-underline select-none"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-slate-500)' }}>
+              <span className="text-lg">⚔</span>
+              <span className="hidden sm:inline">AI Arena</span>
+            </a>
+          )}
+        </div>
+
+        {/* Desktop primary nav */}
+        <nav className="hidden md:flex items-center gap-5">
+          {desktopPrimaryNav.some(i => i.hasDropdown) && <GamesDropdown />}
+          {desktopPrimaryNav.filter(i => !i.hasDropdown).map(item => (
+            <DesktopNavItem key={item.key} item={item} />
+          ))}
+        </nav>
+
+        {/* Right controls */}
+        <div className="flex items-center gap-2 shrink-0">
+          {extrasSlot}
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            className="md:hidden p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {menuOpen ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="5" x2="17" y2="5" /><line x1="3" y1="10" x2="17" y2="10" /><line x1="3" y1="15" x2="17" y2="15" />
+              </svg>
+            )}
+          </button>
+          {rightSlot}
+        </div>
+      </header>
+
+      {/* ── XO game subnav (desktop) ──────────────── */}
+      {subnavItems && (
+        <nav
+          className="hidden md:flex items-center gap-1 px-4 overflow-x-auto"
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            borderBottom: '1px solid var(--border-default)',
+            minHeight: '38px',
+          }}
+        >
+          {subnavItems.map(({ key, label, to }) => (
+            <NavLink
+              key={key}
+              to={to}
+              className={({ isActive }) =>
+                `px-3 py-2 text-xs font-medium whitespace-nowrap no-underline border-b-2 transition-colors ${
+                  isActive
+                    ? 'border-[var(--color-blue-500)]'
+                    : 'border-transparent hover:border-[var(--border-default)]'
+                }`
+              }
+              style={({ isActive }) => ({ color: isActive ? 'var(--color-blue-600)' : 'var(--text-secondary)' })}
+            >
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+      )}
+
+      {/* ── Mobile drawer ─────────────────────────── */}
+      {menuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/50" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+          <div
+            className="w-64 h-full flex flex-col overflow-y-auto border-l"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+          >
+            {/* Drawer header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Menu</span>
+              <button onClick={() => setMenuOpen(false)} className="p-1 rounded-lg hover:bg-[var(--bg-surface-hover)]"
+                aria-label="Close menu" style={{ color: 'var(--text-muted)' }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="3" x2="13" y2="13" /><line x1="13" y1="3" x2="3" y2="13" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Sections */}
+            <nav className="flex-1 px-2 py-3">
+              {drawerSections.map((section, si) => (
+                <div key={section.title} className={si > 0 ? 'mt-3' : ''}>
+                  <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: 'var(--text-muted)' }}>
+                    {section.title}
+                  </div>
+                  <div className="space-y-0.5 mt-1">
+                    {section.items.map(item => {
+                      const { href, internal } = resolveItem(item, appId, appUrls)
+                      const cls = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors no-underline'
+                      if (internal) {
+                        return (
+                          <NavLink key={item.key} to={href} onClick={() => setMenuOpen(false)}
+                            className={({ isActive }) =>
+                              `${cls} ${isActive
+                                ? 'bg-[var(--color-blue-50)] text-[var(--color-blue-600)]'
+                                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]'
+                              }`
+                            }>
+                            {item.icon && <span className="text-base w-5 text-center leading-none">{item.icon}</span>}
+                            {item.label}
+                          </NavLink>
+                        )
+                      }
+                      return (
+                        <a key={item.key} href={href}
+                          className={`${cls} text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]`}
+                          style={{ display: 'flex' }}>
+                          {item.icon && <span className="text-base w-5 text-center leading-none">{item.icon}</span>}
+                          {item.label}
+                        </a>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
