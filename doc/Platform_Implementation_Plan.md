@@ -45,7 +45,7 @@
 - [x] Implement `sdk.getPreviewState()` — lightweight board snapshot
 - [x] Implement `sdk.spectate()` — live move feed for spectators
 - [x] Implement focused vs chrome-present rendering modes — derived from `session.isSpectator`
-- [ ] Add escape affordance for focused mode (floating "Back to Arena" button)
+- [x] Add escape affordance for focused mode (floating "Back to Arena" button)
 - [x] Implement `botInterface.makeMove()` — wraps existing minimax and ML bot logic
 - [x] Implement `botInterface.personas` — existing named bot personalities
 - [x] Implement `botInterface.getTrainingConfig()`, `train()`, `serializeState()`, `deserializeMove()`
@@ -57,8 +57,8 @@
 - [ ] Verify platform loads XO via dynamic URL import — split-out path (local only, no Fly deployment yet)
 - [ ] Confirm `/* @vite-ignore */` import works, CORS headers correct, SDK props cross the bundle boundary correctly
 - [ ] Document the registry switch mechanism for future use
-- [ ] Run full regression — all XO functionality works through both loading paths
-- [ ] Move `ruleBasedImplementation` from `backend/src/ai/ruleBased.js` into `packages/ai` so rule-based bot personas work in `botInterface.makeMove()`
+- [x] Run full regression — all XO functionality works through both loading paths (bundled path verified: PvP, win/draw/loss detection, marks, scores, reactions, forfeit, rematch; split-out URL path deferred to 1.4 outstanding items)
+- [x] Move `ruleBasedImplementation` from `backend/src/ai/ruleBased.js` into `packages/ai` so rule-based bot personas work in `botInterface.makeMove()`
 
 ### 1.5 Replay and live view abstraction
 

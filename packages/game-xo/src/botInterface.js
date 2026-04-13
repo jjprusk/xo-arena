@@ -17,11 +17,8 @@ import {
   AlphaZeroEngine,
   runEpisode,
   getEmptyCells,
+  ruleBasedMove,
 } from '@xo-arena/ai'
-
-// ruleBasedImplementation lives in backend/src/ai/ruleBased.js (not in packages/ai yet).
-// Rule-based personas fall back to random moves until it is moved to packages/ai.
-const ruleBasedImplementation = null
 
 import { meta } from './meta.js'
 import { serializeState, deserializeMove, getLegalMoves } from './adapters.js'
@@ -50,10 +47,11 @@ function makeMove(state, playerId, persona, weights) {
     return minimaxImplementation.move(board, diff, mark)
   }
 
-  // Rule-based personas — falls back to random until ruleBasedImplementation
-  // is moved from backend/src/ai/ruleBased.js into packages/ai
+  // Rule-based — weights.rules is pre-loaded by the platform bot dispatcher
+  // (dispatcher resolves persona.ruleSetId → rules array before calling makeMove)
   if (persona.algorithm === 'rule_based') {
-    return empty[Math.floor(Math.random() * empty.length)]
+    const rules = weights?.rules ?? []
+    return ruleBasedMove(board, mark, rules)
   }
 
   // Q-Learning

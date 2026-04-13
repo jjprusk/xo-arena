@@ -101,3 +101,28 @@ export function applyRule(board, mark, ruleId) {
       return null
   }
 }
+
+/**
+ * Pure synchronous rule-based move.
+ * `rules` is a pre-loaded array of rule objects `{ id, priority?, enabled? }`,
+ * sorted by priority ascending. The platform bot dispatcher is responsible for
+ * loading the rule set from the database and passing it here as `weights.rules`.
+ *
+ * Falls back to a random legal move if no rule applies or no rules provided.
+ *
+ * @param {Array<string|null>} board
+ * @param {string} mark    'X' | 'O'
+ * @param {Array<{id: string}>} rules
+ * @returns {number}
+ */
+export function ruleBasedMove(board, mark, rules = []) {
+  const empty = getEmptyCells(board)
+  if (empty.length === 0) return -1
+
+  for (const rule of rules) {
+    const move = applyRule(board, mark, rule.id)
+    if (move !== null) return move
+  }
+
+  return empty[Math.floor(Math.random() * empty.length)]
+}

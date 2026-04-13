@@ -125,7 +125,16 @@ export default function PlayPage() {
   // Active or finished game
   if ((phase === 'playing' || phase === 'finished') && session) {
     return (
-      <div className="flex flex-col items-center w-full max-w-md mx-auto py-6 px-4">
+      <div className="relative flex flex-col items-center w-full max-w-md mx-auto py-6 px-4">
+        {/* Escape affordance — visible during play so the player can always leave */}
+        <Link
+          to={tournamentId ? `/tournaments/${tournamentId}` : '/'}
+          className="absolute top-0 left-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-opacity opacity-30 hover:opacity-80"
+          style={{ color: 'var(--text-muted)' }}
+          title="Back to Arena"
+        >
+          ← Arena
+        </Link>
         <Suspense fallback={<Spinner />}>
           <XOGame session={session} sdk={sdk} />
         </Suspense>
