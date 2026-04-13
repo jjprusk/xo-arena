@@ -10,6 +10,7 @@ import Redis from 'ioredis'
 import { jwtVerify, importJWK } from 'jose'
 import { roomManager } from './roomManager.js'
 import { botGameRunner } from './botGameRunner.js'
+import * as pongRunner from './pongRunner.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
@@ -501,6 +502,37 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
+    // ── Pong spike ───────────────────────────────────────────────────────────
+
+    on('pong:create', ({ slug }) => {
+      if (!slug) return socket.emit('error', { message: 'slug required' })
+      pongRunner.createRoom(slug)
+      socket.join(slug)
+      const result = pongRunner.joinRoom(slug, socket.id)
+      if (result.error) return socket.emit('error', { message: result.error })
+      socket.emit('pong:created', { slug, playerIndex: result.playerIndex })
+    })
+
+    on('pong:join', ({ slug }) => {
+      if (!slug) return socket.emit('error', { message: 'slug required' })
+      if (!pongRunner.hasRoom(slug)) pongRunner.createRoom(slug)
+      socket.join(slug)
+      const result = pongRunner.joinRoom(slug, socket.id)
+      if (result.error) return socket.emit('error', { message: result.error })
+      const currentState = pongRunner.getState(slug)
+      socket.emit('pong:joined', {
+        slug,
+        playerIndex: result.playerIndex ?? null,
+        spectating:  result.spectating ?? false,
+        state:       currentState,
+      })
+    })
+
+    on('pong:input', ({ slug, direction }) => {
+      if (!slug || !direction) return
+      pongRunner.applyInput(slug, socket.id, direction)
+    })
+
     // ── Support room ─────────────────────────────────────────────────
 
     on('support:join', () => {
@@ -616,8 +648,9 @@ export async function attachSocketIO(httpServer) {
         },
       })
 
-      // Also clean up bot game spectator
+      // Also clean up bot game spectator and pong rooms
       botGameRunner.removeSpectator(socket.id)
+      pongRunner.removeSocket(socket.id)
 
       if (result && !result.wasSpectator) {
         const slug = roomManager._socketToRoom.get(socket.id) ||
@@ -634,6 +667,7 @@ export async function attachSocketIO(httpServer) {
   })
 
   botGameRunner.setIO(io)
+  pongRunner.setIO(io)
 
   // Clean up _pendingPvpMatches when any room closes (abandon, stale sweep, cancel, etc.)
   // so the map doesn't accumulate entries for matches that ended abnormally.

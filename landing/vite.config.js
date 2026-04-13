@@ -25,7 +25,8 @@ export default defineConfig(({ mode }) => ({
       '@xo-arena/xo':       resolve(__dirname, '../packages/xo/src/index.js'),
       '@xo-arena/nav':      resolve(__dirname, '../packages/nav/src/index.js'),
       '@xo-arena/ai':       resolve(__dirname, '../packages/ai/src/index.js'),
-      '@callidity/game-xo': resolve(__dirname, '../packages/game-xo/src/index.js'),
+      '@callidity/game-xo':   resolve(__dirname, '../packages/game-xo/src/index.js'),
+      '@callidity/game-pong': resolve(__dirname, '../packages/game-pong/src/index.js'),
     },
     // Force packages' imports to resolve from the project root's node_modules.
     // Without this, Node resolution from /packages/* can't find /app/node_modules/.
@@ -48,7 +49,8 @@ export default defineConfig(({ mode }) => ({
         manualChunks(id) {
           if (id.includes('react-dom') || id.includes('react-router-dom') || /\/react\//.test(id)) return 'vendor-react'
           if (id.includes('socket.io-client')) return 'vendor-realtime'
-          if (id.includes('packages/game-xo')) return 'game-xo'
+          if (id.includes('packages/game-xo'))   return 'game-xo'
+          if (id.includes('packages/game-pong')) return 'game-pong'
         },
       },
     },
