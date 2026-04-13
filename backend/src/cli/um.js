@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 #!/usr/bin/env node --experimental-transform-types --no-warnings
 import { Command } from 'commander'
 import { guardProduction, umEnv, ensureProxy } from './lib/safety.js'

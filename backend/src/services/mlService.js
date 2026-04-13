@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * ML Service — CRUD, training orchestration, in-memory cache.
  *
@@ -73,7 +74,7 @@ const trainingQueue = []
 // ─── Model CRUD ─────────────────────────────────────────────────────────────
 
 export async function listModels() {
-  const models = await db.mLModel.findMany({
+  const models = await db.botSkill.findMany({
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { sessions: true } } },
   })
@@ -143,13 +144,13 @@ export async function createModel({ name, description, algorithm = 'Q_LEARNING',
   }
 
   const maxEpisodes = await getSystemConfig('ml.maxEpisodesPerModel', 100_000)
-  return db.mLModel.create({
-    data: { name, description: description || null, algorithm, qtable: {}, config: mergedConfig, createdBy, maxEpisodes },
+  return db.botSkill.create({
+    data: { name, description: description || null, algorithm, weights: {}, config: mergedConfig, createdBy, maxEpisodes },
   })
 }
 
 export async function getModel(id) {
-  const model = await db.mLModel.findUnique({
+  const model = await db.botSkill.findUnique({
     where: { id },
     include: { _count: { select: { sessions: true, checkpoints: true, benchmarks: true } } },
   })
@@ -167,7 +168,7 @@ export async function getModel(id) {
 }
 
 export async function updateModel(id, { name, description, config }) {
-  return db.mLModel.update({
+  return db.botSkill.update({
     where: { id },
     data: {
       ...(name        !== undefined && { name }),
@@ -179,17 +180,17 @@ export async function updateModel(id, { name, description, config }) {
 
 export async function deleteModel(id) {
   engineCache.delete(id)
-  return db.mLModel.delete({ where: { id } })
+  return db.botSkill.delete({ where: { id } })
 }
 
 export async function resetModel(id) {
   engineCache.delete(id)
-  const model = await db.mLModel.findUnique({ where: { id } })
+  const model = await db.botSkill.findUnique({ where: { id } })
   if (!model) throw new Error('Model not found')
   const freshConfig = { ...model.config, currentEpsilon: model.config.epsilonStart ?? DEFAULT_CONFIG.epsilonStart }
-  const updated = await db.mLModel.update({
+  const updated = await db.botSkill.update({
     where: { id },
-    data: { qtable: {}, totalEpisodes: 0, status: 'IDLE', config: freshConfig },
+    data: { weights: {}, totalEpisodes: 0, status: 'IDLE', config: freshConfig },
   })
 
   // If this model is owned by a bot, reset its ELO and trigger calibration
@@ -204,18 +205,17 @@ export async function resetModel(id) {
 }
 
 export async function cloneModel(id, { name, description, createdBy = null }) {
-  const src = await db.mLModel.findUnique({ where: { id } })
+  const src = await db.botSkill.findUnique({ where: { id } })
   if (!src) throw new Error('Source model not found')
-  return db.mLModel.create({
+  return db.botSkill.create({
     data: {
       name: name || `${src.name} (copy)`,
       description: description || src.description,
       algorithm: src.algorithm,
-      qtable: src.qtable,
+      weights: src.weights,
       config: src.config,
       totalEpisodes: src.totalEpisodes,
       maxEpisodes: src.maxEpisodes,
-      eloRating: src.eloRating,
       createdBy,
     },
   })
@@ -261,7 +261,7 @@ export async function listCheckpoints(modelId) {
   return db.mLCheckpoint.findMany({
     where: { modelId },
     orderBy: { episodeNum: 'desc' },
-    select: { id: true, modelId: true, episodeNum: true, epsilon: true, eloRating: true, createdAt: true },
+    select: { id: true, modelId: true, episodeNum: true, epsilon: true, createdAt: true },
   })
 }
 
@@ -269,13 +269,12 @@ export async function restoreCheckpoint(modelId, checkpointId) {
   const cp = await db.mLCheckpoint.findUnique({ where: { id: checkpointId } })
   if (!cp || cp.modelId !== modelId) throw new Error('Checkpoint not found')
   engineCache.delete(modelId)
-  const newConfig = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
-  return db.mLModel.update({
+  const newConfig = await db.botSkill.findUnique({ where: { id: modelId }, select: { config: true } })
+  return db.botSkill.update({
     where: { id: modelId },
     data: {
-      qtable: cp.qtable,
+      weights: cp.weights,
       totalEpisodes: cp.episodeNum,
-      eloRating: cp.eloRating,
       status: 'IDLE',
       config: { ...newConfig.config, currentEpsilon: cp.epsilon },
     },
@@ -285,9 +284,9 @@ export async function restoreCheckpoint(modelId, checkpointId) {
 // ─── Opening book ────────────────────────────────────────────────────────────
 
 export async function getOpeningBook(modelId) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId }, select: { qtable: true } })
+  const model = await db.botSkill.findUnique({ where: { id: modelId }, select: { weights: true } })
   if (!model) throw new Error('Model not found')
-  const qtable = model.qtable
+  const qtable = model.weights
 
   // Agent's first-move Q-values from the all-empty state
   const emptyKey = '.........'
@@ -309,16 +308,16 @@ export async function getOpeningBook(modelId) {
 // ─── Q-table / move ──────────────────────────────────────────────────────────
 
 export async function getQTable(modelId) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId }, select: { qtable: true } })
-  return model?.qtable ?? {}
+  const model = await db.botSkill.findUnique({ where: { id: modelId }, select: { weights: true } })
+  return model?.weights ?? {}
 }
 
 export async function getMoveForModel(modelId, board) {
   if (!engineCache.has(modelId)) {
-    const model = await db.mLModel.findUnique({ where: { id: modelId } })
+    const model = await db.botSkill.findUnique({ where: { id: modelId } })
     if (!model) throw new Error(`ML model ${modelId} not found`)
     const engine = new QLearningEngine(model.config)
-    engine.loadQTable(model.qtable)
+    engine.loadQTable(model.weights)
     engineCache.set(modelId, engine)
   }
   return engineCache.get(modelId).chooseAction(board, false) // pure exploitation
@@ -345,10 +344,10 @@ export async function explainMove(modelId, board) {
 export async function getAdaptedMoveForModel(modelId, board, mark, userId) {
   // Ensure engine is loaded
   if (!engineCache.has(modelId)) {
-    const model = await db.mLModel.findUnique({ where: { id: modelId } })
+    const model = await db.botSkill.findUnique({ where: { id: modelId } })
     if (!model) throw new Error(`ML model ${modelId} not found`)
     const engine = new QLearningEngine(model.config)
-    engine.loadQTable(model.qtable)
+    engine.loadQTable(model.weights)
     engineCache.set(modelId, engine)
   }
   const engine = engineCache.get(modelId)
@@ -369,22 +368,18 @@ function _expectedScore(rA, rB) {
 }
 
 export async function updateElo(modelAId, modelBId, outcome) {
-  // outcome: 'WIN' (A wins), 'LOSS' (A loses), 'DRAW'
-  const [a, b] = await Promise.all([
-    db.mLModel.findUnique({ where: { id: modelAId }, select: { eloRating: true } }),
-    db.mLModel.findUnique({ where: { id: modelBId }, select: { eloRating: true } }),
-  ])
-  const eA = _expectedScore(a.eloRating, b.eloRating)
-  const eB = _expectedScore(b.eloRating, a.eloRating)
+  // ELO is now tracked in GameElo (per user/bot), not on BotSkill.
+  // ML model-vs-model ELO is tracked only via MLEloHistory with a fixed baseline of 1200.
+  const BASE_ELO = 1200
   const sA = outcome === 'WIN' ? 1 : outcome === 'DRAW' ? 0.5 : 0
   const sB = 1 - sA
-  const newA = parseFloat((a.eloRating + ELO_K * (sA - eA)).toFixed(2))
-  const newB = parseFloat((b.eloRating + ELO_K * (sB - eB)).toFixed(2))
+  const eA = _expectedScore(BASE_ELO, BASE_ELO)
+  const eB = eA
+  const newA = parseFloat((BASE_ELO + ELO_K * (sA - eA)).toFixed(2))
+  const newB = parseFloat((BASE_ELO + ELO_K * (sB - eB)).toFixed(2))
   await db.$transaction([
-    db.mLModel.update({ where: { id: modelAId }, data: { eloRating: newA } }),
-    db.mLModel.update({ where: { id: modelBId }, data: { eloRating: newB } }),
-    db.mLEloHistory.create({ data: { modelId: modelAId, eloRating: newA, delta: parseFloat((newA - a.eloRating).toFixed(2)), opponentId: modelBId, opponentType: 'ML', outcome: outcome === 'WIN' ? 'WIN' : outcome === 'DRAW' ? 'DRAW' : 'LOSS' } }),
-    db.mLEloHistory.create({ data: { modelId: modelBId, eloRating: newB, delta: parseFloat((newB - b.eloRating).toFixed(2)), opponentId: modelAId, opponentType: 'ML', outcome: outcome === 'WIN' ? 'LOSS' : outcome === 'DRAW' ? 'DRAW' : 'WIN' } }),
+    db.mLEloHistory.create({ data: { modelId: modelAId, eloRating: newA, delta: parseFloat((newA - BASE_ELO).toFixed(2)), opponentId: modelBId, opponentType: 'ML', outcome: outcome === 'WIN' ? 'WIN' : outcome === 'DRAW' ? 'DRAW' : 'LOSS' } }),
+    db.mLEloHistory.create({ data: { modelId: modelBId, eloRating: newB, delta: parseFloat((newB - BASE_ELO).toFixed(2)), opponentId: modelAId, opponentType: 'ML', outcome: outcome === 'WIN' ? 'LOSS' : outcome === 'DRAW' ? 'DRAW' : 'WIN' } }),
   ])
   return { newA, newB }
 }
@@ -405,7 +400,7 @@ function _randomMove(board) {
 
 function _greedyEngine(model) {
   const engine = new QLearningEngine({ ...model.config, epsilonStart: 0, epsilonMin: 0 })
-  engine.loadQTable(model.qtable)
+  engine.loadQTable(model.weights)
   engine.epsilon = 0
   return engine
 }
@@ -422,7 +417,7 @@ function _runGames(engine, opponentFn, games = 1000) {
 }
 
 export async function startBenchmark(modelId) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  const model = await db.botSkill.findUnique({ where: { id: modelId } })
   if (!model) throw new Error('Model not found')
   const record = await db.mLBenchmarkResult.create({
     data: { modelId, vsRandom: {}, vsEasy: {}, vsMedium: {}, vsTough: {}, vsHard: {}, summary: { status: 'RUNNING' } },
@@ -485,8 +480,8 @@ async function _runBenchmark(model, benchmarkId) {
 export async function runVersus(modelAId, modelBId, games = 100) {
   if (games < 1 || games > 1000) throw new Error('games must be 1–1000')
   const [modelA, modelB] = await Promise.all([
-    db.mLModel.findUnique({ where: { id: modelAId } }),
-    db.mLModel.findUnique({ where: { id: modelBId } }),
+    db.botSkill.findUnique({ where: { id: modelAId } }),
+    db.botSkill.findUnique({ where: { id: modelBId } }),
   ])
   if (!modelA || !modelB) throw new Error('Model not found')
 
@@ -541,7 +536,7 @@ export async function listTournaments() {
 
 async function _runTournament(tournamentId, modelIds, gamesPerPair) {
   try {
-    const models = await Promise.all(modelIds.map(id => db.mLModel.findUnique({ where: { id } })))
+    const models = await Promise.all(modelIds.map(id => db.botSkill.findUnique({ where: { id } })))
     const valid = models.filter(Boolean)
     const engines = Object.fromEntries(valid.map(m => [m.id, _greedyEngine(m)]))
 
@@ -591,15 +586,14 @@ async function _runTournament(tournamentId, modelIds, gamesPerPair) {
 }
 
 export async function saveCheckpoint(modelId) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  const model = await db.botSkill.findUnique({ where: { id: modelId } })
   if (!model) throw new Error('Model not found')
   return db.mLCheckpoint.create({
     data: {
       modelId,
       episodeNum: model.totalEpisodes,
-      qtable: model.qtable,
+      weights: model.weights,
       epsilon: model.config?.currentEpsilon ?? model.config?.epsilonStart ?? 1.0,
-      eloRating: model.eloRating,
     },
   })
 }
@@ -611,7 +605,7 @@ export async function getCheckpoint(modelId, checkpointId) {
 }
 
 export async function exportModel(modelId) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  const model = await db.botSkill.findUnique({ where: { id: modelId } })
   if (!model) throw new Error('Model not found')
   // eslint-disable-next-line no-unused-vars
   const { id, createdAt, updatedAt, ...rest } = model
@@ -619,20 +613,19 @@ export async function exportModel(modelId) {
 }
 
 export async function importModel(data) {
-  const { name, description, algorithm, config, qtable, totalEpisodes, eloRating, createdBy = null } = data
+  const { name, description, algorithm, config, qtable, weights, totalEpisodes, createdBy = null } = data
   if (!name?.trim()) throw new Error('name is required')
   const mergedConfig = { ...DEFAULT_CONFIG, ...(config || {}) }
   const maxEpisodes = await getSystemConfig('ml.maxEpisodesPerModel', 100_000)
-  return db.mLModel.create({
+  return db.botSkill.create({
     data: {
       name: name.trim(),
       description: description || null,
       algorithm: algorithm || 'Q_LEARNING',
       config: mergedConfig,
-      qtable: qtable || {},
+      weights: weights || qtable || {},
       totalEpisodes: totalEpisodes || 0,
       maxEpisodes,
-      eloRating: eloRating || 1000,
       createdBy,
     },
   })
@@ -654,7 +647,7 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
     throw new Error(`Training limit: max ${maxEpisodes.toLocaleString()} episodes per session`)
   }
   if (maxConcurrent > 0) {
-    const runningCount = await db.mLModel.count({ where: { status: 'TRAINING' } })
+    const runningCount = await db.botSkill.count({ where: { status: 'TRAINING' } })
     if (runningCount >= maxConcurrent) {
       throw new Error(`Training limit: max ${maxConcurrent} concurrent session${maxConcurrent !== 1 ? 's' : ''}`)
     }
@@ -684,7 +677,7 @@ export async function startTraining(modelId, { mode, iterations, config = {} }) 
   const session = await db.trainingSession.create({
     data: { modelId, mode, iterations, status: 'RUNNING', config },
   })
-  await db.mLModel.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
+  await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
 
   // Fire-and-forget background loop
   setImmediate(() => _runTraining(model, session, { mode, iterations, config }))
@@ -708,7 +701,7 @@ async function _processNextInQueue() {
       where: { id: next.sessionId },
       data: { status: 'RUNNING', startedAt: new Date() },
     })
-    await db.mLModel.update({ where: { id: next.modelId }, data: { status: 'TRAINING' } })
+    await db.botSkill.update({ where: { id: next.modelId }, data: { status: 'TRAINING' } })
     setImmediate(() => _runTraining(model, session, next.opts))
     logger.info({ modelId: next.modelId, sessionId: next.sessionId }, 'Queued training started')
   } catch (err) {
@@ -726,7 +719,7 @@ export async function cancelSession(sessionId) {
       where: { id: sessionId },
       data: { status: 'CANCELLED', completedAt: new Date() },
     })
-    await db.mLModel.update({ where: { id: s.modelId }, data: { status: 'IDLE' } })
+    await db.botSkill.update({ where: { id: s.modelId }, data: { status: 'IDLE' } })
   }
 }
 
@@ -748,7 +741,7 @@ export async function startFrontendSession(modelId, { mode, iterations, config =
     throw new Error(`Training limit: max ${maxEpisodes.toLocaleString()} episodes per session`)
   }
   if (maxConcurrent > 0) {
-    const runningCount = await db.mLModel.count({ where: { status: 'TRAINING' } })
+    const runningCount = await db.botSkill.count({ where: { status: 'TRAINING' } })
     if (runningCount >= maxConcurrent) {
       throw new Error(`Training limit: max ${maxConcurrent} concurrent session${maxConcurrent !== 1 ? 's' : ''}`)
     }
@@ -767,16 +760,15 @@ export async function startFrontendSession(modelId, { mode, iterations, config =
   const session = await db.trainingSession.create({
     data: { modelId, mode, iterations, status: 'RUNNING', config: { ...config, frontend: true } },
   })
-  await db.mLModel.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
+  await db.botSkill.update({ where: { id: modelId }, data: { status: 'TRAINING' } })
   logger.info({ modelId, sessionId: session.id }, 'Frontend training session started')
 
   return {
     session,
     model: {
       config: model.config,
-      qtable: model.qtable,
+      weights: model.weights,
       algorithm: model.algorithm,
-      eloRating: model.eloRating,
     },
   }
 }
@@ -801,7 +793,7 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
     stateCount,
   }
 
-  const currentModel = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
+  const currentModel = await db.botSkill.findUnique({ where: { id: modelId }, select: { config: true } })
 
   // Sync DQN architecture if it changed during training
   const configOverride = {}
@@ -824,10 +816,10 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
   })) : []
 
   await db.$transaction([
-    db.mLModel.update({
+    db.botSkill.update({
       where: { id: modelId },
       data: {
-        qtable: weights || {},
+        weights: weights || {},
         status: 'IDLE',
         totalEpisodes: { increment: safeIterations },
         config: { ...currentModel.config, ...configOverride, currentEpsilon: finalEpsilon },
@@ -845,7 +837,7 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
 
   // Journey step 5: first training run (fire-and-forget)
   if (safeIterations > 0) {
-    db.mLModel.findUnique({ where: { id: modelId }, select: { createdBy: true } })
+    db.botSkill.findUnique({ where: { id: modelId }, select: { createdBy: true } })
       .then(async model => {
         if (!model?.createdBy) return
         const user = await db.user.findUnique({ where: { betterAuthId: model.createdBy }, select: { id: true } })
@@ -857,8 +849,7 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
   // ELO calibration — non-blocking background task
   setImmediate(async () => {
     try {
-      const calibModel  = await db.mLModel.findUnique({ where: { id: modelId }, select: { eloRating: true } })
-      const freshModel  = await db.mLModel.findUnique({ where: { id: modelId } })
+      const freshModel  = await db.botSkill.findUnique({ where: { id: modelId } })
       const calibEngine = _greedyEngine(freshModel)
       const CALIBRATION_OPPONENTS = [
         { difficulty: 'novice',       fixedElo: 800  },
@@ -867,7 +858,7 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
         { difficulty: 'master',       fixedElo: 1800 },
       ]
       const CALIB_GAMES = 100
-      let currentElo = calibModel.eloRating
+      let currentElo = 1200
       for (const { difficulty, fixedElo } of CALIBRATION_OPPONENTS) {
         const r = _runGames(calibEngine, (b, p) => minimaxMove(b, difficulty, p), CALIB_GAMES)
         const actual   = (r.wins + r.draws * 0.5) / CALIB_GAMES
@@ -875,9 +866,8 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
         currentElo = parseFloat((currentElo + ELO_K * (actual - expected)).toFixed(2))
         await new Promise(res => setImmediate(res))
       }
-      const delta = parseFloat((currentElo - calibModel.eloRating).toFixed(2))
+      const delta = parseFloat((currentElo - 1200).toFixed(2))
       const outcome = delta > 0 ? 'WIN' : delta < 0 ? 'LOSS' : 'DRAW'
-      await db.mLModel.update({ where: { id: modelId }, data: { eloRating: currentElo } })
       await db.mLEloHistory.create({ data: { modelId, eloRating: currentElo, delta, opponentType: 'MINIMAX', outcome } })
       logger.info({ modelId, newElo: currentElo, delta }, 'ELO calibrated after frontend training')
     } catch (eloErr) {
@@ -1233,7 +1223,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
   // DQN: handle per-session architecture override (networkShape or hiddenSize from the Train tab).
   // If the requested architecture differs from the stored one, reset weights — you can't continue
   // training a [9,32,9] network with [9,64,64,9] weights.
-  let sessionQtable = model.qtable
+  let sessionQtable = model.weights
   if (algorithm === 'DQN') {
     const requestedShape = config.networkShape ?? (config.hiddenSize != null ? [config.hiddenSize] : null)
     if (requestedShape) {
@@ -1353,7 +1343,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
       // Checkpoint
       if ((i + 1) % CHECKPOINT_GAP === 0) {
         await db.mLCheckpoint.create({
-          data: { modelId, episodeNum: model.totalEpisodes + i + 1, qtable: engine.toJSON(), epsilon: engine.epsilon, eloRating: model.eloRating },
+          data: { modelId, episodeNum: model.totalEpisodes + i + 1, weights: engine.toJSON(), epsilon: engine.epsilon },
         })
       }
 
@@ -1377,7 +1367,7 @@ async function _runTraining(model, session, { mode, iterations, config }) {
     await _finishSession(sessionId, modelId, engine, actualEpisodes, 'COMPLETED', { wins, losses, draws, totalQDelta })
   } catch (err) {
     logger.error({ err, sessionId, modelId }, 'Training failed')
-    await db.mLModel.update({ where: { id: modelId }, data: { status: 'IDLE' } })
+    await db.botSkill.update({ where: { id: modelId }, data: { status: 'IDLE' } })
     await db.trainingSession.update({ where: { id: sessionId }, data: { status: 'FAILED', completedAt: new Date() } })
     _emit(`ml:session:${sessionId}`, 'ml:error', { sessionId, error: err.message })
     _processNextInQueue()
@@ -1393,7 +1383,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
     stateCount: engine.stateCount,
     ...extraMeta,
   }
-  const updatedConfig = await db.mLModel.findUnique({ where: { id: modelId }, select: { config: true } })
+  const updatedConfig = await db.botSkill.findUnique({ where: { id: modelId }, select: { config: true } })
   // For DQN: keep model.config.layerSizes / networkShape in sync with what was actually trained.
   // This matters when the user changed the architecture via the Train tab — future sessions and
   // inference must use the updated architecture, not the stale creation-time shape.
@@ -1404,10 +1394,10 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
     configArchOverride.networkShape = ls.slice(1, -1)
   }
   await db.$transaction([
-    db.mLModel.update({
+    db.botSkill.update({
       where: { id: modelId },
       data: {
-        qtable: engine.toJSON(),
+        weights: engine.toJSON(),
         status: 'IDLE',
         totalEpisodes: { increment: iterations },
         config: { ...updatedConfig.config, ...configArchOverride, currentEpsilon: engine.epsilon },
@@ -1427,8 +1417,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
 
   // ELO calibration: play 100 games vs each fixed minimax level and update ELO
   try {
-    const calibModel  = await db.mLModel.findUnique({ where: { id: modelId }, select: { eloRating: true } })
-    const calibEngine = _greedyEngine(await db.mLModel.findUnique({ where: { id: modelId } }))
+    const calibEngine = _greedyEngine(await db.botSkill.findUnique({ where: { id: modelId } }))
     const CALIBRATION_OPPONENTS = [
       { difficulty: 'novice',       fixedElo: 800  },
       { difficulty: 'intermediate', fixedElo: 1200 },
@@ -1436,7 +1425,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
       { difficulty: 'master',       fixedElo: 1800 },
     ]
     const CALIB_GAMES = 100
-    let currentElo = calibModel.eloRating
+    let currentElo = 1200
     for (const { difficulty, fixedElo } of CALIBRATION_OPPONENTS) {
       const r = _runGames(calibEngine, (b, p) => minimaxMove(b, difficulty, p), CALIB_GAMES)
       const actual   = (r.wins + r.draws * 0.5) / CALIB_GAMES
@@ -1444,9 +1433,8 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
       currentElo = parseFloat((currentElo + ELO_K * (actual - expected)).toFixed(2))
       await new Promise(res => setImmediate(res))
     }
-    const delta = parseFloat((currentElo - calibModel.eloRating).toFixed(2))
+    const delta = parseFloat((currentElo - 1200).toFixed(2))
     const outcome = delta > 0 ? 'WIN' : delta < 0 ? 'LOSS' : 'DRAW'
-    await db.mLModel.update({ where: { id: modelId }, data: { eloRating: currentElo } })
     await db.mLEloHistory.create({ data: { modelId, eloRating: currentElo, delta, opponentType: 'MINIMAX', outcome } })
     logger.info({ modelId, newElo: currentElo, delta }, 'ELO calibrated after training')
   } catch (eloErr) {
@@ -1465,7 +1453,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
       const prevHardRate = prev.vsHard?.winRate ?? null
       if (prevHardRate !== null) {
         // Mini-benchmark: 100 games vs hard
-        const freshModel = await db.mLModel.findUnique({ where: { id: modelId } })
+        const freshModel = await db.botSkill.findUnique({ where: { id: modelId } })
         const greedyEng = _greedyEngine(freshModel)
         const miniResult = _runGames(greedyEng, (b, p) => minimaxMove(b, 'master', p), 100)
         const drop = prevHardRate - miniResult.winRate
@@ -1493,7 +1481,7 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
  * @returns {{ bestConfig: Object, results: Array }} best config and all results
  */
 export async function startHyperparamSearch(modelId, { paramGrid = {}, gamesPerConfig = 500 } = {}) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  const model = await db.botSkill.findUnique({ where: { id: modelId } })
   if (!model) throw new Error('Model not found')
 
   // Build cartesian product of paramGrid
@@ -1521,7 +1509,7 @@ export async function startHyperparamSearch(modelId, { paramGrid = {}, gamesPerC
     const mergedConfig = { ...DEFAULT_CONFIG, ...model.config, ...cfg, currentEpsilon: cfg.epsilonStart ?? DEFAULT_CONFIG.epsilonStart }
     const engine = new QLearningEngine(mergedConfig)
     // Load current qtable as starting point
-    engine.loadQTable(model.qtable && typeof model.qtable === 'object' ? { ...model.qtable } : {})
+    engine.loadQTable(model.weights && typeof model.weights === 'object' ? { ...model.weights } : {})
 
     // Train for gamesPerConfig episodes vs VS_MINIMAX hard
     for (let i = 0; i < gamesPerConfig; i++) {
@@ -1548,7 +1536,7 @@ export async function startHyperparamSearch(modelId, { paramGrid = {}, gamesPerC
 
   // Save best config + all results to model metadata
   const currentMetadata = (model.config && typeof model.config === 'object') ? model.config : {}
-  await db.mLModel.update({
+  await db.botSkill.update({
     where: { id: modelId },
     data: {
       config: {
@@ -1571,14 +1559,14 @@ export async function startHyperparamSearch(modelId, { paramGrid = {}, gamesPerC
  * For tabular engines, returns null activations and uses explainBoard.
  */
 export async function explainActivations(modelId, board) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  const model = await db.botSkill.findUnique({ where: { id: modelId } })
   if (!model) throw new Error('Model not found')
 
   const alg = (model.algorithm || 'Q_LEARNING').toUpperCase()
 
   if (alg === 'DQN') {
     const engine = new DQNEngine(model.config)
-    engine.loadQTable(model.qtable)
+    engine.loadQTable(model.weights)
     const mark = 'X'
     const { qValues, activations } = engine.explainBoard(board, mark)
     return { activations, qValues }
@@ -1586,7 +1574,7 @@ export async function explainActivations(modelId, board) {
 
   if (alg === 'ALPHA_ZERO' || alg === 'AZ') {
     const engine = new AlphaZeroEngine(model.config)
-    engine.loadQTable(model.qtable)
+    engine.loadQTable(model.weights)
     const mark = 'X'
     const { qValues, activations, value } = engine.explainBoard(board, mark)
     return { activations, qValues, value }
@@ -1594,7 +1582,7 @@ export async function explainActivations(modelId, board) {
 
   // Tabular engine — no network activations
   const engine = _buildEngine(model.config, alg)
-  engine.loadQTable(model.qtable)
+  engine.loadQTable(model.weights)
   const qValues = engine.explainBoard ? engine.explainBoard(board) : null
   return { activations: null, qValues }
 }
@@ -1610,14 +1598,14 @@ export async function explainActivations(modelId, board) {
  * @param {string} mark
  */
 export async function ensembleMove(modelIds, method, weights, board, mark) {
-  const models = await Promise.all(modelIds.map(id => db.mLModel.findUnique({ where: { id } })))
+  const models = await Promise.all(modelIds.map(id => db.botSkill.findUnique({ where: { id } })))
   const valid = models.filter(Boolean)
   if (valid.length === 0) throw new Error('No valid models found')
 
   const engines = valid.map(m => {
     const alg = (m.algorithm || 'Q_LEARNING').toUpperCase()
     const engine = _buildEngine(m.config, alg)
-    engine.loadQTable(m.qtable)
+    engine.loadQTable(m.weights)
     engine.epsilon = 0
     return { engine, alg, model: m }
   })

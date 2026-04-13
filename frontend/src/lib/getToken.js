@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Returns a signed JWT bearer token from the Better Auth JWT plugin endpoint.
  * Works in both React components and non-React contexts (Zustand, etc.).

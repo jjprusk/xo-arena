@@ -13,7 +13,7 @@ import { botGameRunner } from './botGameRunner.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
-import { getSystemConfig } from '../services/mlService.js'
+import { getSystemConfig } from '../services/skillService.js'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
 import {
@@ -186,7 +186,10 @@ export async function attachSocketIO(httpServer) {
           spectatorAllowed,
         })
         room.hostUserDisplayName = user?.displayName ?? null
-        room.hostUserElo = user?.eloRating ?? null
+        if (user?.id) {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.hostUserElo = eloRow?.rating ?? null
+        }
         socket.join(room.slug)
         socket.emit('room:created', { slug: room.slug, displayName: room.displayName, mark: 'X' })
       } catch (err) {
@@ -246,7 +249,10 @@ export async function attachSocketIO(httpServer) {
 
         const room = result.room
         room.guestUserDisplayName = user?.displayName ?? null
-        room.guestUserElo = user?.eloRating ?? null
+        if (user?.id) {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.guestUserElo = eloRow?.rating ?? null
+        }
         socket.join(slug)
         socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeRoom(room) })
         // Notify host
@@ -410,7 +416,10 @@ export async function attachSocketIO(httpServer) {
           bestOfN,
         })
         room.hostUserDisplayName = user.displayName ?? null
-        room.hostUserElo = user.eloRating ?? null
+        {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.hostUserElo = eloRow?.rating ?? null
+        }
         socket.join(room.slug)
         slug = room.slug
         mark = 'X'
@@ -423,7 +432,10 @@ export async function attachSocketIO(httpServer) {
 
         const room = result.room
         room.guestUserDisplayName = user.displayName ?? null
-        room.guestUserElo = user.eloRating ?? null
+        {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.guestUserElo = eloRow?.rating ?? null
+        }
         mark = 'O'
         socket.join(slug)
         socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })

@@ -67,7 +67,7 @@ vi.mock('../../lib/db.js', () => ({
       findUnique: vi.fn(),
       findFirst:  vi.fn(),
     },
-    mLModel: {
+    botSkill: {
       findUnique: vi.fn(),
       count:      vi.fn(),
     },
@@ -114,8 +114,8 @@ beforeEach(() => {
   isAdminMock = vi.fn().mockResolvedValue(false)
   // Re-wire the getter to use the fresh mock
   vi.mocked(svc.getSystemConfig).mockResolvedValue(10)
-  vi.mocked(db.user.findUnique).mockResolvedValue({ mlModelLimit: null })
-  vi.mocked(db.mLModel.count).mockResolvedValue(0)
+  vi.mocked(db.user.findUnique).mockResolvedValue({ skillLimit: null })
+  vi.mocked(db.botSkill.count).mockResolvedValue(0)
   vi.mocked(db.user.findFirst).mockResolvedValue(null)
 })
 
@@ -166,8 +166,8 @@ describe('POST /models', () => {
   })
 
   it('403 when model limit reached', async () => {
-    vi.mocked(db.user.findUnique).mockResolvedValue({ mlModelLimit: null })
-    vi.mocked(db.mLModel.count).mockResolvedValue(10)
+    vi.mocked(db.user.findUnique).mockResolvedValue({ skillLimit: null })
+    vi.mocked(db.botSkill.count).mockResolvedValue(10)
     vi.mocked(svc.getSystemConfig).mockResolvedValue(10)
 
     const res = await request(app).post('/api/v1/ml/models').send({ name: 'New' })
@@ -176,7 +176,7 @@ describe('POST /models', () => {
   })
 
   it('201 on success', async () => {
-    vi.mocked(db.mLModel.count).mockResolvedValue(0)
+    vi.mocked(db.botSkill.count).mockResolvedValue(0)
     vi.mocked(svc.createModel).mockResolvedValue(mockModel)
 
     const res = await request(app).post('/api/v1/ml/models').send({ name: 'New Model' })
@@ -284,8 +284,8 @@ describe('POST /models/:id/reset', () => {
 
 describe('POST /models/:id/clone', () => {
   it('403 when limit reached', async () => {
-    vi.mocked(db.user.findUnique).mockResolvedValue({ mlModelLimit: null })
-    vi.mocked(db.mLModel.count).mockResolvedValue(10)
+    vi.mocked(db.user.findUnique).mockResolvedValue({ skillLimit: null })
+    vi.mocked(db.botSkill.count).mockResolvedValue(10)
     vi.mocked(svc.getSystemConfig).mockResolvedValue(10)
 
     const res = await request(app).post('/api/v1/ml/models/model_1/clone').send({ name: 'Clone' })
@@ -293,7 +293,7 @@ describe('POST /models/:id/clone', () => {
   })
 
   it('201 on success', async () => {
-    vi.mocked(db.mLModel.count).mockResolvedValue(0)
+    vi.mocked(db.botSkill.count).mockResolvedValue(0)
     vi.mocked(svc.cloneModel).mockResolvedValue({ ...mockModel, id: 'model_clone', name: 'Clone' })
 
     const res = await request(app).post('/api/v1/ml/models/model_1/clone').send({ name: 'Clone' })

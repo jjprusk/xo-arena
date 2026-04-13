@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
 import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'

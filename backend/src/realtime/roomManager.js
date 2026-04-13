@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * In-memory room state manager.
  * Manages PvP game rooms: creation, joining, turn management, disconnect/reconnect.
@@ -74,6 +75,8 @@ class RoomManager {
       idleTimers: {},
       createdAt: now,
       lastActivityAt: now,
+      // Compact move history for replay storage (cleared on rematch)
+      moves: [],
       // Tournament match context (null for free-play rooms)
       tournamentMatchId,
       tournamentId,
@@ -132,6 +135,7 @@ class RoomManager {
 
     room.board[cellIndex] = playerMark
     room.lastActivityAt = Date.now()
+    room.moves.push({ n: room.moves.length + 1, m: playerMark, c: cellIndex })
     const winner = getWinner(room.board)
     const draw = !winner && isBoardFull(room.board)
 
@@ -165,6 +169,7 @@ class RoomManager {
     room.currentTurn = room.currentTurn === 'X' ? 'O' : 'X'
     room.winner = null
     room.winLine = null
+    room.moves = []
     room.status = 'playing'
     room.round++
 

@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Mountain name pool for room naming.
  * Names are used as URL slugs: xoarena.com/room/mt-everest

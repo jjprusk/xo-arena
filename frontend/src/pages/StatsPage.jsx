@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'

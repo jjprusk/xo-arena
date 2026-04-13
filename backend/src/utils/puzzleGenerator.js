@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Tactical puzzle generator for tic-tac-toe.
  *

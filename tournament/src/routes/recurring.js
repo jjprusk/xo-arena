@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import db from '../lib/db.js'
 import { requireAuth, requireTournamentAdmin } from '../middleware/auth.js'

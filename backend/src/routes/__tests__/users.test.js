@@ -44,6 +44,9 @@ vi.mock('../../lib/db.js', () => ({
     userEloHistory: {
       findMany: vi.fn(async () => []),
     },
+    gameElo: {
+      findUnique: vi.fn(async () => ({ rating: 1200 })),
+    },
     mLPlayerProfile: {
       findMany: vi.fn(async () => []),
     },

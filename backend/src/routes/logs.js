@@ -1,7 +1,8 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
-import { getSystemConfig, setSystemConfig } from '../services/mlService.js'
+import { getSystemConfig, setSystemConfig } from '../services/skillService.js'
 
 const router = Router()
 

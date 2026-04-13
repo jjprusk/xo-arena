@@ -161,11 +161,20 @@ export default function PvPBoard() {
         </div>
       )}
 
-      {/* Spectator badge */}
+      {/* Spectator badge + leave button */}
       {role === 'spectator' && (
-        <span className="text-xs px-3 py-1 rounded-full" style={{ backgroundColor: 'var(--color-teal-50)', color: 'var(--color-teal-600)' }}>
-          Spectating
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs px-3 py-1 rounded-full" style={{ backgroundColor: 'var(--color-teal-50)', color: 'var(--color-teal-600)' }}>
+            Spectating
+          </span>
+          <button
+            onClick={reset}
+            className="text-xs transition-colors hover:text-[var(--color-red-600)]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Leave
+          </button>
+        </div>
       )}
 
       {/* Game-end actions */}

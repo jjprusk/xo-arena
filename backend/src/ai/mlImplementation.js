@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * ML implementation for the AI registry.
  *
@@ -6,7 +7,7 @@
  * the Q-table and returns the best move via pure exploitation.
  */
 
-import { getMoveForModel } from '../services/mlService.js'
+import { getMoveForModel } from '../services/skillService.js'
 import { getEmptyCells } from '@xo-arena/ai'
 
 export const mlImplementation = {

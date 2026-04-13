@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useGameStore } from '../store/gameStore.js'
@@ -25,7 +26,7 @@ export default function PlayPage() {
   const { status: pvaiStatus, mode: pvaiMode } = useGameStore()
   const {
     status: pvpStatus, joinRoom, role, slug, isAutoRoom, displayName,
-    abandoned, kicked, myMark, reset,
+    abandoned, kicked, myMark, reset, error: pvpError,
   } = usePvpStore()
 
   const inviteUrl = slug ? `${window.location.origin}/play?join=${slug}` : ''
@@ -124,6 +125,24 @@ export default function PlayPage() {
       <p style={{ color: 'var(--text-secondary)' }}>
         {isTournamentMatch ? 'Waiting for opponent…' : 'Joining room…'}
       </p>
+    </div>
+  )
+  if (pvpStatus === 'waiting' && role === 'spectator') return (
+    <div className="flex flex-col items-center gap-4 py-12">
+      {pvpError ? (
+        <>
+          <div className="text-4xl">📭</div>
+          <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {pvpError === 'Room not found' ? 'This game has already ended.' : pvpError}
+          </p>
+          <button onClick={reset} className="btn btn-primary text-sm">Back to Play</button>
+        </>
+      ) : (
+        <>
+          <div className="w-8 h-8 border-4 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
+          <p style={{ color: 'var(--text-secondary)' }}>Joining as spectator…</p>
+        </>
+      )}
     </div>
   )
 

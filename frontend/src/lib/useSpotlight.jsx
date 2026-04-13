@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { useRef } from 'react'
 import { useGuideStore } from '../store/guideStore.js'
 

@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { create } from 'zustand'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'

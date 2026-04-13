@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * In-memory AI metrics store.
  * Accumulates per-move records in a capped ring buffer (max 10 000 entries).

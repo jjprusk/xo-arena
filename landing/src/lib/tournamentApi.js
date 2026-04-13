@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Tournament service API client for the aiarena landing app.
  * Mirrors frontend/src/lib/tournamentApi.js — single source until

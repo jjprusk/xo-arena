@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import Redis from 'ioredis'
 import logger from '../logger.js'
 

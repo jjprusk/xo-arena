@@ -1,8 +1,9 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import { createBot, listBots } from '../services/userService.js'
-import { getSystemConfig } from '../services/mlService.js'
+import { getSystemConfig } from '../services/skillService.js'
 import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
 import { completeStep } from '../services/journeyService.js'
@@ -219,9 +220,14 @@ router.post('/:id/reset-elo', requireAuth, async (req, res, next) => {
     // Clear UserEloHistory and reset ELO in a transaction
     await db.$transaction([
       db.userEloHistory.deleteMany({ where: { userId: bot.id } }),
+      db.gameElo.upsert({
+        where: { userId_gameId: { userId: bot.id, gameId: 'xo' } },
+        update: { rating: 1200, gamesPlayed: 0 },
+        create: { userId: bot.id, gameId: 'xo', rating: 1200, gamesPlayed: 0 },
+      }),
       db.user.update({
         where: { id: bot.id },
-        data: { eloRating: 1200, botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
+        data: { botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
       }),
     ])
 
@@ -249,7 +255,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       await tx.game.deleteMany({ where: { player1Id: bot.id } })
       await tx.user.delete({ where: { id: bot.id } })
       if (bot.botModelId) {
-        await tx.mLModel.delete({ where: { id: bot.botModelId } })
+        await tx.botSkill.delete({ where: { id: bot.botModelId } })
       }
     })
 

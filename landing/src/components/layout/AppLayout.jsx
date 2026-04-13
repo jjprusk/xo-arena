@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'

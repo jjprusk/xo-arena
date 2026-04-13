@@ -6,6 +6,10 @@ vi.mock('../../lib/db.js', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    gameElo: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+    },
     userEloHistory: {
       create: vi.fn(),
     },
@@ -13,7 +17,7 @@ vi.mock('../../lib/db.js', () => ({
   },
 }))
 
-vi.mock('../mlService.js', () => ({
+vi.mock('../skillService.js', () => ({
   getSystemConfig: vi.fn().mockResolvedValue(5),
 }))
 
@@ -24,51 +28,46 @@ const db = (await import('../../lib/db.js')).default
 beforeEach(() => {
   vi.clearAllMocks()
   db.user.update.mockResolvedValue({})
+  db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+  db.gameElo.upsert.mockResolvedValue({})
   db.userEloHistory.create.mockResolvedValue({})
   db.$transaction.mockImplementation(async (ops) => Promise.all(ops))
 })
 
 describe('updatePlayerEloAfterPvAI', () => {
   it('increases ELO on win vs novice', async () => {
-    db.user.findUnique.mockResolvedValue({ eloRating: 1200 })
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
     const result = await updatePlayerEloAfterPvAI('usr_1', 'PLAYER1_WIN', 'novice')
     expect(result.delta).toBeGreaterThan(0)
   })
 
   it('decreases ELO on loss vs master', async () => {
-    db.user.findUnique.mockResolvedValue({ eloRating: 1200 })
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
     const result = await updatePlayerEloAfterPvAI('usr_1', 'AI_WIN', 'master')
     expect(result.delta).toBeLessThan(0)
   })
 
   it('records opponentType correctly', async () => {
-    db.user.findUnique.mockResolvedValue({ eloRating: 1200 })
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
     await updatePlayerEloAfterPvAI('usr_1', 'DRAW', 'intermediate')
     const historyCreate = db.userEloHistory.create.mock.calls[0][0]
     expect(historyCreate.data.opponentType).toBe('ai_intermediate')
     expect(historyCreate.data.outcome).toBe('draw')
   })
 
-  it('returns undefined when user not found', async () => {
-    db.user.findUnique.mockResolvedValue(null)
-    const result = await updatePlayerEloAfterPvAI('usr_missing', 'PLAYER1_WIN', 'novice')
-    expect(result).toBeUndefined()
-  })
-
   it('does not throw when db errors — returns undefined', async () => {
-    db.user.findUnique.mockRejectedValue(new Error('db down'))
+    db.gameElo.findUnique.mockRejectedValue(new Error('db down'))
     const result = await updatePlayerEloAfterPvAI('usr_1', 'PLAYER1_WIN', 'novice')
     expect(result).toBeUndefined()
   })
 })
 
 describe('updateBothElosAfterPvBot', () => {
-  const mockBot = { eloRating: 1200, botGamesPlayed: 0, botProvisional: true }
+  const mockBotData = { botGamesPlayed: 0, botProvisional: true }
 
   it('updates both human and bot ELO on human win', async () => {
-    db.user.findUnique
-      .mockResolvedValueOnce({ eloRating: 1200 }) // human
-      .mockResolvedValueOnce(mockBot)              // bot
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
 
     const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN')
     expect(result.human.delta).toBeGreaterThan(0)
@@ -76,9 +75,8 @@ describe('updateBothElosAfterPvBot', () => {
   })
 
   it('updates both ELO on bot win', async () => {
-    db.user.findUnique
-      .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce(mockBot)
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
 
     const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER2_WIN')
     expect(result.human.delta).toBeLessThan(0)
@@ -86,9 +84,8 @@ describe('updateBothElosAfterPvBot', () => {
   })
 
   it('writes history for both sides', async () => {
-    db.user.findUnique
-      .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce(mockBot)
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
 
     await updateBothElosAfterPvBot('usr_1', 'bot_1', 'DRAW')
     expect(db.userEloHistory.create).toHaveBeenCalledTimes(2)
@@ -103,25 +100,15 @@ describe('updateBothElosAfterPvBot', () => {
     expect(botCall[0].data.outcome).toBe('draw')
   })
 
-  it('returns undefined when either user not found', async () => {
-    db.user.findUnique
-      .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce(null)
-
-    const result = await updateBothElosAfterPvBot('usr_1', 'bot_missing', 'PLAYER1_WIN')
-    expect(result).toBeUndefined()
-  })
-
   it('does not throw on db error', async () => {
-    db.user.findUnique.mockRejectedValue(new Error('db down'))
+    db.gameElo.findUnique.mockRejectedValue(new Error('db down'))
     const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN')
     expect(result).toBeUndefined()
   })
 
   it('ELO delta magnitude is symmetric for equal-rated players', async () => {
-    db.user.findUnique
-      .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce(mockBot)
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
+    db.user.findUnique.mockResolvedValue(mockBotData)
 
     const result = await updateBothElosAfterPvBot('usr_1', 'bot_1', 'PLAYER1_WIN')
     expect(Math.abs(result.human.delta)).toBeCloseTo(Math.abs(result.bot.delta), 1)
@@ -130,21 +117,16 @@ describe('updateBothElosAfterPvBot', () => {
 
 describe('updatePlayersEloAfterPvP', () => {
   it('increases winner ELO and decreases loser ELO', async () => {
-    db.user.findUnique
-      .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce({ eloRating: 1200 })
+    db.gameElo.findUnique.mockResolvedValue({ rating: 1200 })
 
     const result = await updatePlayersEloAfterPvP('usr_1', 'usr_2', 'PLAYER1_WIN')
     expect(result.player1.delta).toBeGreaterThan(0)
     expect(result.player2.delta).toBeLessThan(0)
   })
 
-  it('returns undefined when a player is missing', async () => {
-    db.user.findUnique
-      .mockResolvedValueOnce({ eloRating: 1200 })
-      .mockResolvedValueOnce(null)
-
-    const result = await updatePlayersEloAfterPvP('usr_1', 'usr_missing', 'PLAYER1_WIN')
+  it('does not throw on db error', async () => {
+    db.gameElo.findUnique.mockRejectedValue(new Error('db down'))
+    const result = await updatePlayersEloAfterPvP('usr_1', 'usr_2', 'PLAYER1_WIN')
     expect(result).toBeUndefined()
   })
 })

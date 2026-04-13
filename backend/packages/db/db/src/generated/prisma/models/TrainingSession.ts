@@ -241,7 +241,7 @@ export type TrainingSessionWhereInput = {
   startedAt?: Prisma.DateTimeFilter<"TrainingSession"> | Date | string
   completedAt?: Prisma.DateTimeNullableFilter<"TrainingSession"> | Date | string | null
   episodes?: Prisma.TrainingEpisodeListRelationFilter
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }
 
 export type TrainingSessionOrderByWithRelationInput = {
@@ -255,7 +255,7 @@ export type TrainingSessionOrderByWithRelationInput = {
   startedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   episodes?: Prisma.TrainingEpisodeOrderByRelationAggregateInput
-  model?: Prisma.MLModelOrderByWithRelationInput
+  model?: Prisma.BotSkillOrderByWithRelationInput
 }
 
 export type TrainingSessionWhereUniqueInput = Prisma.AtLeast<{
@@ -272,7 +272,7 @@ export type TrainingSessionWhereUniqueInput = Prisma.AtLeast<{
   startedAt?: Prisma.DateTimeFilter<"TrainingSession"> | Date | string
   completedAt?: Prisma.DateTimeNullableFilter<"TrainingSession"> | Date | string | null
   episodes?: Prisma.TrainingEpisodeListRelationFilter
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }, "id">
 
 export type TrainingSessionOrderByWithAggregationInput = {
@@ -317,7 +317,7 @@ export type TrainingSessionCreateInput = {
   startedAt?: Date | string
   completedAt?: Date | string | null
   episodes?: Prisma.TrainingEpisodeCreateNestedManyWithoutSessionInput
-  model: Prisma.MLModelCreateNestedOneWithoutSessionsInput
+  model: Prisma.BotSkillCreateNestedOneWithoutSessionsInput
 }
 
 export type TrainingSessionUncheckedCreateInput = {
@@ -343,7 +343,7 @@ export type TrainingSessionUpdateInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   episodes?: Prisma.TrainingEpisodeUpdateManyWithoutSessionNestedInput
-  model?: Prisma.MLModelUpdateOneRequiredWithoutSessionsNestedInput
+  model?: Prisma.BotSkillUpdateOneRequiredWithoutSessionsNestedInput
 }
 
 export type TrainingSessionUncheckedUpdateInput = {
@@ -587,7 +587,7 @@ export type TrainingSessionCreateWithoutEpisodesInput = {
   summary?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   startedAt?: Date | string
   completedAt?: Date | string | null
-  model: Prisma.MLModelCreateNestedOneWithoutSessionsInput
+  model: Prisma.BotSkillCreateNestedOneWithoutSessionsInput
 }
 
 export type TrainingSessionUncheckedCreateWithoutEpisodesInput = {
@@ -627,7 +627,7 @@ export type TrainingSessionUpdateWithoutEpisodesInput = {
   summary?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  model?: Prisma.MLModelUpdateOneRequiredWithoutSessionsNestedInput
+  model?: Prisma.BotSkillUpdateOneRequiredWithoutSessionsNestedInput
 }
 
 export type TrainingSessionUncheckedUpdateWithoutEpisodesInput = {
@@ -730,7 +730,7 @@ export type TrainingSessionSelect<ExtArgs extends runtime.Types.Extensions.Inter
   startedAt?: boolean
   completedAt?: boolean
   episodes?: boolean | Prisma.TrainingSession$episodesArgs<ExtArgs>
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
   _count?: boolean | Prisma.TrainingSessionCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["trainingSession"]>
 
@@ -744,7 +744,7 @@ export type TrainingSessionSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   summary?: boolean
   startedAt?: boolean
   completedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["trainingSession"]>
 
 export type TrainingSessionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -757,7 +757,7 @@ export type TrainingSessionSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   summary?: boolean
   startedAt?: boolean
   completedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["trainingSession"]>
 
 export type TrainingSessionSelectScalar = {
@@ -775,21 +775,21 @@ export type TrainingSessionSelectScalar = {
 export type TrainingSessionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "modelId" | "mode" | "iterations" | "status" | "config" | "summary" | "startedAt" | "completedAt", ExtArgs["result"]["trainingSession"]>
 export type TrainingSessionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   episodes?: boolean | Prisma.TrainingSession$episodesArgs<ExtArgs>
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
   _count?: boolean | Prisma.TrainingSessionCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type TrainingSessionIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type TrainingSessionIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 
 export type $TrainingSessionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "TrainingSession"
   objects: {
     episodes: Prisma.$TrainingEpisodePayload<ExtArgs>[]
-    model: Prisma.$MLModelPayload<ExtArgs>
+    model: Prisma.$BotSkillPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1196,7 +1196,7 @@ readonly fields: TrainingSessionFieldRefs;
 export interface Prisma__TrainingSessionClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   episodes<T extends Prisma.TrainingSession$episodesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TrainingSession$episodesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TrainingEpisodePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  model<T extends Prisma.MLModelDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MLModelDefaultArgs<ExtArgs>>): Prisma.Prisma__MLModelClient<runtime.Types.Result.GetResult<Prisma.$MLModelPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  model<T extends Prisma.BotSkillDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.BotSkillDefaultArgs<ExtArgs>>): Prisma.Prisma__BotSkillClient<runtime.Types.Result.GetResult<Prisma.$BotSkillPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.

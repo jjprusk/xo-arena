@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { create } from 'zustand'
 
 const EMPTY_BOARD = Array(9).fill(null)

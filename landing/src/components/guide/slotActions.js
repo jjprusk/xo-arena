@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * slotActions for the landing (aiarena platform) app.
  * xo-arena routes use VITE_XO_URL; platform routes are internal.

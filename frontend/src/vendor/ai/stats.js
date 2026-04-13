@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 // Normal CDF approximation (Abramowitz & Stegun)
 function normalCDF(z) {
   const t = 1 / (1 + 0.2316419 * Math.abs(z))

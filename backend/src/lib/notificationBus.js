@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Notification bus — single dispatch() entry point for all notification events.
  */

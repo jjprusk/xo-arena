@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React from 'react'
 
 /** Animated shimmer placeholder. Use width/height/rounded/className to shape it. */

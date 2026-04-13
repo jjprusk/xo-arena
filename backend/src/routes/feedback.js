@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Public feedback submission route.
  * POST /api/v1/feedback

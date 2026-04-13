@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Credit service — activity scores, tier computation, and capability limits.
  */

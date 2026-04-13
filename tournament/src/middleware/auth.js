@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { jwtVerify, importJWK } from 'jose'
 import db from '../lib/db.js'
 import logger from '../logger.js'

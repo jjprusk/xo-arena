@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React from 'react'
 import { AdminHeader } from './AdminDashboard.jsx'
 import FeedbackInbox from '../../components/feedback/FeedbackInbox.jsx'

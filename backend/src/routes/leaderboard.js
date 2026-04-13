@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { getLeaderboard } from '../services/userService.js'
 import cache from '../utils/cache.js'

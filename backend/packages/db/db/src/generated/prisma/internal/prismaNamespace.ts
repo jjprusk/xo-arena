@@ -389,10 +389,11 @@ export const ModelName = {
   FeedbackReply: 'FeedbackReply',
   UserRole: 'UserRole',
   UserEloHistory: 'UserEloHistory',
+  GameElo: 'GameElo',
   Game: 'Game',
   Move: 'Move',
   AIError: 'AIError',
-  MLModel: 'MLModel',
+  BotSkill: 'BotSkill',
   MLPlayerProfile: 'MLPlayerProfile',
   TrainingSession: 'TrainingSession',
   TrainingEpisode: 'TrainingEpisode',
@@ -435,7 +436,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "game" | "move" | "aIError" | "mLModel" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "notificationPreference" | "scheduledJob" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration"
+    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "gameElo" | "game" | "move" | "aIError" | "botSkill" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "notificationPreference" | "scheduledJob" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -809,6 +810,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    GameElo: {
+      payload: Prisma.$GameEloPayload<ExtArgs>
+      fields: Prisma.GameEloFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.GameEloFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.GameEloFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        findFirst: {
+          args: Prisma.GameEloFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.GameEloFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        findMany: {
+          args: Prisma.GameEloFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>[]
+        }
+        create: {
+          args: Prisma.GameEloCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        createMany: {
+          args: Prisma.GameEloCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.GameEloCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>[]
+        }
+        delete: {
+          args: Prisma.GameEloDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        update: {
+          args: Prisma.GameEloUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        deleteMany: {
+          args: Prisma.GameEloDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.GameEloUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.GameEloUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>[]
+        }
+        upsert: {
+          args: Prisma.GameEloUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        aggregate: {
+          args: Prisma.GameEloAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateGameElo>
+        }
+        groupBy: {
+          args: Prisma.GameEloGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GameEloGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.GameEloCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GameEloCountAggregateOutputType> | number
+        }
+      }
+    }
     Game: {
       payload: Prisma.$GamePayload<ExtArgs>
       fields: Prisma.GameFieldRefs
@@ -1031,77 +1106,77 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
-    MLModel: {
-      payload: Prisma.$MLModelPayload<ExtArgs>
-      fields: Prisma.MLModelFieldRefs
+    BotSkill: {
+      payload: Prisma.$BotSkillPayload<ExtArgs>
+      fields: Prisma.BotSkillFieldRefs
       operations: {
         findUnique: {
-          args: Prisma.MLModelFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload> | null
+          args: Prisma.BotSkillFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload> | null
         }
         findUniqueOrThrow: {
-          args: Prisma.MLModelFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         findFirst: {
-          args: Prisma.MLModelFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload> | null
+          args: Prisma.BotSkillFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload> | null
         }
         findFirstOrThrow: {
-          args: Prisma.MLModelFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         findMany: {
-          args: Prisma.MLModelFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>[]
+          args: Prisma.BotSkillFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>[]
         }
         create: {
-          args: Prisma.MLModelCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         createMany: {
-          args: Prisma.MLModelCreateManyArgs<ExtArgs>
+          args: Prisma.BotSkillCreateManyArgs<ExtArgs>
           result: BatchPayload
         }
         createManyAndReturn: {
-          args: Prisma.MLModelCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>[]
+          args: Prisma.BotSkillCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>[]
         }
         delete: {
-          args: Prisma.MLModelDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         update: {
-          args: Prisma.MLModelUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         deleteMany: {
-          args: Prisma.MLModelDeleteManyArgs<ExtArgs>
+          args: Prisma.BotSkillDeleteManyArgs<ExtArgs>
           result: BatchPayload
         }
         updateMany: {
-          args: Prisma.MLModelUpdateManyArgs<ExtArgs>
+          args: Prisma.BotSkillUpdateManyArgs<ExtArgs>
           result: BatchPayload
         }
         updateManyAndReturn: {
-          args: Prisma.MLModelUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>[]
+          args: Prisma.BotSkillUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>[]
         }
         upsert: {
-          args: Prisma.MLModelUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         aggregate: {
-          args: Prisma.MLModelAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateMLModel>
+          args: Prisma.BotSkillAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateBotSkill>
         }
         groupBy: {
-          args: Prisma.MLModelGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.MLModelGroupByOutputType>[]
+          args: Prisma.BotSkillGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BotSkillGroupByOutputType>[]
         }
         count: {
-          args: Prisma.MLModelCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.MLModelCountAggregateOutputType> | number
+          args: Prisma.BotSkillCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BotSkillCountAggregateOutputType> | number
         }
       }
     }
@@ -3153,9 +3228,8 @@ export const UserScalarFieldEnum = {
   preferences: 'preferences',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  eloRating: 'eloRating',
   banned: 'banned',
-  mlModelLimit: 'mlModelLimit',
+  skillLimit: 'skillLimit',
   betterAuthId: 'betterAuthId',
   botActive: 'botActive',
   botAvailable: 'botAvailable',
@@ -3236,6 +3310,19 @@ export const UserEloHistoryScalarFieldEnum = {
 export type UserEloHistoryScalarFieldEnum = (typeof UserEloHistoryScalarFieldEnum)[keyof typeof UserEloHistoryScalarFieldEnum]
 
 
+export const GameEloScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  gameId: 'gameId',
+  rating: 'rating',
+  gamesPlayed: 'gamesPlayed',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GameEloScalarFieldEnum = (typeof GameEloScalarFieldEnum)[keyof typeof GameEloScalarFieldEnum]
+
+
 export const GameScalarFieldEnum = {
   id: 'id',
   appId: 'appId',
@@ -3252,7 +3339,9 @@ export const GameScalarFieldEnum = {
   endedAt: 'endedAt',
   roomName: 'roomName',
   tournamentId: 'tournamentId',
-  tournamentMatchId: 'tournamentMatchId'
+  tournamentMatchId: 'tournamentMatchId',
+  isTournament: 'isTournament',
+  moveStream: 'moveStream'
 } as const
 
 export type GameScalarFieldEnum = (typeof GameScalarFieldEnum)[keyof typeof GameScalarFieldEnum]
@@ -3286,24 +3375,25 @@ export const AIErrorScalarFieldEnum = {
 export type AIErrorScalarFieldEnum = (typeof AIErrorScalarFieldEnum)[keyof typeof AIErrorScalarFieldEnum]
 
 
-export const MLModelScalarFieldEnum = {
+export const BotSkillScalarFieldEnum = {
   id: 'id',
   name: 'name',
   description: 'description',
   algorithm: 'algorithm',
-  qtable: 'qtable',
+  weights: 'weights',
   config: 'config',
   status: 'status',
   totalEpisodes: 'totalEpisodes',
-  eloRating: 'eloRating',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   featured: 'featured',
   createdBy: 'createdBy',
-  maxEpisodes: 'maxEpisodes'
+  maxEpisodes: 'maxEpisodes',
+  botId: 'botId',
+  gameId: 'gameId'
 } as const
 
-export type MLModelScalarFieldEnum = (typeof MLModelScalarFieldEnum)[keyof typeof MLModelScalarFieldEnum]
+export type BotSkillScalarFieldEnum = (typeof BotSkillScalarFieldEnum)[keyof typeof BotSkillScalarFieldEnum]
 
 
 export const MLPlayerProfileScalarFieldEnum = {
@@ -3354,9 +3444,8 @@ export const MLCheckpointScalarFieldEnum = {
   id: 'id',
   modelId: 'modelId',
   episodeNum: 'episodeNum',
-  qtable: 'qtable',
+  weights: 'weights',
   epsilon: 'epsilon',
-  eloRating: 'eloRating',
   createdAt: 'createdAt'
 } as const
 
@@ -3573,7 +3662,6 @@ export const TournamentScalarFieldEnum = {
   allowNonCompetitiveBots: 'allowNonCompetitiveBots',
   paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
-  replayRetentionDays: 'replayRetentionDays',
   startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
@@ -3801,20 +3889,6 @@ export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaM
 
 
 /**
- * Reference to a field of type 'Float'
- */
-export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
-    
-
-
-/**
- * Reference to a field of type 'Float[]'
- */
-export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
-    
-
-
-/**
  * Reference to a field of type 'Boolean'
  */
 export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
@@ -3878,6 +3952,20 @@ export type ListEnumRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaM
 
 
 /**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
+
+
+/**
  * Reference to a field of type 'GameMode'
  */
 export type EnumGameModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GameMode'>
@@ -3934,30 +4022,16 @@ export type ListEnumMovePlayerFieldRefInput<$PrismaModel> = FieldRefInputType<$P
 
 
 /**
- * Reference to a field of type 'MLAlgorithm'
+ * Reference to a field of type 'BotSkillStatus'
  */
-export type EnumMLAlgorithmFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLAlgorithm'>
+export type EnumBotSkillStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BotSkillStatus'>
     
 
 
 /**
- * Reference to a field of type 'MLAlgorithm[]'
+ * Reference to a field of type 'BotSkillStatus[]'
  */
-export type ListEnumMLAlgorithmFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLAlgorithm[]'>
-    
-
-
-/**
- * Reference to a field of type 'MLModelStatus'
- */
-export type EnumMLModelStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLModelStatus'>
-    
-
-
-/**
- * Reference to a field of type 'MLModelStatus[]'
- */
-export type ListEnumMLModelStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLModelStatus[]'>
+export type ListEnumBotSkillStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BotSkillStatus[]'>
     
 
 
@@ -4284,10 +4358,11 @@ export type GlobalOmitConfig = {
   feedbackReply?: Prisma.FeedbackReplyOmit
   userRole?: Prisma.UserRoleOmit
   userEloHistory?: Prisma.UserEloHistoryOmit
+  gameElo?: Prisma.GameEloOmit
   game?: Prisma.GameOmit
   move?: Prisma.MoveOmit
   aIError?: Prisma.AIErrorOmit
-  mLModel?: Prisma.MLModelOmit
+  botSkill?: Prisma.BotSkillOmit
   mLPlayerProfile?: Prisma.MLPlayerProfileOmit
   trainingSession?: Prisma.TrainingSessionOmit
   trainingEpisode?: Prisma.TrainingEpisodeOmit

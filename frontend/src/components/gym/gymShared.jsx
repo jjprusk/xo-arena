@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 // Shared constants, helpers, and tiny UI components used across Gym tab files.
 import React from 'react'
 import { ResponsiveContainer } from 'recharts'

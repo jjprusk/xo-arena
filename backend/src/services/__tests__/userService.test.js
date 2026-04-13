@@ -15,6 +15,10 @@ vi.mock('../../lib/db.js', () => ({
       count: vi.fn(),
       groupBy: vi.fn(),
     },
+    gameElo: {
+      upsert: vi.fn(),
+    },
+    $transaction: vi.fn(async (ops) => Array.isArray(ops) ? Promise.all(ops) : ops({})),
     $queryRaw: vi.fn(),
   },
 }))
@@ -127,16 +131,21 @@ describe('getBotByModelId', () => {
 
 describe('resetBotElo', () => {
   it('resets ELO to 1200 and sets botProvisional + botEloResetAt', async () => {
-    const updated = { ...mockBot, eloRating: 1200, botProvisional: true, botEloResetAt: new Date() }
+    const updated = { ...mockBot, botProvisional: true, botEloResetAt: new Date() }
+    db.gameElo.upsert.mockResolvedValue({ rating: 1200, gamesPlayed: 0 })
     db.user.update.mockResolvedValue(updated)
 
-    const result = await resetBotElo('bot_1')
+    await resetBotElo('bot_1')
+
+    expect(db.gameElo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ rating: 1200, gamesPlayed: 0 }),
+      })
+    )
     const call = db.user.update.mock.calls.at(-1)[0]
     expect(call.where).toEqual({ id: 'bot_1' })
-    expect(call.data.eloRating).toBe(1200)
     expect(call.data.botProvisional).toBe(true)
     expect(call.data.botEloResetAt).toBeInstanceOf(Date)
-    expect(result.eloRating).toBe(1200)
   })
 })
 

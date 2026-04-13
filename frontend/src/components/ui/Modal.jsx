@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect } from 'react'
 
 const MAX_WIDTHS = { sm: '24rem', md: '28rem', lg: '36rem' }

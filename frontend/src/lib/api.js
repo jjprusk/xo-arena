@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Thin API client — wraps fetch with base URL and error handling.
  */

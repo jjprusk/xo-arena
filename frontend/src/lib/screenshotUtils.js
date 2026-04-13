@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Screenshot capture and compression utilities for the feedback system.
  */

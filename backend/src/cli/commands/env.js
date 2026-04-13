@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 export function envCommand(program) {
   program
     .command('env')

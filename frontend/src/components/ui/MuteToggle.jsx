@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React from 'react'
 import { useSoundStore } from '../../store/soundStore.js'
 

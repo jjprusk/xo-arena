@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import db from '../lib/db.js'
 import { resolveUsers, ok, fail } from '../lib/safety.js'
 

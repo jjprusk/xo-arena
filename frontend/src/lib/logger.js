@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Frontend log transport.
  * - Batches log entries and ships to POST /api/v1/logs every 5s

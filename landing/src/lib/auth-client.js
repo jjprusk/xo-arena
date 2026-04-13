@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { createAuthClient } from 'better-auth/react'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''

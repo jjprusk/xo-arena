@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Notification service — accomplishment detection, queuing, and email delivery.
  */

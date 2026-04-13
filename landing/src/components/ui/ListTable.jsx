@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useRef, useEffect, useState } from 'react'
 
 export function UserAvatar({ user, size = 'md' }) {

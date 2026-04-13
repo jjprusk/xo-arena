@@ -1,6 +1,8 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { getUserByBetterAuthId, getBotByModelId, createGame } from '../services/userService.js'
+import db from '../lib/db.js'
 import { updatePlayerEloAfterPvAI, updateBothElosAfterPvBot } from '../services/eloService.js'
 import { recordGameCompletion } from '../services/creditService.js'
 import { completeStep } from '../services/journeyService.js'
@@ -104,6 +106,39 @@ router.post('/', requireAuth, async (req, res, next) => {
     res.status(201).json({ game: { id: game.id } })
   } catch (err) {
     logger.error({ err }, 'Failed to record game')
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/games/:id/replay
+ * Returns a game record with its moveStream for replay.
+ * Returns 404 if game not found, 410 if moveStream has been purged.
+ */
+router.get('/:id/replay', requireAuth, async (req, res, next) => {
+  try {
+    const game = await db.game.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        player1Id: true,
+        player2Id: true,
+        winnerId: true,
+        outcome: true,
+        totalMoves: true,
+        durationMs: true,
+        startedAt: true,
+        endedAt: true,
+        isTournament: true,
+        moveStream: true,
+        player1: { select: { id: true, displayName: true } },
+        player2: { select: { id: true, displayName: true } },
+      },
+    })
+    if (!game) return res.status(404).json({ error: 'Game not found' })
+    if (game.moveStream === null) return res.status(410).json({ error: 'Replay has been purged' })
+    res.json(game)
+  } catch (err) {
     next(err)
   }
 })

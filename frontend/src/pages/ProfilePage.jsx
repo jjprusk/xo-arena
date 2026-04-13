@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback } from 'react'
 import { useOptimisticSession, clearSessionCache } from '../lib/useOptimisticSession.js'
 import { getToken, clearTokenCache } from '../lib/getToken.js'

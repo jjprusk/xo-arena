@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Support-facing endpoints for managing feedback and users.
  * All routes require SUPPORT or ADMIN role.

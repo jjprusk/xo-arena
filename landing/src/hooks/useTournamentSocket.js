@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { useState, useEffect } from 'react'
 import { connectSocket } from '../lib/socket.js'
 import { getToken } from '../lib/getToken.js'

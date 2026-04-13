@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { useState, useEffect } from 'react'
 import { authClient } from './auth-client.js'
 

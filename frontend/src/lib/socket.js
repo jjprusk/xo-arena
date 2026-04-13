@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Socket.io client singleton.
  * Connect lazily — only when a PvP game is started.

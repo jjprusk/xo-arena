@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api.js'
 import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
@@ -154,11 +155,12 @@ export default function AdminGamesPage() {
           <thead>
             <tr>
               <ListTh>Player(s)</ListTh>
-              <ListTh>Mode</ListTh>
+              <ListTh className="hidden md:table-cell">Mode</ListTh>
               <ListTh>Outcome</ListTh>
-              <ListTh align="right" className="hidden sm:table-cell">Moves</ListTh>
-              <ListTh align="right" className="hidden sm:table-cell">Duration</ListTh>
+              <ListTh align="right" className="hidden lg:table-cell">Moves</ListTh>
+              <ListTh align="right" className="hidden lg:table-cell">Duration</ListTh>
               <ListTh className="hidden md:table-cell">Date</ListTh>
+              <ListTh>ID</ListTh>
               <ListTh />
             </tr>
           </thead>
@@ -180,7 +182,7 @@ export default function AdminGamesPage() {
                     </div>
                   )}
                 </ListTd>
-                <ListTd>
+                <ListTd className="hidden md:table-cell">
                   <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                     {g.mode === 'PVAI' ? 'PvAI' : 'PvP'}
                   </span>
@@ -196,14 +198,22 @@ export default function AdminGamesPage() {
                     {OUTCOME_LABEL[g.outcome] ?? g.outcome}
                   </span>
                 </ListTd>
-                <ListTd align="right" className="hidden sm:table-cell">
+                <ListTd align="right" className="hidden lg:table-cell">
                   <span className="tabular-nums">{g.totalMoves}</span>
                 </ListTd>
-                <ListTd align="right" className="hidden sm:table-cell">
+                <ListTd align="right" className="hidden lg:table-cell">
                   <span className="tabular-nums">{(g.durationMs / 1000).toFixed(1)}s</span>
                 </ListTd>
                 <ListTd className="hidden md:table-cell">
                   <span className="text-xs">{new Date(g.endedAt).toLocaleDateString()}</span>
+                </ListTd>
+                <ListTd>
+                  <span
+                    className="text-xs font-mono select-all cursor-text"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {g.id}
+                  </span>
                 </ListTd>
                 <ListTd align="right">
                   <button

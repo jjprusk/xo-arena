@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import db from '../lib/db.js'
 import { publish } from '../lib/redis.js'
@@ -88,7 +89,7 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
     const {
       name, description, game, mode, format, bracketType,
       minParticipants, maxParticipants, bestOfN, botMinGamesPlayed,
-      allowNonCompetitiveBots, paceMs, allowSpectators, replayRetentionDays,
+      allowNonCompetitiveBots, paceMs, allowSpectators,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
       recurrenceEndDate, autoOptOutAfterMissed, startMode,
@@ -126,7 +127,6 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
         ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
         ...(paceMs !== undefined && { paceMs }),
         ...(allowSpectators !== undefined && { allowSpectators }),
-        ...(replayRetentionDays !== undefined && { replayRetentionDays }),
         ...(startTime !== undefined && { startTime: new Date(startTime) }),
         ...(endTime !== undefined && { endTime: new Date(endTime) }),
         ...(registrationOpenAt !== undefined && { registrationOpenAt: new Date(registrationOpenAt) }),
@@ -152,7 +152,7 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
     const {
       name, description, game, mode, format, bracketType,
       minParticipants, maxParticipants, bestOfN, botMinGamesPlayed,
-      allowNonCompetitiveBots, paceMs, allowSpectators, replayRetentionDays,
+      allowNonCompetitiveBots, paceMs, allowSpectators,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
       recurrenceEndDate, autoOptOutAfterMissed, startMode,
@@ -185,7 +185,6 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
       ...(paceMs !== undefined && { paceMs }),
       ...(allowSpectators !== undefined && { allowSpectators }),
-      ...(replayRetentionDays !== undefined && { replayRetentionDays }),
       ...(startTime !== undefined && { startTime: new Date(startTime) }),
       ...(endTime !== undefined && { endTime: new Date(endTime) }),
       ...(registrationOpenAt !== undefined && { registrationOpenAt: new Date(registrationOpenAt) }),
