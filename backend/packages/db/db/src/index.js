@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Shared Prisma client and repository layer.
  *

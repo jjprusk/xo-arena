@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Injectable dependencies for the PvP store.
  * Call configurePvp() early in the app (e.g. main.jsx) before any PvP action is invoked.

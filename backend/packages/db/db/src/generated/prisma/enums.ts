@@ -205,7 +205,6 @@ export type TournamentStartMode = (typeof TournamentStartMode)[keyof typeof Tour
 
 export const ParticipantStatus = {
   REGISTERED: 'REGISTERED',
-  ACTIVE: 'ACTIVE',
   ELIMINATED: 'ELIMINATED',
   WITHDRAWN: 'WITHDRAWN'
 } as const

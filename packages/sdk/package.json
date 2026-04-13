@@ -1,0 +1,16 @@
+{
+  "name": "@callidity/sdk",
+  "version": "1.0.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  }
+}
