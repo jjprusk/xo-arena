@@ -134,17 +134,17 @@ export async function getUserStats(userId) {
   const [pvpGames, pvaiGames, pvbotGames, recent] = await Promise.all([
     db.game.findMany({
       where: {
-        mode: 'PVP',
+        mode: 'HVH',
         OR: [{ player1Id: userId }, { player2Id: userId }],
       },
       select: { outcome: true, player1Id: true, winnerId: true },
     }),
     db.game.findMany({
-      where: { mode: 'PVAI', player1Id: userId },
+      where: { mode: 'HVA', player1Id: userId },
       select: { outcome: true, difficulty: true, winnerId: true },
     }),
     db.game.findMany({
-      where: { mode: 'PVBOT', player1Id: userId },
+      where: { mode: 'HVB', player1Id: userId },
       select: {
         outcome: true, winnerId: true, player2Id: true,
         player2: { select: { id: true, displayName: true, avatarUrl: true } },
@@ -190,7 +190,7 @@ export async function getUserStats(userId) {
     }
   }
 
-  // PVBOT stats grouped by opponent bot
+  // HVB stats grouped by opponent bot
   const pvbotByBot = {}
   for (const g of pvbotGames) {
     const botId = g.player2Id
@@ -216,9 +216,9 @@ export async function getUserStats(userId) {
     losses,
     draws,
     winRate,
-    pvp: { played: pvpGames.length, wins: pvpWins, rate: pvpRate },
-    pvai: pvaiByDiff,
-    pvbot: {
+    hvh: { played: pvpGames.length, wins: pvpWins, rate: pvpRate },
+    hva: pvaiByDiff,
+    hvb: {
       played: pvbotGames.length,
       wins: pvbotGames.filter((g) => g.winnerId === userId).length,
       rate: pvbotGames.length > 0 ? pvbotGames.filter((g) => g.winnerId === userId).length / pvbotGames.length : 0,
@@ -230,12 +230,12 @@ export async function getUserStats(userId) {
 
 /**
  * Compute stats for a bot from the bot's perspective.
- * Queries games where the bot is player2 (PVBOT challenges).
+ * Queries games where the bot is player2 (HVB challenges).
  * Returns win rates vs humans and vs other bots separately.
  */
 export async function getBotStats(botId) {
   const games = await db.game.findMany({
-    where: { player2Id: botId, mode: 'PVBOT' },
+    where: { player2Id: botId, mode: 'HVB' },
     select: {
       outcome: true, winnerId: true, player1Id: true,
       player1: { select: { isBot: true } },
@@ -264,7 +264,7 @@ export async function getBotStats(botId) {
  * Uses a single CTE query instead of 4 Prisma round trips.
  */
 export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50, includeBots = false } = {}) {
-  const whereMode = mode === 'pvp' ? 'PVP' : mode === 'pvai' ? 'PVAI' : null
+  const whereMode = mode === 'hvh' ? 'HVH' : mode === 'hva' ? 'HVA' : null
 
   // Prisma.sql fragments for optional filters — interpolated safely as SQL, not parameters
   const modeFilter = whereMode ? Prisma.sql`AND g.mode = ${whereMode}::"GameMode"` : Prisma.empty
@@ -523,7 +523,7 @@ export async function createGame({
   player1Id,
   player2Id = null,
   winnerId = null,
-  mode,           // 'PVP' | 'PVAI' | 'PVBOT'
+  mode,           // 'HVH' | 'HVA' | 'HVB'
   outcome,        // 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'AI_WIN' | 'DRAW'
   difficulty = null,
   aiImplementationId = null,

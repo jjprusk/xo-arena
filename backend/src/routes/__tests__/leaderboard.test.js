@@ -83,9 +83,9 @@ describe('GET /api/v1/leaderboard', () => {
     expect(getLeaderboard).toHaveBeenCalledWith(expect.objectContaining({ period: 'monthly' }))
   })
 
-  it('passes mode=pvp to getLeaderboard', async () => {
-    await request(app).get('/api/v1/leaderboard?mode=pvp')
-    expect(getLeaderboard).toHaveBeenCalledWith(expect.objectContaining({ mode: 'pvp' }))
+  it('passes mode=hvh to getLeaderboard', async () => {
+    await request(app).get('/api/v1/leaderboard?mode=hvh')
+    expect(getLeaderboard).toHaveBeenCalledWith(expect.objectContaining({ mode: 'hvh' }))
   })
 
   it('passes includeBots=true when query param is "true"', async () => {
@@ -99,9 +99,9 @@ describe('GET /api/v1/leaderboard', () => {
   })
 
   it('uses a distinct cache key per param combination', async () => {
-    await request(app).get('/api/v1/leaderboard?period=weekly&mode=pvp&limit=10&includeBots=true')
+    await request(app).get('/api/v1/leaderboard?period=weekly&mode=hvh&limit=10&includeBots=true')
     const [key] = cache.set.mock.calls[0]
-    expect(key).toBe('leaderboard:weekly:pvp:10:true')
+    expect(key).toBe('leaderboard:weekly:hvh:10:true')
   })
 
   it('returns 500 on service error', async () => {

@@ -488,7 +488,7 @@ describe('DELETE /api/v1/admin/users/:id', () => {
 
 describe('GET /api/v1/admin/games', () => {
   it('returns paginated game list', async () => {
-    const mockGame = { id: 'g1', mode: 'PVAI', outcome: 'PLAYER1_WIN', endedAt: new Date(), player1: {}, player2: {}, winner: null }
+    const mockGame = { id: 'g1', mode: 'HVA', outcome: 'PLAYER1_WIN', endedAt: new Date(), player1: {}, player2: {}, winner: null }
     db.game.findMany.mockResolvedValue([mockGame])
     db.game.count.mockResolvedValue(1)
 
@@ -503,10 +503,10 @@ describe('GET /api/v1/admin/games', () => {
     db.game.findMany.mockResolvedValue([])
     db.game.count.mockResolvedValue(0)
 
-    await request(app).get('/api/v1/admin/games?mode=pvp')
+    await request(app).get('/api/v1/admin/games?mode=hvh')
 
     expect(db.game.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ mode: 'PVP' }) })
+      expect.objectContaining({ where: expect.objectContaining({ mode: 'HVH' }) })
     )
   })
 

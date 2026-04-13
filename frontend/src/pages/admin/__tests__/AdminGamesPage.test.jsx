@@ -51,7 +51,7 @@ const MOCK_GAME = {
   id: 'game_1',
   player1: { displayName: 'Alice' },
   player2: { displayName: 'Bob' },
-  mode: 'PVP',
+  mode: 'HVH',
   outcome: 'PLAYER1_WIN',
   totalMoves: 9,
   durationMs: 45000,
@@ -112,11 +112,11 @@ describe('AdminGamesPage — game list', () => {
     })
   })
 
-  it('shows "PvP" mode label for PVP mode game', async () => {
+  it('shows "HvH" mode label for HVH mode game', async () => {
     api.admin.games.mockResolvedValue({ games: [MOCK_GAME], total: 1 })
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText('PvP')).toBeDefined()
+      expect(screen.getByText('HvH')).toBeDefined()
     })
   })
 

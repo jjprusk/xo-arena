@@ -104,8 +104,10 @@ export default function AdminGamesPage() {
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
         >
           <option value="">All modes</option>
-          <option value="pvai">PvAI</option>
-          <option value="pvp">PvP</option>
+          <option value="hva">HvA</option>
+          <option value="hvh">HvH</option>
+          <option value="hvb">HvB</option>
+          <option value="bvb">BvB</option>
         </select>
         <select
           value={outcomeFilter}
@@ -176,7 +178,7 @@ export default function AdminGamesPage() {
                       vs {g.player2.displayName}
                     </div>
                   )}
-                  {!g.player2 && g.mode === 'PVAI' && (
+                  {!g.player2 && g.mode === 'HVA' && (
                     <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       vs AI {g.difficulty ? `(${g.difficulty.toLowerCase()})` : ''}
                     </div>
@@ -184,7 +186,7 @@ export default function AdminGamesPage() {
                 </ListTd>
                 <ListTd className="hidden md:table-cell">
                   <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    {g.mode === 'PVAI' ? 'PvAI' : 'PvP'}
+                    {g.mode === 'HVA' ? 'HvA' : g.mode === 'HVH' ? 'HvH' : g.mode === 'HVB' ? 'HvB' : g.mode === 'BVB' ? 'BvB' : g.mode}
                   </span>
                 </ListTd>
                 <ListTd>

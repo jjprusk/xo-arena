@@ -56,7 +56,7 @@ function makeTournament(overrides = {}) {
     minParticipants: 4,
     maxParticipants: null,
     bestOfN: 3,
-    mode: 'PVP',
+    mode: 'HVH',
     format: 'PLANNED',
     bracketType: 'SINGLE_ELIM',
     participants: [],

@@ -42,7 +42,7 @@ class RoomManager {
   /**
    * Create a new room. Returns the room object.
    */
-  createRoom({ hostSocketId, hostUserId = null, spectatorAllowed = true, tournamentMatchId = null, tournamentId = null, bestOfN = null } = {}) {
+  createRoom({ hostSocketId, hostUserId = null, spectatorAllowed = true, tournamentMatchId = null, tournamentId = null, bestOfN = null, isHvb = false, botUserId = null, botSkillId = null, botMark = null } = {}) {
     // If this socket already owns a waiting room (e.g. StrictMode double-invoke),
     // close the old one cleanly before creating a new one.
     const existingSlug = this._socketToRoom.get(hostSocketId)
@@ -81,6 +81,11 @@ class RoomManager {
       tournamentMatchId,
       tournamentId,
       bestOfN,
+      // HvB bot context (null for non-bot rooms)
+      isHvb,
+      botUserId,
+      botSkillId,
+      botMark,
     }
 
     this._rooms.set(slug, room)
@@ -151,6 +156,44 @@ class RoomManager {
       room.winner = null
     } else {
       room.currentTurn = playerMark === 'X' ? 'O' : 'X'
+    }
+
+    return { room }
+  }
+
+  /**
+   * Apply a server-computed bot move in an HvB room (no socketId required).
+   * Returns { room } or { error }.
+   */
+  makeBotMove({ slug, cellIndex }) {
+    const room = this._rooms.get(slug)
+    if (!room) return { error: 'Room not found' }
+    if (!room.isHvb) return { error: 'Not an HvB room' }
+    if (room.status !== 'playing') return { error: 'Game not in progress' }
+
+    const botMark = room.botMark
+    if (botMark !== room.currentTurn) return { error: 'Not bot turn' }
+    if (room.board[cellIndex] !== null) return { error: 'Cell already occupied' }
+
+    room.board[cellIndex] = botMark
+    room.lastActivityAt = Date.now()
+    room.moves.push({ n: room.moves.length + 1, m: botMark, c: cellIndex })
+
+    const winner = getWinner(room.board)
+    const draw = !winner && isBoardFull(room.board)
+
+    if (winner) {
+      room.winner = winner
+      room.winLine = WIN_LINES.find(([a, b, c]) =>
+        room.board[a] === winner && room.board[b] === winner && room.board[c] === winner
+      ) || null
+      room.status = 'finished'
+      room.scores[winner]++
+    } else if (draw) {
+      room.status = 'finished'
+      room.winner = null
+    } else {
+      room.currentTurn = botMark === 'X' ? 'O' : 'X'
     }
 
     return { room }

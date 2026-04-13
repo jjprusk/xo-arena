@@ -126,7 +126,7 @@ export async function runBotMatchSeries(matchId) {
           gameResult.outcome === 'PLAYER1_WIN' ? p1Participant.user.id
           : gameResult.outcome === 'PLAYER2_WIN' ? p2Participant.user.id
           : null,
-        mode: 'BOTVBOT',
+        mode: 'BVB',
         outcome: gameResult.outcome,
         totalMoves: gameResult.totalMoves,
         durationMs: 0,

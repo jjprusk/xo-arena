@@ -517,10 +517,10 @@ enum FeedbackStatus {
 }
 
 enum GameMode {
-  PVP
-  PVAI
-  PVBOT
-  BOTVBOT
+  HVH
+  HVA
+  HVB
+  BVB
 }
 
 enum Difficulty {
@@ -573,7 +573,7 @@ enum EpisodeOutcome {
 // ─── Tournament (Phase 1) ────────────────────────────────────────────────────
 
 enum TournamentMode {
-  PVP
+  HVH
   BOT_VS_BOT
   MIXED
 }

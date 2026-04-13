@@ -261,7 +261,7 @@ async function autoStartTournament(tournament) {
             },
           })
 
-          if (tournament.mode === 'PVP') {
+          if (tournament.mode === 'HVH') {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
@@ -300,7 +300,7 @@ async function autoStartTournament(tournament) {
             },
           })
 
-          if (tournament.mode === 'PVP') {
+          if (tournament.mode === 'HVH') {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,

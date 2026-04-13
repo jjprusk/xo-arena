@@ -49,10 +49,10 @@ export type FeedbackStatus = (typeof FeedbackStatus)[keyof typeof FeedbackStatus
 
 
 export const GameMode = {
-  PVP: 'PVP',
-  PVAI: 'PVAI',
-  PVBOT: 'PVBOT',
-  BOTVBOT: 'BOTVBOT'
+  HVH: 'HVH',
+  HVA: 'HVA',
+  HVB: 'HVB',
+  BVB: 'BVB'
 } as const
 
 export type GameMode = (typeof GameMode)[keyof typeof GameMode]
@@ -127,7 +127,7 @@ export type EpisodeOutcome = (typeof EpisodeOutcome)[keyof typeof EpisodeOutcome
 
 
 export const TournamentMode = {
-  PVP: 'PVP',
+  HVH: 'HVH',
   BOT_VS_BOT: 'BOT_VS_BOT',
   MIXED: 'MIXED'
 } as const

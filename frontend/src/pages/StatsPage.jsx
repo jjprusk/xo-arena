@@ -151,17 +151,17 @@ export default function StatsPage() {
                 className="rounded-xl border p-4 space-y-3"
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
               >
-                <WinRateBar label="vs Humans" rate={stats.pvp.rate} color="var(--color-blue-600)" />
+                <WinRateBar label="vs Humans" rate={stats.hvh.rate} color="var(--color-blue-600)" />
                 {['novice', 'intermediate', 'advanced', 'master'].map(d => (
                   <WinRateBar
                     key={d}
                     label={`${AI_NAMES[d]} (${d.charAt(0).toUpperCase() + d.slice(1)})`}
-                    rate={stats.pvai[d].rate}
+                    rate={stats.hva[d].rate}
                     color="var(--color-teal-600)"
                   />
                 ))}
-                {stats.pvbot?.played > 0 && (
-                  <WinRateBar label="vs Bots" rate={stats.pvbot.rate} color="#9333ea" />
+                {stats.hvb?.played > 0 && (
+                  <WinRateBar label="vs Bots" rate={stats.hvb.rate} color="#9333ea" />
                 )}
               </div>
             </section>
@@ -180,7 +180,7 @@ export default function StatsPage() {
                       return (
                         <div
                           key={i}
-                          title={`${result} · ${g.mode === 'PVP' ? 'PvP' : g.mode === 'PVBOT' ? `vs ${g.player2?.displayName ?? 'Bot'}` : `vs AI (${g.difficulty?.toLowerCase()})`}`}
+                          title={`${result} · ${g.mode === 'HVH' ? 'HvH' : g.mode === 'HVB' ? `vs ${g.player2?.displayName ?? 'Bot'}` : `vs AI (${g.difficulty?.toLowerCase()})`}`}
                           className="w-4 h-4 rounded-sm"
                           style={{ backgroundColor: OUTCOME_COLOR[result] }}
                         />
@@ -200,8 +200,8 @@ export default function StatsPage() {
             )}
           </div>
 
-          {/* PvBot breakdown */}
-          {stats.pvbot?.played > 0 && (
+          {/* HvB breakdown */}
+          {stats.hvb?.played > 0 && (
             <section className="space-y-2">
               <SectionLabel>Bot Challenges</SectionLabel>
               <ListTable maxHeight="220px">
@@ -213,7 +213,7 @@ export default function StatsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.values(stats.pvbot.byBot).map((entry, i, arr) => (
+                  {Object.values(stats.hvb.byBot).map((entry, i, arr) => (
                     <ListTr key={entry.bot.id} last={i === arr.length - 1}>
                       <ListTd>
                         <div className="flex items-center gap-2">

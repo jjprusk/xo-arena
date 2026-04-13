@@ -185,10 +185,10 @@ describe('api.admin.users', () => {
 describe('api.admin.games', () => {
   it('includes mode and outcome filters in URL', async () => {
     mockOkResponse({ games: [] })
-    await api.admin.games('tok', 1, 10, { mode: 'pvp', outcome: 'x_wins' })
+    await api.admin.games('tok', 1, 10, { mode: 'hvh', outcome: 'x_wins' })
 
     const [url] = fetch.mock.calls[0]
-    expect(url).toContain('mode=pvp')
+    expect(url).toContain('mode=hvh')
     expect(url).toContain('outcome=x_wins')
   })
 

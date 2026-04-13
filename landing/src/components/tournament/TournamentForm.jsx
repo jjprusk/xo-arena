@@ -59,7 +59,7 @@ function toLocalDatetimeValue(val) {
 }
 
 const DEFAULT_FORM = {
-  name: '', description: '', game: 'xo', mode: 'PVP', format: 'PLANNED',
+  name: '', description: '', game: 'xo', mode: 'HVH', format: 'PLANNED',
   bracketType: 'SINGLE_ELIM', bestOfN: 3, minParticipants: 2, maxParticipants: '',
   startMode: 'AUTO',
   startTime: '', registrationOpenAt: '', registrationCloseAt: '', allowSpectators: true,
@@ -73,7 +73,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
     if (!initialValues) return DEFAULT_FORM
     return {
       name: initialValues.name ?? '', description: initialValues.description ?? '',
-      game: initialValues.game ?? 'xo', mode: initialValues.mode ?? 'PVP',
+      game: initialValues.game ?? 'xo', mode: initialValues.mode ?? 'HVH',
       format: initialValues.format ?? 'PLANNED', bracketType: initialValues.bracketType ?? 'SINGLE_ELIM',
       bestOfN: initialValues.bestOfN ?? 3, minParticipants: initialValues.minParticipants ?? 2,
       maxParticipants: initialValues.maxParticipants ?? '',
@@ -183,7 +183,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
         </Field>
         <Field label="Mode" required>
           <select value={form.mode} onChange={e => set('mode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            <option value="PVP">PvP (Human vs Human)</option>
+            <option value="HVH">HvH (Human vs Human)</option>
             <option value="BOT_VS_BOT">Bot vs Bot</option>
             <option value="MIXED">Mixed</option>
           </select>

@@ -475,9 +475,9 @@ export default function ProfilePage() {
 
       {/* Quick Stats */}
       {stats && stats.totalGames > 0 && (() => {
-        const pvaiWins = Object.values(stats.pvai).reduce((s, v) => s + v.wins, 0)
-        const pvbotWins = stats.pvbot?.wins ?? 0
-        const pvpWins = stats.pvp?.wins ?? 0
+        const pvaiWins = Object.values(stats.hva).reduce((s, v) => s + v.wins, 0)
+        const pvbotWins = stats.hvb?.wins ?? 0
+        const pvpWins = stats.hvh?.wins ?? 0
         return (
           <AccordionSection
             title="Quick Stats"
@@ -496,9 +496,9 @@ export default function ProfilePage() {
                 style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}
               >
                 {[
-                  { label: 'vs Humans', wins: pvpWins, played: stats.pvp?.played ?? 0 },
-                  { label: 'vs Quick AI', wins: pvaiWins, played: Object.values(stats.pvai).reduce((s, v) => s + v.played, 0) },
-                  { label: 'vs Bots', wins: pvbotWins, played: stats.pvbot?.played ?? 0 },
+                  { label: 'vs Humans', wins: pvpWins, played: stats.hvh?.played ?? 0 },
+                  { label: 'vs Quick AI', wins: pvaiWins, played: Object.values(stats.hva).reduce((s, v) => s + v.played, 0) },
+                  { label: 'vs Bots', wins: pvbotWins, played: stats.hvb?.played ?? 0 },
                 ].map(({ label, wins, played }) => (
                   <div key={label} className="px-2">
                     <div className="text-sm font-bold" style={{ color: played > 0 ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>

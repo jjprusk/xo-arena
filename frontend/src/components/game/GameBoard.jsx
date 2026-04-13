@@ -114,7 +114,7 @@ export default function GameBoard({ roomName }) {
 
   const themeMarkColor = THEME_MARKS[boardTheme] || THEME_MARKS.default
 
-  // ── Opponent display name (pvai mode) ───────────────────────────────────
+  // ── Opponent display name (hva mode) ───────────────────────────────────
   const aiOpponentName = aiImplementation === 'ml'
     ? (xModelName ?? 'AI')
     : (MINIMAX_PERSONAS[difficulty?.toLowerCase()]?.name ?? 'AI')
@@ -217,9 +217,9 @@ export default function GameBoard({ roomName }) {
     return () => clearTimeout(t)
   }, [moveHistory.length])
 
-  // ── Record PvAI game result when game ends ───────────────────────────────
+  // ── Record HvA game result when game ends ───────────────────────────────
   useEffect(() => {
-    if (mode !== 'pvai') return
+    if (mode !== 'hva') return
     if (status !== 'won' && status !== 'draw' && status !== 'forfeit') return
     if (gameRecordedRef.current) return  // already recorded for this round
     gameRecordedRef.current = true
@@ -242,13 +242,13 @@ export default function GameBoard({ roomName }) {
       const durationMs = Date.now() - startedAt
 
       if (pvbotModelId) {
-        // Record as PVBOT — named bot challenge or quick minimax game
+        // Record as HVB — named bot challenge or quick minimax game
         let outcome = 'DRAW'
         if (status === 'won' || status === 'forfeit') {
           outcome = winner === playerMark ? 'PLAYER1_WIN' : 'PLAYER2_WIN'
         }
         api.games.record({
-          mode: 'PVBOT',
+          mode: 'HVB',
           outcome,
           botModelId: pvbotModelId,
           totalMoves,
@@ -260,7 +260,7 @@ export default function GameBoard({ roomName }) {
           api.ml.recordGameEnd(mlModelId, user.id).catch(() => {})
         }
       } else {
-        // Record as PVAI (ML or rule-based)
+        // Record as HVA (ML or rule-based)
         let outcome = 'DRAW'
         if (status === 'won' || status === 'forfeit') {
           outcome = winner === playerMark ? 'PLAYER1_WIN' : 'AI_WIN'
@@ -283,9 +283,9 @@ export default function GameBoard({ roomName }) {
     recordGame()
   }, [status])
 
-  // ── AI move effect (PvAI — player's AI opponent) ─────────────────────────
+  // ── AI move effect (HvA — player's AI opponent) ─────────────────────────
   useEffect(() => {
-    if (mode !== 'pvai') return
+    if (mode !== 'hva') return
     if (status !== 'playing') return
     if (currentTurn !== aiMark) return
 
@@ -490,8 +490,8 @@ export default function GameBoard({ roomName }) {
         </div>
       )}
 
-      {/* Opponent chip — pvai / pvbot */}
-      {(mode === 'pvai' || mode === 'pvbot') && (() => {
+      {/* Opponent chip — hva / hvb */}
+      {(mode === 'hva' || mode === 'hvb') && (() => {
         const persona = MINIMAX_PERSONAS[difficulty?.toLowerCase()]
         const gameOver = (status === 'won' || status === 'draw' || status === 'forfeit') && moveHistory.length > 0 && !analyzeMode
         return (
@@ -604,7 +604,7 @@ export default function GameBoard({ roomName }) {
             {isOpponentTurn && (
               <>
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  {isAIThinking ? `${mode === 'pvai' ? aiOpponentName : 'AI'} is thinking…` : (mode === 'pvai' ? `${aiOpponentName}'s turn` : "Opponent's turn")}
+                  {isAIThinking ? `${mode === 'hva' ? aiOpponentName : 'AI'} is thinking…` : (mode === 'hva' ? `${aiOpponentName}'s turn` : "Opponent's turn")}
                 </span>
                 <span className="ml-1 tabular-nums text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
                   {(thinkingMs / 1000).toFixed(2)}s
@@ -623,7 +623,7 @@ export default function GameBoard({ roomName }) {
             <span className="font-bold" style={{ color: winner === playerMark ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
               {isAivai
                 ? `${winner} wins!`
-                : winner === playerMark ? 'You win! 🎉' : (mode === 'pvai' ? `${aiOpponentName} wins!` : `${winner} wins!`)}
+                : winner === playerMark ? 'You win! 🎉' : (mode === 'hva' ? `${aiOpponentName} wins!` : `${winner} wins!`)}
             </span>
             {isAivai && autoRematchCountdown !== null && (
               <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>· Next in {autoRematchCountdown}…</span>
@@ -679,7 +679,7 @@ export default function GameBoard({ roomName }) {
       )}
 
       {/* Minimax strategy panel */}
-      {aiImplementation === 'minimax' && mode === 'pvai' && status === 'playing' && !analyzeMode && (
+      {aiImplementation === 'minimax' && mode === 'hva' && status === 'playing' && !analyzeMode && (
         <div className="w-full">
           <button
             onClick={() => setShowStrategy(v => !v)}
@@ -800,8 +800,8 @@ export default function GameBoard({ roomName }) {
         </div>
       )}
 
-      {/* Hint + Undo row (during play, pvai only) */}
-      {mode === 'pvai' && status === 'playing' && !analyzeMode && (
+      {/* Hint + Undo row (during play, hva only) */}
+      {mode === 'hva' && status === 'playing' && !analyzeMode && (
         <div className="flex gap-2 w-full">
           <button
             onClick={handleHint}

@@ -318,7 +318,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       data: updateData,
     })
 
-    const isPvp = existing.mode === 'PVP'
+    const isPvp = existing.mode === 'HVH'
 
     if (existing.bracketType === 'SINGLE_ELIM') {
       const shuffled = [...participants].sort(() => Math.random() - 0.5)

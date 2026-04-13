@@ -16,7 +16,7 @@
 - [x] Define the `GameContract` TypeScript interface (`meta` + default component export)
 - [x] Define all `meta` fields including `supportsBots`, `supportsTraining`, `supportsPuzzles`, `builtInBots`
 - [x] Define the `GameSDK` interface: `submitMove`, `onMove`, `signalEnd`, `getPlayers`, `getSettings`, `spectate`, `getPreviewState`, `getPlayerState`
-- [ ] Implement the platform-side SDK provider (creates the `sdk` object passed into every game)
+- [x] Implement the platform-side SDK provider (creates the `sdk` object passed into every game)
 - [x] Write SDK developer documentation (contract spec, method signatures, example usage) — `doc/Game_SDK_Developer_Guide.md`
 
 ### 1.2 botInterface contract
@@ -26,7 +26,7 @@
 - [x] Define `personas` array structure
 - [x] Define `GymComponent` prop contract (what the platform passes in)
 - [x] Define `puzzles` array structure
-- [ ] Implement the platform-side bot dispatcher (calls `botInterface.makeMove()` server-side for bot turns)
+- [x] Implement the platform-side bot dispatcher (calls `botInterface.makeMove()` server-side for bot turns)
 - [x] Write botInterface developer documentation — covered in `doc/Game_SDK_Developer_Guide.md`
 
 ### 1.3 GitHub Packages registry
@@ -68,7 +68,7 @@
 - [x] Implement replay controls: play/pause, step forward/back, scrub, variable speed — `ReplayPage` + `ReplayControls`
 - [x] Implement live view mode: input disabled, observer status signalled in UI — derived from `session.isSpectator: true`; `ReplayPage` delivers via fake spectate SDK
 - [ ] For Pong (future): confirm sampled snapshot approach (100ms intervals) works within this abstraction — deferred until Pong spike (1.8)
-- [ ] Test: replay a completed XO game end-to-end — play a game, visit `/replay/:id`
+- [x] Test: replay a completed XO game end-to-end — play a game, visit `/replay/:id`
 
 ### 1.6 Replay retention infrastructure
 

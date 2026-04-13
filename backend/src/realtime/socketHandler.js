@@ -13,7 +13,8 @@ import { botGameRunner } from './botGameRunner.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
-import { getSystemConfig } from '../services/skillService.js'
+import { getSystemConfig, getMoveForModel } from '../services/skillService.js'
+import { minimaxMove } from '@xo-arena/ai'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
 import {
@@ -197,6 +198,49 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
+    on('room:create:hvb', async ({ botUserId, botSkillId, spectatorAllowed = true, authToken = null } = {}) => {
+      try {
+        if (!botUserId) return socket.emit('error', { message: 'botUserId required' })
+        const user = await resolveSocketUser(authToken)
+        if (!socket.connected) return
+        // Human is X (host), bot is O
+        const room = roomManager.createRoom({
+          hostSocketId: socket.id,
+          hostUserId: user?.id || null,
+          spectatorAllowed,
+          isHvb: true,
+          botUserId,
+          botSkillId: botSkillId || null,
+          botMark: 'O',
+        })
+        room.hostUserDisplayName = user?.displayName ?? null
+        if (user?.id) {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.hostUserElo = eloRow?.rating ?? null
+        }
+        // Join the human and a virtual bot "seat" (no real socket for bot)
+        socket.join(room.slug)
+        // Simulate guest join for the bot — set guestId to a sentinel, update status to playing
+        room.guestId = `bot:${botUserId}`
+        room.guestUserId = botUserId
+        room.playerMarks[`bot:${botUserId}`] = 'O'
+        room.status = 'playing'
+        socket.emit('room:created:hvb', {
+          slug: room.slug,
+          displayName: room.displayName,
+          mark: 'X',
+          board: room.board,
+          currentTurn: room.currentTurn,
+        })
+        // Start idle timer for the human
+        const { warnMs, graceMs } = await getIdleConfig()
+        const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+        roomManager.resetIdleTimer({ socketId: socket.id, warnMs, graceMs, onWarn, onAbandon, onKick })
+      } catch (err) {
+        socket.emit('error', { message: err.message })
+      }
+    })
+
     on('room:join', async ({ slug, role = 'player', authToken = null }) => {
       const user = await resolveSocketUser(authToken)
       if (!socket.connected) return  // disconnected while resolving auth
@@ -312,6 +356,11 @@ export async function attachSocketIO(httpServer) {
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
         roomManager.resetIdleTimer({ socketId: socket.id, warnMs, graceMs, onWarn, onAbandon, onKick })
+
+        // For HvB rooms, compute and apply bot move server-side
+        if (room.isHvb) {
+          dispatchBotMove(room, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot move'))
+        }
       }
     })
 
@@ -602,6 +651,47 @@ export async function attachSocketIO(httpServer) {
 }
 
 /**
+ * Compute and apply a bot move for an HvB room, then emit game:moved.
+ * Falls back to minimax master if no skill is configured.
+ */
+async function dispatchBotMove(room, io) {
+  if (!room.isHvb || room.status !== 'playing') return
+
+  let cellIndex
+  try {
+    if (room.botSkillId) {
+      cellIndex = await getMoveForModel(room.botSkillId, room.board)
+    } else {
+      cellIndex = minimaxMove(room.board, 'master', room.botMark)
+    }
+  } catch (err) {
+    logger.warn({ err, slug: room.slug }, 'Bot move computation failed, falling back to minimax')
+    cellIndex = minimaxMove(room.board, 'master', room.botMark)
+  }
+
+  const result = roomManager.makeBotMove({ slug: room.slug, cellIndex })
+  if (result.error) {
+    logger.warn({ error: result.error, slug: room.slug }, 'makeBotMove failed')
+    return
+  }
+
+  const r = result.room
+  io.to(r.slug).emit('game:moved', {
+    cellIndex,
+    board: r.board,
+    currentTurn: r.currentTurn,
+    status: r.status,
+    winner: r.winner,
+    winLine: r.winLine,
+    scores: r.scores,
+  })
+
+  if (r.status === 'finished') {
+    recordPvpGame(r, io).catch((err) => logger.warn({ err }, 'Failed to record HvB game'))
+  }
+}
+
+/**
  * Record a finished PvP game (one round within a match) for any authenticated players.
  * Skipped silently if neither player has a DB user.
  * For tournament rooms: skips ELO, links game to tournament, checks series completion.
@@ -638,7 +728,7 @@ async function recordPvpGame(room, io) {
       player1Id: room.hostUserId,
       player2Id: room.guestUserId || null,
       winnerId,
-      mode: 'PVP',
+      mode: room.isHvb ? 'HVB' : 'HVH',
       outcome,
       totalMoves,
       durationMs,
@@ -650,8 +740,8 @@ async function recordPvpGame(room, io) {
     })
   }
 
-  // ELO update: skip for tournament games (design requirement)
-  if (!isTournamentRoom && room.hostUserId && room.guestUserId) {
+  // ELO update: skip for tournament and HvB games
+  if (!isTournamentRoom && !room.isHvb && room.hostUserId && room.guestUserId) {
     updatePlayersEloAfterPvP(room.hostUserId, room.guestUserId, outcome).catch(() => {})
   }
 
@@ -703,11 +793,11 @@ async function recordPvpGame(room, io) {
   // Record credits and emit accomplishment events (free-play only)
   const pvpParticipants = [
     room.hostUserId  ? { userId: room.hostUserId,  isBot: false, botOwnerId: null } : null,
-    room.guestUserId ? { userId: room.guestUserId, isBot: false, botOwnerId: null } : null,
+    room.guestUserId ? { userId: room.guestUserId, isBot: room.isHvb ?? false, botOwnerId: null } : null,
   ].filter(Boolean)
 
   if (pvpParticipants.length > 0) {
-    recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: 'pvp' })
+    recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: room.isHvb ? 'hvb' : 'hvh' })
       .then((notifications) => {
         if (!io || !notifications.length) return
         for (const notif of notifications) {

@@ -309,7 +309,7 @@ class BotGameRunner {
       player1Id: game.bot1.id,
       player2Id: game.bot2.id,
       winnerId: seriesWinnerId,
-      mode: 'BOTVBOT',
+      mode: 'BVB',
       outcome: seriesWinnerId === game.bot1.id ? 'PLAYER1_WIN' : seriesWinnerId === game.bot2.id ? 'PLAYER2_WIN' : 'DRAW',
       totalMoves,
       durationMs,

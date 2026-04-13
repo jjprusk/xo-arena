@@ -75,14 +75,14 @@ const MOCK_STATS = {
   losses: 1,
   draws: 1,
   winRate: 0.6,
-  pvp: { wins: 1, played: 2 },
-  pvai: {
+  hvh: { wins: 1, played: 2 },
+  hva: {
     novice:       { wins: 1, played: 1 },
     intermediate: { wins: 1, played: 1 },
     advanced:     { wins: 0, played: 1 },
     master:       { wins: 0, played: 0 },
   },
-  pvbot: { wins: 0, played: 0 },
+  hvb: { wins: 0, played: 0 },
 }
 
 function renderPage() {

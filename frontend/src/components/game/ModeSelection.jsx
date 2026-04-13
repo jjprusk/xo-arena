@@ -368,7 +368,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
     applyOptions()
     const cfg = getBotPlayConfig(bot)
     const isAlternating = selectedMark === 'alternate'
-    setMode('pvai')
+    setMode('hva')
     setDifficulty(cfg.difficulty)
     setAIImplementation(cfg.implementation)
     setMLModelId(cfg.mlModelId)

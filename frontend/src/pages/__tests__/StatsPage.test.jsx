@@ -39,14 +39,14 @@ const MOCK_STATS = {
   wins: 14,
   draws: 2,
   winRate: 0.7,
-  pvp: { rate: 0.6, played: 10 },
-  pvai: {
+  hvh: { rate: 0.6, played: 10 },
+  hva: {
     novice:       { rate: 0.9, played: 3 },
     intermediate: { rate: 0.7, played: 3 },
     advanced:     { rate: 0.5, played: 2 },
     master:       { rate: 0.2, played: 2 },
   },
-  pvbot: { played: 0, rate: 0, byBot: {} },
+  hvb: { played: 0, rate: 0, byBot: {} },
   recentGames: [],
 }
 
@@ -221,8 +221,8 @@ describe('StatsPage — with stats', () => {
 describe('StatsPage — recent games', () => {
   it('shows recent games section when games exist', async () => {
     const recentGames = [
-      { winnerId: 'db_usr_1', outcome: 'WIN', mode: 'PVP', difficulty: null, player2: null },
-      { winnerId: null, outcome: 'DRAW', mode: 'PVAI', difficulty: 'novice', player2: null },
+      { winnerId: 'db_usr_1', outcome: 'WIN', mode: 'HVH', difficulty: null, player2: null },
+      { winnerId: null, outcome: 'DRAW', mode: 'HVA', difficulty: 'novice', player2: null },
     ]
     signedIn()
     setupApis({ stats: { ...MOCK_STATS, totalGames: 2, recentGames } })
@@ -242,7 +242,7 @@ describe('StatsPage — recent games', () => {
 })
 
 describe('StatsPage — bot challenges', () => {
-  it('shows Bot Challenges section when pvbot games exist', async () => {
+  it('shows Bot Challenges section when hvb games exist', async () => {
     const pvbot = {
       played: 3,
       rate: 0.33,
@@ -255,7 +255,7 @@ describe('StatsPage — bot challenges', () => {
       },
     }
     signedIn()
-    setupApis({ stats: { ...MOCK_STATS, pvbot } })
+    setupApis({ stats: { ...MOCK_STATS, hvb: pvbot } })
     renderPage()
     await waitFor(() => {
       expect(screen.getByText('Bot Challenges')).toBeDefined()
@@ -263,7 +263,7 @@ describe('StatsPage — bot challenges', () => {
     })
   })
 
-  it('does not show Bot Challenges when no pvbot games', async () => {
+  it('does not show Bot Challenges when no hvb games', async () => {
     signedIn()
     renderPage()
     await waitFor(() => expect(screen.getByText('14')).toBeDefined()) // wins count, unique on page

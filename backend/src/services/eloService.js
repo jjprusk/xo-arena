@@ -4,7 +4,7 @@
  *
  * Computes ELO updates after game outcomes and persists them to GameElo.
  * AI opponents have fixed ELO ratings by difficulty level.
- * Bot opponents (PVBOT) use their live GameElo for 'xo'.
+ * Bot opponents (HVB) use their live GameElo for 'xo'.
  */
 
 import db from '../lib/db.js'

@@ -118,9 +118,10 @@ export async function getTierLimit(userId, capability) {
  *
  * appId:        string — e.g. "xo-arena", "chess" (for context/logging; not used in logic)
  * participants: { userId, isBot, botOwnerId }[]
- * mode:         "pvp" | "pvc" | "bvb"
- *   - "pvc" = player vs built-in AI → Universal Exclusion, no credits awarded
- *   - "pvp" = real players (human or bot) on both sides → HPC for humans, BPC for bot owners
+ * mode:         "hvh" | "hva" | "hvb" | "bvb"
+ *   - "hva" = human vs built-in AI → Universal Exclusion, no credits awarded
+ *   - "hvh" = human vs human → HPC for both
+ *   - "hvb" = human vs user bot → HPC for human, BPC for bot owner
  *   - "bvb" = bot vs bot → BPC for bot owners only
  *
  * Returns an array of UserNotification objects that were newly created.
@@ -131,13 +132,13 @@ export async function recordGameCompletion({ appId, participants, mode }) {
   const { checkAndNotify } = await import('./notificationService.js')
 
   // Universal Exclusion: built-in AI games never earn credits
-  if (mode === 'pvc') return []
+  if (mode === 'hva' || mode === 'pvc') return []
 
   const created = []
 
   // HPC: all human participants in any qualifying game (built-in AI exclusion already handled above)
   const humans = participants.filter(p => !p.isBot)
-  if (mode === 'pvp' && humans.length >= 1) {
+  if ((mode === 'hvh' || mode === 'hvb' || mode === 'pvp') && humans.length >= 1) {
     for (const { userId } of humans) {
       const prev = await getUserCredits(userId)
       await db.user.update({ where: { id: userId }, data: { creditsHpc: { increment: 1 } } })

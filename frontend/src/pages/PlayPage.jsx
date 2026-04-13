@@ -172,8 +172,8 @@ export default function PlayPage() {
     )
   }
 
-  // PvAI / AI-vs-AI flow
-  const inGame = pvaiStatus !== 'idle' && (pvaiMode === 'pvai' || pvaiMode === 'aivai')
+  // HvA / AI-vs-AI flow
+  const inGame = pvaiStatus !== 'idle' && (pvaiMode === 'hva' || pvaiMode === 'aivai')
   if (inGame) return (
     <div className="flex flex-col items-center w-full max-w-md mx-auto gap-4">
       <GameBoard roomName={displayName} />
