@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Game Registry Switch Guide
 
 > How game packages are loaded, published, and how to switch between loading paths.

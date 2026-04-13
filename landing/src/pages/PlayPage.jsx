@@ -3,9 +3,29 @@ import React, { lazy, Suspense, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
+import { meta as xoMeta } from '@callidity/game-xo'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 const XOGame = lazy(() => import('@callidity/game-xo'))
+
+const WIDTH_CLASS = {
+  compact:    'max-w-sm',
+  standard:   'max-w-md',
+  wide:       'max-w-2xl',
+  fullscreen: 'max-w-full',
+}
+const gameWidthClass = WIDTH_CLASS[xoMeta.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
+
+// Merge base tokens with any mode-specific overrides.
+// dark/light overrides are only needed when token values are raw colors rather than
+// var() references — var() values resolve against the active CSS custom properties
+// automatically when the .dark class is toggled on <html>.
+function resolveThemeVars(theme, isDark) {
+  return {
+    ...theme?.tokens,
+    ...(isDark ? theme?.dark : theme?.light),
+  }
+}
 
 function Spinner() {
   return (
@@ -125,7 +145,10 @@ export default function PlayPage() {
   // Active or finished game
   if ((phase === 'playing' || phase === 'finished') && session) {
     return (
-      <div className="relative flex flex-col items-center w-full max-w-md mx-auto py-6 px-4">
+      <div
+        className={`relative flex flex-col items-center w-full ${gameWidthClass} mx-auto py-6 px-4`}
+        style={resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))}
+      >
         {/* Escape affordance — visible during play so the player can always leave */}
         <Link
           to={tournamentId ? `/tournaments/${tournamentId}` : '/'}

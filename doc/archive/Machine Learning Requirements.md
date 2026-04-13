@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Machine Learning AI — Requirements
 
 ## Overview

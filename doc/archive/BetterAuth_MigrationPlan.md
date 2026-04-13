@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Clerk → Better Auth Migration Plan
 
 ## Overview

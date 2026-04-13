@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — Bot Players
 
 Bots are synthetic players tied to a single AI model (ML, minimax, MCTS, rule-based, etc.). They participate in PvAI and AiVsAi games as named opponents, accumulate ELO ratings, and appear on the leaderboard alongside human players.

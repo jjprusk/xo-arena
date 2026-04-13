@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — UI Peer Review Brief
 
 > **Give this document to a reviewing AI along with screenshots of each surface.**

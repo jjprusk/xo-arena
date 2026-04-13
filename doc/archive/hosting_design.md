@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Hosting Design
 
 > **External review rating: 9.5/10** — Reviewed April 2026.

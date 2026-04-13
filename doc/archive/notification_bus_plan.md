@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Notification Bus — Implementation Plan
 
 > **Status: READY TO BUILD**

@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — Railway Hosting Plan
 
 ## Architecture Overview

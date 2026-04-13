@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # AI Arena — Platform Implementation Plan
 
 > **Related:** See `Platform_Architecture.md` for the decisions and rationale behind this plan.
@@ -62,22 +63,22 @@
 
 ### 1.5 Replay and live view abstraction
 
-- [ ] Design game state reconstructor (applies move array to initial state in sequence)
-- [ ] Update game renderer to accept either live socket feed or recorded move array
-- [ ] Implement replay controls: play/pause, step forward/back, scrub, variable speed
-- [ ] Implement live view mode: input disabled, observer status signalled in UI
-- [ ] For Pong (future): confirm sampled snapshot approach (100ms intervals) works within this abstraction
-- [ ] Test: replay a completed XO game end-to-end
+- [x] Design game state reconstructor (applies move array to initial state in sequence) — `useReplaySDK.reconstructStates()`
+- [x] Update game renderer to accept either live socket feed or recorded move array — `useReplaySDK` provides same `{ session, sdk }` interface as `useGameSDK`
+- [x] Implement replay controls: play/pause, step forward/back, scrub, variable speed — `ReplayPage` + `ReplayControls`
+- [x] Implement live view mode: input disabled, observer status signalled in UI — derived from `session.isSpectator: true`; `ReplayPage` delivers via fake spectate SDK
+- [ ] For Pong (future): confirm sampled snapshot approach (100ms intervals) works within this abstraction — deferred until Pong spike (1.8)
+- [ ] Test: replay a completed XO game end-to-end — play a game, visit `/replay/:id`
 
 ### 1.6 Replay retention infrastructure
 
-- [ ] Add `moveStream` storage to game records (separate from result)
-- [ ] Add `isTournament Boolean` flag to game records
-- [ ] Implement admin-configurable TTL settings (casual TTL, tournament TTL, default 90 days)
-- [ ] Build scheduled purge job — deletes expired move streams, retains game results permanently
-- [ ] Migrate existing `replayRetentionDays` from `Tournament` model to new admin TTL config
-- [ ] Remove `replayRetentionDays` field from `Tournament` model
-- [ ] Add retention settings to admin panel
+- [x] Add `moveStream` storage to game records (separate from result) — `Json?` field on `Game`; populated by roomManager + socketHandler + botGameRunner
+- [x] Add `isTournament Boolean` flag to game records — backfilled from `tournamentId IS NOT NULL`
+- [x] Implement admin-configurable TTL settings (casual TTL, tournament TTL, default 90 days) — `SystemConfig` keys `replay.casualRetentionDays` / `replay.tournamentRetentionDays`
+- [x] Build scheduled purge job — deletes expired move streams, retains game results permanently — `replayPurgeService.js`, 24h interval
+- [x] Migrate existing `replayRetentionDays` from `Tournament` model to new admin TTL config — defaults set to 90 days in SystemConfig
+- [x] Remove `replayRetentionDays` field from `Tournament` model — migration `20260413120000_replay_stream`
+- [x] Add retention settings to admin panel — `ReplayConfigPanel` in `AdminDashboard`
 
 ### 1.7 Schema migration — Skills, per-game ELO, terminology
 

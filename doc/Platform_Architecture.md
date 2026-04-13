@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # AI Arena — Platform Architecture
 
 > **Related:** See `Platform_Implementation_Plan.md` for the phased implementation checklist derived from these decisions.

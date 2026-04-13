@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Socket & Resource Leak Instrumentation Plan
 
 ## Overview

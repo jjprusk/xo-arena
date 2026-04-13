@@ -1,4 +1,5 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
+import { platformDefaultTheme } from '@callidity/sdk'
 
 /** @type {import('@callidity/sdk').GameMeta} */
 export const meta = {
@@ -7,6 +8,11 @@ export const meta = {
   description:      'Classic 3×3 strategy game. First to get three in a row wins.',
   minPlayers:       2,
   maxPlayers:       2,
+  layout: {
+    preferredWidth: 'compact',
+    aspectRatio:    '1/1',
+  },
+  theme: platformDefaultTheme,
   supportsBots:     true,
   supportsTraining: true,
   supportsPuzzles:  true,

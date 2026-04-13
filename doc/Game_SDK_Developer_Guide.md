@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # AI Arena — Game SDK Developer Guide
 
 > This document is the authoritative reference for building games on the AI Arena platform.
@@ -94,6 +95,10 @@ export const meta = {
   icon:             '/icons/xo.svg',
   minPlayers:       2,
   maxPlayers:       2,
+  layout: {
+    preferredWidth: 'compact',   // max-w-sm — small square board
+    aspectRatio:    '1/1',       // pre-allocates square space while loading
+  },
   supportsBots:     true,
   supportsTraining: true,
   supportsPuzzles:  true,
@@ -109,10 +114,108 @@ export const meta = {
 | `icon` | `string?` | Path or URL to game icon. |
 | `minPlayers` | `number` | Minimum seated players to start. |
 | `maxPlayers` | `number` | Maximum players allowed at the table. |
+| `layout` | `GameLayout?` | Container sizing preferences. Defaults to `standard` if omitted. See Layout below. |
 | `supportsBots` | `boolean` | Enables bot opponent options at table creation. |
 | `supportsTraining` | `boolean` | Enables Gym tab in the platform shell. |
 | `supportsPuzzles` | `boolean` | Enables Puzzles tab in the platform shell. |
 | `builtInBots` | `BotPersona[]` | Bot personalities bundled with the game. Empty array if `supportsBots` is false. |
+
+### Layout
+
+Games declare their preferred container width via `meta.layout` instead of hardcoding `max-w-*` classes inside `GameComponent`. The platform reads this at render time and applies the correct Tailwind class to the wrapper.
+
+```ts
+interface GameLayout {
+  preferredWidth?: 'compact' | 'standard' | 'wide' | 'fullscreen'
+  aspectRatio?:    string   // CSS ratio string, e.g. '1/1', '7/6', '4/3'
+}
+```
+
+| `preferredWidth` | Tailwind class | Width | Use case |
+|---|---|---|---|
+| `compact` | `max-w-sm` | 384 px | Small grids — Tic-Tac-Toe, Checkers |
+| `standard` | `max-w-md` | 448 px | Default; most turn-based games |
+| `wide` | `max-w-2xl` | 672 px | Broader boards — Connect4, Chess |
+| `fullscreen` | `max-w-full` | viewport | Complex strategy games |
+
+`aspectRatio` is an optional hint the platform uses to pre-allocate vertical space before the game component finishes loading, preventing layout shift. Use a CSS ratio string (`'1/1'`, `'7/6'`, `'4/3'`). Omit it for variable-height games.
+
+**GameComponent must not apply its own `max-w-*` class.** The platform container is already sized; adding a width constraint inside the component creates double-nesting and breaks the wide/fullscreen modes.
+
+### Theme
+
+Games declare visual identity via `meta.theme`. The platform applies these as CSS custom properties (inline styles) scoped to the game container element. This gives each game its own color identity without polluting global platform tokens.
+
+```ts
+interface GameTheme {
+  tokens?: Record<string, string>   // applied in all color modes
+  light?:  Record<string, string>   // merged on top of tokens in light mode only
+  dark?:   Record<string, string>   // merged on top of tokens in dark mode only
+}
+```
+
+Token keys should start with `--game-` to avoid collisions with platform tokens (`--color-*`, `--bg-*`, etc.).
+
+Token values may reference platform CSS variables via `var()`. Since platform variables already adapt when dark mode is toggled (via the `.dark` class on `<html>`), `light`/`dark` overrides are only needed when a token value is a raw color rather than a `var()` reference.
+
+**Platform default tokens** (what games get when no theme is declared or when using `platformDefaultTheme`):
+
+| Token | Light & Dark value | Purpose |
+|---|---|---|
+| `--game-mark-x` | `var(--color-blue-600)` → `#1A6FD4` | X player mark color |
+| `--game-mark-o` | `var(--color-teal-600)` → `#1D9E75` | O player mark color |
+| `--game-cell-win-bg` | `var(--color-amber-100)` → `#FAEEDA` | Winning cell background |
+| `--game-cell-win-border` | `var(--color-amber-500)` → `#D4891E` | Winning cell border |
+
+**Usage — explicitly declare platform defaults:**
+
+```js
+import { platformDefaultTheme } from '@callidity/sdk'
+
+export const meta = {
+  // ...
+  theme: platformDefaultTheme,
+}
+```
+
+**Usage — custom game identity:**
+
+```js
+theme: {
+  tokens: {
+    '--game-mark-x': '#e63946',    // red discs (raw value — requires dark override if needed)
+    '--game-mark-o': '#f4d03f',    // yellow discs
+    '--game-board-bg': '#1a5276',  // game-specific token consumed by GameComponent
+  },
+  dark: {
+    '--game-mark-x': '#ff6b6b',    // lighter red for dark mode legibility
+  },
+}
+```
+
+**Usage — spread defaults and override one token:**
+
+```js
+import { platformDefaultTheme } from '@callidity/sdk'
+
+theme: {
+  ...platformDefaultTheme,
+  tokens: {
+    ...platformDefaultTheme.tokens,
+    '--game-mark-x': 'var(--color-red-600)',   // red X, everything else unchanged
+  },
+}
+```
+
+**In GameComponent**, reference `var(--game-*)` tokens instead of hardcoded platform tokens:
+
+```js
+// Do this — reads from the game container's scoped tokens
+const MARK_COLOR = { X: 'var(--game-mark-x)', O: 'var(--game-mark-o)' }
+
+// Not this — bypasses the theme system
+const MARK_COLOR = { X: 'var(--color-blue-600)', O: 'var(--color-teal-600)' }
+```
 
 ---
 
@@ -800,11 +903,13 @@ XO is the reference implementation. Use this checklist to verify compliance:
 
 ### GameContract exports
 - [ ] `export default GameComponent` — React component, no platform imports
-- [ ] `export { meta }` — all GameMeta fields populated including `builtInBots`
+- [ ] `export { meta }` — all GameMeta fields populated including `builtInBots`, `layout`, and `theme`
 - [ ] `export { botInterface }` — full BotInterface implemented
 
 ### GameComponent
 - [ ] Receives only `{ session, sdk }` props
+- [ ] No hardcoded `max-w-*` width class — container sizing is declared in `meta.layout`
+- [ ] Color tokens reference `var(--game-*)` — not hardcoded `var(--color-*)` platform tokens
 - [ ] No direct socket.io calls
 - [ ] No auth imports
 - [ ] Subscribes to moves via `sdk.onMove` or `sdk.spectate`
@@ -845,6 +950,8 @@ All types are defined in `packages/sdk/src/index.d.ts`.
 |---|---|
 | `GameContract` | Full shape a game package must export |
 | `GameMeta` | Static game metadata |
+| `GameLayout` | Container width and aspect ratio preferences |
+| `GameTheme` | Scoped CSS custom property overrides for game-specific color identity |
 | `GameSession` | Runtime session context passed to game component |
 | `GameSDK` | Platform interface the game calls into |
 | `Player` | A seated player (human or bot) |

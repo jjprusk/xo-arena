@@ -1,4 +1,17 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
+/**
+ * GymComponent — XO training UI
+ *
+ * Rendered in the Gym tab of the platform shell.
+ * Receives GymProps from the platform (see @callidity/sdk for the interface).
+ *
+ * Responsibilities:
+ *   1. Load training config from botInterface.getTrainingConfig()
+ *   2. Render algorithm picker, episode count slider, and hyperparameter controls
+ *   3. Call botInterface.train() and stream progress back via onProgress
+ *   4. Call onTrainingComplete(result) when done — the platform persists the weights
+ */
+
 import React, { useState, useEffect, useRef } from 'react'
 
 const ALGORITHM_LABELS = {
@@ -10,10 +23,7 @@ const ALGORITHM_LABELS = {
   alphazero:      'AlphaZero',
 }
 
-/**
- * XO Gym — training UI rendered in the platform shell Gym tab.
- * Props match the GymProps interface from @callidity/sdk.
- */
+/** @param {import('@callidity/sdk').GymProps} props */
 export function GymComponent({ botId, gameId, currentWeights, onTrainingComplete, onProgress }) {
   const [config, setConfig]         = useState(null)
   const [episodes, setEpisodes]     = useState(5000)
@@ -198,21 +208,45 @@ export function GymComponent({ botId, gameId, currentWeights, onTrainingComplete
         </p>
       )}
 
-      {/* Results summary (after training) */}
-      {!isTraining && progressLog.length > 0 && (() => {
-        const last = progressLog[progressLog.length - 1]
-        if (last.episode < last.totalEpisodes) return null
-        return (
-          <div className="rounded-xl p-4 flex flex-col gap-2" style={{ background: 'var(--bg-surface-hover)' }}>
-            <p className="text-sm font-semibold">Training complete</p>
-            <div className="grid grid-cols-3 gap-2 text-center text-sm">
-              <div><div className="font-bold" style={{ color: 'var(--color-teal-600)' }}>{Math.round((progressLog.reduce((s, p) => s + (p.outcome === 'WIN' ? 1 : 0), 0) / progressLog.length) * 100)}%</div><div style={{ color: 'var(--text-muted)' }}>Win rate</div></div>
-              <div><div className="font-bold" style={{ color: 'var(--color-amber-600)' }}>{Math.round((progressLog.reduce((s, p) => s + (p.outcome === 'DRAW' ? 1 : 0), 0) / progressLog.length) * 100)}%</div><div style={{ color: 'var(--text-muted)' }}>Draw rate</div></div>
-              <div><div className="font-bold" style={{ color: 'var(--color-red-600)' }}>{Math.round((progressLog.reduce((s, p) => s + (p.outcome === 'LOSS' ? 1 : 0), 0) / progressLog.length) * 100)}%</div><div style={{ color: 'var(--text-muted)' }}>Loss rate</div></div>
-            </div>
-          </div>
-        )
-      })()}
+      {/* Results summary — shown once training completes */}
+      {!isTraining && progressLog.length > 0 && (
+        <TrainingSummary progressLog={progressLog} />
+      )}
+    </div>
+  )
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+/**
+ * Displays win / draw / loss rates computed from the sampled progress log.
+ * Only rendered after training has fully completed.
+ */
+function TrainingSummary({ progressLog }) {
+  const last = progressLog[progressLog.length - 1]
+  if (!last || last.episode < last.totalEpisodes) return null
+
+  const total = progressLog.length
+  const pct   = (outcome) =>
+    Math.round((progressLog.filter(p => p.outcome === outcome).length / total) * 100)
+
+  return (
+    <div className="rounded-xl p-4 flex flex-col gap-2" style={{ background: 'var(--bg-surface-hover)' }}>
+      <p className="text-sm font-semibold">Training complete</p>
+      <div className="grid grid-cols-3 gap-2 text-center text-sm">
+        <StatCell label="Win rate"  value={`${pct('WIN')}%`}  color="var(--color-teal-600)" />
+        <StatCell label="Draw rate" value={`${pct('DRAW')}%`} color="var(--color-amber-600)" />
+        <StatCell label="Loss rate" value={`${pct('LOSS')}%`} color="var(--color-red-600)" />
+      </div>
+    </div>
+  )
+}
+
+function StatCell({ label, value, color }) {
+  return (
+    <div>
+      <div className="font-bold" style={{ color }}>{value}</div>
+      <div style={{ color: 'var(--text-muted)' }}>{label}</div>
     </div>
   )
 }

@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — Bot Training Guide
 
 A practical reference for creating and training competitive bots. Each algorithm has different strengths, convergence speed, and ideal session structure. Follow the recipes below for the best results.

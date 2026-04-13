@@ -146,6 +146,68 @@ export interface GameSDK {
 // GameMeta — static metadata exported from every game package
 // ---------------------------------------------------------------------------
 
+/**
+ * Game-specific CSS custom property overrides scoped to the game container.
+ *
+ * The platform applies these as inline styles on the element that wraps the game component,
+ * giving each game its own visual identity without affecting platform-level tokens.
+ *
+ * Token naming convention: prefix all keys with '--game-' to avoid colliding with
+ * platform tokens like '--color-*', '--bg-*', '--border-*'.
+ *
+ * Values may reference platform tokens via var() — the platform CSS variables
+ * cascade into the container, so var(--color-blue-600) resolves correctly and
+ * adapts automatically when dark mode is toggled.
+ *
+ * Import platformDefaultTheme from '@callidity/sdk' to explicitly declare that
+ * your game uses the platform's default aesthetic.
+ */
+export interface GameTheme {
+  /**
+   * CSS custom property overrides applied in all color modes.
+   * Keys should start with '--game-'.
+   */
+  tokens?: Record<string, string>
+  /**
+   * Additional overrides applied only in light mode, merged on top of tokens.
+   * Use when a token needs a different raw value in light vs dark.
+   * Not needed when token values reference platform vars (they adapt automatically).
+   */
+  light?: Record<string, string>
+  /**
+   * Additional overrides applied only in dark mode, merged on top of tokens.
+   * Use when a token needs a different raw value in dark mode.
+   * Not needed when token values reference platform vars (they adapt automatically).
+   */
+  dark?: Record<string, string>
+}
+
+/**
+ * Layout preferences the game declares so the platform can size its container correctly.
+ * Games should not hardcode their own container width — declare it here instead.
+ *
+ * Width mappings applied by the platform shell:
+ *   compact  → max-w-sm  (384px)  — small grids, e.g. Tic-Tac-Toe
+ *   standard → max-w-md  (448px)  — default; most turn-based games
+ *   wide     → max-w-2xl (672px)  — broader boards, e.g. Connect4, Chess
+ *   fullscreen → max-w-full       — complex strategy games needing the full viewport
+ */
+export interface GameLayout {
+  /**
+   * Preferred container width.
+   * The platform applies the corresponding Tailwind max-w class to the game wrapper.
+   * Defaults to 'standard' if omitted.
+   */
+  preferredWidth?: 'compact' | 'standard' | 'wide' | 'fullscreen'
+
+  /**
+   * Aspect ratio hint as a CSS ratio string (e.g. '1/1', '7/6', '4/3').
+   * The platform uses this to pre-allocate vertical space and avoid layout shift
+   * while the game component loads. Optional — omit for variable-height games.
+   */
+  aspectRatio?: string
+}
+
 export interface GameMeta {
   /**
    * Stable, lowercase identifier used throughout the platform.
@@ -167,6 +229,21 @@ export interface GameMeta {
 
   /** Maximum number of players allowed at the table. */
   maxPlayers: number
+
+  /**
+   * Layout preferences for the platform container.
+   * Declare your game's preferred width here instead of hardcoding max-w in GameComponent.
+   * Defaults to standard (max-w-md) if omitted.
+   */
+  layout?: GameLayout
+
+  /**
+   * Game-specific CSS custom property overrides.
+   * The platform scopes these to the game container element as inline styles.
+   * Omit to inherit platform defaults with no game-specific color overrides.
+   * Use platformDefaultTheme from '@callidity/sdk' to explicitly declare default appearance.
+   */
+  theme?: GameTheme
 
   /**
    * True if the game supports bot opponents via BotInterface.makeMove.

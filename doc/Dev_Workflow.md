@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — Development Workflow
 
 ## The Three Environments

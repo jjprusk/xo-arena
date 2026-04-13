@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # In-App Feedback & Bug Report System
 
 ## Overview

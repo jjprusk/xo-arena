@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — ML Feature Checklist
 
 Tracks every task from the ML Development Plan. `Done` = implementation complete. `Tested` = tests passing.

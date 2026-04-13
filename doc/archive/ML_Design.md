@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — Machine Learning Feature: Technical Design
 
 **Date:** 2026-03-19

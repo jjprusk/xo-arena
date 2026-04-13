@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Future Ideas
 
 Deferred features and improvements that are worth revisiting but not currently prioritized.

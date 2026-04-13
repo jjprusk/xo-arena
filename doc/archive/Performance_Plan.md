@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # XO Arena — Performance Plan
 
 ## Baseline (2026-03-28, staging)

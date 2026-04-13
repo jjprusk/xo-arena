@@ -4,8 +4,24 @@ import { useParams, Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useReplaySDK } from '../lib/useReplaySDK.js'
+import { meta as xoMeta } from '@callidity/game-xo'
 
 const XOGame = lazy(() => import('@callidity/game-xo'))
+
+const WIDTH_CLASS = {
+  compact:    'max-w-sm',
+  standard:   'max-w-md',
+  wide:       'max-w-2xl',
+  fullscreen: 'max-w-full',
+}
+const gameWidthClass = WIDTH_CLASS[xoMeta.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
+
+function resolveThemeVars(theme, isDark) {
+  return {
+    ...theme?.tokens,
+    ...(isDark ? theme?.dark : theme?.light),
+  }
+}
 
 const SPEEDS = [0.5, 1, 2]
 
@@ -171,7 +187,10 @@ export default function ReplayPage() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full max-w-md mx-auto py-6 px-4">
+    <div
+      className={`flex flex-col items-center gap-4 w-full ${gameWidthClass} mx-auto py-6 px-4`}
+      style={resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))}
+    >
       <div className="w-full flex items-center justify-between">
         <Link
           to="/"

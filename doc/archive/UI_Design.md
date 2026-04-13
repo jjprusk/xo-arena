@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # AI Arena — Platform UI Design
 
 ## Overview
