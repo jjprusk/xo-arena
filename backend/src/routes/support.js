@@ -205,11 +205,11 @@ router.get('/users', async (req, res, next) => {
         email:       true,
         createdAt:   true,
         banned:      true,
-        eloRating:   true,
+        gameElo:     { where: { gameId: 'xo' }, select: { rating: true } },
       },
     })
 
-    res.json({ users })
+    res.json({ users: users.map(u => ({ ...u, eloRating: u.gameElo?.[0]?.rating ?? 1200, gameElo: undefined })) })
   } catch (err) {
     next(err)
   }

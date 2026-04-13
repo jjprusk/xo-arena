@@ -472,25 +472,38 @@ router.get('/ml/models', async (req, res, next) => {
     // createdBy may store a BA user ID (ba_xxx) for new bots or a domain user ID
     // for bots created before the ownerBaId fix — query both ways.
     const creatorIds = [...new Set(models.map(m => m.createdBy).filter(Boolean))]
-    const [byBaId, byDomainId] = creatorIds.length
-      ? await Promise.all([
-          db.user.findMany({
+    const botIds = [...new Set(models.map(m => m.botId).filter(Boolean))]
+
+    const [byBaId, byDomainId, botEloRows] = await Promise.all([
+      creatorIds.length
+        ? db.user.findMany({
             where: { betterAuthId: { in: creatorIds } },
             select: { betterAuthId: true, id: true, displayName: true, username: true },
-          }),
-          db.user.findMany({
+          })
+        : [],
+      creatorIds.length
+        ? db.user.findMany({
             where: { id: { in: creatorIds } },
             select: { betterAuthId: true, id: true, displayName: true, username: true },
-          }),
-        ])
-      : [[], []]
+          })
+        : [],
+      botIds.length
+        ? db.gameElo.findMany({
+            where: { userId: { in: botIds }, gameId: 'xo' },
+            select: { userId: true, rating: true },
+          })
+        : [],
+    ])
+
     const creatorMap = Object.fromEntries([
       ...byDomainId.map(u => [u.id, u]),
       ...byBaId.map(u => [u.betterAuthId, u]),
     ])
+    const eloMap = Object.fromEntries(botEloRows.map(r => [r.userId, r.rating]))
 
     const enriched = models.map(m => ({
       ...m,
+      eloRating: m.botId ? (eloMap[m.botId] ?? 1200) : null,
       creatorName: m.createdBy
         ? (creatorMap[m.createdBy]?.displayName || creatorMap[m.createdBy]?.username || null)
         : null,

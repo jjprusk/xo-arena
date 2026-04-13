@@ -323,7 +323,7 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
  * Create a bot user row owned by the given user.
  * Enforces reserved name, profanity, and deduplication rules.
  */
-const VALID_ML_ALGORITHMS = ['Q_LEARNING', 'SARSA', 'MONTE_CARLO', 'POLICY_GRADIENT', 'DQN', 'ALPHA_ZERO']
+const VALID_ML_ALGORITHMS = ['qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero']
 
 export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
@@ -366,7 +366,7 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
   if (alg === 'minimax' || alg === 'mcts' || alg === 'rule_based') {
     // handled below
   } else if (alg === 'ml') {
-    mlAlgo = (modelType || 'DQN').toUpperCase().replace(/-/g, '_')
+    mlAlgo = (modelType || 'dqn').toLowerCase().replace(/[-_]/g, '')
     if (!VALID_ML_ALGORITHMS.includes(mlAlgo)) {
       throw Object.assign(new Error(`Unknown ML algorithm: ${modelType}`), { code: 'INVALID_ALGORITHM' })
     }

@@ -157,7 +157,7 @@ function EloPanel({ model }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <MiniStat label="Current ELO" value={Math.round(model.eloRating)} color="var(--color-blue-600)" />
+        <MiniStat label="Current ELO" value={history.length > 0 ? Math.round(history[history.length - 1].eloRating) : '—'} color="var(--color-blue-600)" />
         <MiniStat label="Peak ELO" value={history.length > 0 ? Math.round(Math.max(...history.map(h => h.eloRating))) : '—'} color="var(--color-teal-600)" />
         <MiniStat label="Games" value={history.length.toLocaleString()} />
       </div>

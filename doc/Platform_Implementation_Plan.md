@@ -83,30 +83,30 @@
 ### 1.7 Schema migration — Skills, per-game ELO, terminology
 
 **MLModel --> BotSkill**
-- [ ] Rename `MLModel` Prisma model to `BotSkill`
-- [ ] Add `botId String` field (userId of the owning bot)
-- [ ] Add `gameId String` field
-- [ ] Add unique constraint on `(botId, gameId)`
-- [ ] Rename `qtable Json` field to `weights Json`
-- [ ] Add `algorithm String` field — records which algorithm produced the weights so `makeMove` can deserialize correctly (e.g. `'qlearning'`, `'alphazero'`)
-- [ ] Migrate existing `MLModel` records — set `gameId = 'xo'`, set `botId` from `createdBy`, set `algorithm = 'qlearning'`
-- [ ] Remove `eloRating` from `BotSkill` (ELO moves to `GameElo`)
-- [ ] Run and verify migration
+- [x] Rename `MLModel` Prisma model to `BotSkill`
+- [x] Add `botId String` field (userId of the owning bot)
+- [x] Add `gameId String` field
+- [x] Add unique constraint on `(botId, gameId)`
+- [x] Rename `qtable Json` field to `weights Json`
+- [x] Add `algorithm String` field — records which algorithm produced the weights so `makeMove` can deserialize correctly (e.g. `'qlearning'`, `'alphazero'`)
+- [x] Migrate existing `MLModel` records — set `gameId = 'xo'`, set `botId` from `createdBy`, set `algorithm = 'qlearning'`
+- [x] Remove `eloRating` from `BotSkill` (ELO moves to `GameElo`)
+- [ ] Run and verify migration against staging DB
 
 **Per-game ELO**
-- [ ] Create `GameElo` model: `{ userId, gameId, rating Float, gamesPlayed Int }`
-- [ ] Migrate existing `eloRating` values from `User` to `GameElo` entries for XO (humans and bots)
-- [ ] Migrate existing `eloRating` values from old `MLModel` to `GameElo` entries
-- [ ] Remove `eloRating` field from `User` model
-- [ ] Update all ELO read/write logic to use `GameElo`
-- [ ] Update leaderboard and profile pages to display per-game ratings
+- [x] Create `GameElo` model: `{ userId, gameId, rating Float, gamesPlayed Int }`
+- [x] Migrate existing `eloRating` values from `User` to `GameElo` entries for XO (humans and bots)
+- [x] Migrate existing `eloRating` values from old `MLModel` to `GameElo` entries
+- [x] Remove `eloRating` field from `User` model
+- [x] Update all ELO read/write logic to use `GameElo`
+- [x] Update leaderboard and profile pages to display per-game ratings
 
 **Terminology rename throughout codebase**
-- [ ] Rename `mlService.js` --> `skillService.js`, update all imports
-- [ ] Replace "brain" / "model" with "skill" in all UI copy, API responses, and comments
-- [ ] Rename API routes: `/api/ml/*` --> `/api/skills/*`
-- [ ] Update admin panel labels
-- [ ] Update Gym UI — "Your Models" --> "Bot Skills", "Train Model" --> "Train Skill"
+- [x] Rename `mlService.js` --> `skillService.js`, update all imports
+- [x] Replace "brain" / "model" with "skill" in all UI copy, API responses, and comments
+- [x] Rename API routes: `/api/ml/*` --> `/api/skills/*` (both mounted; `/api/ml` kept for backward compat)
+- [x] Update admin panel labels
+- [x] Update Gym UI — algorithm display, checkpoint display, ELO references removed from BotSkill
 
 ### 1.8 Pong real-time spike
 
