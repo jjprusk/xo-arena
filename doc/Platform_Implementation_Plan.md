@@ -51,12 +51,12 @@
 - [x] Implement `botInterface.getTrainingConfig()`, `train()`, `serializeState()`, `deserializeMove()`
 - [x] Migrate GymComponent into the package as `botInterface.GymComponent`
 - [x] Migrate puzzle content into the package as `botInterface.puzzles`
-- [ ] Publish `@callidity/game-xo` to GitHub Packages — pending GitHub org setup
+- [ ] Publish `@callidity/game-xo` to GitHub Packages — requires `CALLIDITY_NPM_TOKEN` secret (fine-grained PAT with write:packages on callidity org); see doc/Registry_Switch_Guide.md
 - [x] Verify platform loads XO via `React.lazy(() => import('@callidity/game-xo'))` — bundled path (builds clean, 37KB separate chunk)
-- [ ] Deploy `@callidity/game-xo` as a standalone local test service
-- [ ] Verify platform loads XO via dynamic URL import — split-out path (local only, no Fly deployment yet)
-- [ ] Confirm `/* @vite-ignore */` import works, CORS headers correct, SDK props cross the bundle boundary correctly
-- [ ] Document the registry switch mechanism for future use
+- [ ] Deploy `@callidity/game-xo` as a standalone local test service — deferred to Phase 7 (requires importmap for shared React instance; documented in Registry_Switch_Guide.md)
+- [ ] Verify platform loads XO via dynamic URL import — deferred to Phase 7
+- [ ] Confirm `/* @vite-ignore */` import works, CORS headers correct, SDK props cross the bundle boundary correctly — deferred to Phase 7 (importmap prerequisite)
+- [x] Document the registry switch mechanism — `doc/Registry_Switch_Guide.md`
 - [x] Run full regression — all XO functionality works through both loading paths (bundled path verified: PvP, win/draw/loss detection, marks, scores, reactions, forfeit, rematch; split-out URL path deferred to 1.4 outstanding items)
 - [x] Move `ruleBasedImplementation` from `backend/src/ai/ruleBased.js` into `packages/ai` so rule-based bot personas work in `botInterface.makeMove()`
 
