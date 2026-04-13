@@ -924,13 +924,13 @@ function MeritsSection({ classification, bots, botClassifications, open, onToggl
             <tbody>
               {roster.map((row, i) => {
                 const cls = row.classification
-                if (!cls && row.isBot) {
-                  // Bot has no classification yet
+                if (!cls) {
+                  // No classification yet (user or bot)
                   return (
                     <tr key={row.id} style={{ borderTop: i > 0 ? '1px solid var(--border-default)' : undefined }}>
                       <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
                         {row.label}
-                        <span className="ml-1.5 badge badge-done" style={{ fontSize: '9px' }}>bot</span>
+                        {row.isBot && <span className="ml-1.5 badge badge-done" style={{ fontSize: '9px' }}>bot</span>}
                       </td>
                       <td className="px-3 py-2 text-center" style={{ color: 'var(--text-muted)' }}>—</td>
                       <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>—</td>
