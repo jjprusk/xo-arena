@@ -84,7 +84,7 @@ export default function GameComponent({ session, sdk }) {
       signalledRef.current = true
       sdk.signalEnd({
         rankings: event.state.winner
-          ? sortByWinner(session.players, event.state.winner, session.settings.marks)
+          ? sortByWinner(session?.players ?? [], event.state.winner, session?.settings?.marks)
           : [],
         isDraw: !event.state.winner,
       })

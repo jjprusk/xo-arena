@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Socket.io event handler.
  * Wires all room lifecycle and game events to the RoomManager.
@@ -226,6 +227,8 @@ export async function attachSocketIO(httpServer) {
               currentTurn: g.currentTurn,
               winner: g.winner,
               winLine: g.winLine,
+              scores: { X: g.seriesBot1Wins, O: g.seriesBot2Wins },
+              round: g.seriesGamesPlayed + 1,
               spectatorCount: g.spectatorIds.size,
               spectatorAllowed: true,
               isBotGame: true,
@@ -631,6 +634,7 @@ async function recordPvpGame(room, io) {
       roomName: room.name,
       tournamentId: room.tournamentId ?? null,
       tournamentMatchId: room.tournamentMatchId ?? null,
+      moveStream: room.moves?.length ? room.moves : null,
     })
   }
 

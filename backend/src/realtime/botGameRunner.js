@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * BotGameRunner — server-side bot vs bot game execution.
  *
@@ -35,7 +36,7 @@ async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGa
   }
 }
 
-const DEFAULT_MOVE_DELAY_MS = 800
+const DEFAULT_MOVE_DELAY_MS = 1500
 
 /**
  * Parse a botModelId string into { impl, difficulty }.
@@ -120,6 +121,7 @@ class BotGameRunner {
       seriesBot2Wins: 0,
       seriesDraws: 0,
       seriesGamesPlayed: 0,
+      moves: [],  // compact move stream for replay
     }
 
     this._games.set(slug, game)
@@ -167,10 +169,9 @@ class BotGameRunner {
         board: game.board,
         currentTurn: game.currentTurn,
         round: game.seriesGamesPlayed + 1,
+        scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
         bot1: { displayName: game.bot1.displayName, mark: 'X' },
         bot2: { displayName: game.bot2.displayName, mark: 'O' },
-        seriesBot1Wins: game.seriesBot1Wins,
-        seriesBot2Wins: game.seriesBot2Wins,
       })
 
       // Play until terminal state
@@ -198,12 +199,14 @@ class BotGameRunner {
             winner: game.winner,
             winLine: null,
             forfeit: true,
+            scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
           })
           break
         }
 
         game.board[cellIndex] = game.currentTurn
         game.lastActivityAt = Date.now()
+        game.moves.push({ n: game.moves.length + 1, m: game.currentTurn, c: cellIndex })
 
         const winner = getWinner(game.board)
         const draw = !winner && isBoardFull(game.board)
@@ -228,6 +231,7 @@ class BotGameRunner {
           status: game.status,
           winner: game.winner,
           winLine: game.winLine,
+          scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
         })
       }
 
@@ -256,6 +260,7 @@ class BotGameRunner {
       game.winLine = null
       game.createdAt = Date.now()
       game.lastActivityAt = Date.now()
+      game.moves = []
     }
 
     // Record the finished series
@@ -311,6 +316,7 @@ class BotGameRunner {
       startedAt: new Date(game.createdAt),
       tournamentId: game.tournamentId ?? null,
       tournamentMatchId: game.tournamentMatchId ?? null,
+      moveStream: game.moves?.length ? game.moves : null,
     }).catch(err => logger.warn({ err, slug }, 'Failed to write bot game record — will still attempt tournament completion'))
 
     if (!isTournamentGame) {

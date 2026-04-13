@@ -6,10 +6,12 @@ function makeMockSocket() {
   const listeners = {}
   return {
     on:         vi.fn((event, cb) => { listeners[event] = cb }),
+    once:       vi.fn((event, cb) => { listeners[`once:${event}`] = cb }),
     off:        vi.fn(),
     emit:       vi.fn(),
     connect:    vi.fn(),
     disconnect: vi.fn(),
+    connected:  true,
     id: 'test-socket-id',
     _listeners: listeners,
     _trigger: (event, data) => listeners[event]?.(data),
