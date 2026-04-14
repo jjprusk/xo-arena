@@ -31,26 +31,38 @@ const LANDING_URL    = process.env.LANDING_URL    || process.env.BASE_URL || 'ht
 test('wait for deploy — /api/version matches expected version', async ({ request }) => {
   test.setTimeout(6 * 60 * 1000) // 6 min — overrides global 30s for this polling test
   const deadline = Date.now() + 5 * 60 * 1000 // 5 minutes
-  let deployed = null
+  let backendDeployed = null
+  let landingDeployed = null
 
   while (Date.now() < deadline) {
     try {
-      const res = await request.get(`${BACKEND_URL}/api/version`)
-      if (res.ok()) {
-        const { version } = await res.json()
-        if (version === EXPECTED_VERSION) {
-          deployed = version
-          break
+      // Check backend version
+      if (!backendDeployed) {
+        const res = await request.get(`${BACKEND_URL}/api/version`)
+        if (res.ok()) {
+          const { version } = await res.json()
+          if (version === EXPECTED_VERSION) backendDeployed = version
+          else console.log(`  backend still on v${version}, waiting for v${EXPECTED_VERSION}…`)
         }
-        console.log(`  still on v${version}, waiting for v${EXPECTED_VERSION}…`)
       }
-    } catch { /* backend not yet up */ }
+      // Check landing version (confirms landing container also redeployed)
+      if (!landingDeployed) {
+        const res = await request.get(`${LANDING_URL}/landing-version`)
+        if (res.ok()) {
+          const { version } = await res.json()
+          if (version === EXPECTED_VERSION) landingDeployed = version
+          else console.log(`  landing still on v${version}, waiting for v${EXPECTED_VERSION}…`)
+        }
+      }
+      if (backendDeployed && landingDeployed) break
+    } catch { /* services not yet up */ }
     await new Promise(r => setTimeout(r, 10_000)) // poll every 10s
   }
 
-  expect(deployed, `Timed out waiting for v${EXPECTED_VERSION} to deploy`).toBe(EXPECTED_VERSION)
-  console.log(`\n✓ Deployed version: v${deployed}\n`)
-  test.info().annotations.push({ type: 'Deployed version', description: `v${deployed}` })
+  expect(backendDeployed, `Timed out waiting for backend v${EXPECTED_VERSION}`).toBe(EXPECTED_VERSION)
+  expect(landingDeployed, `Timed out waiting for landing v${EXPECTED_VERSION}`).toBe(EXPECTED_VERSION)
+  console.log(`\n✓ Deployed version: v${backendDeployed} (backend + landing)\n`)
+  test.info().annotations.push({ type: 'Deployed version', description: `v${backendDeployed}` })
 })
 
 // ── Frontend smoke ────────────────────────────────────────────────────────────
