@@ -23,6 +23,13 @@ import AdminBotsPage from './pages/admin/AdminBotsPage.jsx'
 import AdminFeedbackPage from './pages/admin/AdminFeedbackPage.jsx'
 import AdminHealthPage from './pages/admin/AdminHealthPage.jsx'
 import LogViewerPage from './pages/admin/LogViewerPage.jsx'
+import RankingsPage from './pages/RankingsPage.jsx'
+import StatsPage from './pages/StatsPage.jsx'
+import BotProfilePage from './pages/BotProfilePage.jsx'
+import SupportPage from './pages/SupportPage.jsx'
+import GymPage from './pages/GymPage.jsx'
+import GymGuidePage from './pages/GymGuidePage.jsx'
+import PuzzlePage from './pages/PuzzlePage.jsx'
 
 export default function App() {
   return (
@@ -40,6 +47,14 @@ export default function App() {
           <Route path="/pong/:slug" element={<PongPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/rankings" element={<RankingsPage />} />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/bots/:id" element={<BotProfilePage />} />
+          <Route path="/support" element={<SupportPage />} />
+          <Route path="/gym" element={<GymPage />} />
+          <Route path="/gym/guide" element={<GymGuidePage />} />
+          <Route path="/puzzles" element={<PuzzlePage />} />
+          <Route path="/tables" element={<div className="max-w-2xl mx-auto py-12 text-center"><h1 className="text-3xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>Tables</h1><p style={{ color: 'var(--text-muted)' }}>Coming soon — Phase 3</p></div>} />
 
           {/* Admin routes — all guarded by AdminRoute */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

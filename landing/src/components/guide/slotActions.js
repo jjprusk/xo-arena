@@ -1,33 +1,30 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * slotActions for the landing (aiarena platform) app.
- * xo-arena routes use VITE_XO_URL; platform routes are internal.
+ * All routes are now internal — XO features run on landing.
  */
-
-const XO = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 
 export const SLOT_ACTIONS = [
   // Platform (internal)
-  { key: 'tournaments',  label: 'Tournaments',    icon: '⊕',  href: '/tournaments',                    section: 'Platform',  crossSite: false },
-  // XO Arena (cross-site)
-  { key: 'play',         label: 'Play',        icon: '⊞',  href: `${XO}/play?action=vs-community-bot`, section: 'XO Arena',  crossSite: true },
-  { key: 'play_my_bot',      label: 'Play vs Bot', icon: '🎮', href: `${XO}/play?action=vs-my-bot`, section: 'XO Arena',  crossSite: true },
-  { key: 'journey_complete', label: 'Congrats',    icon: '🏅', href: null,                           section: 'Platform',  crossSite: false },
-  { key: 'faq',          label: 'Read the FAQ',   icon: '❓', href: '/faq',                              section: 'Platform',  crossSite: false },
-  { key: 'gym_guide',    label: 'AI Training',    icon: '📖', href: `${XO}/gym/guide`,                   section: 'XO Arena',  crossSite: true },
-  { key: 'gym',          label: 'Train Bot',      icon: '⚡', href: `${XO}/gym?action=start-training`,   section: 'XO Arena',  crossSite: true },
-  { key: 'bots',         label: 'My Bots',        icon: '🤖', href: `${XO}/bots`,                        section: 'XO Arena',  crossSite: true },
-  { key: 'create_bot',   label: 'Create 1st Bot', icon: '🤖', href: '/profile?action=create-bot',        section: 'Platform',  crossSite: false },
-  { key: 'profile_bots', label: 'My Bots',        icon: '🤖', href: '/profile?section=bots',             section: 'Platform',  crossSite: false },
-  { key: 'rankings',     label: 'Rankings',       icon: '★',  href: `${XO}/leaderboard`,                 section: 'XO Arena',  crossSite: true },
-  { key: 'stats',        label: 'Stats',          icon: '◎',  href: `${XO}/stats`,                       section: 'XO Arena',  crossSite: true },
-  { key: 'puzzles',      label: 'Puzzles',        icon: '◈',  href: `${XO}/puzzles`,                     section: 'XO Arena',  crossSite: true },
+  { key: 'tournaments',  label: 'Tournaments',    icon: '⊕',  href: '/tournaments',                       section: 'Platform', crossSite: false },
+  { key: 'play',         label: 'Play',           icon: '⊞',  href: '/play?action=vs-community-bot',      section: 'Platform', crossSite: false },
+  { key: 'play_my_bot',  label: 'Play vs Bot',    icon: '🎮', href: '/play?action=vs-my-bot',             section: 'Platform', crossSite: false },
+  { key: 'journey_complete', label: 'Congrats',   icon: '🏅', href: null,                                 section: 'Platform', crossSite: false },
+  { key: 'faq',          label: 'Read the FAQ',   icon: '❓', href: '/faq',                               section: 'Platform', crossSite: false },
+  { key: 'gym_guide',    label: 'AI Training',    icon: '📖', href: '/gym/guide',                         section: 'Platform', crossSite: false },
+  { key: 'gym',          label: 'Train Bot',      icon: '⚡', href: '/gym?action=start-training',         section: 'Platform', crossSite: false },
+  { key: 'bots',         label: 'My Bots',        icon: '🤖', href: '/profile?section=bots',              section: 'Platform', crossSite: false },
+  { key: 'create_bot',   label: 'Create 1st Bot', icon: '🤖', href: '/profile?action=create-bot',         section: 'Platform', crossSite: false },
+  { key: 'profile_bots', label: 'My Bots',        icon: '🤖', href: '/profile?section=bots',              section: 'Platform', crossSite: false },
+  { key: 'rankings',     label: 'Rankings',       icon: '★',  href: '/rankings',                          section: 'Platform', crossSite: false },
+  { key: 'stats',        label: 'Stats',          icon: '◎',  href: '/stats',                             section: 'Platform', crossSite: false },
+  { key: 'puzzles',      label: 'Puzzles',        icon: '◈',  href: '/puzzles',                           section: 'Platform', crossSite: false },
   { key: 'profile',      label: 'My Profile',     icon: '◉',  href: '/profile',                          section: 'Platform',  crossSite: false },
   // Admin
   { key: 'admin',        label: 'Admin',          icon: '⚙',  href: '/admin',                            section: 'Admin',     crossSite: false },
 ]
 
-export const SLOT_SECTIONS = ['Platform', 'XO Arena', 'Admin']
+export const SLOT_SECTIONS = ['Platform', 'Admin']
 
 export function getActionByKey(key) {
   return SLOT_ACTIONS.find(a => a.key === key) ?? null

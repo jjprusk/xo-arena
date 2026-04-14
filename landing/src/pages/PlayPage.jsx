@@ -74,11 +74,8 @@ export default function PlayPage() {
     navigate('/', { replace: true })
   }, [kicked])
 
-  // No slug and no create intent → go home
-  if (!joinSlug && phase === 'connecting') {
-    // Allow a brief moment for room:create to fire
-    // If still connecting after mount it means there's no intent — redirect
-  }
+  // No slug → go home
+  if (!joinSlug) return <Navigate to="/" replace />
 
   // Tournament series complete screen
   if (seriesResult) {

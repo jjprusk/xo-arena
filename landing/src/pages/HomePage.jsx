@@ -3,11 +3,9 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
-
 function XOIcon() {
   return (
-    <svg width="36" height="36" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="XO Arena">
+    <svg width="36" height="36" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="XO">
       <rect width="32" height="32" rx="7" fill="var(--color-blue-600)" />
       <line x1="11" y1="5"  x2="11" y2="27" stroke="white"                 strokeWidth="2.5" strokeLinecap="round" />
       <line x1="21" y1="5"  x2="21" y2="27" stroke="var(--color-teal-400)" strokeWidth="2.5" strokeLinecap="round" />
@@ -20,9 +18,9 @@ function XOIcon() {
 const GAMES = [
   {
     icon: <XOIcon />,
-    name: 'XO Arena',
+    name: 'XO',
     description: 'Tic-tac-toe with ML-driven AI, ELO rankings, live PvP rooms, and tournament play.',
-    href: XO_URL,
+    href: '/play',
     badge: 'Play now',
     live: true,
   },
@@ -74,9 +72,9 @@ export default function HomePage() {
               View Tournaments
             </Link>
             {!user && (
-              <a href={XO_URL} className="btn btn-secondary">
-                Play XO Arena
-              </a>
+              <Link to="/play" className="btn btn-secondary">
+                Play XO
+              </Link>
             )}
           </div>
         </div>

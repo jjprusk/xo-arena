@@ -36,7 +36,7 @@ export default function GuestWelcomeModal({ isOpen, onClose, onSignIn }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.25rem' }}>
             <Feature icon="🏆" text="Browse and watch tournaments" />
             <Feature icon="★"  text="View rankings and leaderboards" />
-            <Feature icon="⊞"  text="Play games as a guest on XO Arena" />
+            <Feature icon="⊞"  text="Play games as a guest on AI Arena" />
           </div>
 
           <p style={{ margin: '0 0 0.625rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>

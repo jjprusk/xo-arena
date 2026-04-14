@@ -27,6 +27,8 @@ function renderSettings() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Default fallback so stray API calls after test assertions don't cause unhandled rejections
+  global.fetch.mockResolvedValue({ ok: true, json: async () => ({}) })
 })
 
 describe('SettingsPage', () => {

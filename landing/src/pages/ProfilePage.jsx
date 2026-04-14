@@ -11,8 +11,6 @@ import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
 
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
-
 const BOT_MODEL_LABELS = {
   ml: 'ML',
   minimax: 'Minimax',
@@ -508,13 +506,13 @@ export default function ProfilePage() {
                   </div>
                 ))}
               </div>
-              <a
-                href={`${XO_URL}/stats`}
+              <Link
+                to="/stats"
                 className="text-sm font-medium transition-colors"
                 style={{ color: 'var(--color-blue-600)' }}
               >
                 View full stats →
-              </a>
+              </Link>
             </div>
           </AccordionSection>
         )
@@ -593,7 +591,6 @@ export default function ProfilePage() {
         classification={classification}
         bots={bots}
         botClassifications={botClassifications}
-        xoUrl={XO_URL}
         open={openSections.merits}
         onToggle={() => toggle('merits')}
       />
@@ -732,13 +729,13 @@ export default function ProfilePage() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 flex-wrap">
-                          <a
-                            href={`${XO_URL}/bots/${bot.id}`}
+                          <Link
+                            to={`/bots/${bot.id}`}
                             className="font-semibold hover:underline"
                             style={{ color: 'var(--text-primary)' }}
                           >
                             {bot.displayName}
-                          </a>
+                          </Link>
                           {bot.botProvisional && (
                             <span className="badge badge-closed">provisional</span>
                           )}
@@ -861,7 +858,7 @@ export default function ProfilePage() {
           onDismiss={() => {
             setShowBotCreatedPopup(false)
             useGuideStore.getState().open()
-            window.location.href = `${XO_URL}/gym`
+            window.location.href = '/gym'
           }}
         />
       )}
@@ -885,7 +882,7 @@ function tierMeta(tier) {
   return { meta: TIER_META[idx] ?? TIER_META[0], idx: idx === -1 ? 0 : idx }
 }
 
-function MeritsSection({ classification, bots, botClassifications, xoUrl, open, onToggle }) {
+function MeritsSection({ classification, bots, botClassifications, open, onToggle }) {
   const roster = [
     { id: 'me', label: 'You', classification: classification ?? null, isBot: false },
     ...bots.map(b => ({
@@ -936,7 +933,7 @@ function MeritsSection({ classification, bots, botClassifications, xoUrl, open, 
                     <tr key={row.id} style={{ borderTop: i > 0 ? '1px solid var(--border-default)' : undefined }}>
                       <td className="px-3 py-2 font-medium" style={{ color: 'var(--text-secondary)' }}>
                         {row.isBot ? (
-                          <a href={`${xoUrl}/bots/${row.botId}`} className="hover:underline" style={{ color: 'var(--text-secondary)' }}>
+                          <a href={`/bots/${row.botId}`} className="hover:underline" style={{ color: 'var(--text-secondary)' }}>
                             {row.label}
                           </a>
                         ) : row.label}
@@ -962,7 +959,7 @@ function MeritsSection({ classification, bots, botClassifications, xoUrl, open, 
                   >
                     <td className="px-3 py-2 font-medium" style={{ color: 'var(--text-primary)' }}>
                       {row.isBot ? (
-                        <a href={`${xoUrl}/bots/${row.botId}`} className="hover:underline" style={{ color: 'var(--text-primary)' }}>
+                        <a href={`/bots/${row.botId}`} className="hover:underline" style={{ color: 'var(--text-primary)' }}>
                           {row.label}
                         </a>
                       ) : row.label}

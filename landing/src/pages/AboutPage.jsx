@@ -33,7 +33,7 @@ export default function AboutPage() {
             { icon: '★',  label: 'Rankings and leaderboards across all games' },
             { icon: '⚡', label: 'Build, train, and deploy your own ML bots' },
             { icon: '◎',  label: 'Full match history and per-bot training stats' },
-            { icon: '⊞',  label: 'Play games live — XO Arena and more coming soon' },
+            { icon: '⊞',  label: 'Play games live — XO and more coming soon' },
           ].map(({ icon, label }) => (
             <li key={label} className="flex items-start gap-3">
               <span className="mt-0.5 text-base leading-none" style={{ color: 'var(--color-slate-500)' }}>{icon}</span>
