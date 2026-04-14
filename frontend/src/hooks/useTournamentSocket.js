@@ -17,7 +17,7 @@ const TOURNAMENT_EVENTS = [
  * Call this once in a top-level component (e.g. AppLayout or TournamentsPage).
  *
  * Emits `user:subscribe` with { authToken } to the socket after connection.
- * Listens for all 5 tournament events and stores the most recent one.
+ * Listens for all 6 tournament events and stores the most recent one.
  *
  * Returns: { lastEvent } — the most recent tournament event received,
  * shaped as { channel, data, ts } or null if none received yet.
@@ -28,6 +28,7 @@ export function useTournamentSocket() {
   useEffect(() => {
     let socket = null
     let subscribed = false
+    let onConnect = null   // kept in outer scope so cleanup can remove it precisely
 
     async function setup() {
       const token = await getToken()
@@ -41,14 +42,13 @@ export function useTournamentSocket() {
         socket.emit('user:subscribe', { authToken: token })
       }
 
-      // If already connected, subscribe immediately
-      if (socket.connected) {
-        subscribe()
-      } else {
-        socket.once('connect', subscribe)
-      }
+      // Persistent connect handler — re-subscribes after backend restarts.
+      // Assigned to outer-scope `onConnect` so cleanup removes only this handler,
+      // not all connect listeners (which would strip AppLayout's presence handler).
+      onConnect = () => subscribe()
+      socket.on('connect', onConnect)
+      if (socket.connected) subscribe()
 
-      // Register listeners for all tournament channels
       TOURNAMENT_EVENTS.forEach(channel => {
         socket.on(channel, (data) => {
           setLastEvent({ channel, data, ts: Date.now() })
@@ -60,10 +60,10 @@ export function useTournamentSocket() {
 
     return () => {
       if (!socket) return
-      socket.off('connect')
-      TOURNAMENT_EVENTS.forEach(channel => {
-        socket.removeAllListeners(channel)
-      })
+      // Remove only this hook's connect handler — do NOT use socket.off('connect')
+      // without a reference, which would strip all connect listeners (e.g. AppLayout).
+      if (onConnect) socket.off('connect', onConnect)
+      TOURNAMENT_EVENTS.forEach(channel => socket.off(channel))
     }
   }, [])
 
