@@ -8,19 +8,11 @@
  * Otherwise, build a cross-site <a href> using appUrls[item.app].
  */
 export const PRIMARY_NAV = [
-  {
-    key: 'games',
-    label: 'Games',
-    hasDropdown: true,
-    dropdown: [
-      { key: 'xo', label: 'XO Arena', app: 'xo', to: '/', icon: '⚔' },
-    ],
-  },
+  { key: 'tables',      label: 'Tables',      app: 'landing', to: '/tables'      },
   { key: 'tournaments', label: 'Tournaments', app: 'landing', to: '/tournaments' },
-  { key: 'rankings',    label: 'Rankings',    app: 'xo',      to: '/leaderboard' },
+  { key: 'rankings',    label: 'Rankings',    app: 'landing', to: '/rankings'    },
   { key: 'profile',     label: 'Profile',     app: 'landing', to: '/profile'     },
   { key: 'about',       label: 'About',       app: 'landing', to: '/about'       },
-  { key: 'faq',         label: 'FAQ',         app: 'landing', to: '/faq'         },
 ]
 
 /**

@@ -5,6 +5,36 @@
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
+/**
+ * Stale-while-revalidate fetch.
+ * Returns { immediate, refresh } where:
+ *   immediate — cached data from localStorage if within maxAgeMs (or null)
+ *   refresh   — Promise that resolves with fresh data and updates the cache
+ */
+export function cachedFetch(path, maxAgeMs = 5 * 60_000) {
+  const key = 'xo_swr_' + path
+  let immediate = null
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) {
+      const entry = JSON.parse(raw)
+      if (Date.now() - entry.ts < maxAgeMs) immediate = entry.data
+    }
+  } catch {}
+
+  const refresh = fetch(`${BASE}/api/v1${path}`)
+    .then(r => {
+      if (!r.ok) return Promise.reject(new Error(r.statusText))
+      return r.json()
+    })
+    .then(data => {
+      try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
+      return data
+    })
+
+  return { immediate, refresh }
+}
+
 async function request(method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
@@ -34,6 +64,7 @@ export const api = {
     sync:        (token)        => api.post('/users/sync', {}, token),
     stats:       (id)           => api.get(`/users/${id}/stats`),
     eloHistory:  (id)           => api.get(`/users/${id}/elo-history`),
+    mlProfiles:  (id, token)    => api.get(`/users/${id}/ml-profiles`, token),
     credits:     (id)           => api.get(`/users/${id}/credits`),
     updateSettings: (body, token) => api.patch('/users/me/settings', body, token),
     getPreferences:   (token)       => api.get('/users/me/preferences', token),
@@ -47,6 +78,10 @@ export const api = {
     patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),
     triggerStep:      (step, token) => api.post('/guide/journey/step', { step }, token),
     restartJourney:   (token)       => api.post('/guide/journey/restart', {}, token),
+  },
+
+  ml: {
+    getSessions: (id) => api.get(`/ml/models/${id}/sessions`),
   },
 
   bots: {

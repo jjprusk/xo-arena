@@ -1,5 +1,5 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { NavLink, Link, useLocation } from 'react-router-dom'
 import { PRIMARY_NAV, XO_SUBNAV, resolveItem } from './navItems.js'
 
@@ -18,25 +18,12 @@ import { PRIMARY_NAV, XO_SUBNAV, resolveItem } from './navItems.js'
  */
 export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSlot, extrasSlot, isStaging }) {
   const location = useLocation()
-  const [menuOpen, setMenuOpen]   = useState(false)
-  const [gamesOpen, setGamesOpen] = useState(false)
-  const gamesRef = useRef(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
-  // Close mobile drawer and games dropdown on route change
+  // Close mobile drawer on route change
   useEffect(() => {
     setMenuOpen(false)
-    setGamesOpen(false)
   }, [location.pathname])
-
-  // Close games dropdown on outside click
-  useEffect(() => {
-    if (!gamesOpen) return
-    function onDown(e) {
-      if (gamesRef.current && !gamesRef.current.contains(e.target)) setGamesOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [gamesOpen])
 
   const subnavItems = subnav === 'xo' ? XO_SUBNAV : null
 
@@ -46,15 +33,12 @@ export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSl
     : PRIMARY_NAV
 
   // Mobile drawer always shows everything:
-  //   XO subnav section (if present) → then full primary nav expanded
+  //   XO subnav section (if present) → then full primary nav
   const drawerSections = []
   if (subnavItems) {
     drawerSections.push({ title: 'XO Arena', items: subnavItems.map(i => ({ ...i, app: 'xo' })) })
   }
-  const platformItems = PRIMARY_NAV.flatMap(item =>
-    item.hasDropdown ? item.dropdown : [item]
-  )
-  drawerSections.push({ title: 'Platform', items: platformItems })
+  drawerSections.push({ title: 'Platform', items: PRIMARY_NAV })
 
   function DesktopNavItem({ item }) {
     const { href, internal } = resolveItem(item, appId, appUrls)
@@ -67,50 +51,6 @@ export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSl
       <a href={href} className="text-sm font-medium transition-colors no-underline text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
         {item.label}
       </a>
-    )
-  }
-
-  function GamesDropdown() {
-    const gamesItem = PRIMARY_NAV.find(n => n.key === 'games')
-    return (
-      <div ref={gamesRef} style={{ position: 'relative' }}>
-        <button
-          onClick={() => setGamesOpen(o => !o)}
-          className="text-sm font-medium transition-colors flex items-center gap-1 hover:text-[var(--text-primary)]"
-          style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          Games
-          <span style={{ fontSize: '0.6rem', display: 'inline-block', transition: 'transform 0.15s', transform: gamesOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
-        </button>
-        {gamesOpen && (
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 8px)', left: 0,
-            minWidth: 160, borderRadius: '0.625rem',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-default)',
-            boxShadow: 'var(--shadow-md)',
-            zIndex: 100, overflow: 'hidden',
-          }}>
-            {gamesItem.dropdown.map(game => {
-              const { href, internal } = resolveItem(game, appId, appUrls)
-              const itemCls = 'flex items-center gap-2 px-3 py-2.5 text-sm no-underline transition-colors hover:bg-[var(--bg-surface-hover)]'
-              return internal ? (
-                <Link key={game.key} to={href} onClick={() => setGamesOpen(false)}
-                  className={itemCls} style={{ color: 'var(--text-primary)' }}>
-                  {game.icon && <span>{game.icon}</span>}
-                  {game.label}
-                </Link>
-              ) : (
-                <a key={game.key} href={href}
-                  className={itemCls} style={{ color: 'var(--text-primary)', display: 'flex' }}>
-                  {game.icon && <span>{game.icon}</span>}
-                  {game.label}
-                </a>
-              )
-            })}
-          </div>
-        )}
-      </div>
     )
   }
 
@@ -144,8 +84,7 @@ export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSl
 
         {/* Desktop primary nav */}
         <nav className="hidden md:flex items-center gap-5">
-          {desktopPrimaryNav.some(i => i.hasDropdown) && <GamesDropdown />}
-          {desktopPrimaryNav.filter(i => !i.hasDropdown).map(item => (
+          {desktopPrimaryNav.map(item => (
             <DesktopNavItem key={item.key} item={item} />
           ))}
         </nav>

@@ -9,25 +9,25 @@ const XO = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
 export const SLOT_ACTIONS = [
   // Platform (internal)
   { key: 'tournaments',  label: 'Tournaments',    icon: '⊕',  href: '/tournaments',                    section: 'Platform',  crossSite: false },
-  // XO Arena (cross-site)
-  { key: 'play',         label: 'Play',        icon: '⊞',  href: `${XO}/play?action=vs-community-bot`, section: 'XO Arena',  crossSite: true },
-  { key: 'play_my_bot',      label: 'Play vs Bot', icon: '🎮', href: `${XO}/play?action=vs-my-bot`, section: 'XO Arena',  crossSite: true },
+  // XO (cross-site)
+  { key: 'play',         label: 'Play',        icon: '⊞',  href: `${XO}/play?action=vs-community-bot`, section: 'XO',  crossSite: true },
+  { key: 'play_my_bot',      label: 'Play vs Bot', icon: '🎮', href: `${XO}/play?action=vs-my-bot`, section: 'XO',  crossSite: true },
   { key: 'journey_complete', label: 'Congrats',    icon: '🏅', href: null,                           section: 'Platform',  crossSite: false },
   { key: 'faq',          label: 'Read the FAQ',   icon: '❓', href: '/faq',                              section: 'Platform',  crossSite: false },
-  { key: 'gym_guide',    label: 'AI Training',    icon: '📖', href: `${XO}/gym/guide`,                   section: 'XO Arena',  crossSite: true },
-  { key: 'gym',          label: 'Train Bot',      icon: '⚡', href: `${XO}/gym?action=start-training`,   section: 'XO Arena',  crossSite: true },
-  { key: 'bots',         label: 'My Bots',        icon: '🤖', href: `${XO}/bots`,                        section: 'XO Arena',  crossSite: true },
+  { key: 'gym_guide',    label: 'AI Training',    icon: '📖', href: `${XO}/gym/guide`,                   section: 'XO',  crossSite: true },
+  { key: 'gym',          label: 'Train Bot',      icon: '⚡', href: `${XO}/gym?action=start-training`,   section: 'XO',  crossSite: true },
+  { key: 'bots',         label: 'My Bots',        icon: '🤖', href: `${XO}/bots`,                        section: 'XO',  crossSite: true },
   { key: 'create_bot',   label: 'Create 1st Bot', icon: '🤖', href: '/profile?action=create-bot',        section: 'Platform',  crossSite: false },
   { key: 'profile_bots', label: 'My Bots',        icon: '🤖', href: '/profile?section=bots',             section: 'Platform',  crossSite: false },
-  { key: 'rankings',     label: 'Rankings',       icon: '★',  href: `${XO}/leaderboard`,                 section: 'XO Arena',  crossSite: true },
-  { key: 'stats',        label: 'Stats',          icon: '◎',  href: `${XO}/stats`,                       section: 'XO Arena',  crossSite: true },
-  { key: 'puzzles',      label: 'Puzzles',        icon: '◈',  href: `${XO}/puzzles`,                     section: 'XO Arena',  crossSite: true },
+  { key: 'rankings',     label: 'Rankings',       icon: '★',  href: `${XO}/leaderboard`,                 section: 'XO',  crossSite: true },
+  { key: 'stats',        label: 'Stats',          icon: '◎',  href: `${XO}/stats`,                       section: 'XO',  crossSite: true },
+  { key: 'puzzles',      label: 'Puzzles',        icon: '◈',  href: `${XO}/puzzles`,                     section: 'XO',  crossSite: true },
   { key: 'profile',      label: 'My Profile',     icon: '◉',  href: '/profile',                          section: 'Platform',  crossSite: false },
   // Admin
   { key: 'admin',        label: 'Admin',          icon: '⚙',  href: '/admin',                            section: 'Admin',     crossSite: false },
 ]
 
-export const SLOT_SECTIONS = ['Platform', 'XO Arena', 'Admin']
+export const SLOT_SECTIONS = ['Platform', 'XO', 'Admin']
 
 export function getActionByKey(key) {
   return SLOT_ACTIONS.find(a => a.key === key) ?? null

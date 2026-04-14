@@ -22,7 +22,7 @@ const STEPS = [
 
 const SITE_BADGE = {
   platform: { label: 'AI Arena', color: 'var(--color-slate-400)' },
-  xo:       { label: 'XO Arena', color: 'var(--color-teal-500)'  },
+  xo:       { label: 'XO', color: 'var(--color-teal-500)'  },
 }
 
 const TOTAL = 8
