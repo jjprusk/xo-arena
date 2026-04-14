@@ -5,6 +5,7 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { meta as xoMeta } from '@callidity/game-xo'
 import { api } from '../lib/api.js'
+import { getCommunityBot } from '../lib/communityBotCache.js'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 const XOGame = lazy(() => import('@callidity/game-xo'))
@@ -160,8 +161,6 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
   return <Spinner />
 }
 
-const BUILTIN_ORDER = { Rusty: 0, Copper: 1, Sterling: 2, Magnus: 3 }
-
 export default function PlayPage() {
   const [searchParams]         = useSearchParams()
   const { data: authSession }  = useOptimisticSession()
@@ -178,22 +177,12 @@ export default function PlayPage() {
   // so the chunk is ready by the time phase becomes 'playing'.
   useEffect(() => { import('@callidity/game-xo').catch(() => {}) }, [])
 
-  // Resolve community bot for ?action=vs-community-bot
+  // Resolve community bot — uses the module-level cache so repeated plays
+  // and navigations from HomePage (which prefetches) skip the round-trip.
   useEffect(() => {
     if (action !== 'vs-community-bot' || joinSlug) return
-    api.bots.list({ gameId: 'xo' })
-      .then(res => {
-        const bots = res.bots ?? []
-        const builtIn = bots
-          .filter(b => !b.botOwnerId)
-          .sort((a, b) => (BUILTIN_ORDER[a.displayName] ?? 99) - (BUILTIN_ORDER[b.displayName] ?? 99))
-        const target = builtIn[0] ?? bots[0]
-        if (target) {
-          setBotConfig({ botUserId: target.id, botSkillId: target.botModelId ?? null })
-        } else {
-          setBotError(true)
-        }
-      })
+    getCommunityBot()
+      .then(config => { config ? setBotConfig(config) : setBotError(true) })
       .catch(() => setBotError(true))
   }, [action, joinSlug])
 

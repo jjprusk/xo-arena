@@ -1,7 +1,8 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { prefetchCommunityBot } from '../lib/communityBotCache.js'
 
 function XOIcon() {
   return (
@@ -45,6 +46,9 @@ const GAMES = [
 export default function HomePage() {
   const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
+
+  // Prefetch the community bot list so /play?action=vs-community-bot is instant.
+  useEffect(() => { prefetchCommunityBot() }, [])
 
   return (
     <div className="flex flex-col">
