@@ -34,14 +34,25 @@ export function disconnectSocket() {
   if (_socket?.connected) _socket.disconnect()
 }
 
-// Reconnect immediately when the user returns to a suspended tab.
-// Safari (and iOS) freeze JS and kill network connections when a tab is
-// backgrounded — Socket.IO's built-in reconnect backoff can take 1-5s.
-// This fires as soon as the tab becomes visible again, beating the backoff.
+// Handle tab suspension gracefully.
+//
+// Safari (and iOS) freeze JS and then kill network connections when a tab is
+// backgrounded. Any in-flight polling XHR is aborted, which Safari reports as
+// "XMLHttpRequest cannot load … due to access control checks" — a misleading
+// error that actually means "connection killed by the browser".
+//
+// Fix: disconnect cleanly when the tab hides (no in-flight XHR to abort) and
+// reconnect immediately when the user returns (beats Socket.IO's 1-5s backoff).
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && _socket && !_socket.connected) {
-      _socket.connect()
+    if (!_socket) return
+    if (document.visibilityState === 'hidden') {
+      // Disconnect before Safari kills the in-flight XHR — prevents the
+      // "access control checks" console error on backgrounded tabs.
+      if (_socket.connected) _socket.disconnect()
+    } else {
+      // Tab is visible again — reconnect immediately.
+      if (!_socket.connected) _socket.connect()
     }
   })
 }
