@@ -31,6 +31,18 @@ export function disconnectSocket() {
   if (_socket?.connected) _socket.disconnect()
 }
 
+// Reconnect immediately when the user returns to a suspended tab.
+// Safari (and iOS) freeze JS and kill network connections when a tab is
+// backgrounded — Socket.IO's built-in reconnect backoff can take 1-5s.
+// This fires as soon as the tab becomes visible again, beating the backoff.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && _socket && !_socket.connected) {
+      _socket.connect()
+    }
+  })
+}
+
 /**
  * Log current listener counts per event to the console.
  * Only active when VITE_DEBUG_SOCKET=true — no-op in production.
