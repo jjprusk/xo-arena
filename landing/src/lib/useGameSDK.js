@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { connectSocket, disconnectSocket, getSocket } from './socket.js'
 import { getToken } from './getToken.js'
+import { useSoundStore } from '../store/soundStore.js'
 
 /**
  * Platform-side SDK provider for socket-based games.
@@ -52,12 +53,17 @@ export function useGameSDK({
   const reactionHandlersRef = useRef([])
   const idleHandlersRef    = useRef([])
   const gameEndCallbackRef = useRef(null)
+  // Tracks whether the local player's move is in-flight, so game:moved echo
+  // doesn't double-play the move sound (we already played it on submitMove).
+  const localMovePendingRef = useRef(false)
 
   // ── SDK object (stable reference — methods close over refs) ───────────────
   const sdk = useMemo(() => ({
     // ── Core contract methods ──────────────────────────────────────────────
 
     submitMove(move) {
+      useSoundStore.getState().play('move')
+      localMovePendingRef.current = true
       getSocket().emit('game:move', { cellIndex: move })
     },
 
@@ -324,10 +330,18 @@ export function useGameSDK({
 
     socket.on('game:moved', ({ cellIndex, board, currentTurn, status, winner, winLine, scores, round }) => {
       setPhase(status === 'finished' ? 'finished' : 'playing')
+      if (status === 'finished') {
+        useSoundStore.getState().play(winner ? 'win' : 'draw')
+      } else if (!localMovePendingRef.current) {
+        // Only play move sound for opponent moves — own move already played on submitMove
+        useSoundStore.getState().play('move')
+      }
+      localMovePendingRef.current = false
       emitMoveEvent(cellIndex, { board, currentTurn, status, winner, winLine, scores, round })
     })
 
     socket.on('game:forfeit', ({ winner, scores }) => {
+      useSoundStore.getState().play('forfeit')
       emitMoveEvent(null, {
         board:       boardRef.current,
         currentTurn: null,

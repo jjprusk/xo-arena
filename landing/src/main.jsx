@@ -6,9 +6,16 @@ import App from './App.jsx'
 import { configurePvp } from '@xo-arena/xo'
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js'
 import { getToken } from './lib/getToken.js'
+import { useSoundStore } from './store/soundStore.js'
 
-// Wire socket + token into the shared PvP store (no sound on the landing site)
-configurePvp({ connectSocket, disconnectSocket, getSocket, getToken })
+// Wire socket, token, and sound into the shared PvP store
+configurePvp({
+  connectSocket,
+  disconnectSocket,
+  getSocket,
+  getToken,
+  playSound: (key) => useSoundStore.getState().play(key),
+})
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
