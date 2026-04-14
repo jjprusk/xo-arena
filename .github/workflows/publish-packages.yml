@@ -8,6 +8,10 @@ on:
         description: 'Package to publish (e.g. sdk, game-xo). Leave blank to publish all.'
         required: false
         default: ''
+      ref:
+        description: 'Branch or commit to publish from (default: dev)'
+        required: false
+        default: 'dev'
   push:
     branches: [main]
     paths:
@@ -25,6 +29,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'dev' }}
 
       - uses: actions/setup-node@v4
         with:
