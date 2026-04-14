@@ -17,6 +17,13 @@ export function clearSessionCache() {
   try { localStorage.removeItem(CACHE_KEY) } catch {}
 }
 
+// Imperative refresh — call after sign-in/sign-up so the session updates
+// immediately instead of waiting for the 60-second poll cycle.
+const _refreshListeners = []
+export function triggerSessionRefresh() {
+  _refreshListeners.forEach(fn => fn())
+}
+
 // Fetch the session via /api/session — always returns 200 so browsers
 // don't log "401 Unauthorized" in the console for unauthenticated users.
 async function fetchSession() {
@@ -47,10 +54,18 @@ export function useOptimisticSession() {
       timerRef.current = setTimeout(check, POLL_MS)
     }
 
+    function forceRefresh() {
+      clearTimeout(timerRef.current)
+      check()
+    }
+
+    _refreshListeners.push(forceRefresh)
     check()
     return () => {
       cancelled = true
       clearTimeout(timerRef.current)
+      const idx = _refreshListeners.indexOf(forceRefresh)
+      if (idx !== -1) _refreshListeners.splice(idx, 1)
     }
   }, [])
 

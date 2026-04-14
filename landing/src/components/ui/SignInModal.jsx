@@ -1,6 +1,7 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
 import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
+import { triggerSessionRefresh } from '../../lib/useOptimisticSession.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
 
@@ -43,6 +44,7 @@ export default function SignInModal({ onClose, defaultView = 'sign-in' }) {
     try {
       const result = await signIn.email({ email: email.trim(), password })
       if (result?.error) { setError(result.error.message || 'Sign in failed.'); return }
+      triggerSessionRefresh()
       onClose()
     } catch (err) {
       setError(err?.message || 'Sign in failed.')
