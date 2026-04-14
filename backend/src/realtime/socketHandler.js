@@ -18,6 +18,7 @@ import { getSystemConfig, getMoveForModel } from '../services/skillService.js'
 import { minimaxMove } from '@xo-arena/ai'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
+import { completeStep as completeJourneyStep } from '../services/journeyService.js'
 import {
   getPendingPvpMatch,
   setPendingPvpMatchSlug,
@@ -778,6 +779,10 @@ async function recordPvpGame(room, io) {
       moveStream: room.moves?.length ? room.moves : null,
     })
   }
+
+  // Journey step 3: first game played (fire-and-forget, idempotent)
+  if (room.hostUserId)  completeJourneyStep(room.hostUserId,  3, io).catch(() => {})
+  if (room.guestUserId && !room.isHvb) completeJourneyStep(room.guestUserId, 3, io).catch(() => {})
 
   // ELO update: skip for tournament and HvB games
   if (!isTournamentRoom && !room.isHvb && room.hostUserId && room.guestUserId) {
