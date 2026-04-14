@@ -30,6 +30,7 @@ import { setIO as logSetIO } from './routes/logs.js'
 import { setIO as journeySetIO } from './services/journeyService.js'
 import { startActivityFlushJob } from './services/activityService.js'
 import { startReplayPurgeJob } from './services/replayPurgeService.js'
+import { startIdleSessionPurgeJob } from './services/idleSessionPurgeService.js'
 import { startTournamentBridge } from './lib/tournamentBridge.js'
 import { initBus } from './lib/notificationBus.js'
 import { startDispatcher, setIO as schedulerSetIO } from './lib/scheduledJobs.js'
@@ -100,6 +101,7 @@ db.$connect().catch((err) => logger.warn('DB pre-connect failed', { err }))
 // Start background activity flush job (Redis → Postgres)
 startActivityFlushJob()
 startReplayPurgeJob()
+startIdleSessionPurgeJob()
 startDispatcher()
 
 attachSocketIO(server).then((io) => {

@@ -84,8 +84,16 @@ export default function IdleLogoutManager() {
     navigate('/', { replace: true })
   }, [clearAllTimers, navigate])
 
-  // Start the grace-period countdown + auto-logout timer.
-  // Called when the warn timer fires (or immediately on visibility if overdue).
+  // Dismiss the warning without signing out — server-side purge handles the actual kick.
+  const dismissWarning = useCallback(() => {
+    clearAllTimers()
+    warningRef.current = false
+    setWarning(false)
+    setRemaining(null)
+  }, [clearAllTimers])
+
+  // Start the grace-period countdown. When it reaches zero the popup is dismissed;
+  // the server-side idle purge job handles actual session invalidation.
   const startGrace = useCallback((graceMs) => {
     clearTimeout(graceTimerRef.current)
     clearInterval(countdownRef.current)
@@ -103,8 +111,8 @@ export default function IdleLogoutManager() {
       })
     }, 1000)
 
-    graceTimerRef.current = setTimeout(doLogout, graceMs)
-  }, [doLogout])
+    graceTimerRef.current = setTimeout(dismissWarning, graceMs)
+  }, [dismissWarning])
 
   const startWarnTimer = useCallback(() => {
     if (!config) return
@@ -144,12 +152,12 @@ export default function IdleLogoutManager() {
 
     if (graceDeadlineRef.current) {
       if (now >= graceDeadlineRef.current) {
-        doLogout()
+        dismissWarning()
       } else {
         const remainingSec = Math.ceil((graceDeadlineRef.current - now) / 1000)
         setRemaining(remainingSec)
         clearTimeout(graceTimerRef.current)
-        graceTimerRef.current = setTimeout(doLogout, graceDeadlineRef.current - now)
+        graceTimerRef.current = setTimeout(dismissWarning, graceDeadlineRef.current - now)
       }
       return
     }
