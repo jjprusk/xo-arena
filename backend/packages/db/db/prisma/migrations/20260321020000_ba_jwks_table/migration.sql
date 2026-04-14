@@ -1,6 +1,0 @@
-CREATE TABLE "ba_jwks" (
-  "id" TEXT NOT NULL PRIMARY KEY,
-  "publicKey" TEXT NOT NULL,
-  "privateKey" TEXT NOT NULL,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);

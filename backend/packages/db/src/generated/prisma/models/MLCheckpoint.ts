@@ -29,13 +29,11 @@ export type AggregateMLCheckpoint = {
 export type MLCheckpointAvgAggregateOutputType = {
   episodeNum: number | null
   epsilon: number | null
-  eloRating: number | null
 }
 
 export type MLCheckpointSumAggregateOutputType = {
   episodeNum: number | null
   epsilon: number | null
-  eloRating: number | null
 }
 
 export type MLCheckpointMinAggregateOutputType = {
@@ -43,7 +41,6 @@ export type MLCheckpointMinAggregateOutputType = {
   modelId: string | null
   episodeNum: number | null
   epsilon: number | null
-  eloRating: number | null
   createdAt: Date | null
 }
 
@@ -52,7 +49,6 @@ export type MLCheckpointMaxAggregateOutputType = {
   modelId: string | null
   episodeNum: number | null
   epsilon: number | null
-  eloRating: number | null
   createdAt: Date | null
 }
 
@@ -60,9 +56,8 @@ export type MLCheckpointCountAggregateOutputType = {
   id: number
   modelId: number
   episodeNum: number
-  qtable: number
+  weights: number
   epsilon: number
-  eloRating: number
   createdAt: number
   _all: number
 }
@@ -71,13 +66,11 @@ export type MLCheckpointCountAggregateOutputType = {
 export type MLCheckpointAvgAggregateInputType = {
   episodeNum?: true
   epsilon?: true
-  eloRating?: true
 }
 
 export type MLCheckpointSumAggregateInputType = {
   episodeNum?: true
   epsilon?: true
-  eloRating?: true
 }
 
 export type MLCheckpointMinAggregateInputType = {
@@ -85,7 +78,6 @@ export type MLCheckpointMinAggregateInputType = {
   modelId?: true
   episodeNum?: true
   epsilon?: true
-  eloRating?: true
   createdAt?: true
 }
 
@@ -94,7 +86,6 @@ export type MLCheckpointMaxAggregateInputType = {
   modelId?: true
   episodeNum?: true
   epsilon?: true
-  eloRating?: true
   createdAt?: true
 }
 
@@ -102,9 +93,8 @@ export type MLCheckpointCountAggregateInputType = {
   id?: true
   modelId?: true
   episodeNum?: true
-  qtable?: true
+  weights?: true
   epsilon?: true
-  eloRating?: true
   createdAt?: true
   _all?: true
 }
@@ -199,9 +189,8 @@ export type MLCheckpointGroupByOutputType = {
   id: string
   modelId: string
   episodeNum: number
-  qtable: runtime.JsonValue
+  weights: runtime.JsonValue
   epsilon: number
-  eloRating: number
   createdAt: Date
   _count: MLCheckpointCountAggregateOutputType | null
   _avg: MLCheckpointAvgAggregateOutputType | null
@@ -232,22 +221,20 @@ export type MLCheckpointWhereInput = {
   id?: Prisma.StringFilter<"MLCheckpoint"> | string
   modelId?: Prisma.StringFilter<"MLCheckpoint"> | string
   episodeNum?: Prisma.IntFilter<"MLCheckpoint"> | number
-  qtable?: Prisma.JsonFilter<"MLCheckpoint">
+  weights?: Prisma.JsonFilter<"MLCheckpoint">
   epsilon?: Prisma.FloatFilter<"MLCheckpoint"> | number
-  eloRating?: Prisma.FloatFilter<"MLCheckpoint"> | number
   createdAt?: Prisma.DateTimeFilter<"MLCheckpoint"> | Date | string
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }
 
 export type MLCheckpointOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   episodeNum?: Prisma.SortOrder
-  qtable?: Prisma.SortOrder
+  weights?: Prisma.SortOrder
   epsilon?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
-  model?: Prisma.MLModelOrderByWithRelationInput
+  model?: Prisma.BotSkillOrderByWithRelationInput
 }
 
 export type MLCheckpointWhereUniqueInput = Prisma.AtLeast<{
@@ -257,20 +244,18 @@ export type MLCheckpointWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.MLCheckpointWhereInput | Prisma.MLCheckpointWhereInput[]
   modelId?: Prisma.StringFilter<"MLCheckpoint"> | string
   episodeNum?: Prisma.IntFilter<"MLCheckpoint"> | number
-  qtable?: Prisma.JsonFilter<"MLCheckpoint">
+  weights?: Prisma.JsonFilter<"MLCheckpoint">
   epsilon?: Prisma.FloatFilter<"MLCheckpoint"> | number
-  eloRating?: Prisma.FloatFilter<"MLCheckpoint"> | number
   createdAt?: Prisma.DateTimeFilter<"MLCheckpoint"> | Date | string
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }, "id">
 
 export type MLCheckpointOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   episodeNum?: Prisma.SortOrder
-  qtable?: Prisma.SortOrder
+  weights?: Prisma.SortOrder
   epsilon?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.MLCheckpointCountOrderByAggregateInput
   _avg?: Prisma.MLCheckpointAvgOrderByAggregateInput
@@ -286,49 +271,44 @@ export type MLCheckpointScalarWhereWithAggregatesInput = {
   id?: Prisma.StringWithAggregatesFilter<"MLCheckpoint"> | string
   modelId?: Prisma.StringWithAggregatesFilter<"MLCheckpoint"> | string
   episodeNum?: Prisma.IntWithAggregatesFilter<"MLCheckpoint"> | number
-  qtable?: Prisma.JsonWithAggregatesFilter<"MLCheckpoint">
+  weights?: Prisma.JsonWithAggregatesFilter<"MLCheckpoint">
   epsilon?: Prisma.FloatWithAggregatesFilter<"MLCheckpoint"> | number
-  eloRating?: Prisma.FloatWithAggregatesFilter<"MLCheckpoint"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"MLCheckpoint"> | Date | string
 }
 
 export type MLCheckpointCreateInput = {
   id?: string
   episodeNum: number
-  qtable: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon: number
-  eloRating: number
   createdAt?: Date | string
-  model: Prisma.MLModelCreateNestedOneWithoutCheckpointsInput
+  model: Prisma.BotSkillCreateNestedOneWithoutCheckpointsInput
 }
 
 export type MLCheckpointUncheckedCreateInput = {
   id?: string
   modelId: string
   episodeNum: number
-  qtable: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon: number
-  eloRating: number
   createdAt?: Date | string
 }
 
 export type MLCheckpointUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   episodeNum?: Prisma.IntFieldUpdateOperationsInput | number
-  qtable?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon?: Prisma.FloatFieldUpdateOperationsInput | number
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  model?: Prisma.MLModelUpdateOneRequiredWithoutCheckpointsNestedInput
+  model?: Prisma.BotSkillUpdateOneRequiredWithoutCheckpointsNestedInput
 }
 
 export type MLCheckpointUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   modelId?: Prisma.StringFieldUpdateOperationsInput | string
   episodeNum?: Prisma.IntFieldUpdateOperationsInput | number
-  qtable?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon?: Prisma.FloatFieldUpdateOperationsInput | number
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -336,18 +316,16 @@ export type MLCheckpointCreateManyInput = {
   id?: string
   modelId: string
   episodeNum: number
-  qtable: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon: number
-  eloRating: number
   createdAt?: Date | string
 }
 
 export type MLCheckpointUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   episodeNum?: Prisma.IntFieldUpdateOperationsInput | number
-  qtable?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon?: Prisma.FloatFieldUpdateOperationsInput | number
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -355,9 +333,8 @@ export type MLCheckpointUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   modelId?: Prisma.StringFieldUpdateOperationsInput | string
   episodeNum?: Prisma.IntFieldUpdateOperationsInput | number
-  qtable?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon?: Prisma.FloatFieldUpdateOperationsInput | number
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -375,16 +352,14 @@ export type MLCheckpointCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   episodeNum?: Prisma.SortOrder
-  qtable?: Prisma.SortOrder
+  weights?: Prisma.SortOrder
   epsilon?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
 export type MLCheckpointAvgOrderByAggregateInput = {
   episodeNum?: Prisma.SortOrder
   epsilon?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
 }
 
 export type MLCheckpointMaxOrderByAggregateInput = {
@@ -392,7 +367,6 @@ export type MLCheckpointMaxOrderByAggregateInput = {
   modelId?: Prisma.SortOrder
   episodeNum?: Prisma.SortOrder
   epsilon?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -401,14 +375,12 @@ export type MLCheckpointMinOrderByAggregateInput = {
   modelId?: Prisma.SortOrder
   episodeNum?: Prisma.SortOrder
   epsilon?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
 export type MLCheckpointSumOrderByAggregateInput = {
   episodeNum?: Prisma.SortOrder
   epsilon?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
 }
 
 export type MLCheckpointCreateNestedManyWithoutModelInput = {
@@ -456,18 +428,16 @@ export type MLCheckpointUncheckedUpdateManyWithoutModelNestedInput = {
 export type MLCheckpointCreateWithoutModelInput = {
   id?: string
   episodeNum: number
-  qtable: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon: number
-  eloRating: number
   createdAt?: Date | string
 }
 
 export type MLCheckpointUncheckedCreateWithoutModelInput = {
   id?: string
   episodeNum: number
-  qtable: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon: number
-  eloRating: number
   createdAt?: Date | string
 }
 
@@ -504,45 +474,40 @@ export type MLCheckpointScalarWhereInput = {
   id?: Prisma.StringFilter<"MLCheckpoint"> | string
   modelId?: Prisma.StringFilter<"MLCheckpoint"> | string
   episodeNum?: Prisma.IntFilter<"MLCheckpoint"> | number
-  qtable?: Prisma.JsonFilter<"MLCheckpoint">
+  weights?: Prisma.JsonFilter<"MLCheckpoint">
   epsilon?: Prisma.FloatFilter<"MLCheckpoint"> | number
-  eloRating?: Prisma.FloatFilter<"MLCheckpoint"> | number
   createdAt?: Prisma.DateTimeFilter<"MLCheckpoint"> | Date | string
 }
 
 export type MLCheckpointCreateManyModelInput = {
   id?: string
   episodeNum: number
-  qtable: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon: number
-  eloRating: number
   createdAt?: Date | string
 }
 
 export type MLCheckpointUpdateWithoutModelInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   episodeNum?: Prisma.IntFieldUpdateOperationsInput | number
-  qtable?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon?: Prisma.FloatFieldUpdateOperationsInput | number
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type MLCheckpointUncheckedUpdateWithoutModelInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   episodeNum?: Prisma.IntFieldUpdateOperationsInput | number
-  qtable?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon?: Prisma.FloatFieldUpdateOperationsInput | number
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type MLCheckpointUncheckedUpdateManyWithoutModelInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   episodeNum?: Prisma.IntFieldUpdateOperationsInput | number
-  qtable?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   epsilon?: Prisma.FloatFieldUpdateOperationsInput | number
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -552,68 +517,63 @@ export type MLCheckpointSelect<ExtArgs extends runtime.Types.Extensions.Internal
   id?: boolean
   modelId?: boolean
   episodeNum?: boolean
-  qtable?: boolean
+  weights?: boolean
   epsilon?: boolean
-  eloRating?: boolean
   createdAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLCheckpoint"]>
 
 export type MLCheckpointSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   modelId?: boolean
   episodeNum?: boolean
-  qtable?: boolean
+  weights?: boolean
   epsilon?: boolean
-  eloRating?: boolean
   createdAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLCheckpoint"]>
 
 export type MLCheckpointSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   modelId?: boolean
   episodeNum?: boolean
-  qtable?: boolean
+  weights?: boolean
   epsilon?: boolean
-  eloRating?: boolean
   createdAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLCheckpoint"]>
 
 export type MLCheckpointSelectScalar = {
   id?: boolean
   modelId?: boolean
   episodeNum?: boolean
-  qtable?: boolean
+  weights?: boolean
   epsilon?: boolean
-  eloRating?: boolean
   createdAt?: boolean
 }
 
-export type MLCheckpointOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "modelId" | "episodeNum" | "qtable" | "epsilon" | "eloRating" | "createdAt", ExtArgs["result"]["mLCheckpoint"]>
+export type MLCheckpointOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "modelId" | "episodeNum" | "weights" | "epsilon" | "createdAt", ExtArgs["result"]["mLCheckpoint"]>
 export type MLCheckpointInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLCheckpointIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLCheckpointIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 
 export type $MLCheckpointPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "MLCheckpoint"
   objects: {
-    model: Prisma.$MLModelPayload<ExtArgs>
+    model: Prisma.$BotSkillPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     modelId: string
     episodeNum: number
-    qtable: runtime.JsonValue
+    weights: runtime.JsonValue
     epsilon: number
-    eloRating: number
     createdAt: Date
   }, ExtArgs["result"]["mLCheckpoint"]>
   composites: {}
@@ -1009,7 +969,7 @@ readonly fields: MLCheckpointFieldRefs;
  */
 export interface Prisma__MLCheckpointClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  model<T extends Prisma.MLModelDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MLModelDefaultArgs<ExtArgs>>): Prisma.Prisma__MLModelClient<runtime.Types.Result.GetResult<Prisma.$MLModelPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  model<T extends Prisma.BotSkillDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.BotSkillDefaultArgs<ExtArgs>>): Prisma.Prisma__BotSkillClient<runtime.Types.Result.GetResult<Prisma.$BotSkillPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1042,9 +1002,8 @@ export interface MLCheckpointFieldRefs {
   readonly id: Prisma.FieldRef<"MLCheckpoint", 'String'>
   readonly modelId: Prisma.FieldRef<"MLCheckpoint", 'String'>
   readonly episodeNum: Prisma.FieldRef<"MLCheckpoint", 'Int'>
-  readonly qtable: Prisma.FieldRef<"MLCheckpoint", 'Json'>
+  readonly weights: Prisma.FieldRef<"MLCheckpoint", 'Json'>
   readonly epsilon: Prisma.FieldRef<"MLCheckpoint", 'Float'>
-  readonly eloRating: Prisma.FieldRef<"MLCheckpoint", 'Float'>
   readonly createdAt: Prisma.FieldRef<"MLCheckpoint", 'DateTime'>
 }
     

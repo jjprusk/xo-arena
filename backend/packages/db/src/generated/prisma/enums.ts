@@ -9,6 +9,16 @@
 * 🟢 You can import this file directly.
 */
 
+export const ScheduledJobStatus = {
+  PENDING: 'PENDING',
+  RUNNING: 'RUNNING',
+  DONE: 'DONE',
+  FAILED: 'FAILED'
+} as const
+
+export type ScheduledJobStatus = (typeof ScheduledJobStatus)[keyof typeof ScheduledJobStatus]
+
+
 export const Role = {
   ADMIN: 'ADMIN',
   BOT_ADMIN: 'BOT_ADMIN',
@@ -79,24 +89,12 @@ export const MovePlayer = {
 export type MovePlayer = (typeof MovePlayer)[keyof typeof MovePlayer]
 
 
-export const MLAlgorithm = {
-  Q_LEARNING: 'Q_LEARNING',
-  SARSA: 'SARSA',
-  MONTE_CARLO: 'MONTE_CARLO',
-  POLICY_GRADIENT: 'POLICY_GRADIENT',
-  DQN: 'DQN',
-  ALPHA_ZERO: 'ALPHA_ZERO'
-} as const
-
-export type MLAlgorithm = (typeof MLAlgorithm)[keyof typeof MLAlgorithm]
-
-
-export const MLModelStatus = {
+export const BotSkillStatus = {
   IDLE: 'IDLE',
   TRAINING: 'TRAINING'
 } as const
 
-export type MLModelStatus = (typeof MLModelStatus)[keyof typeof MLModelStatus]
+export type BotSkillStatus = (typeof BotSkillStatus)[keyof typeof BotSkillStatus]
 
 
 export const TrainingMode = {
@@ -184,9 +182,17 @@ export const TournamentStatus = {
 export type TournamentStatus = (typeof TournamentStatus)[keyof typeof TournamentStatus]
 
 
+export const TournamentStartMode = {
+  AUTO: 'AUTO',
+  SCHEDULED: 'SCHEDULED',
+  MANUAL: 'MANUAL'
+} as const
+
+export type TournamentStartMode = (typeof TournamentStartMode)[keyof typeof TournamentStartMode]
+
+
 export const ParticipantStatus = {
   REGISTERED: 'REGISTERED',
-  ACTIVE: 'ACTIVE',
   ELIMINATED: 'ELIMINATED',
   WITHDRAWN: 'WITHDRAWN'
 } as const

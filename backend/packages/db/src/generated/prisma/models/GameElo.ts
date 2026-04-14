@@ -15,6 +15,7 @@ import type * as Prisma from "../internal/prismaNamespace.ts"
 /**
  * Model GameElo
  * Current ELO rating for a user in a specific game (replaces User.eloRating).
+ * Note: game_elo table uses snake_case columns — @map required on all non-trivial fields.
  */
 export type GameEloModel = runtime.Types.Result.DefaultSelection<Prisma.$GameEloPayload>
 

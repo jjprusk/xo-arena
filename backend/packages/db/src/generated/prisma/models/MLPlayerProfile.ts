@@ -236,7 +236,7 @@ export type MLPlayerProfileWhereInput = {
   tendencies?: Prisma.JsonFilter<"MLPlayerProfile">
   createdAt?: Prisma.DateTimeFilter<"MLPlayerProfile"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MLPlayerProfile"> | Date | string
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }
 
 export type MLPlayerProfileOrderByWithRelationInput = {
@@ -249,7 +249,7 @@ export type MLPlayerProfileOrderByWithRelationInput = {
   tendencies?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  model?: Prisma.MLModelOrderByWithRelationInput
+  model?: Prisma.BotSkillOrderByWithRelationInput
 }
 
 export type MLPlayerProfileWhereUniqueInput = Prisma.AtLeast<{
@@ -266,7 +266,7 @@ export type MLPlayerProfileWhereUniqueInput = Prisma.AtLeast<{
   tendencies?: Prisma.JsonFilter<"MLPlayerProfile">
   createdAt?: Prisma.DateTimeFilter<"MLPlayerProfile"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MLPlayerProfile"> | Date | string
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }, "id" | "modelId_userId">
 
 export type MLPlayerProfileOrderByWithAggregationInput = {
@@ -310,7 +310,7 @@ export type MLPlayerProfileCreateInput = {
   tendencies?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  model: Prisma.MLModelCreateNestedOneWithoutPlayerProfilesInput
+  model: Prisma.BotSkillCreateNestedOneWithoutPlayerProfilesInput
 }
 
 export type MLPlayerProfileUncheckedCreateInput = {
@@ -334,7 +334,7 @@ export type MLPlayerProfileUpdateInput = {
   tendencies?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  model?: Prisma.MLModelUpdateOneRequiredWithoutPlayerProfilesNestedInput
+  model?: Prisma.BotSkillUpdateOneRequiredWithoutPlayerProfilesNestedInput
 }
 
 export type MLPlayerProfileUncheckedUpdateInput = {
@@ -598,7 +598,7 @@ export type MLPlayerProfileSelect<ExtArgs extends runtime.Types.Extensions.Inter
   tendencies?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLPlayerProfile"]>
 
 export type MLPlayerProfileSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -611,7 +611,7 @@ export type MLPlayerProfileSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   tendencies?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLPlayerProfile"]>
 
 export type MLPlayerProfileSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -624,7 +624,7 @@ export type MLPlayerProfileSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   tendencies?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLPlayerProfile"]>
 
 export type MLPlayerProfileSelectScalar = {
@@ -641,19 +641,19 @@ export type MLPlayerProfileSelectScalar = {
 
 export type MLPlayerProfileOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "modelId" | "userId" | "gamesRecorded" | "movePatterns" | "openingPreferences" | "tendencies" | "createdAt" | "updatedAt", ExtArgs["result"]["mLPlayerProfile"]>
 export type MLPlayerProfileInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLPlayerProfileIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLPlayerProfileIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 
 export type $MLPlayerProfilePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "MLPlayerProfile"
   objects: {
-    model: Prisma.$MLModelPayload<ExtArgs>
+    model: Prisma.$BotSkillPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1059,7 +1059,7 @@ readonly fields: MLPlayerProfileFieldRefs;
  */
 export interface Prisma__MLPlayerProfileClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  model<T extends Prisma.MLModelDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MLModelDefaultArgs<ExtArgs>>): Prisma.Prisma__MLModelClient<runtime.Types.Result.GetResult<Prisma.$MLModelPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  model<T extends Prisma.BotSkillDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.BotSkillDefaultArgs<ExtArgs>>): Prisma.Prisma__BotSkillClient<runtime.Types.Result.GetResult<Prisma.$BotSkillPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.

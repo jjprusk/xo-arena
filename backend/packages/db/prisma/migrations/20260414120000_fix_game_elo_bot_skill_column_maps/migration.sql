@@ -1,0 +1,6 @@
+-- Fix column mapping: game_elo and bot_skills were created with snake_case columns
+-- in the Phase 1.7 migration, inconsistent with every other table (camelCase).
+-- No SQL needed — the DB already has the correct column names.
+-- This migration exists purely to update Prisma's schema metadata (@map annotations
+-- added to GameElo and BotSkill in schema.prisma so the generated client queries
+-- the correct column names).

@@ -986,6 +986,9 @@ export type $TournamentParticipantPayload<ExtArgs extends runtime.Types.Extensio
     status: $Enums.ParticipantStatus
     resultNotifPref: $Enums.ResultNotifPref
     finalPosition: number | null
+    /**
+     * Normalised rank: 0.0 = winner (best), 1.0 = last place (worst). Null until tournament ends.
+     */
     finalPositionPct: number | null
     points: number
     registrationMode: $Enums.RegistrationMode
