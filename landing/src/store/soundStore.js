@@ -105,6 +105,12 @@ export const useSoundStore = create(
     }),
     {
       name: 'xo-sound',
+      version: 1,
+      // Migrate old persisted state: 'default' pack was removed; map it to 'retro'.
+      migrate: (old) => ({
+        ...old,
+        soundPack: ['retro', 'nature'].includes(old?.soundPack) ? old.soundPack : 'retro',
+      }),
       onRehydrateStorage: () => (state) => {
         if (state?.volume != null) _synthVolume = state.volume
       },

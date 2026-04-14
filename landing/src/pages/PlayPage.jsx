@@ -174,6 +174,10 @@ export default function PlayPage() {
   const [botConfig, setBotConfig] = useState(null)   // { botUserId, botSkillId }
   const [botError, setBotError]   = useState(false)
 
+  // Preload the game chunk immediately — runs in parallel with the bot fetch
+  // so the chunk is ready by the time phase becomes 'playing'.
+  useEffect(() => { import('@callidity/game-xo').catch(() => {}) }, [])
+
   // Resolve community bot for ?action=vs-community-bot
   useEffect(() => {
     if (action !== 'vs-community-bot' || joinSlug) return
