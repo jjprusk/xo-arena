@@ -1,0 +1,55 @@
+name: Publish packages
+
+# Trigger manually or on push to main when package sources change
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish (e.g. sdk, game-xo). Leave blank to publish all.'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'packages/sdk/**'
+      - 'packages/game-xo/**'
+      - 'packages/game-connect4/**'
+
+jobs:
+  publish:
+    name: Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@callidity'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # CALLIDITY_NPM_TOKEN must be a fine-grained PAT with write:packages on the
+      # callidity GitHub org. GITHUB_TOKEN is scoped to jjprusk/xo-arena only.
+      # See doc/Registry_Switch_Guide.md for setup instructions.
+      - name: Publish @callidity/sdk
+        if: ${{ github.event.inputs.package == 'sdk' || github.event.inputs.package == '' }}
+        working-directory: packages/sdk
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.CALLIDITY_NPM_TOKEN }}
+
+      - name: Publish @callidity/game-xo
+        if: ${{ github.event.inputs.package == 'game-xo' || github.event.inputs.package == '' }}
+        working-directory: packages/game-xo
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.CALLIDITY_NPM_TOKEN }}
