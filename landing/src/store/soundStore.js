@@ -1,40 +1,17 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Howl, Howler } from 'howler'
 
+// Landing site uses Web Audio synthesis only — no Howler/file dependency.
 export const SOUND_PACKS = [
-  { id: 'default', label: 'Default', description: 'Clean classic sounds' },
-  { id: 'retro',   label: 'Retro',   description: '8-bit arcade style' },
-  { id: 'nature',  label: 'Nature',  description: 'Soft ambient sounds' },
+  { id: 'retro',  label: 'Retro',  description: '8-bit arcade style' },
+  { id: 'nature', label: 'Nature', description: 'Soft ambient sounds' },
 ]
 
-// ── Default pack — file-based via Howler ─────────────────────────────────────
-const SOUND_KEYS = ['move', 'win', 'draw', 'forfeit']
-const howlCache = {}
-
-function getHowl(key) {
-  if (!howlCache[key]) {
-    // html5: true uses HTMLAudioElement — avoids AudioContext unlock/replay
-    // issues that cause double sounds with Web Audio API.
-    // Eager preloading (SOUND_KEYS.forEach below) reduces first-play delay.
-    howlCache[key] = new Howl({ src: [`/sounds/${key}.wav`], html5: true, preload: true })
-  }
-  return howlCache[key]
-}
-
-// Preload after first user interaction — avoids pool exhaustion at module
-// init while ensuring sounds are buffered before they're needed.
-if (typeof window !== 'undefined') {
-  window.addEventListener('pointerdown', function preloadSounds() {
-    SOUND_KEYS.forEach(getHowl)
-  }, { once: true })
-}
-
-// ── Retro / Nature packs — Web Audio synthesis ───────────────────────────────
+// ── Web Audio synthesis ───────────────────────────────────────────────────────
 let _audioCtx = null
 let _masterGain = null
-let _synthVolume = 0.15 // mirrors store volume; updated by setVolume and onRehydrateStorage
+let _synthVolume = 0.15
 
 function ctx() {
   if (!_audioCtx) {
@@ -47,25 +24,22 @@ function ctx() {
   return _audioCtx
 }
 
-// Pre-warm the AudioContext on every pointer interaction in the capture phase.
-// capture:true fires BEFORE any component handlers, so by the time game logic
-// calls play() the resume is already in-flight — eliminating the async gap that
-// causes audible lag when the browser auto-suspends the context between moves.
+// Pre-warm AudioContext on pointer interaction (capture phase fires before component handlers).
 if (typeof window !== 'undefined') {
   document.addEventListener('pointerdown', () => {
     if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
   }, { capture: true, passive: true })
 
   // Also resume on tab-show: PvP socket events (opponent moves) fire without
-  // any user gesture, so the pointerdown listener won't pre-warm the context
-  // in time. Resuming here ensures the context is running before any socket
-  // event triggers a sound after the user returns to the tab.
+  // any user gesture, so the pointerdown listener won't pre-warm in time.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
     }
   })
 }
+
+const LOOKAHEAD = 0.05
 
 function tone(ac, type, freq, startTime, duration, gain = 0.18, fadeOut = true) {
   const osc = ac.createOscillator()
@@ -80,65 +54,23 @@ function tone(ac, type, freq, startTime, duration, gain = 0.18, fadeOut = true) 
   osc.stop(startTime + duration + 0.02)
 }
 
-// Small lookahead (50 ms) so tones fire after the context resumes from
-// suspension without audible lag. Relative timing within each sound is unchanged.
-const LOOKAHEAD = 0.05
-
 const SYNTH = {
   retro: {
-    move() {
-      const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      tone(ac, 'square', 330, t, 0.08, 0.15)
-      tone(ac, 'square', 440, t + 0.05, 0.07, 0.12)
-    },
-    win() {
-      const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      const notes = [523, 659, 784, 1047]
-      notes.forEach((f, i) => tone(ac, 'square', f, t + i * 0.1, 0.15, 0.15))
-    },
-    draw() {
-      const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      tone(ac, 'square', 440, t,        0.1, 0.15)
-      tone(ac, 'square', 330, t + 0.12, 0.1, 0.12)
-    },
-    forfeit() {
-      const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      tone(ac, 'square', 330, t,        0.12, 0.15)
-      tone(ac, 'square', 220, t + 0.14, 0.18, 0.15)
-      tone(ac, 'square', 165, t + 0.30, 0.22, 0.12)
-    },
+    move()    { const ac = ctx(); const t = ac.currentTime + LOOKAHEAD; tone(ac, 'square', 330, t, 0.08, 0.15); tone(ac, 'square', 440, t + 0.05, 0.07, 0.12) },
+    win()     { const ac = ctx(); const t = ac.currentTime + LOOKAHEAD; [523, 659, 784, 1047].forEach((f, i) => tone(ac, 'square', f, t + i * 0.1, 0.15, 0.15)) },
+    draw()    { const ac = ctx(); const t = ac.currentTime + LOOKAHEAD; tone(ac, 'square', 440, t, 0.1, 0.15); tone(ac, 'square', 330, t + 0.12, 0.1, 0.12) },
+    forfeit() { const ac = ctx(); const t = ac.currentTime + LOOKAHEAD; tone(ac, 'square', 330, t, 0.12, 0.15); tone(ac, 'square', 220, t + 0.14, 0.18, 0.15); tone(ac, 'square', 165, t + 0.30, 0.22, 0.12) },
   },
-
   nature: {
-    move() {
-      const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      tone(ac, 'sine', 528, t, 0.18, 0.12)
-      tone(ac, 'sine', 792, t + 0.02, 0.12, 0.08)
-    },
-    win() {
-      const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      const notes = [528, 660, 792, 1056]
-      notes.forEach((f, i) => {
-        tone(ac, 'sine', f,       t + i * 0.14, 0.28, 0.14)
-        tone(ac, 'sine', f * 1.5, t + i * 0.14, 0.20, 0.06)
-      })
-    },
-    draw() {
-      const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      tone(ac, 'sine', 440, t,        0.25, 0.10)
-      tone(ac, 'sine', 528, t + 0.05, 0.20, 0.08)
-    },
+    move()    { const ac = ctx(); const t = ac.currentTime + LOOKAHEAD; tone(ac, 'sine', 528, t, 0.18, 0.12); tone(ac, 'sine', 792, t + 0.02, 0.12, 0.08) },
+    win()     { const ac = ctx(); const t = ac.currentTime + LOOKAHEAD; [528, 660, 792, 1056].forEach((f, i) => { tone(ac, 'sine', f, t + i * 0.14, 0.28, 0.14); tone(ac, 'sine', f * 1.5, t + i * 0.14, 0.20, 0.06) }) },
+    draw()    { const ac = ctx(); const t = ac.currentTime + LOOKAHEAD; tone(ac, 'sine', 440, t, 0.25, 0.10); tone(ac, 'sine', 528, t + 0.05, 0.20, 0.08) },
     forfeit() {
       const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
-      const osc = ac.createOscillator()
-      const env = ac.createGain()
-      osc.type = 'sine'
-      osc.frequency.setValueAtTime(330, t)
-      osc.frequency.exponentialRampToValueAtTime(165, t + 0.5)
-      env.gain.setValueAtTime(0.14, t)
-      env.gain.exponentialRampToValueAtTime(0.001, t + 0.5)
-      osc.connect(env); env.connect(_masterGain)
-      osc.start(t); osc.stop(t + 0.55)
+      const osc = ac.createOscillator(); const env = ac.createGain()
+      osc.type = 'sine'; osc.frequency.setValueAtTime(330, t); osc.frequency.exponentialRampToValueAtTime(165, t + 0.5)
+      env.gain.setValueAtTime(0.14, t); env.gain.exponentialRampToValueAtTime(0.001, t + 0.5)
+      osc.connect(env); env.connect(_masterGain); osc.start(t); osc.stop(t + 0.55)
     },
   },
 }
@@ -152,16 +84,13 @@ export const useSoundStore = create(
       soundPack: 'retro',
 
       toggleMute() {
-        const next = !get().muted
-        set({ muted: next })
-        Howler.mute(next)
+        set({ muted: !get().muted })
       },
 
       setVolume(v) {
         _synthVolume = v
         if (_masterGain) _masterGain.gain.value = v
         set({ volume: v })
-        Howler.volume(v)
       },
 
       setSoundPack(pack) {
@@ -171,11 +100,7 @@ export const useSoundStore = create(
       play(key) {
         const { muted, soundPack } = get()
         if (muted) return
-        if (soundPack === 'default') {
-          getHowl(key)?.play()
-        } else {
-          SYNTH[soundPack]?.[key]?.()
-        }
+        SYNTH[soundPack]?.[key]?.()
       },
     }),
     {

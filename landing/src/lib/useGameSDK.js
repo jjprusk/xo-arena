@@ -407,14 +407,22 @@ export function useGameSDK({
 
     // Must wait for the socket to be fully connected before emitting —
     // emitting before 'connect' fires is silently dropped by socket.io.
+    //
+    // Use socket.on (not socket.once) so that a disconnect-reconnect cycle
+    // while still in the 'connecting' phase re-emits the room action.
+    // Guard: only re-emit if we haven't received a room slug yet (slugRef is null),
+    // so a reconnect mid-game never accidentally creates a second room.
     function onConnect() {
+      if (!slugRef.current) {
+        // No room created yet — safe to re-emit (reset guard so emitRoomAction runs)
+        emitted = false
+      }
       getToken().then(emitRoomAction)
     }
 
+    socket.on('connect', onConnect)
     if (socket.connected) {
       getToken().then(emitRoomAction)
-    } else {
-      socket.once('connect', onConnect)
     }
 
     return () => {
