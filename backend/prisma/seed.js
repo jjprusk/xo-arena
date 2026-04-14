@@ -82,7 +82,6 @@ async function main() {
         username:    'system',
         email:       'system@xo-arena.internal',
         displayName: 'System',
-        eloRating:   1200,
       },
     })
     console.log('✓ System account:', systemAccount.id)
@@ -107,7 +106,6 @@ async function main() {
           botActive:      true,
           botCompetitive: bot.botCompetitive,
           botAvailable:   true,
-          eloRating:      1200,
         },
       })
       console.log('✓ Bot:', bot.displayName)
