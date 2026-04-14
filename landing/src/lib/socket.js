@@ -1,7 +1,9 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { io } from 'socket.io-client'
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? ''
+// Use `|| undefined` not `?? ''`: io('') builds 'http://' (invalid URL) instead of
+// using window.location.host. io(undefined) correctly defaults to the current origin.
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined
 
 // In development Vite proxies /socket.io → backend, but the HTTP→WebSocket
 // upgrade is unreliable through the proxy: Socket.IO fires a rapid
