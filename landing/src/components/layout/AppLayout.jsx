@@ -14,9 +14,8 @@ import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 import { AppNav } from '@xo-arena/nav'
 
-const XO_URL      = import.meta.env.VITE_XO_URL      ?? 'https://xo-frontend-prod.fly.dev'
 const LANDING_URL = import.meta.env.VITE_LANDING_URL  ?? 'https://aiarena.callidity.com'
-const APP_URLS    = { landing: LANDING_URL, xo: XO_URL }
+const APP_URLS    = { landing: LANDING_URL, xo: LANDING_URL }
 
 /**
  * Map a raw bus notification { type, payload } to the shape NotificationCard expects:

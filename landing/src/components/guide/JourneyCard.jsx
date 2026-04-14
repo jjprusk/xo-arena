@@ -6,23 +6,19 @@ import { POST_JOURNEY_SLOTS } from './slotActions.js'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 
-const XO = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
-
-// site: 'platform' = landing site (NavLink), 'xo' = game site (external link)
 const STEPS = [
-  { index: 1, title: 'Welcome to the Arena',   cta: null,                  href: null,                                    external: false, site: 'platform' },
-  { index: 2, title: 'Read the FAQ',            cta: 'Read the FAQ',       href: '/faq',                                  external: false, site: 'platform' },
-  { index: 3, title: 'Play your first game',    cta: 'Play now',           href: `${XO}/play?action=vs-community-bot`,    external: true,  site: 'xo'       },
-  { index: 4, title: 'Explore AI Training',     cta: 'Open Gym Guide',     href: `${XO}/gym/guide`,                       external: true,  site: 'xo'       },
-  { index: 5, title: 'Create your first bot',   cta: 'Create a bot',       href: '/profile?action=create-bot',            external: false, site: 'platform' },
-  { index: 6, title: 'Train your bot',          cta: 'Start training',     href: `${XO}/gym?action=start-training`,       external: true,  site: 'xo'       },
-  { index: 7, title: 'Enter a tournament',      cta: 'Browse tournaments', href: '/tournaments',                          external: false, site: 'platform' },
-  { index: 8, title: 'Play a tournament match', cta: 'Check tournaments',  href: '/tournaments',                          external: false, site: 'platform' },
+  { index: 1, title: 'Welcome to the Arena',   cta: null,                  href: null,                           site: 'platform' },
+  { index: 2, title: 'Read the FAQ',            cta: 'Read the FAQ',       href: '/faq',                         site: 'platform' },
+  { index: 3, title: 'Play your first game',    cta: 'Play now',           href: '/play?action=vs-community-bot', site: 'platform' },
+  { index: 4, title: 'Explore AI Training',     cta: 'Open Gym Guide',     href: '/gym/guide',                   site: 'platform' },
+  { index: 5, title: 'Create your first bot',   cta: 'Create a bot',       href: '/profile?action=create-bot',   site: 'platform' },
+  { index: 6, title: 'Train your bot',          cta: 'Start training',     href: '/gym?action=start-training',   site: 'platform' },
+  { index: 7, title: 'Enter a tournament',      cta: 'Browse tournaments', href: '/tournaments',                 site: 'platform' },
+  { index: 8, title: 'Play a tournament match', cta: 'Check tournaments',  href: '/tournaments',                 site: 'platform' },
 ]
 
 const SITE_BADGE = {
   platform: { label: 'AI Arena', color: 'var(--color-slate-400)' },
-  xo:       { label: 'XO', color: 'var(--color-teal-500)'  },
 }
 
 const TOTAL = 8
@@ -118,14 +114,6 @@ export default function JourneyCard() {
 
   function StepCta({ step }) {
     if (!step.href) return null
-    if (step.external) {
-      return (
-        <a href={step.href} onClick={e => { e.preventDefault(); close(); window.location.href = step.href }}
-          style={{ display: 'inline-block', marginTop: '0.25rem', padding: '0.25rem 0.5rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.6875rem', fontWeight: 700, borderRadius: '0.3rem', textDecoration: 'none' }}>
-          {step.cta}
-        </a>
-      )
-    }
     return (
       <Link to={step.href} onClick={close}
         style={{ display: 'inline-block', marginTop: '0.25rem', padding: '0.25rem 0.5rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.6875rem', fontWeight: 700, borderRadius: '0.3rem', textDecoration: 'none' }}>
@@ -180,17 +168,10 @@ export default function JourneyCard() {
       {/* CTA */}
       {nextStep?.href && (
         <div style={{ margin: '0.5rem 0.75rem 0.75rem' }}>
-          {nextStep.external ? (
-            <a href={nextStep.href} onClick={e => { e.preventDefault(); close(); window.location.href = nextStep.href }}
-              style={{ display: 'block', width: '100%', textAlign: 'center', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
-              {nextStep.cta}
-            </a>
-          ) : (
-            <Link to={nextStep.href} onClick={close}
-              style={{ display: 'block', width: '100%', textAlign: 'center', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
-              {nextStep.cta}
-            </Link>
-          )}
+          <Link to={nextStep.href} onClick={close}
+            style={{ display: 'block', width: '100%', textAlign: 'center', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
+            {nextStep.cta}
+          </Link>
         </div>
       )}
 

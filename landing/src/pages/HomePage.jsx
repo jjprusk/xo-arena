@@ -3,8 +3,6 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
-
 function XOIcon() {
   return (
     <svg width="36" height="36" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="XO">
@@ -22,7 +20,7 @@ const GAMES = [
     icon: <XOIcon />,
     name: 'XO',
     description: 'Tic-tac-toe with ML-driven AI, ELO rankings, live PvP rooms, and tournament play.',
-    href: XO_URL,
+    href: '/play',
     badge: 'Play now',
     live: true,
   },
@@ -74,9 +72,9 @@ export default function HomePage() {
               View Tournaments
             </Link>
             {!user && (
-              <a href={XO_URL} className="btn btn-secondary">
+              <Link to="/play" className="btn btn-secondary">
                 Play XO
-              </a>
+              </Link>
             )}
           </div>
         </div>

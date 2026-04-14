@@ -9,8 +9,6 @@ import {
 } from '../../components/ui/ListTable.jsx'
 
 const LIMIT = 25
-const XO_URL = import.meta.env.VITE_XO_URL ?? 'https://xo-frontend-prod.fly.dev'
-
 const ALGO_COLORS = {
   minimax:    { bg: 'var(--color-blue-50)',   text: 'var(--color-blue-700)'   },
   ml:         { bg: 'var(--color-teal-50)',   text: 'var(--color-teal-700)'   },
@@ -189,7 +187,7 @@ export default function AdminBotsPage() {
           <p className="text-xs" style={{ color: 'var(--color-teal-600)' }}>
             Game started: <strong>{sgResult.displayName}</strong> —{' '}
             <a
-              href={`${XO_URL}/play?spectate=${sgResult.slug}`}
+              href={`/play?spectate=${sgResult.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="underline"

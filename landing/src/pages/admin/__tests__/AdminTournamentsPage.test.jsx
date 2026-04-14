@@ -30,10 +30,10 @@ function renderAdmin() {
 }
 
 describe('AdminTournamentsPage', () => {
-  it('renders nothing while auth is pending', () => {
+  it('shows a loading spinner while auth is pending', () => {
     useOptimisticSession.mockReturnValue({ data: null, isPending: true })
     const { container } = renderAdmin()
-    expect(container.firstChild).toBeNull()
+    expect(container.querySelector('.animate-spin')).not.toBeNull()
   })
 
   it('redirects to / when user is not signed in', () => {
