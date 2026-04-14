@@ -23,6 +23,27 @@ app.use(cors({
 // Better Auth handler — must be mounted BEFORE express.json()
 app.all('/api/auth/*', toNodeHandler(auth))
 
+// Silent session + token endpoints — always return 200 so browsers don't
+// log 401 in the console for unauthenticated users. The client code
+// checks for null user/token rather than relying on HTTP status.
+app.get('/api/session', async (req, res) => {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers })
+    res.json(session ?? { user: null, session: null })
+  } catch {
+    res.json({ user: null, session: null })
+  }
+})
+app.get('/api/token', async (req, res) => {
+  try {
+    const result = await auth.api.getToken({ headers: req.headers })
+    res.json(result ?? { token: null })
+  } catch (err) {
+    logger.warn({ err: err.message }, '/api/token failed')
+    res.json({ token: null })
+  }
+})
+
 app.use(express.json({ limit: '50mb' }))
 
 // Request timing middleware

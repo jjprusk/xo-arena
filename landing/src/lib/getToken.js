@@ -14,7 +14,8 @@ export async function getToken() {
   if (_cachedToken && Date.now() < _tokenExpiry - 60_000) return _cachedToken
   if (Date.now() < _nullUntil) return null
   try {
-    const res = await fetch('/api/auth/token', { method: 'GET', credentials: 'include' })
+    // Use /api/token (always 200) so browsers don't log 401 for unauthenticated users.
+    const res = await fetch('/api/token', { method: 'GET', credentials: 'include' })
     if (!res.ok) { _cachedToken = null; _nullUntil = Date.now() + 10_000; return null }
     const data = await res.json()
     const token = data?.token ?? null

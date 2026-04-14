@@ -402,6 +402,11 @@ export async function attachSocketIO(httpServer) {
       for (const pid of [room.hostId, room.guestId]) {
         if (pid) roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
       }
+
+      // HvB: if alternation gives the bot the opening move, dispatch it now
+      if (room.isHvb && room.currentTurn === room.botMark) {
+        dispatchBotMove(room, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot opening move on rematch'))
+      }
     })
 
     on('game:forfeit', () => {

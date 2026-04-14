@@ -18,9 +18,9 @@ function XOIcon() {
 const GAMES = [
   {
     icon: <XOIcon />,
-    name: 'XO',
-    description: 'Tic-tac-toe with ML-driven AI, ELO rankings, live PvP rooms, and tournament play.',
-    href: '/play',
+    name: 'XO Arena',
+    description: 'Tic-tac-toe with AI-driven bots, ELO rankings, player vs. player (PvP) rooms, and tournament play.',
+    href: '/play?action=vs-community-bot',
     badge: 'Play now',
     live: true,
   },
@@ -72,7 +72,7 @@ export default function HomePage() {
               View Tournaments
             </Link>
             {!user && (
-              <Link to="/play" className="btn btn-secondary">
+              <Link to="/play?action=vs-community-bot" className="btn btn-secondary">
                 Play XO
               </Link>
             )}

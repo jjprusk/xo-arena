@@ -51,6 +51,6 @@ export const JOURNEY_DEFAULT_SLOTS = [
   { actionKey: 'gym_guide',   stepIndex: 4 },
   { actionKey: 'create_bot',  stepIndex: 5 },
   { actionKey: 'gym',         stepIndex: 6 },
-  { actionKey: 'play_my_bot',  stepIndex: 7 },
+  { actionKey: 'tournaments',  stepIndex: 7 },
   { actionKey: 'journey_complete', stepIndex: 8 },
 ]

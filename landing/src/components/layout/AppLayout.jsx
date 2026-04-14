@@ -93,7 +93,7 @@ export default function AppLayout() {
     setShowSignIn(true)
   }
 
-  useJourneyAutoOpen()
+  useJourneyAutoOpen(user?.id ?? null)
 
   // Close user dropdown and guide panel whenever the user navigates
   useEffect(() => {

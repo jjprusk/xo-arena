@@ -1,9 +1,10 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { lazy, Suspense, useEffect } from 'react'
+import React, { lazy, Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { meta as xoMeta } from '@callidity/game-xo'
+import { api } from '../lib/api.js'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 const XOGame = lazy(() => import('@callidity/game-xo'))
@@ -16,10 +17,6 @@ const WIDTH_CLASS = {
 }
 const gameWidthClass = WIDTH_CLASS[xoMeta.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
 
-// Merge base tokens with any mode-specific overrides.
-// dark/light overrides are only needed when token values are raw colors rather than
-// var() references — var() values resolve against the active CSS custom properties
-// automatically when the .dark class is toggled on <html>.
 function resolveThemeVars(theme, isDark) {
   return {
     ...theme?.tokens,
@@ -38,14 +35,10 @@ function Spinner() {
   )
 }
 
-export default function PlayPage() {
-  const [searchParams] = useSearchParams()
-  const navigate       = useNavigate()
-  const { data: authSession } = useOptimisticSession()
-
-  const joinSlug          = searchParams.get('join')
-  const tournamentMatchId = searchParams.get('tournamentMatch')
-  const tournamentId      = searchParams.get('tournamentId')
+// Inner component — only mounted once botConfig is resolved (or not needed).
+// Keeps all hook calls stable regardless of async bot fetch.
+function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig }) {
+  const navigate = useNavigate()
 
   const currentUser = authSession?.user
     ? { id: authSession.user.id, displayName: authSession.user.name ?? authSession.user.email }
@@ -57,7 +50,16 @@ export default function PlayPage() {
     tournamentMatchId,
     tournamentId,
     currentUser,
+    botUserId:  botConfig?.botUserId  ?? null,
+    botSkillId: botConfig?.botSkillId ?? null,
   })
+
+  // Register leave-table callback so sdk.leaveTable() navigates away
+  useEffect(() => {
+    sdk._onGameEnd(({ leave } = {}) => {
+      if (leave) navigate(tournamentId ? `/tournaments/${tournamentId}` : '/', { replace: true })
+    })
+  }, [sdk]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abandoned → navigate away after brief notice
   useEffect(() => {
@@ -66,16 +68,13 @@ export default function PlayPage() {
       navigate(tournamentId ? `/tournaments/${tournamentId}` : '/', { replace: true })
     }, 3000)
     return () => clearTimeout(id)
-  }, [abandoned])
+  }, [abandoned]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kicked (spectator inactivity) → go home
   useEffect(() => {
     if (!kicked) return
     navigate('/', { replace: true })
-  }, [kicked])
-
-  // No slug → go home
-  if (!joinSlug) return <Navigate to="/" replace />
+  }, [kicked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tournament series complete screen
   if (seriesResult) {
@@ -88,10 +87,7 @@ export default function PlayPage() {
         <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
           {seriesResult.p1Wins} – {seriesResult.p2Wins}
         </p>
-        <Link
-          to={`/tournaments/${tournamentId}`}
-          className="btn btn-primary"
-        >
+        <Link to={`/tournaments/${tournamentId}`} className="btn btn-primary">
           Back to Tournament
         </Link>
       </div>
@@ -113,7 +109,7 @@ export default function PlayPage() {
     )
   }
 
-  // Waiting for opponent
+  // Waiting for opponent (PvP only — bot games go straight to playing)
   if (phase === 'connecting' || phase === 'waiting') {
     return (
       <div className="flex flex-col items-center gap-4 py-12">
@@ -146,7 +142,6 @@ export default function PlayPage() {
         className={`relative flex flex-col items-center w-full ${gameWidthClass} mx-auto py-6 px-4`}
         style={resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))}
       >
-        {/* Escape affordance — visible during play so the player can always leave */}
         <Link
           to={tournamentId ? `/tournaments/${tournamentId}` : '/'}
           className="absolute top-0 left-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-opacity opacity-30 hover:opacity-80"
@@ -163,4 +158,57 @@ export default function PlayPage() {
   }
 
   return <Spinner />
+}
+
+const BUILTIN_ORDER = { Rusty: 0, Copper: 1, Sterling: 2, Magnus: 3 }
+
+export default function PlayPage() {
+  const [searchParams]         = useSearchParams()
+  const { data: authSession }  = useOptimisticSession()
+
+  const joinSlug          = searchParams.get('join')
+  const tournamentMatchId = searchParams.get('tournamentMatch')
+  const tournamentId      = searchParams.get('tournamentId')
+  const action            = searchParams.get('action')
+
+  const [botConfig, setBotConfig] = useState(null)   // { botUserId, botSkillId }
+  const [botError, setBotError]   = useState(false)
+
+  // Resolve community bot for ?action=vs-community-bot
+  useEffect(() => {
+    if (action !== 'vs-community-bot' || joinSlug) return
+    api.bots.list({ gameId: 'xo' })
+      .then(res => {
+        const bots = res.bots ?? []
+        const builtIn = bots
+          .filter(b => !b.botOwnerId)
+          .sort((a, b) => (BUILTIN_ORDER[a.displayName] ?? 99) - (BUILTIN_ORDER[b.displayName] ?? 99))
+        const target = builtIn[0] ?? bots[0]
+        if (target) {
+          setBotConfig({ botUserId: target.id, botSkillId: target.botModelId ?? null })
+        } else {
+          setBotError(true)
+        }
+      })
+      .catch(() => setBotError(true))
+  }, [action, joinSlug])
+
+  // No join slug and no recognised action → home
+  if (!joinSlug && !action) return <Navigate to="/" replace />
+
+  // Bot fetch failed → back to home
+  if (botError) return <Navigate to="/" replace />
+
+  // Waiting for community bot to be resolved
+  if (action === 'vs-community-bot' && !joinSlug && !botConfig) return <Spinner />
+
+  return (
+    <GameView
+      joinSlug={joinSlug}
+      tournamentMatchId={tournamentMatchId}
+      tournamentId={tournamentId}
+      authSession={authSession}
+      botConfig={action === 'vs-community-bot' ? botConfig : null}
+    />
+  )
 }

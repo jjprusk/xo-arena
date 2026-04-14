@@ -16,6 +16,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { initialGameState } from './logic.js'
+import { playSound } from './soundUtils.js'
 
 // ── Theme tokens ───────────────────────────────────────────────────────────────
 // These reference CSS custom properties injected by the platform from meta.theme.
@@ -109,6 +110,13 @@ export default function GameComponent({ session, sdk }) {
     setLastCell(event.move)
     setTimeout(() => setLastCell(null), 350)
 
+    // Play sounds
+    if (event.state.status === 'finished') {
+      playSound(event.state.winner ? 'win' : 'draw')
+    } else {
+      playSound('move')
+    }
+
     // Notify the platform once when the game concludes.
     // The platform uses this to record the result and update ELO.
     if (event.state.status === 'finished' && !signalledRef.current) {
@@ -137,11 +145,13 @@ export default function GameComponent({ session, sdk }) {
   }
 
   function handleForfeit() {
+    playSound('forfeit')
     sdk.forfeit?.()
     setShowForfeit(false)
   }
 
   function handleRematch() {
+    playSound('move')
     sdk.rematch?.()
   }
 

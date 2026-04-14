@@ -8,6 +8,10 @@ let _socket = null
 export function getSocket() {
   if (!_socket) {
     _socket = io(SOCKET_URL, { autoConnect: false })
+    // Suppress connect_error from appearing as unhandled red errors in the
+    // browser console (e.g. during backend restarts). Socket.IO will retry
+    // automatically — no user-visible action needed.
+    _socket.on('connect_error', () => {})
   }
   return _socket
 }

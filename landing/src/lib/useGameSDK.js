@@ -25,6 +25,8 @@ export function useGameSDK({
   tournamentMatchId = null,
   tournamentId    = null,
   currentUser     = null,
+  botUserId       = null,
+  botSkillId      = null,
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [phase, setPhase]           = useState('connecting')   // connecting | waiting | playing | finished
@@ -181,6 +183,32 @@ export function useGameSDK({
       settingsRef.current = { displayName, myMark: mark }
       setPhase('waiting')
       buildSession({ isSpectator: false })
+    })
+
+    socket.on('room:created:hvb', ({ slug, displayName, mark, board, currentTurn }) => {
+      const cu = currentUserRef.current
+      slugRef.current = slug
+      const hostId = cu?.id ?? 'host'
+      const botId = botUserId ?? 'bot'
+      marksRef.current[hostId] = mark
+      marksRef.current[botId] = mark === 'X' ? 'O' : 'X'
+      playersRef.current = [
+        { id: hostId, displayName: cu?.displayName ?? 'You', isBot: false },
+        { id: botId, displayName: 'Bot', isBot: true },
+      ]
+      settingsRef.current = { displayName, myMark: mark }
+      boardRef.current = board
+      setPhase('playing')
+      buildSession({ isSpectator: false })
+      emitMoveEvent(null, {
+        board,
+        currentTurn: currentTurn ?? 'X',
+        status: 'playing',
+        winner: null,
+        winLine: null,
+        scores: { X: 0, O: 0 },
+        round: 1,
+      })
     })
 
     socket.on('room:renamed', ({ slug, displayName }) => {
@@ -356,6 +384,8 @@ export function useGameSDK({
         socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else if (joinSlug) {
         socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token ?? null })
+      } else if (botUserId) {
+        socket.emit('room:create:hvb', { botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null })
       } else {
         socket.emit('room:create', { spectatorAllowed: true, authToken: token ?? null })
       }
@@ -378,7 +408,7 @@ export function useGameSDK({
       socket.off('connect', onConnect)
       emitted = true // prevent any in-flight getToken().then from emitting after cleanup
       ;[
-        'room:created', 'room:renamed', 'room:joined', 'room:guestJoined',
+        'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
         'room:spectatorJoined', 'room:playerDisconnected', 'room:cancelled',
         'room:abandoned', 'room:kicked',
         'game:start', 'game:moved', 'game:forfeit',
