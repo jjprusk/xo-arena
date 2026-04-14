@@ -10,9 +10,44 @@ import { jwt } from 'better-auth/plugins'
 import { admin } from 'better-auth/plugins'
 import { Resend } from 'resend'
 import crypto from 'node:crypto'
+import { scryptAsync } from '@noble/hashes/scrypt.js'
 import db from './db.js'
 import logger from '../logger.js'
 import { syncUser } from '../services/userService.js'
+
+// Better Auth's default scrypt config (N:16384, r:16) is deliberately slow for
+// production security but painful on a dev machine (2-4s per login). In dev we
+// use lighter params (N:4096, r:8) and mark those hashes with a "d$" prefix so
+// the verify function can tell them apart from prod hashes. Existing prod hashes
+// (no prefix) always verify with the heavier params.
+const DEV = process.env.NODE_ENV === 'development'
+
+const SCRYPT_PROD = { N: 16384, r: 16, p: 1, dkLen: 64 }
+const SCRYPT_DEV  = { N: 4096,  r: 8,  p: 1, dkLen: 64 }
+
+function hexEncode(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function hashPassword(password) {
+  const params = DEV ? SCRYPT_DEV : SCRYPT_PROD
+  const salt   = hexEncode(crypto.getRandomValues(new Uint8Array(16)))
+  const key    = await scryptAsync(password.normalize('NFKC'), salt, { ...params, maxmem: 128 * params.N * params.r * 2 })
+  return DEV ? `d$${salt}:${hexEncode(key)}` : `${salt}:${hexEncode(key)}`
+}
+
+async function verifyPassword({ hash, password }) {
+  const isDev  = hash.startsWith('d$')
+  const params = isDev ? SCRYPT_DEV : SCRYPT_PROD
+  const raw    = isDev ? hash.slice(2) : hash
+  const [salt, storedKey] = raw.split(':')
+  if (!salt || !storedKey) return false
+  const derived = await scryptAsync(password.normalize('NFKC'), salt, { ...params, maxmem: 128 * params.N * params.r * 2 })
+  // Constant-time comparison
+  const a = Buffer.from(hexEncode(derived))
+  const b = Buffer.from(storedKey)
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
 
 /**
  * Generate an Apple client secret JWT signed with the .p8 private key.
@@ -69,6 +104,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    password: { hash: hashPassword, verify: verifyPassword },
     sendResetPassword: async ({ user, url }) => {
       await sendEmail({
         to: user.email,
