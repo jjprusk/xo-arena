@@ -18,9 +18,8 @@ model User {
   preferences     Json             @default("{}")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
-  eloRating       Float            @default(1200)
   banned          Boolean          @default(false)
-  mlModelLimit    Int?
+  skillLimit      Int?
   betterAuthId    String?          @unique
   botActive       Boolean          @default(true)
   botAvailable    Boolean          @default(false)
@@ -46,9 +45,11 @@ model User {
   eloHistory            UserEloHistory[]
   userRoles             UserRole[]
   notifications         UserNotification[]
+  notifPreferences      NotificationPreference[]
   feedback              Feedback[]
   tournamentParticipants TournamentParticipant[]
   classification PlayerClassification?
+  gameElo               GameElo[]
 
   @@map("users")
 }
@@ -119,6 +120,23 @@ model UserEloHistory {
   @@map("user_elo_history")
 }
 
+/// Current ELO rating for a user in a specific game (replaces User.eloRating).
+/// Note: game_elo table uses snake_case columns — @map required on all non-trivial fields.
+model GameElo {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  gameId      String   @map("game_id")
+  rating      Float    @default(1200)
+  gamesPlayed Int      @default(0)  @map("games_played")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([userId])
+  @@map("game_elo")
+}
+
 model Game {
   id                 String      @id @default(cuid())
   appId              String      @default("xo-arena")
@@ -136,6 +154,8 @@ model Game {
   roomName           String?
   tournamentId       String?
   tournamentMatchId  String?
+  isTournament       Boolean     @default(false)
+  moveStream         Json?
   aiErrors           AIError[]
   player1            User             @relation("Player1Games", fields: [player1Id], references: [id])
   player2            User?            @relation("Player2Games", fields: [player2Id], references: [id])
@@ -185,28 +205,30 @@ model AIError {
   @@map("ai_errors")
 }
 
-model MLModel {
+model BotSkill {
   id             String              @id @default(cuid())
   name           String
   description    String?
-  algorithm      MLAlgorithm         @default(Q_LEARNING)
-  qtable         Json                @default("{}")
+  algorithm      String              @default("qlearning")
+  weights        Json                @default("{}")
   config         Json
-  status         MLModelStatus       @default(IDLE)
+  status         BotSkillStatus      @default(IDLE)
   totalEpisodes  Int                 @default(0)
-  eloRating      Float               @default(1000)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   featured       Boolean             @default(false)
   createdBy      String?
   maxEpisodes    Int                 @default(100000)
+  botId          String?             @map("bot_id")
+  gameId         String              @default("xo") @map("game_id")
   benchmarks     MLBenchmarkResult[]
   checkpoints    MLCheckpoint[]
   eloHistory     MLEloHistory[]
   playerProfiles MLPlayerProfile[]
   sessions       TrainingSession[]
 
-  @@map("ml_models")
+  @@unique([botId, gameId])
+  @@map("bot_skills")
 }
 
 model MLPlayerProfile {
@@ -219,7 +241,7 @@ model MLPlayerProfile {
   tendencies         Json     @default("{}")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  model              MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model              BotSkill @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@unique([modelId, userId])
   @@map("ml_player_profiles")
@@ -236,7 +258,7 @@ model TrainingSession {
   startedAt   DateTime          @default(now())
   completedAt DateTime?
   episodes    TrainingEpisode[]
-  model       MLModel           @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model       BotSkill          @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("training_sessions")
@@ -261,11 +283,10 @@ model MLCheckpoint {
   id         String   @id @default(cuid())
   modelId    String
   episodeNum Int
-  qtable     Json
+  weights    Json
   epsilon    Float
-  eloRating  Float
   createdAt  DateTime @default(now())
-  model      MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model      BotSkill @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_checkpoints")
@@ -281,7 +302,7 @@ model MLBenchmarkResult {
   vsHard   Json
   summary  Json
   vsTough  Json?
-  model    MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model    BotSkill @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_benchmark_results")
@@ -296,7 +317,7 @@ model MLEloHistory {
   opponentType String
   outcome      EpisodeOutcome
   recordedAt   DateTime       @default(now())
-  model        MLModel        @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model        BotSkill       @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_elo_history")
@@ -430,12 +451,50 @@ model UserNotification {
   type        String
   payload     Json
   createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
   deliveredAt DateTime?
   emailedAt   DateTime?
+  readAt      DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, deliveredAt])
   @@map("user_notifications")
+}
+
+model NotificationPreference {
+  id        String  @id @default(cuid())
+  userId    String
+  eventType String
+  inApp     Boolean @default(true)
+  email     Boolean @default(false)
+  sms       Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType])
+  @@map("notification_preferences")
+}
+
+enum ScheduledJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+model ScheduledJob {
+  id          String             @id @default(cuid())
+  type        String
+  payload     Json
+  runAt       DateTime
+  status      ScheduledJobStatus @default(PENDING)
+  attempts    Int                @default(0)
+  maxAttempts Int                @default(3)
+  lastError   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([status, runAt])
+  @@map("scheduled_jobs")
 }
 
 enum Role {
@@ -487,16 +546,7 @@ enum MovePlayer {
   AI
 }
 
-enum MLAlgorithm {
-  Q_LEARNING
-  SARSA
-  MONTE_CARLO
-  POLICY_GRADIENT
-  DQN
-  ALPHA_ZERO
-}
-
-enum MLModelStatus {
+enum BotSkillStatus {
   IDLE
   TRAINING
 }
@@ -561,6 +611,12 @@ enum TournamentStatus {
   CANCELLED
 }
 
+enum TournamentStartMode {
+  AUTO
+  SCHEDULED
+  MANUAL
+}
+
 enum ParticipantStatus {
   REGISTERED
   ELIMINATED
@@ -610,7 +666,7 @@ model Tournament {
   allowNonCompetitiveBots   Boolean            @default(false)
   paceMs                    Int?               @map("pace_ms")
   allowSpectators           Boolean            @default(true)
-  replayRetentionDays       Int                @default(30)
+  startMode                 TournamentStartMode @default(AUTO)
   startTime                 DateTime?
   endTime                   DateTime?
   registrationOpenAt        DateTime?

@@ -121,14 +121,15 @@ model UserEloHistory {
 }
 
 /// Current ELO rating for a user in a specific game (replaces User.eloRating).
+/// Note: game_elo table uses snake_case columns — @map required on all non-trivial fields.
 model GameElo {
   id          String   @id @default(cuid())
-  userId      String
-  gameId      String
+  userId      String   @map("user_id")
+  gameId      String   @map("game_id")
   rating      Float    @default(1200)
-  gamesPlayed Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  gamesPlayed Int      @default(0)  @map("games_played")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, gameId])
@@ -218,8 +219,8 @@ model BotSkill {
   featured       Boolean             @default(false)
   createdBy      String?
   maxEpisodes    Int                 @default(100000)
-  botId          String?
-  gameId         String              @default("xo")
+  botId          String?             @map("bot_id")
+  gameId         String              @default("xo") @map("game_id")
   benchmarks     MLBenchmarkResult[]
   checkpoints    MLCheckpoint[]
   eloHistory     MLEloHistory[]

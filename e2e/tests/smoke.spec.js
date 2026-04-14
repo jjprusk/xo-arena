@@ -1,20 +1,27 @@
 import { test, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 /**
- * Smoke tests — run against BASE_URL after every production promotion.
+ * Smoke tests — run against staging after every promotion.
  *
- * Polls /api/version until the expected version is live (up to 5 min),
- * then verifies key surfaces load and reports the deployed version.
+ * Two-phase structure:
+ *   Phase 1 — CI gate: polls GitHub Actions until "Deploy Staging" is done.
+ *             Definitive success/failure — no timeout guessing.
+ *   Phase 2 — Version check: confirms backend + landing serve the new version.
+ *             Should be quick since Phase 1 already waited for the deploy.
  *
  * Run with:
  *   BASE_URL=https://xo-frontend-staging.fly.dev \
  *   BACKEND_URL=https://xo-backend-staging.fly.dev \
+ *   LANDING_URL=https://xo-landing-staging.fly.dev \
+ *   TOURNAMENT_URL=https://xo-tournament-staging.fly.dev \
  *   npx playwright test smoke --project=chromium
  *
- * BACKEND_URL defaults to BASE_URL when running locally (Vite proxies /api/).
+ * GITHUB_TOKEN is read from the environment or resolved via `gh auth token`.
+ * Without it Phase 1 is skipped and Phase 2 falls back to longer polling.
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -25,43 +32,114 @@ const { version: EXPECTED_VERSION } = JSON.parse(
 const BACKEND_URL    = process.env.BACKEND_URL    || process.env.BASE_URL || 'http://localhost:3000'
 const TOURNAMENT_URL = process.env.TOURNAMENT_URL || 'http://localhost:3001'
 const LANDING_URL    = process.env.LANDING_URL    || process.env.BASE_URL || 'http://localhost:5174'
+const GITHUB_REPO    = 'jjprusk/xo-arena'
 
-// ── Wait for deploy ───────────────────────────────────────────────────────────
+// Resolve token from env or gh CLI so callers don't need to export it manually.
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || (() => {
+  try { return execSync('gh auth token', { encoding: 'utf8' }).trim() } catch { return null }
+})()
 
-test('wait for deploy — /api/version matches expected version', async ({ request }) => {
-  test.setTimeout(6 * 60 * 1000) // 6 min — overrides global 30s for this polling test
-  const deadline = Date.now() + 5 * 60 * 1000 // 5 minutes
-  let backendDeployed = null
-  let landingDeployed = null
+// ── Phase 1: CI deploy gate ───────────────────────────────────────────────────
+
+test('Phase 1 — Deploy Staging workflow completes on GitHub', async ({ request }) => {
+  if (!GITHUB_TOKEN) {
+    console.log('  ℹ No GitHub token available — skipping CI gate (Phase 1)')
+    test.skip()
+    return
+  }
+
+  test.setTimeout(30 * 60 * 1000) // 30 min hard cap — GitHub will always resolve before this
+  const deadline = Date.now() + 28 * 60 * 1000
+
+  const headers = {
+    Authorization:         `Bearer ${GITHUB_TOKEN}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+
+  let run = null
+  let conclusion = null
+
+  console.log(`\n  Waiting for "Deploy Staging" on branch staging (v${EXPECTED_VERSION})…\n`)
 
   while (Date.now() < deadline) {
     try {
-      // Check backend version
+      const res = await request.get(
+        `https://api.github.com/repos/${GITHUB_REPO}/actions/runs?branch=staging&per_page=10`,
+        { headers }
+      )
+      if (res.ok()) {
+        const { workflow_runs } = await res.json()
+        // Most recent "Deploy Staging" run — always the one just triggered by the merge.
+        run = workflow_runs.find(r => r.name === 'Deploy Staging')
+        if (run?.status === 'completed') {
+          conclusion = run.conclusion
+          break
+        }
+        if (run) console.log(`  Deploy Staging: ${run.status}…`)
+        else     console.log('  Deploy Staging: run not yet visible…')
+      }
+    } catch { /* network hiccup — retry */ }
+    await new Promise(r => setTimeout(r, 15_000)) // poll every 15s
+  }
+
+  const url = run?.html_url ?? `https://github.com/${GITHUB_REPO}/actions`
+  console.log(`\n  Deploy Staging: ${conclusion ?? 'timed out'} — ${url}\n`)
+
+  expect(conclusion, `Deploy Staging timed out — check ${url}`).not.toBeNull()
+  expect(conclusion, `Deploy Staging failed — see ${url}`).toBe('success')
+
+  console.log('  ✓ Deploy Staging succeeded\n')
+})
+
+// ── Phase 2: Version confirmation ─────────────────────────────────────────────
+// Deploy is already confirmed by Phase 1, so this should resolve quickly.
+// If Phase 1 was skipped (no token), we poll longer as a fallback.
+
+test('Phase 2 — backend and landing serve the expected version', async ({ request }) => {
+  const fallbackMode = !GITHUB_TOKEN
+  const pollMinutes  = fallbackMode ? 12 : 3
+  test.setTimeout((pollMinutes + 1) * 60 * 1000)
+  const deadline = Date.now() + pollMinutes * 60 * 1000
+
+  if (fallbackMode) {
+    console.log(`\n  ℹ No GitHub token — polling version directly for up to ${pollMinutes} min\n`)
+  } else {
+    console.log(`\n  Confirming version (up to ${pollMinutes} min)…\n`)
+  }
+
+  let backendDeployed = null
+  let landingDeployed  = null
+
+  while (Date.now() < deadline) {
+    try {
       if (!backendDeployed) {
         const res = await request.get(`${BACKEND_URL}/api/version`)
         if (res.ok()) {
           const { version } = await res.json()
           if (version === EXPECTED_VERSION) backendDeployed = version
-          else console.log(`  backend still on v${version}, waiting for v${EXPECTED_VERSION}…`)
+          else console.log(`  backend: v${version} (waiting for v${EXPECTED_VERSION}…)`)
         }
       }
-      // Check landing version (confirms landing container also redeployed)
       if (!landingDeployed) {
         const res = await request.get(`${LANDING_URL}/landing-version`)
         if (res.ok()) {
           const { version } = await res.json()
           if (version === EXPECTED_VERSION) landingDeployed = version
-          else console.log(`  landing still on v${version}, waiting for v${EXPECTED_VERSION}…`)
+          else console.log(`  landing: v${version} (waiting for v${EXPECTED_VERSION}…)`)
         }
       }
       if (backendDeployed && landingDeployed) break
-    } catch { /* services not yet up */ }
-    await new Promise(r => setTimeout(r, 10_000)) // poll every 10s
+    } catch { /* services not yet responding */ }
+    await new Promise(r => setTimeout(r, 10_000))
   }
 
-  expect(backendDeployed, `Timed out waiting for backend v${EXPECTED_VERSION}`).toBe(EXPECTED_VERSION)
-  expect(landingDeployed, `Timed out waiting for landing v${EXPECTED_VERSION}`).toBe(EXPECTED_VERSION)
-  console.log(`\n✓ Deployed version: v${backendDeployed} (backend + landing)\n`)
+  console.log(`\n  backend : ${backendDeployed ? `✓ v${backendDeployed}` : '✗ timed out (still on old version)'}`)
+  console.log(`  landing : ${landingDeployed  ? `✓ v${landingDeployed}`  : '✗ timed out (still on old version)'}\n`)
+
+  expect(backendDeployed, `Backend not at v${EXPECTED_VERSION} after deploy`).toBe(EXPECTED_VERSION)
+  expect(landingDeployed,  `Landing not at v${EXPECTED_VERSION} after deploy`).toBe(EXPECTED_VERSION)
+
+  console.log(`✓ Deployed version: v${backendDeployed} (backend + landing)\n`)
   test.info().annotations.push({ type: 'Deployed version', description: `v${backendDeployed}` })
 })
 

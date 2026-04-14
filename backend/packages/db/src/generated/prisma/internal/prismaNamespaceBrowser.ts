@@ -56,10 +56,11 @@ export const ModelName = {
   FeedbackReply: 'FeedbackReply',
   UserRole: 'UserRole',
   UserEloHistory: 'UserEloHistory',
+  GameElo: 'GameElo',
   Game: 'Game',
   Move: 'Move',
   AIError: 'AIError',
-  MLModel: 'MLModel',
+  BotSkill: 'BotSkill',
   MLPlayerProfile: 'MLPlayerProfile',
   TrainingSession: 'TrainingSession',
   TrainingEpisode: 'TrainingEpisode',
@@ -76,6 +77,8 @@ export const ModelName = {
   Jwks: 'Jwks',
   BaVerification: 'BaVerification',
   UserNotification: 'UserNotification',
+  NotificationPreference: 'NotificationPreference',
+  ScheduledJob: 'ScheduledJob',
   Tournament: 'Tournament',
   TournamentParticipant: 'TournamentParticipant',
   TournamentRound: 'TournamentRound',
@@ -114,9 +117,8 @@ export const UserScalarFieldEnum = {
   preferences: 'preferences',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  eloRating: 'eloRating',
   banned: 'banned',
-  mlModelLimit: 'mlModelLimit',
+  skillLimit: 'skillLimit',
   betterAuthId: 'betterAuthId',
   botActive: 'botActive',
   botAvailable: 'botAvailable',
@@ -197,6 +199,19 @@ export const UserEloHistoryScalarFieldEnum = {
 export type UserEloHistoryScalarFieldEnum = (typeof UserEloHistoryScalarFieldEnum)[keyof typeof UserEloHistoryScalarFieldEnum]
 
 
+export const GameEloScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  gameId: 'gameId',
+  rating: 'rating',
+  gamesPlayed: 'gamesPlayed',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GameEloScalarFieldEnum = (typeof GameEloScalarFieldEnum)[keyof typeof GameEloScalarFieldEnum]
+
+
 export const GameScalarFieldEnum = {
   id: 'id',
   appId: 'appId',
@@ -213,7 +228,9 @@ export const GameScalarFieldEnum = {
   endedAt: 'endedAt',
   roomName: 'roomName',
   tournamentId: 'tournamentId',
-  tournamentMatchId: 'tournamentMatchId'
+  tournamentMatchId: 'tournamentMatchId',
+  isTournament: 'isTournament',
+  moveStream: 'moveStream'
 } as const
 
 export type GameScalarFieldEnum = (typeof GameScalarFieldEnum)[keyof typeof GameScalarFieldEnum]
@@ -247,24 +264,25 @@ export const AIErrorScalarFieldEnum = {
 export type AIErrorScalarFieldEnum = (typeof AIErrorScalarFieldEnum)[keyof typeof AIErrorScalarFieldEnum]
 
 
-export const MLModelScalarFieldEnum = {
+export const BotSkillScalarFieldEnum = {
   id: 'id',
   name: 'name',
   description: 'description',
   algorithm: 'algorithm',
-  qtable: 'qtable',
+  weights: 'weights',
   config: 'config',
   status: 'status',
   totalEpisodes: 'totalEpisodes',
-  eloRating: 'eloRating',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   featured: 'featured',
   createdBy: 'createdBy',
-  maxEpisodes: 'maxEpisodes'
+  maxEpisodes: 'maxEpisodes',
+  botId: 'botId',
+  gameId: 'gameId'
 } as const
 
-export type MLModelScalarFieldEnum = (typeof MLModelScalarFieldEnum)[keyof typeof MLModelScalarFieldEnum]
+export type BotSkillScalarFieldEnum = (typeof BotSkillScalarFieldEnum)[keyof typeof BotSkillScalarFieldEnum]
 
 
 export const MLPlayerProfileScalarFieldEnum = {
@@ -315,9 +333,8 @@ export const MLCheckpointScalarFieldEnum = {
   id: 'id',
   modelId: 'modelId',
   episodeNum: 'episodeNum',
-  qtable: 'qtable',
+  weights: 'weights',
   epsilon: 'epsilon',
-  eloRating: 'eloRating',
   createdAt: 'createdAt'
 } as const
 
@@ -481,11 +498,41 @@ export const UserNotificationScalarFieldEnum = {
   type: 'type',
   payload: 'payload',
   createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
   deliveredAt: 'deliveredAt',
-  emailedAt: 'emailedAt'
+  emailedAt: 'emailedAt',
+  readAt: 'readAt'
 } as const
 
 export type UserNotificationScalarFieldEnum = (typeof UserNotificationScalarFieldEnum)[keyof typeof UserNotificationScalarFieldEnum]
+
+
+export const NotificationPreferenceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  eventType: 'eventType',
+  inApp: 'inApp',
+  email: 'email',
+  sms: 'sms'
+} as const
+
+export type NotificationPreferenceScalarFieldEnum = (typeof NotificationPreferenceScalarFieldEnum)[keyof typeof NotificationPreferenceScalarFieldEnum]
+
+
+export const ScheduledJobScalarFieldEnum = {
+  id: 'id',
+  type: 'type',
+  payload: 'payload',
+  runAt: 'runAt',
+  status: 'status',
+  attempts: 'attempts',
+  maxAttempts: 'maxAttempts',
+  lastError: 'lastError',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ScheduledJobScalarFieldEnum = (typeof ScheduledJobScalarFieldEnum)[keyof typeof ScheduledJobScalarFieldEnum]
 
 
 export const TournamentScalarFieldEnum = {
@@ -504,7 +551,7 @@ export const TournamentScalarFieldEnum = {
   allowNonCompetitiveBots: 'allowNonCompetitiveBots',
   paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
-  replayRetentionDays: 'replayRetentionDays',
+  startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
   registrationOpenAt: 'registrationOpenAt',

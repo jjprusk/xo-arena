@@ -53,6 +53,7 @@ export type GameMinAggregateOutputType = {
   roomName: string | null
   tournamentId: string | null
   tournamentMatchId: string | null
+  isTournament: boolean | null
 }
 
 export type GameMaxAggregateOutputType = {
@@ -72,6 +73,7 @@ export type GameMaxAggregateOutputType = {
   roomName: string | null
   tournamentId: string | null
   tournamentMatchId: string | null
+  isTournament: boolean | null
 }
 
 export type GameCountAggregateOutputType = {
@@ -91,6 +93,8 @@ export type GameCountAggregateOutputType = {
   roomName: number
   tournamentId: number
   tournamentMatchId: number
+  isTournament: number
+  moveStream: number
   _all: number
 }
 
@@ -122,6 +126,7 @@ export type GameMinAggregateInputType = {
   roomName?: true
   tournamentId?: true
   tournamentMatchId?: true
+  isTournament?: true
 }
 
 export type GameMaxAggregateInputType = {
@@ -141,6 +146,7 @@ export type GameMaxAggregateInputType = {
   roomName?: true
   tournamentId?: true
   tournamentMatchId?: true
+  isTournament?: true
 }
 
 export type GameCountAggregateInputType = {
@@ -160,6 +166,8 @@ export type GameCountAggregateInputType = {
   roomName?: true
   tournamentId?: true
   tournamentMatchId?: true
+  isTournament?: true
+  moveStream?: true
   _all?: true
 }
 
@@ -266,6 +274,8 @@ export type GameGroupByOutputType = {
   roomName: string | null
   tournamentId: string | null
   tournamentMatchId: string | null
+  isTournament: boolean
+  moveStream: runtime.JsonValue | null
   _count: GameCountAggregateOutputType | null
   _avg: GameAvgAggregateOutputType | null
   _sum: GameSumAggregateOutputType | null
@@ -308,6 +318,8 @@ export type GameWhereInput = {
   roomName?: Prisma.StringNullableFilter<"Game"> | string | null
   tournamentId?: Prisma.StringNullableFilter<"Game"> | string | null
   tournamentMatchId?: Prisma.StringNullableFilter<"Game"> | string | null
+  isTournament?: Prisma.BoolFilter<"Game"> | boolean
+  moveStream?: Prisma.JsonNullableFilter<"Game">
   aiErrors?: Prisma.AIErrorListRelationFilter
   player1?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   player2?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
@@ -334,6 +346,8 @@ export type GameOrderByWithRelationInput = {
   roomName?: Prisma.SortOrderInput | Prisma.SortOrder
   tournamentId?: Prisma.SortOrderInput | Prisma.SortOrder
   tournamentMatchId?: Prisma.SortOrderInput | Prisma.SortOrder
+  isTournament?: Prisma.SortOrder
+  moveStream?: Prisma.SortOrderInput | Prisma.SortOrder
   aiErrors?: Prisma.AIErrorOrderByRelationAggregateInput
   player1?: Prisma.UserOrderByWithRelationInput
   player2?: Prisma.UserOrderByWithRelationInput
@@ -363,6 +377,8 @@ export type GameWhereUniqueInput = Prisma.AtLeast<{
   roomName?: Prisma.StringNullableFilter<"Game"> | string | null
   tournamentId?: Prisma.StringNullableFilter<"Game"> | string | null
   tournamentMatchId?: Prisma.StringNullableFilter<"Game"> | string | null
+  isTournament?: Prisma.BoolFilter<"Game"> | boolean
+  moveStream?: Prisma.JsonNullableFilter<"Game">
   aiErrors?: Prisma.AIErrorListRelationFilter
   player1?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   player2?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
@@ -389,6 +405,8 @@ export type GameOrderByWithAggregationInput = {
   roomName?: Prisma.SortOrderInput | Prisma.SortOrder
   tournamentId?: Prisma.SortOrderInput | Prisma.SortOrder
   tournamentMatchId?: Prisma.SortOrderInput | Prisma.SortOrder
+  isTournament?: Prisma.SortOrder
+  moveStream?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.GameCountOrderByAggregateInput
   _avg?: Prisma.GameAvgOrderByAggregateInput
   _max?: Prisma.GameMaxOrderByAggregateInput
@@ -416,6 +434,8 @@ export type GameScalarWhereWithAggregatesInput = {
   roomName?: Prisma.StringNullableWithAggregatesFilter<"Game"> | string | null
   tournamentId?: Prisma.StringNullableWithAggregatesFilter<"Game"> | string | null
   tournamentMatchId?: Prisma.StringNullableWithAggregatesFilter<"Game"> | string | null
+  isTournament?: Prisma.BoolWithAggregatesFilter<"Game"> | boolean
+  moveStream?: Prisma.JsonNullableWithAggregatesFilter<"Game">
 }
 
 export type GameCreateInput = {
@@ -430,6 +450,8 @@ export type GameCreateInput = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorCreateNestedManyWithoutGameInput
   player1: Prisma.UserCreateNestedOneWithoutGamesAsPlayer1Input
   player2?: Prisma.UserCreateNestedOneWithoutGamesAsPlayer2Input
@@ -456,6 +478,8 @@ export type GameUncheckedCreateInput = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedCreateNestedManyWithoutGameInput
   moves?: Prisma.MoveUncheckedCreateNestedManyWithoutGameInput
 }
@@ -472,6 +496,8 @@ export type GameUpdateInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUpdateManyWithoutGameNestedInput
   player1?: Prisma.UserUpdateOneRequiredWithoutGamesAsPlayer1NestedInput
   player2?: Prisma.UserUpdateOneWithoutGamesAsPlayer2NestedInput
@@ -498,6 +524,8 @@ export type GameUncheckedUpdateInput = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedUpdateManyWithoutGameNestedInput
   moves?: Prisma.MoveUncheckedUpdateManyWithoutGameNestedInput
 }
@@ -519,6 +547,8 @@ export type GameCreateManyInput = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameUpdateManyMutationInput = {
@@ -533,6 +563,8 @@ export type GameUpdateManyMutationInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameUncheckedUpdateManyInput = {
@@ -552,6 +584,8 @@ export type GameUncheckedUpdateManyInput = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameListRelationFilter = {
@@ -581,6 +615,8 @@ export type GameCountOrderByAggregateInput = {
   roomName?: Prisma.SortOrder
   tournamentId?: Prisma.SortOrder
   tournamentMatchId?: Prisma.SortOrder
+  isTournament?: Prisma.SortOrder
+  moveStream?: Prisma.SortOrder
 }
 
 export type GameAvgOrderByAggregateInput = {
@@ -605,6 +641,7 @@ export type GameMaxOrderByAggregateInput = {
   roomName?: Prisma.SortOrder
   tournamentId?: Prisma.SortOrder
   tournamentMatchId?: Prisma.SortOrder
+  isTournament?: Prisma.SortOrder
 }
 
 export type GameMinOrderByAggregateInput = {
@@ -624,6 +661,7 @@ export type GameMinOrderByAggregateInput = {
   roomName?: Prisma.SortOrder
   tournamentId?: Prisma.SortOrder
   tournamentMatchId?: Prisma.SortOrder
+  isTournament?: Prisma.SortOrder
 }
 
 export type GameSumOrderByAggregateInput = {
@@ -898,6 +936,8 @@ export type GameCreateWithoutPlayer1Input = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorCreateNestedManyWithoutGameInput
   player2?: Prisma.UserCreateNestedOneWithoutGamesAsPlayer2Input
   winner?: Prisma.UserCreateNestedOneWithoutGamesWonInput
@@ -922,6 +962,8 @@ export type GameUncheckedCreateWithoutPlayer1Input = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedCreateNestedManyWithoutGameInput
   moves?: Prisma.MoveUncheckedCreateNestedManyWithoutGameInput
 }
@@ -948,6 +990,8 @@ export type GameCreateWithoutPlayer2Input = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorCreateNestedManyWithoutGameInput
   player1: Prisma.UserCreateNestedOneWithoutGamesAsPlayer1Input
   winner?: Prisma.UserCreateNestedOneWithoutGamesWonInput
@@ -972,6 +1016,8 @@ export type GameUncheckedCreateWithoutPlayer2Input = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedCreateNestedManyWithoutGameInput
   moves?: Prisma.MoveUncheckedCreateNestedManyWithoutGameInput
 }
@@ -998,6 +1044,8 @@ export type GameCreateWithoutWinnerInput = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorCreateNestedManyWithoutGameInput
   player1: Prisma.UserCreateNestedOneWithoutGamesAsPlayer1Input
   player2?: Prisma.UserCreateNestedOneWithoutGamesAsPlayer2Input
@@ -1022,6 +1070,8 @@ export type GameUncheckedCreateWithoutWinnerInput = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedCreateNestedManyWithoutGameInput
   moves?: Prisma.MoveUncheckedCreateNestedManyWithoutGameInput
 }
@@ -1072,6 +1122,8 @@ export type GameScalarWhereInput = {
   roomName?: Prisma.StringNullableFilter<"Game"> | string | null
   tournamentId?: Prisma.StringNullableFilter<"Game"> | string | null
   tournamentMatchId?: Prisma.StringNullableFilter<"Game"> | string | null
+  isTournament?: Prisma.BoolFilter<"Game"> | boolean
+  moveStream?: Prisma.JsonNullableFilter<"Game">
 }
 
 export type GameUpsertWithWhereUniqueWithoutPlayer2Input = {
@@ -1118,6 +1170,8 @@ export type GameCreateWithoutMovesInput = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorCreateNestedManyWithoutGameInput
   player1: Prisma.UserCreateNestedOneWithoutGamesAsPlayer1Input
   player2?: Prisma.UserCreateNestedOneWithoutGamesAsPlayer2Input
@@ -1143,6 +1197,8 @@ export type GameUncheckedCreateWithoutMovesInput = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedCreateNestedManyWithoutGameInput
 }
 
@@ -1174,6 +1230,8 @@ export type GameUpdateWithoutMovesInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUpdateManyWithoutGameNestedInput
   player1?: Prisma.UserUpdateOneRequiredWithoutGamesAsPlayer1NestedInput
   player2?: Prisma.UserUpdateOneWithoutGamesAsPlayer2NestedInput
@@ -1199,6 +1257,8 @@ export type GameUncheckedUpdateWithoutMovesInput = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedUpdateManyWithoutGameNestedInput
 }
 
@@ -1214,6 +1274,8 @@ export type GameCreateWithoutAiErrorsInput = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   player1: Prisma.UserCreateNestedOneWithoutGamesAsPlayer1Input
   player2?: Prisma.UserCreateNestedOneWithoutGamesAsPlayer2Input
   winner?: Prisma.UserCreateNestedOneWithoutGamesWonInput
@@ -1239,6 +1301,8 @@ export type GameUncheckedCreateWithoutAiErrorsInput = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   moves?: Prisma.MoveUncheckedCreateNestedManyWithoutGameInput
 }
 
@@ -1270,6 +1334,8 @@ export type GameUpdateWithoutAiErrorsInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   player1?: Prisma.UserUpdateOneRequiredWithoutGamesAsPlayer1NestedInput
   player2?: Prisma.UserUpdateOneWithoutGamesAsPlayer2NestedInput
   winner?: Prisma.UserUpdateOneWithoutGamesWonNestedInput
@@ -1295,6 +1361,8 @@ export type GameUncheckedUpdateWithoutAiErrorsInput = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   moves?: Prisma.MoveUncheckedUpdateManyWithoutGameNestedInput
 }
 
@@ -1310,6 +1378,8 @@ export type GameCreateWithoutTournamentInput = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorCreateNestedManyWithoutGameInput
   player1: Prisma.UserCreateNestedOneWithoutGamesAsPlayer1Input
   player2?: Prisma.UserCreateNestedOneWithoutGamesAsPlayer2Input
@@ -1334,6 +1404,8 @@ export type GameUncheckedCreateWithoutTournamentInput = {
   endedAt?: Date | string
   roomName?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedCreateNestedManyWithoutGameInput
   moves?: Prisma.MoveUncheckedCreateNestedManyWithoutGameInput
 }
@@ -1376,6 +1448,8 @@ export type GameCreateWithoutTournamentMatchInput = {
   startedAt: Date | string
   endedAt?: Date | string
   roomName?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorCreateNestedManyWithoutGameInput
   player1: Prisma.UserCreateNestedOneWithoutGamesAsPlayer1Input
   player2?: Prisma.UserCreateNestedOneWithoutGamesAsPlayer2Input
@@ -1400,6 +1474,8 @@ export type GameUncheckedCreateWithoutTournamentMatchInput = {
   endedAt?: Date | string
   roomName?: string | null
   tournamentId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedCreateNestedManyWithoutGameInput
   moves?: Prisma.MoveUncheckedCreateNestedManyWithoutGameInput
 }
@@ -1446,6 +1522,8 @@ export type GameCreateManyPlayer1Input = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameCreateManyPlayer2Input = {
@@ -1464,6 +1542,8 @@ export type GameCreateManyPlayer2Input = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameCreateManyWinnerInput = {
@@ -1482,6 +1562,8 @@ export type GameCreateManyWinnerInput = {
   roomName?: string | null
   tournamentId?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameUpdateWithoutPlayer1Input = {
@@ -1496,6 +1578,8 @@ export type GameUpdateWithoutPlayer1Input = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUpdateManyWithoutGameNestedInput
   player2?: Prisma.UserUpdateOneWithoutGamesAsPlayer2NestedInput
   winner?: Prisma.UserUpdateOneWithoutGamesWonNestedInput
@@ -1520,6 +1604,8 @@ export type GameUncheckedUpdateWithoutPlayer1Input = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedUpdateManyWithoutGameNestedInput
   moves?: Prisma.MoveUncheckedUpdateManyWithoutGameNestedInput
 }
@@ -1540,6 +1626,8 @@ export type GameUncheckedUpdateManyWithoutPlayer1Input = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameUpdateWithoutPlayer2Input = {
@@ -1554,6 +1642,8 @@ export type GameUpdateWithoutPlayer2Input = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUpdateManyWithoutGameNestedInput
   player1?: Prisma.UserUpdateOneRequiredWithoutGamesAsPlayer1NestedInput
   winner?: Prisma.UserUpdateOneWithoutGamesWonNestedInput
@@ -1578,6 +1668,8 @@ export type GameUncheckedUpdateWithoutPlayer2Input = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedUpdateManyWithoutGameNestedInput
   moves?: Prisma.MoveUncheckedUpdateManyWithoutGameNestedInput
 }
@@ -1598,6 +1690,8 @@ export type GameUncheckedUpdateManyWithoutPlayer2Input = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameUpdateWithoutWinnerInput = {
@@ -1612,6 +1706,8 @@ export type GameUpdateWithoutWinnerInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUpdateManyWithoutGameNestedInput
   player1?: Prisma.UserUpdateOneRequiredWithoutGamesAsPlayer1NestedInput
   player2?: Prisma.UserUpdateOneWithoutGamesAsPlayer2NestedInput
@@ -1636,6 +1732,8 @@ export type GameUncheckedUpdateWithoutWinnerInput = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedUpdateManyWithoutGameNestedInput
   moves?: Prisma.MoveUncheckedUpdateManyWithoutGameNestedInput
 }
@@ -1656,6 +1754,8 @@ export type GameUncheckedUpdateManyWithoutWinnerInput = {
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameCreateManyTournamentInput = {
@@ -1674,6 +1774,8 @@ export type GameCreateManyTournamentInput = {
   endedAt?: Date | string
   roomName?: string | null
   tournamentMatchId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameUpdateWithoutTournamentInput = {
@@ -1688,6 +1790,8 @@ export type GameUpdateWithoutTournamentInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUpdateManyWithoutGameNestedInput
   player1?: Prisma.UserUpdateOneRequiredWithoutGamesAsPlayer1NestedInput
   player2?: Prisma.UserUpdateOneWithoutGamesAsPlayer2NestedInput
@@ -1712,6 +1816,8 @@ export type GameUncheckedUpdateWithoutTournamentInput = {
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedUpdateManyWithoutGameNestedInput
   moves?: Prisma.MoveUncheckedUpdateManyWithoutGameNestedInput
 }
@@ -1732,6 +1838,8 @@ export type GameUncheckedUpdateManyWithoutTournamentInput = {
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameCreateManyTournamentMatchInput = {
@@ -1750,6 +1858,8 @@ export type GameCreateManyTournamentMatchInput = {
   endedAt?: Date | string
   roomName?: string | null
   tournamentId?: string | null
+  isTournament?: boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type GameUpdateWithoutTournamentMatchInput = {
@@ -1764,6 +1874,8 @@ export type GameUpdateWithoutTournamentMatchInput = {
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUpdateManyWithoutGameNestedInput
   player1?: Prisma.UserUpdateOneRequiredWithoutGamesAsPlayer1NestedInput
   player2?: Prisma.UserUpdateOneWithoutGamesAsPlayer2NestedInput
@@ -1788,6 +1900,8 @@ export type GameUncheckedUpdateWithoutTournamentMatchInput = {
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   aiErrors?: Prisma.AIErrorUncheckedUpdateManyWithoutGameNestedInput
   moves?: Prisma.MoveUncheckedUpdateManyWithoutGameNestedInput
 }
@@ -1808,6 +1922,8 @@ export type GameUncheckedUpdateManyWithoutTournamentMatchInput = {
   endedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roomName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  moveStream?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 
@@ -1867,6 +1983,8 @@ export type GameSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   roomName?: boolean
   tournamentId?: boolean
   tournamentMatchId?: boolean
+  isTournament?: boolean
+  moveStream?: boolean
   aiErrors?: boolean | Prisma.Game$aiErrorsArgs<ExtArgs>
   player1?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   player2?: boolean | Prisma.Game$player2Args<ExtArgs>
@@ -1894,6 +2012,8 @@ export type GameSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   roomName?: boolean
   tournamentId?: boolean
   tournamentMatchId?: boolean
+  isTournament?: boolean
+  moveStream?: boolean
   player1?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   player2?: boolean | Prisma.Game$player2Args<ExtArgs>
   winner?: boolean | Prisma.Game$winnerArgs<ExtArgs>
@@ -1918,6 +2038,8 @@ export type GameSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   roomName?: boolean
   tournamentId?: boolean
   tournamentMatchId?: boolean
+  isTournament?: boolean
+  moveStream?: boolean
   player1?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   player2?: boolean | Prisma.Game$player2Args<ExtArgs>
   winner?: boolean | Prisma.Game$winnerArgs<ExtArgs>
@@ -1942,9 +2064,11 @@ export type GameSelectScalar = {
   roomName?: boolean
   tournamentId?: boolean
   tournamentMatchId?: boolean
+  isTournament?: boolean
+  moveStream?: boolean
 }
 
-export type GameOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "appId" | "player1Id" | "player2Id" | "winnerId" | "mode" | "aiImplementationId" | "difficulty" | "outcome" | "totalMoves" | "durationMs" | "startedAt" | "endedAt" | "roomName" | "tournamentId" | "tournamentMatchId", ExtArgs["result"]["game"]>
+export type GameOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "appId" | "player1Id" | "player2Id" | "winnerId" | "mode" | "aiImplementationId" | "difficulty" | "outcome" | "totalMoves" | "durationMs" | "startedAt" | "endedAt" | "roomName" | "tournamentId" | "tournamentMatchId" | "isTournament" | "moveStream", ExtArgs["result"]["game"]>
 export type GameInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   aiErrors?: boolean | Prisma.Game$aiErrorsArgs<ExtArgs>
   player1?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -1998,6 +2122,8 @@ export type $GamePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     roomName: string | null
     tournamentId: string | null
     tournamentMatchId: string | null
+    isTournament: boolean
+    moveStream: runtime.JsonValue | null
   }, ExtArgs["result"]["game"]>
   composites: {}
 }
@@ -2444,6 +2570,8 @@ export interface GameFieldRefs {
   readonly roomName: Prisma.FieldRef<"Game", 'String'>
   readonly tournamentId: Prisma.FieldRef<"Game", 'String'>
   readonly tournamentMatchId: Prisma.FieldRef<"Game", 'String'>
+  readonly isTournament: Prisma.FieldRef<"Game", 'Boolean'>
+  readonly moveStream: Prisma.FieldRef<"Game", 'Json'>
 }
     
 

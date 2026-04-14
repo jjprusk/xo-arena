@@ -389,10 +389,11 @@ export const ModelName = {
   FeedbackReply: 'FeedbackReply',
   UserRole: 'UserRole',
   UserEloHistory: 'UserEloHistory',
+  GameElo: 'GameElo',
   Game: 'Game',
   Move: 'Move',
   AIError: 'AIError',
-  MLModel: 'MLModel',
+  BotSkill: 'BotSkill',
   MLPlayerProfile: 'MLPlayerProfile',
   TrainingSession: 'TrainingSession',
   TrainingEpisode: 'TrainingEpisode',
@@ -409,6 +410,8 @@ export const ModelName = {
   Jwks: 'Jwks',
   BaVerification: 'BaVerification',
   UserNotification: 'UserNotification',
+  NotificationPreference: 'NotificationPreference',
+  ScheduledJob: 'ScheduledJob',
   Tournament: 'Tournament',
   TournamentParticipant: 'TournamentParticipant',
   TournamentRound: 'TournamentRound',
@@ -433,7 +436,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "game" | "move" | "aIError" | "mLModel" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration"
+    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "gameElo" | "game" | "move" | "aIError" | "botSkill" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "notificationPreference" | "scheduledJob" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -807,6 +810,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    GameElo: {
+      payload: Prisma.$GameEloPayload<ExtArgs>
+      fields: Prisma.GameEloFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.GameEloFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.GameEloFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        findFirst: {
+          args: Prisma.GameEloFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.GameEloFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        findMany: {
+          args: Prisma.GameEloFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>[]
+        }
+        create: {
+          args: Prisma.GameEloCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        createMany: {
+          args: Prisma.GameEloCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.GameEloCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>[]
+        }
+        delete: {
+          args: Prisma.GameEloDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        update: {
+          args: Prisma.GameEloUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        deleteMany: {
+          args: Prisma.GameEloDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.GameEloUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.GameEloUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>[]
+        }
+        upsert: {
+          args: Prisma.GameEloUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GameEloPayload>
+        }
+        aggregate: {
+          args: Prisma.GameEloAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateGameElo>
+        }
+        groupBy: {
+          args: Prisma.GameEloGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GameEloGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.GameEloCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GameEloCountAggregateOutputType> | number
+        }
+      }
+    }
     Game: {
       payload: Prisma.$GamePayload<ExtArgs>
       fields: Prisma.GameFieldRefs
@@ -1029,77 +1106,77 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
-    MLModel: {
-      payload: Prisma.$MLModelPayload<ExtArgs>
-      fields: Prisma.MLModelFieldRefs
+    BotSkill: {
+      payload: Prisma.$BotSkillPayload<ExtArgs>
+      fields: Prisma.BotSkillFieldRefs
       operations: {
         findUnique: {
-          args: Prisma.MLModelFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload> | null
+          args: Prisma.BotSkillFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload> | null
         }
         findUniqueOrThrow: {
-          args: Prisma.MLModelFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         findFirst: {
-          args: Prisma.MLModelFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload> | null
+          args: Prisma.BotSkillFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload> | null
         }
         findFirstOrThrow: {
-          args: Prisma.MLModelFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         findMany: {
-          args: Prisma.MLModelFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>[]
+          args: Prisma.BotSkillFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>[]
         }
         create: {
-          args: Prisma.MLModelCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         createMany: {
-          args: Prisma.MLModelCreateManyArgs<ExtArgs>
+          args: Prisma.BotSkillCreateManyArgs<ExtArgs>
           result: BatchPayload
         }
         createManyAndReturn: {
-          args: Prisma.MLModelCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>[]
+          args: Prisma.BotSkillCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>[]
         }
         delete: {
-          args: Prisma.MLModelDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         update: {
-          args: Prisma.MLModelUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         deleteMany: {
-          args: Prisma.MLModelDeleteManyArgs<ExtArgs>
+          args: Prisma.BotSkillDeleteManyArgs<ExtArgs>
           result: BatchPayload
         }
         updateMany: {
-          args: Prisma.MLModelUpdateManyArgs<ExtArgs>
+          args: Prisma.BotSkillUpdateManyArgs<ExtArgs>
           result: BatchPayload
         }
         updateManyAndReturn: {
-          args: Prisma.MLModelUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>[]
+          args: Prisma.BotSkillUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>[]
         }
         upsert: {
-          args: Prisma.MLModelUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$MLModelPayload>
+          args: Prisma.BotSkillUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BotSkillPayload>
         }
         aggregate: {
-          args: Prisma.MLModelAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateMLModel>
+          args: Prisma.BotSkillAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateBotSkill>
         }
         groupBy: {
-          args: Prisma.MLModelGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.MLModelGroupByOutputType>[]
+          args: Prisma.BotSkillGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BotSkillGroupByOutputType>[]
         }
         count: {
-          args: Prisma.MLModelCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.MLModelCountAggregateOutputType> | number
+          args: Prisma.BotSkillCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BotSkillCountAggregateOutputType> | number
         }
       }
     }
@@ -2287,6 +2364,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    NotificationPreference: {
+      payload: Prisma.$NotificationPreferencePayload<ExtArgs>
+      fields: Prisma.NotificationPreferenceFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.NotificationPreferenceFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.NotificationPreferenceFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>
+        }
+        findFirst: {
+          args: Prisma.NotificationPreferenceFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.NotificationPreferenceFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>
+        }
+        findMany: {
+          args: Prisma.NotificationPreferenceFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>[]
+        }
+        create: {
+          args: Prisma.NotificationPreferenceCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>
+        }
+        createMany: {
+          args: Prisma.NotificationPreferenceCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.NotificationPreferenceCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>[]
+        }
+        delete: {
+          args: Prisma.NotificationPreferenceDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>
+        }
+        update: {
+          args: Prisma.NotificationPreferenceUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>
+        }
+        deleteMany: {
+          args: Prisma.NotificationPreferenceDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.NotificationPreferenceUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.NotificationPreferenceUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>[]
+        }
+        upsert: {
+          args: Prisma.NotificationPreferenceUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NotificationPreferencePayload>
+        }
+        aggregate: {
+          args: Prisma.NotificationPreferenceAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateNotificationPreference>
+        }
+        groupBy: {
+          args: Prisma.NotificationPreferenceGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NotificationPreferenceGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.NotificationPreferenceCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NotificationPreferenceCountAggregateOutputType> | number
+        }
+      }
+    }
+    ScheduledJob: {
+      payload: Prisma.$ScheduledJobPayload<ExtArgs>
+      fields: Prisma.ScheduledJobFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ScheduledJobFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ScheduledJobFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>
+        }
+        findFirst: {
+          args: Prisma.ScheduledJobFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ScheduledJobFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>
+        }
+        findMany: {
+          args: Prisma.ScheduledJobFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>[]
+        }
+        create: {
+          args: Prisma.ScheduledJobCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>
+        }
+        createMany: {
+          args: Prisma.ScheduledJobCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ScheduledJobCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>[]
+        }
+        delete: {
+          args: Prisma.ScheduledJobDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>
+        }
+        update: {
+          args: Prisma.ScheduledJobUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>
+        }
+        deleteMany: {
+          args: Prisma.ScheduledJobDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ScheduledJobUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ScheduledJobUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>[]
+        }
+        upsert: {
+          args: Prisma.ScheduledJobUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ScheduledJobPayload>
+        }
+        aggregate: {
+          args: Prisma.ScheduledJobAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateScheduledJob>
+        }
+        groupBy: {
+          args: Prisma.ScheduledJobGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ScheduledJobGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ScheduledJobCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ScheduledJobCountAggregateOutputType> | number
+        }
+      }
+    }
     Tournament: {
       payload: Prisma.$TournamentPayload<ExtArgs>
       fields: Prisma.TournamentFieldRefs
@@ -3003,9 +3228,8 @@ export const UserScalarFieldEnum = {
   preferences: 'preferences',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  eloRating: 'eloRating',
   banned: 'banned',
-  mlModelLimit: 'mlModelLimit',
+  skillLimit: 'skillLimit',
   betterAuthId: 'betterAuthId',
   botActive: 'botActive',
   botAvailable: 'botAvailable',
@@ -3086,6 +3310,19 @@ export const UserEloHistoryScalarFieldEnum = {
 export type UserEloHistoryScalarFieldEnum = (typeof UserEloHistoryScalarFieldEnum)[keyof typeof UserEloHistoryScalarFieldEnum]
 
 
+export const GameEloScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  gameId: 'gameId',
+  rating: 'rating',
+  gamesPlayed: 'gamesPlayed',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GameEloScalarFieldEnum = (typeof GameEloScalarFieldEnum)[keyof typeof GameEloScalarFieldEnum]
+
+
 export const GameScalarFieldEnum = {
   id: 'id',
   appId: 'appId',
@@ -3102,7 +3339,9 @@ export const GameScalarFieldEnum = {
   endedAt: 'endedAt',
   roomName: 'roomName',
   tournamentId: 'tournamentId',
-  tournamentMatchId: 'tournamentMatchId'
+  tournamentMatchId: 'tournamentMatchId',
+  isTournament: 'isTournament',
+  moveStream: 'moveStream'
 } as const
 
 export type GameScalarFieldEnum = (typeof GameScalarFieldEnum)[keyof typeof GameScalarFieldEnum]
@@ -3136,24 +3375,25 @@ export const AIErrorScalarFieldEnum = {
 export type AIErrorScalarFieldEnum = (typeof AIErrorScalarFieldEnum)[keyof typeof AIErrorScalarFieldEnum]
 
 
-export const MLModelScalarFieldEnum = {
+export const BotSkillScalarFieldEnum = {
   id: 'id',
   name: 'name',
   description: 'description',
   algorithm: 'algorithm',
-  qtable: 'qtable',
+  weights: 'weights',
   config: 'config',
   status: 'status',
   totalEpisodes: 'totalEpisodes',
-  eloRating: 'eloRating',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   featured: 'featured',
   createdBy: 'createdBy',
-  maxEpisodes: 'maxEpisodes'
+  maxEpisodes: 'maxEpisodes',
+  botId: 'botId',
+  gameId: 'gameId'
 } as const
 
-export type MLModelScalarFieldEnum = (typeof MLModelScalarFieldEnum)[keyof typeof MLModelScalarFieldEnum]
+export type BotSkillScalarFieldEnum = (typeof BotSkillScalarFieldEnum)[keyof typeof BotSkillScalarFieldEnum]
 
 
 export const MLPlayerProfileScalarFieldEnum = {
@@ -3204,9 +3444,8 @@ export const MLCheckpointScalarFieldEnum = {
   id: 'id',
   modelId: 'modelId',
   episodeNum: 'episodeNum',
-  qtable: 'qtable',
+  weights: 'weights',
   epsilon: 'epsilon',
-  eloRating: 'eloRating',
   createdAt: 'createdAt'
 } as const
 
@@ -3370,11 +3609,41 @@ export const UserNotificationScalarFieldEnum = {
   type: 'type',
   payload: 'payload',
   createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
   deliveredAt: 'deliveredAt',
-  emailedAt: 'emailedAt'
+  emailedAt: 'emailedAt',
+  readAt: 'readAt'
 } as const
 
 export type UserNotificationScalarFieldEnum = (typeof UserNotificationScalarFieldEnum)[keyof typeof UserNotificationScalarFieldEnum]
+
+
+export const NotificationPreferenceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  eventType: 'eventType',
+  inApp: 'inApp',
+  email: 'email',
+  sms: 'sms'
+} as const
+
+export type NotificationPreferenceScalarFieldEnum = (typeof NotificationPreferenceScalarFieldEnum)[keyof typeof NotificationPreferenceScalarFieldEnum]
+
+
+export const ScheduledJobScalarFieldEnum = {
+  id: 'id',
+  type: 'type',
+  payload: 'payload',
+  runAt: 'runAt',
+  status: 'status',
+  attempts: 'attempts',
+  maxAttempts: 'maxAttempts',
+  lastError: 'lastError',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ScheduledJobScalarFieldEnum = (typeof ScheduledJobScalarFieldEnum)[keyof typeof ScheduledJobScalarFieldEnum]
 
 
 export const TournamentScalarFieldEnum = {
@@ -3393,7 +3662,7 @@ export const TournamentScalarFieldEnum = {
   allowNonCompetitiveBots: 'allowNonCompetitiveBots',
   paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
-  replayRetentionDays: 'replayRetentionDays',
+  startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
   registrationOpenAt: 'registrationOpenAt',
@@ -3620,20 +3889,6 @@ export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaM
 
 
 /**
- * Reference to a field of type 'Float'
- */
-export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
-    
-
-
-/**
- * Reference to a field of type 'Float[]'
- */
-export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
-    
-
-
-/**
  * Reference to a field of type 'Boolean'
  */
 export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
@@ -3697,6 +3952,20 @@ export type ListEnumRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaM
 
 
 /**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
+
+
+/**
  * Reference to a field of type 'GameMode'
  */
 export type EnumGameModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GameMode'>
@@ -3753,30 +4022,16 @@ export type ListEnumMovePlayerFieldRefInput<$PrismaModel> = FieldRefInputType<$P
 
 
 /**
- * Reference to a field of type 'MLAlgorithm'
+ * Reference to a field of type 'BotSkillStatus'
  */
-export type EnumMLAlgorithmFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLAlgorithm'>
+export type EnumBotSkillStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BotSkillStatus'>
     
 
 
 /**
- * Reference to a field of type 'MLAlgorithm[]'
+ * Reference to a field of type 'BotSkillStatus[]'
  */
-export type ListEnumMLAlgorithmFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLAlgorithm[]'>
-    
-
-
-/**
- * Reference to a field of type 'MLModelStatus'
- */
-export type EnumMLModelStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLModelStatus'>
-    
-
-
-/**
- * Reference to a field of type 'MLModelStatus[]'
- */
-export type ListEnumMLModelStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MLModelStatus[]'>
+export type ListEnumBotSkillStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BotSkillStatus[]'>
     
 
 
@@ -3819,6 +4074,20 @@ export type EnumEpisodeOutcomeFieldRefInput<$PrismaModel> = FieldRefInputType<$P
  * Reference to a field of type 'EpisodeOutcome[]'
  */
 export type ListEnumEpisodeOutcomeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EpisodeOutcome[]'>
+    
+
+
+/**
+ * Reference to a field of type 'ScheduledJobStatus'
+ */
+export type EnumScheduledJobStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ScheduledJobStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'ScheduledJobStatus[]'
+ */
+export type ListEnumScheduledJobStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ScheduledJobStatus[]'>
     
 
 
@@ -3875,6 +4144,20 @@ export type EnumTournamentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<
  * Reference to a field of type 'TournamentStatus[]'
  */
 export type ListEnumTournamentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'TournamentStartMode'
+ */
+export type EnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode'>
+    
+
+
+/**
+ * Reference to a field of type 'TournamentStartMode[]'
+ */
+export type ListEnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode[]'>
     
 
 
@@ -4075,10 +4358,11 @@ export type GlobalOmitConfig = {
   feedbackReply?: Prisma.FeedbackReplyOmit
   userRole?: Prisma.UserRoleOmit
   userEloHistory?: Prisma.UserEloHistoryOmit
+  gameElo?: Prisma.GameEloOmit
   game?: Prisma.GameOmit
   move?: Prisma.MoveOmit
   aIError?: Prisma.AIErrorOmit
-  mLModel?: Prisma.MLModelOmit
+  botSkill?: Prisma.BotSkillOmit
   mLPlayerProfile?: Prisma.MLPlayerProfileOmit
   trainingSession?: Prisma.TrainingSessionOmit
   trainingEpisode?: Prisma.TrainingEpisodeOmit
@@ -4095,6 +4379,8 @@ export type GlobalOmitConfig = {
   jwks?: Prisma.JwksOmit
   baVerification?: Prisma.BaVerificationOmit
   userNotification?: Prisma.UserNotificationOmit
+  notificationPreference?: Prisma.NotificationPreferenceOmit
+  scheduledJob?: Prisma.ScheduledJobOmit
   tournament?: Prisma.TournamentOmit
   tournamentParticipant?: Prisma.TournamentParticipantOmit
   tournamentRound?: Prisma.TournamentRoundOmit

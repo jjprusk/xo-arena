@@ -190,7 +190,7 @@ export type MLBenchmarkResultWhereInput = {
   vsHard?: Prisma.JsonFilter<"MLBenchmarkResult">
   summary?: Prisma.JsonFilter<"MLBenchmarkResult">
   vsTough?: Prisma.JsonNullableFilter<"MLBenchmarkResult">
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }
 
 export type MLBenchmarkResultOrderByWithRelationInput = {
@@ -203,7 +203,7 @@ export type MLBenchmarkResultOrderByWithRelationInput = {
   vsHard?: Prisma.SortOrder
   summary?: Prisma.SortOrder
   vsTough?: Prisma.SortOrderInput | Prisma.SortOrder
-  model?: Prisma.MLModelOrderByWithRelationInput
+  model?: Prisma.BotSkillOrderByWithRelationInput
 }
 
 export type MLBenchmarkResultWhereUniqueInput = Prisma.AtLeast<{
@@ -219,7 +219,7 @@ export type MLBenchmarkResultWhereUniqueInput = Prisma.AtLeast<{
   vsHard?: Prisma.JsonFilter<"MLBenchmarkResult">
   summary?: Prisma.JsonFilter<"MLBenchmarkResult">
   vsTough?: Prisma.JsonNullableFilter<"MLBenchmarkResult">
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }, "id">
 
 export type MLBenchmarkResultOrderByWithAggregationInput = {
@@ -261,7 +261,7 @@ export type MLBenchmarkResultCreateInput = {
   vsHard: Prisma.JsonNullValueInput | runtime.InputJsonValue
   summary: Prisma.JsonNullValueInput | runtime.InputJsonValue
   vsTough?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
-  model: Prisma.MLModelCreateNestedOneWithoutBenchmarksInput
+  model: Prisma.BotSkillCreateNestedOneWithoutBenchmarksInput
 }
 
 export type MLBenchmarkResultUncheckedCreateInput = {
@@ -285,7 +285,7 @@ export type MLBenchmarkResultUpdateInput = {
   vsHard?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   summary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   vsTough?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
-  model?: Prisma.MLModelUpdateOneRequiredWithoutBenchmarksNestedInput
+  model?: Prisma.BotSkillUpdateOneRequiredWithoutBenchmarksNestedInput
 }
 
 export type MLBenchmarkResultUncheckedUpdateInput = {
@@ -530,7 +530,7 @@ export type MLBenchmarkResultSelect<ExtArgs extends runtime.Types.Extensions.Int
   vsHard?: boolean
   summary?: boolean
   vsTough?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLBenchmarkResult"]>
 
 export type MLBenchmarkResultSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -543,7 +543,7 @@ export type MLBenchmarkResultSelectCreateManyAndReturn<ExtArgs extends runtime.T
   vsHard?: boolean
   summary?: boolean
   vsTough?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLBenchmarkResult"]>
 
 export type MLBenchmarkResultSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -556,7 +556,7 @@ export type MLBenchmarkResultSelectUpdateManyAndReturn<ExtArgs extends runtime.T
   vsHard?: boolean
   summary?: boolean
   vsTough?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLBenchmarkResult"]>
 
 export type MLBenchmarkResultSelectScalar = {
@@ -573,19 +573,19 @@ export type MLBenchmarkResultSelectScalar = {
 
 export type MLBenchmarkResultOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "modelId" | "runAt" | "vsRandom" | "vsEasy" | "vsMedium" | "vsHard" | "summary" | "vsTough", ExtArgs["result"]["mLBenchmarkResult"]>
 export type MLBenchmarkResultInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLBenchmarkResultIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLBenchmarkResultIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 
 export type $MLBenchmarkResultPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "MLBenchmarkResult"
   objects: {
-    model: Prisma.$MLModelPayload<ExtArgs>
+    model: Prisma.$BotSkillPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -991,7 +991,7 @@ readonly fields: MLBenchmarkResultFieldRefs;
  */
 export interface Prisma__MLBenchmarkResultClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  model<T extends Prisma.MLModelDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MLModelDefaultArgs<ExtArgs>>): Prisma.Prisma__MLModelClient<runtime.Types.Result.GetResult<Prisma.$MLModelPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  model<T extends Prisma.BotSkillDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.BotSkillDefaultArgs<ExtArgs>>): Prisma.Prisma__BotSkillClient<runtime.Types.Result.GetResult<Prisma.$BotSkillPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.

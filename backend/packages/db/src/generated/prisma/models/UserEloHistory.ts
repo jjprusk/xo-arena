@@ -453,6 +453,14 @@ export type UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput = {
   deleteMany?: Prisma.UserEloHistoryScalarWhereInput | Prisma.UserEloHistoryScalarWhereInput[]
 }
 
+export type FloatFieldUpdateOperationsInput = {
+  set?: number
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
+}
+
 export type UserEloHistoryCreateWithoutUserInput = {
   id?: string
   eloRating: number
