@@ -3,10 +3,12 @@ import compression from 'compression'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { readFileSync } from 'fs'
 
 const app = express()
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const dist = join(__dirname, 'dist')
+const { version: LANDING_VERSION } = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf-8'))
 
 // Support both short (local dev) and long (Railway prod) env var names
 const BACKEND_URL    = process.env.BACKEND_PRIVATE_URL    || process.env.BACKEND_URL    || 'http://localhost:3000'
@@ -14,6 +16,9 @@ const TOURNAMENT_URL = process.env.TOURNAMENT_PRIVATE_URL || process.env.TOURNAM
 const XO_URL         = process.env.XO_PRIVATE_URL         || process.env.XO_URL         || null
 
 app.use(compression())
+
+// ── Landing version — checked by smoke tests to confirm successful deploy ────
+app.get('/landing-version', (_req, res) => res.json({ version: LANDING_VERSION }))
 
 // ── /xo/* → XO static file service (strip /xo prefix) ─────────────────────
 // Only active when XO_PRIVATE_URL / XO_URL is set (i.e. in Railway prod/staging).
