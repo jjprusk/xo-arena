@@ -112,10 +112,10 @@
 
 > Run in parallel with 1.4. Real-time architecture findings must be in hand before Connect4 is complete.
 
-- [ ] Build minimal Pong prototype using tight WebSocket loop (Socket.io)
-- [ ] Measure game feel, latency, and server load at simulated concurrent tables
-- [ ] Decision point: confirm WebSocket loop is sufficient or escalate to WebRTC evaluation
-- [ ] Document findings and recommended approach — output feeds directly into Phase 6
+- [x] Build minimal Pong prototype using tight WebSocket loop (Socket.io)
+- [x] Measure game feel, latency, and server load at simulated concurrent tables
+- [x] Decision point: confirm WebSocket loop is sufficient or escalate to WebRTC evaluation — **WebSocket confirmed sufficient**
+- [x] Document findings and recommended approach — `doc/Pong_Spike_Findings.md`
 
 ---
 
