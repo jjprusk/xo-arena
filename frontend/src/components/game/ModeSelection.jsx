@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from '../../store/gameStore.js'
@@ -367,7 +368,7 @@ export default function ModeSelection({ onStart, onPvpJoin, inviteUrl, roomName,
     applyOptions()
     const cfg = getBotPlayConfig(bot)
     const isAlternating = selectedMark === 'alternate'
-    setMode('pvai')
+    setMode('hva')
     setDifficulty(cfg.difficulty)
     setAIImplementation(cfg.implementation)
     setMLModelId(cfg.mlModelId)

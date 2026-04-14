@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Better Auth central instance.
  * Mounted at /api/auth/* in app.js.

@@ -15,25 +15,25 @@ describe('useIsInGame', () => {
     expect(result.current).toBe(false)
   })
 
-  it('returns true when pvai game is playing', () => {
+  it('returns true when hva game is playing', () => {
     useGameStore.setState({ status: 'playing' })
     const { result } = renderHook(() => useIsInGame())
     expect(result.current).toBe(true)
   })
 
-  it('returns true when pvp game is playing', () => {
+  it('returns true when hvh game is playing', () => {
     usePvpStore.setState({ status: 'playing' })
     const { result } = renderHook(() => useIsInGame())
     expect(result.current).toBe(true)
   })
 
-  it('returns false when pvai game is won (not playing)', () => {
+  it('returns false when hva game is won (not playing)', () => {
     useGameStore.setState({ status: 'won' })
     const { result } = renderHook(() => useIsInGame())
     expect(result.current).toBe(false)
   })
 
-  it('returns false when pvp game is finished (not playing)', () => {
+  it('returns false when hvh game is finished (not playing)', () => {
     usePvpStore.setState({ status: 'finished' })
     const { result } = renderHook(() => useIsInGame())
     expect(result.current).toBe(false)

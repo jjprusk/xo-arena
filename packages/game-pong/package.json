@@ -1,0 +1,13 @@
+{
+  "name": "@callidity/game-pong",
+  "version": "0.1.0-spike",
+  "description": "Pong real-time spike — validates Socket.io architecture for Phase 6",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

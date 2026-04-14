@@ -116,8 +116,8 @@ describe('gameStore', () => {
   // ── undoMove ─────────────────────────────────────────────────────────────
 
   describe('undoMove', () => {
-    it('reverts the last 2 moves in pvai mode', () => {
-      s().setMode('pvai')
+    it('reverts the last 2 moves in hva mode', () => {
+      s().setMode('hva')
       s().startGame()
       s().makeMove(0) // X (human)
       s().makeMove(4) // O (AI)
@@ -130,7 +130,7 @@ describe('gameStore', () => {
     })
 
     it('undoes only 1 move when only 1 move has been made', () => {
-      s().setMode('pvai')
+      s().setMode('hva')
       s().startGame()
       s().makeMove(4) // X
       s().undoMove()
@@ -138,8 +138,8 @@ describe('gameStore', () => {
       expect(s().currentTurn).toBe('X')
     })
 
-    it('does nothing when not in pvai mode', () => {
-      s().setMode('pvp')
+    it('does nothing when not in hva mode', () => {
+      s().setMode('hvh')
       s().startGame()
       s().makeMove(0) // X
       s().makeMove(4) // O
@@ -150,7 +150,7 @@ describe('gameStore', () => {
     })
 
     it('does nothing when status is not playing', () => {
-      s().setMode('pvai')
+      s().setMode('hva')
       s().startGame()
       s().makeMove(0)
       // Force game to a non-playing status

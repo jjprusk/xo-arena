@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Tournament bridge — subscribes to Redis tournament events and:
  * 1. Emits Socket.io events to user-specific rooms

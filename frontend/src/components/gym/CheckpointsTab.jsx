@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect } from 'react'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
@@ -63,7 +64,7 @@ export default function CheckpointsTab({ model, onRestore }) {
             style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
             {checkpoints.map(cp => (
               <option key={cp.id} value={cp.id}>
-                Episode {cp.episodeNum.toLocaleString()} · ε={cp.epsilon.toFixed(4)} · ELO {Math.round(cp.eloRating)} · {new Date(cp.createdAt).toLocaleDateString()}
+                Episode {cp.episodeNum.toLocaleString()} · ε={cp.epsilon.toFixed(4)} · {new Date(cp.createdAt).toLocaleDateString()}
               </option>
             ))}
           </select>
@@ -72,7 +73,7 @@ export default function CheckpointsTab({ model, onRestore }) {
               style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
               <div className="text-xs space-y-0.5" style={{ color: 'var(--text-muted)' }}>
                 <p><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Episode {selectedCp.episodeNum.toLocaleString()}</span></p>
-                <p>ε = {selectedCp.epsilon.toFixed(4)} · ELO {Math.round(selectedCp.eloRating)}</p>
+                <p>ε = {selectedCp.epsilon.toFixed(4)}</p>
                 <p>{new Date(selectedCp.createdAt).toLocaleString()}</p>
               </div>
               <Btn onClick={handleRestore} disabled={restoring} variant="ghost">

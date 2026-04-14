@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect } from 'react'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
@@ -132,7 +133,7 @@ export default function RulesTab({ model, models }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{m?.name ?? modelId}</div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {m?.algorithm?.replace(/_/g, '-')} · ELO {Math.round(m?.eloRating ?? 0)}
+                    {m?.algorithm?.toUpperCase()}
                   </div>
                 </div>
                 {sourceModels.length > 1 && (

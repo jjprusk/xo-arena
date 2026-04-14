@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Frontend ML inference
  *
@@ -212,25 +213,30 @@ const modelCache   = new Map()
 const pendingLoads = new Map()
 
 function parseModel(data) {
-  const { algorithm, qtable, config = {} } = data
-  switch (algorithm) {
-    case 'Q_LEARNING':
-    case 'SARSA':
-    case 'MONTE_CARLO':
-    case 'POLICY_GRADIENT':
-      return qtable ? { type: 'tabular', qtable } : null
+  const { algorithm, config = {} } = data
+  // Accept both new lowercase format and legacy uppercase enum format
+  const alg = (algorithm || 'qlearning').toLowerCase().replace(/_/g, '')
+  // weights field (new) or qtable (legacy)
+  const weights = data.weights ?? data.qtable
 
-    case 'DQN':
-      return qtable?.online
-        ? { type: 'dqn', net: NeuralNet.fromJSON(qtable.online) }
+  switch (alg) {
+    case 'qlearning':
+    case 'sarsa':
+    case 'montecarlo':
+    case 'policygradient':
+      return weights ? { type: 'tabular', qtable: weights } : null
+
+    case 'dqn':
+      return weights?.online
+        ? { type: 'dqn', net: NeuralNet.fromJSON(weights.online) }
         : null
 
-    case 'ALPHA_ZERO':
-      return (qtable?.policyNet && qtable?.valueNet)
+    case 'alphazero':
+      return (weights?.policyNet && weights?.valueNet)
         ? {
             type: 'alphazero',
-            policyNet:      NeuralNet.fromJSON(qtable.policyNet),
-            valueNet:       NeuralNet.fromJSON(qtable.valueNet),
+            policyNet:      NeuralNet.fromJSON(weights.policyNet),
+            valueNet:       NeuralNet.fromJSON(weights.valueNet),
             numSimulations: config.numSimulations ?? 50,
             cPuct:          config.cPuct          ?? 1.5,
           }

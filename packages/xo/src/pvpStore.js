@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { create } from 'zustand'
 import { pvpCfg } from './pvpConfig.js'
 
@@ -64,7 +65,12 @@ export const usePvpStore = create((set, get) => ({
     get()._registerListeners(socket)
     set({ slug, role: role === 'spectator' ? 'spectator' : 'guest', status: 'waiting', error: null })
     pvpCfg.getToken().then((token) => {
-      socket.emit('room:join', { slug, role, authToken: token || null })
+      const emit = () => socket.emit('room:join', { slug, role, authToken: token || null })
+      if (socket.connected) {
+        emit()
+      } else {
+        socket.once('connect', emit)
+      }
     })
   },
 
@@ -167,18 +173,22 @@ export const usePvpStore = create((set, get) => ({
     socket.on('room:joined', ({ slug, role, mark, room }) => {
       const opponentName = mark === 'O' ? (room?.hostUserDisplayName ?? null) : null
       const opponentElo  = mark === 'O' ? (room?.hostUserElo ?? null) : null
+      const spectatorStatus = room?.status === 'finished' ? 'finished' : 'playing'
       set({
         slug,
         role,
         displayName: room?.displayName,
         myMark: mark || null,
-        status: role === 'spectator' ? 'playing' : 'waiting',
+        status: role === 'spectator' ? spectatorStatus : 'waiting',
         board: room?.board || Array(9).fill(null),
         currentTurn: room?.currentTurn || 'X',
         scores: room?.scores || { X: 0, O: 0 },
+        round: room?.round ?? 1,
         spectatorCount: room?.spectatorCount ?? 0,
         opponentName,
         opponentElo,
+        winner: role === 'spectator' ? (room?.winner ?? null) : null,
+        winLine: role === 'spectator' ? (room?.winLine ?? null) : null,
       })
     })
 
@@ -212,7 +222,7 @@ export const usePvpStore = create((set, get) => ({
 
     socket.on('game:moved', ({ board, currentTurn, status, winner, winLine, scores }) => {
       const { myMark } = get()
-      set({ board, currentTurn, scores, _optimisticSnapshot: null, idleWarning: null })
+      set({ board, currentTurn, ...(scores !== undefined && { scores }), _optimisticSnapshot: null, idleWarning: null })
       if (status === 'finished') {
         set({ status: 'finished', winner, winLine })
         pvpCfg.playSound(winner ? 'win' : 'draw')

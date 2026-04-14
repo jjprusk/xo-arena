@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { config as dotenvConfig } from 'dotenv'
 import { existsSync } from 'fs'
 import { spawn } from 'child_process'

@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Socket.io event handler.
  * Wires all room lifecycle and game events to the RoomManager.
@@ -9,10 +10,12 @@ import Redis from 'ioredis'
 import { jwtVerify, importJWK } from 'jose'
 import { roomManager } from './roomManager.js'
 import { botGameRunner } from './botGameRunner.js'
+import * as pongRunner from './pongRunner.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
-import { getSystemConfig } from '../services/mlService.js'
+import { getSystemConfig, getMoveForModel } from '../services/skillService.js'
+import { minimaxMove } from '@xo-arena/ai'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
 import {
@@ -185,9 +188,55 @@ export async function attachSocketIO(httpServer) {
           spectatorAllowed,
         })
         room.hostUserDisplayName = user?.displayName ?? null
-        room.hostUserElo = user?.eloRating ?? null
+        if (user?.id) {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.hostUserElo = eloRow?.rating ?? null
+        }
         socket.join(room.slug)
         socket.emit('room:created', { slug: room.slug, displayName: room.displayName, mark: 'X' })
+      } catch (err) {
+        socket.emit('error', { message: err.message })
+      }
+    })
+
+    on('room:create:hvb', async ({ botUserId, botSkillId, spectatorAllowed = true, authToken = null } = {}) => {
+      try {
+        if (!botUserId) return socket.emit('error', { message: 'botUserId required' })
+        const user = await resolveSocketUser(authToken)
+        if (!socket.connected) return
+        // Human is X (host), bot is O
+        const room = roomManager.createRoom({
+          hostSocketId: socket.id,
+          hostUserId: user?.id || null,
+          spectatorAllowed,
+          isHvb: true,
+          botUserId,
+          botSkillId: botSkillId || null,
+          botMark: 'O',
+        })
+        room.hostUserDisplayName = user?.displayName ?? null
+        if (user?.id) {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.hostUserElo = eloRow?.rating ?? null
+        }
+        // Join the human and a virtual bot "seat" (no real socket for bot)
+        socket.join(room.slug)
+        // Simulate guest join for the bot — set guestId to a sentinel, update status to playing
+        room.guestId = `bot:${botUserId}`
+        room.guestUserId = botUserId
+        room.playerMarks[`bot:${botUserId}`] = 'O'
+        room.status = 'playing'
+        socket.emit('room:created:hvb', {
+          slug: room.slug,
+          displayName: room.displayName,
+          mark: 'X',
+          board: room.board,
+          currentTurn: room.currentTurn,
+        })
+        // Start idle timer for the human
+        const { warnMs, graceMs } = await getIdleConfig()
+        const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+        roomManager.resetIdleTimer({ socketId: socket.id, warnMs, graceMs, onWarn, onAbandon, onKick })
       } catch (err) {
         socket.emit('error', { message: err.message })
       }
@@ -226,6 +275,8 @@ export async function attachSocketIO(httpServer) {
               currentTurn: g.currentTurn,
               winner: g.winner,
               winLine: g.winLine,
+              scores: { X: g.seriesBot1Wins, O: g.seriesBot2Wins },
+              round: g.seriesGamesPlayed + 1,
               spectatorCount: g.spectatorIds.size,
               spectatorAllowed: true,
               isBotGame: true,
@@ -243,7 +294,10 @@ export async function attachSocketIO(httpServer) {
 
         const room = result.room
         room.guestUserDisplayName = user?.displayName ?? null
-        room.guestUserElo = user?.eloRating ?? null
+        if (user?.id) {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.guestUserElo = eloRow?.rating ?? null
+        }
         socket.join(slug)
         socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeRoom(room) })
         // Notify host
@@ -303,6 +357,11 @@ export async function attachSocketIO(httpServer) {
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
         roomManager.resetIdleTimer({ socketId: socket.id, warnMs, graceMs, onWarn, onAbandon, onKick })
+
+        // For HvB rooms, compute and apply bot move server-side
+        if (room.isHvb) {
+          dispatchBotMove(room, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot move'))
+        }
       }
     })
 
@@ -407,7 +466,10 @@ export async function attachSocketIO(httpServer) {
           bestOfN,
         })
         room.hostUserDisplayName = user.displayName ?? null
-        room.hostUserElo = user.eloRating ?? null
+        {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.hostUserElo = eloRow?.rating ?? null
+        }
         socket.join(room.slug)
         slug = room.slug
         mark = 'X'
@@ -420,7 +482,10 @@ export async function attachSocketIO(httpServer) {
 
         const room = result.room
         room.guestUserDisplayName = user.displayName ?? null
-        room.guestUserElo = user.eloRating ?? null
+        {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          room.guestUserElo = eloRow?.rating ?? null
+        }
         mark = 'O'
         socket.join(slug)
         socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })
@@ -435,6 +500,37 @@ export async function attachSocketIO(httpServer) {
           roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
         }
       }
+    })
+
+    // ── Pong spike ───────────────────────────────────────────────────────────
+
+    on('pong:create', ({ slug }) => {
+      if (!slug) return socket.emit('error', { message: 'slug required' })
+      pongRunner.createRoom(slug)
+      socket.join(slug)
+      const result = pongRunner.joinRoom(slug, socket.id)
+      if (result.error) return socket.emit('error', { message: result.error })
+      socket.emit('pong:created', { slug, playerIndex: result.playerIndex })
+    })
+
+    on('pong:join', ({ slug }) => {
+      if (!slug) return socket.emit('error', { message: 'slug required' })
+      if (!pongRunner.hasRoom(slug)) pongRunner.createRoom(slug)
+      socket.join(slug)
+      const result = pongRunner.joinRoom(slug, socket.id)
+      if (result.error) return socket.emit('error', { message: result.error })
+      const currentState = pongRunner.getState(slug)
+      socket.emit('pong:joined', {
+        slug,
+        playerIndex: result.playerIndex ?? null,
+        spectating:  result.spectating ?? false,
+        state:       currentState,
+      })
+    })
+
+    on('pong:input', ({ slug, direction }) => {
+      if (!slug || !direction) return
+      pongRunner.applyInput(slug, socket.id, direction)
     })
 
     // ── Support room ─────────────────────────────────────────────────
@@ -552,8 +648,9 @@ export async function attachSocketIO(httpServer) {
         },
       })
 
-      // Also clean up bot game spectator
+      // Also clean up bot game spectator and pong rooms
       botGameRunner.removeSpectator(socket.id)
+      pongRunner.removeSocket(socket.id)
 
       if (result && !result.wasSpectator) {
         const slug = roomManager._socketToRoom.get(socket.id) ||
@@ -570,6 +667,7 @@ export async function attachSocketIO(httpServer) {
   })
 
   botGameRunner.setIO(io)
+  pongRunner.setIO(io)
 
   // Clean up _pendingPvpMatches when any room closes (abandon, stale sweep, cancel, etc.)
   // so the map doesn't accumulate entries for matches that ended abnormally.
@@ -584,6 +682,47 @@ export async function attachSocketIO(httpServer) {
   setInterval(() => broadcastOnlineUsers(io), 30_000)
 
   return io
+}
+
+/**
+ * Compute and apply a bot move for an HvB room, then emit game:moved.
+ * Falls back to minimax master if no skill is configured.
+ */
+async function dispatchBotMove(room, io) {
+  if (!room.isHvb || room.status !== 'playing') return
+
+  let cellIndex
+  try {
+    if (room.botSkillId) {
+      cellIndex = await getMoveForModel(room.botSkillId, room.board)
+    } else {
+      cellIndex = minimaxMove(room.board, 'master', room.botMark)
+    }
+  } catch (err) {
+    logger.warn({ err, slug: room.slug }, 'Bot move computation failed, falling back to minimax')
+    cellIndex = minimaxMove(room.board, 'master', room.botMark)
+  }
+
+  const result = roomManager.makeBotMove({ slug: room.slug, cellIndex })
+  if (result.error) {
+    logger.warn({ error: result.error, slug: room.slug }, 'makeBotMove failed')
+    return
+  }
+
+  const r = result.room
+  io.to(r.slug).emit('game:moved', {
+    cellIndex,
+    board: r.board,
+    currentTurn: r.currentTurn,
+    status: r.status,
+    winner: r.winner,
+    winLine: r.winLine,
+    scores: r.scores,
+  })
+
+  if (r.status === 'finished') {
+    recordPvpGame(r, io).catch((err) => logger.warn({ err }, 'Failed to record HvB game'))
+  }
 }
 
 /**
@@ -623,7 +762,7 @@ async function recordPvpGame(room, io) {
       player1Id: room.hostUserId,
       player2Id: room.guestUserId || null,
       winnerId,
-      mode: 'PVP',
+      mode: room.isHvb ? 'HVB' : 'HVH',
       outcome,
       totalMoves,
       durationMs,
@@ -631,11 +770,12 @@ async function recordPvpGame(room, io) {
       roomName: room.name,
       tournamentId: room.tournamentId ?? null,
       tournamentMatchId: room.tournamentMatchId ?? null,
+      moveStream: room.moves?.length ? room.moves : null,
     })
   }
 
-  // ELO update: skip for tournament games (design requirement)
-  if (!isTournamentRoom && room.hostUserId && room.guestUserId) {
+  // ELO update: skip for tournament and HvB games
+  if (!isTournamentRoom && !room.isHvb && room.hostUserId && room.guestUserId) {
     updatePlayersEloAfterPvP(room.hostUserId, room.guestUserId, outcome).catch(() => {})
   }
 
@@ -687,11 +827,11 @@ async function recordPvpGame(room, io) {
   // Record credits and emit accomplishment events (free-play only)
   const pvpParticipants = [
     room.hostUserId  ? { userId: room.hostUserId,  isBot: false, botOwnerId: null } : null,
-    room.guestUserId ? { userId: room.guestUserId, isBot: false, botOwnerId: null } : null,
+    room.guestUserId ? { userId: room.guestUserId, isBot: room.isHvb ?? false, botOwnerId: null } : null,
   ].filter(Boolean)
 
   if (pvpParticipants.length > 0) {
-    recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: 'pvp' })
+    recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: room.isHvb ? 'hvb' : 'hvh' })
       .then((notifications) => {
         if (!io || !notifications.length) return
         for (const notif of notifications) {

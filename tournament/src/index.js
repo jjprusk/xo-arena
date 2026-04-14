@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import 'dotenv/config'
 import http from 'node:http'
 import { readFileSync } from 'node:fs'

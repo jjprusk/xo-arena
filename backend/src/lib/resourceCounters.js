@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Resource counters — obtain/release tracking for sockets, rooms, and Redis connections.
  *

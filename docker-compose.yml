@@ -88,8 +88,12 @@ services:
       - "5174:5174"
     volumes:
       - ./landing:/app
-      - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
-      - ./packages/nav:/packages/nav  # resolve alias: __dirname(/app)/../packages/nav
+      - ./packages/xo:/packages/xo           # resolve alias: __dirname(/app)/../packages/xo
+      - ./packages/nav:/packages/nav         # resolve alias: __dirname(/app)/../packages/nav
+      - ./packages/sdk:/packages/sdk         # resolve alias: __dirname(/app)/../packages/sdk
+      - ./packages/game-xo:/packages/game-xo # resolve alias: __dirname(/app)/../packages/game-xo
+      - ./packages/game-pong:/packages/game-pong # resolve alias: __dirname(/app)/../packages/game-pong
+      - ./packages/ai:/packages/ai           # game-xo imports @xo-arena/ai
       - /app/node_modules
     depends_on:
       - backend

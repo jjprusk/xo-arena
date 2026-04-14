@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import '@testing-library/jest-dom'
 
 // Mock window.matchMedia (not available in jsdom)

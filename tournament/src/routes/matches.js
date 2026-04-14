@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import db from '../lib/db.js'
 import { publish } from '../lib/redis.js'
@@ -243,7 +244,7 @@ async function advanceBracketIfReady(match) {
           const p1 = participantMap[p1Id]
           const p2 = participantMap[p2Id]
 
-          if (tournament.mode === 'PVP') {
+          if (tournament.mode === 'HVH') {
             pendingPublishes.push(['tournament:match:ready', {
               tournamentId: tournament.id,
               matchId: newMatch.id,

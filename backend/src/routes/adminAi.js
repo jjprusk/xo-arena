@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { getSummary, getHistogram, getHeatmap, getTotal } from '../services/aiMetrics.js'

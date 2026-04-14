@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Thin API client for the tournament service.
  * Base URL from VITE_TOURNAMENT_URL (defaults to '' for same-origin proxy).

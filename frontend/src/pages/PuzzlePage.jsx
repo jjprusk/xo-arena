@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Puzzle Mode — tactical tic-tac-toe puzzles.
  * Puzzles are generated server-side by type: win1, block1, fork, survive.

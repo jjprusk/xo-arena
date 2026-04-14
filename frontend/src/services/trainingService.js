@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Frontend training service — runs ML training episodes in the browser.
  *

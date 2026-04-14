@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
 import { useGuideStore } from '../../store/guideStore.js'
 import { POST_JOURNEY_SLOTS } from './slotActions.js'

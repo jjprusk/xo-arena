@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
@@ -492,6 +493,98 @@ function SessionIdlePanel() {
   )
 }
 
+function ReplayConfigPanel() {
+  const [form, setForm]     = useState({ casualRetentionDays: '', tournamentRetentionDays: '' })
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const token = await getToken()
+        const d = await api.admin.getReplayConfig(token)
+        setForm({ casualRetentionDays: d.casualRetentionDays, tournamentRetentionDays: d.tournamentRetentionDays })
+        setLoaded(true)
+      } catch { /* non-fatal */ }
+    }
+    load()
+  }, [])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    setSaved(false)
+    try {
+      const token = await getToken()
+      const d = await api.admin.setReplayConfig({
+        casualRetentionDays: form.casualRetentionDays,
+        tournamentRetentionDays: form.tournamentRetentionDays,
+      }, token)
+      setForm({ casualRetentionDays: d.casualRetentionDays, tournamentRetentionDays: d.tournamentRetentionDays })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch { /* non-fatal */ } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!loaded) return null
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Replay Retention</h2>
+      <div
+        className="rounded-xl border p-4 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+      >
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Move streams are purged this many days after a game ends. Game results are kept permanently. A daily job nulls out expired streams.
+        </p>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Casual games (days)</span>
+              <input
+                type="number"
+                min="1"
+                value={form.casualRetentionDays}
+                onChange={e => setForm(f => ({ ...f, casualRetentionDays: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Retention for non-tournament replays (default 90)</span>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Tournament games (days)</span>
+              <input
+                type="number"
+                min="1"
+                value={form.tournamentRetentionDays}
+                onChange={e => setForm(f => ({ ...f, tournamentRetentionDays: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Retention for tournament replays (default 90)</span>
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {saved && <span className="text-xs font-semibold" style={{ color: 'var(--color-teal-600)' }}>✓ Saved</span>}
+          </div>
+        </form>
+      </div>
+    </section>
+  )
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -533,6 +626,7 @@ export default function AdminDashboard() {
       <LogRetentionPanel />
       <IdleConfigPanel />
       <SessionIdlePanel />
+      <ReplayConfigPanel />
 
     </div>
   )

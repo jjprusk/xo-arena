@@ -49,10 +49,10 @@ export type FeedbackStatus = (typeof FeedbackStatus)[keyof typeof FeedbackStatus
 
 
 export const GameMode = {
-  PVP: 'PVP',
-  PVAI: 'PVAI',
-  PVBOT: 'PVBOT',
-  BOTVBOT: 'BOTVBOT'
+  HVH: 'HVH',
+  HVA: 'HVA',
+  HVB: 'HVB',
+  BVB: 'BVB'
 } as const
 
 export type GameMode = (typeof GameMode)[keyof typeof GameMode]
@@ -89,24 +89,12 @@ export const MovePlayer = {
 export type MovePlayer = (typeof MovePlayer)[keyof typeof MovePlayer]
 
 
-export const MLAlgorithm = {
-  Q_LEARNING: 'Q_LEARNING',
-  SARSA: 'SARSA',
-  MONTE_CARLO: 'MONTE_CARLO',
-  POLICY_GRADIENT: 'POLICY_GRADIENT',
-  DQN: 'DQN',
-  ALPHA_ZERO: 'ALPHA_ZERO'
-} as const
-
-export type MLAlgorithm = (typeof MLAlgorithm)[keyof typeof MLAlgorithm]
-
-
-export const MLModelStatus = {
+export const BotSkillStatus = {
   IDLE: 'IDLE',
   TRAINING: 'TRAINING'
 } as const
 
-export type MLModelStatus = (typeof MLModelStatus)[keyof typeof MLModelStatus]
+export type BotSkillStatus = (typeof BotSkillStatus)[keyof typeof BotSkillStatus]
 
 
 export const TrainingMode = {
@@ -139,7 +127,7 @@ export type EpisodeOutcome = (typeof EpisodeOutcome)[keyof typeof EpisodeOutcome
 
 
 export const TournamentMode = {
-  PVP: 'PVP',
+  HVH: 'HVH',
   BOT_VS_BOT: 'BOT_VS_BOT',
   MIXED: 'MIXED'
 } as const
@@ -205,7 +193,6 @@ export type TournamentStartMode = (typeof TournamentStartMode)[keyof typeof Tour
 
 export const ParticipantStatus = {
   REGISTERED: 'REGISTERED',
-  ACTIVE: 'ACTIVE',
   ELIMINATED: 'ELIMINATED',
   WITHDRAWN: 'WITHDRAWN'
 } as const

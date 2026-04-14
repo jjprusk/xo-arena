@@ -1,5 +1,5 @@
 /**
- * PVP Tournament Match Play tests
+ * HvH Tournament Match Play tests
  *
  * Covers:
  * 1. tournament:room:join — first player creates room, second player joins

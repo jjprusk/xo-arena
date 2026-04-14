@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Master action library for Guide slots.
  * Each action has: key, label, icon, href, section, crossSite

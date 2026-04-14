@@ -1,10 +1,11 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 import { getSnapshots, getLatestSnapshot, getAlerts } from '../lib/resourceCounters.js'
-import { deleteModel, getSystemConfig, setSystemConfig } from '../services/mlService.js'
+import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
 import { hasRole } from '../utils/roles.js'
 import {
   listFeedback,
@@ -55,7 +56,7 @@ router.get('/stats', async (_req, res, next) => {
       db.game.count(),
       db.game.count({ where: { endedAt: { gte: todayStart } } }),
       db.user.count({ where: { banned: true } }),
-      db.mLModel.count(),
+      db.botSkill.count(),
     ])
 
     res.json({ stats: { totalUsers, totalGames, gamesToday, bannedUsers, totalModels } })
@@ -118,9 +119,9 @@ router.get('/users', async (req, res, next) => {
           displayName: true,
           email: true,
           avatarUrl: true,
-          eloRating: true,
           banned: true,
           lastActiveAt: true,
+          gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
           userRoles: { select: { role: true, grantedAt: true } },
           createdAt: true,
           _count: { select: { gamesAsPlayer1: true } },
@@ -151,6 +152,8 @@ router.get('/users', async (req, res, next) => {
 
     const users = rawUsers.map(u => ({
       ...u,
+      eloRating: u.gameElo?.[0]?.rating ?? 1200,
+      gameElo: undefined,
       roles: u.userRoles?.map(r => r.role) ?? [],
       baRole: baRoleMap[u.betterAuthId] ?? null,
       emailVerified: baVerifiedMap[u.betterAuthId] ?? null,
@@ -174,25 +177,32 @@ router.patch('/users/:id', async (req, res, next) => {
 
     const data = {}
     if (banned !== undefined) data.banned = Boolean(banned)
+    let eloOverride = undefined
     if (eloRating !== undefined) {
       const elo = parseFloat(eloRating)
       if (isNaN(elo) || elo < 0 || elo > 5000) {
         return res.status(400).json({ error: 'eloRating must be between 0 and 5000' })
       }
-      data.eloRating = elo
+      eloOverride = elo
     }
     // Update domain user scalar fields
     let user = null
     const USER_SELECT = {
       id: true, betterAuthId: true, username: true, displayName: true,
-      email: true, avatarUrl: true, eloRating: true, banned: true,
+      email: true, avatarUrl: true, banned: true,
       createdAt: true, botLimit: true,
+      gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
       userRoles: { select: { role: true, grantedAt: true } },
       _count: { select: { gamesAsPlayer1: true } },
     }
 
     function flattenRoles(rawUser) {
-      return { ...rawUser, roles: rawUser.userRoles?.map(r => r.role) ?? [] }
+      return {
+        ...rawUser,
+        eloRating: rawUser.gameElo?.[0]?.rating ?? 1200,
+        gameElo: undefined,
+        roles: rawUser.userRoles?.map(r => r.role) ?? [],
+      }
     }
 
     if (Object.keys(data).length > 0) {
@@ -200,6 +210,15 @@ router.patch('/users/:id', async (req, res, next) => {
     } else {
       user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
       if (!user) return res.status(404).json({ error: 'User not found' })
+    }
+    // Update GameElo if eloRating was provided
+    if (eloOverride !== undefined) {
+      await db.gameElo.upsert({
+        where: { userId_gameId: { userId: req.params.id, gameId: 'xo' } },
+        update: { rating: eloOverride },
+        create: { userId: req.params.id, gameId: 'xo', rating: eloOverride, gamesPlayed: 0 },
+      })
+      user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
     }
 
     // Update domain roles via UserRole join table
@@ -282,8 +301,9 @@ router.get('/users/:id', async (req, res, next) => {
       where: { id: req.params.id, isBot: false },
       select: {
         id: true, betterAuthId: true, username: true, displayName: true,
-        email: true, avatarUrl: true, eloRating: true, banned: true,
+        email: true, avatarUrl: true, banned: true,
         oauthProvider: true, createdAt: true, botLimit: true,
+        gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
         userRoles: { select: { role: true, grantedAt: true } },
         _count: { select: { gamesAsPlayer1: true } },
       },
@@ -306,6 +326,8 @@ router.get('/users/:id', async (req, res, next) => {
     res.json({
       user: {
         ...user,
+        eloRating: user.gameElo?.[0]?.rating ?? 1200,
+        gameElo: undefined,
         roles: user.userRoles?.map(r => r.role) ?? [],
         baRole: baUser?.role ?? null,
         emailVerified: baUser?.emailVerified ?? null,
@@ -436,39 +458,52 @@ router.get('/ml/models', async (req, res, next) => {
     }
 
     const [models, total] = await Promise.all([
-      db.mLModel.findMany({
+      db.botSkill.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
         include: { _count: { select: { sessions: true } } },
       }),
-      db.mLModel.count({ where }),
+      db.botSkill.count({ where }),
     ])
 
     // Enrich with creator display names.
     // createdBy may store a BA user ID (ba_xxx) for new bots or a domain user ID
     // for bots created before the ownerBaId fix — query both ways.
     const creatorIds = [...new Set(models.map(m => m.createdBy).filter(Boolean))]
-    const [byBaId, byDomainId] = creatorIds.length
-      ? await Promise.all([
-          db.user.findMany({
+    const botIds = [...new Set(models.map(m => m.botId).filter(Boolean))]
+
+    const [byBaId, byDomainId, botEloRows] = await Promise.all([
+      creatorIds.length
+        ? db.user.findMany({
             where: { betterAuthId: { in: creatorIds } },
             select: { betterAuthId: true, id: true, displayName: true, username: true },
-          }),
-          db.user.findMany({
+          })
+        : [],
+      creatorIds.length
+        ? db.user.findMany({
             where: { id: { in: creatorIds } },
             select: { betterAuthId: true, id: true, displayName: true, username: true },
-          }),
-        ])
-      : [[], []]
+          })
+        : [],
+      botIds.length
+        ? db.gameElo.findMany({
+            where: { userId: { in: botIds }, gameId: 'xo' },
+            select: { userId: true, rating: true },
+          })
+        : [],
+    ])
+
     const creatorMap = Object.fromEntries([
       ...byDomainId.map(u => [u.id, u]),
       ...byBaId.map(u => [u.betterAuthId, u]),
     ])
+    const eloMap = Object.fromEntries(botEloRows.map(r => [r.userId, r.rating]))
 
     const enriched = models.map(m => ({
       ...m,
+      eloRating: m.botId ? (eloMap[m.botId] ?? 1200) : null,
       creatorName: m.createdBy
         ? (creatorMap[m.createdBy]?.displayName || creatorMap[m.createdBy]?.username || null)
         : null,
@@ -486,9 +521,9 @@ router.get('/ml/models', async (req, res, next) => {
  */
 router.patch('/ml/models/:id/feature', async (req, res, next) => {
   try {
-    const model = await db.mLModel.findUnique({ where: { id: req.params.id }, select: { featured: true } })
+    const model = await db.botSkill.findUnique({ where: { id: req.params.id }, select: { featured: true } })
     if (!model) return res.status(404).json({ error: 'Model not found' })
-    const updated = await db.mLModel.update({
+    const updated = await db.botSkill.update({
       where: { id: req.params.id },
       data: { featured: !model.featured },
     })
@@ -664,7 +699,7 @@ router.patch('/ml/limits', async (req, res, next) => {
  */
 router.patch('/ml/models/:id/max-episodes', async (req, res, next) => {
   try {
-    const model = await db.mLModel.findUnique({ where: { id: req.params.id }, select: { id: true, maxEpisodes: true } })
+    const model = await db.botSkill.findUnique({ where: { id: req.params.id }, select: { id: true, maxEpisodes: true } })
     if (!model) return res.status(404).json({ error: 'Model not found' })
 
     const v = parseInt(req.body.maxEpisodes)
@@ -673,7 +708,7 @@ router.patch('/ml/models/:id/max-episodes', async (req, res, next) => {
       return res.status(400).json({ error: `Cannot decrease maxEpisodes (current: ${model.maxEpisodes.toLocaleString()})` })
     }
 
-    const updated = await db.mLModel.update({ where: { id: req.params.id }, data: { maxEpisodes: v } })
+    const updated = await db.botSkill.update({ where: { id: req.params.id }, data: { maxEpisodes: v } })
     res.json({ model: { id: updated.id, maxEpisodes: updated.maxEpisodes } })
   } catch (err) {
     next(err)
@@ -738,7 +773,7 @@ router.get('/bots', async (req, res, next) => {
           id: true,
           displayName: true,
           avatarUrl: true,
-          eloRating: true,
+          gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
           botModelType: true,
           botModelId: true,
           botActive: true,
@@ -765,6 +800,8 @@ router.get('/bots', async (req, res, next) => {
 
     const enriched = bots.map(b => ({
       ...b,
+      eloRating: b.gameElo?.[0]?.rating ?? 1200,
+      gameElo: undefined,
       owner: b.botOwnerId ? (ownerMap[b.botOwnerId] ?? null) : null,
     }))
 
@@ -832,7 +869,7 @@ router.delete('/bots/:id', async (req, res, next) => {
     })
 
     if (bot.botModelId) {
-      await db.mLModel.delete({ where: { id: bot.botModelId } }).catch(() => {})
+      await db.botSkill.delete({ where: { id: bot.botModelId } }).catch(() => {})
     }
 
     res.status(204).end()
@@ -986,6 +1023,47 @@ router.patch('/session-config', async (req, res, next) => {
       getSystemConfig('session.idleGraceMinutes',  5),
     ])
     res.json({ idleWarnMinutes: warn, idleGraceMinutes: grace })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/admin/replay-config
+ */
+router.get('/replay-config', async (_req, res, next) => {
+  try {
+    const [casualRetentionDays, tournamentRetentionDays] = await Promise.all([
+      getSystemConfig('replay.casualRetentionDays',    90),
+      getSystemConfig('replay.tournamentRetentionDays', 90),
+    ])
+    res.json({ casualRetentionDays, tournamentRetentionDays })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/replay-config
+ */
+router.patch('/replay-config', async (req, res, next) => {
+  try {
+    const { casualRetentionDays, tournamentRetentionDays } = req.body
+    if (casualRetentionDays !== undefined) {
+      const v = parseInt(casualRetentionDays)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'casualRetentionDays must be >= 1' })
+      await setSystemConfig('replay.casualRetentionDays', v)
+    }
+    if (tournamentRetentionDays !== undefined) {
+      const v = parseInt(tournamentRetentionDays)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'tournamentRetentionDays must be >= 1' })
+      await setSystemConfig('replay.tournamentRetentionDays', v)
+    }
+    const [casual, tournament] = await Promise.all([
+      getSystemConfig('replay.casualRetentionDays',    90),
+      getSystemConfig('replay.tournamentRetentionDays', 90),
+    ])
+    res.json({ casualRetentionDays: casual, tournamentRetentionDays: tournament })
   } catch (err) {
     next(err)
   }

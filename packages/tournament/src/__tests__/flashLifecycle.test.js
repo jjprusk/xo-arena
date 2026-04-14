@@ -45,7 +45,7 @@ function makeMatch(overrides = {}) {
       id: 'round_1',
       tournamentId: 'tour_1',
       roundNumber: 1,
-      tournament: { id: 'tour_1', status: 'IN_PROGRESS', bracketType: 'SINGLE_ELIM', mode: 'PVP', format: 'FLASH' },
+      tournament: { id: 'tour_1', status: 'IN_PROGRESS', bracketType: 'SINGLE_ELIM', mode: 'HVH', format: 'FLASH' },
       matches: [],
     },
     ...overrides,

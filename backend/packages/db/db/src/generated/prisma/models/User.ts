@@ -27,8 +27,7 @@ export type AggregateUser = {
 }
 
 export type UserAvgAggregateOutputType = {
-  eloRating: number | null
-  mlModelLimit: number | null
+  skillLimit: number | null
   botLimit: number | null
   botGamesPlayed: number | null
   creditsHpc: number | null
@@ -37,8 +36,7 @@ export type UserAvgAggregateOutputType = {
 }
 
 export type UserSumAggregateOutputType = {
-  eloRating: number | null
-  mlModelLimit: number | null
+  skillLimit: number | null
   botLimit: number | null
   botGamesPlayed: number | null
   creditsHpc: number | null
@@ -56,9 +54,8 @@ export type UserMinAggregateOutputType = {
   oauthProvider: string | null
   createdAt: Date | null
   updatedAt: Date | null
-  eloRating: number | null
   banned: boolean | null
-  mlModelLimit: number | null
+  skillLimit: number | null
   betterAuthId: string | null
   botActive: boolean | null
   botAvailable: boolean | null
@@ -90,9 +87,8 @@ export type UserMaxAggregateOutputType = {
   oauthProvider: string | null
   createdAt: Date | null
   updatedAt: Date | null
-  eloRating: number | null
   banned: boolean | null
-  mlModelLimit: number | null
+  skillLimit: number | null
   betterAuthId: string | null
   botActive: boolean | null
   botAvailable: boolean | null
@@ -125,9 +121,8 @@ export type UserCountAggregateOutputType = {
   preferences: number
   createdAt: number
   updatedAt: number
-  eloRating: number
   banned: number
-  mlModelLimit: number
+  skillLimit: number
   betterAuthId: number
   botActive: number
   botAvailable: number
@@ -152,8 +147,7 @@ export type UserCountAggregateOutputType = {
 
 
 export type UserAvgAggregateInputType = {
-  eloRating?: true
-  mlModelLimit?: true
+  skillLimit?: true
   botLimit?: true
   botGamesPlayed?: true
   creditsHpc?: true
@@ -162,8 +156,7 @@ export type UserAvgAggregateInputType = {
 }
 
 export type UserSumAggregateInputType = {
-  eloRating?: true
-  mlModelLimit?: true
+  skillLimit?: true
   botLimit?: true
   botGamesPlayed?: true
   creditsHpc?: true
@@ -181,9 +174,8 @@ export type UserMinAggregateInputType = {
   oauthProvider?: true
   createdAt?: true
   updatedAt?: true
-  eloRating?: true
   banned?: true
-  mlModelLimit?: true
+  skillLimit?: true
   betterAuthId?: true
   botActive?: true
   botAvailable?: true
@@ -215,9 +207,8 @@ export type UserMaxAggregateInputType = {
   oauthProvider?: true
   createdAt?: true
   updatedAt?: true
-  eloRating?: true
   banned?: true
-  mlModelLimit?: true
+  skillLimit?: true
   betterAuthId?: true
   botActive?: true
   botAvailable?: true
@@ -250,9 +241,8 @@ export type UserCountAggregateInputType = {
   preferences?: true
   createdAt?: true
   updatedAt?: true
-  eloRating?: true
   banned?: true
-  mlModelLimit?: true
+  skillLimit?: true
   betterAuthId?: true
   botActive?: true
   botAvailable?: true
@@ -372,9 +362,8 @@ export type UserGroupByOutputType = {
   preferences: runtime.JsonValue
   createdAt: Date
   updatedAt: Date
-  eloRating: number
   banned: boolean
-  mlModelLimit: number | null
+  skillLimit: number | null
   betterAuthId: string | null
   botActive: boolean
   botAvailable: boolean
@@ -430,9 +419,8 @@ export type UserWhereInput = {
   preferences?: Prisma.JsonFilter<"User">
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
-  eloRating?: Prisma.FloatFilter<"User"> | number
   banned?: Prisma.BoolFilter<"User"> | boolean
-  mlModelLimit?: Prisma.IntNullableFilter<"User"> | number | null
+  skillLimit?: Prisma.IntNullableFilter<"User"> | number | null
   betterAuthId?: Prisma.StringNullableFilter<"User"> | string | null
   botActive?: Prisma.BoolFilter<"User"> | boolean
   botAvailable?: Prisma.BoolFilter<"User"> | boolean
@@ -462,6 +450,7 @@ export type UserWhereInput = {
   feedback?: Prisma.FeedbackListRelationFilter
   tournamentParticipants?: Prisma.TournamentParticipantListRelationFilter
   classification?: Prisma.XOR<Prisma.PlayerClassificationNullableScalarRelationFilter, Prisma.PlayerClassificationWhereInput> | null
+  gameElo?: Prisma.GameEloListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -475,9 +464,8 @@ export type UserOrderByWithRelationInput = {
   preferences?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   banned?: Prisma.SortOrder
-  mlModelLimit?: Prisma.SortOrderInput | Prisma.SortOrder
+  skillLimit?: Prisma.SortOrderInput | Prisma.SortOrder
   betterAuthId?: Prisma.SortOrderInput | Prisma.SortOrder
   botActive?: Prisma.SortOrder
   botAvailable?: Prisma.SortOrder
@@ -507,6 +495,7 @@ export type UserOrderByWithRelationInput = {
   feedback?: Prisma.FeedbackOrderByRelationAggregateInput
   tournamentParticipants?: Prisma.TournamentParticipantOrderByRelationAggregateInput
   classification?: Prisma.PlayerClassificationOrderByWithRelationInput
+  gameElo?: Prisma.GameEloOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -525,9 +514,8 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   preferences?: Prisma.JsonFilter<"User">
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
-  eloRating?: Prisma.FloatFilter<"User"> | number
   banned?: Prisma.BoolFilter<"User"> | boolean
-  mlModelLimit?: Prisma.IntNullableFilter<"User"> | number | null
+  skillLimit?: Prisma.IntNullableFilter<"User"> | number | null
   botActive?: Prisma.BoolFilter<"User"> | boolean
   botAvailable?: Prisma.BoolFilter<"User"> | boolean
   botProvisional?: Prisma.BoolFilter<"User"> | boolean
@@ -555,6 +543,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   feedback?: Prisma.FeedbackListRelationFilter
   tournamentParticipants?: Prisma.TournamentParticipantListRelationFilter
   classification?: Prisma.XOR<Prisma.PlayerClassificationNullableScalarRelationFilter, Prisma.PlayerClassificationWhereInput> | null
+  gameElo?: Prisma.GameEloListRelationFilter
 }, "id" | "clerkId" | "username" | "email" | "betterAuthId" | "botModelId">
 
 export type UserOrderByWithAggregationInput = {
@@ -568,9 +557,8 @@ export type UserOrderByWithAggregationInput = {
   preferences?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   banned?: Prisma.SortOrder
-  mlModelLimit?: Prisma.SortOrderInput | Prisma.SortOrder
+  skillLimit?: Prisma.SortOrderInput | Prisma.SortOrder
   betterAuthId?: Prisma.SortOrderInput | Prisma.SortOrder
   botActive?: Prisma.SortOrder
   botAvailable?: Prisma.SortOrder
@@ -611,9 +599,8 @@ export type UserScalarWhereWithAggregatesInput = {
   preferences?: Prisma.JsonWithAggregatesFilter<"User">
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"User"> | Date | string
-  eloRating?: Prisma.FloatWithAggregatesFilter<"User"> | number
   banned?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
-  mlModelLimit?: Prisma.IntNullableWithAggregatesFilter<"User"> | number | null
+  skillLimit?: Prisma.IntNullableWithAggregatesFilter<"User"> | number | null
   betterAuthId?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   botActive?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   botAvailable?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
@@ -646,9 +633,8 @@ export type UserCreateInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -678,6 +664,7 @@ export type UserCreateInput = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -691,9 +678,8 @@ export type UserUncheckedCreateInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -723,6 +709,7 @@ export type UserUncheckedCreateInput = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -736,9 +723,8 @@ export type UserUpdateInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -768,6 +754,7 @@ export type UserUpdateInput = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -781,9 +768,8 @@ export type UserUncheckedUpdateInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -813,6 +799,7 @@ export type UserUncheckedUpdateInput = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -826,9 +813,8 @@ export type UserCreateManyInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -861,9 +847,8 @@ export type UserUpdateManyMutationInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -896,9 +881,8 @@ export type UserUncheckedUpdateManyInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -931,9 +915,8 @@ export type UserCountOrderByAggregateInput = {
   preferences?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   banned?: Prisma.SortOrder
-  mlModelLimit?: Prisma.SortOrder
+  skillLimit?: Prisma.SortOrder
   betterAuthId?: Prisma.SortOrder
   botActive?: Prisma.SortOrder
   botAvailable?: Prisma.SortOrder
@@ -956,8 +939,7 @@ export type UserCountOrderByAggregateInput = {
 }
 
 export type UserAvgOrderByAggregateInput = {
-  eloRating?: Prisma.SortOrder
-  mlModelLimit?: Prisma.SortOrder
+  skillLimit?: Prisma.SortOrder
   botLimit?: Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
   creditsHpc?: Prisma.SortOrder
@@ -975,9 +957,8 @@ export type UserMaxOrderByAggregateInput = {
   oauthProvider?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   banned?: Prisma.SortOrder
-  mlModelLimit?: Prisma.SortOrder
+  skillLimit?: Prisma.SortOrder
   betterAuthId?: Prisma.SortOrder
   botActive?: Prisma.SortOrder
   botAvailable?: Prisma.SortOrder
@@ -1009,9 +990,8 @@ export type UserMinOrderByAggregateInput = {
   oauthProvider?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  eloRating?: Prisma.SortOrder
   banned?: Prisma.SortOrder
-  mlModelLimit?: Prisma.SortOrder
+  skillLimit?: Prisma.SortOrder
   betterAuthId?: Prisma.SortOrder
   botActive?: Prisma.SortOrder
   botAvailable?: Prisma.SortOrder
@@ -1034,8 +1014,7 @@ export type UserMinOrderByAggregateInput = {
 }
 
 export type UserSumOrderByAggregateInput = {
-  eloRating?: Prisma.SortOrder
-  mlModelLimit?: Prisma.SortOrder
+  skillLimit?: Prisma.SortOrder
   botLimit?: Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
   creditsHpc?: Prisma.SortOrder
@@ -1063,14 +1042,6 @@ export type NullableStringFieldUpdateOperationsInput = {
 
 export type DateTimeFieldUpdateOperationsInput = {
   set?: Date | string
-}
-
-export type FloatFieldUpdateOperationsInput = {
-  set?: number
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
 }
 
 export type BoolFieldUpdateOperationsInput = {
@@ -1139,6 +1110,20 @@ export type UserUpdateOneRequiredWithoutEloHistoryNestedInput = {
   upsert?: Prisma.UserUpsertWithoutEloHistoryInput
   connect?: Prisma.UserWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutEloHistoryInput, Prisma.UserUpdateWithoutEloHistoryInput>, Prisma.UserUncheckedUpdateWithoutEloHistoryInput>
+}
+
+export type UserCreateNestedOneWithoutGameEloInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutGameEloInput, Prisma.UserUncheckedCreateWithoutGameEloInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutGameEloInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutGameEloNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutGameEloInput, Prisma.UserUncheckedCreateWithoutGameEloInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutGameEloInput
+  upsert?: Prisma.UserUpsertWithoutGameEloInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutGameEloInput, Prisma.UserUpdateWithoutGameEloInput>, Prisma.UserUncheckedUpdateWithoutGameEloInput>
 }
 
 export type UserCreateNestedOneWithoutGamesAsPlayer1Input = {
@@ -1254,9 +1239,8 @@ export type UserCreateWithoutFeedbackInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1285,6 +1269,7 @@ export type UserCreateWithoutFeedbackInput = {
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutFeedbackInput = {
@@ -1298,9 +1283,8 @@ export type UserUncheckedCreateWithoutFeedbackInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1329,6 +1313,7 @@ export type UserUncheckedCreateWithoutFeedbackInput = {
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutFeedbackInput = {
@@ -1358,9 +1343,8 @@ export type UserUpdateWithoutFeedbackInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1389,6 +1373,7 @@ export type UserUpdateWithoutFeedbackInput = {
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutFeedbackInput = {
@@ -1402,9 +1387,8 @@ export type UserUncheckedUpdateWithoutFeedbackInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1433,6 +1417,7 @@ export type UserUncheckedUpdateWithoutFeedbackInput = {
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUserRolesInput = {
@@ -1446,9 +1431,8 @@ export type UserCreateWithoutUserRolesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1477,6 +1461,7 @@ export type UserCreateWithoutUserRolesInput = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUserRolesInput = {
@@ -1490,9 +1475,8 @@ export type UserUncheckedCreateWithoutUserRolesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1521,6 +1505,7 @@ export type UserUncheckedCreateWithoutUserRolesInput = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUserRolesInput = {
@@ -1550,9 +1535,8 @@ export type UserUpdateWithoutUserRolesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1581,6 +1565,7 @@ export type UserUpdateWithoutUserRolesInput = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUserRolesInput = {
@@ -1594,9 +1579,8 @@ export type UserUncheckedUpdateWithoutUserRolesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1625,6 +1609,7 @@ export type UserUncheckedUpdateWithoutUserRolesInput = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutEloHistoryInput = {
@@ -1638,9 +1623,8 @@ export type UserCreateWithoutEloHistoryInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1669,6 +1653,7 @@ export type UserCreateWithoutEloHistoryInput = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutEloHistoryInput = {
@@ -1682,9 +1667,8 @@ export type UserUncheckedCreateWithoutEloHistoryInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1713,6 +1697,7 @@ export type UserUncheckedCreateWithoutEloHistoryInput = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutEloHistoryInput = {
@@ -1742,9 +1727,8 @@ export type UserUpdateWithoutEloHistoryInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1773,6 +1757,7 @@ export type UserUpdateWithoutEloHistoryInput = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutEloHistoryInput = {
@@ -1786,9 +1771,8 @@ export type UserUncheckedUpdateWithoutEloHistoryInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1817,6 +1801,199 @@ export type UserUncheckedUpdateWithoutEloHistoryInput = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutGameEloInput = {
+  id?: string
+  clerkId?: string | null
+  username: string
+  email: string
+  displayName: string
+  avatarUrl?: string | null
+  oauthProvider?: string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  banned?: boolean
+  skillLimit?: number | null
+  betterAuthId?: string | null
+  botActive?: boolean
+  botAvailable?: boolean
+  botProvisional?: boolean
+  botCompetitive?: boolean
+  botInTournament?: boolean
+  botLimit?: number | null
+  botModelId?: string | null
+  botModelType?: string | null
+  botOwnerId?: string | null
+  isBot?: boolean
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
+  botEloResetAt?: Date | string | null
+  botGamesPlayed?: number
+  creditsHpc?: number
+  creditsBpc?: number
+  creditsTc?: number
+  emailAchievements?: boolean
+  gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
+  gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
+  gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutGameEloInput = {
+  id?: string
+  clerkId?: string | null
+  username: string
+  email: string
+  displayName: string
+  avatarUrl?: string | null
+  oauthProvider?: string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  banned?: boolean
+  skillLimit?: number | null
+  betterAuthId?: string | null
+  botActive?: boolean
+  botAvailable?: boolean
+  botProvisional?: boolean
+  botCompetitive?: boolean
+  botInTournament?: boolean
+  botLimit?: number | null
+  botModelId?: string | null
+  botModelType?: string | null
+  botOwnerId?: string | null
+  isBot?: boolean
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
+  botEloResetAt?: Date | string | null
+  botGamesPlayed?: number
+  creditsHpc?: number
+  creditsBpc?: number
+  creditsTc?: number
+  emailAchievements?: boolean
+  gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
+  gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
+  gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutGameEloInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutGameEloInput, Prisma.UserUncheckedCreateWithoutGameEloInput>
+}
+
+export type UserUpsertWithoutGameEloInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutGameEloInput, Prisma.UserUncheckedUpdateWithoutGameEloInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutGameEloInput, Prisma.UserUncheckedCreateWithoutGameEloInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutGameEloInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutGameEloInput, Prisma.UserUncheckedUpdateWithoutGameEloInput>
+}
+
+export type UserUpdateWithoutGameEloInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  clerkId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  oauthProvider?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botProvisional?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botCompetitive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botInTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  botModelId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
+  gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
+  gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutGameEloInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  clerkId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  oauthProvider?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botProvisional?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botCompetitive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botInTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  botModelId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
+  gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
+  gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
 }
 
 export type UserCreateWithoutGamesAsPlayer1Input = {
@@ -1830,9 +2007,8 @@ export type UserCreateWithoutGamesAsPlayer1Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1861,6 +2037,7 @@ export type UserCreateWithoutGamesAsPlayer1Input = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGamesAsPlayer1Input = {
@@ -1874,9 +2051,8 @@ export type UserUncheckedCreateWithoutGamesAsPlayer1Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1905,6 +2081,7 @@ export type UserUncheckedCreateWithoutGamesAsPlayer1Input = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGamesAsPlayer1Input = {
@@ -1923,9 +2100,8 @@ export type UserCreateWithoutGamesAsPlayer2Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1954,6 +2130,7 @@ export type UserCreateWithoutGamesAsPlayer2Input = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGamesAsPlayer2Input = {
@@ -1967,9 +2144,8 @@ export type UserUncheckedCreateWithoutGamesAsPlayer2Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -1998,6 +2174,7 @@ export type UserUncheckedCreateWithoutGamesAsPlayer2Input = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGamesAsPlayer2Input = {
@@ -2016,9 +2193,8 @@ export type UserCreateWithoutGamesWonInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2047,6 +2223,7 @@ export type UserCreateWithoutGamesWonInput = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGamesWonInput = {
@@ -2060,9 +2237,8 @@ export type UserUncheckedCreateWithoutGamesWonInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2091,6 +2267,7 @@ export type UserUncheckedCreateWithoutGamesWonInput = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGamesWonInput = {
@@ -2120,9 +2297,8 @@ export type UserUpdateWithoutGamesAsPlayer1Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2151,6 +2327,7 @@ export type UserUpdateWithoutGamesAsPlayer1Input = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGamesAsPlayer1Input = {
@@ -2164,9 +2341,8 @@ export type UserUncheckedUpdateWithoutGamesAsPlayer1Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2195,6 +2371,7 @@ export type UserUncheckedUpdateWithoutGamesAsPlayer1Input = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserUpsertWithoutGamesAsPlayer2Input = {
@@ -2219,9 +2396,8 @@ export type UserUpdateWithoutGamesAsPlayer2Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2250,6 +2426,7 @@ export type UserUpdateWithoutGamesAsPlayer2Input = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGamesAsPlayer2Input = {
@@ -2263,9 +2440,8 @@ export type UserUncheckedUpdateWithoutGamesAsPlayer2Input = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2294,6 +2470,7 @@ export type UserUncheckedUpdateWithoutGamesAsPlayer2Input = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserUpsertWithoutGamesWonInput = {
@@ -2318,9 +2495,8 @@ export type UserUpdateWithoutGamesWonInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2349,6 +2525,7 @@ export type UserUpdateWithoutGamesWonInput = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGamesWonInput = {
@@ -2362,9 +2539,8 @@ export type UserUncheckedUpdateWithoutGamesWonInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2393,6 +2569,7 @@ export type UserUncheckedUpdateWithoutGamesWonInput = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutNotificationsInput = {
@@ -2406,9 +2583,8 @@ export type UserCreateWithoutNotificationsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2437,6 +2613,7 @@ export type UserCreateWithoutNotificationsInput = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutNotificationsInput = {
@@ -2450,9 +2627,8 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2481,6 +2657,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutNotificationsInput = {
@@ -2510,9 +2687,8 @@ export type UserUpdateWithoutNotificationsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2541,6 +2717,7 @@ export type UserUpdateWithoutNotificationsInput = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutNotificationsInput = {
@@ -2554,9 +2731,8 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2585,6 +2761,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutNotifPreferencesInput = {
@@ -2598,9 +2775,8 @@ export type UserCreateWithoutNotifPreferencesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2629,6 +2805,7 @@ export type UserCreateWithoutNotifPreferencesInput = {
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutNotifPreferencesInput = {
@@ -2642,9 +2819,8 @@ export type UserUncheckedCreateWithoutNotifPreferencesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2673,6 +2849,7 @@ export type UserUncheckedCreateWithoutNotifPreferencesInput = {
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutNotifPreferencesInput = {
@@ -2702,9 +2879,8 @@ export type UserUpdateWithoutNotifPreferencesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2733,6 +2909,7 @@ export type UserUpdateWithoutNotifPreferencesInput = {
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutNotifPreferencesInput = {
@@ -2746,9 +2923,8 @@ export type UserUncheckedUpdateWithoutNotifPreferencesInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2777,6 +2953,7 @@ export type UserUncheckedUpdateWithoutNotifPreferencesInput = {
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutTournamentParticipantsInput = {
@@ -2790,9 +2967,8 @@ export type UserCreateWithoutTournamentParticipantsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2821,6 +2997,7 @@ export type UserCreateWithoutTournamentParticipantsInput = {
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutTournamentParticipantsInput = {
@@ -2834,9 +3011,8 @@ export type UserUncheckedCreateWithoutTournamentParticipantsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -2865,6 +3041,7 @@ export type UserUncheckedCreateWithoutTournamentParticipantsInput = {
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutTournamentParticipantsInput = {
@@ -2894,9 +3071,8 @@ export type UserUpdateWithoutTournamentParticipantsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2925,6 +3101,7 @@ export type UserUpdateWithoutTournamentParticipantsInput = {
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutTournamentParticipantsInput = {
@@ -2938,9 +3115,8 @@ export type UserUncheckedUpdateWithoutTournamentParticipantsInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2969,6 +3145,7 @@ export type UserUncheckedUpdateWithoutTournamentParticipantsInput = {
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutClassificationInput = {
@@ -2982,9 +3159,8 @@ export type UserCreateWithoutClassificationInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -3013,6 +3189,7 @@ export type UserCreateWithoutClassificationInput = {
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
   feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutClassificationInput = {
@@ -3026,9 +3203,8 @@ export type UserUncheckedCreateWithoutClassificationInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
-  eloRating?: number
   banned?: boolean
-  mlModelLimit?: number | null
+  skillLimit?: number | null
   betterAuthId?: string | null
   botActive?: boolean
   botAvailable?: boolean
@@ -3057,6 +3233,7 @@ export type UserUncheckedCreateWithoutClassificationInput = {
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
   feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutClassificationInput = {
@@ -3086,9 +3263,8 @@ export type UserUpdateWithoutClassificationInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3117,6 +3293,7 @@ export type UserUpdateWithoutClassificationInput = {
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
   feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutClassificationInput = {
@@ -3130,9 +3307,8 @@ export type UserUncheckedUpdateWithoutClassificationInput = {
   preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  eloRating?: Prisma.FloatFieldUpdateOperationsInput | number
   banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  mlModelLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3161,6 +3337,7 @@ export type UserUncheckedUpdateWithoutClassificationInput = {
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
   feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -3178,6 +3355,7 @@ export type UserCountOutputType = {
   notifPreferences: number
   feedback: number
   tournamentParticipants: number
+  gameElo: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -3190,6 +3368,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   notifPreferences?: boolean | UserCountOutputTypeCountNotifPreferencesArgs
   feedback?: boolean | UserCountOutputTypeCountFeedbackArgs
   tournamentParticipants?: boolean | UserCountOutputTypeCountTournamentParticipantsArgs
+  gameElo?: boolean | UserCountOutputTypeCountGameEloArgs
 }
 
 /**
@@ -3265,6 +3444,13 @@ export type UserCountOutputTypeCountTournamentParticipantsArgs<ExtArgs extends r
   where?: Prisma.TournamentParticipantWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountGameEloArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.GameEloWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -3277,9 +3463,8 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   preferences?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  eloRating?: boolean
   banned?: boolean
-  mlModelLimit?: boolean
+  skillLimit?: boolean
   betterAuthId?: boolean
   botActive?: boolean
   botAvailable?: boolean
@@ -3309,6 +3494,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   feedback?: boolean | Prisma.User$feedbackArgs<ExtArgs>
   tournamentParticipants?: boolean | Prisma.User$tournamentParticipantsArgs<ExtArgs>
   classification?: boolean | Prisma.User$classificationArgs<ExtArgs>
+  gameElo?: boolean | Prisma.User$gameEloArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -3323,9 +3509,8 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   preferences?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  eloRating?: boolean
   banned?: boolean
-  mlModelLimit?: boolean
+  skillLimit?: boolean
   betterAuthId?: boolean
   botActive?: boolean
   botAvailable?: boolean
@@ -3358,9 +3543,8 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   preferences?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  eloRating?: boolean
   banned?: boolean
-  mlModelLimit?: boolean
+  skillLimit?: boolean
   betterAuthId?: boolean
   botActive?: boolean
   botAvailable?: boolean
@@ -3393,9 +3577,8 @@ export type UserSelectScalar = {
   preferences?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  eloRating?: boolean
   banned?: boolean
-  mlModelLimit?: boolean
+  skillLimit?: boolean
   betterAuthId?: boolean
   botActive?: boolean
   botAvailable?: boolean
@@ -3417,7 +3600,7 @@ export type UserSelectScalar = {
   emailAchievements?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "clerkId" | "username" | "email" | "displayName" | "avatarUrl" | "oauthProvider" | "preferences" | "createdAt" | "updatedAt" | "eloRating" | "banned" | "mlModelLimit" | "betterAuthId" | "botActive" | "botAvailable" | "botProvisional" | "botCompetitive" | "botInTournament" | "botLimit" | "botModelId" | "botModelType" | "botOwnerId" | "isBot" | "nameConfirmed" | "lastActiveAt" | "botEloResetAt" | "botGamesPlayed" | "creditsHpc" | "creditsBpc" | "creditsTc" | "emailAchievements", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "clerkId" | "username" | "email" | "displayName" | "avatarUrl" | "oauthProvider" | "preferences" | "createdAt" | "updatedAt" | "banned" | "skillLimit" | "betterAuthId" | "botActive" | "botAvailable" | "botProvisional" | "botCompetitive" | "botInTournament" | "botLimit" | "botModelId" | "botModelType" | "botOwnerId" | "isBot" | "nameConfirmed" | "lastActiveAt" | "botEloResetAt" | "botGamesPlayed" | "creditsHpc" | "creditsBpc" | "creditsTc" | "emailAchievements", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   gamesAsPlayer1?: boolean | Prisma.User$gamesAsPlayer1Args<ExtArgs>
   gamesAsPlayer2?: boolean | Prisma.User$gamesAsPlayer2Args<ExtArgs>
@@ -3429,6 +3612,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   feedback?: boolean | Prisma.User$feedbackArgs<ExtArgs>
   tournamentParticipants?: boolean | Prisma.User$tournamentParticipantsArgs<ExtArgs>
   classification?: boolean | Prisma.User$classificationArgs<ExtArgs>
+  gameElo?: boolean | Prisma.User$gameEloArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -3447,6 +3631,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     feedback: Prisma.$FeedbackPayload<ExtArgs>[]
     tournamentParticipants: Prisma.$TournamentParticipantPayload<ExtArgs>[]
     classification: Prisma.$PlayerClassificationPayload<ExtArgs> | null
+    gameElo: Prisma.$GameEloPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -3459,9 +3644,8 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     preferences: runtime.JsonValue
     createdAt: Date
     updatedAt: Date
-    eloRating: number
     banned: boolean
-    mlModelLimit: number | null
+    skillLimit: number | null
     betterAuthId: string | null
     botActive: boolean
     botAvailable: boolean
@@ -3885,6 +4069,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   feedback<T extends Prisma.User$feedbackArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$feedbackArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FeedbackPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tournamentParticipants<T extends Prisma.User$tournamentParticipantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$tournamentParticipantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentParticipantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   classification<T extends Prisma.User$classificationArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$classificationArgs<ExtArgs>>): Prisma.Prisma__PlayerClassificationClient<runtime.Types.Result.GetResult<Prisma.$PlayerClassificationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  gameElo<T extends Prisma.User$gameEloArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$gameEloArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GameEloPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -3924,9 +4109,8 @@ export interface UserFieldRefs {
   readonly preferences: Prisma.FieldRef<"User", 'Json'>
   readonly createdAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"User", 'DateTime'>
-  readonly eloRating: Prisma.FieldRef<"User", 'Float'>
   readonly banned: Prisma.FieldRef<"User", 'Boolean'>
-  readonly mlModelLimit: Prisma.FieldRef<"User", 'Int'>
+  readonly skillLimit: Prisma.FieldRef<"User", 'Int'>
   readonly betterAuthId: Prisma.FieldRef<"User", 'String'>
   readonly botActive: Prisma.FieldRef<"User", 'Boolean'>
   readonly botAvailable: Prisma.FieldRef<"User", 'Boolean'>
@@ -4571,6 +4755,30 @@ export type User$classificationArgs<ExtArgs extends runtime.Types.Extensions.Int
    */
   include?: Prisma.PlayerClassificationInclude<ExtArgs> | null
   where?: Prisma.PlayerClassificationWhereInput
+}
+
+/**
+ * User.gameElo
+ */
+export type User$gameEloArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the GameElo
+   */
+  select?: Prisma.GameEloSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the GameElo
+   */
+  omit?: Prisma.GameEloOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.GameEloInclude<ExtArgs> | null
+  where?: Prisma.GameEloWhereInput
+  orderBy?: Prisma.GameEloOrderByWithRelationInput | Prisma.GameEloOrderByWithRelationInput[]
+  cursor?: Prisma.GameEloWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.GameEloScalarFieldEnum | Prisma.GameEloScalarFieldEnum[]
 }
 
 /**

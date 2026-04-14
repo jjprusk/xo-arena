@@ -526,7 +526,7 @@ export async function startTournament(id, actorBetterAuthId) {
             createdMatches
           )
         } else if (match.participant1Id && match.participant2Id) {
-          // Real match — set to IN_PROGRESS and publish event (PVP) or enqueue (BOT_VS_BOT)
+          // Real match — set to IN_PROGRESS and publish event (HVH) or enqueue (BOT_VS_BOT)
           await db.tournamentMatch.update({
             where: { id: match.id },
             data: { status: 'IN_PROGRESS' },
@@ -586,7 +586,7 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
   })
 
   // For MIXED human-vs-bot matches, write a Game record.
-  // (BOT_VS_BOT records it in the worker; PVP records it in socketHandler; MIXED h-vs-b records it here)
+  // (BOT_VS_BOT records it in the worker; HVH records it in socketHandler; MIXED h-vs-b records it here)
   if (tournament.mode === 'MIXED' && match.participant1Id && match.participant2Id) {
     const p1Participant = await db.tournamentParticipant.findUnique({
       where: { id: match.participant1Id },
@@ -611,7 +611,7 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
           player1Id: p1User.id,
           player2Id: p2User.id,
           winnerId: winnerId ? winnerUser?.id ?? null : null,
-          mode: 'PVBOT',
+          mode: 'HVB',
           outcome,
           totalMoves: 0,
           durationMs: 0,
@@ -722,7 +722,7 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
         data: { status: 'IN_PROGRESS' },
       })
 
-      // Set next round matches to IN_PROGRESS and publish match:ready events (PVP) or enqueue (BOT_VS_BOT)
+      // Set next round matches to IN_PROGRESS and publish match:ready events (HVH) or enqueue (BOT_VS_BOT)
       const nextRoundMatches = allMatches.filter(m => m.roundId === nextRound.id)
       for (const nextMatch of nextRoundMatches) {
         // Re-fetch to get updated participant IDs
@@ -752,7 +752,7 @@ export async function completeMatch(matchId, winnerId, { p1Wins, p2Wins, drawGam
  * Dispatch a match: bot-vs-bot → enqueue server-side job;
  * human-vs-human or human-vs-bot → publish tournament:match:ready for client-side play.
  *
- * Works for all tournament modes (PVP, BOT_VS_BOT, MIXED).
+ * Works for all tournament modes (HVH, BOT_VS_BOT, MIXED).
  */
 async function _dispatchMatch(tournament, match) {
   const p1 = await db.tournamentParticipant.findUnique({

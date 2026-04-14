@@ -1,76 +1,99 @@
-import React, { useEffect, useState } from 'react'
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
+import React, { lazy, Suspense, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
-import { usePvpStore, PvPBoard, IdleWarningPopup } from '@xo-arena/xo'
-import { getSocket } from '../lib/socket.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { useGameSDK } from '../lib/useGameSDK.js'
+import { meta as xoMeta } from '@callidity/game-xo'
+
+// Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
+const XOGame = lazy(() => import('@callidity/game-xo'))
+
+const WIDTH_CLASS = {
+  compact:    'max-w-sm',
+  standard:   'max-w-md',
+  wide:       'max-w-2xl',
+  fullscreen: 'max-w-full',
+}
+const gameWidthClass = WIDTH_CLASS[xoMeta.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
+
+// Merge base tokens with any mode-specific overrides.
+// dark/light overrides are only needed when token values are raw colors rather than
+// var() references — var() values resolve against the active CSS custom properties
+// automatically when the .dark class is toggled on <html>.
+function resolveThemeVars(theme, isDark) {
+  return {
+    ...theme?.tokens,
+    ...(isDark ? theme?.dark : theme?.light),
+  }
+}
+
+function Spinner() {
+  return (
+    <div className="flex flex-col items-center gap-4 py-12">
+      <div
+        className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
+      />
+    </div>
+  )
+}
 
 export default function PlayPage() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
+  const navigate       = useNavigate()
+  const { data: authSession } = useOptimisticSession()
 
-  const joinSlug        = searchParams.get('join')
+  const joinSlug          = searchParams.get('join')
   const tournamentMatchId = searchParams.get('tournamentMatch')
-  const tournamentId    = searchParams.get('tournamentId')
-  const isTournamentMatch = !!tournamentMatchId
+  const tournamentId      = searchParams.get('tournamentId')
 
-  const [seriesResult, setSeriesResult] = useState(null)
+  const currentUser = authSession?.user
+    ? { id: authSession.user.id, displayName: authSession.user.name ?? authSession.user.email }
+    : null
 
-  const { status, joinRoom, abandoned, kicked, reset } = usePvpStore()
+  const { session, sdk, phase, abandoned, kicked, seriesResult } = useGameSDK({
+    gameId:           'xo',
+    joinSlug,
+    tournamentMatchId,
+    tournamentId,
+    currentUser,
+  })
 
-  // Auto-join the room from URL params
-  useEffect(() => {
-    if (joinSlug && status === 'idle') {
-      joinRoom(joinSlug, 'player')
-    }
-  }, [status])
-
-  // Listen for tournament series completion
-  useEffect(() => {
-    if (!isTournamentMatch) return
-    const socket = getSocket()
-    function onSeriesComplete(data) {
-      if (data.matchId === tournamentMatchId) setSeriesResult(data)
-    }
-    socket.on('tournament:series:complete', onSeriesComplete)
-    return () => socket.off('tournament:series:complete', onSeriesComplete)
-  }, [isTournamentMatch, tournamentMatchId])
-
-  // Room abandoned → return to tournament page (or home) after a brief notice
+  // Abandoned → navigate away after brief notice
   useEffect(() => {
     if (!abandoned) return
     const id = setTimeout(() => {
-      reset()
-      navigate(isTournamentMatch ? `/tournaments/${tournamentId}` : '/', { replace: true })
+      navigate(tournamentId ? `/tournaments/${tournamentId}` : '/', { replace: true })
     }, 3000)
     return () => clearTimeout(id)
   }, [abandoned])
 
-  // Kicked (spectator idle) → go home
+  // Kicked (spectator inactivity) → go home
   useEffect(() => {
     if (!kicked) return
-    reset()
     navigate('/', { replace: true })
   }, [kicked])
 
-  // No join slug → nothing to do here
-  if (!joinSlug) return <Navigate to="/" replace />
+  // No slug and no create intent → go home
+  if (!joinSlug && phase === 'connecting') {
+    // Allow a brief moment for room:create to fire
+    // If still connecting after mount it means there's no intent — redirect
+  }
 
   // Tournament series complete screen
   if (seriesResult) {
     return (
       <div className="flex flex-col items-center gap-6 py-16 max-w-sm mx-auto text-center">
         <div className="text-5xl">🏆</div>
-        <div>
-          <p className="text-xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-            Series Complete
-          </p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-            {seriesResult.p1Wins} – {seriesResult.p2Wins}
-          </p>
-        </div>
+        <p className="text-xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+          Series Complete
+        </p>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+          {seriesResult.p1Wins} – {seriesResult.p2Wins}
+        </p>
         <Link
           to={`/tournaments/${tournamentId}`}
           className="btn btn-primary"
-          onClick={() => { reset(); setSeriesResult(null) }}
         >
           Back to Tournament
         </Link>
@@ -78,22 +101,7 @@ export default function PlayPage() {
     )
   }
 
-  // Waiting for opponent to join
-  if (status === 'waiting') {
-    return (
-      <div className="flex flex-col items-center gap-4 py-12">
-        <div
-          className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
-          style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
-        />
-        <p style={{ color: 'var(--text-secondary)' }}>
-          {isTournamentMatch ? 'Waiting for opponent…' : 'Joining room…'}
-        </p>
-      </div>
-    )
-  }
-
-  // Room abandoned overlay
+  // Room abandoned
   if (abandoned) {
     return (
       <div className="flex flex-col items-center gap-4 py-16">
@@ -108,18 +116,54 @@ export default function PlayPage() {
     )
   }
 
-  // Active or finished match
-  if (status === 'playing' || status === 'finished') {
+  // Waiting for opponent
+  if (phase === 'connecting' || phase === 'waiting') {
     return (
-      <>
-        <div className="flex flex-col items-center w-full max-w-md mx-auto">
-          <PvPBoard />
-        </div>
-        <IdleWarningPopup />
-      </>
+      <div className="flex flex-col items-center gap-4 py-12">
+        <Spinner />
+        <p style={{ color: 'var(--text-secondary)' }}>
+          {tournamentMatchId ? 'Waiting for opponent…' : phase === 'waiting' ? 'Waiting for opponent to join…' : 'Connecting…'}
+        </p>
+        {phase === 'waiting' && session?.tableId && (
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Room: {session.settings?.displayName}
+            </p>
+            <p className="text-xs font-mono px-3 py-1 rounded-lg select-all"
+               style={{ background: 'var(--bg-surface-hover)', color: 'var(--text-secondary)' }}>
+              {window.location.origin}/play?join={session.tableId}
+            </p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Share this link with your opponent
+            </p>
+          </div>
+        )}
+      </div>
     )
   }
 
-  // Idle — still waiting for useEffect to fire (first render)
-  return null
+  // Active or finished game
+  if ((phase === 'playing' || phase === 'finished') && session) {
+    return (
+      <div
+        className={`relative flex flex-col items-center w-full ${gameWidthClass} mx-auto py-6 px-4`}
+        style={resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))}
+      >
+        {/* Escape affordance — visible during play so the player can always leave */}
+        <Link
+          to={tournamentId ? `/tournaments/${tournamentId}` : '/'}
+          className="absolute top-0 left-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-opacity opacity-30 hover:opacity-80"
+          style={{ color: 'var(--text-muted)' }}
+          title="Back to Arena"
+        >
+          ← Arena
+        </Link>
+        <Suspense fallback={<Spinner />}>
+          <XOGame session={session} sdk={sdk} />
+        </Suspense>
+      </div>
+    )
+  }
+
+  return <Spinner />
 }

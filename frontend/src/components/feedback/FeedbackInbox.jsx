@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getToken } from '../../lib/getToken.js'
 

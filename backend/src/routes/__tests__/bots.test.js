@@ -20,8 +20,11 @@ const mockDb = {
   game: {
     deleteMany: vi.fn(),
   },
-  mLModel: {
+  botSkill: {
     delete: vi.fn(),
+  },
+  gameElo: {
+    upsert: vi.fn(),
   },
   $transaction: vi.fn(),
 }
@@ -33,7 +36,7 @@ vi.mock('../../services/userService.js', () => ({
   createBot: vi.fn(),
 }))
 
-vi.mock('../../services/mlService.js', () => ({
+vi.mock('../../services/skillService.js', () => ({
   getSystemConfig: vi.fn(),
 }))
 
@@ -49,7 +52,7 @@ vi.mock('../../utils/cache.js', () => ({
 
 const botsRouter = (await import('../bots.js')).default
 const { listBots, createBot } = await import('../../services/userService.js')
-const { getSystemConfig } = await import('../../services/mlService.js')
+const { getSystemConfig } = await import('../../services/skillService.js')
 const { getTierLimit } = await import('../../services/creditService.js')
 const cache = (await import('../../utils/cache.js')).default
 
@@ -494,7 +497,9 @@ describe('POST /api/v1/bots/:id/reset-elo', () => {
       if (where.id === 'bot_1') return mockBot
       return null
     })
-    mockDb.$transaction.mockResolvedValue([])
+    mockDb.gameElo.upsert.mockResolvedValue({})
+    mockDb.user.update.mockResolvedValue({})
+    mockDb.$transaction.mockImplementation(async (ops) => Promise.all(ops))
 
     const res = await request(app).post('/api/v1/bots/bot_1/reset-elo')
 
@@ -555,7 +560,7 @@ describe('DELETE /api/v1/bots/:id', () => {
     })
     const txMlModelDelete = vi.fn()
     mockDb.$transaction.mockImplementation(async (fn) =>
-      fn({ game: mockDb.game, user: mockDb.user, mLModel: { delete: txMlModelDelete } })
+      fn({ game: mockDb.game, user: mockDb.user, botSkill: { delete: txMlModelDelete } })
     )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
@@ -575,14 +580,14 @@ describe('DELETE /api/v1/bots/:id', () => {
     })
     const txMlModelDelete = vi.fn().mockResolvedValue({})
     mockDb.$transaction.mockImplementation(async (fn) =>
-      fn({ game: mockDb.game, user: mockDb.user, mLModel: { delete: txMlModelDelete } })
+      fn({ game: mockDb.game, user: mockDb.user, botSkill: { delete: txMlModelDelete } })
     )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
 
     expect(res.status).toBe(204)
     expect(txMlModelDelete).toHaveBeenCalledWith({ where: { id: 'model_1' } })
-    expect(mockDb.mLModel.delete).not.toHaveBeenCalled()
+    expect(mockDb.botSkill.delete).not.toHaveBeenCalled()
   })
 
   it('bot not found → 404', async () => {

@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout.jsx'
@@ -8,6 +9,8 @@ import TournamentDetailPage from './pages/TournamentDetailPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import PlayPage from './pages/PlayPage.jsx'
+import ReplayPage from './pages/ReplayPage.jsx'
+import PongPage   from './pages/PongPage.jsx'
 import FAQPage from './pages/FAQPage.jsx'
 import AboutPage from './pages/AboutPage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
@@ -32,6 +35,9 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/play" element={<PlayPage />} />
+          <Route path="/replay/:id" element={<ReplayPage />} />
+          <Route path="/pong"      element={<PongPage />} />
+          <Route path="/pong/:slug" element={<PongPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/about" element={<AboutPage />} />
 

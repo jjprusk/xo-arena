@@ -67,6 +67,11 @@ export type UserRole = Prisma.UserRoleModel
  */
 export type UserEloHistory = Prisma.UserEloHistoryModel
 /**
+ * Model GameElo
+ * Current ELO rating for a user in a specific game (replaces User.eloRating).
+ */
+export type GameElo = Prisma.GameEloModel
+/**
  * Model Game
  * 
  */
@@ -82,10 +87,10 @@ export type Move = Prisma.MoveModel
  */
 export type AIError = Prisma.AIErrorModel
 /**
- * Model MLModel
+ * Model BotSkill
  * 
  */
-export type MLModel = Prisma.MLModelModel
+export type BotSkill = Prisma.BotSkillModel
 /**
  * Model MLPlayerProfile
  * 

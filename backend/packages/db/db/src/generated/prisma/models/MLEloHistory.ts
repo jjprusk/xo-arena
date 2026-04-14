@@ -244,7 +244,7 @@ export type MLEloHistoryWhereInput = {
   opponentType?: Prisma.StringFilter<"MLEloHistory"> | string
   outcome?: Prisma.EnumEpisodeOutcomeFilter<"MLEloHistory"> | $Enums.EpisodeOutcome
   recordedAt?: Prisma.DateTimeFilter<"MLEloHistory"> | Date | string
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }
 
 export type MLEloHistoryOrderByWithRelationInput = {
@@ -256,7 +256,7 @@ export type MLEloHistoryOrderByWithRelationInput = {
   opponentType?: Prisma.SortOrder
   outcome?: Prisma.SortOrder
   recordedAt?: Prisma.SortOrder
-  model?: Prisma.MLModelOrderByWithRelationInput
+  model?: Prisma.BotSkillOrderByWithRelationInput
 }
 
 export type MLEloHistoryWhereUniqueInput = Prisma.AtLeast<{
@@ -271,7 +271,7 @@ export type MLEloHistoryWhereUniqueInput = Prisma.AtLeast<{
   opponentType?: Prisma.StringFilter<"MLEloHistory"> | string
   outcome?: Prisma.EnumEpisodeOutcomeFilter<"MLEloHistory"> | $Enums.EpisodeOutcome
   recordedAt?: Prisma.DateTimeFilter<"MLEloHistory"> | Date | string
-  model?: Prisma.XOR<Prisma.MLModelScalarRelationFilter, Prisma.MLModelWhereInput>
+  model?: Prisma.XOR<Prisma.BotSkillScalarRelationFilter, Prisma.BotSkillWhereInput>
 }, "id">
 
 export type MLEloHistoryOrderByWithAggregationInput = {
@@ -312,7 +312,7 @@ export type MLEloHistoryCreateInput = {
   opponentType: string
   outcome: $Enums.EpisodeOutcome
   recordedAt?: Date | string
-  model: Prisma.MLModelCreateNestedOneWithoutEloHistoryInput
+  model: Prisma.BotSkillCreateNestedOneWithoutEloHistoryInput
 }
 
 export type MLEloHistoryUncheckedCreateInput = {
@@ -334,7 +334,7 @@ export type MLEloHistoryUpdateInput = {
   opponentType?: Prisma.StringFieldUpdateOperationsInput | string
   outcome?: Prisma.EnumEpisodeOutcomeFieldUpdateOperationsInput | $Enums.EpisodeOutcome
   recordedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  model?: Prisma.MLModelUpdateOneRequiredWithoutEloHistoryNestedInput
+  model?: Prisma.BotSkillUpdateOneRequiredWithoutEloHistoryNestedInput
 }
 
 export type MLEloHistoryUncheckedUpdateInput = {
@@ -586,7 +586,7 @@ export type MLEloHistorySelect<ExtArgs extends runtime.Types.Extensions.Internal
   opponentType?: boolean
   outcome?: boolean
   recordedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLEloHistory"]>
 
 export type MLEloHistorySelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -598,7 +598,7 @@ export type MLEloHistorySelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   opponentType?: boolean
   outcome?: boolean
   recordedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLEloHistory"]>
 
 export type MLEloHistorySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -610,7 +610,7 @@ export type MLEloHistorySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   opponentType?: boolean
   outcome?: boolean
   recordedAt?: boolean
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mLEloHistory"]>
 
 export type MLEloHistorySelectScalar = {
@@ -626,19 +626,19 @@ export type MLEloHistorySelectScalar = {
 
 export type MLEloHistoryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "modelId" | "eloRating" | "delta" | "opponentId" | "opponentType" | "outcome" | "recordedAt", ExtArgs["result"]["mLEloHistory"]>
 export type MLEloHistoryInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLEloHistoryIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 export type MLEloHistoryIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  model?: boolean | Prisma.MLModelDefaultArgs<ExtArgs>
+  model?: boolean | Prisma.BotSkillDefaultArgs<ExtArgs>
 }
 
 export type $MLEloHistoryPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "MLEloHistory"
   objects: {
-    model: Prisma.$MLModelPayload<ExtArgs>
+    model: Prisma.$BotSkillPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1043,7 +1043,7 @@ readonly fields: MLEloHistoryFieldRefs;
  */
 export interface Prisma__MLEloHistoryClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  model<T extends Prisma.MLModelDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MLModelDefaultArgs<ExtArgs>>): Prisma.Prisma__MLModelClient<runtime.Types.Result.GetResult<Prisma.$MLModelPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  model<T extends Prisma.BotSkillDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.BotSkillDefaultArgs<ExtArgs>>): Prisma.Prisma__BotSkillClient<runtime.Types.Result.GetResult<Prisma.$BotSkillPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.

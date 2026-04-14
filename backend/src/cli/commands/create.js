@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { hashPassword } from 'better-auth/crypto'
 import { randomBytes } from 'crypto'
 import db from '../lib/db.js'

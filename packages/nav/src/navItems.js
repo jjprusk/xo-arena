@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Canonical primary navigation for the AI Arena platform.
  * Both the landing site and XO game site share this structure.

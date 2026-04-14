@@ -25,8 +25,10 @@ export default defineConfig(({ mode }) => ({
       // Direct path so Docker can resolve this without the workspace symlink.
       // Host:   __dirname = .../frontend  →  ../packages/xo/src/index.js  ✓
       // Docker: __dirname = /app          →  /packages/xo/src/index.js    ✓ (see docker-compose mount)
-      '@xo-arena/xo':  resolve(__dirname, '../packages/xo/src/index.js'),
-      '@xo-arena/nav': resolve(__dirname, '../packages/nav/src/index.js'),
+      '@xo-arena/xo':    resolve(__dirname, '../packages/xo/src/index.js'),
+      '@xo-arena/nav':   resolve(__dirname, '../packages/nav/src/index.js'),
+      '@callidity/sdk':  resolve(__dirname, '../packages/sdk/src/index.js'),
+      '@callidity/game-xo': resolve(__dirname, '../packages/game-xo/src/index.js'),
     },
   },
   plugins: [

@@ -69,7 +69,7 @@ vi.mock('resend', () => ({
   })),
 }))
 
-vi.mock('../../services/mlService.js', () => ({
+vi.mock('../../services/skillService.js', () => ({
   deleteModel:     vi.fn(),
   getSystemConfig: vi.fn().mockResolvedValue(null),
   setSystemConfig: vi.fn().mockResolvedValue(null),

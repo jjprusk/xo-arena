@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Thin API client — wraps fetch with base URL and error handling.
  */
@@ -147,5 +148,10 @@ export const api = {
     setIdleConfig: (body, token) => api.patch('/admin/idle-config', body, token),
     getSessionConfig: (token) => api.get('/admin/session-config', token),
     setSessionConfig: (body, token) => api.patch('/admin/session-config', body, token),
+    getReplayConfig: (token) => api.get('/admin/replay-config', token),
+    setReplayConfig: (body, token) => api.patch('/admin/replay-config', body, token),
+  },
+  games: {
+    getReplay: (id, token) => api.get(`/games/${id}/replay`, token),
   },
 }

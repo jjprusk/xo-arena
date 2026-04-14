@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Rule Extraction Service
  *
@@ -33,19 +34,19 @@ import {
 // ─── Engine helpers ───────────────────────────────────────────────────────────
 
 function buildEngine(model) {
-  const alg = (model.algorithm || 'Q_LEARNING').toUpperCase()
+  const alg = (model.algorithm || 'qlearning').toUpperCase().replace(/_/g, '')
   let engine
   if      (alg === 'SARSA')           engine = new SarsaEngine(model.config)
-  else if (alg === 'MONTE_CARLO')     engine = new MonteCarloEngine(model.config)
-  else if (alg === 'POLICY_GRADIENT') engine = new PolicyGradientEngine(model.config)
+  else if (alg === 'MONTECARLO')      engine = new MonteCarloEngine(model.config)
+  else if (alg === 'POLICYGRADIENT')  engine = new PolicyGradientEngine(model.config)
   else if (alg === 'DQN')             engine = new DQNEngine(model.config)
-  else if (alg === 'ALPHA_ZERO')      engine = new AlphaZeroEngine(model.config)
+  else if (alg === 'ALPHAZERO')       engine = new AlphaZeroEngine(model.config)
   else                                engine = new QLearningEngine(model.config)
-  engine.loadQTable(model.qtable)
+  engine.loadQTable(model.weights)
   return engine
 }
 
-const NEURAL_NET_ALGS = new Set(['DQN', 'ALPHA_ZERO'])
+const NEURAL_NET_ALGS = new Set(['DQN', 'ALPHAZERO'])
 
 /** Determine whose turn it is from a board state. */
 function getTurn(board) {
@@ -180,14 +181,14 @@ function buildRuleEntries(stats) {
  * Returns { rules: RuleEntry[], movePairsAnalyzed: number }
  */
 export async function extractRulesFromModel(modelId) {
-  const model = await db.mLModel.findUnique({ where: { id: modelId } })
+  const model = await db.botSkill.findUnique({ where: { id: modelId } })
   if (!model) throw new Error(`Model ${modelId} not found`)
 
-  const alg = (model.algorithm || 'Q_LEARNING').toUpperCase()
+  const alg = (model.algorithm || 'qlearning').toUpperCase().replace(/_/g, '')
   const engine = buildEngine(model)
   const movePairs = NEURAL_NET_ALGS.has(alg)
     ? movePairsFromNeuralNet(engine)
-    : movePairsFromQTable(model.qtable)
+    : movePairsFromQTable(model.weights)
 
   const stats = computeRuleStats(movePairs)
   const rules = buildRuleEntries(stats)

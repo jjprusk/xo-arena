@@ -54,8 +54,8 @@ describe('LeaderboardPage', () => {
     expect(screen.getAllByRole('button', { name: /^all$/i }).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByRole('button', { name: /monthly/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /weekly/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^pvp$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^pvai$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^HvH$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^HvA$/i })).toBeInTheDocument()
   })
 
   it('fetches and displays player names', async () => {

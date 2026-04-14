@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
 const isStaging = import.meta.env.VITE_ENV === 'staging'
 const LANDING_URL = import.meta.env.VITE_LANDING_URL || 'http://localhost:5174'

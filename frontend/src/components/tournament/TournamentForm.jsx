@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect } from 'react'
 
 const FIELD_STYLE = {
@@ -80,7 +81,7 @@ const DEFAULT_FORM = {
   name: '',
   description: '',
   game: 'xo',
-  mode: 'PVP',
+  mode: 'HVH',
   format: 'PLANNED',
   bracketType: 'SINGLE_ELIM',
   bestOfN: 3,
@@ -117,7 +118,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       name:                initialValues.name ?? '',
       description:         initialValues.description ?? '',
       game:                initialValues.game ?? 'xo',
-      mode:                initialValues.mode ?? 'PVP',
+      mode:                initialValues.mode ?? 'HVH',
       format:              initialValues.format ?? 'PLANNED',
       bracketType:         initialValues.bracketType ?? 'SINGLE_ELIM',
       bestOfN:             initialValues.bestOfN ?? 3,
@@ -262,7 +263,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
             className={SELECT_CLASS}
             style={FIELD_STYLE}
           >
-            <option value="PVP">PvP (Human vs Human)</option>
+            <option value="HVH">HvH (Human vs Human)</option>
             <option value="BOT_VS_BOT">Bot vs Bot</option>
             <option value="MIXED">Mixed</option>
           </select>

@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { getUserById, updateUser, getUserStats, getBotStats, syncUser } from '../services/userService.js'
@@ -17,7 +18,7 @@ async function getBotProfileData(user) {
       ? db.user.findUnique({ where: { id: user.botOwnerId }, select: { id: true, displayName: true, betterAuthId: true } })
       : null,
     user.botModelId && user.botModelId.startsWith('builtin:') === false
-      ? db.mLModel.findUnique({
+      ? db.botSkill.findUnique({
           where: { id: user.botModelId },
           select: { id: true, name: true, algorithm: true, updatedAt: true, totalEpisodes: true },
         }).catch(() => null)
@@ -371,13 +372,16 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
 
     // Only return full data to the user themselves; otherwise public view
     const isSelf = req.auth?.userId && user.betterAuthId === req.auth.userId
-    const botData = user.isBot ? await getBotProfileData(user) : null
+    const [botData, eloRow] = await Promise.all([
+      user.isBot ? getBotProfileData(user) : null,
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } }),
+    ])
 
     const data = {
       id: user.id,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      eloRating: user.eloRating,
+      eloRating: eloRow?.rating ?? 1200,
       createdAt: user.createdAt,
       ...(botData ?? {}),
       ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider, nameConfirmed: user.nameConfirmed }),
@@ -457,17 +461,18 @@ router.get('/:id/stats', async (req, res, next) => {
  */
 router.get('/:id/elo-history', async (req, res, next) => {
   try {
-    const [user, history] = await Promise.all([
+    const [user, history, eloRow] = await Promise.all([
       getUserById(req.params.id),
       db.userEloHistory.findMany({
         where: { userId: req.params.id },
         orderBy: { recordedAt: 'desc' },
         take: 50,
       }),
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: req.params.id, gameId: 'xo' } } }),
     ])
     if (!user) return res.status(404).json({ error: 'User not found' })
 
-    res.json({ eloHistory: history, currentElo: user.eloRating })
+    res.json({ eloHistory: history, currentElo: eloRow?.rating ?? 1200 })
   } catch (err) {
     next(err)
   }

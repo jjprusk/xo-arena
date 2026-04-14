@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * User service — account management and stats.
  */
@@ -8,8 +9,8 @@ import { DEFAULT_CONFIG as ML_DEFAULT_CONFIG } from '@xo-arena/ai'
 const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
 
 /**
- * Local helper — mirrors mlService.getSystemConfig to avoid a circular import
- * (mlService already imports resetBotElo from this module).
+ * Local helper — mirrors skillService.getSystemConfig to avoid a circular import
+ * (skillService already imports resetBotElo from this module).
  */
 async function _getSystemConfig(key, defaultValue = null) {
   const row = await db.systemConfig.findUnique({ where: { key } })
@@ -96,13 +97,20 @@ export async function getBotByModelId(botModelId) {
 
 /**
  * Reset a bot's ELO to 1200 and mark it as calibrating.
- * Called on scratch retrain (via mlService.resetModel) or by owner/admin.
+ * Called on scratch retrain (via skillService.resetModel) or by owner/admin.
  */
 export async function resetBotElo(botId) {
-  return db.user.update({
-    where: { id: botId },
-    data: { eloRating: 1200, botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
-  })
+  return db.$transaction([
+    db.gameElo.upsert({
+      where: { userId_gameId: { userId: botId, gameId: 'xo' } },
+      update: { rating: 1200, gamesPlayed: 0 },
+      create: { userId: botId, gameId: 'xo', rating: 1200, gamesPlayed: 0 },
+    }),
+    db.user.update({
+      where: { id: botId },
+      data: { botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
+    }),
+  ])
 }
 
 /**
@@ -126,17 +134,17 @@ export async function getUserStats(userId) {
   const [pvpGames, pvaiGames, pvbotGames, recent] = await Promise.all([
     db.game.findMany({
       where: {
-        mode: 'PVP',
+        mode: 'HVH',
         OR: [{ player1Id: userId }, { player2Id: userId }],
       },
       select: { outcome: true, player1Id: true, winnerId: true },
     }),
     db.game.findMany({
-      where: { mode: 'PVAI', player1Id: userId },
+      where: { mode: 'HVA', player1Id: userId },
       select: { outcome: true, difficulty: true, winnerId: true },
     }),
     db.game.findMany({
-      where: { mode: 'PVBOT', player1Id: userId },
+      where: { mode: 'HVB', player1Id: userId },
       select: {
         outcome: true, winnerId: true, player2Id: true,
         player2: { select: { id: true, displayName: true, avatarUrl: true } },
@@ -182,7 +190,7 @@ export async function getUserStats(userId) {
     }
   }
 
-  // PVBOT stats grouped by opponent bot
+  // HVB stats grouped by opponent bot
   const pvbotByBot = {}
   for (const g of pvbotGames) {
     const botId = g.player2Id
@@ -208,9 +216,9 @@ export async function getUserStats(userId) {
     losses,
     draws,
     winRate,
-    pvp: { played: pvpGames.length, wins: pvpWins, rate: pvpRate },
-    pvai: pvaiByDiff,
-    pvbot: {
+    hvh: { played: pvpGames.length, wins: pvpWins, rate: pvpRate },
+    hva: pvaiByDiff,
+    hvb: {
       played: pvbotGames.length,
       wins: pvbotGames.filter((g) => g.winnerId === userId).length,
       rate: pvbotGames.length > 0 ? pvbotGames.filter((g) => g.winnerId === userId).length / pvbotGames.length : 0,
@@ -222,12 +230,12 @@ export async function getUserStats(userId) {
 
 /**
  * Compute stats for a bot from the bot's perspective.
- * Queries games where the bot is player2 (PVBOT challenges).
+ * Queries games where the bot is player2 (HVB challenges).
  * Returns win rates vs humans and vs other bots separately.
  */
 export async function getBotStats(botId) {
   const games = await db.game.findMany({
-    where: { player2Id: botId, mode: 'PVBOT' },
+    where: { player2Id: botId, mode: 'HVB' },
     select: {
       outcome: true, winnerId: true, player1Id: true,
       player1: { select: { isBot: true } },
@@ -256,7 +264,7 @@ export async function getBotStats(botId) {
  * Uses a single CTE query instead of 4 Prisma round trips.
  */
 export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50, includeBots = false } = {}) {
-  const whereMode = mode === 'pvp' ? 'PVP' : mode === 'pvai' ? 'PVAI' : null
+  const whereMode = mode === 'hvh' ? 'HVH' : mode === 'hva' ? 'HVA' : null
 
   // Prisma.sql fragments for optional filters — interpolated safely as SQL, not parameters
   const modeFilter = whereMode ? Prisma.sql`AND g.mode = ${whereMode}::"GameMode"` : Prisma.empty
@@ -315,7 +323,7 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
  * Create a bot user row owned by the given user.
  * Enforces reserved name, profanity, and deduplication rules.
  */
-const VALID_ML_ALGORITHMS = ['Q_LEARNING', 'SARSA', 'MONTE_CARLO', 'POLICY_GRADIENT', 'DQN', 'ALPHA_ZERO']
+const VALID_ML_ALGORITHMS = ['qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero']
 
 export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
@@ -358,7 +366,7 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
   if (alg === 'minimax' || alg === 'mcts' || alg === 'rule_based') {
     // handled below
   } else if (alg === 'ml') {
-    mlAlgo = (modelType || 'DQN').toUpperCase().replace(/-/g, '_')
+    mlAlgo = (modelType || 'dqn').toLowerCase().replace(/[-_]/g, '')
     if (!VALID_ML_ALGORITHMS.includes(mlAlgo)) {
       throw Object.assign(new Error(`Unknown ML algorithm: ${modelType}`), { code: 'INVALID_ALGORITHM' })
     }
@@ -389,17 +397,18 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
   if (alg === 'ml') {
     const maxEpisodes = await _getSystemConfig('ml.maxEpisodesPerModel', 100_000)
     return db.$transaction(async (tx) => {
-      const model = await tx.mLModel.create({
+      const skill = await tx.botSkill.create({
         data: {
           name: finalName,
-          algorithm: mlAlgo,
-          qtable: {},
+          algorithm: mlAlgo || 'qlearning',
+          weights: {},
           config: { ...ML_DEFAULT_CONFIG },
           createdBy: ownerBaId ?? ownerId,
           maxEpisodes,
+          gameId: 'xo',
         },
       })
-      return tx.user.create({
+      const bot = await tx.user.create({
         data: {
           username,
           email,
@@ -407,13 +416,18 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
           avatarUrl: avatarUrl ?? null,
           isBot: true,
           botModelType: alg,
-          botModelId: model.id,
+          botModelId: skill.id,
           botOwnerId: ownerId,
           botActive: true,
           botCompetitive,
           botProvisional: true,
         },
       })
+      // Set botId on the skill now that we have the bot's user ID
+      await tx.botSkill.update({ where: { id: skill.id }, data: { botId: bot.id } })
+      // Create initial GameElo record for the bot
+      await tx.gameElo.create({ data: { userId: bot.id, gameId: 'xo', rating: 1200 } })
+      return bot
     })
   }
 
@@ -450,13 +464,12 @@ export async function listBots({ ownerId, includeInactive = false } = {}) {
     ...(ownerId ? { botOwnerId: ownerId } : {}),
     ...(includeInactive ? {} : { botActive: true }),
   }
-  return db.user.findMany({
+  const bots = await db.user.findMany({
     where,
     select: {
       id: true,
       displayName: true,
       avatarUrl: true,
-      eloRating: true,
       botModelType: true,
       botModelId: true,
       botActive: true,
@@ -466,9 +479,16 @@ export async function listBots({ ownerId, includeInactive = false } = {}) {
       botInTournament: true,
       botOwnerId: true,
       createdAt: true,
+      gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
     },
     orderBy: { createdAt: 'desc' },
   })
+  // Flatten gameElo into a top-level eloRating field for backward compatibility
+  return bots.map(b => ({
+    ...b,
+    eloRating: b.gameElo?.[0]?.rating ?? 1200,
+    gameElo: undefined,
+  }))
 }
 
 /**
@@ -503,7 +523,7 @@ export async function createGame({
   player1Id,
   player2Id = null,
   winnerId = null,
-  mode,           // 'PVP' | 'PVAI' | 'PVBOT'
+  mode,           // 'HVH' | 'HVA' | 'HVB'
   outcome,        // 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'AI_WIN' | 'DRAW'
   difficulty = null,
   aiImplementationId = null,
@@ -513,6 +533,7 @@ export async function createGame({
   roomName = null,
   tournamentId = null,
   tournamentMatchId = null,
+  moveStream = null,
 }) {
   return db.game.create({
     data: {
@@ -530,6 +551,8 @@ export async function createGame({
       roomName,
       tournamentId,
       tournamentMatchId,
+      isTournament: !!(tournamentId),
+      moveStream: moveStream ?? undefined,
     },
   })
 }

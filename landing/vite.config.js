@@ -22,11 +22,15 @@ export default defineConfig(({ mode }) => ({
       // Direct path so Docker can resolve this without the workspace symlink.
       // Host:   __dirname = .../landing  →  ../packages/xo/src/index.js  ✓
       // Docker: __dirname = /app          →  /packages/xo/src/index.js    ✓ (see docker-compose mount)
-      '@xo-arena/xo':  resolve(__dirname, '../packages/xo/src/index.js'),
-      '@xo-arena/nav': resolve(__dirname, '../packages/nav/src/index.js'),
+      '@xo-arena/xo':         resolve(__dirname, '../packages/xo/src/index.js'),
+      '@xo-arena/nav':        resolve(__dirname, '../packages/nav/src/index.js'),
+      '@xo-arena/ai':         resolve(__dirname, '../packages/ai/src/index.js'),
+      '@callidity/sdk':        resolve(__dirname, '../packages/sdk/src/index.js'),
+      '@callidity/game-xo':   resolve(__dirname, '../packages/game-xo/src/index.js'),
+      '@callidity/game-pong': resolve(__dirname, '../packages/game-pong/src/index.js'),
     },
-    // Force packages/xo's imports to resolve from the project root's node_modules.
-    // Without this, Node resolution from /packages/xo/ can't find /app/node_modules/.
+    // Force packages' imports to resolve from the project root's node_modules.
+    // Without this, Node resolution from /packages/* can't find /app/node_modules/.
     dedupe: ['react', 'react-dom', 'react-router-dom', 'zustand'],
   },
   define: {
@@ -46,6 +50,8 @@ export default defineConfig(({ mode }) => ({
         manualChunks(id) {
           if (id.includes('react-dom') || id.includes('react-router-dom') || /\/react\//.test(id)) return 'vendor-react'
           if (id.includes('socket.io-client')) return 'vendor-realtime'
+          if (id.includes('packages/game-xo'))   return 'game-xo'
+          if (id.includes('packages/game-pong')) return 'game-pong'
         },
       },
     },

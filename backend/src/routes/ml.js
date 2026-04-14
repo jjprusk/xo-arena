@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * ML routes — model management, training, sessions, checkpoints, rule sets.
  * All write operations require authentication.
@@ -19,11 +20,11 @@ const router = Router()
  */
 async function checkModelLimit(req, res) {
   const [userRecord, currentCount, defaultLimit] = await Promise.all([
-    db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { mlModelLimit: true } }),
-    db.mLModel.count({ where: { createdBy: req.auth.userId } }),
+    db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { skillLimit: true } }),
+    db.botSkill.count({ where: { createdBy: req.auth.userId } }),
     svc.getSystemConfig('ml.maxModelsPerUser', 10),
   ])
-  const limit = userRecord?.mlModelLimit ?? defaultLimit
+  const limit = userRecord?.skillLimit ?? defaultLimit
   if (limit > 0 && currentCount >= limit) {
     res.status(403).json({ error: `Model limit reached (${limit}). Delete an existing model to create a new one.` })
     return false
@@ -277,7 +278,7 @@ router.post('/sessions/:id/finish', requireAuth, async (req, res, next) => {
     const session = await svc.getSession(req.params.id)
     if (!session) return res.status(404).json({ error: 'Session not found' })
     if (session.modelId) {
-      const model = await db.mLModel.findUnique({ where: { id: session.modelId }, select: { createdBy: true } })
+      const model = await db.botSkill.findUnique({ where: { id: session.modelId }, select: { createdBy: true } })
       if (model?.createdBy && model.createdBy !== req.auth.userId) {
         if (!await isAdmin(req.auth.userId)) {
           return res.status(403).json({ error: 'You do not own this model' })

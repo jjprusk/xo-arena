@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, cachedFetch } from '../lib/api.js'
@@ -14,7 +15,8 @@ const PODIUM_COLORS = {
 }
 
 const FILTERS_PERIOD = ['all', 'monthly', 'weekly']
-const FILTERS_MODE = ['all', 'pvp', 'pvai']
+const FILTERS_MODE = ['all', 'hvh', 'hva']
+const MODE_LABELS = { all: 'All', hvh: 'HvH', hva: 'HvA' }
 const LS_SHOW_BOTS = 'xo-leaderboard-show-bots'
 
 export default function LeaderboardPage() {
@@ -80,7 +82,7 @@ export default function LeaderboardPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <FilterGroup label="Period" options={FILTERS_PERIOD} value={period} onChange={setPeriod} />
-        <FilterGroup label="Mode" options={FILTERS_MODE} value={mode} onChange={setMode} />
+        <FilterGroup label="Mode" options={FILTERS_MODE} labels={MODE_LABELS} value={mode} onChange={setMode} />
         <SearchBar
           value={search}
           onChange={setSearch}
@@ -212,7 +214,7 @@ export default function LeaderboardPage() {
   )
 }
 
-function FilterGroup({ label, options, value, onChange }) {
+function FilterGroup({ label, options, labels, value, onChange }) {
   return (
     <div
       className="flex items-center rounded-lg border overflow-hidden"
@@ -227,7 +229,7 @@ function FilterGroup({ label, options, value, onChange }) {
           }`}
           style={{ color: value === opt ? 'white' : 'var(--text-secondary)' }}
         >
-          {opt}
+          {labels?.[opt] ?? opt}
         </button>
       ))}
     </div>

@@ -3,7 +3,7 @@
  *
  * Covers:
  * - BOT_VS_BOT tournaments enforce bot-specific eligibility requirements
- * - PVP tournaments do not apply bot eligibility checks
+ * - HVH tournaments do not apply bot eligibility checks
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -203,7 +203,7 @@ describe('registerParticipant — BOT_VS_BOT eligibility', () => {
     })
   })
 
-  it('does not check bot eligibility for PVP tournament', async () => {
+  it('does not check bot eligibility for HVH tournament', async () => {
     // Non-bot user registering for PVP — should succeed
     mockDb.user.findUnique.mockResolvedValue({
       id: 'user_human_1',
@@ -216,10 +216,10 @@ describe('registerParticipant — BOT_VS_BOT eligibility', () => {
       botGamesPlayed: 0,
     })
     mockDb.tournament.findUnique.mockResolvedValue({
-      id: 'tour_pvp_1',
-      name: 'PVP Tournament',
+      id: 'tour_hvh_1',
+      name: 'HVH Tournament',
       status: 'REGISTRATION_OPEN',
-      mode: 'PVP',
+      mode: 'HVH',
       minParticipants: 4,
       maxParticipants: null,
       bestOfN: 3,
@@ -229,13 +229,13 @@ describe('registerParticipant — BOT_VS_BOT eligibility', () => {
     })
     mockDb.tournamentParticipant.findUnique.mockResolvedValue(null)
     mockDb.tournamentParticipant.create.mockResolvedValue({
-      id: 'part_pvp_1',
-      tournamentId: 'tour_pvp_1',
+      id: 'part_hvh_1',
+      tournamentId: 'tour_hvh_1',
       userId: 'user_human_1',
       status: 'REGISTERED',
     })
 
-    const result = await registerParticipant('tour_pvp_1', 'ba_human_1')
+    const result = await registerParticipant('tour_hvh_1', 'ba_human_1')
     expect(result.status).toBe('REGISTERED')
   })
 })

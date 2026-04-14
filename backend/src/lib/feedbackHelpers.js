@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Shared query/mutation helpers for feedback endpoints.
  * Used by both /support and /admin route handlers.

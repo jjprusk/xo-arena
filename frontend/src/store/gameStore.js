@@ -1,14 +1,15 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { create } from 'zustand'
 
 const EMPTY_BOARD = Array(9).fill(null)
 
 export const useGameStore = create((set, get) => ({
   // Mode selection
-  mode: null,         // 'pvai' | 'pvp' | 'aivai'
+  mode: null,         // 'hva' | 'hvh' | 'aivai'
   difficulty: 'intermediate',
   aiImplementation: 'minimax',
   mlModelId: null,    // modelId when aiImplementation === 'ml' or ruleSetId for 'rule_based'
-  pvbotModelId: null, // when set, game records as PVBOT with this botModelId string
+  pvbotModelId: null, // when set, game records as HVB with this botModelId string
   playerMark: 'X',   // which mark the human plays
   alternating: false, // swap playerMark on each rematch
   playerName: '',
@@ -118,7 +119,7 @@ export const useGameStore = create((set, get) => ({
 
   undoMove() {
     const { moveHistory, mode, status } = get()
-    if (mode !== 'pvai') return
+    if (mode !== 'hva') return
     if (status !== 'playing') return
     if (moveHistory.length === 0) return
 

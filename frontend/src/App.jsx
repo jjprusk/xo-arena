@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect } from 'react'
 
 const LANDING_URL = import.meta.env.VITE_LANDING_URL ?? 'https://aiarena.callidity.com'

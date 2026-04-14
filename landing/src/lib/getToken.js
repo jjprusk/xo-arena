@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 let _cachedToken = null
 let _tokenExpiry = 0
 let _nullUntil   = 0

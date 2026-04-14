@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Durable job scheduler — polls DB every 30s, claims and executes PENDING jobs.
  * Replaces ad-hoc setInterval sweeps for tournament timing.

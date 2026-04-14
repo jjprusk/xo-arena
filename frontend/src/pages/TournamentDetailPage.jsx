@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
@@ -621,7 +622,7 @@ function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDis
   const [joining, setJoining] = useState(false)
   const [err, setErr]         = useState(null)
 
-  if (!matchEvent || tournament.mode !== 'PVP') return null
+  if (!matchEvent || tournament.mode !== 'HVH') return null
 
   const { matchId, participant1UserId, participant2UserId, bestOfN } = matchEvent
   const isParticipant = userBetterAuthId &&

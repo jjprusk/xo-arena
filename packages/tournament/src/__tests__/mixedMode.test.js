@@ -308,7 +308,7 @@ describe('completeMatch — MIXED mode Game row', () => {
         data: expect.objectContaining({
           player1Id: 'user_human_1',
           player2Id: 'user_bot_1',
-          mode: 'PVBOT',
+          mode: 'HVB',
           tournamentId: 'tour_mixed',
           tournamentMatchId: 'match_hvb',
           outcome: 'PLAYER1_WIN',

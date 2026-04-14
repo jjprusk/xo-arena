@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
@@ -317,7 +318,7 @@ export default function GymPage() {
                     </div>
                     {selectedBot.bio && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selectedBot.bio}</p>}
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <span>{selectedModel.algorithm?.replace(/_/g, '-')}</span>
+                      <span>{selectedModel.algorithm?.toUpperCase()}</span>
                       <span>{selectedModel.totalEpisodes.toLocaleString()} / {selectedModel.maxEpisodes > 0 ? selectedModel.maxEpisodes.toLocaleString() : '∞'} episodes</span>
                       <span>ELO {Math.round(selectedBot.eloRating || 1200)}</span>
                       <span title={isModelCached(selectedModel.id) ? 'Q-table loaded in browser — moves run locally' : 'Not yet cached'} style={{ color: isModelCached(selectedModel.id) ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>

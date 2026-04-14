@@ -93,13 +93,13 @@ describe('FeedbackButton — rendering', () => {
   })
 
   it('does not render when game is actively playing and hideWhenPlaying is true', () => {
-    setupDefaults({ status: 'playing', mode: 'pvai' })
+    setupDefaults({ status: 'playing', mode: 'hva' })
     renderButton({ hideWhenPlaying: true })
     expect(screen.queryByRole('button', { name: /send feedback/i })).toBeNull()
   })
 
   it('renders even when game is playing if hideWhenPlaying is false', () => {
-    setupDefaults({ status: 'playing', mode: 'pvai' })
+    setupDefaults({ status: 'playing', mode: 'hva' })
     renderButton({ hideWhenPlaying: false })
     expect(screen.getByRole('button', { name: /send feedback/i })).toBeDefined()
   })
@@ -111,13 +111,13 @@ describe('FeedbackButton — rendering', () => {
   })
 
   it('renders when status is "won" (not actively playing)', () => {
-    setupDefaults({ status: 'won', mode: 'pvai' })
+    setupDefaults({ status: 'won', mode: 'hva' })
     renderButton({ hideWhenPlaying: true })
     expect(screen.getByRole('button', { name: /send feedback/i })).toBeDefined()
   })
 
   it('renders when status is "idle" and mode is set', () => {
-    setupDefaults({ status: 'idle', mode: 'pvp' })
+    setupDefaults({ status: 'idle', mode: 'hvh' })
     renderButton({ hideWhenPlaying: true })
     expect(screen.getByRole('button', { name: /send feedback/i })).toBeDefined()
   })

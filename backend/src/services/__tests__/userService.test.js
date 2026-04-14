@@ -15,6 +15,10 @@ vi.mock('../../lib/db.js', () => ({
       count: vi.fn(),
       groupBy: vi.fn(),
     },
+    gameElo: {
+      upsert: vi.fn(),
+    },
+    $transaction: vi.fn(async (ops) => Array.isArray(ops) ? Promise.all(ops) : ops({})),
     $queryRaw: vi.fn(),
   },
 }))
@@ -127,16 +131,21 @@ describe('getBotByModelId', () => {
 
 describe('resetBotElo', () => {
   it('resets ELO to 1200 and sets botProvisional + botEloResetAt', async () => {
-    const updated = { ...mockBot, eloRating: 1200, botProvisional: true, botEloResetAt: new Date() }
+    const updated = { ...mockBot, botProvisional: true, botEloResetAt: new Date() }
+    db.gameElo.upsert.mockResolvedValue({ rating: 1200, gamesPlayed: 0 })
     db.user.update.mockResolvedValue(updated)
 
-    const result = await resetBotElo('bot_1')
+    await resetBotElo('bot_1')
+
+    expect(db.gameElo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ rating: 1200, gamesPlayed: 0 }),
+      })
+    )
     const call = db.user.update.mock.calls.at(-1)[0]
     expect(call.where).toEqual({ id: 'bot_1' })
-    expect(call.data.eloRating).toBe(1200)
     expect(call.data.botProvisional).toBe(true)
     expect(call.data.botEloResetAt).toBeInstanceOf(Date)
-    expect(result.eloRating).toBe(1200)
   })
 })
 
@@ -146,13 +155,13 @@ describe('getUserStats', () => {
   })
 
   it('returns zero stats when no games played', async () => {
-    // pvp, pvai, pvbot, recent — all empty
+    // hvh, hva, hvb, recent — all empty
     db.game.findMany.mockResolvedValue([])
     const stats = await getUserStats('usr_1')
     expect(stats.totalGames).toBe(0)
     expect(stats.wins).toBe(0)
     expect(stats.winRate).toBe(0)
-    expect(stats.pvbot.played).toBe(0)
+    expect(stats.hvb.played).toBe(0)
   })
 
   it('calculates win rate correctly from pvp games', async () => {
@@ -162,9 +171,9 @@ describe('getUserStats', () => {
       { outcome: 'DRAW', player1Id: 'usr_1', winnerId: null },
     ]
     db.game.findMany
-      .mockResolvedValueOnce(pvpGames) // pvp
-      .mockResolvedValueOnce([])       // pvai
-      .mockResolvedValueOnce([])       // pvbot
+      .mockResolvedValueOnce(pvpGames) 
+      .mockResolvedValueOnce([])       
+      .mockResolvedValueOnce([])       
       .mockResolvedValueOnce([])       // recent
 
     const stats = await getUserStats('usr_1')
@@ -180,17 +189,17 @@ describe('getUserStats', () => {
       { outcome: 'PLAYER2_WIN', winnerId: 'bot_1', player2Id: 'bot_1', player2: { id: 'bot_1', displayName: 'Rusty', avatarUrl: null } },
     ]
     db.game.findMany
-      .mockResolvedValueOnce([])       // pvp
-      .mockResolvedValueOnce([])       // pvai
-      .mockResolvedValueOnce(pvbotGames) // pvbot
+      .mockResolvedValueOnce([])       
+      .mockResolvedValueOnce([])       
+      .mockResolvedValueOnce(pvbotGames) 
       .mockResolvedValueOnce([])       // recent
 
     const stats = await getUserStats('usr_1')
     expect(stats.totalGames).toBe(2)
-    expect(stats.pvbot.played).toBe(2)
-    expect(stats.pvbot.wins).toBe(1)
-    expect(stats.pvbot.rate).toBe(0.5)
-    expect(stats.pvbot.byBot['bot_1'].played).toBe(2)
+    expect(stats.hvb.played).toBe(2)
+    expect(stats.hvb.wins).toBe(1)
+    expect(stats.hvb.rate).toBe(0.5)
+    expect(stats.hvb.byBot['bot_1'].played).toBe(2)
   })
 
   it('groups pvbot stats by opponent bot', async () => {
@@ -206,11 +215,11 @@ describe('getUserStats', () => {
       .mockResolvedValueOnce([])
 
     const stats = await getUserStats('usr_1')
-    expect(Object.keys(stats.pvbot.byBot)).toHaveLength(2)
-    expect(stats.pvbot.byBot['bot_1'].wins).toBe(1)
-    expect(stats.pvbot.byBot['bot_2'].wins).toBe(1)
-    expect(stats.pvbot.byBot['bot_2'].played).toBe(2)
-    expect(stats.pvbot.byBot['bot_2'].rate).toBe(0.5)
+    expect(Object.keys(stats.hvb.byBot)).toHaveLength(2)
+    expect(stats.hvb.byBot['bot_1'].wins).toBe(1)
+    expect(stats.hvb.byBot['bot_2'].wins).toBe(1)
+    expect(stats.hvb.byBot['bot_2'].played).toBe(2)
+    expect(stats.hvb.byBot['bot_2'].rate).toBe(0.5)
   })
 })
 

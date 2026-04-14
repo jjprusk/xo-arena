@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Bot vs Bot game management routes.
  *
@@ -9,7 +10,6 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
-import { getUserByBetterAuthId } from '../services/userService.js'
 import { hasRole } from '../utils/roles.js'
 import db from '../lib/db.js'
 
@@ -22,7 +22,10 @@ const router = Router()
  */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const caller = await getUserByBetterAuthId(req.auth.userId)
+    const caller = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      include: { userRoles: { select: { role: true } } },
+    })
     if (!caller) return res.status(404).json({ error: 'User not found' })
     if (!hasRole(caller, 'ADMIN') && !hasRole(caller, 'BOT_ADMIN')) {
       return res.status(403).json({ error: 'Requires ADMIN or BOT_ADMIN role' })

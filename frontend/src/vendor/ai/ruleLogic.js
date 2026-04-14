@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Shared rule logic — used by the Minimax classifier, the rule extraction
  * service, and the rule-based AI player.
