@@ -95,13 +95,13 @@ export default function HomePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {GAMES.map(game => (
             game.href ? (
-              <a
+              <Link
                 key={game.name}
-                href={game.href}
+                to={game.href}
                 className="card p-5 flex flex-col gap-2 no-underline transition-colors hover:bg-[var(--bg-surface-hover)]"
               >
                 <GameCardContent game={game} />
-              </a>
+              </Link>
             ) : (
               <div
                 key={game.name}

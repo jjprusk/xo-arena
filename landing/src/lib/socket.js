@@ -5,19 +5,32 @@ import { io } from 'socket.io-client'
 // using window.location.host. io(undefined) correctly defaults to the current origin.
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined
 
-// In development Vite proxies /socket.io → backend, but the HTTP→WebSocket
-// upgrade is unreliable through the proxy: Socket.IO fires a rapid
-// connect/disconnect cycle that triggers red console errors AND races with
-// backend event handlers (the /:id guard bails when the upgrade socket drops).
-// Use polling-only in dev so there is one stable connection with no upgrade.
-// In production the socket connects directly and WebSocket works fine.
-const TRANSPORTS = import.meta.env.DEV ? ['polling'] : ['polling', 'websocket']
+// Polling-only on every environment.
+//
+// In dev: Vite's proxy fires a rapid connect/disconnect cycle on the
+// HTTP→WebSocket upgrade and races with backend event handlers.
+//
+// In prod: the same upgrade fails through the landing express + http-proxy-
+// middleware proxy chain on Fly. The failed upgrade kills the polling
+// session server-side, the next poll returns 400, socket.io reconnects,
+// tries to upgrade again, fails again — a 3–4s cascade that delays the
+// game from appearing.
+//
+// Polling-only sidesteps the upgrade entirely. Slightly higher per-event
+// latency (~50ms vs ~10ms) but a stable connection with no error cascade.
+// Revisit if the proxy WebSocket forwarding gets fixed (see Game_System_Audit).
+const TRANSPORTS = ['polling']
 
 let _socket = null
 
 export function getSocket() {
   if (!_socket) {
-    _socket = io(SOCKET_URL, { autoConnect: false, transports: TRANSPORTS })
+    _socket = io(SOCKET_URL, {
+      autoConnect: false,
+      transports: TRANSPORTS,
+      upgrade: false,           // never attempt polling → websocket upgrade
+      rememberUpgrade: false,
+    })
     _socket.on('connect_error', () => {})
   }
   return _socket
@@ -51,12 +64,8 @@ if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (!_socket) return
     if (document.visibilityState === 'hidden') {
-      // Only pre-emptively disconnect in Safari — prevents the "access control
-      // checks" error caused by Safari aborting in-flight XHRs on tab hide.
-      // In Chrome/Firefox the socket survives backgrounding without errors.
       if (isSafari && _socket.connected) _socket.disconnect()
     } else {
-      // Restore: reconnect if we disconnected (Safari) or socket dropped.
       if (!_socket.connected) _socket.connect()
     }
   })

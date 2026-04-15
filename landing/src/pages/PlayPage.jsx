@@ -3,11 +3,15 @@ import React, { lazy, Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
-import { meta as xoMeta } from '@callidity/game-xo'
 import { api } from '../lib/api.js'
 import { getCommunityBot } from '../lib/communityBotCache.js'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
+// Note: we deliberately do NOT statically import `meta` from @callidity/game-xo
+// at the top of this file. A synchronous import would force Vite to compile the
+// entire game module graph (React + JSX + deps) before PlayPage can render its
+// spinner — adding 1–2s on /play page reload in dev mode. Instead, we load meta
+// asynchronously below and fall back to sensible defaults while it loads.
 const XOGame = lazy(() => import('@callidity/game-xo'))
 
 const WIDTH_CLASS = {
@@ -16,7 +20,6 @@ const WIDTH_CLASS = {
   wide:       'max-w-2xl',
   fullscreen: 'max-w-full',
 }
-const gameWidthClass = WIDTH_CLASS[xoMeta.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
 
 function resolveThemeVars(theme, isDark) {
   return {
@@ -40,6 +43,14 @@ function Spinner() {
 // Keeps all hook calls stable regardless of async bot fetch.
 function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig }) {
   const navigate = useNavigate()
+
+  // Load game meta asynchronously — see comment at top of file. While null we
+  // use 'standard' width and no theme tokens. By the time phase === 'playing'
+  // the lazy import of XOGame is also done, so meta is reliably populated.
+  const [xoMeta, setXoMeta] = useState(null)
+  useEffect(() => {
+    import('@callidity/game-xo').then(m => setXoMeta(m.meta)).catch(() => {})
+  }, [])
 
   const currentUser = authSession?.user
     ? { id: authSession.user.id, displayName: authSession.user.name ?? authSession.user.email }
@@ -138,10 +149,14 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
 
   // Active or finished game
   if ((phase === 'playing' || phase === 'finished') && session) {
+    const widthClass = WIDTH_CLASS[xoMeta?.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
+    const themeStyle = xoMeta?.theme
+      ? resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))
+      : undefined
     return (
       <div
-        className={`relative flex flex-col items-center w-full ${gameWidthClass} mx-auto py-6 px-4`}
-        style={resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))}
+        className={`relative flex flex-col items-center w-full ${widthClass} mx-auto py-6 px-4`}
+        style={themeStyle}
       >
         <Link
           to={tournamentId ? `/tournaments/${tournamentId}` : '/'}
