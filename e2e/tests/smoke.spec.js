@@ -145,9 +145,9 @@ test('Phase 2 — backend and landing serve the expected version', async ({ requ
 // ── Frontend smoke ────────────────────────────────────────────────────────────
 
 test.describe('Smoke — frontend', () => {
-  test('home page loads and shows XO Arena branding', async ({ page }) => {
+  test('home page loads and shows AI Arena branding', async ({ page }) => {
     await page.goto('/')
-    await expect(page).toHaveTitle(/XO Arena/i)
+    await expect(page).toHaveTitle(/AI Arena/i)
   })
 
   test('sign-in modal can be opened', async ({ page }) => {
@@ -160,9 +160,10 @@ test.describe('Smoke — frontend', () => {
     await expect(page.locator('input[autocomplete="email"]')).toBeVisible({ timeout: 15_000 })
   })
 
-  test('leaderboard page loads without auth', async ({ page }) => {
-    await page.goto('/leaderboard')
-    await expect(page.getByRole('heading', { name: /leaderboard/i })).toBeVisible()
+  test('rankings page loads without auth', async ({ page }) => {
+    // Phase 2.2 renamed /leaderboard → /rankings (and the page header).
+    await page.goto('/rankings')
+    await expect(page.getByRole('heading', { name: /rankings/i })).toBeVisible()
   })
 
   test('tournaments page loads and shows filter bar', async ({ page }) => {
