@@ -22,6 +22,11 @@ export async function getToken() {
     if (token) {
       _cachedToken = token
       _tokenExpiry = decodeExpiry(token)
+    } else {
+      // Cache null for 30s so guest sessions don't re-fetch on every navigation.
+      // clearTokenCache() (called on sign-in) wipes _nullUntil so a fresh token
+      // can be fetched immediately after auth.
+      _nullUntil = Date.now() + 30_000
     }
     return token
   } catch {

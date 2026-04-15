@@ -422,17 +422,27 @@ export function useGameSDK({
     // while still in the 'connecting' phase re-emits the room action.
     // Guard: only re-emit if we haven't received a room slug yet (slugRef is null),
     // so a reconnect mid-game never accidentally creates a second room.
+    // Skip the /api/token round trip for guests — we already know there's no
+    // auth to send. Eliminates an async hop on the /play hot path.
+    function resolveAndEmit() {
+      if (!currentUserRef.current?.id) {
+        emitRoomAction(null)
+      } else {
+        getToken().then(emitRoomAction)
+      }
+    }
+
     function onConnect() {
       if (!slugRef.current) {
         // No room created yet — safe to re-emit (reset guard so emitRoomAction runs)
         emitted = false
       }
-      getToken().then(emitRoomAction)
+      resolveAndEmit()
     }
 
     socket.on('connect', onConnect)
     if (socket.connected) {
-      getToken().then(emitRoomAction)
+      resolveAndEmit()
     }
 
     return () => {
