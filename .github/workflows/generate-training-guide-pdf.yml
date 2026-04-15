@@ -11,6 +11,11 @@ jobs:
     name: Generate PDF from markdown
     runs-on: ubuntu-latest
 
+    # GITHUB_TOKEN needs write access to push the regenerated PDF back.
+    # Default is read-only since GitHub tightened workflow permissions.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
         with:
