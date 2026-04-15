@@ -119,20 +119,9 @@
 
 ---
 
-## Phase 2 — Platform Consolidation: Retire Frontend, Rebrand, Navigate
+## Phase 2 — Platform Consolidation: Rebrand and Navigate
 
-> **Goal:** `landing/` becomes the unified AI Arena platform. `frontend/` is retired. New identity and nav live.
-
-### 2.0 Retire the XO frontend service
-
-> **Prerequisite:** Phase 1.4 complete — XO loads correctly through the platform shell.
-
-- [ ] Confirm `@callidity/game-xo` loads and plays correctly via the platform shell
-- [ ] Confirm Gym and Puzzles render correctly via `botInterface.GymComponent` and `botInterface.puzzles`
-- [ ] Remove `frontend/` service from the monorepo
-- [ ] Remove `frontend` service from Fly.io
-- [ ] Remove `frontend` from `docker-compose.yml` and CI workflows
-- [ ] Update all internal references from XO frontend URL to AI Arena URL
+> **Goal:** The unified AI Arena identity, nav, and journey live on `landing/`. Frontend retirement is split out into Phase 3.0 since it's the natural prerequisite for the Tables-page work.
 
 ### 2.1 Unified visual identity
 
@@ -156,69 +145,83 @@
 - [x] Update any journey step that references "XO Arena" to "XO" or "AI Arena" — `JourneyCard.jsx` badge label updated
 - [x] **Re-wire journey steps whose completion is triggered by a route visit** — `slotActions.js` XO-section slots converted to internal routes; `JourneyCard.jsx` steps 3, 4, 6 converted from external cross-site links to internal `<Link>`
 - [x] Update site badges on journey cards if needed — all steps use `site: 'platform'` → "AI Arena" badge; correct
-- [ ] QA full journey flow end-to-end — verify every step can be completed
+- [x] QA full journey flow end-to-end — verify every step can be completed
 
 ### 2.x QA Checklist
 
-> Complete before promoting Phase 2 to production.
+> Signed off 2026-04-15 against staging v1.3.0-alpha-1.06.
 
 #### Core navigation
 
-- [ ] Landing home page loads with correct branding ("AI Arena" / "XO", no "XO Arena")
-- [ ] All 5 nav items visible and route correctly: Tables · Tournaments · Rankings · Profile · About
-- [ ] No broken links or 404s in the main nav
-- [ ] Mobile hamburger nav opens and all items are reachable
+- [x] Landing home page loads with correct branding ("AI Arena" / "XO", no "XO Arena")
+- [x] All 5 nav items visible and route correctly: Tables · Tournaments · Rankings · Profile · About
+- [x] No broken links or 404s in the main nav
+- [x] Mobile hamburger nav opens and all items are reachable
 
-#### Phase 2.0 — Cross-site links removed
+#### Cross-site links removed
 
-- [ ] Home page "Play" button routes to `/play` internally (no redirect to external site)
-- [ ] Profile page stats and bot links route internally
-- [ ] Journey card steps 3, 4, 6 route internally — no cross-site navigation
-- [ ] Guide slot actions route internally
+- [x] Home page "Play" button routes to `/play` internally (no redirect to external site)
+- [x] Profile page stats and bot links route internally
+- [x] Journey card steps 3, 4, 6 route internally — no cross-site navigation
+- [x] Guide slot actions route internally
 
-#### Phase 2.0 — Ported pages (new on landing)
+#### Ported pages (new on landing)
 
-- [ ] `/gym` loads the Gym page
-- [ ] `/gym/guide` loads the Gym Guide page
-- [ ] `/puzzles` loads the Puzzle page
-- [ ] `/rankings` loads the Rankings page
-- [ ] `/stats` loads the Stats page
-- [ ] `/bots/:id` loads the Bot Profile page
+- [x] `/gym` loads the Gym page
+- [x] `/gym/guide` loads the Gym Guide page
+- [x] `/puzzles` loads the Puzzle page
+- [x] `/rankings` loads the Rankings page
+- [x] `/stats` loads the Stats page
+- [x] `/bots/:id` loads the Bot Profile page
 
 #### Phase 2.1 — Branding
 
-- [ ] No "XO Arena" text visible anywhere in the UI
-- [ ] Home page, About page, and welcome modal use "AI Arena" / "XO" correctly
+- [x] No "XO Arena" text visible anywhere in the UI
+- [x] Home page, About page, and welcome modal use "AI Arena" / "XO" correctly
 
 #### Phase 2.2 — Navigation
 
-- [ ] Nav shows: Tables · Tournaments · Rankings · Profile · About
-- [ ] No Games dropdown visible
-- [ ] FAQ content accessible via About page
-- [ ] Rankings nav item routes to `/rankings` on landing (not cross-site)
+- [x] Nav shows: Tables · Tournaments · Rankings · Profile · About
+- [x] No Games dropdown visible
+- [x] FAQ content accessible via About page
+- [x] Rankings nav item routes to `/rankings` on landing (not cross-site)
 
 #### Phase 2.3 — Journey
 
-- [ ] Journey opens correctly for new users
-- [ ] All journey steps can be completed end-to-end
-- [ ] No journey step links to the old frontend domain
+- [x] Journey opens correctly for new users
+- [x] All journey steps can be completed end-to-end
+- [x] No journey step links to the old frontend domain
 
 #### Auth flows
 
-- [ ] Sign-in modal opens
-- [ ] Google OAuth sign-in works end to end
-- [ ] Signed-in state persists on refresh
+- [x] Sign-in modal opens
+- [x] Google OAuth sign-in works end to end
+- [x] Signed-in state persists on refresh
 
 #### Settings
 
-- [ ] Settings page loads when signed in
-- [ ] Notification preference toggle saves
-- [ ] Flash alerts toggle saves
+- [x] Settings page loads when signed in
+- [x] Notification preference toggle saves
+- [x] Flash alerts toggle saves
 ---
 
-## Phase 3 — Tables Page + Platform Shell
+## Phase 3 — Frontend Retirement, Tables Page, Platform Shell
 
-> **Goal:** The Tables page is the new front door. Players browse, create, and join tables. The platform shell loads any registered game.
+> **Goal:** Retire the legacy XO frontend service, then ship the Tables page (the new front door) and the platform shell that loads any registered game.
+
+### 3.0 Retire the XO frontend service
+
+> **Prerequisite:** Phase 2 complete — landing fully owns the unified AI Arena UI; XO loads correctly through the platform shell on landing.
+
+- [x] Confirm `@callidity/game-xo` loads and plays correctly via the platform shell — verified end-to-end on staging at v1.3.0-alpha-1.06
+- [x] Confirm Gym and Puzzles render correctly via `botInterface.GymComponent` and `botInterface.puzzles` — Gym, Gym Guide, and Puzzles all render on landing
+- [ ] Remove `frontend/` service from the monorepo
+- [ ] Remove `frontend` service from Fly.io (`xo-frontend-staging`, `xo-frontend-prod`)
+- [ ] Remove `frontend` from `docker-compose.yml`
+- [ ] Remove `frontend` deploy steps from `.github/workflows/deploy-staging.yml` and `deploy-prod.yml`
+- [ ] Update e2e smoke tests — drop `BASE_URL=https://xo-frontend-staging.fly.dev` from the harness
+- [ ] Update all remaining internal references from XO frontend URL to AI Arena URL
+- [ ] Final QA: nothing on staging or prod still depends on the frontend service before destroying Fly apps
 
 ### 3.1 Table data model (backend)
 
