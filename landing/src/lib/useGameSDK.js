@@ -53,17 +53,12 @@ export function useGameSDK({
   const reactionHandlersRef = useRef([])
   const idleHandlersRef    = useRef([])
   const gameEndCallbackRef = useRef(null)
-  // Tracks whether the local player's move is in-flight, so game:moved echo
-  // doesn't double-play the move sound (we already played it on submitMove).
-  const localMovePendingRef = useRef(false)
 
   // ── SDK object (stable reference — methods close over refs) ───────────────
   const sdk = useMemo(() => ({
     // ── Core contract methods ──────────────────────────────────────────────
 
     submitMove(move) {
-      useSoundStore.getState().play('move')
-      localMovePendingRef.current = true
       getSocket().emit('game:move', { cellIndex: move })
     },
 
@@ -140,6 +135,14 @@ export function useGameSDK({
       }
     },
 
+    // ── Platform audio ─────────────────────────────────────────────────────
+    // Games route all sound through this — platform owns the AudioContext
+    // (mute, volume, suspend/resume lifecycle). Unknown keys are a no-op.
+
+    playSound(key) {
+      useSoundStore.getState().play(key)
+    },
+
     // Register platform shell game-end callback
     _onGameEnd(cb) {
       gameEndCallbackRef.current = cb
@@ -161,7 +164,22 @@ export function useGameSDK({
         isSpectator:   overrides.isSpectator ?? false,
         settings:      { ...settingsRef.current, marks: { ...marksRef.current } },
       }
-      setSession({ ...s })
+      // Preserve object identity when nothing meaningful changed — avoids a
+      // re-render of the game component on every socket event. Scalars are
+      // compared directly; players/settings (small objects/arrays) use
+      // JSON.stringify — cheap at this scale and exact.
+      setSession(prev => {
+        if (
+          prev
+          && prev.tableId       === s.tableId
+          && prev.gameId        === s.gameId
+          && prev.isSpectator   === s.isSpectator
+          && prev.currentUserId === s.currentUserId
+          && JSON.stringify(prev.players)  === JSON.stringify(s.players)
+          && JSON.stringify(prev.settings) === JSON.stringify(s.settings)
+        ) return prev
+        return s
+      })
       return s
     }
 
@@ -330,18 +348,10 @@ export function useGameSDK({
 
     socket.on('game:moved', ({ cellIndex, board, currentTurn, status, winner, winLine, scores, round }) => {
       setPhase(status === 'finished' ? 'finished' : 'playing')
-      if (status === 'finished') {
-        useSoundStore.getState().play(winner ? 'win' : 'draw')
-      } else if (!localMovePendingRef.current) {
-        // Only play move sound for opponent moves — own move already played on submitMove
-        useSoundStore.getState().play('move')
-      }
-      localMovePendingRef.current = false
       emitMoveEvent(cellIndex, { board, currentTurn, status, winner, winLine, scores, round })
     })
 
     socket.on('game:forfeit', ({ winner, scores }) => {
-      useSoundStore.getState().play('forfeit')
       emitMoveEvent(null, {
         board:       boardRef.current,
         currentTurn: null,

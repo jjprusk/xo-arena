@@ -173,9 +173,7 @@ export default function PlayPage() {
   const [botConfig, setBotConfig] = useState(null)   // { botUserId, botSkillId }
   const [botError, setBotError]   = useState(false)
 
-  // Preload the game chunk immediately — runs in parallel with the bot fetch
-  // so the chunk is ready by the time phase becomes 'playing'.
-  useEffect(() => { import('@callidity/game-xo').catch(() => {}) }, [])
+  // Game chunk is preloaded at the module level in AppLayout — no need to re-trigger here.
 
   // Resolve community bot — uses the module-level cache so repeated plays
   // and navigations from HomePage (which prefetches) skip the round-trip.

@@ -41,17 +41,22 @@ export function disconnectSocket() {
 // "XMLHttpRequest cannot load … due to access control checks" — a misleading
 // error that actually means "connection killed by the browser".
 //
-// Fix: disconnect cleanly when the tab hides (no in-flight XHR to abort) and
-// reconnect immediately when the user returns (beats Socket.IO's 1-5s backoff).
+// Strategy: only disconnect on hide in Safari (where the XHR is forcibly killed).
+// In other browsers, leaving the socket connected avoids the 400 race condition
+// that occurs when disconnect() closes the server session mid in-flight polling GET.
+const isSafari = typeof navigator !== 'undefined' &&
+  /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (!_socket) return
     if (document.visibilityState === 'hidden') {
-      // Disconnect before Safari kills the in-flight XHR — prevents the
-      // "access control checks" console error on backgrounded tabs.
-      if (_socket.connected) _socket.disconnect()
+      // Only pre-emptively disconnect in Safari — prevents the "access control
+      // checks" error caused by Safari aborting in-flight XHRs on tab hide.
+      // In Chrome/Firefox the socket survives backgrounding without errors.
+      if (isSafari && _socket.connected) _socket.disconnect()
     } else {
-      // Tab is visible again — reconnect immediately.
+      // Restore: reconnect if we disconnected (Safari) or socket dropped.
       if (!_socket.connected) _socket.connect()
     }
   })

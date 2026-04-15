@@ -45,12 +45,11 @@ export const POST_JOURNEY_SLOTS = [
 ]
 
 export const JOURNEY_DEFAULT_SLOTS = [
-  { actionKey: null,          stepIndex: 1, label: 'Welcome',     icon: '🎉', href: null },
-  { actionKey: 'faq',         stepIndex: 2 },
-  { actionKey: 'play',        stepIndex: 3 },
-  { actionKey: 'gym_guide',   stepIndex: 4 },
-  { actionKey: 'create_bot',  stepIndex: 5 },
-  { actionKey: 'gym',         stepIndex: 6 },
-  { actionKey: 'tournaments',  stepIndex: 7 },
-  { actionKey: 'journey_complete', stepIndex: 8 },
+  { actionKey: null,           stepIndex: 1, label: 'Welcome',  icon: '🎉', href: null },
+  { actionKey: 'faq',          stepIndex: 2 },
+  { actionKey: 'play',         stepIndex: 3 },
+  { actionKey: 'gym_guide',    stepIndex: 4 },
+  { actionKey: 'create_bot',   stepIndex: 5 },
+  { actionKey: 'gym',          stepIndex: 6 },
+  { actionKey: 'tournaments',  stepIndex: 7, isFinalStep: true },
 ]

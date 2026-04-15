@@ -16,7 +16,6 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { initialGameState } from './logic.js'
-import { playSound } from './soundUtils.js'
 
 // ── Theme tokens ───────────────────────────────────────────────────────────────
 // These reference CSS custom properties injected by the platform from meta.theme.
@@ -110,11 +109,13 @@ export default function GameComponent({ session, sdk }) {
     setLastCell(event.move)
     setTimeout(() => setLastCell(null), 350)
 
-    // Play sounds
+    // Play sounds via the platform SDK (single shared AudioContext — honors mute/volume).
+    // Own moves were already sounded on handleCellClick for instant feedback, so skip
+    // the echo here to avoid doubling.
     if (event.state.status === 'finished') {
-      playSound(event.state.winner ? 'win' : 'draw')
-    } else {
-      playSound('move')
+      sdk.playSound?.(event.state.winner ? 'win' : 'draw')
+    } else if (event.playerId && event.playerId !== session?.currentUserId) {
+      sdk.playSound?.('move')
     }
 
     // Notify the platform once when the game concludes.
@@ -141,17 +142,18 @@ export default function GameComponent({ session, sdk }) {
 
   function handleCellClick(index) {
     if (!isMyTurn || board[index] !== null) return
+    sdk.playSound?.('move')   // instant feedback — don't wait for the server echo
     sdk.submitMove(index)
   }
 
   function handleForfeit() {
-    playSound('forfeit')
+    sdk.playSound?.('forfeit')
     sdk.forfeit?.()
     setShowForfeit(false)
   }
 
   function handleRematch() {
-    playSound('move')
+    sdk.playSound?.('move')
     sdk.rematch?.()
   }
 
