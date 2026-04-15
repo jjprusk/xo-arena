@@ -15,7 +15,22 @@ let _socket = null
 
 export function getSocket() {
   if (!_socket) {
-    _socket = io(SOCKET_URL, { autoConnect: false })
+    // Polling-only on every environment.
+    //
+    // The HTTP→WebSocket upgrade fails through both the Vite dev proxy and the
+    // production landing/express + http-proxy-middleware proxy chain on Fly.
+    // The failed upgrade kills the polling session server-side, the next poll
+    // returns 400, socket.io reconnects, tries upgrade again, fails again — a
+    // 3–4s cascade that delays game start.
+    //
+    // Polling-only sidesteps the upgrade entirely. Slightly higher per-event
+    // latency (~50ms vs ~10ms) but a stable connection with no error cascade.
+    _socket = io(SOCKET_URL, {
+      autoConnect: false,
+      transports: ['polling'],
+      upgrade: false,
+      rememberUpgrade: false,
+    })
   }
   return _socket
 }
@@ -38,17 +53,18 @@ export function disconnectSocket() {
 // "XMLHttpRequest cannot load … due to access control checks" — a misleading
 // error that actually means "connection killed by the browser".
 //
-// Fix: disconnect cleanly when the tab hides (no in-flight XHR to abort) and
-// reconnect immediately when the user returns (beats Socket.IO's 1-5s backoff).
+// Strategy: only disconnect on hide in Safari. In Chrome/Firefox, disconnecting
+// while a poll is in flight causes the server to close the session — when the
+// in-flight GET returns it gets a 400 response.
+const isSafari = typeof navigator !== 'undefined' &&
+  /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (!_socket) return
     if (document.visibilityState === 'hidden') {
-      // Disconnect before Safari kills the in-flight XHR — prevents the
-      // "access control checks" console error on backgrounded tabs.
-      if (_socket.connected) _socket.disconnect()
+      if (isSafari && _socket.connected) _socket.disconnect()
     } else {
-      // Tab is visible again — reconnect immediately.
       if (!_socket.connected) _socket.connect()
     }
   })

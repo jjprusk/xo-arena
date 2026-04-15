@@ -106,10 +106,10 @@ export default function AppLayout() {
     useGuideStore.getState().close()
   }, [location.pathname])
 
-  // Pre-warm socket connection for all users so it's established by the time
-  // the user navigates to /play. Socket.IO auth is per-event (not per-connection),
-  // so guest sockets are accepted and remain open until explicitly used.
-  useEffect(() => { connectSocket() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // No socket pre-warm: empirically, an idle pre-warmed polling socket goes
+  // stale (server expires the SID), and the 400 + reconnect cycle on first
+  // event is 5-10× slower than a fresh on-demand handshake (~1100ms vs ~100ms).
+  // useGameSDK connects the socket itself when /play mounts.
 
   // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out.
   useEffect(() => {
