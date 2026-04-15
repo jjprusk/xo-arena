@@ -1,3 +1,0 @@
-PLACEHOLDER — replace this entire file with the content downloaded from Apple Developer portal.
-Go to: developer.apple.com → Certificates, Identifiers & Profiles → More → Configure Domains
-Download the file Apple provides and replace this file with its exact content.
