@@ -14,13 +14,19 @@ export async function getToken() {
   if (_cachedToken && Date.now() < _tokenExpiry - 60_000) return _cachedToken
   if (Date.now() < _nullUntil) return null
   try {
-    const res = await fetch('/api/auth/token', { method: 'GET', credentials: 'include' })
+    // Use /api/token (always 200) so browsers don't log 401 for unauthenticated users.
+    const res = await fetch('/api/token', { method: 'GET', credentials: 'include' })
     if (!res.ok) { _cachedToken = null; _nullUntil = Date.now() + 10_000; return null }
     const data = await res.json()
     const token = data?.token ?? null
     if (token) {
       _cachedToken = token
       _tokenExpiry = decodeExpiry(token)
+    } else {
+      // Cache null for 30s so guest sessions don't re-fetch on every navigation.
+      // clearTokenCache() (called on sign-in) wipes _nullUntil so a fresh token
+      // can be fetched immediately after auth.
+      _nullUntil = Date.now() + 30_000
     }
     return token
   } catch {

@@ -30,7 +30,7 @@ vi.mock('../../lib/socket.js', () => ({
 import { useGameSDK } from '../../lib/useGameSDK.js'
 import PlayPage from '../PlayPage.jsx'
 
-const mockSdk = {}
+const mockSdk = { _onGameEnd: vi.fn() }
 const defaultSDKReturn = {
   session: null,
   sdk: mockSdk,

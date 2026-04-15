@@ -1,5 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
 import { POST_JOURNEY_SLOTS } from './slotActions.js'
 import NotificationStack from './NotificationStack.jsx'
@@ -14,16 +15,21 @@ import JourneyCompletePopup from '../ui/JourneyCompletePopup.jsx'
  * 320px on desktop, full-width bottom-sheet on mobile.
  * Closes on Escape or clicking the backdrop.
  */
-function handleJourneyComplete() {
-  useGuideStore.getState().completeJourney(POST_JOURNEY_SLOTS)
-}
+// Note: handleJourneyComplete is called inside GuidePanel so it has access to navigate.
+// Defined as a closure below inside the component.
 
 export default function GuidePanel({ isAdmin = false }) {
+  const navigate = useNavigate()
   const { panelOpen, close, onlineUsers } = useGuideStore()
   const [editMode,            setEditMode]            = useState(false)
   const [pickerOpen,          setPickerOpen]          = useState(false)
   const [journeyCompleteOpen, setJourneyCompleteOpen] = useState(false)
   const panelRef = useRef(null)
+
+  function handleJourneyComplete() {
+    useGuideStore.getState().completeJourney(POST_JOURNEY_SLOTS)
+    navigate('/tournaments')
+  }
 
   // Escape key closes panel
   useEffect(() => {

@@ -151,13 +151,69 @@
 
 ### 2.3 Onboarding journey update
 
-- [ ] Audit all journey steps for references to old nav items, site names, or structural flows
-- [ ] Update step copy and instructions to reflect new nav and AI Arena identity
-- [ ] Update any journey step that references "XO Arena" to "XO" or "AI Arena"
-- [ ] **Explicitly re-wire any journey step whose completion is triggered by a route visit** — if the route has changed or been removed, update the trigger in `journeyService.js` and `useJourneyAutoOpen.js`
-- [ ] Update site badges on journey cards if needed
+- [x] Audit all journey steps for references to old nav items, site names, or structural flows — all 8 step titles and hrefs are correct; all routes are internal
+- [x] Update step copy and instructions to reflect new nav and AI Arena identity — `JourneyCard.jsx` STEPS titles confirmed correct; `JOURNEY_DEFAULT_SLOTS` step 7 slot corrected from `play_my_bot` → `tournaments` to match "Enter a tournament" step
+- [x] Update any journey step that references "XO Arena" to "XO" or "AI Arena" — `JourneyCard.jsx` badge label updated
+- [x] **Re-wire journey steps whose completion is triggered by a route visit** — `slotActions.js` XO-section slots converted to internal routes; `JourneyCard.jsx` steps 3, 4, 6 converted from external cross-site links to internal `<Link>`
+- [x] Update site badges on journey cards if needed — all steps use `site: 'platform'` → "AI Arena" badge; correct
 - [ ] QA full journey flow end-to-end — verify every step can be completed
 
+### 2.x QA Checklist
+
+> Complete before promoting Phase 2 to production.
+
+#### Core navigation
+
+- [ ] Landing home page loads with correct branding ("AI Arena" / "XO", no "XO Arena")
+- [ ] All 5 nav items visible and route correctly: Tables · Tournaments · Rankings · Profile · About
+- [ ] No broken links or 404s in the main nav
+- [ ] Mobile hamburger nav opens and all items are reachable
+
+#### Phase 2.0 — Cross-site links removed
+
+- [ ] Home page "Play" button routes to `/play` internally (no redirect to external site)
+- [ ] Profile page stats and bot links route internally
+- [ ] Journey card steps 3, 4, 6 route internally — no cross-site navigation
+- [ ] Guide slot actions route internally
+
+#### Phase 2.0 — Ported pages (new on landing)
+
+- [ ] `/gym` loads the Gym page
+- [ ] `/gym/guide` loads the Gym Guide page
+- [ ] `/puzzles` loads the Puzzle page
+- [ ] `/rankings` loads the Rankings page
+- [ ] `/stats` loads the Stats page
+- [ ] `/bots/:id` loads the Bot Profile page
+
+#### Phase 2.1 — Branding
+
+- [ ] No "XO Arena" text visible anywhere in the UI
+- [ ] Home page, About page, and welcome modal use "AI Arena" / "XO" correctly
+
+#### Phase 2.2 — Navigation
+
+- [ ] Nav shows: Tables · Tournaments · Rankings · Profile · About
+- [ ] No Games dropdown visible
+- [ ] FAQ content accessible via About page
+- [ ] Rankings nav item routes to `/rankings` on landing (not cross-site)
+
+#### Phase 2.3 — Journey
+
+- [ ] Journey opens correctly for new users
+- [ ] All journey steps can be completed end-to-end
+- [ ] No journey step links to the old frontend domain
+
+#### Auth flows
+
+- [ ] Sign-in modal opens
+- [ ] Google OAuth sign-in works end to end
+- [ ] Signed-in state persists on refresh
+
+#### Settings
+
+- [ ] Settings page loads when signed in
+- [ ] Notification preference toggle saves
+- [ ] Flash alerts toggle saves
 ---
 
 ## Phase 3 — Tables Page + Platform Shell

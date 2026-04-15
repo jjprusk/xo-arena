@@ -109,6 +109,15 @@ export default function GameComponent({ session, sdk }) {
     setLastCell(event.move)
     setTimeout(() => setLastCell(null), 350)
 
+    // Play sounds via the platform SDK (single shared AudioContext — honors mute/volume).
+    // Own moves were already sounded on handleCellClick for instant feedback, so skip
+    // the echo here to avoid doubling.
+    if (event.state.status === 'finished') {
+      sdk.playSound?.(event.state.winner ? 'win' : 'draw')
+    } else if (event.playerId && event.playerId !== session?.currentUserId) {
+      sdk.playSound?.('move')
+    }
+
     // Notify the platform once when the game concludes.
     // The platform uses this to record the result and update ELO.
     if (event.state.status === 'finished' && !signalledRef.current) {
@@ -133,15 +142,18 @@ export default function GameComponent({ session, sdk }) {
 
   function handleCellClick(index) {
     if (!isMyTurn || board[index] !== null) return
+    sdk.playSound?.('move')   // instant feedback — don't wait for the server echo
     sdk.submitMove(index)
   }
 
   function handleForfeit() {
+    sdk.playSound?.('forfeit')
     sdk.forfeit?.()
     setShowForfeit(false)
   }
 
   function handleRematch() {
+    sdk.playSound?.('move')
     sdk.rematch?.()
   }
 

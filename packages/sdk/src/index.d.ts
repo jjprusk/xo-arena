@@ -140,6 +140,31 @@ export interface GameSDK {
    * The platform calls this before sending state to each client.
    */
   getPlayerState(playerId: string): unknown
+
+  /**
+   * Play a named sound through the platform's audio system.
+   *
+   * The platform owns a single shared AudioContext with master gain, user-configurable
+   * volume and mute, and lifecycle handling for tab suspension. Games MUST route all
+   * audio through this method rather than creating their own AudioContext — doing so
+   * breaks mute/volume controls and causes double-playback of platform sounds.
+   *
+   * Standard keys the platform implements for every game:
+   *   'move'    — a player took their turn
+   *   'win'     — the game ended with a winner
+   *   'draw'    — the game ended in a draw
+   *   'forfeit' — a player resigned
+   *
+   * Unknown keys are a no-op (silently ignored). Honors the user's mute and volume
+   * settings. Safe to call during tab visibility changes — the platform resumes its
+   * AudioContext automatically.
+   *
+   * @example
+   * function handleMove(event) {
+   *   sdk.playSound(event.state.status === 'finished' ? 'win' : 'move')
+   * }
+   */
+  playSound(key: string): void
 }
 
 // ---------------------------------------------------------------------------

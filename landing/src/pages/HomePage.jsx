@@ -1,7 +1,8 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { prefetchCommunityBot } from '../lib/communityBotCache.js'
 
 function XOIcon() {
   return (
@@ -18,9 +19,9 @@ function XOIcon() {
 const GAMES = [
   {
     icon: <XOIcon />,
-    name: 'XO',
-    description: 'Tic-tac-toe with ML-driven AI, ELO rankings, live PvP rooms, and tournament play.',
-    href: '/play',
+    name: 'XO Arena',
+    description: 'Tic-tac-toe with AI-driven bots, ELO rankings, player vs. player (PvP) rooms, and tournament play.',
+    href: '/play?action=vs-community-bot',
     badge: 'Play now',
     live: true,
   },
@@ -45,6 +46,9 @@ const GAMES = [
 export default function HomePage() {
   const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
+
+  // Prefetch the community bot list so /play?action=vs-community-bot is instant.
+  useEffect(() => { prefetchCommunityBot() }, [])
 
   return (
     <div className="flex flex-col">
@@ -72,7 +76,7 @@ export default function HomePage() {
               View Tournaments
             </Link>
             {!user && (
-              <Link to="/play" className="btn btn-secondary">
+              <Link to="/play?action=vs-community-bot" className="btn btn-secondary">
                 Play XO
               </Link>
             )}

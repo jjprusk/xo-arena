@@ -8,11 +8,12 @@ const STEP_ROUTES = {
   8: '/tournaments',
 }
 
-export function useJourneyAutoOpen() {
+export function useJourneyAutoOpen(userId = null) {
   const { pathname } = useLocation()
   const { journeyProgress, panelOpen, open } = useGuideStore()
 
   useEffect(() => {
+    if (!userId) return  // never auto-open for unauthenticated visitors
     if (panelOpen) return
 
     const { completedSteps = [], dismissedAt } = journeyProgress ?? {}

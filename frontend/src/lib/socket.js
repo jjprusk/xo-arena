@@ -7,7 +7,9 @@ import { io } from 'socket.io-client'
 
 // Socket.IO connects to same origin — server.js proxies /socket.io/* to the backend.
 // In local dev (Vite), VITE_SOCKET_URL points directly to the backend dev server.
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? ''
+// Use `|| undefined` not `?? ''`: io('') builds 'http://' (invalid URL) instead of
+// using window.location.host. io(undefined) correctly defaults to the current origin.
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined
 
 let _socket = null
 
@@ -27,6 +29,29 @@ export function connectSocket(token = null) {
 
 export function disconnectSocket() {
   if (_socket?.connected) _socket.disconnect()
+}
+
+// Handle tab suspension gracefully.
+//
+// Safari (and iOS) freeze JS and then kill network connections when a tab is
+// backgrounded. Any in-flight polling XHR is aborted, which Safari reports as
+// "XMLHttpRequest cannot load … due to access control checks" — a misleading
+// error that actually means "connection killed by the browser".
+//
+// Fix: disconnect cleanly when the tab hides (no in-flight XHR to abort) and
+// reconnect immediately when the user returns (beats Socket.IO's 1-5s backoff).
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!_socket) return
+    if (document.visibilityState === 'hidden') {
+      // Disconnect before Safari kills the in-flight XHR — prevents the
+      // "access control checks" console error on backgrounded tabs.
+      if (_socket.connected) _socket.disconnect()
+    } else {
+      // Tab is visible again — reconnect immediately.
+      if (!_socket.connected) _socket.connect()
+    }
+  })
 }
 
 /**

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { connectSocket, disconnectSocket, getSocket } from './socket.js'
 import { getToken } from './getToken.js'
+import { useSoundStore } from '../store/soundStore.js'
 
 /**
  * Platform-side SDK provider for socket-based games.
@@ -25,6 +26,8 @@ export function useGameSDK({
   tournamentMatchId = null,
   tournamentId    = null,
   currentUser     = null,
+  botUserId       = null,
+  botSkillId      = null,
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [phase, setPhase]           = useState('connecting')   // connecting | waiting | playing | finished
@@ -132,6 +135,14 @@ export function useGameSDK({
       }
     },
 
+    // ── Platform audio ─────────────────────────────────────────────────────
+    // Games route all sound through this — platform owns the AudioContext
+    // (mute, volume, suspend/resume lifecycle). Unknown keys are a no-op.
+
+    playSound(key) {
+      useSoundStore.getState().play(key)
+    },
+
     // Register platform shell game-end callback
     _onGameEnd(cb) {
       gameEndCallbackRef.current = cb
@@ -153,7 +164,22 @@ export function useGameSDK({
         isSpectator:   overrides.isSpectator ?? false,
         settings:      { ...settingsRef.current, marks: { ...marksRef.current } },
       }
-      setSession({ ...s })
+      // Preserve object identity when nothing meaningful changed — avoids a
+      // re-render of the game component on every socket event. Scalars are
+      // compared directly; players/settings (small objects/arrays) use
+      // JSON.stringify — cheap at this scale and exact.
+      setSession(prev => {
+        if (
+          prev
+          && prev.tableId       === s.tableId
+          && prev.gameId        === s.gameId
+          && prev.isSpectator   === s.isSpectator
+          && prev.currentUserId === s.currentUserId
+          && JSON.stringify(prev.players)  === JSON.stringify(s.players)
+          && JSON.stringify(prev.settings) === JSON.stringify(s.settings)
+        ) return prev
+        return s
+      })
       return s
     }
 
@@ -181,6 +207,32 @@ export function useGameSDK({
       settingsRef.current = { displayName, myMark: mark }
       setPhase('waiting')
       buildSession({ isSpectator: false })
+    })
+
+    socket.on('room:created:hvb', ({ slug, displayName, mark, board, currentTurn }) => {
+      const cu = currentUserRef.current
+      slugRef.current = slug
+      const hostId = cu?.id ?? 'host'
+      const botId = botUserId ?? 'bot'
+      marksRef.current[hostId] = mark
+      marksRef.current[botId] = mark === 'X' ? 'O' : 'X'
+      playersRef.current = [
+        { id: hostId, displayName: cu?.displayName ?? 'You', isBot: false },
+        { id: botId, displayName: 'Bot', isBot: true },
+      ]
+      settingsRef.current = { displayName, myMark: mark }
+      boardRef.current = board
+      setPhase('playing')
+      buildSession({ isSpectator: false })
+      emitMoveEvent(null, {
+        board,
+        currentTurn: currentTurn ?? 'X',
+        status: 'playing',
+        winner: null,
+        winLine: null,
+        scores: { X: 0, O: 0 },
+        round: 1,
+      })
     })
 
     socket.on('room:renamed', ({ slug, displayName }) => {
@@ -356,6 +408,8 @@ export function useGameSDK({
         socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else if (joinSlug) {
         socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token ?? null })
+      } else if (botUserId) {
+        socket.emit('room:create:hvb', { botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null })
       } else {
         socket.emit('room:create', { spectatorAllowed: true, authToken: token ?? null })
       }
@@ -363,14 +417,32 @@ export function useGameSDK({
 
     // Must wait for the socket to be fully connected before emitting —
     // emitting before 'connect' fires is silently dropped by socket.io.
-    function onConnect() {
-      getToken().then(emitRoomAction)
+    //
+    // Use socket.on (not socket.once) so that a disconnect-reconnect cycle
+    // while still in the 'connecting' phase re-emits the room action.
+    // Guard: only re-emit if we haven't received a room slug yet (slugRef is null),
+    // so a reconnect mid-game never accidentally creates a second room.
+    // Skip the /api/token round trip for guests — we already know there's no
+    // auth to send. Eliminates an async hop on the /play hot path.
+    function resolveAndEmit() {
+      if (!currentUserRef.current?.id) {
+        emitRoomAction(null)
+      } else {
+        getToken().then(emitRoomAction)
+      }
     }
 
+    function onConnect() {
+      if (!slugRef.current) {
+        // No room created yet — safe to re-emit (reset guard so emitRoomAction runs)
+        emitted = false
+      }
+      resolveAndEmit()
+    }
+
+    socket.on('connect', onConnect)
     if (socket.connected) {
-      getToken().then(emitRoomAction)
-    } else {
-      socket.once('connect', onConnect)
+      resolveAndEmit()
     }
 
     return () => {
@@ -378,7 +450,7 @@ export function useGameSDK({
       socket.off('connect', onConnect)
       emitted = true // prevent any in-flight getToken().then from emitting after cleanup
       ;[
-        'room:created', 'room:renamed', 'room:joined', 'room:guestJoined',
+        'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
         'room:spectatorJoined', 'room:playerDisconnected', 'room:cancelled',
         'room:abandoned', 'room:kicked',
         'game:start', 'game:moved', 'game:forfeit',

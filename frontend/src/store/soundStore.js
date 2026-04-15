@@ -55,6 +55,16 @@ if (typeof window !== 'undefined') {
   document.addEventListener('pointerdown', () => {
     if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
   }, { capture: true, passive: true })
+
+  // Also resume on tab-show: PvP socket events (opponent moves) fire without
+  // any user gesture, so the pointerdown listener won't pre-warm the context
+  // in time. Resuming here ensures the context is running before any socket
+  // event triggers a sound after the user returns to the tab.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
+    }
+  })
 }
 
 function tone(ac, type, freq, startTime, duration, gain = 0.18, fadeOut = true) {

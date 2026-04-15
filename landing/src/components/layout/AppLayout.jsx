@@ -12,7 +12,12 @@ import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
+import { JOURNEY_DEFAULT_SLOTS } from '../guide/slotActions.js'
 import { AppNav } from '@xo-arena/nav'
+
+// Kick off the game-xo chunk download immediately on app load — by the time
+// the user navigates to /play the module graph is already compiled and cached.
+import('@callidity/game-xo').catch(() => {})
 
 const LANDING_URL = import.meta.env.VITE_LANDING_URL  ?? 'https://aiarena.callidity.com'
 const APP_URLS    = { landing: LANDING_URL, xo: LANDING_URL }
@@ -93,13 +98,18 @@ export default function AppLayout() {
     setShowSignIn(true)
   }
 
-  useJourneyAutoOpen()
+  useJourneyAutoOpen(user?.id ?? null)
 
   // Close user dropdown and guide panel whenever the user navigates
   useEffect(() => {
     setUserMenuOpen(false)
     useGuideStore.getState().close()
   }, [location.pathname])
+
+  // Pre-warm socket connection for all users so it's established by the time
+  // the user navigates to /play. Socket.IO auth is per-event (not per-connection),
+  // so guest sockets are accepted and remain open until explicitly used.
+  useEffect(() => { connectSocket() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out.
   useEffect(() => {
@@ -109,7 +119,7 @@ export default function AppLayout() {
         if (window.location.pathname.startsWith('/play')) return
         const { journeyProgress } = useGuideStore.getState()
         const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-        if (!dismissedAt && completedSteps.length < 8) {
+        if (!dismissedAt && completedSteps.length < JOURNEY_DEFAULT_SLOTS.length) {
           useGuideStore.getState().open()
         }
       })

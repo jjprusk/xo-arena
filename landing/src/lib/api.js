@@ -81,7 +81,50 @@ export const api = {
   },
 
   ml: {
-    getSessions: (id) => api.get(`/ml/models/${id}/sessions`),
+    listModels:       ()           => api.get('/ml/models'),
+    getNetworkConfig: ()           => api.get('/ml/network-config'),
+    createModel:      (body, tok)  => api.post('/ml/models', body, tok),
+    getModel:         (id)         => api.get(`/ml/models/${id}`),
+    updateModel:      (id, b, tok) => api.patch(`/ml/models/${id}`, b, tok),
+    deleteModel:      (id, tok)    => request('DELETE', `/ml/models/${id}`, null, tok),
+    resetModel:       (id, tok)    => api.post(`/ml/models/${id}/reset`, {}, tok),
+    cloneModel:       (id, b, tok) => api.post(`/ml/models/${id}/clone`, b, tok),
+    getQTable:        (id)         => api.get(`/ml/models/${id}/qtable`),
+    explainMove:      (id, board)  => api.post(`/ml/models/${id}/explain`, { board }),
+    train:            (id, b, tok) => api.post(`/ml/models/${id}/train`, b, tok),
+    finishSession:    (id, b, tok) => api.post(`/ml/sessions/${id}/finish`, b, tok),
+    getSessions:      (id)         => api.get(`/ml/models/${id}/sessions`),
+    getSession:       (id)         => api.get(`/ml/sessions/${id}`),
+    getEpisodes:      (id, page)   => api.get(`/ml/sessions/${id}/episodes?page=${page}&limit=500`),
+    cancelSession:    (id, tok)    => api.post(`/ml/sessions/${id}/cancel`, {}, tok),
+    getCheckpoints:   (id)         => api.get(`/ml/models/${id}/checkpoints`),
+    getCheckpoint:    (id, cpId)   => api.get(`/ml/models/${id}/checkpoints/${cpId}`),
+    saveCheckpoint:   (id, tok)    => api.post(`/ml/models/${id}/checkpoint`, {}, tok),
+    restoreCheckpoint:(id,cp,tok)  => api.post(`/ml/models/${id}/checkpoints/${cp}/restore`, {}, tok),
+    getOpeningBook:   (id)         => api.get(`/ml/models/${id}/opening-book`),
+    exportModel:      (id)         => api.get(`/ml/models/${id}/export`),
+    importModel:      (data, tok)  => api.post('/ml/models/import', data, tok),
+    getEloHistory:    (id)              => api.get(`/ml/models/${id}/elo-history`),
+    startBenchmark:   (id, tok)         => api.post(`/ml/models/${id}/benchmark`, {}, tok),
+    listBenchmarks:   (id)              => api.get(`/ml/models/${id}/benchmarks`),
+    getBenchmark:     (id)              => api.get(`/ml/benchmark/${id}`),
+    runVersus:        (id, id2, g, tok) => api.post(`/ml/models/${id}/versus/${id2}`, { games: g }, tok),
+    startTournament:  (data, tok)       => api.post('/ml/tournament', data, tok),
+    listTournaments:  ()                => api.get('/ml/tournaments'),
+    getTournament:    (id)              => api.get(`/ml/tournament/${id}`),
+    startHyperparamSearch: (id, body, tok) => api.post(`/ml/models/${id}/hypersearch`, body, tok),
+    explainActivations: (id, board) => api.post(`/ml/models/${id}/explain-activations`, { board }),
+    ensembleMove: (body) => api.post('/ml/models/ensemble', body),
+    getPlayerProfiles: (id) => api.get(`/ml/models/${id}/player-profiles`),
+    getPlayerProfile: (id, userId) => api.get(`/ml/models/${id}/player-profiles/${userId}`),
+    recordHumanMove: (modelId, userId, board, cellIndex) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/human-move`, { board, cellIndex }),
+    recordGameEnd: (modelId, userId) => api.post(`/ml/models/${modelId}/player-profiles/${userId}/game-end`, {}),
+    listRuleSets:     ()              => api.get('/ml/rulesets'),
+    createRuleSet:    (body, tok)     => api.post('/ml/rulesets', body, tok),
+    getRuleSet:       (id)            => api.get(`/ml/rulesets/${id}`),
+    updateRuleSet:    (id, body, tok) => api.patch(`/ml/rulesets/${id}`, body, tok),
+    deleteRuleSet:    (id, tok)       => request('DELETE', `/ml/rulesets/${id}`, null, tok),
+    extractRules:     (id, body, tok) => api.post(`/ml/rulesets/${id}/extract`, body, tok),
   },
 
   bots: {
@@ -188,5 +231,15 @@ export const api = {
   },
   games: {
     getReplay: (id, token) => api.get(`/games/${id}/replay`, token),
+  },
+
+  puzzles: {
+    list: (type, count) => {
+      const params = new URLSearchParams()
+      if (type) params.set('type', type)
+      if (count) params.set('count', count)
+      const qs = params.toString()
+      return api.get(`/puzzles${qs ? `?${qs}` : ''}`)
+    },
   },
 }

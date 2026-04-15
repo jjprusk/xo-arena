@@ -4,6 +4,7 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 import { useNotifSoundStore, NOTIF_SOUND_TYPES } from '../store/notifSoundStore.js'
+import { changePassword } from '../lib/auth-client.js'
 
 // ── Guide notification toggle groups ─────────────────────────────────────────
 // Each group maps to one or more event types on the backend.
@@ -62,6 +63,9 @@ export default function SettingsPage() {
   // Guide notification preferences: { eventType → { inApp: bool } }
   const [notifPrefs, setNotifPrefs]       = useState(null)   // null = loading
   const [savingPrefs, setSavingPrefs]     = useState({})     // { groupKey → bool }
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState(null) // { ok: bool, text: string }
 
   useEffect(() => {
     if (!user) return
@@ -270,6 +274,57 @@ export default function SettingsPage() {
                 <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${flashStartAlerts ? 'left-7' : 'left-1'}`} />
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* Change Password */}
+      {user && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Security</h2>
+          <div
+            className="rounded-xl border p-5 space-y-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <div className="font-medium" style={{ color: 'var(--text-primary)' }}>Change password</div>
+            <div className="space-y-3">
+              {['current', 'next', 'confirm'].map((field, i) => (
+                <input
+                  key={field}
+                  type="password"
+                  placeholder={['Current password', 'New password', 'Confirm new password'][i]}
+                  value={pwForm[field]}
+                  onChange={e => { setPwForm(f => ({ ...f, [field]: e.target.value })); setPwMsg(null) }}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  disabled={pwSaving}
+                />
+              ))}
+            </div>
+            {pwMsg && (
+              <p className="text-sm" style={{ color: pwMsg.ok ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
+                {pwMsg.text}
+              </p>
+            )}
+            <button
+              disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
+              onClick={async () => {
+                if (pwForm.next !== pwForm.confirm) { setPwMsg({ ok: false, text: 'New passwords do not match.' }); return }
+                if (pwForm.next.length < 8) { setPwMsg({ ok: false, text: 'New password must be at least 8 characters.' }); return }
+                setPwSaving(true); setPwMsg(null)
+                try {
+                  const result = await changePassword({ currentPassword: pwForm.current, newPassword: pwForm.next, revokeOtherSessions: false })
+                  if (result?.error) { setPwMsg({ ok: false, text: result.error.message ?? 'Password change failed.' }) }
+                  else { setPwMsg({ ok: true, text: 'Password updated.' }); setPwForm({ current: '', next: '', confirm: '' }) }
+                } catch (err) {
+                  setPwMsg({ ok: false, text: err?.message ?? 'Password change failed.' })
+                } finally { setPwSaving(false) }
+              }}
+              className="w-full py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
+            >
+              {pwSaving ? 'Saving…' : 'Update password'}
+            </button>
           </div>
         </section>
       )}

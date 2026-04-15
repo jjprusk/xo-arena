@@ -10,9 +10,42 @@ import { jwt } from 'better-auth/plugins'
 import { admin } from 'better-auth/plugins'
 import { Resend } from 'resend'
 import crypto from 'node:crypto'
+import { promisify } from 'node:util'
 import db from './db.js'
 import logger from '../logger.js'
 import { syncUser } from '../services/userService.js'
+
+// Node.js's crypto.scrypt runs native code in the libuv thread pool — non-blocking
+// and ~10-50x faster than a pure-JS implementation for the same params.
+//
+// In dev we use lighter params (N:4096, r:8) vs prod (N:16384, r:16) and prefix
+// dev hashes with "d$" so the verifier can pick the right params. Existing prod
+// hashes (no prefix) always verify with the heavier params.
+const scrypt = promisify(crypto.scrypt)
+const DEV = process.env.NODE_ENV === 'development'
+
+const SCRYPT_PROD = { N: 16384, r: 16, p: 1 }
+const SCRYPT_DEV  = { N: 4096,  r: 8,  p: 1 }
+const KEYLEN      = 64
+
+async function hashPassword(password) {
+  const params = DEV ? SCRYPT_DEV : SCRYPT_PROD
+  const salt   = crypto.randomBytes(16).toString('hex')
+  const key    = await scrypt(password.normalize('NFKC'), salt, KEYLEN, { ...params, maxmem: 128 * params.N * params.r * 2 })
+  return DEV ? `d$${salt}:${key.toString('hex')}` : `${salt}:${key.toString('hex')}`
+}
+
+async function verifyPassword({ hash, password }) {
+  const isDev  = hash.startsWith('d$')
+  const params = isDev ? SCRYPT_DEV : SCRYPT_PROD
+  const raw    = isDev ? hash.slice(2) : hash
+  const [salt, storedKey] = raw.split(':')
+  if (!salt || !storedKey) return false
+  const derived = await scrypt(password.normalize('NFKC'), salt, KEYLEN, { ...params, maxmem: 128 * params.N * params.r * 2 })
+  const a = derived
+  const b = Buffer.from(storedKey, 'hex')
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
 
 /**
  * Generate an Apple client secret JWT signed with the .p8 private key.
@@ -69,6 +102,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    password: { hash: hashPassword, verify: verifyPassword },
     sendResetPassword: async ({ user, url }) => {
       await sendEmail({
         to: user.email,

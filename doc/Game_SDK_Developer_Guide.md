@@ -7,6 +7,34 @@
 
 ---
 
+## Contents
+
+1. [Overview](#overview)
+2. [Package Structure](#package-structure)
+3. [The Game Contract](#the-game-contract)
+4. [GameMeta](#gamemeta)
+   - [Layout](#layout)
+   - [Theme](#theme)
+5. [GameSession](#gamesession)
+6. [GameSDK](#gamesdk)
+   - submitMove · onMove · signalEnd · getPlayers · getSettings · spectate · getPreviewState · getPlayerState
+7. [Rendering Modes](#rendering-modes)
+8. [Game Component](#game-component)
+9. [BotInterface](#botinterface)
+   - Bot Personas · makeMove · getTrainingConfig · train · serializeState · deserializeMove
+10. [GymComponent](#gymcomponent)
+11. [Puzzles](#puzzles)
+12. [Using packages/ai](#using-packagesai)
+13. [Multiple Skills Per Bot](#multiple-skills-per-bot)
+14. [Publishing to GitHub Packages](#publishing-to-github-packages)
+
+**Addendum — XO Reference Implementation**
+
+- [XO Refactoring Checklist](#xo-refactoring-checklist)
+- [Type Reference](#type-reference)
+
+---
+
 ## Overview
 
 AI Arena is a multi-game platform. Games are independent packages that implement a strict contract. The platform loads any registered game via `React.lazy` and provides a runtime SDK object for all platform communication.
@@ -967,3 +995,441 @@ All types are defined in `packages/sdk/src/index.d.ts`.
 | `TrainingResult` | Final training output including weights |
 | `GymProps` | Props passed into GymComponent by the platform |
 | `Puzzle` | A single puzzle position |
+
+---
+
+## Addendum — XO (Tic-Tac-Toe) Reference Implementation
+
+> This is the complete source of `@callidity/game-xo` — the platform's first game and the reference implementation of the SDK contract. Read this alongside the contract spec above. Everything here is a concrete example of a concept described in the main body.
+>
+> Package location: `packages/game-xo/src/`
+
+---
+
+### src/index.js
+
+The package entry point. Satisfies the `GameContract` shape exactly.
+
+```js
+export { default }      from './GameComponent.jsx'
+export { meta }         from './meta.js'
+export { botInterface } from './botInterface.js'
+```
+
+---
+
+### src/meta.js
+
+```js
+import { platformDefaultTheme } from '@callidity/sdk'
+
+export const meta = {
+  id:               'xo',
+  title:            'Tic-Tac-Toe',
+  description:      'Classic 3×3 strategy game. First to get three in a row wins.',
+  minPlayers:       2,
+  maxPlayers:       2,
+  layout: {
+    preferredWidth: 'compact',
+    aspectRatio:    '1/1',
+  },
+  theme: platformDefaultTheme,
+  supportsBots:     true,
+  supportsTraining: true,
+  supportsPuzzles:  true,
+  builtInBots: [
+    { id: 'minimax-novice',        name: 'Rusty',      description: 'Makes mistakes on purpose. Great for beginners.',        difficulty: 'easy',    algorithm: 'minimax'    },
+    { id: 'minimax-intermediate',  name: 'Copper',     description: 'A decent challenge. Will punish obvious mistakes.',       difficulty: 'medium',  algorithm: 'minimax'    },
+    { id: 'minimax-advanced',      name: 'Sterling',   description: 'Plays well. Difficult to beat without a solid strategy.', difficulty: 'hard',    algorithm: 'minimax'    },
+    { id: 'minimax-master',        name: 'Magnus',     description: 'Perfect play. Never loses.',                             difficulty: 'expert',  algorithm: 'minimax'    },
+    { id: 'rule-novice',           name: 'Rookie',     description: 'Rule-based with beginner-level heuristics.',             difficulty: 'beginner',algorithm: 'rule_based' },
+    { id: 'ql-trained',            name: 'Trained AI', description: 'Learns from experience. Strength depends on training.',  difficulty: 'medium',  algorithm: 'qlearning'  },
+  ],
+}
+```
+
+---
+
+### src/logic.js
+
+Pure game logic — no platform dependencies. Re-exports shared primitives from `@xo-arena/ai` and adds XO-specific helpers.
+
+```js
+export {
+  getWinner,
+  isBoardFull,
+  getEmptyCells,
+  opponent,
+  WIN_LINES,
+} from '@xo-arena/ai'
+
+/** Return the mark ('X' or 'O') for the current user from the session. */
+export function getMyMark(session) {
+  return session?.settings?.marks?.[session?.currentUserId] ?? null
+}
+
+/** Initial game state for a new round. */
+export function initialGameState() {
+  return {
+    board:       Array(9).fill(null),
+    currentTurn: 'X',
+    status:      'playing',
+    winner:      null,
+    winLine:     null,
+    scores:      { X: 0, O: 0 },
+    round:       1,
+  }
+}
+```
+
+---
+
+### src/adapters.js
+
+Bridges between XO's board representation and the general-purpose AI algorithms in `@xo-arena/ai`.
+
+```js
+import { getEmptyCells } from '@xo-arena/ai'
+
+/**
+ * Serialize board state for neural-net / DQN / AlphaZero.
+ * Returns a 9-element array: 1 = player mark, -1 = opponent, 0 = empty.
+ */
+export function serializeState(state, playerMark = 'X') {
+  const board = Array.isArray(state) ? state : state.board
+  return board.map(cell => {
+    if (cell === null)        return 0
+    if (cell === playerMark)  return 1
+    return -1
+  })
+}
+
+/** Deserialize a stored move back to a cell index (0-8). */
+export function deserializeMove(raw) {
+  return Number(raw)
+}
+
+/** Return legal move indices (empty cells). Used by MCTS, minimax, policy gradient. */
+export function getLegalMoves(state) {
+  const board = Array.isArray(state) ? state : state.board
+  return getEmptyCells(board)
+}
+```
+
+---
+
+### src/GameComponent.jsx
+
+The game's React component. Receives `{ session, sdk }` only — no platform imports.
+
+```jsx
+import React, { useState, useEffect, useRef } from 'react'
+import { initialGameState } from './logic.js'
+
+const MARK_COLOR = {
+  X: 'var(--game-mark-x)',
+  O: 'var(--game-mark-o)',
+}
+
+const REACTIONS = ['👍', '😂', '😮', '🔥', '😭', '🤔', '👏', '💀']
+
+export default function GameComponent({ session, sdk }) {
+  const [gameState, setGameState]         = useState(initialGameState())
+  const [incomingReaction, setReaction]   = useState(null)
+  const [showReactions, setShowReactions] = useState(false)
+  const [showForfeit, setShowForfeit]     = useState(false)
+  const [idleWarning, setIdleWarning]     = useState(null)
+  const [lastCell, setLastCell]           = useState(null)
+
+  const signalledRef  = useRef(false)
+  const reactionTimer = useRef(null)
+
+  const { board, currentTurn, status, winner, winLine, scores, round } = gameState
+
+  const myMark   = session?.settings?.marks?.[session?.currentUserId]
+                ?? session?.settings?.myMark
+                ?? null
+  const isPlayer = !session?.isSpectator && myMark !== null
+  const isMyTurn = isPlayer && status === 'playing' && currentTurn === myMark
+
+  // Subscribe to moves
+  useEffect(() => {
+    const unsub = session?.isSpectator
+      ? sdk.spectate(handleMoveEvent)
+      : sdk.onMove(handleMoveEvent)
+    return unsub
+  }, [sdk, session?.isSpectator])
+
+  // XO-specific SDK extensions (optional — not present in replay/test SDKs)
+  useEffect(() => {
+    if (!sdk.onReaction) return
+    const unsub = sdk.onReaction(({ emoji }) => {
+      clearTimeout(reactionTimer.current)
+      setReaction({ emoji, id: Date.now() })
+      reactionTimer.current = setTimeout(() => setReaction(null), 2500)
+    })
+    return () => { unsub?.(); clearTimeout(reactionTimer.current) }
+  }, [sdk])
+
+  useEffect(() => {
+    if (!sdk.onIdleWarning) return
+    return sdk.onIdleWarning(({ secondsRemaining }) => setIdleWarning({ secondsRemaining }))
+  }, [sdk])
+
+  function handleMoveEvent(event) {
+    // null move = new round starting; reset state and signalEnd guard
+    if (event.move === null) {
+      setGameState(event.state)
+      setLastCell(null)
+      signalledRef.current = false
+      return
+    }
+    setGameState(event.state)
+    setLastCell(event.move)
+    setTimeout(() => setLastCell(null), 350)
+
+    // Signal end exactly once when the game concludes
+    if (event.state.status === 'finished' && !signalledRef.current) {
+      signalledRef.current = true
+      sdk.signalEnd({
+        rankings: event.state.winner
+          ? sortByWinner(session?.players ?? [], event.state.winner, session?.settings?.marks)
+          : [],
+        isDraw: !event.state.winner,
+      })
+    }
+  }
+
+  function sortByWinner(players, winnerMark, marks) {
+    return [...players]
+      .sort((a, b) => (marks?.[a.id] === winnerMark ? -1 : 1))
+      .map(p => p.id)
+  }
+
+  function handleCellClick(index) {
+    if (!isMyTurn || board[index] !== null) return
+    sdk.submitMove(index)
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-6 w-full">
+      <PlayerStrip session={session} myMark={myMark} />
+
+      {/* Score strip */}
+      <div className="w-full flex items-center justify-between px-2">
+        <ScorePill mark="X" score={scores.X} highlight={myMark === 'X'} />
+        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Round {round}</span>
+        <ScorePill mark="O" score={scores.O} highlight={myMark === 'O'} />
+      </div>
+
+      {/* Turn / result indicator */}
+      <div className="flex items-center gap-2 h-8">
+        {status === 'playing' && (
+          <>
+            <span className="font-bold" style={{ color: MARK_COLOR[currentTurn] }}>{currentTurn}</span>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              {session?.isSpectator ? `${currentTurn}'s turn` : isMyTurn ? 'Your turn' : "Opponent's turn"}
+            </span>
+          </>
+        )}
+        {status === 'finished' && winner && (
+          <span className="font-bold" style={{
+            color: session?.isSpectator
+              ? MARK_COLOR[winner]
+              : winner === myMark ? 'var(--color-teal-600)' : 'var(--color-red-600)',
+          }}>
+            {session?.isSpectator ? `${winner} wins!` : winner === myMark ? 'You win! 🎉' : 'Opponent wins!'}
+          </span>
+        )}
+        {status === 'finished' && !winner && (
+          <span className="font-bold" style={{ color: 'var(--color-amber-600)' }}>Draw!</span>
+        )}
+      </div>
+
+      {/* Board */}
+      <div className="grid grid-cols-3 gap-2 w-full" aria-label="Tic-tac-toe board">
+        {board.map((cell, i) => {
+          const isWin      = winLine?.includes(i)
+          const isPlayable = isMyTurn && cell === null && status === 'playing'
+          const isNew      = lastCell === i
+          return (
+            <button
+              key={i}
+              onClick={() => handleCellClick(i)}
+              aria-label={`Cell ${i + 1}${cell ? `, ${cell}` : ''}`}
+              disabled={!isPlayable}
+              className={[
+                'aspect-square flex items-center justify-center rounded-xl text-4xl font-bold border-2 transition-all select-none',
+                isWin ? 'bg-[var(--game-cell-win-bg)] border-[var(--game-cell-win-border)]'
+                      : 'bg-[var(--bg-surface)] border-[var(--border-default)]',
+                isNew      ? 'scale-[1.08]' : '',
+                isPlayable ? 'hover:bg-[var(--bg-surface-hover)] hover:scale-[1.04] active:scale-[0.97] cursor-pointer'
+                           : 'cursor-default',
+              ].join(' ')}
+              style={{
+                minHeight:  'clamp(72px, 24vw, 88px)',
+                fontFamily: 'var(--font-display)',
+                color:      cell ? MARK_COLOR[cell] : 'transparent',
+              }}
+            >
+              {cell || '·'}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Reactions, forfeit, idle warning, game-end actions omitted for brevity — */}
+      {/* see packages/game-xo/src/GameComponent.jsx for the full implementation  */}
+    </div>
+  )
+}
+
+function PlayerStrip({ session, myMark }) {
+  if (!session) return null
+  const opponent = session.players?.find(p => p.id !== session.currentUserId)
+  if (!opponent) return null
+  return (
+    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+      <span style={{ color: 'var(--text-muted)' }}>vs</span>
+      <span className="font-medium">{opponent.displayName}</span>
+      {opponent.isBot && <span className="badge badge-bot text-xs">BOT</span>}
+    </div>
+  )
+}
+
+function ScorePill({ mark, score, highlight }) {
+  return (
+    <div className={`flex items-center gap-2 ${highlight ? 'font-bold' : ''}`}>
+      <span style={{ fontFamily: 'var(--font-display)', color: MARK_COLOR[mark], fontSize: highlight ? '1.25rem' : '1rem' }}>
+        {mark}
+      </span>
+      <span className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{score}</span>
+    </div>
+  )
+}
+```
+
+---
+
+### src/botInterface.js
+
+```js
+import {
+  minimaxImplementation, QLearningEngine, SarsaEngine,
+  DQNEngine, AlphaZeroEngine, runEpisode, getEmptyCells, ruleBasedMove,
+} from '@xo-arena/ai'
+import { meta } from './meta.js'
+import { serializeState, deserializeMove, getLegalMoves } from './adapters.js'
+import { GymComponent } from './GymComponent.jsx'
+import { puzzles } from './puzzles.js'
+
+function makeMove(state, playerId, persona, weights) {
+  const board = Array.isArray(state) ? state : state.board
+  const mark  = state.marks?.[playerId] ?? state.currentTurn ?? 'X'
+  const empty = getEmptyCells(board)
+  if (empty.length === 0) return -1
+
+  if (persona.algorithm === 'minimax') {
+    const diffMap = { beginner: 'novice', easy: 'novice', medium: 'intermediate', hard: 'advanced', expert: 'master' }
+    return minimaxImplementation.move(board, diffMap[persona.difficulty] ?? 'intermediate', mark)
+  }
+  if (persona.algorithm === 'rule_based') {
+    return ruleBasedMove(board, mark, weights?.rules ?? [])
+  }
+  if (persona.algorithm === 'qlearning') {
+    if (!weights) return empty[Math.floor(Math.random() * empty.length)]
+    const engine = new QLearningEngine()
+    engine.loadQTable(weights)
+    return engine.chooseAction(board, false)
+  }
+  if (persona.algorithm === 'dqn') {
+    if (!weights) return empty[Math.floor(Math.random() * empty.length)]
+    const engine = new DQNEngine({ stateSize: 9, actionSize: 9 })
+    engine.loadWeights(weights)
+    const qVals = engine.predict(serializeState(board, mark))
+    return empty.reduce((best, idx) => qVals[idx] > qVals[best] ? idx : best, empty[0])
+  }
+  // Fallback — random legal move
+  return empty[Math.floor(Math.random() * empty.length)]
+}
+
+function getTrainingConfig() {
+  return {
+    algorithm:       'qlearning',
+    defaultEpisodes: 5000,
+    hyperparameters: {
+      algorithm:      { label: 'Algorithm',      type: 'select', default: 'qlearning',
+                        options: [
+                          { value: 'qlearning',      label: 'Q-Learning' },
+                          { value: 'sarsa',          label: 'SARSA' },
+                          { value: 'dqn',            label: 'Deep Q-Network (DQN)' },
+                          { value: 'montecarlo',     label: 'Monte Carlo' },
+                          { value: 'policygradient', label: 'Policy Gradient' },
+                          { value: 'alphazero',      label: 'AlphaZero' },
+                        ]},
+      learningRate:   { label: 'Learning Rate',   type: 'number', default: 0.3,  min: 0.01, max: 1.0,  step: 0.01 },
+      discountFactor: { label: 'Discount Factor', type: 'number', default: 0.9,  min: 0.5,  max: 1.0,  step: 0.01 },
+      epsilonStart:   { label: 'Epsilon Start',   type: 'number', default: 1.0,  min: 0.1,  max: 1.0,  step: 0.05 },
+      epsilonMin:     { label: 'Epsilon Min',     type: 'number', default: 0.05, min: 0.0,  max: 0.5,  step: 0.01 },
+      decayMethod:    { label: 'Epsilon Decay',   type: 'select', default: 'exponential',
+                        options: [
+                          { value: 'exponential', label: 'Exponential' },
+                          { value: 'linear',      label: 'Linear' },
+                          { value: 'cosine',      label: 'Cosine' },
+                        ]},
+    },
+  }
+}
+
+async function train(run, currentWeights, onProgress) {
+  const { episodes, params } = run
+  const algo = params.algorithm ?? run.algorithm ?? 'qlearning'
+
+  const engine = algo === 'sarsa'
+    ? new SarsaEngine({ learningRate: params.learningRate ?? 0.3, discountFactor: params.discountFactor ?? 0.9,
+                        epsilonStart: params.epsilonStart ?? 1.0, epsilonMin: params.epsilonMin ?? 0.05,
+                        decayMethod: params.decayMethod ?? 'exponential', totalEpisodes: episodes })
+    : new QLearningEngine({ learningRate: params.learningRate ?? 0.3, discountFactor: params.discountFactor ?? 0.9,
+                            epsilonStart: params.epsilonStart ?? 1.0, epsilonMin: params.epsilonMin ?? 0.05,
+                            decayMethod: params.decayMethod ?? 'exponential', totalEpisodes: episodes })
+
+  if (currentWeights) engine.loadQTable(currentWeights)
+
+  let wins = 0, losses = 0, draws = 0
+  const interval = Math.max(1, Math.floor(episodes / 100))
+
+  for (let i = 1; i <= episodes; i++) {
+    const result = runEpisode(engine, 'both', null)
+    if (result.outcome === 'WIN')  wins++
+    if (result.outcome === 'LOSS') losses++
+    if (result.outcome === 'DRAW') draws++
+    if (i % interval === 0 || i === episodes) {
+      onProgress({ episode: i, totalEpisodes: episodes, outcome: result.outcome,
+                   epsilon: engine.epsilon, avgQDelta: result.avgQDelta })
+      await new Promise(r => setTimeout(r, 0))
+    }
+  }
+
+  return {
+    episodesCompleted: episodes,
+    winRate:  wins   / episodes,
+    lossRate: losses / episodes,
+    drawRate: draws  / episodes,
+    finalEpsilon: engine.epsilon,
+    weights: engine.toJSON(),
+  }
+}
+
+export const botInterface = {
+  makeMove,
+  getTrainingConfig,
+  train,
+  serializeState,
+  deserializeMove,
+  personas: meta.builtInBots,
+  GymComponent,
+  puzzles,
+}
+```
+
+> `GymComponent.jsx` and `puzzles.js` follow the contracts defined in the GymComponent and Puzzles sections of this guide. See `packages/game-xo/src/` for their full source.

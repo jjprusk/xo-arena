@@ -7,6 +7,7 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
+import { changePassword } from '../lib/auth-client.js'
 
 const NOTIF_GROUPS = [
   { label: 'Tournaments', types: ['tournament.published', 'tournament.flash_announced', 'tournament.registration_closing', 'tournament.starting_soon', 'tournament.started', 'tournament.cancelled', 'tournament.completed'] },
@@ -53,6 +54,9 @@ export default function SettingsPage() {
   const [savingFlashAlerts, setSavingFlashAlerts] = useState(false)
   const [notifPrefs, setNotifPrefs] = useState(null)
   const [notifLoading, setNotifLoading] = useState(false)
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState(null) // { ok: bool, text: string }
 
   useEffect(() => {
     if (!session?.user) return
@@ -357,6 +361,70 @@ export default function SettingsPage() {
                 <div className="h-3" />
               </>
             )}
+          </div>
+        </section>
+      )}
+
+      {/* Change Password */}
+      {session?.user && (
+        <section className="space-y-3">
+          <SectionLabel>Security</SectionLabel>
+          <div
+            className="rounded-xl border p-5 space-y-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <div className="font-medium">Change password</div>
+            <div className="space-y-3">
+              {['current', 'next', 'confirm'].map((field, i) => (
+                <input
+                  key={field}
+                  type="password"
+                  placeholder={['Current password', 'New password', 'Confirm new password'][i]}
+                  value={pwForm[field]}
+                  onChange={e => { setPwForm(f => ({ ...f, [field]: e.target.value })); setPwMsg(null) }}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+                  style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  disabled={pwSaving}
+                />
+              ))}
+            </div>
+            {pwMsg && (
+              <p className="text-sm" style={{ color: pwMsg.ok ? 'var(--color-teal-600)' : 'var(--color-red-600)' }}>
+                {pwMsg.text}
+              </p>
+            )}
+            <button
+              disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
+              onClick={async () => {
+                if (pwForm.next !== pwForm.confirm) {
+                  setPwMsg({ ok: false, text: 'New passwords do not match.' })
+                  return
+                }
+                if (pwForm.next.length < 8) {
+                  setPwMsg({ ok: false, text: 'New password must be at least 8 characters.' })
+                  return
+                }
+                setPwSaving(true)
+                setPwMsg(null)
+                try {
+                  const result = await changePassword({ currentPassword: pwForm.current, newPassword: pwForm.next, revokeOtherSessions: false })
+                  if (result?.error) {
+                    setPwMsg({ ok: false, text: result.error.message ?? 'Password change failed.' })
+                  } else {
+                    setPwMsg({ ok: true, text: 'Password updated.' })
+                    setPwForm({ current: '', next: '', confirm: '' })
+                  }
+                } catch (err) {
+                  setPwMsg({ ok: false, text: err?.message ?? 'Password change failed.' })
+                } finally {
+                  setPwSaving(false)
+                }
+              }}
+              className="w-full py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-blue-600)', color: 'white' }}
+            >
+              {pwSaving ? 'Saving…' : 'Update password'}
+            </button>
           </div>
         </section>
       )}

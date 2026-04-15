@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
 import { getActionByKey, JOURNEY_DEFAULT_SLOTS } from './slotActions.js'
 
-const TOTAL_SLOTS = 8
+const TOTAL_SLOTS = 8  // post-journey slot count (POST_JOURNEY_SLOTS has 8 entries)
 
 export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction }) {
   const { slots, updateSlots, journeyProgress, close } = useGuideStore()
@@ -34,8 +34,9 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction })
     ? (JOURNEY_DEFAULT_SLOTS.find(s => !completedSteps.includes(s.stepIndex))?.stepIndex ?? null)
     : null
 
+  const slotCount = journeyActive ? JOURNEY_DEFAULT_SLOTS.length : TOTAL_SLOTS
   const cells = journeyActive
-    ? Array.from({ length: TOTAL_SLOTS }, (_, i) => {
+    ? Array.from({ length: slotCount }, (_, i) => {
         const j = JOURNEY_DEFAULT_SLOTS[i]
         return j ? { ...j, _journey: true } : null
       })
@@ -69,6 +70,9 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction })
           const stepCurrent = slot._journey && slot.stepIndex === nextStepIndex
           const stepTodo    = slot._journey && !stepDone && !stepCurrent
           const showPointer = showFaqPointer && stepCurrent && slot.stepIndex === 2 && !editMode
+          // Final journey step: intercept click to show the completion popup
+          // instead of navigating directly; GuidePanel navigates after dismissal.
+          const isFinalJourneyStep = slot._journey && slot.isFinalStep && stepCurrent
 
           const content = (
             <>
@@ -121,7 +125,17 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction })
                 </div>
               )}
 
-              {!hasHref || isExternal || editMode ? (
+              {isFinalJourneyStep ? (
+                // Final step: trigger journey complete popup instead of navigating directly
+                <div
+                  style={{ ...cellStyle, cursor: 'pointer' }}
+                  onClick={() => { if (onSlotAction) onSlotAction('journey_complete') }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-surface-hover)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-surface-2)' }}
+                >
+                  {content}
+                </div>
+              ) : !hasHref || isExternal || editMode ? (
                 <div
                   style={{ ...cellStyle, cursor: hasHref && !editMode ? 'pointer' : 'default' }}
                   onClick={editMode ? undefined : () => {

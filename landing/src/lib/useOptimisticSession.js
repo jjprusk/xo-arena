@@ -1,8 +1,8 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import { useState, useEffect } from 'react'
-import { authClient } from './auth-client.js'
+import { useState, useEffect, useRef } from 'react'
 
 const CACHE_KEY = 'aiarena_session_cache'
+const POLL_MS   = 60_000   // re-check session every 60 s
 
 function readCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY)) } catch { return null }
@@ -17,17 +17,57 @@ export function clearSessionCache() {
   try { localStorage.removeItem(CACHE_KEY) } catch {}
 }
 
+// Imperative refresh — call after sign-in/sign-up so the session updates
+// immediately instead of waiting for the 60-second poll cycle.
+const _refreshListeners = []
+export function triggerSessionRefresh() {
+  _refreshListeners.forEach(fn => fn())
+}
+
+// Fetch the session via /api/session — always returns 200 so browsers
+// don't log "401 Unauthorized" in the console for unauthenticated users.
+async function fetchSession() {
+  try {
+    const res = await fetch('/api/session', { credentials: 'include' })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json?.user ? json : null    // normalise to { user, session } | null
+  } catch {
+    return null
+  }
+}
+
 export function useOptimisticSession() {
-  const [cached, setCached] = useState(() => readCache())
-  const { data, isPending } = authClient.useSession()
+  const [data, setData]           = useState(() => readCache())
+  const [isPending, setIsPending] = useState(true)
+  const timerRef                  = useRef(null)
 
   useEffect(() => {
-    if (!isPending) {
-      writeCache(data ?? null)
-      setCached(data ?? null)
-    }
-  }, [data, isPending])
+    let cancelled = false
 
-  if (cached && isPending) return { data: cached, isPending: false }
-  return { data: data ?? null, isPending }
+    async function check() {
+      const session = await fetchSession()
+      if (cancelled) return
+      writeCache(session)
+      setData(session)
+      setIsPending(false)
+      timerRef.current = setTimeout(check, POLL_MS)
+    }
+
+    function forceRefresh() {
+      clearTimeout(timerRef.current)
+      check()
+    }
+
+    _refreshListeners.push(forceRefresh)
+    check()
+    return () => {
+      cancelled = true
+      clearTimeout(timerRef.current)
+      const idx = _refreshListeners.indexOf(forceRefresh)
+      if (idx !== -1) _refreshListeners.splice(idx, 1)
+    }
+  }, [])
+
+  return { data, isPending }
 }
