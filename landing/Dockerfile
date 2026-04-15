@@ -15,8 +15,6 @@ COPY packages/ai/ ./packages/ai/
 COPY landing/ ./landing/
 
 WORKDIR /app/landing
-ARG VITE_XO_URL=https://xo.aiarena.callidity.com
-ENV VITE_XO_URL=$VITE_XO_URL
 RUN npm run build
 
 FROM node:22-slim
