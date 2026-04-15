@@ -4,12 +4,17 @@ on:
   push:
     branches: [main, staging, dev]
     paths:
-      - 'frontend/public/bot-training-guide.md'
+      - 'landing/public/bot-training-guide.md'
 
 jobs:
   generate-pdf:
     name: Generate PDF from markdown
     runs-on: ubuntu-latest
+
+    # GITHUB_TOKEN needs write access to push the regenerated PDF back.
+    # Default is read-only since GitHub tightened workflow permissions.
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -35,14 +40,14 @@ jobs:
           npx --yes md-to-pdf \
             --highlight-style github \
             --launch-options '{"args":["--no-sandbox","--disable-setuid-sandbox"]}' \
-            frontend/public/bot-training-guide.md
-        # Output lands at frontend/public/bot-training-guide.pdf
+            landing/public/bot-training-guide.md
+        # Output lands at landing/public/bot-training-guide.pdf
 
       - name: Commit PDF back to branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add frontend/public/bot-training-guide.pdf
+          git add landing/public/bot-training-guide.pdf
           # Only commit if the PDF actually changed
           git diff --staged --quiet || git commit -m "chore: regenerate bot-training-guide.pdf from .md [skip ci]"
           git push

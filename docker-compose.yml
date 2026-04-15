@@ -57,24 +57,6 @@ services:
       redis:
         condition: service_healthy
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    restart: unless-stopped
-    # API uses relative URLs via Vite proxy — no VITE_API_URL needed
-    environment:
-      VITE_PLATFORM_URL: http://localhost:5174
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - ./packages/xo:/packages/xo   # resolve alias: __dirname(/app)/../packages/xo
-      - ./packages/nav:/packages/nav  # resolve alias: __dirname(/app)/../packages/nav
-      - /app/node_modules
-    depends_on:
-      - backend
-
   landing:
     build:
       context: ./landing
