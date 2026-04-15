@@ -100,7 +100,9 @@ export const useSoundStore = create(
       play(key) {
         const { muted, soundPack } = get()
         if (muted) return
-        SYNTH[soundPack]?.[key]?.()
+        // Fallback to 'retro' if stored pack is invalid (e.g. 'default' from frontend)
+        const pack = SYNTH[soundPack] ? soundPack : 'retro'
+        SYNTH[pack][key]?.()
       },
     }),
     {

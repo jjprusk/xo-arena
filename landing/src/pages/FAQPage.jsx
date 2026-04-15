@@ -194,21 +194,13 @@ export default function FAQPage() {
     return 0
   })
 
-  // Show tip only the first time this page is visited during the journey (step 2 not yet complete)
-  const [showTip, setShowTip] = useState(() => {
-    const store = useGuideStore.getState()
-    if (store.uiHints?.faqTipShown) return false
-    const completedSteps = store.journeyProgress?.completedSteps ?? []
-    return !completedSteps.includes(2)
-  })
-
-  function dismissTip() {
-    useGuideStore.getState().setUiHint('faqTipShown')
-    setShowTip(false)
-  }
+  // Never show the overlay — user should land directly on the FAQ content.
+  const showTip = false
+  function dismissTip() {}
 
   useEffect(() => {
     useGuideStore.getState().setUiHint('faqAccordionOpened')
+    useGuideStore.getState().setUiHint('faqTipShown')  // mark as seen so it never reappears
   }, [])
 
   useEffect(() => {
@@ -217,7 +209,7 @@ export default function FAQPage() {
       .then(setContent)
   }, [])
 
-  // Close guide panel immediately so the page feels unobstructed
+  // Close guide panel so the page is unobstructed
   useEffect(() => { useGuideStore.getState().close() }, [])
 
   // Journey step 2: visiting the FAQ page — update store directly so UI reflects completion without waiting for socket
