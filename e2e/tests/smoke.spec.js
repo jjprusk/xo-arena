@@ -14,7 +14,6 @@ import { dirname, join } from 'node:path'
  *             Should be quick since Phase 1 already waited for the deploy.
  *
  * Run with:
- *   BASE_URL=https://xo-frontend-staging.fly.dev \
  *   BACKEND_URL=https://xo-backend-staging.fly.dev \
  *   LANDING_URL=https://xo-landing-staging.fly.dev \
  *   TOURNAMENT_URL=https://xo-tournament-staging.fly.dev \
@@ -29,9 +28,9 @@ const { version: EXPECTED_VERSION } = JSON.parse(
   readFileSync(join(__dirname, '../../package.json'), 'utf-8')
 )
 
-const BACKEND_URL    = process.env.BACKEND_URL    || process.env.BASE_URL || 'http://localhost:3000'
+const BACKEND_URL    = process.env.BACKEND_URL    || 'http://localhost:3000'
 const TOURNAMENT_URL = process.env.TOURNAMENT_URL || 'http://localhost:3001'
-const LANDING_URL    = process.env.LANDING_URL    || process.env.BASE_URL || 'http://localhost:5174'
+const LANDING_URL    = process.env.LANDING_URL    || 'http://localhost:5174'
 const GITHUB_REPO    = 'jjprusk/xo-arena'
 
 // Resolve token from env or gh CLI so callers don't need to export it manually.

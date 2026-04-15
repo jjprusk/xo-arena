@@ -9,7 +9,9 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
 
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:5173',
+    // Default baseURL = landing (the unified platform). LANDING_URL is the
+    // canonical env var; BASE_URL is honored for back-compat but legacy.
+    baseURL: process.env.LANDING_URL || process.env.BASE_URL || 'http://localhost:5174',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
