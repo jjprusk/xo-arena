@@ -62,7 +62,9 @@ describe('TableDetailPage', () => {
     api.tables.get.mockResolvedValue({ table: baseTable })
     renderAt('/tables/tbl_1')
     await waitFor(() => expect(screen.getByText(/xo \(tic-tac-toe\)/i)).toBeInTheDocument())
-    expect(screen.getAllByText(/empty seat/i)).toHaveLength(2)
+    // Empty seats are clickable buttons for a user who can join — two of them
+    expect(screen.getAllByRole('button', { name: /take seat \d/i })).toHaveLength(2)
+    // Header action button also present
     expect(screen.getByRole('button', { name: /take a seat/i })).toBeInTheDocument()
   })
 
@@ -97,6 +99,22 @@ describe('TableDetailPage', () => {
     await waitFor(() => expect(screen.getByText(/xo \(tic-tac-toe\)/i)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /take a seat/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /leave seat/i })).toBeNull()
+    // Seats are not clickable for guests — render as static list items
+    expect(screen.queryAllByRole('button', { name: /take seat \d/i })).toHaveLength(0)
+    expect(screen.getAllByText(/empty seat/i)).toHaveLength(2)
+  })
+
+  it('clicking an empty seat triggers join (same action as the header button)', async () => {
+    api.tables.get.mockResolvedValue({ table: baseTable })
+    api.tables.join.mockResolvedValue({ table: { ...baseTable, seats: [
+      { userId: 'u1', status: 'occupied' },
+      { userId: null, status: 'empty' },
+    ] } })
+    renderAt('/tables/tbl_1')
+    const seatBtn = await screen.findByRole('button', { name: /take seat 1/i })
+    const { act } = await import('react')
+    await act(async () => { seatBtn.click() })
+    expect(api.tables.join).toHaveBeenCalledWith('tbl_1', 'tok')
   })
 
   it('renders through PlatformShell when table.status is ACTIVE', async () => {

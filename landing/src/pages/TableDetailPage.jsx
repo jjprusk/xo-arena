@@ -241,31 +241,68 @@ export default function TableDetailPage() {
       <section>
         <h2 className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Seats</h2>
         <ul className="grid gap-2 sm:grid-cols-2">
-          {table.seats?.map((seat, i) => (
-            <li key={i}
+          {table.seats?.map((seat, i) => {
+            // Empty seats are clickable when the caller can join — gives "click
+            // the seat to take it" behavior alongside the header "Take a seat"
+            // button. Occupied seats are static. When the user is seated but
+            // not at this seat (e.g., seat 1 vs seat 2), the other empty seat
+            // is still not clickable (they can't take a second seat).
+            const clickable = seat.status === 'empty' && canJoin && !busy
+            const seatOccupied = seat.status === 'occupied'
+            const commonStyle = {
+              borderColor: seatOccupied ? 'var(--color-teal-500)' : 'var(--border-default)',
+            }
+            const content = (
+              <>
+                <span
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{
+                    background: seatOccupied ? 'var(--color-teal-500)' : 'var(--bg-surface-hover)',
+                    color:      seatOccupied ? 'white' : 'var(--text-muted)',
+                  }}>
+                  {i + 1}
+                </span>
+                <div className="text-sm flex-1 min-w-0">
+                  {seatOccupied ? (
+                    <span className="truncate">
+                      {seat.userId === currentUserId ? 'You' : `User ${(seat.userId ?? '').slice(0, 8)}`}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {clickable ? 'Take this seat' : 'Empty seat'}
+                    </span>
+                  )}
+                </div>
+              </>
+            )
+
+            if (clickable) {
+              return (
+                <li key={i}>
+                  <button
+                    type="button"
+                    onClick={handleJoin}
+                    disabled={busy}
+                    className="card p-3 flex items-center gap-3 w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)] cursor-pointer"
+                    style={commonStyle}
+                    aria-label={`Take seat ${i + 1}`}
+                  >
+                    {content}
+                  </button>
+                </li>
+              )
+            }
+
+            return (
+              <li
+                key={i}
                 className="card p-3 flex items-center gap-3"
-                style={{
-                  borderColor: seat.status === 'occupied' ? 'var(--color-teal-500)' : 'var(--border-default)',
-                }}>
-              <span
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                style={{
-                  background: seat.status === 'occupied' ? 'var(--color-teal-500)' : 'var(--bg-surface-hover)',
-                  color:      seat.status === 'occupied' ? 'white' : 'var(--text-muted)',
-                }}>
-                {i + 1}
-              </span>
-              <div className="text-sm">
-                {seat.status === 'occupied' ? (
-                  <span>
-                    {seat.userId === currentUserId ? 'You' : `User ${(seat.userId ?? '').slice(0, 8)}`}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--text-muted)' }}>Empty seat</span>
-                )}
-              </div>
-            </li>
-          ))}
+                style={commonStyle}
+              >
+                {content}
+              </li>
+            )
+          })}
         </ul>
       </section>
 
