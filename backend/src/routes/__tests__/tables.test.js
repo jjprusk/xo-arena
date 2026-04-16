@@ -20,6 +20,7 @@ vi.mock('../../lib/db.js', () => ({
       findMany:   vi.fn(),
       findUnique: vi.fn(),
       update:     vi.fn(),
+      delete:     vi.fn(),
     },
   },
 }))
@@ -396,6 +397,63 @@ describe('POST /api/v1/tables/:id/leave', () => {
     db.table.findUnique.mockResolvedValue(null)
     const app = makeApp()
     const res = await request(app).post('/api/v1/tables/nope/leave')
+    expect(res.status).toBe(404)
+  })
+})
+
+// ── DELETE /api/v1/tables/:id ─────────────────────────────────────────────────
+
+describe('DELETE /api/v1/tables/:id', () => {
+  it('creator can delete a FORMING table', async () => {
+    db.table.findUnique.mockResolvedValue({ ...baseTable, createdById: 'ba_user_1' })
+    db.table.delete.mockResolvedValue({})
+    const app = makeApp()
+    const res = await request(app).delete('/api/v1/tables/tbl_1')
+    expect(res.status).toBe(204)
+    expect(db.table.delete).toHaveBeenCalledWith({ where: { id: 'tbl_1' } })
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'table.deleted',
+      targets: { broadcast: true },
+      payload: { tableId: 'tbl_1', gameId: 'xo' },
+    }))
+  })
+
+  it('creator can delete a COMPLETED table', async () => {
+    db.table.findUnique.mockResolvedValue({ ...baseTable, createdById: 'ba_user_1', status: 'COMPLETED' })
+    db.table.delete.mockResolvedValue({})
+    const app = makeApp()
+    const res = await request(app).delete('/api/v1/tables/tbl_1')
+    expect(res.status).toBe(204)
+  })
+
+  it('returns 403 when the caller is not the creator', async () => {
+    db.table.findUnique.mockResolvedValue({ ...baseTable, createdById: 'someone_else' })
+    const app = makeApp()
+    const res = await request(app).delete('/api/v1/tables/tbl_1')
+    expect(res.status).toBe(403)
+    expect(db.table.delete).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 on tournament-generated tables', async () => {
+    db.table.findUnique.mockResolvedValue({ ...baseTable, createdById: 'ba_user_1', isTournament: true })
+    const app = makeApp()
+    const res = await request(app).delete('/api/v1/tables/tbl_1')
+    expect(res.status).toBe(403)
+    expect(res.body.error).toMatch(/tournament/i)
+  })
+
+  it('returns 409 when the table is ACTIVE (mid-game)', async () => {
+    db.table.findUnique.mockResolvedValue({ ...baseTable, createdById: 'ba_user_1', status: 'ACTIVE' })
+    const app = makeApp()
+    const res = await request(app).delete('/api/v1/tables/tbl_1')
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/active/i)
+  })
+
+  it('returns 404 when the table does not exist', async () => {
+    db.table.findUnique.mockResolvedValue(null)
+    const app = makeApp()
+    const res = await request(app).delete('/api/v1/tables/nope')
     expect(res.status).toBe(404)
   })
 })

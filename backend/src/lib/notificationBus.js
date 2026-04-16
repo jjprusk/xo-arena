@@ -39,6 +39,7 @@ const REGISTRY = {
   'player.joined':                   { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // someone took a seat
   'spectator.joined':                { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // someone is watching (Phase 3.1 presence)
   'table.empty':                     { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // last seat vacated while still FORMING
+  'table.deleted':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // creator deleted; remove from list
 }
 
 // ── Default preferences (used when no NotificationPreference row exists) ──────
@@ -62,6 +63,7 @@ const PREF_DEFAULTS = {
   'player.joined':                   { inApp: true,  email: false },
   'spectator.joined':                { inApp: true,  email: false },
   'table.empty':                     { inApp: true,  email: false },
+  'table.deleted':                   { inApp: true,  email: false },
 }
 
 /**

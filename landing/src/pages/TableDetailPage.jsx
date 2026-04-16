@@ -87,6 +87,12 @@ export default function TableDetailPage() {
   useEffect(() => {
     const socket = getSocket()
     function onBusEvent({ type, payload }) {
+      // If this specific table was deleted (by the creator or admin), bounce
+      // back to the Tables list — no point staying on a 404 page.
+      if (type === 'table.deleted' && payload?.tableId === tableId) {
+        navigate('/tables', { replace: true })
+        return
+      }
       if (!['player.joined', 'spectator.joined', 'table.empty'].includes(type)) return
       if (payload?.tableId && payload.tableId !== tableId) return
       load()
@@ -108,6 +114,9 @@ export default function TableDetailPage() {
   const seated      = Array.isArray(table?.seats) ? table.seats.filter(s => s?.status === 'occupied').length : 0
   const canJoin     = !!currentUserId && !isSeated && table?.status === 'FORMING' && seated < (table?.maxPlayers ?? 0)
   const canLeave    = isSeated && table?.status !== 'COMPLETED'
+  const isCreator   = !!currentUserId && table?.createdById === currentUserId
+  // Delete allowed for creator-owned, non-tournament tables that aren't mid-game.
+  const canDelete   = isCreator && !table?.isTournament && table?.status !== 'ACTIVE'
 
   async function handleJoin(seatIndex) {
     setBusy(true); setError(null)
@@ -137,6 +146,21 @@ export default function TableDetailPage() {
     } catch (err) {
       setError(err.message || 'Leave failed')
     } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete() {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm('Delete this table? This cannot be undone.')) return
+    setBusy(true); setError(null)
+    try {
+      const token = await getToken()
+      if (!token) throw new Error('Sign in to delete.')
+      await api.tables.delete(tableId, token)
+      navigate('/tables', { replace: true })
+    } catch (err) {
+      setError(err.message || 'Delete failed')
       setBusy(false)
     }
   }
@@ -324,18 +348,35 @@ export default function TableDetailPage() {
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Link to="/tables" className="btn btn-ghost btn-sm">Back</Link>
-        {canLeave && (
-          <button onClick={handleLeave} disabled={busy} className="btn btn-secondary btn-sm">
-            {busy ? 'Leaving…' : 'Leave seat'}
-          </button>
-        )}
-        {canJoin && (
-          <button onClick={handleJoin} disabled={busy} className="btn btn-primary btn-sm">
-            {busy ? 'Joining…' : 'Take a seat'}
-          </button>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Creator-only delete on the left so it's out of the way of the
+            primary join/leave actions on the right. */}
+        <div>
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={busy}
+              className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ color: 'var(--color-red-700)', borderColor: 'var(--color-red-200, var(--border-default))' }}
+              title="Delete this table (creator only)"
+            >
+              Delete table
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/tables" className="btn btn-ghost btn-sm">Back</Link>
+          {canLeave && (
+            <button onClick={handleLeave} disabled={busy} className="btn btn-secondary btn-sm">
+              {busy ? 'Leaving…' : 'Leave seat'}
+            </button>
+          )}
+          {canJoin && (
+            <button onClick={handleJoin} disabled={busy} className="btn btn-primary btn-sm">
+              {busy ? 'Joining…' : 'Take a seat'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

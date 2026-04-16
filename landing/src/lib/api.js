@@ -276,5 +276,7 @@ export const api = {
     },
     /** Vacate the caller's seat. Idempotent. */
     leave:  (id, token) => api.post(`/tables/${id}/leave`, null, token),
+    /** Delete a table (creator-only, and only when not ACTIVE). */
+    delete: (id, token) => api.delete(`/tables/${id}`, token),
   },
 }

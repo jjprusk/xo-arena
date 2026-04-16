@@ -68,6 +68,7 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
     case 'player.joined':
     case 'spectator.joined':
     case 'table.empty':
+    case 'table.deleted':
       return null
     default:
       return { id, uiType: 'admin',       type: 'admin',       title: type, body: payload.message ?? '', expiresAt: null }

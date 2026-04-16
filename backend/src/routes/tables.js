@@ -318,4 +318,46 @@ router.post('/:id/leave', requireAuth, async (req, res, next) => {
   }
 })
 
+/**
+ * DELETE /api/v1/tables/:id
+ * Delete a table. Only the creator may delete it.
+ *
+ * Allowed when status is FORMING or COMPLETED. Disallowed mid-game (ACTIVE)
+ * to prevent yanking a live session out from under seated players.
+ *
+ * Tournament-generated tables (isTournament=true) can only be deleted by
+ * admins — the tournament service created them, not the user.
+ *
+ * Fires `table.deleted` on the bus (broadcast) so the Tables list and any
+ * open detail views can react in real time.
+ */
+router.delete('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const table = await db.table.findUnique({ where: { id: req.params.id } })
+    if (!table) return res.status(404).json({ error: 'Table not found' })
+
+    if (table.createdById !== req.auth.userId) {
+      return res.status(403).json({ error: 'Only the creator can delete this table' })
+    }
+    if (table.isTournament) {
+      return res.status(403).json({ error: 'Tournament tables cannot be deleted manually' })
+    }
+    if (table.status === 'ACTIVE') {
+      return res.status(409).json({ error: 'Cannot delete an active table. Wait for the game to finish.' })
+    }
+
+    await db.table.delete({ where: { id: table.id } })
+
+    dispatch({
+      type: 'table.deleted',
+      targets: { broadcast: true },
+      payload: { tableId: table.id, gameId: table.gameId },
+    }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'table.deleted dispatch failed'))
+
+    res.status(204).end()
+  } catch (err) {
+    next(err)
+  }
+})
+
 export default router
