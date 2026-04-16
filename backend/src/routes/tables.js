@@ -147,14 +147,18 @@ router.post('/', requireAuth, async (req, res, next) => {
 /**
  * GET /api/v1/tables
  * List tables.
- *   default       — public only (isPrivate=false), ordered newest first
- *   ?mine=true    — tables created by the caller (private + public)
- *   ?status=…     — filter to FORMING / ACTIVE / COMPLETED
- *   ?gameId=…     — filter by game
- *   ?limit=N      — page size (default 50, max 200)
+ *   default (guest)     — public only (isPrivate=false), ordered newest first
+ *   default (authed)    — public PLUS the caller's own private tables, so
+ *                         a user can see every table they created without
+ *                         having to toggle a filter. Other users' private
+ *                         tables stay hidden.
+ *   ?mine=true          — tables created by the caller (private + public only)
+ *   ?status=…           — filter to FORMING / ACTIVE / COMPLETED
+ *   ?gameId=…           — filter by game
+ *   ?limit=N            — page size (default 50, max 200)
  *
- * Private tables are NEVER listed in the default response; access them by
- * direct URL via GET /api/v1/tables/:id.
+ * Other users' private tables are never listed; they're accessible only by
+ * direct URL via GET /api/v1/tables/:id (share-link mechanism).
  */
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
@@ -166,7 +170,14 @@ router.get('/', optionalAuth, async (req, res, next) => {
       // optionalAuth sets req.auth = null for guests
       if (!req.auth?.userId) return res.status(401).json({ error: 'Auth required for ?mine=true' })
       where.createdById = req.auth.userId
+    } else if (req.auth?.userId) {
+      // Authed default: public + caller's own tables (including their private ones)
+      where.OR = [
+        { isPrivate: false },
+        { createdById: req.auth.userId },
+      ]
     } else {
+      // Guest default: public only
       where.isPrivate = false
     }
     if (status && ['FORMING', 'ACTIVE', 'COMPLETED'].includes(status)) where.status = status

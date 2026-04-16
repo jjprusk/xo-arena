@@ -149,14 +149,34 @@ describe('POST /api/v1/tables', () => {
 // ── GET /api/v1/tables — list ─────────────────────────────────────────────────
 
 describe('GET /api/v1/tables', () => {
-  it('lists public tables only by default', async () => {
+  it('lists public tables only for guests (unauthenticated default)', async () => {
     db.table.findMany.mockResolvedValue([baseTable])
     const app = makeApp()
     const res = await request(app).get('/api/v1/tables')
     expect(res.status).toBe(200)
     expect(res.body.tables).toHaveLength(1)
+    // optionalAuth sets req.auth = null by default in the mock, so guest path
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { isPrivate: false },
+    }))
+  })
+
+  it('authed default returns public + caller-owned (including private)', async () => {
+    optionalAuth.mockImplementationOnce((req, _res, next) => {
+      req.auth = { userId: 'ba_user_1' }
+      next()
+    })
+    db.table.findMany.mockResolvedValue([baseTable])
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables')
+    expect(res.status).toBe(200)
+    expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        OR: [
+          { isPrivate: false },
+          { createdById: 'ba_user_1' },
+        ],
+      },
     }))
   })
 
