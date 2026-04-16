@@ -247,6 +247,15 @@
 - [x] Real-time updates — table list reflects new tables, seat changes, status changes without page refresh — `90289c5`; both pages subscribe to `guide:notification` + debounced refetch; table events routed out of the user notification stack
 - [x] Bot-vs-bot tables always appear in public list — bot tables are just regular tables with bot user IDs seated; not filtered out by the list
 - [x] **Instrument critical resources in admin health.** — `084ac0f`; 5 new tiles on AdminHealthPage (Tables Forming/Active/Completed/Stale + Table Watchers), backed by `takeTablesSnapshot()` in resourceCounters.js. Stale-FORMING surfaced as a metric (not yet a leak alert — legitimate for private tables waiting to be shared). Other critical resources were already covered (notif queue depth, scheduler pending/running/failed, dispatcher heartbeat, pending PvP match map).
+- [x] **Post-3.2 polish (pre-3.5).** Landed after the initial Tables page shipped, while 3.3 was in flight:
+  - `ListTable` refactor so the list scales to 100+ tables with sticky header + fitViewport scroller
+  - Mobile: truncate long game names instead of wrapping so rows stay one line
+  - Symmetric seat click on detail page: empty seat → take it; own occupied seat → leave it
+  - Server placement honors `seatIndex` on join (previously always picked first empty seat)
+  - Creator-only delete for non-tournament, non-ACTIVE tables (`DELETE /api/v1/tables/:id`) + `table.deleted` bus event + client redirect
+  - Creator can see their own private tables in `/tables`; other users still cannot
+  - `ShareTableButton` (icon + full variants) on list row and detail page — copies `/tables/:id` URL with clipboard + execCommand fallback
+  - Loading skeleton replaced by a single centered spinner (quieter on filter changes)
 
 ### 3.3 Platform shell and game loading — complete
 
@@ -305,6 +314,38 @@ These are concrete things to look for and decisions already made by the time 3.4
 - No `// TODO Phase 3.4:` markers remain in the codebase.
 - Tournament match end-to-end flow passes existing tests (no behavior regression).
 - A new e2e test creates a Table via REST, joins via socket, plays a complete game, asserts the result lands in `db.game` and `Table.status = COMPLETED` — proving Tables are the single source of truth.
+
+### 3.5 Rendered table paradigm — minimum viable
+
+> **Goal:** Ship the Medium rendered table for 2p sit-down and 2p head-to-head. XO validates sit-down; shell is ready for head-to-head when Pong arrives. See `doc/Table_Paradigm.md` for the full design decisions.
+
+- [ ] Add `meta.tableArchetype` (`'sit-down' | 'head-to-head'`) + `meta.orientations` (`['horizontal', 'vertical']`) fields to `GameContract`. Defaults preserve existing behavior.
+- [ ] Evolve `PlatformShell` to render a `<TableSurface>` with positioned `<Seat>` slots. Board renders in the `<TableCenter>` rect.
+- [ ] Seats are avatar + name, spatially positioned (no more sidebar-only seated list for the primary rendering).
+- [ ] Forming → Playing transition: fade-in on the center when ACTIVE lands (Table_Paradigm §4.4 option B); respect `prefers-reduced-motion`.
+- [ ] Relative POV (§4.2): caller at bottom / near-end; opponents arranged relative to caller.
+- [ ] Spectator badge (§4.3): edge cluster with click-to-expand popover listing watcher names; sidebar list unchanged.
+- [ ] End-of-game seat indication (§4.5): winner glow, loser muted, plus small outcome banner.
+- [ ] Tournament context card in sidebar (§4.7) when `isTournament = true`.
+- [ ] QA: XO still plays correctly via the new shell on both desktop and mobile.
+
+### 3.6 Multi-seat sit-down shell (infrastructure for Poker)
+
+> **Goal:** Shell gains layouts for 3–8p sit-down tables and the per-seat render slot API for hidden-info games. No user-visible change from a gameplay standpoint — this is infrastructure so Poker can land cleanly in Phase 5.
+
+- [ ] Seat position maps for 3/4/6/8p (round / oval) in the shell.
+- [ ] Per-seat render slot API — game returns content per seat, shell positions it spatially.
+- [ ] Per-seat visibility control via `getPlayerState(playerId)` — shell asks the game what to render for each seat from each viewer's POV.
+- [ ] Responsive behavior: 8p oval on desktop, compact/rotated on portrait mobile.
+- [ ] XO / Connect4 leave per-seat slots empty — no game-package changes required.
+
+### 3.7 Rendered-table polish (optional, not blocking)
+
+> Lands opportunistically after 3.5 and 3.6 once live use surfaces friction.
+
+- [ ] Sit-down animation on seat claim (Table_Paradigm §4.4 option C).
+- [ ] Showdown / chip / card animations for card games (per-game assets; arrives with Poker).
+- [ ] Any additional visual refinements from live use.
 
 ---
 

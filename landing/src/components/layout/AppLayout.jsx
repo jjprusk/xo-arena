@@ -61,14 +61,47 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
       return { id, uiType: 'admin',       type: 'admin',       title: 'System Alert', body: payload.message, expiresAt: null }
     case 'system.alert.cleared':
       return { id, uiType: 'admin',       type: 'admin',       title: 'Alert Cleared', body: payload.message, expiresAt: null }
-    // Table state-nudge events (Phase 3.2) — consumed by TablesPage /
-    // TableDetailPage directly via socket. Returning null here keeps them
-    // out of the notification stack (they're not user-facing inbox items).
+    // Table state-nudge events (Phase 3.2): infrastructure for lists/seat
+    // strips. Suppressed from the notification stack — the relevant UI
+    // already reflects the state, and broadcasting these to every
+    // connected user would be noisy.
     case 'table.created':
-    case 'player.joined':
     case 'spectator.joined':
     case 'table.empty':
+    case 'table.deleted':
       return null
+    // Seat changes ARE surfaced, but only for stakeholders (creator or
+    // currently seated). The upstream handler in onGuideNotification filters
+    // by payload.stakeholders before calling into this normalizer, so by the
+    // time we get here the event is already known to be relevant.
+    case 'player.joined': {
+      const who      = payload.actorDisplayName ?? 'Someone'
+      const gameName = payload.gameId === 'xo' ? 'XO' : (payload.gameId ?? 'table')
+      const seat     = Number.isInteger(payload.seatIndex) ? `seat ${payload.seatIndex + 1}` : 'a seat'
+      return {
+        id,
+        uiType:    'table',
+        type:      'table',
+        title:     `${who} took ${seat}`,
+        body:      `Your ${gameName} table`,
+        href:      payload.tableId ? `/tables/${payload.tableId}` : null,
+        expiresAt: exp,
+      }
+    }
+    case 'player.left': {
+      const who      = payload.actorDisplayName ?? 'Someone'
+      const gameName = payload.gameId === 'xo' ? 'XO' : (payload.gameId ?? 'table')
+      const seat     = Number.isInteger(payload.seatIndex) ? `seat ${payload.seatIndex + 1}` : 'a seat'
+      return {
+        id,
+        uiType:    'table',
+        type:      'table',
+        title:     `${who} left ${seat}`,
+        body:      `Your ${gameName} table`,
+        href:      payload.tableId ? `/tables/${payload.tableId}` : null,
+        expiresAt: exp,
+      }
+    }
     default:
       return { id, uiType: 'admin',       type: 'admin',       title: type, body: payload.message ?? '', expiresAt: null }
   }
@@ -85,6 +118,13 @@ export default function AppLayout() {
   // Tracks the DB userId confirmed by the server after user:subscribe.
   // Used to detect when the server dropped us from the online list.
   const myPresenceIdRef = useRef(null)
+
+  // Mirror of session?.user?.id (the betterAuthId) so the long-lived
+  // guide:notification listener — registered once on mount — can filter
+  // stakeholder-scoped events (player.joined / player.left) against the
+  // CURRENT user without re-registering on every sign-in/out.
+  const myBaIdRef = useRef(null)
+  useEffect(() => { myBaIdRef.current = user?.id ?? null }, [user?.id])
 
   // Guest welcome modal — shown once to non-authenticated first-time visitors
   const [guestWelcomeOpen, setGuestWelcomeOpen] = useState(false)
@@ -156,9 +196,21 @@ export default function AppLayout() {
       if (token) socket.emit('user:subscribe', { authToken: token })
     }
     function onGuideNotification({ type, payload = {}, expiresAt = null }) {
+      // Stakeholder filter for seat-change events. These broadcast to every
+      // connected client (list page + detail page seat strips need to react),
+      // but the notification drawer should only surface them for users who
+      // actually care — the table's creator or anyone currently seated. The
+      // actor themselves is excluded (they just performed the action).
+      if (type === 'player.joined' || type === 'player.left') {
+        const myBaId = myBaIdRef.current
+        if (!myBaId) return                                    // guest / not signed in
+        if (payload.userId === myBaId) return                  // self-action
+        const stakes = Array.isArray(payload.stakeholders) ? payload.stakeholders : []
+        if (!stakes.includes(myBaId)) return                   // not relevant to this user
+      }
       const notif = normalizeBusNotification(type, payload, expiresAt)
-      // State-nudge events (e.g. table.*) return null — not user-facing,
-      // consumed by pages via their own socket subscription.
+      // State-nudge events (e.g. table.created, spectator.joined) return
+      // null — not user-facing, consumed by pages via their own subscription.
       if (!notif) return
       useGuideStore.getState().addNotification(notif)
       useNotifSoundStore.getState().play()

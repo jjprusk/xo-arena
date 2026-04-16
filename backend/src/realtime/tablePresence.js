@@ -74,16 +74,35 @@ export function removeWatcherFromAllTables(socketId) {
 
 /**
  * Snapshot of the current watchers for a table.
- * Returns { count, userIds } where userIds is the de-duplicated set of
- * authenticated userIds (guests are counted but contribute null userId).
+ *
+ * `count` is the number of unique *people* watching, not sockets:
+ *   - authenticated watchers are deduped by userId (one person, many tabs → 1)
+ *   - guest watchers are deduped by socketId (each tab counts once)
+ *
+ * This matches the user-facing mental model ("N people are watching") and
+ * stops two pathological cases from inflating the badge:
+ *   - refresh a tab: new socket arrives before the old one times out, so for
+ *     ~45s there are two socketIds for one person. Without userId dedupe the
+ *     count would jump up permanently until the old socket is detected gone
+ *     (polling transport + default ping settings).
+ *   - open N tabs as the same user: without dedupe, that person counts N
+ *     times even though there's one human at a keyboard.
+ *
+ * `userIds` remains the de-duplicated set of authenticated userIds, used by
+ * the detail page to render the "watching" list and by the spectator.joined
+ * dispatch cohort.
  */
 export function getPresence(tableId) {
   const watchers = _tableWatchers.get(tableId)
   if (!watchers || watchers.size === 0) return { count: 0, userIds: [] }
+  const personIds = new Set()
+  for (const [socketId, w] of watchers) {
+    personIds.add(w.userId ?? `guest:${socketId}`)
+  }
   const userIds = [...new Set(
     [...watchers.values()].map(w => w.userId).filter(Boolean),
   )]
-  return { count: watchers.size, userIds }
+  return { count: personIds.size, userIds }
 }
 
 /**

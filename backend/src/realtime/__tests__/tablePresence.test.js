@@ -25,22 +25,31 @@ describe('tablePresence — addWatcher', () => {
     expect(getPresence('tbl_1').count).toBe(1)
   })
 
-  it('multiple sockets on the same table accumulate', () => {
+  it('counts unique people, not sockets — same user across tabs is one watcher', () => {
     addWatcher('tbl_1', 'sock_a', { userId: 'user_a' })
     addWatcher('tbl_1', 'sock_b', { userId: 'user_b' })
-    addWatcher('tbl_1', 'sock_c', { userId: 'user_a' }) // same user, different socket
+    addWatcher('tbl_1', 'sock_c', { userId: 'user_a' }) // same user, different tab
     const p = getPresence('tbl_1')
-    expect(p.count).toBe(3)
-    expect(p.userIds.sort()).toEqual(['user_a', 'user_b'])  // de-duped
+    expect(p.count).toBe(2)  // user_a (2 tabs) + user_b = 2 people
+    expect(p.userIds.sort()).toEqual(['user_a', 'user_b'])
   })
 
-  it('guest watchers (userId=null) count toward the total but contribute no userId', () => {
+  it('guest watchers (userId=null) count per-socket so each tab is its own person', () => {
     addWatcher('tbl_1', 'sock_a', { userId: null })
     addWatcher('tbl_1', 'sock_b', { userId: null })
     addWatcher('tbl_1', 'sock_c', { userId: 'user_a' })
     const p = getPresence('tbl_1')
-    expect(p.count).toBe(3)
+    expect(p.count).toBe(3)   // 2 distinct guests + 1 signed-in
     expect(p.userIds).toEqual(['user_a'])
+  })
+
+  it('refresh race (same user, old + new socket briefly) shows count 1, not 2', () => {
+    // Polling transport: old socket stays in the map until ~45s ping timeout.
+    // New socket registers immediately on refresh. With dedupe the count
+    // stays correct during the overlap.
+    addWatcher('tbl_1', 'sock_old', { userId: 'user_a' })
+    addWatcher('tbl_1', 'sock_new', { userId: 'user_a' })
+    expect(getPresence('tbl_1').count).toBe(1)
   })
 
   it('returns false on missing tableId / socketId', () => {

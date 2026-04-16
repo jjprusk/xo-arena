@@ -10,6 +10,9 @@ const TYPE_CONFIG = {
   admin:       { label: 'Admin',       color: 'var(--color-blue-500)',   bg: 'var(--color-blue-50)'  },
   invite:      { label: 'Invite',      color: 'var(--color-teal-500)',   bg: 'var(--color-teal-50)'  },
   room_invite: { label: 'Room Invite', color: 'var(--color-teal-500)',   bg: 'var(--color-teal-50)'  },
+  // Seat changes on a table you created or are seated at — matches the
+  // teal accent used on the Table detail page's occupied-seat indicator.
+  table:       { label: 'Table',       color: 'var(--color-teal-600)',   bg: 'var(--color-teal-50)'  },
 }
 
 function NotificationCard({ notif, onDismiss }) {

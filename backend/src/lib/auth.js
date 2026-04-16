@@ -217,5 +217,24 @@ export const auth = betterAuth({
         },
       },
     },
+    session: {
+      create: {
+        // Reset lastActiveAt to now whenever a new session is created (sign-in).
+        // Without this, `um list` and the idle-purge timer keep using the
+        // user's pre-sign-in idle value until the next activityService flush
+        // (up to 60s away) — making a freshly-signed-in user appear as e.g.
+        // "17h idle" seconds after login.
+        after: async (baSession) => {
+          try {
+            await db.user.updateMany({
+              where: { betterAuthId: baSession.userId },
+              data:  { lastActiveAt: baSession.createdAt ?? new Date() },
+            })
+          } catch (err) {
+            logger.warn({ err: err.message, baUserId: baSession.userId }, 'Post-createSession lastActiveAt reset failed')
+          }
+        },
+      },
+    },
   },
 })

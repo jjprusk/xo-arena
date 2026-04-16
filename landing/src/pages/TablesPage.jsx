@@ -12,11 +12,13 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
+import { ListTable, ListTh, ListTd, ListTr } from '../components/ui/ListTable.jsx'
+import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -85,7 +87,7 @@ export default function TablesPage() {
   useEffect(() => {
     const socket = getSocket()
     function onBusEvent({ type }) {
-      if (!['table.created', 'player.joined', 'spectator.joined', 'table.empty'].includes(type)) return
+      if (!['table.created', 'player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.deleted'].includes(type)) return
       clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => { fetchTables() }, 250)
     }
@@ -130,13 +132,7 @@ export default function TablesPage() {
       ) : tables.length === 0 ? (
         <EmptyState canCreate={isSignedIn} onCreate={() => setShowCreate(true)} />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {tables.map(table => (
-            <li key={table.id}>
-              <TableCard table={table} />
-            </li>
-          ))}
-        </ul>
+        <TablesList tables={tables} />
       )}
 
       {showCreate && (
@@ -181,51 +177,105 @@ function FilterBar({ label, options, value, onChange }) {
   )
 }
 
-function TableCard({ table }) {
+/**
+ * Virtualization-friendly list view. Scales to hundreds of tables because the
+ * ListTable container has a fixed viewport-fit height with its own overflow
+ * scroller — the page itself doesn't grow. Each row is a clickable link via
+ * ListTr's onClick navigation.
+ */
+function TablesList({ tables }) {
+  const navigate = useNavigate()
+  return (
+    <ListTable
+      fitViewport
+      bottomPadding={32}
+      columns={['24%', '12%', '14%', '14%', '24%', '56px']}
+    >
+      <thead>
+        <tr>
+          <ListTh>Game</ListTh>
+          <ListTh>Status</ListTh>
+          <ListTh align="center">Seats</ListTh>
+          <ListTh align="center">Type</ListTh>
+          <ListTh>Seat strip</ListTh>
+          <ListTh align="center"><span className="sr-only">Share</span></ListTh>
+        </tr>
+      </thead>
+      <tbody>
+        {tables.map((table, i) => (
+          <TableRow
+            key={table.id}
+            table={table}
+            last={i === tables.length - 1}
+            onClick={() => navigate(`/tables/${table.id}`)}
+          />
+        ))}
+      </tbody>
+    </ListTable>
+  )
+}
+
+function TableRow({ table, last, onClick }) {
   const meta    = STATUS_META[table.status] ?? STATUS_META.COMPLETED
   const seated  = countSeated(table.seats)
   const max     = table.maxPlayers
   return (
-    <Link
-      to={`/tables/${table.id}`}
-      className="block card p-4 no-underline transition-colors hover:bg-[var(--bg-surface-hover)]"
-      style={{ color: 'var(--text-primary)' }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold truncate" style={{ fontFamily: 'var(--font-display)' }}>
-            {gameLabel(table.gameId)}
-          </p>
-          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
-            {seated} / {max} seated{table.isTournament ? ' · Tournament' : ''}
-          </p>
-        </div>
+    <ListTr last={last} onClick={onClick}>
+      <ListTd>
+        {/* Truncate instead of wrap on narrow viewports so the row stays one
+            line tall. Full name still available via title attribute and the
+            table detail page. */}
         <span
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap"
+          className="font-semibold block truncate"
+          style={{ color: 'var(--text-primary)' }}
+          title={gameLabel(table.gameId)}
+        >
+          {gameLabel(table.gameId)}
+        </span>
+      </ListTd>
+      <ListTd>
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap"
           style={{ background: meta.bg, color: meta.color }}
         >
           {meta.label}
         </span>
-      </div>
-
-      {/* Seat strip — one dot per seat, filled = occupied */}
-      <div className="flex items-center gap-1 mt-3">
-        {Array.from({ length: max }).map((_, i) => {
-          const filled = table.seats?.[i]?.status === 'occupied'
-          return (
-            <span
-              key={i}
-              className="w-3 h-3 rounded-full"
-              style={{
-                background:   filled ? 'var(--color-teal-500)' : 'transparent',
-                border: `1.5px solid ${filled ? 'var(--color-teal-500)' : 'var(--border-default)'}`,
-              }}
-              aria-label={filled ? 'occupied seat' : 'empty seat'}
-            />
-          )
-        })}
-      </div>
-    </Link>
+      </ListTd>
+      <ListTd align="center">
+        <span className="tabular-nums">{seated} / {max}</span>
+      </ListTd>
+      <ListTd align="center">
+        <span
+          className="text-xs block truncate"
+          style={{ color: 'var(--text-muted)' }}
+          title={table.isTournament ? 'Tournament' : table.isPrivate ? 'Private' : 'Public'}
+        >
+          {table.isTournament ? 'Tournament' : table.isPrivate ? 'Private' : 'Public'}
+        </span>
+      </ListTd>
+      <ListTd>
+        <div className="flex items-center gap-1">
+          {Array.from({ length: max }).map((_, i) => {
+            const filled = table.seats?.[i]?.status === 'occupied'
+            return (
+              <span
+                key={i}
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{
+                  background:   filled ? 'var(--color-teal-500)' : 'transparent',
+                  border: `1.5px solid ${filled ? 'var(--color-teal-500)' : 'var(--border-default)'}`,
+                }}
+                aria-label={filled ? 'occupied seat' : 'empty seat'}
+              />
+            )
+          })}
+        </div>
+      </ListTd>
+      <ListTd align="center">
+        {/* Share button — stops propagation so the row click doesn't navigate */}
+        <ShareTableButton tableId={table.id} variant="icon" />
+      </ListTd>
+    </ListTr>
   )
 }
 

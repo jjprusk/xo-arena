@@ -22,6 +22,7 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
+import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',   color: 'var(--color-amber-600)' },
@@ -61,6 +62,12 @@ export default function TableDetailPage() {
   // reconnect via the 'connect' listener so counts stay accurate even after
   // a network hiccup. Guests can watch too (just don't fire spectator.joined
   // on the server side — see tablePresence.js).
+  //
+  // We also fire `table:unwatch` on `pagehide`, because the React cleanup
+  // return is NOT guaranteed to run on tab close / navigation-away — and
+  // without it the server only detects the disconnect when the polling
+  // transport times out (~45s on default settings), leaving a stale
+  // watcher in the count. `pagehide` fires reliably on close + refresh.
   useEffect(() => {
     const socket = getSocket()
     let cancelled = false
@@ -70,14 +77,22 @@ export default function TableDetailPage() {
       if (cancelled) return
       socket.emit('table:watch', { tableId, authToken: token ?? null })
     }
+    function emitUnwatch() {
+      // socket.emit during pagehide is best-effort over polling — the XHR
+      // may or may not flush. The server still catches orphans on socket
+      // timeout, so this is a latency optimization, not a correctness fix.
+      try { socket.emit('table:unwatch', { tableId }) } catch {}
+    }
 
     emitWatch()
     socket.on('connect', emitWatch)
+    window.addEventListener('pagehide', emitUnwatch)
 
     return () => {
       cancelled = true
       socket.off('connect', emitWatch)
-      socket.emit('table:unwatch', { tableId })
+      window.removeEventListener('pagehide', emitUnwatch)
+      emitUnwatch()
     }
   }, [tableId])
 
@@ -87,7 +102,13 @@ export default function TableDetailPage() {
   useEffect(() => {
     const socket = getSocket()
     function onBusEvent({ type, payload }) {
-      if (!['player.joined', 'spectator.joined', 'table.empty'].includes(type)) return
+      // If this specific table was deleted (by the creator or admin), bounce
+      // back to the Tables list — no point staying on a 404 page.
+      if (type === 'table.deleted' && payload?.tableId === tableId) {
+        navigate('/tables', { replace: true })
+        return
+      }
+      if (!['player.joined', 'player.left', 'spectator.joined', 'table.empty'].includes(type)) return
       if (payload?.tableId && payload.tableId !== tableId) return
       load()
     }
@@ -108,13 +129,20 @@ export default function TableDetailPage() {
   const seated      = Array.isArray(table?.seats) ? table.seats.filter(s => s?.status === 'occupied').length : 0
   const canJoin     = !!currentUserId && !isSeated && table?.status === 'FORMING' && seated < (table?.maxPlayers ?? 0)
   const canLeave    = isSeated && table?.status !== 'COMPLETED'
+  const isCreator   = !!currentUserId && table?.createdById === currentUserId
+  // Delete allowed for creator-owned, non-tournament tables that aren't mid-game.
+  const canDelete   = isCreator && !table?.isTournament && table?.status !== 'ACTIVE'
 
-  async function handleJoin() {
+  async function handleJoin(seatIndex) {
     setBusy(true); setError(null)
     try {
       const token = await getToken()
       if (!token) throw new Error('Sign in to join a table.')
-      const res = await api.tables.join(tableId, token)
+      // seatIndex is optional: if provided, server places us there; otherwise
+      // server picks the first empty seat (used by the header "Take a seat"
+      // button when the caller hasn't specified which seat).
+      const opts = typeof seatIndex === 'number' ? { seatIndex } : null
+      const res = await api.tables.join(tableId, opts, token)
       setTable(res.table)
     } catch (err) {
       setError(err.message || 'Join failed')
@@ -133,6 +161,21 @@ export default function TableDetailPage() {
     } catch (err) {
       setError(err.message || 'Leave failed')
     } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete() {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm('Delete this table? This cannot be undone.')) return
+    setBusy(true); setError(null)
+    try {
+      const token = await getToken()
+      if (!token) throw new Error('Sign in to delete.')
+      await api.tables.delete(tableId, token)
+      navigate('/tables', { replace: true })
+    } catch (err) {
+      setError(err.message || 'Delete failed')
       setBusy(false)
     }
   }
@@ -174,8 +217,10 @@ export default function TableDetailPage() {
         .filter(s => s.status === 'occupied' && s.userId)
         .map(s => ({
           id:          s.userId,
-          displayName: s.userId === currentUserId ? 'You' : `User ${s.userId.slice(0, 8)}`,
-          isBot:       false,
+          displayName: s.userId === currentUserId
+            ? 'You'
+            : (s.displayName ?? `User ${s.userId.slice(0, 8)}`),
+          isBot:       s.isBot ?? false,
         })),
     }
     const shellMeta = {
@@ -191,7 +236,10 @@ export default function TableDetailPage() {
         session={shellSession}
         phase="playing"
         table={table}
-        spectatorCount={presence.count}
+        spectatorCount={Math.max(
+          0,
+          (presence.count ?? 0) - (currentUserId && presence.userIds?.includes(currentUserId) ? 1 : 0),
+        )}
         backHref="/tables"
         onLeave={canLeave ? handleLeave : undefined}
         // Force chrome-present until Phase 3.4 bridges the real game session.
@@ -223,12 +271,23 @@ export default function TableDetailPage() {
           <h1 className="text-2xl font-bold truncate" style={{ fontFamily: 'var(--font-display)' }}>
             {gameLabel(table.gameId)}
           </h1>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Table · {seated} / {table.maxPlayers} seated
-            {presence.count > 0 && ` · ${presence.count} watching`}
-            {table.isPrivate   && ' · Private'}
-            {table.isTournament && ' · Tournament'}
-          </p>
+          {(() => {
+            // "Watching" = other people, not the viewer themselves. If the
+            // caller is signed in and in the presence userIds, subtract 1
+            // from the count so "3 tabs of me alone" reads 0, not 1.
+            const watchingOthers = Math.max(
+              0,
+              (presence.count ?? 0) - (currentUserId && presence.userIds?.includes(currentUserId) ? 1 : 0),
+            )
+            return (
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Table · {seated} / {table.maxPlayers} seated
+                {watchingOthers > 0 && ` · ${watchingOthers} watching`}
+                {table.isPrivate   && ' · Private'}
+                {table.isTournament && ' · Tournament'}
+              </p>
+            )
+          })()}
         </div>
         <span
           className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold"
@@ -241,31 +300,77 @@ export default function TableDetailPage() {
       <section>
         <h2 className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Seats</h2>
         <ul className="grid gap-2 sm:grid-cols-2">
-          {table.seats?.map((seat, i) => (
-            <li key={i}
+          {table.seats?.map((seat, i) => {
+            // Symmetric seat-click behavior:
+            //  - empty seat + canJoin  → click to take
+            //  - my occupied seat + canLeave → click to leave
+            //  - any other occupied seat → static (display only)
+            //  - empty seat when I can't join → static
+            const seatOccupied = seat.status === 'occupied'
+            const isMine       = seatOccupied && seat.userId === currentUserId
+            const takeable     = !seatOccupied && canJoin && !busy
+            const leaveable    = isMine && canLeave && !busy
+            const clickable    = takeable || leaveable
+            // Bind the seat index so the server places us in the seat we clicked,
+            // not just the first empty one.
+            const onSeatClick  = takeable ? () => handleJoin(i) : leaveable ? handleLeave : undefined
+            const commonStyle  = {
+              borderColor: seatOccupied ? 'var(--color-teal-500)' : 'var(--border-default)',
+            }
+            const content = (
+              <>
+                <span
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{
+                    background: seatOccupied ? 'var(--color-teal-500)' : 'var(--bg-surface-hover)',
+                    color:      seatOccupied ? 'white' : 'var(--text-muted)',
+                  }}>
+                  {i + 1}
+                </span>
+                <div className="text-sm flex-1 min-w-0">
+                  {seatOccupied ? (
+                    <span className="truncate">
+                      {isMine
+                        ? (leaveable ? 'You — click to leave' : 'You')
+                        : (seat.displayName ?? `User ${(seat.userId ?? '').slice(0, 8)}`)}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {takeable ? 'Take this seat' : 'Empty seat'}
+                    </span>
+                  )}
+                </div>
+              </>
+            )
+
+            if (clickable) {
+              const label = takeable ? `Take seat ${i + 1}` : `Leave seat ${i + 1}`
+              return (
+                <li key={i}>
+                  <button
+                    type="button"
+                    onClick={onSeatClick}
+                    disabled={busy}
+                    className="card p-3 flex items-center gap-3 w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)] cursor-pointer"
+                    style={commonStyle}
+                    aria-label={label}
+                  >
+                    {content}
+                  </button>
+                </li>
+              )
+            }
+
+            return (
+              <li
+                key={i}
                 className="card p-3 flex items-center gap-3"
-                style={{
-                  borderColor: seat.status === 'occupied' ? 'var(--color-teal-500)' : 'var(--border-default)',
-                }}>
-              <span
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                style={{
-                  background: seat.status === 'occupied' ? 'var(--color-teal-500)' : 'var(--bg-surface-hover)',
-                  color:      seat.status === 'occupied' ? 'white' : 'var(--text-muted)',
-                }}>
-                {i + 1}
-              </span>
-              <div className="text-sm">
-                {seat.status === 'occupied' ? (
-                  <span>
-                    {seat.userId === currentUserId ? 'You' : `User ${(seat.userId ?? '').slice(0, 8)}`}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--text-muted)' }}>Empty seat</span>
-                )}
-              </div>
-            </li>
-          ))}
+                style={commonStyle}
+              >
+                {content}
+              </li>
+            )
+          })}
         </ul>
       </section>
 
@@ -276,18 +381,36 @@ export default function TableDetailPage() {
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Link to="/tables" className="btn btn-ghost btn-sm">Back</Link>
-        {canLeave && (
-          <button onClick={handleLeave} disabled={busy} className="btn btn-secondary btn-sm">
-            {busy ? 'Leaving…' : 'Leave seat'}
-          </button>
-        )}
-        {canJoin && (
-          <button onClick={handleJoin} disabled={busy} className="btn btn-primary btn-sm">
-            {busy ? 'Joining…' : 'Take a seat'}
-          </button>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Creator-only delete on the left so it's out of the way of the
+            primary join/leave actions on the right. */}
+        <div>
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={busy}
+              className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ color: 'var(--color-red-700)', borderColor: 'var(--color-red-200, var(--border-default))' }}
+              title="Delete this table (creator only)"
+            >
+              Delete table
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/tables" className="btn btn-ghost btn-sm">Back</Link>
+          <ShareTableButton tableId={tableId} variant="full" />
+          {canLeave && (
+            <button onClick={handleLeave} disabled={busy} className="btn btn-secondary btn-sm">
+              {busy ? 'Leaving…' : 'Leave seat'}
+            </button>
+          )}
+          {canJoin && (
+            <button onClick={handleJoin} disabled={busy} className="btn btn-primary btn-sm">
+              {busy ? 'Joining…' : 'Take a seat'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

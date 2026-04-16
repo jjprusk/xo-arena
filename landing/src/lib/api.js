@@ -267,9 +267,16 @@ export const api = {
     get:    (id, token) => api.get(`/tables/${id}`, token),
     /** Create a new table. body: { gameId, minPlayers, maxPlayers, isPrivate?, isTournament? } */
     create: (body, token) => api.post('/tables', body, token),
-    /** Claim an empty seat. Idempotent. */
-    join:   (id, token) => api.post(`/tables/${id}/join`,  null, token),
+    /** Claim an empty seat. Idempotent. Pass { seatIndex } to target a specific seat. */
+    join:   (id, opts, token) => {
+      // Back-compat: older callers pass (id, token) with no opts.
+      const body = opts && typeof opts === 'object' && 'seatIndex' in opts ? { seatIndex: opts.seatIndex } : null
+      const resolvedToken = (typeof opts === 'string') ? opts : token
+      return api.post(`/tables/${id}/join`, body, resolvedToken)
+    },
     /** Vacate the caller's seat. Idempotent. */
     leave:  (id, token) => api.post(`/tables/${id}/leave`, null, token),
+    /** Delete a table (creator-only, and only when not ACTIVE). */
+    delete: (id, token) => api.delete(`/tables/${id}`, token),
   },
 }
