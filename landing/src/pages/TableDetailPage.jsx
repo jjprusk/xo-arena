@@ -16,6 +16,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { getSocket } from '../lib/socket.js'
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',   color: 'var(--color-amber-600)' },
@@ -50,6 +51,52 @@ export default function TableDetailPage() {
   }, [tableId])
 
   useEffect(() => { load() }, [load])
+
+  // Presence: tell the backend we're watching this table. Re-emits on
+  // reconnect via the 'connect' listener so counts stay accurate even after
+  // a network hiccup. Guests can watch too (just don't fire spectator.joined
+  // on the server side — see tablePresence.js).
+  useEffect(() => {
+    const socket = getSocket()
+    let cancelled = false
+
+    async function emitWatch() {
+      const token = await getToken().catch(() => null)
+      if (cancelled) return
+      socket.emit('table:watch', { tableId, authToken: token ?? null })
+    }
+
+    emitWatch()
+    socket.on('connect', emitWatch)
+
+    return () => {
+      cancelled = true
+      socket.off('connect', emitWatch)
+      socket.emit('table:unwatch', { tableId })
+    }
+  }, [tableId])
+
+  // Real-time: listen to table.* bus events and the table:presence feed,
+  // refreshing when this specific table is affected.
+  const [presence, setPresence] = useState({ count: 0, userIds: [] })
+  useEffect(() => {
+    const socket = getSocket()
+    function onBusEvent({ type, payload }) {
+      if (!['player.joined', 'spectator.joined', 'table.empty'].includes(type)) return
+      if (payload?.tableId && payload.tableId !== tableId) return
+      load()
+    }
+    function onPresence(data) {
+      if (data?.tableId !== tableId) return
+      setPresence({ count: data.count ?? 0, userIds: data.userIds ?? [] })
+    }
+    socket.on('guide:notification', onBusEvent)
+    socket.on('table:presence',     onPresence)
+    return () => {
+      socket.off('guide:notification', onBusEvent)
+      socket.off('table:presence',     onPresence)
+    }
+  }, [tableId, load])
 
   const mySeatIndex = table?.seats?.findIndex?.(s => s.userId && s.userId === currentUserId) ?? -1
   const isSeated    = mySeatIndex !== -1
@@ -117,6 +164,7 @@ export default function TableDetailPage() {
           </h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
             Table · {seated} / {table.maxPlayers} seated
+            {presence.count > 0 && ` · ${presence.count} watching`}
             {table.isPrivate   && ' · Private'}
             {table.isTournament && ' · Tournament'}
           </p>

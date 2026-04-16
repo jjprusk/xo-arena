@@ -11,11 +11,12 @@
  * guide:notification).
  */
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import { getSocket } from '../lib/socket.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,25 @@ export default function TablesPage() {
   }, [statusFilter, gameFilter])
 
   useEffect(() => { fetchTables() }, [fetchTables])
+
+  // Real-time: listen to table.* bus events and refresh the list when any
+  // of them fires. Small events stream so a full re-fetch is simpler and
+  // correct vs. reconciling individual mutations — revisit if volume grows.
+  // Coalesces bursts of events into a single fetch via a short debounce.
+  const debounceRef = useRef(null)
+  useEffect(() => {
+    const socket = getSocket()
+    function onBusEvent({ type }) {
+      if (!['table.created', 'player.joined', 'spectator.joined', 'table.empty'].includes(type)) return
+      clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => { fetchTables() }, 250)
+    }
+    socket.on('guide:notification', onBusEvent)
+    return () => {
+      clearTimeout(debounceRef.current)
+      socket.off('guide:notification', onBusEvent)
+    }
+  }, [fetchTables])
 
   return (
     <div className="max-w-4xl mx-auto w-full px-4 py-6 space-y-6">

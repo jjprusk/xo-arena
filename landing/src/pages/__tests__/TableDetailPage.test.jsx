@@ -21,6 +21,10 @@ vi.mock('../../lib/useOptimisticSession.js', () => ({
   useOptimisticSession: vi.fn(),
 }))
 
+vi.mock('../../lib/socket.js', () => ({
+  getSocket: vi.fn(() => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn() })),
+}))
+
 import TableDetailPage from '../TableDetailPage.jsx'
 import { api } from '../../lib/api.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
