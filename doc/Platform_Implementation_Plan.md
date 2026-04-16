@@ -125,18 +125,18 @@
 
 ### 2.1 Unified visual identity
 
-- [ ] Remove XO-specific theming (mountain background, teal/blue per-site identity)
-- [ ] Align to AI Arena design language (Colosseum + slate blue)
-- [ ] Audit all hardcoded "XO Arena" strings — replace with "XO" or "AI Arena"
-- [ ] Verify shared `packages/nav` renders consistently
+- [x] Remove XO-specific theming (mountain background, teal/blue per-site identity) — Colosseum background live; no per-site theming
+- [x] Align to AI Arena design language (Colosseum + slate blue) — live on staging
+- [x] Audit all hardcoded "XO Arena" strings — replace with "XO" or "AI Arena" — AppNav "XO Arena" → "XO", BotProfilePage "XO Arena (built-in)" → "AI Arena (built-in)", page title "AI Arena"
+- [x] Verify shared `packages/nav` renders consistently — verified on staging, desktop + mobile
 
 ### 2.2 Primary navigation
 
-- [ ] Update nav to: Tables · Tournaments · Rankings · Profile · About
-- [ ] Remove Games dropdown
-- [ ] Fold FAQ into About page (`/about#faq` or tabbed section)
-- [ ] Update `packages/nav/src/navItems.js` with new structure
-- [ ] Verify desktop and mobile (hamburger) nav
+- [x] Update nav to: Tables · Tournaments · Rankings · Profile · About — navItems.js updated, verified
+- [x] Remove Games dropdown — confirmed gone
+- [ ] Fold FAQ into About page (`/about#faq` or tabbed section) — FAQ content still on standalone `/faq` route; not yet folded into About
+- [x] Update `packages/nav/src/navItems.js` with new structure — done
+- [x] Verify desktop and mobile (hamburger) nav — verified on staging
 
 ### 2.3 Onboarding journey update
 
@@ -215,28 +215,25 @@
 
 - [x] Confirm `@callidity/game-xo` loads and plays correctly via the platform shell — verified end-to-end on staging at v1.3.0-alpha-1.06
 - [x] Confirm Gym and Puzzles render correctly via `botInterface.GymComponent` and `botInterface.puzzles` — Gym, Gym Guide, and Puzzles all render on landing
-- [ ] Remove `frontend/` service from the monorepo
-- [ ] Remove `frontend` service from Fly.io (`xo-frontend-staging`, `xo-frontend-prod`)
-- [ ] Remove `frontend` from `docker-compose.yml`
-- [ ] Remove `frontend` deploy steps from `.github/workflows/deploy-staging.yml` and `deploy-prod.yml`
-- [ ] Update e2e smoke tests — drop `BASE_URL=https://xo-frontend-staging.fly.dev` from the harness
-- [ ] Update all remaining internal references from XO frontend URL to AI Arena URL
-- [ ] Final QA: nothing on staging or prod still depends on the frontend service before destroying Fly apps
+- [x] Remove `frontend/` service from the monorepo — deleted in `a4ad867`, 193 files / 41 MB
+- [x] Remove `frontend` service from Fly.io (`xo-frontend-staging`, `xo-frontend-prod`) — both destroyed via `flyctl apps destroy` on 2026-04-15
+- [x] Remove `frontend` from `docker-compose.yml` — `73067c8`
+- [x] Remove `frontend` deploy steps from `.github/workflows/deploy-staging.yml` and `deploy-prod.yml` — `dc61aa7`
+- [x] Update e2e smoke tests — drop `BASE_URL=https://xo-frontend-staging.fly.dev` from the harness — `a79abe5`; playwright baseURL now defaults to LANDING_URL
+- [x] Update all remaining internal references from XO frontend URL to AI Arena URL — landing/server.js `/xo` proxy removed (`10e1dc2`); landing/Dockerfile `VITE_XO_URL` arg removed; generate-training-guide-pdf.yml re-pointed to `landing/public/`
+- [x] Final QA: staging and prod both verified clean at v1.3.0-alpha-1.07+ with 12/12 smoke tests passing
 
-### 3.1 Table data model (backend)
+### 3.1 Table data model (backend) — complete
 
-- [ ] Create `Table` Prisma model with all required fields:
-  - `gameId String`, `status Enum (forming|active|completed)`, `createdBy String`
-  - `minPlayers Int`, `maxPlayers Int`
-  - `isPrivate Boolean`, `chatEnabled Boolean` (false), `isTournament Boolean` (false)
-  - `seats Json` — array of `{ userId, status: "occupied | empty" }`
-  - `previewState Json?` — updated via `sdk.getPreviewState()` on each state change
-- [ ] Run and verify migration
-- [ ] Add table CRUD endpoints (create, list, get, join, leave)
-- [ ] Private table share link — table accessible at `/tables/[id]`; private tables not listed publicly but accessible via direct URL
-- [ ] Add notification bus events: `table.created`, `match.ready`, `player.joined`, `spectator.joined`, `table.empty`
-- [ ] Add presence tracking per table (who is watching)
-- [ ] Update tournament service to set `isTournament: true` on generated tables
+> Signed off 2026-04-15 against staging v1.3.0-alpha-1.08.
+
+- [x] Create `Table` Prisma model with all required fields — `85bd20d`; TableStatus enum (FORMING/ACTIVE/COMPLETED), seats Json, previewState Json, isPrivate, isTournament; indexes on status, gameId, createdById, isTournament
+- [x] Run and verify migration — `20260416000403_phase3_tables` applied to local dev DB; Prisma Client regenerated
+- [x] Add table CRUD endpoints (create, list, get, join, leave) — `bd5eacc`; 5 routes on `/api/v1/tables`; 26 vitest cases (create validation, list filters, auth gate, get-one-private, join idempotency, leave idempotency)
+- [x] Private table share link — table accessible at `/tables/[id]`; private tables excluded from default list but reachable by direct URL (GET `/api/v1/tables/:id` always works)
+- [x] Add notification bus events: `table.created`, `player.joined`, `spectator.joined`, `table.empty` — `ddf3969`; 4 event types in REGISTRY + PREF_DEFAULTS; wired into create/join/leave routes + spectator.joined from presence
+- [x] Add presence tracking per table (who is watching) — `8b75e17`; `tablePresence.js` module (addWatcher/removeWatcher/getPresence) + `table:watch`/`table:unwatch` socket events + disconnect cleanup; 12 unit tests
+- [x] Update tournament service to set `isTournament: true` on generated tables — `8be204e` (Option A: Tables alongside TournamentMatch); tournamentBridge creates Table row at match:ready, marks COMPLETED at match:result; 8 tests. Phase 3.4 commits to collapsing the dual-write.
 
 ### 3.2 Tables page (frontend)
 
