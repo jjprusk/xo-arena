@@ -107,17 +107,20 @@ describe('TableDetailPage', () => {
     expect(screen.getAllByText(/empty seat/i)).toHaveLength(2)
   })
 
-  it('clicking an empty seat triggers join (same action as the header button)', async () => {
+  it('clicking an empty seat joins at that specific seatIndex (not first empty)', async () => {
+    // Start signed out of the table, two empty seats
     api.tables.get.mockResolvedValue({ table: baseTable })
     api.tables.join.mockResolvedValue({ table: { ...baseTable, seats: [
-      { userId: 'u1', status: 'occupied' },
       { userId: null, status: 'empty' },
+      { userId: 'u1', status: 'occupied' },
     ] } })
     renderAt('/tables/tbl_1')
-    const seatBtn = await screen.findByRole('button', { name: /take seat 1/i })
+    // Click seat 2 specifically
+    const seatBtn = await screen.findByRole('button', { name: /take seat 2/i })
     const { act } = await import('react')
     await act(async () => { seatBtn.click() })
-    expect(api.tables.join).toHaveBeenCalledWith('tbl_1', 'tok')
+    // API called with { seatIndex: 1 } — zero-based index for seat 2
+    expect(api.tables.join).toHaveBeenCalledWith('tbl_1', { seatIndex: 1 }, 'tok')
   })
 
   it('clicking the caller\'s own occupied seat triggers leave (symmetric with join)', async () => {

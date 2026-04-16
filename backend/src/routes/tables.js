@@ -204,8 +204,14 @@ router.get('/:id', async (req, res, next) => {
  * POST /api/v1/tables/:id/join
  * Claim an empty seat at the table.
  *
+ * Body (optional): { seatIndex: number } — take that specific seat. Returns
+ * 409 if the requested seat is already occupied or out of range. When
+ * seatIndex is omitted, the first empty seat is used.
+ *
  * Idempotent: if the caller is already seated, returns 200 with the unchanged
- * table. Returns 409 when the table is full or its status is not FORMING.
+ * table (even if the caller requested a different seat — use leave + join to
+ * change seats). Returns 409 when the table is full or its status is not
+ * FORMING.
  */
 router.post('/:id/join', requireAuth, async (req, res, next) => {
   try {
@@ -222,8 +228,21 @@ router.post('/:id/join', requireAuth, async (req, res, next) => {
     // Already seated → no-op success
     if (userSeatIndex(table.seats, req.auth.userId) !== -1) return res.json({ table, seated: true })
 
-    const idx = firstEmptySeatIndex(table.seats)
-    if (idx === -1) return res.status(409).json({ error: 'Table is full' })
+    // Resolve target seat: explicit seatIndex from body, else first empty.
+    const { seatIndex } = req.body ?? {}
+    let idx
+    if (seatIndex !== undefined && seatIndex !== null) {
+      if (!Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex >= table.maxPlayers) {
+        return res.status(400).json({ error: 'seatIndex out of range' })
+      }
+      if (table.seats[seatIndex].status !== 'empty') {
+        return res.status(409).json({ error: 'Seat is already occupied' })
+      }
+      idx = seatIndex
+    } else {
+      idx = firstEmptySeatIndex(table.seats)
+      if (idx === -1) return res.status(409).json({ error: 'Table is full' })
+    }
 
     // Build a fresh seats array — never mutate the value returned from findUnique.
     const seats = table.seats.map((s, i) =>

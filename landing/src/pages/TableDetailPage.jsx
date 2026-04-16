@@ -109,12 +109,16 @@ export default function TableDetailPage() {
   const canJoin     = !!currentUserId && !isSeated && table?.status === 'FORMING' && seated < (table?.maxPlayers ?? 0)
   const canLeave    = isSeated && table?.status !== 'COMPLETED'
 
-  async function handleJoin() {
+  async function handleJoin(seatIndex) {
     setBusy(true); setError(null)
     try {
       const token = await getToken()
       if (!token) throw new Error('Sign in to join a table.')
-      const res = await api.tables.join(tableId, token)
+      // seatIndex is optional: if provided, server places us there; otherwise
+      // server picks the first empty seat (used by the header "Take a seat"
+      // button when the caller hasn't specified which seat).
+      const opts = typeof seatIndex === 'number' ? { seatIndex } : null
+      const res = await api.tables.join(tableId, opts, token)
       setTable(res.table)
     } catch (err) {
       setError(err.message || 'Join failed')
@@ -252,7 +256,9 @@ export default function TableDetailPage() {
             const takeable     = !seatOccupied && canJoin && !busy
             const leaveable    = isMine && canLeave && !busy
             const clickable    = takeable || leaveable
-            const onSeatClick  = takeable ? handleJoin : leaveable ? handleLeave : undefined
+            // Bind the seat index so the server places us in the seat we clicked,
+            // not just the first empty one.
+            const onSeatClick  = takeable ? () => handleJoin(i) : leaveable ? handleLeave : undefined
             const commonStyle  = {
               borderColor: seatOccupied ? 'var(--color-teal-500)' : 'var(--border-default)',
             }

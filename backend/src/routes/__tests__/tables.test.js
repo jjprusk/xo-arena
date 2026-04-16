@@ -244,6 +244,54 @@ describe('POST /api/v1/tables/:id/join', () => {
     })
   })
 
+  it('seats the caller at the requested seatIndex when provided', async () => {
+    db.table.findUnique.mockResolvedValue({
+      ...baseTable,
+      maxPlayers: 3,
+      seats: [
+        { userId: null, status: 'empty' },
+        { userId: null, status: 'empty' },
+        { userId: null, status: 'empty' },
+      ],
+    })
+    db.table.update.mockImplementation(({ data }) => Promise.resolve({ ...baseTable, ...data }))
+    const app = makeApp()
+    const res = await request(app).post('/api/v1/tables/tbl_1/join').send({ seatIndex: 2 })
+    expect(res.status).toBe(200)
+    expect(db.table.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        seats: [
+          { userId: null, status: 'empty' },
+          { userId: null, status: 'empty' },
+          { userId: 'ba_user_1', status: 'occupied' },
+        ],
+      },
+    }))
+  })
+
+  it('returns 409 when the requested seatIndex is already occupied', async () => {
+    db.table.findUnique.mockResolvedValue({
+      ...baseTable,
+      seats: [
+        { userId: 'somebody', status: 'occupied' },
+        { userId: null,       status: 'empty' },
+      ],
+    })
+    const app = makeApp()
+    const res = await request(app).post('/api/v1/tables/tbl_1/join').send({ seatIndex: 0 })
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/already occupied/i)
+    expect(db.table.update).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when seatIndex is out of range', async () => {
+    db.table.findUnique.mockResolvedValue(baseTable)
+    const app = makeApp()
+    const res = await request(app).post('/api/v1/tables/tbl_1/join').send({ seatIndex: 99 })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/out of range/i)
+  })
+
   it('is idempotent — returns 200 without updating when already seated', async () => {
     db.table.findUnique.mockResolvedValue({
       ...baseTable,
