@@ -56,11 +56,12 @@ export async function requireAuth(req, res, next) {
   if (!authPayload) {
     return res.status(401).json({ error: 'Authentication required' })
   }
-  req.auth = authPayload
 
-  // Check banned flag and active session in parallel.
-  // Activity is only recorded when a real BaSession exists — this prevents
-  // a cached-but-still-valid JWT from updating lastActiveAt after sign-out.
+  // Session presence is the source of truth for authentication. A valid JWT
+  // alone is NOT sufficient — we also need a live BaSession row. This closes
+  // the "zombie auth" window where a cached JWT would still authenticate
+  // after the session was purged (by idleSessionPurgeService or explicit
+  // sign-out), causing client/server state to drift.
   try {
     const [user, activeSession] = await Promise.all([
       db.user.findUnique({
@@ -73,9 +74,19 @@ export async function requireAuth(req, res, next) {
       }),
     ])
     if (user?.banned) return res.status(403).json({ error: 'Account suspended' })
-    if (user?.id && activeSession) recordActivity(user.id)
+    if (!activeSession) {
+      return res.status(401).json({ error: 'Session expired', code: 'SESSION_EXPIRED' })
+    }
+    req.auth = authPayload
+    // Session presence is enforced above, so activity can be recorded
+    // unconditionally — no more "ghost sign-out" worry since the JWT is
+    // gated behind the session anyway.
+    if (user?.id) recordActivity(user.id)
   } catch (err) {
-    logger.warn({ err }, 'Ban check failed — allowing request through')
+    logger.warn({ err }, 'Auth session check failed')
+    // Fail closed on DB errors so a compromised session row doesn't accidentally
+    // grant access. 503 makes it clear this is an infra issue, not credentials.
+    return res.status(503).json({ error: 'Auth service unavailable' })
   }
 
   next()
@@ -83,10 +94,26 @@ export async function requireAuth(req, res, next) {
 
 /**
  * Middleware: optional auth.
- * If a valid token is present, attaches req.auth. Otherwise req.auth = null (guest).
+ * If a valid token AND a live session are present, attaches req.auth.
+ * Otherwise req.auth = null (guest). See requireAuth for why session
+ * presence is required alongside JWT validity.
  */
 export async function optionalAuth(req, _res, next) {
-  req.auth = await verifyToken(req)
+  const authPayload = await verifyToken(req)
+  if (!authPayload) {
+    req.auth = null
+    return next()
+  }
+  try {
+    const activeSession = await db.baSession.findFirst({
+      where: { userId: authPayload.userId, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    })
+    req.auth = activeSession ? authPayload : null
+  } catch {
+    // Fail closed to guest on DB errors — don't grant auth on infra failure.
+    req.auth = null
+  }
   next()
 }
 
