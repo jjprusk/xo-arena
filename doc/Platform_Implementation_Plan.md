@@ -263,6 +263,49 @@
 - [ ] Load game via `React.lazy(() => import('@callidity/game-xo'))` through shell
 - [ ] Verify XO plays correctly through the new shell including Gym and Puzzles tabs
 
+### 3.4 Retire in-memory Room layer (Tables become the only primitive)
+
+> **Goal:** Tables are THE source of truth for live game sessions. The in-memory `roomManager` and the dual-write between `Table` and `TournamentMatch` go away; the realtime layer reads/writes Tables directly.
+>
+> **Why this exists:** Phase 3.1 chose **Option A** (additive — tournament bridge creates `Table` rows alongside `TournamentMatch` so the Tables page lights up immediately). That left two intentional sources of truth for game session state: the `Table` row and the in-memory `Room` (created by `roomManager` and used by `socketHandler`'s `room:*` events). Phase 3.4 collapses them.
+
+#### Tasks
+
+- [ ] **Make `Table` canonical for game session state.** Move the fields currently held by in-memory `Room` (board, currentTurn, scores, round, etc.) into `Table.previewState` or dedicated columns where appropriate. Add fields if needed (e.g., `lastActivityAt` for idle GC).
+- [ ] **Rewrite `socketHandler.js` `room:*` events to operate on `db.table`** instead of `roomManager`:
+  - `room:create` → `db.table.create()` (already exists via REST; socket version stays for game-start ergonomics)
+  - `room:join` → `db.table.update({ seats })`
+  - `room:created`, `room:joined`, `room:guestJoined`, `room:cancelled`, `room:abandoned`, `room:kicked` → emitted from Table updates
+  - `game:move`, `game:moved`, `game:forfeit` → update Table.previewState
+- [ ] **Delete the dual-write code in `tournamentBridge.js`** that syncs `Table.status` from `TournamentMatch.status`. Reverse the data flow: `TournamentMatch` records bracket position only; `Table` is the live game session.
+- [ ] **Update tournament queries that read `TournamentMatch.status`** for game-session info (e.g., "is the match in progress?") to read `Table.status` instead. Bracket position queries continue to read `TournamentMatch`.
+- [ ] **Delete `roomManager` (or shrink to a thin Table cache)** — once `socketHandler` no longer references it, remove the in-memory state and the related types.
+- [ ] **Migrate idle/abandonment timers** from `roomManager` to a Table-aware service (`idleSessionPurgeService` already exists for sessions; extend it for Tables).
+- [ ] **Verify presence tracking from Phase 3.1** still works correctly when Tables are the source of truth (presence map keyed by `Table.id`, no roomId).
+- [ ] **Tournament-match flow QA**: create match → players join → play to completion → bracket advances. No regressions vs pre-3.4 behavior.
+
+#### Conversion notes (for whoever picks this up)
+
+These are concrete things to look for and decisions already made by the time 3.4 starts:
+
+1. **The Table row already exists for tournament matches.** Phase 3.1 / Option A wired `tournamentBridge.js` to call `db.table.create({ isTournament: true, … })` when a match becomes ready. So the data is in place — 3.4 doesn't need to backfill or migrate. It only needs to swap which side reads from which.
+2. **The dual-write to look for.** Search for `// TODO Phase 3.4:` markers in `tournamentBridge.js` (added by Phase 3.1) — those flag every line that becomes net-deleted in 3.4.
+3. **Schema diffs between `Room` (in-memory) and `Table` (DB).**
+   - `Room` has: `slug`, `hostSocketId`, `playerMarks`, `board`, `currentTurn`, `scores`, `round`, `status`, `spectatorCount`, `displayName`, `isHvb`, `botUserId`, `botSkillId`, `botMark`.
+   - `Table` has (after 3.1): `gameId`, `status` (FORMING/ACTIVE/COMPLETED), `seats`, `previewState`, `isPrivate`, `isTournament`, `chatEnabled`.
+   - **Gap to close in 3.4**: most `Room` fields belong inside `previewState` (game-defined opaque blob) — they're already what `sdk.getPreviewState()` returns. The exceptions are `botUserId`/`botSkillId` (HvB metadata — add as nullable columns) and `lastActivityAt` (idle GC — add an indexed column).
+4. **Don't break replay.** Game move stream is recorded via `Game` + `Move` Prisma models, independent of Room/Table. 3.4 must not touch that path.
+5. **Spectator UX during the swap.** The `spectator.joined` bus event was registered in Phase 3.1 but not fired (presence wired against Table.id in 3.1). Once 3.4 lands, spectators are simply socket subscribers to a Table-keyed channel; no separate "room spectator" concept needed.
+6. **Tournament-bridge events stay.** `match.ready`, `match.result`, `tournament.starting_soon`, etc. continue to fire from `tournamentBridge.js` — those are bracket-level events independent of how the underlying game session is persisted.
+7. **Risk to watch.** Anyone who builds new tournament features between 3.1 and 3.4 might add code that joins `TournamentMatch` and `Table` for game-session state, treating both as canonical. PR review during that window should redirect such queries to read `Table` only.
+
+#### Acceptance criteria
+
+- `roomManager.js` deleted (or reduced to <50 lines as a Table-fetch helper).
+- No `// TODO Phase 3.4:` markers remain in the codebase.
+- Tournament match end-to-end flow passes existing tests (no behavior regression).
+- A new e2e test creates a Table via REST, joins via socket, plays a complete game, asserts the result lands in `db.game` and `Table.status = COMPLETED` — proving Tables are the single source of truth.
+
 ---
 
 ## Phase 4 — Connect4
