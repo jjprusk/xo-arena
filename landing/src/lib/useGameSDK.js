@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { connectSocket, disconnectSocket, getSocket } from './socket.js'
 import { getToken } from './getToken.js'
 import { useSoundStore } from '../store/soundStore.js'
+import { perfMark } from './perfLog.js'
 
 /**
  * Platform-side SDK provider for socket-based games.
@@ -54,6 +55,12 @@ export function useGameSDK({
   const idleHandlersRef    = useRef([])
   const gameEndCallbackRef = useRef(null)
 
+  // Last move event, replayed to newly-mounted subscribers so layout remounts
+  // (e.g., PlatformShell focused↔chrome-present switch, which unmounts XOGame
+  // because the parent frame component type changes) pick up the current
+  // board state instead of reverting to an empty initialGameState().
+  const lastMoveEventRef = useRef(null)
+
   // ── SDK object (stable reference — methods close over refs) ───────────────
   const sdk = useMemo(() => ({
     // ── Core contract methods ──────────────────────────────────────────────
@@ -64,6 +71,12 @@ export function useGameSDK({
 
     onMove(handler) {
       moveHandlersRef.current.push(handler)
+      // Replay the most recent move event so a newly-mounted subscriber
+      // (fresh XOGame instance after a shell mode switch, for example)
+      // hydrates to the current board state instead of showing an empty
+      // initialGameState. `replay: true` tells the consumer to update state
+      // but skip side effects (sounds, signalEnd, last-cell animations).
+      if (lastMoveEventRef.current) handler({ ...lastMoveEventRef.current, replay: true })
       return () => {
         moveHandlersRef.current = moveHandlersRef.current.filter(h => h !== handler)
       }
@@ -84,6 +97,8 @@ export function useGameSDK({
 
     spectate(handler) {
       moveHandlersRef.current.push(handler)
+      // Same rehydration logic as onMove — covers spectator remounts too.
+      if (lastMoveEventRef.current) handler({ ...lastMoveEventRef.current, replay: true })
       return () => {
         moveHandlersRef.current = moveHandlersRef.current.filter(h => h !== handler)
       }
@@ -151,7 +166,9 @@ export function useGameSDK({
 
   // ── Socket lifecycle ───────────────────────────────────────────────────────
   useEffect(() => {
+    perfMark('useGameSDK:effect-start', { gameId, joinSlug, tournamentMatchId })
     const socket = connectSocket()
+    perfMark('useGameSDK:after-connectSocket', socket.connected ? 'already-connected' : 'connecting')
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -193,6 +210,9 @@ export function useGameSDK({
         state:     { ...state, marks: { ...marksRef.current } },
         timestamp: new Date().toISOString(),
       }
+      // Save for replay to handlers that subscribe later (e.g., a remounted
+      // XOGame after the PlatformShell mode switch).
+      lastMoveEventRef.current = event
       moveHandlersRef.current.forEach(h => h(event))
     }
 
@@ -210,6 +230,7 @@ export function useGameSDK({
     })
 
     socket.on('room:created:hvb', ({ slug, displayName, mark, board, currentTurn }) => {
+      perfMark('useGameSDK:room:created:hvb')
       const cu = currentUserRef.current
       slugRef.current = slug
       const hostId = cu?.id ?? 'host'
@@ -394,6 +415,22 @@ export function useGameSDK({
         socket.emit('room:join', { slug: state.slug, role: 'spectator' })
         return
       }
+      // "Room not found" happens when the server-side room has been cleaned
+      // up (idle abandonment after game.idleWarnSeconds + game.idleGraceSeconds
+      // = 3 min default, or socket reconnected with a new socket.id that the
+      // room no longer recognizes). Without this branch, clicks after the
+      // room is gone silently fail — sound plays, no move, no feedback.
+      // Surface as the same "abandoned" state the room:abandoned event uses
+      // so PlayPage's existing cleanup path runs.
+      if (message === 'Room not found') {
+        setAbandoned({ reason: 'stale', message: 'Game ended (idle). Returning…' })
+        return
+      }
+      // Any other unrecognized error: log to the console so it's visible in
+      // devtools instead of eaten silently. Pre-existing behavior swallowed
+      // everything, which is how this bug hid.
+      // eslint-disable-next-line no-console
+      console.warn('[useGameSDK] unhandled socket error:', message)
     })
 
     // ── Initial join / create ──────────────────────────────────────────────────
@@ -404,6 +441,7 @@ export function useGameSDK({
     function emitRoomAction(token) {
       if (emitted) return
       emitted = true
+      perfMark('useGameSDK:emitRoomAction', { hasToken: !!token, botUserId, joinSlug })
       if (tournamentMatchId) {
         socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else if (joinSlug) {
@@ -433,6 +471,7 @@ export function useGameSDK({
     }
 
     function onConnect() {
+      perfMark('useGameSDK:socket-connect-fired')
       if (!slugRef.current) {
         // No room created yet — safe to re-emit (reset guard so emitRoomAction runs)
         emitted = false
@@ -442,6 +481,7 @@ export function useGameSDK({
 
     socket.on('connect', onConnect)
     if (socket.connected) {
+      perfMark('useGameSDK:socket-already-connected')
       resolveAndEmit()
     }
 

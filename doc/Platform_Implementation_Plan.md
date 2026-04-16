@@ -239,7 +239,7 @@
 
 - [x] Build Tables page at `/tables` — `5a6f5a2`; TablesPage.jsx with status + game filters, empty state
 - [x] Live list of open public tables — private tables hidden from list, accessible by direct URL only — `5a6f5a2`; `api.tables.list()` excludes private by default, `GET /tables/:id` always works
-- [x] Table card shows: game type, table icon, status, players seated, spectator count, `previewState` thumbnail — `5a6f5a2` + `90289c5`; card shows game label, seat strip (filled/empty dots), status badge, seated count; spectator count lands on TableDetailPage via `table:presence`; previewState thumbnail deferred to 3.3 (needs game-specific renderer)
+- [x] Table card shows: game type, table icon, status, players seated, spectator count, `previewState` thumbnail — `5a6f5a2` + `90289c5`; card shows game label, seat strip (filled/empty dots), status badge, seated count; spectator count lands on TableDetailPage via `table:presence`; previewState thumbnail deferred to 3.5 (needs game-specific renderer + the rendered table surface from Phase 3.5)
 - [x] `forming` state: table card shows empty seats waiting to fill — `5a6f5a2`; seat strip dots show filled vs outline
 - [x] Create table flow: choose game, set private/public, configure settings — `5a6f5a2`; `CreateTableModal` with game picker + private/public toggle
 - [x] Join table flow: click table — sit down (if seat available) or spectate — `5a6f5a2`; TableDetailPage shows seats + `Take a seat` / `Leave seat` buttons
@@ -281,6 +281,17 @@
 #### Tasks
 
 - [ ] **Make `Table` canonical for game session state.** Move the fields currently held by in-memory `Room` (board, currentTurn, scores, round, etc.) into `Table.previewState` or dedicated columns where appropriate. Add fields if needed (e.g., `lastActivityAt` for idle GC).
+- [ ] **Table GC (idle cleanup).** Add a periodic service (`tableGcService`) that purges stale tables:
+  - FORMING + empty seats + age > 30 min → auto-delete + `table.deleted` bus event.
+  - FORMING + occupied + age > 60 min (game never started) → warn seated players → then auto-delete.
+  - COMPLETED + age > 24 hr → auto-delete (the result is already recorded in the `Game` model).
+  - ACTIVE + idle (no moves for `game.idleWarnSeconds + game.idleGraceSeconds`) → warn → abandon → mark COMPLETED. Replaces the in-memory Room idle timer once 3.4 collapses Rooms into Tables.
+  - `lastActivityAt` (indexed column added above) drives the idle detection for ACTIVE tables.
+- [ ] **Admin table management page.** Add a `ListTable`-based view in the admin panel that shows ALL tables (any status, any owner). Columns: game, status, creator, seats, age. Admin can **force-delete any table** — including ACTIVE ones mid-game. On force-delete:
+  - Server deletes the table row.
+  - Fires `table.deleted` bus event (broadcast) so the Tables list/detail pages react.
+  - Emits `room:abandoned` (or the 3.4 equivalent) to every socket in that table's presence set with `reason: 'admin'`, so seated players see a clear notice ("This table was removed by an administrator") instead of a silent failure.
+  - Tournament tables: admin delete is allowed (overrides the creator-only guard); bracket state handled by tournamentBridge marking the match as void.
 - [ ] **Rewrite `socketHandler.js` `room:*` events to operate on `db.table`** instead of `roomManager`:
   - `room:create` → `db.table.create()` (already exists via REST; socket version stays for game-start ergonomics)
   - `room:join` → `db.table.update({ seats })`
@@ -327,6 +338,7 @@ These are concrete things to look for and decisions already made by the time 3.4
 - [ ] Spectator badge (§4.3): edge cluster with click-to-expand popover listing watcher names; sidebar list unchanged.
 - [ ] End-of-game seat indication (§4.5): winner glow, loser muted, plus small outcome banner.
 - [ ] Tournament context card in sidebar (§4.7) when `isTournament = true`.
+- [ ] **Active table preview thumbnail.** Render a mini `previewState` snapshot (e.g., a small XO board with current marks) on the Tables list page for ACTIVE tables. Deferred from Phase 3.2 — requires the game-specific renderer that the `<TableSurface>` component provides.
 - [ ] QA: XO still plays correctly via the new shell on both desktop and mobile.
 
 ### 3.6 Multi-seat sit-down shell (infrastructure for Poker)
@@ -473,3 +485,8 @@ These are concrete things to look for and decisions already made by the time 3.4
 - [ ] Mobile QA: Tables page, game shell focused/chrome modes, Gym, replay controls
 - [ ] Performance: verify `React.lazy` chunking — each game is a separate bundle
 - [ ] Bot leaderboard: per-game bot rankings, ELO history, training stats
+- [ ] **Cross-tab session-switch banner.** When a user signs in as a different account in another tab (same browser/origin), the cookies + localStorage session cache are shared, so every other tab silently swaps to the new user on the next `useOptimisticSession` poll (≤60s). This is correct HTTP/cookie behavior — not fixable — but it is confusing. Detect when the polled `session.user.id` differs from the previously-cached id on the same tab, and surface a banner ("Signed-in account changed in another tab — now signed in as **B**. Refresh to continue.") instead of silently mutating the UI. Small polish; likely fits in 30 lines in `useOptimisticSession` + a banner component.
+- [ ] **socket.io multi-machine routing on Fly.io.** As of 2026-04-16 staging has been manually scaled to 1 backend machine because socket.io polling transport + Fly.io round-robin load balancing causes a 400-Bad-Request cascade on every other poll (each polling request can land on a different machine, but only the issuing machine knows the SID). Current workaround: `flyctl scale count 1 -a xo-backend-staging`. Real fixes (pick one before scaling back to N machines in prod):
+  - **Sticky sessions via `fly-replay`.** Add backend middleware that detects a polling request carrying an SID owned by a different instance and sets `fly-replay: instance=<owner>` so Fly's edge proxy re-routes. Requires tracking SID-to-instance-id mapping (e.g., via Redis with the existing adapter).
+  - **Restore WebSocket transport.** `landing/src/lib/socket.js` forces `transports: ['polling']` because the landing express + http-proxy-middleware chain was dropping WS upgrades on Fly. Fix the landing proxy to forward `upgrade` + `connection` headers, re-enable WS on the client, and the multi-machine problem disappears (a WS stays on the machine it opened on). Lowest-risk long-term fix.
+  - **Route `/socket.io` straight to backend from the edge** (skip landing proxy entirely). Requires a DNS/routing change; simplest if we move away from the double-proxy topology anyway.

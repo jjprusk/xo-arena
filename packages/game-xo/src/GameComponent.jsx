@@ -97,37 +97,48 @@ export default function GameComponent({ session, sdk }) {
   function handleMoveEvent(event) {
     // A null move signals a new round starting (game:start from the server).
     // Reset local state and clear the signalled guard so signalEnd fires again.
+    // On a replay (state rehydration for a newly-mounted handler — e.g.,
+    // after PlatformShell mode switch unmounts/remounts this component),
+    // update state but DON'T reset the signalled guard: the game hasn't
+    // actually restarted, we're just catching up.
     if (event.move === null) {
       setGameState(event.state)
       setLastCell(null)
       setError(null)
-      signalledRef.current = false
+      if (!event.replay) signalledRef.current = false
       return
     }
 
     setGameState(event.state)
-    setLastCell(event.move)
-    setTimeout(() => setLastCell(null), 350)
 
-    // Play sounds via the platform SDK (single shared AudioContext — honors mute/volume).
-    // Own moves were already sounded on handleCellClick for instant feedback, so skip
-    // the echo here to avoid doubling.
-    if (event.state.status === 'finished') {
-      sdk.playSound?.(event.state.winner ? 'win' : 'draw')
-    } else if (event.playerId && event.playerId !== session?.currentUserId) {
-      sdk.playSound?.('move')
-    }
+    // Side effects (cell highlight flash, sounds, signalEnd) are suppressed
+    // on replay. They only belong to the live event — replaying them on a
+    // remount would double-sound moves and re-trigger signalEnd on finished
+    // games, corrupting ELO.
+    if (!event.replay) {
+      setLastCell(event.move)
+      setTimeout(() => setLastCell(null), 350)
 
-    // Notify the platform once when the game concludes.
-    // The platform uses this to record the result and update ELO.
-    if (event.state.status === 'finished' && !signalledRef.current) {
-      signalledRef.current = true
-      sdk.signalEnd({
-        rankings: event.state.winner
-          ? sortByWinner(session?.players ?? [], event.state.winner, session?.settings?.marks)
-          : [],
-        isDraw: !event.state.winner,
-      })
+      // Play sounds via the platform SDK (single shared AudioContext — honors mute/volume).
+      // Own moves were already sounded on handleCellClick for instant feedback, so skip
+      // the echo here to avoid doubling.
+      if (event.state.status === 'finished') {
+        sdk.playSound?.(event.state.winner ? 'win' : 'draw')
+      } else if (event.playerId && event.playerId !== session?.currentUserId) {
+        sdk.playSound?.('move')
+      }
+
+      // Notify the platform once when the game concludes.
+      // The platform uses this to record the result and update ELO.
+      if (event.state.status === 'finished' && !signalledRef.current) {
+        signalledRef.current = true
+        sdk.signalEnd({
+          rankings: event.state.winner
+            ? sortByWinner(session?.players ?? [], event.state.winner, session?.settings?.marks)
+            : [],
+          isDraw: !event.state.winner,
+        })
+      }
     }
   }
 

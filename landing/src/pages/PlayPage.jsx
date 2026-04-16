@@ -5,6 +5,7 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { getCommunityBot } from '../lib/communityBotCache.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
+import { perfMark, perfDumpSummary } from '../lib/perfLog.js'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 // Note: we deliberately do NOT statically import `meta` from @callidity/game-xo
@@ -136,6 +137,8 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
   // Active or finished game — route through the platform shell so the same
   // chrome renders on /play and (Phase 3.4) /tables/:id.
   if ((phase === 'playing' || phase === 'finished') && session) {
+    perfMark('PlayPage:board-renderable')
+    perfDumpSummary('/play?action=vs-community-bot')
     return (
       <PlatformShell
         gameMeta={xoMeta}
@@ -152,6 +155,7 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
 }
 
 export default function PlayPage() {
+  perfMark('PlayPage:render')
   const [searchParams]         = useSearchParams()
   const { data: authSession }  = useOptimisticSession()
 
@@ -169,8 +173,12 @@ export default function PlayPage() {
   // and navigations from HomePage (which prefetches) skip the round-trip.
   useEffect(() => {
     if (action !== 'vs-community-bot' || joinSlug) return
+    perfMark('PlayPage:botConfig-start')
     getCommunityBot()
-      .then(config => { config ? setBotConfig(config) : setBotError(true) })
+      .then(config => {
+        perfMark('PlayPage:botConfig-done', config ? 'ok' : 'null')
+        config ? setBotConfig(config) : setBotError(true)
+      })
       .catch(() => setBotError(true))
   }, [action, joinSlug])
 

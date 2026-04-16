@@ -5,6 +5,7 @@ import { useOptimisticSession, clearSessionCache, triggerSessionRefresh } from '
 import { signOut } from '../../lib/auth-client.js'
 import { getToken, clearTokenCache } from '../../lib/getToken.js'
 import { getSocket, connectSocket, disconnectSocket } from '../../lib/socket.js'
+import { perfMark } from '../../lib/perfLog.js'
 import SignInModal from '../ui/SignInModal.jsx'
 import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
@@ -162,23 +163,33 @@ export default function AppLayout() {
   // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out.
   useEffect(() => {
     if (session?.user?.id) {
-      useGuideStore.getState().hydrate().then(() => {
-        // Don't auto-open on pages where the guide would obscure gameplay
-        if (window.location.pathname.startsWith('/play')) return
-        const { journeyProgress } = useGuideStore.getState()
-        const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-        if (!dismissedAt && completedSteps.length < JOURNEY_DEFAULT_SLOTS.length) {
-          useGuideStore.getState().open()
-        }
-      })
+      perfMark('AppLayout:session-resolved', session.user.id)
+      // Skip guide hydrate on /play — the panel is suppressed on that route,
+      // so the extra /api/v1/guide/preferences round trip is pure waste on
+      // the game hot path. Other routes hydrate as before.
+      const onPlayRoute = window.location.pathname.startsWith('/play')
+      if (!onPlayRoute) {
+        useGuideStore.getState().hydrate().then(() => {
+          perfMark('AppLayout:hydrate-done')
+          const { journeyProgress } = useGuideStore.getState()
+          const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+          if (!dismissedAt && completedSteps.length < JOURNEY_DEFAULT_SLOTS.length) {
+            useGuideStore.getState().open()
+          }
+        })
+      }
       // Connect socket and explicitly subscribe — covers the case where the socket
       // was already connected (so 'connect' won't fire) or reconnects mid-await.
       getToken().then(token => {
+        perfMark('AppLayout:token-resolved', token ? 'ok' : 'null')
         if (!token) return
         const socket = connectSocket(token)
-        // If already connected, 'connect' won't fire — subscribe directly.
-        // If not yet connected, the 'connect' handler in the effect below will do it.
-        if (socket.connected) socket.emit('user:subscribe', { authToken: token })
+        if (socket.connected) {
+          perfMark('AppLayout:socket-already-connected')
+          socket.emit('user:subscribe', { authToken: token })
+        } else {
+          socket.once('connect', () => perfMark('AppLayout:socket-connected'))
+        }
       }).catch(() => {})
     } else {
       useGuideStore.getState().reset()

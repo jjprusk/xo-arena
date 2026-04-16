@@ -150,19 +150,32 @@ function FocusedFrame({ children, themeStyle, widthClass, onExpand, backHref }) 
       style={themeStyle}
       data-shell-mode="focused"
     >
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-1 pt-1">
+      {/* Affordance chrome: semi-transparent so it doesn't compete with the
+          board, but high-enough opacity + a surface background that the
+          buttons are unambiguously discoverable against busy page backgrounds
+          (Colosseum). Previous 30% opacity on muted text was effectively
+          invisible. */}
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-1 pt-1 pointer-events-none">
         <Link
           to={backHref}
-          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-opacity opacity-30 hover:opacity-80"
-          style={{ color: 'var(--text-muted)' }}
+          className="pointer-events-auto flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100"
+          style={{
+            color: 'var(--text-secondary)',
+            background: 'var(--bg-surface)',
+            boxShadow: 'var(--shadow-card)',
+          }}
           title="Back"
         >
           ← Back
         </Link>
         <button
           onClick={onExpand}
-          className="text-xs px-2 py-1 rounded-lg transition-opacity opacity-30 hover:opacity-80"
-          style={{ color: 'var(--text-muted)' }}
+          className="pointer-events-auto text-xs px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100"
+          style={{
+            color: 'var(--text-secondary)',
+            background: 'var(--bg-surface)',
+            boxShadow: 'var(--shadow-card)',
+          }}
           title="Show table context"
           aria-label="Show table context"
         >
@@ -192,8 +205,12 @@ function ChromePresentFrame({
         >
           <button
             onClick={onFocus}
-            className="absolute top-0 right-0 text-xs px-2 py-1 rounded-lg transition-opacity opacity-30 hover:opacity-80 z-10"
-            style={{ color: 'var(--text-muted)' }}
+            className="absolute top-0 right-0 text-xs px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100 z-10"
+            style={{
+              color: 'var(--text-secondary)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-card)',
+            }}
             title="Focus mode (hide chrome)"
             aria-label="Focus mode"
           >

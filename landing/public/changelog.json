@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.3.0-alpha-1.12",
+    "date": "2026-04-16",
+    "description": "QA fixes: shell button visibility, mode-switch board reset, stale-room error handling, and perf instrumentation"
+  },
+  {
     "version": "1.3.0-alpha-1.11",
     "date": "2026-04-16",
     "description": "Tables QA fixes: cross-tab seat sync, stakeholder-scoped notifications, and accurate watcher counts. Design doc for the Phase 3.5 rendered table paradigm."
