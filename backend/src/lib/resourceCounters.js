@@ -20,6 +20,7 @@ import logger from '../logger.js'
 import { dispatch, getDispatchCounters } from './notificationBus.js'
 import { getDispatcherHeartbeat } from './scheduledJobs.js'
 import { getPendingPvpMatchCount } from './tournamentBridge.js'
+import { getTotalWatchers as getTableWatcherTotal } from '../realtime/tablePresence.js'
 
 // ── Counters ──────────────────────────────────────────────────────────────────
 
@@ -132,8 +133,37 @@ async function takeBusSnapshot() {
   }
 }
 
+/**
+ * Phase 3.2 (and ongoing): Tables + presence instrumentation.
+ * Stale-FORMING threshold: tables in FORMING state older than 30 min with
+ * zero occupied seats. Not (yet) a leak alert — stale private tables can
+ * be legitimate (creator hasn't shared the link yet). Surfaced as a metric
+ * so admins can spot abandoned table buildup.
+ */
+const STALE_TABLE_MS = 30 * 60 * 1000
+
+async function takeTablesSnapshot() {
+  const cutoff = new Date(Date.now() - STALE_TABLE_MS)
+  const [forming, active, completed, staleForming] = await Promise.all([
+    db.table.count({ where: { status: 'FORMING'   } }),
+    db.table.count({ where: { status: 'ACTIVE'    } }),
+    db.table.count({ where: { status: 'COMPLETED' } }),
+    db.table.count({ where: { status: 'FORMING', createdAt: { lt: cutoff } } }),
+  ])
+  return {
+    tablesForming:      forming,
+    tablesActive:       active,
+    tablesCompleted:    completed,
+    tablesStaleForming: staleForming,
+    tableWatchers:      getTableWatcherTotal(),
+  }
+}
+
 async function takeSnapshot() {
-  const busSnap = await takeBusSnapshot().catch(() => ({}))
+  const [busSnap, tableSnap] = await Promise.all([
+    takeBusSnapshot().catch(() => ({})),
+    takeTablesSnapshot().catch(() => ({})),
+  ])
   const mem = process.memoryUsage()
   const snap = {
     ts: Date.now(),
@@ -144,6 +174,7 @@ async function takeSnapshot() {
     heapTotalMb:   Math.round(mem.heapTotal / 1024 / 1024),
     rssMb:         Math.round(mem.rss       / 1024 / 1024),
     ...busSnap,
+    ...tableSnap,
   }
 
   _snapshots.push(snap)

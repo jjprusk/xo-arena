@@ -95,6 +95,17 @@ export function getActiveTableIds() {
 }
 
 /**
+ * Return the total number of watchers across all tables (counts every
+ * socket, including multiple tabs from the same user). Used by the admin
+ * health snapshot so the platform can see spectator load.
+ */
+export function getTotalWatchers() {
+  let total = 0
+  for (const watchers of _tableWatchers.values()) total += watchers.size
+  return total
+}
+
+/**
  * Reset all presence state. Test-only — never call from production code.
  */
 export function _resetForTests() {

@@ -7,12 +7,18 @@ import { AdminHeader, Spinner, ErrorMsg } from './AdminDashboard.jsx'
 const POLL_INTERVAL_MS = 15_000
 
 const COUNTER_LABELS = {
-  sockets:          'Sockets',
-  rooms:            'Rooms',
-  redisConnections: 'Redis Connections',
-  memoryMb:         'Heap Used (MB)',
-  heapTotalMb:      'Heap Total (MB)',
-  rssMb:            'RSS (MB)',
+  sockets:            'Sockets',
+  rooms:              'Rooms',
+  redisConnections:   'Redis Connections',
+  memoryMb:           'Heap Used (MB)',
+  heapTotalMb:        'Heap Total (MB)',
+  rssMb:              'RSS (MB)',
+  // Phase 3.2 — Tables instrumentation
+  tablesForming:      'Tables Forming',
+  tablesActive:       'Tables Active',
+  tablesCompleted:    'Tables Completed',
+  tablesStaleForming: 'Tables Stale (>30m)',
+  tableWatchers:      'Table Watchers',
 }
 
 function counterStatus(key, alerts, history) {
@@ -60,7 +66,12 @@ function HistoryTable({ history }) {
     return <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No snapshots yet — first snapshot fires 60 s after backend start.</p>
   }
 
-  const keys = ['sockets', 'rooms', 'redisConnections', 'memoryMb', 'heapTotalMb', 'rssMb']
+  const keys = [
+    'sockets', 'rooms', 'redisConnections',
+    'memoryMb', 'heapTotalMb', 'rssMb',
+    'tablesForming', 'tablesActive', 'tablesCompleted',
+    'tablesStaleForming', 'tableWatchers',
+  ]
   const rows = [...history].reverse()
 
   return (

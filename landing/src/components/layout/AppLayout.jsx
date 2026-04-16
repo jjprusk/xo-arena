@@ -61,6 +61,14 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
       return { id, uiType: 'admin',       type: 'admin',       title: 'System Alert', body: payload.message, expiresAt: null }
     case 'system.alert.cleared':
       return { id, uiType: 'admin',       type: 'admin',       title: 'Alert Cleared', body: payload.message, expiresAt: null }
+    // Table state-nudge events (Phase 3.2) — consumed by TablesPage /
+    // TableDetailPage directly via socket. Returning null here keeps them
+    // out of the notification stack (they're not user-facing inbox items).
+    case 'table.created':
+    case 'player.joined':
+    case 'spectator.joined':
+    case 'table.empty':
+      return null
     default:
       return { id, uiType: 'admin',       type: 'admin',       title: type, body: payload.message ?? '', expiresAt: null }
   }
@@ -149,6 +157,9 @@ export default function AppLayout() {
     }
     function onGuideNotification({ type, payload = {}, expiresAt = null }) {
       const notif = normalizeBusNotification(type, payload, expiresAt)
+      // State-nudge events (e.g. table.*) return null — not user-facing,
+      // consumed by pages via their own socket subscription.
+      if (!notif) return
       useGuideStore.getState().addNotification(notif)
       useNotifSoundStore.getState().play()
       if (notif.uiType === 'flash' || notif.uiType === 'match_ready') {

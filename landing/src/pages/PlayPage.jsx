@@ -1,10 +1,10 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { lazy, Suspense, useEffect, useState } from 'react'
+import React, { lazy, useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
-import { api } from '../lib/api.js'
 import { getCommunityBot } from '../lib/communityBotCache.js'
+import PlatformShell from '../components/platform/PlatformShell.jsx'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 // Note: we deliberately do NOT statically import `meta` from @callidity/game-xo
@@ -13,20 +13,6 @@ import { getCommunityBot } from '../lib/communityBotCache.js'
 // spinner — adding 1–2s on /play page reload in dev mode. Instead, we load meta
 // asynchronously below and fall back to sensible defaults while it loads.
 const XOGame = lazy(() => import('@callidity/game-xo'))
-
-const WIDTH_CLASS = {
-  compact:    'max-w-sm',
-  standard:   'max-w-md',
-  wide:       'max-w-2xl',
-  fullscreen: 'max-w-full',
-}
-
-function resolveThemeVars(theme, isDark) {
-  return {
-    ...theme?.tokens,
-    ...(isDark ? theme?.dark : theme?.light),
-  }
-}
 
 function Spinner() {
   return (
@@ -147,29 +133,18 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     )
   }
 
-  // Active or finished game
+  // Active or finished game — route through the platform shell so the same
+  // chrome renders on /play and (Phase 3.4) /tables/:id.
   if ((phase === 'playing' || phase === 'finished') && session) {
-    const widthClass = WIDTH_CLASS[xoMeta?.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
-    const themeStyle = xoMeta?.theme
-      ? resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))
-      : undefined
     return (
-      <div
-        className={`relative flex flex-col items-center w-full ${widthClass} mx-auto py-6 px-4`}
-        style={themeStyle}
+      <PlatformShell
+        gameMeta={xoMeta}
+        session={session}
+        phase={phase}
+        backHref={tournamentId ? `/tournaments/${tournamentId}` : '/'}
       >
-        <Link
-          to={tournamentId ? `/tournaments/${tournamentId}` : '/'}
-          className="absolute top-0 left-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-opacity opacity-30 hover:opacity-80"
-          style={{ color: 'var(--text-muted)' }}
-          title="Back to Arena"
-        >
-          ← Arena
-        </Link>
-        <Suspense fallback={<Spinner />}>
-          <XOGame session={session} sdk={sdk} />
-        </Suspense>
-      </div>
+        <XOGame session={session} sdk={sdk} />
+      </PlatformShell>
     )
   }
 

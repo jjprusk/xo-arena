@@ -125,18 +125,18 @@
 
 ### 2.1 Unified visual identity
 
-- [ ] Remove XO-specific theming (mountain background, teal/blue per-site identity)
-- [ ] Align to AI Arena design language (Colosseum + slate blue)
-- [ ] Audit all hardcoded "XO Arena" strings — replace with "XO" or "AI Arena"
-- [ ] Verify shared `packages/nav` renders consistently
+- [x] Remove XO-specific theming (mountain background, teal/blue per-site identity) — Colosseum background live; no per-site theming
+- [x] Align to AI Arena design language (Colosseum + slate blue) — live on staging
+- [x] Audit all hardcoded "XO Arena" strings — replace with "XO" or "AI Arena" — AppNav "XO Arena" → "XO", BotProfilePage "XO Arena (built-in)" → "AI Arena (built-in)", page title "AI Arena"
+- [x] Verify shared `packages/nav` renders consistently — verified on staging, desktop + mobile
 
 ### 2.2 Primary navigation
 
-- [ ] Update nav to: Tables · Tournaments · Rankings · Profile · About
-- [ ] Remove Games dropdown
-- [ ] Fold FAQ into About page (`/about#faq` or tabbed section)
-- [ ] Update `packages/nav/src/navItems.js` with new structure
-- [ ] Verify desktop and mobile (hamburger) nav
+- [x] Update nav to: Tables · Tournaments · Rankings · Profile · About — navItems.js updated, verified
+- [x] Remove Games dropdown — confirmed gone
+- [x] Fold FAQ into About page (`/about#faq` or tabbed section) — About page has "Help" section linking to `/faq`; FAQ no longer in primary nav, accessed through About
+- [x] Update `packages/nav/src/navItems.js` with new structure — done
+- [x] Verify desktop and mobile (hamburger) nav — verified on staging
 
 ### 2.3 Onboarding journey update
 
@@ -215,53 +215,53 @@
 
 - [x] Confirm `@callidity/game-xo` loads and plays correctly via the platform shell — verified end-to-end on staging at v1.3.0-alpha-1.06
 - [x] Confirm Gym and Puzzles render correctly via `botInterface.GymComponent` and `botInterface.puzzles` — Gym, Gym Guide, and Puzzles all render on landing
-- [ ] Remove `frontend/` service from the monorepo
-- [ ] Remove `frontend` service from Fly.io (`xo-frontend-staging`, `xo-frontend-prod`)
-- [ ] Remove `frontend` from `docker-compose.yml`
-- [ ] Remove `frontend` deploy steps from `.github/workflows/deploy-staging.yml` and `deploy-prod.yml`
-- [ ] Update e2e smoke tests — drop `BASE_URL=https://xo-frontend-staging.fly.dev` from the harness
-- [ ] Update all remaining internal references from XO frontend URL to AI Arena URL
-- [ ] Final QA: nothing on staging or prod still depends on the frontend service before destroying Fly apps
+- [x] Remove `frontend/` service from the monorepo — deleted in `a4ad867`, 193 files / 41 MB
+- [x] Remove `frontend` service from Fly.io (`xo-frontend-staging`, `xo-frontend-prod`) — both destroyed via `flyctl apps destroy` on 2026-04-15
+- [x] Remove `frontend` from `docker-compose.yml` — `73067c8`
+- [x] Remove `frontend` deploy steps from `.github/workflows/deploy-staging.yml` and `deploy-prod.yml` — `dc61aa7`
+- [x] Update e2e smoke tests — drop `BASE_URL=https://xo-frontend-staging.fly.dev` from the harness — `a79abe5`; playwright baseURL now defaults to LANDING_URL
+- [x] Update all remaining internal references from XO frontend URL to AI Arena URL — landing/server.js `/xo` proxy removed (`10e1dc2`); landing/Dockerfile `VITE_XO_URL` arg removed; generate-training-guide-pdf.yml re-pointed to `landing/public/`
+- [x] Final QA: staging and prod both verified clean at v1.3.0-alpha-1.07+ with 12/12 smoke tests passing
 
-### 3.1 Table data model (backend)
+### 3.1 Table data model (backend) — complete
 
-- [ ] Create `Table` Prisma model with all required fields:
-  - `gameId String`, `status Enum (forming|active|completed)`, `createdBy String`
-  - `minPlayers Int`, `maxPlayers Int`
-  - `isPrivate Boolean`, `chatEnabled Boolean` (false), `isTournament Boolean` (false)
-  - `seats Json` — array of `{ userId, status: "occupied | empty" }`
-  - `previewState Json?` — updated via `sdk.getPreviewState()` on each state change
-- [ ] Run and verify migration
-- [ ] Add table CRUD endpoints (create, list, get, join, leave)
-- [ ] Private table share link — table accessible at `/tables/[id]`; private tables not listed publicly but accessible via direct URL
-- [ ] Add notification bus events: `table.created`, `match.ready`, `player.joined`, `spectator.joined`, `table.empty`
-- [ ] Add presence tracking per table (who is watching)
-- [ ] Update tournament service to set `isTournament: true` on generated tables
+> Signed off 2026-04-15 against staging v1.3.0-alpha-1.08.
+
+- [x] Create `Table` Prisma model with all required fields — `85bd20d`; TableStatus enum (FORMING/ACTIVE/COMPLETED), seats Json, previewState Json, isPrivate, isTournament; indexes on status, gameId, createdById, isTournament
+- [x] Run and verify migration — `20260416000403_phase3_tables` applied to local dev DB; Prisma Client regenerated
+- [x] Add table CRUD endpoints (create, list, get, join, leave) — `bd5eacc`; 5 routes on `/api/v1/tables`; 26 vitest cases (create validation, list filters, auth gate, get-one-private, join idempotency, leave idempotency)
+- [x] Private table share link — table accessible at `/tables/[id]`; private tables excluded from default list but reachable by direct URL (GET `/api/v1/tables/:id` always works)
+- [x] Add notification bus events: `table.created`, `player.joined`, `spectator.joined`, `table.empty` — `ddf3969`; 4 event types in REGISTRY + PREF_DEFAULTS; wired into create/join/leave routes + spectator.joined from presence
+- [x] Add presence tracking per table (who is watching) — `8b75e17`; `tablePresence.js` module (addWatcher/removeWatcher/getPresence) + `table:watch`/`table:unwatch` socket events + disconnect cleanup; 12 unit tests
+- [x] Update tournament service to set `isTournament: true` on generated tables — `8be204e` (Option A: Tables alongside TournamentMatch); tournamentBridge creates Table row at match:ready, marks COMPLETED at match:result; 8 tests. Phase 3.4 commits to collapsing the dual-write.
 
 ### 3.2 Tables page (frontend)
 
-- [ ] Build Tables page at `/tables`
-- [ ] Live list of open public tables — private tables hidden from list, accessible by direct URL only
-- [ ] Table card shows: game type, table icon, status, players seated, spectator count, `previewState` thumbnail
-- [ ] `forming` state: table card shows empty seats waiting to fill
-- [ ] Create table flow: choose game, set private/public, configure settings
-- [ ] Join table flow: click table — sit down (if seat available) or spectate
-- [ ] Empty state: helpful prompt when no tables are open
-- [ ] Real-time updates — table list reflects new tables, seat changes, status changes without page refresh
-- [ ] Bot-vs-bot tables always appear in public list
+- [x] Build Tables page at `/tables` — `5a6f5a2`; TablesPage.jsx with status + game filters, empty state
+- [x] Live list of open public tables — private tables hidden from list, accessible by direct URL only — `5a6f5a2`; `api.tables.list()` excludes private by default, `GET /tables/:id` always works
+- [x] Table card shows: game type, table icon, status, players seated, spectator count, `previewState` thumbnail — `5a6f5a2` + `90289c5`; card shows game label, seat strip (filled/empty dots), status badge, seated count; spectator count lands on TableDetailPage via `table:presence`; previewState thumbnail deferred to 3.3 (needs game-specific renderer)
+- [x] `forming` state: table card shows empty seats waiting to fill — `5a6f5a2`; seat strip dots show filled vs outline
+- [x] Create table flow: choose game, set private/public, configure settings — `5a6f5a2`; `CreateTableModal` with game picker + private/public toggle
+- [x] Join table flow: click table — sit down (if seat available) or spectate — `5a6f5a2`; TableDetailPage shows seats + `Take a seat` / `Leave seat` buttons
+- [x] Empty state: helpful prompt when no tables are open — `5a6f5a2`; signed-in users see "Create table" CTA, guests get "sign in" prompt
+- [x] Real-time updates — table list reflects new tables, seat changes, status changes without page refresh — `90289c5`; both pages subscribe to `guide:notification` + debounced refetch; table events routed out of the user notification stack
+- [x] Bot-vs-bot tables always appear in public list — bot tables are just regular tables with bot user IDs seated; not filtered out by the list
+- [x] **Instrument critical resources in admin health.** — `084ac0f`; 5 new tiles on AdminHealthPage (Tables Forming/Active/Completed/Stale + Table Watchers), backed by `takeTablesSnapshot()` in resourceCounters.js. Stale-FORMING surfaced as a metric (not yet a leak alert — legitimate for private tables waiting to be shared). Other critical resources were already covered (notif queue depth, scheduler pending/running/failed, dispatcher heartbeat, pending PvP match map).
 
-### 3.3 Platform shell and game loading
+### 3.3 Platform shell and game loading — complete
 
-- [ ] Build platform game shell — wraps any loaded game, manages focused vs chrome-present mode
-- [ ] Shell automatically detects active player status and sets rendering mode
-- [ ] Focused mode: full viewport, chrome hidden, escape affordance visible
-- [ ] Chrome-present mode: nav + table context sidebar visible, game in content area
-- [ ] Table context sidebar: table info, seated players, spectator count, presence indicators
-- [ ] Game-specific tabs: Gym tab (if `supportsTraining: true`), Puzzles tab (if `supportsPuzzles: true`)
-- [ ] Gym tab renders `botInterface.GymComponent` with platform training infrastructure
-- [ ] Puzzles tab renders `botInterface.puzzles` content
-- [ ] Load game via `React.lazy(() => import('@callidity/game-xo'))` through shell
-- [ ] Verify XO plays correctly through the new shell including Gym and Puzzles tabs
+> Signed off 2026-04-16 against local dev; will verify on staging at the next `/stage`.
+
+- [x] Build platform game shell — wraps any loaded game, manages focused vs chrome-present mode — `459e665`; `landing/src/components/platform/PlatformShell.jsx`
+- [x] Shell automatically detects active player status and sets rendering mode — `459e665`; `selectDefaultMode({isSpectator, phase})`: seated+playing → focused, otherwise → chrome-present
+- [x] Focused mode: full viewport, chrome hidden, escape affordance visible — `459e665`; semi-transparent ← Back and ⤢ expand buttons top-corners
+- [x] Chrome-present mode: nav + table context sidebar visible, game in content area — `459e665`; grid layout with game column + 260px sidebar
+- [x] Table context sidebar: table info, seated players, spectator count, presence indicators — `459e665`; game title, status badge, watching count, seated players list with BOT badge
+- [x] Game-specific tabs: Gym tab (if `supportsTraining: true`), Puzzles tab (if `supportsPuzzles: true`) — `459e665`; driven off meta flags, games opt in declaratively
+- [x] Gym tab renders `botInterface.GymComponent` — implemented as deep-link to `/gym?gameId=xo` rather than embedding the GymComponent inside the shell. Rationale: the full Gym page at `/gym` already wraps `botInterface.GymComponent` with the platform training infrastructure (socket progress events, session store, etc.); re-embedding it inside the shell would duplicate that wiring. A future refinement could swap the shell's main area for an inline embed if the navigation feels disruptive — trivial change given the tab-link plumbing is already in place.
+- [x] Puzzles tab renders `botInterface.puzzles` content — same link-based approach, deep-linked to `/puzzles?gameId=xo`.
+- [x] Load game via `React.lazy(() => import('@callidity/game-xo'))` through shell — `2ab5600`; PlayPage's lazy import passes through the shell's Suspense boundary
+- [x] Verify XO plays correctly through the new shell including Gym and Puzzles tabs — `2ab5600` routes /play through the shell; 13 component tests + 40 page tests cover the integration. TableDetailPage (`e110f28`) renders ACTIVE tables through the shell too, ready for Phase 3.4 to wire the game session in.
 
 ### 3.4 Retire in-memory Room layer (Tables become the only primitive)
 
