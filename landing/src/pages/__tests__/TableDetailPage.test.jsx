@@ -87,8 +87,11 @@ describe('TableDetailPage', () => {
       },
     })
     renderAt('/tables/tbl_1')
-    await waitFor(() => expect(screen.getByText('You')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /leave seat/i })).toBeInTheDocument()
+    // "You" now prefixes a clickable affordance like "You — click to leave";
+    // match loosely. Both a header "Leave seat" button AND a per-seat "Leave
+    // seat 1" button are now present — assert at least one exists.
+    await waitFor(() => expect(screen.getByText(/^You/)).toBeInTheDocument())
+    expect(screen.getAllByRole('button', { name: /leave seat/i }).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /take a seat/i })).toBeNull()
   })
 
@@ -115,6 +118,40 @@ describe('TableDetailPage', () => {
     const { act } = await import('react')
     await act(async () => { seatBtn.click() })
     expect(api.tables.join).toHaveBeenCalledWith('tbl_1', 'tok')
+  })
+
+  it('clicking the caller\'s own occupied seat triggers leave (symmetric with join)', async () => {
+    const seatedTable = {
+      ...baseTable,
+      seats: [
+        { userId: 'u1',  status: 'occupied' },
+        { userId: null,  status: 'empty' },
+      ],
+    }
+    api.tables.get.mockResolvedValue({ table: seatedTable })
+    api.tables.leave.mockResolvedValue({ table: baseTable })
+    renderAt('/tables/tbl_1')
+    const seatBtn = await screen.findByRole('button', { name: /leave seat 1/i })
+    const { act } = await import('react')
+    await act(async () => { seatBtn.click() })
+    expect(api.tables.leave).toHaveBeenCalledWith('tbl_1', 'tok')
+  })
+
+  it('does NOT make other players\' occupied seats clickable', async () => {
+    api.tables.get.mockResolvedValue({
+      table: {
+        ...baseTable,
+        seats: [
+          { userId: 'u1',      status: 'occupied' },  // mine
+          { userId: 'someone', status: 'occupied' },  // someone else
+        ],
+      },
+    })
+    renderAt('/tables/tbl_1')
+    await waitFor(() => expect(screen.getByText(/xo \(tic-tac-toe\)/i)).toBeInTheDocument())
+    // Exactly one seat is leaveable (mine); other occupied seat must not be a button
+    expect(screen.getAllByRole('button', { name: /leave seat \d/i })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /take seat \d/i })).toBeNull()
   })
 
   it('renders through PlatformShell when table.status is ACTIVE', async () => {

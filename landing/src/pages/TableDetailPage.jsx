@@ -242,14 +242,18 @@ export default function TableDetailPage() {
         <h2 className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Seats</h2>
         <ul className="grid gap-2 sm:grid-cols-2">
           {table.seats?.map((seat, i) => {
-            // Empty seats are clickable when the caller can join — gives "click
-            // the seat to take it" behavior alongside the header "Take a seat"
-            // button. Occupied seats are static. When the user is seated but
-            // not at this seat (e.g., seat 1 vs seat 2), the other empty seat
-            // is still not clickable (they can't take a second seat).
-            const clickable = seat.status === 'empty' && canJoin && !busy
+            // Symmetric seat-click behavior:
+            //  - empty seat + canJoin  → click to take
+            //  - my occupied seat + canLeave → click to leave
+            //  - any other occupied seat → static (display only)
+            //  - empty seat when I can't join → static
             const seatOccupied = seat.status === 'occupied'
-            const commonStyle = {
+            const isMine       = seatOccupied && seat.userId === currentUserId
+            const takeable     = !seatOccupied && canJoin && !busy
+            const leaveable    = isMine && canLeave && !busy
+            const clickable    = takeable || leaveable
+            const onSeatClick  = takeable ? handleJoin : leaveable ? handleLeave : undefined
+            const commonStyle  = {
               borderColor: seatOccupied ? 'var(--color-teal-500)' : 'var(--border-default)',
             }
             const content = (
@@ -265,11 +269,11 @@ export default function TableDetailPage() {
                 <div className="text-sm flex-1 min-w-0">
                   {seatOccupied ? (
                     <span className="truncate">
-                      {seat.userId === currentUserId ? 'You' : `User ${(seat.userId ?? '').slice(0, 8)}`}
+                      {isMine ? (leaveable ? 'You — click to leave' : 'You') : `User ${(seat.userId ?? '').slice(0, 8)}`}
                     </span>
                   ) : (
                     <span style={{ color: 'var(--text-muted)' }}>
-                      {clickable ? 'Take this seat' : 'Empty seat'}
+                      {takeable ? 'Take this seat' : 'Empty seat'}
                     </span>
                   )}
                 </div>
@@ -277,15 +281,16 @@ export default function TableDetailPage() {
             )
 
             if (clickable) {
+              const label = takeable ? `Take seat ${i + 1}` : `Leave seat ${i + 1}`
               return (
                 <li key={i}>
                   <button
                     type="button"
-                    onClick={handleJoin}
+                    onClick={onSeatClick}
                     disabled={busy}
                     className="card p-3 flex items-center gap-3 w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)] cursor-pointer"
                     style={commonStyle}
-                    aria-label={`Take seat ${i + 1}`}
+                    aria-label={label}
                   >
                     {content}
                   </button>
