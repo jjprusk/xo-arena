@@ -248,18 +248,20 @@
 - [x] Bot-vs-bot tables always appear in public list — bot tables are just regular tables with bot user IDs seated; not filtered out by the list
 - [x] **Instrument critical resources in admin health.** — `084ac0f`; 5 new tiles on AdminHealthPage (Tables Forming/Active/Completed/Stale + Table Watchers), backed by `takeTablesSnapshot()` in resourceCounters.js. Stale-FORMING surfaced as a metric (not yet a leak alert — legitimate for private tables waiting to be shared). Other critical resources were already covered (notif queue depth, scheduler pending/running/failed, dispatcher heartbeat, pending PvP match map).
 
-### 3.3 Platform shell and game loading
+### 3.3 Platform shell and game loading — complete
 
-- [ ] Build platform game shell — wraps any loaded game, manages focused vs chrome-present mode
-- [ ] Shell automatically detects active player status and sets rendering mode
-- [ ] Focused mode: full viewport, chrome hidden, escape affordance visible
-- [ ] Chrome-present mode: nav + table context sidebar visible, game in content area
-- [ ] Table context sidebar: table info, seated players, spectator count, presence indicators
-- [ ] Game-specific tabs: Gym tab (if `supportsTraining: true`), Puzzles tab (if `supportsPuzzles: true`)
-- [ ] Gym tab renders `botInterface.GymComponent` with platform training infrastructure
-- [ ] Puzzles tab renders `botInterface.puzzles` content
-- [ ] Load game via `React.lazy(() => import('@callidity/game-xo'))` through shell
-- [ ] Verify XO plays correctly through the new shell including Gym and Puzzles tabs
+> Signed off 2026-04-16 against local dev; will verify on staging at the next `/stage`.
+
+- [x] Build platform game shell — wraps any loaded game, manages focused vs chrome-present mode — `459e665`; `landing/src/components/platform/PlatformShell.jsx`
+- [x] Shell automatically detects active player status and sets rendering mode — `459e665`; `selectDefaultMode({isSpectator, phase})`: seated+playing → focused, otherwise → chrome-present
+- [x] Focused mode: full viewport, chrome hidden, escape affordance visible — `459e665`; semi-transparent ← Back and ⤢ expand buttons top-corners
+- [x] Chrome-present mode: nav + table context sidebar visible, game in content area — `459e665`; grid layout with game column + 260px sidebar
+- [x] Table context sidebar: table info, seated players, spectator count, presence indicators — `459e665`; game title, status badge, watching count, seated players list with BOT badge
+- [x] Game-specific tabs: Gym tab (if `supportsTraining: true`), Puzzles tab (if `supportsPuzzles: true`) — `459e665`; driven off meta flags, games opt in declaratively
+- [x] Gym tab renders `botInterface.GymComponent` — implemented as deep-link to `/gym?gameId=xo` rather than embedding the GymComponent inside the shell. Rationale: the full Gym page at `/gym` already wraps `botInterface.GymComponent` with the platform training infrastructure (socket progress events, session store, etc.); re-embedding it inside the shell would duplicate that wiring. A future refinement could swap the shell's main area for an inline embed if the navigation feels disruptive — trivial change given the tab-link plumbing is already in place.
+- [x] Puzzles tab renders `botInterface.puzzles` content — same link-based approach, deep-linked to `/puzzles?gameId=xo`.
+- [x] Load game via `React.lazy(() => import('@callidity/game-xo'))` through shell — `2ab5600`; PlayPage's lazy import passes through the shell's Suspense boundary
+- [x] Verify XO plays correctly through the new shell including Gym and Puzzles tabs — `2ab5600` routes /play through the shell; 13 component tests + 40 page tests cover the integration. TableDetailPage (`e110f28`) renders ACTIVE tables through the shell too, ready for Phase 3.4 to wire the game session in.
 
 ### 3.4 Retire in-memory Room layer (Tables become the only primitive)
 
