@@ -5,6 +5,7 @@ import {
   removeWatcherFromAllTables,
   getPresence,
   getActiveTableIds,
+  getTotalWatchers,
   _resetForTests,
 } from '../tablePresence.js'
 
@@ -94,5 +95,24 @@ describe('tablePresence — removeWatcherFromAllTables (disconnect cleanup)', ()
 describe('tablePresence — getPresence on unknown tables', () => {
   it('returns count 0 and empty userIds', () => {
     expect(getPresence('tbl_unknown')).toEqual({ count: 0, userIds: [] })
+  })
+})
+
+describe('tablePresence — getTotalWatchers (admin health)', () => {
+  it('returns 0 when no one is watching', () => {
+    expect(getTotalWatchers()).toBe(0)
+  })
+
+  it('sums watcher counts across multiple tables', () => {
+    addWatcher('tbl_1', 'sock_a', { userId: 'user_a' })
+    addWatcher('tbl_1', 'sock_b', { userId: 'user_b' })
+    addWatcher('tbl_2', 'sock_c', { userId: 'user_c' })
+    expect(getTotalWatchers()).toBe(3)
+  })
+
+  it('counts every socket (tab), not every user', () => {
+    addWatcher('tbl_1', 'sock_a', { userId: 'user_a' })
+    addWatcher('tbl_1', 'sock_b', { userId: 'user_a' })  // same user, different tab
+    expect(getTotalWatchers()).toBe(2)
   })
 })
