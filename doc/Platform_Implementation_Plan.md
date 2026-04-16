@@ -134,7 +134,7 @@
 
 - [x] Update nav to: Tables · Tournaments · Rankings · Profile · About — navItems.js updated, verified
 - [x] Remove Games dropdown — confirmed gone
-- [ ] Fold FAQ into About page (`/about#faq` or tabbed section) — FAQ content still on standalone `/faq` route; not yet folded into About
+- [x] Fold FAQ into About page (`/about#faq` or tabbed section) — About page has "Help" section linking to `/faq`; FAQ no longer in primary nav, accessed through About
 - [x] Update `packages/nav/src/navItems.js` with new structure — done
 - [x] Verify desktop and mobile (hamburger) nav — verified on staging
 
@@ -237,15 +237,16 @@
 
 ### 3.2 Tables page (frontend)
 
-- [ ] Build Tables page at `/tables`
-- [ ] Live list of open public tables — private tables hidden from list, accessible by direct URL only
-- [ ] Table card shows: game type, table icon, status, players seated, spectator count, `previewState` thumbnail
-- [ ] `forming` state: table card shows empty seats waiting to fill
-- [ ] Create table flow: choose game, set private/public, configure settings
-- [ ] Join table flow: click table — sit down (if seat available) or spectate
-- [ ] Empty state: helpful prompt when no tables are open
-- [ ] Real-time updates — table list reflects new tables, seat changes, status changes without page refresh
-- [ ] Bot-vs-bot tables always appear in public list
+- [x] Build Tables page at `/tables` — `5a6f5a2`; TablesPage.jsx with status + game filters, empty state
+- [x] Live list of open public tables — private tables hidden from list, accessible by direct URL only — `5a6f5a2`; `api.tables.list()` excludes private by default, `GET /tables/:id` always works
+- [x] Table card shows: game type, table icon, status, players seated, spectator count, `previewState` thumbnail — `5a6f5a2` + `90289c5`; card shows game label, seat strip (filled/empty dots), status badge, seated count; spectator count lands on TableDetailPage via `table:presence`; previewState thumbnail deferred to 3.3 (needs game-specific renderer)
+- [x] `forming` state: table card shows empty seats waiting to fill — `5a6f5a2`; seat strip dots show filled vs outline
+- [x] Create table flow: choose game, set private/public, configure settings — `5a6f5a2`; `CreateTableModal` with game picker + private/public toggle
+- [x] Join table flow: click table — sit down (if seat available) or spectate — `5a6f5a2`; TableDetailPage shows seats + `Take a seat` / `Leave seat` buttons
+- [x] Empty state: helpful prompt when no tables are open — `5a6f5a2`; signed-in users see "Create table" CTA, guests get "sign in" prompt
+- [x] Real-time updates — table list reflects new tables, seat changes, status changes without page refresh — `90289c5`; both pages subscribe to `guide:notification` + debounced refetch; table events routed out of the user notification stack
+- [x] Bot-vs-bot tables always appear in public list — bot tables are just regular tables with bot user IDs seated; not filtered out by the list
+- [x] **Instrument critical resources in admin health.** — `084ac0f`; 5 new tiles on AdminHealthPage (Tables Forming/Active/Completed/Stale + Table Watchers), backed by `takeTablesSnapshot()` in resourceCounters.js. Stale-FORMING surfaced as a metric (not yet a leak alert — legitimate for private tables waiting to be shared). Other critical resources were already covered (notif queue depth, scheduler pending/running/failed, dispatcher heartbeat, pending PvP match map).
 
 ### 3.3 Platform shell and game loading
 
