@@ -69,7 +69,7 @@ describe('TablesPage', () => {
     expect(screen.getByRole('button', { name: /\+ create table/i })).toBeInTheDocument()
   })
 
-  it('renders table cards when the list has entries', async () => {
+  it('renders table rows when the list has entries', async () => {
     api.tables.list.mockResolvedValue({
       tables: [
         {
@@ -86,13 +86,11 @@ describe('TablesPage', () => {
     })
     renderPage()
     await waitFor(() => expect(screen.queryByText(/no tables open/i)).toBeNull())
-    // The card links to the table detail page — use that to scope the match
-    const link = screen.getByRole('link', { name: /xo .tic-tac-toe./i })
-    expect(link).toBeInTheDocument()
-    expect(link.getAttribute('href')).toBe('/tables/tbl_1')
-    expect(link).toHaveTextContent(/1 \/ 2 seated/)
-    // "Forming" appears in both the filter bar AND the card status badge; just
-    // verify at least one exists
+    // ListTable renders a <table>. The game cell shows the human-readable label.
+    const row = screen.getByRole('row', { name: /xo .tic-tac-toe./i })
+    expect(row).toBeInTheDocument()
+    expect(row).toHaveTextContent(/1 \/ 2/)
+    // "Forming" appears in both the filter bar AND the row status badge; verify at least one
     expect(screen.getAllByText(/forming/i).length).toBeGreaterThan(0)
   })
 
