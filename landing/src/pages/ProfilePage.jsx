@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useRef, useState } from 'react'
-import { useOptimisticSession, clearSessionCache } from '../lib/useOptimisticSession.js'
+import { useOptimisticSession, clearSessionCache, triggerSessionRefresh } from '../lib/useOptimisticSession.js'
 import { getToken, clearTokenCache } from '../lib/getToken.js'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
@@ -344,6 +344,7 @@ export default function ProfilePage() {
       clearTokenCache()
       disconnectSocket()
       await signOut()
+      triggerSessionRefresh()  // update useOptimisticSession state immediately
       navigate('/')
     } catch (err) {
       setDeleteError(err.message || 'Could not delete account. Try again.')

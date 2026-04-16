@@ -1,7 +1,7 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useOptimisticSession, clearSessionCache } from '../../lib/useOptimisticSession.js'
+import { useOptimisticSession, clearSessionCache, triggerSessionRefresh } from '../../lib/useOptimisticSession.js'
 import { signOut } from '../../lib/auth-client.js'
 import { getToken, clearTokenCache } from '../../lib/getToken.js'
 import { getSocket, connectSocket, disconnectSocket } from '../../lib/socket.js'
@@ -220,6 +220,10 @@ export default function AppLayout() {
     clearSessionCache()
     clearTokenCache()
     disconnectSocket()
+    // Force useOptimisticSession to re-check — clearing localStorage alone
+    // doesn't update the hook's React state, so the UI would keep showing
+    // the signed-in avatar/menu until the next 60s poll or a page refresh.
+    triggerSessionRefresh()
     navigate('/')
   }
 

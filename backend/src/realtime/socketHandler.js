@@ -151,6 +151,15 @@ async function resolveSocketUser(token) {
     const { payload } = await jwtVerify(token, cryptoKey)
     if (!payload?.sub) return null
 
+    // Match the HTTP middleware: require a live BaSession alongside a valid
+    // JWT. Prevents sockets from staying authenticated after the session was
+    // purged by idleSessionPurgeService (or explicitly signed out).
+    const activeSession = await db.baSession.findFirst({
+      where: { userId: payload.sub, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    })
+    if (!activeSession) return null
+
     return await getUserByBetterAuthId(payload.sub)
   } catch (err) {
     logger.warn({ err: err.message }, 'resolveSocketUser: JWT verification failed')
