@@ -252,15 +252,16 @@ function TournamentCard({ tournament, token, dbUserId, onRegistered }) {
 
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 
-function CardSkeleton() {
+function LoadingSpinner() {
+  // Simple centered spinner. Replaces the prior grid-of-card skeletons which
+  // looked like a matrix of shadows flashing on every filter change. For a
+  // list with a sub-second fetch, a single spinner is quieter and cheaper.
   return (
-    <div
-      className="rounded-xl border p-4 space-y-3 animate-pulse"
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
-    >
-      <div className="h-4 rounded w-2/3" style={{ backgroundColor: 'var(--border-default)' }} />
-      <div className="h-3 rounded w-1/2" style={{ backgroundColor: 'var(--border-default)' }} />
-      <div className="h-3 rounded w-3/4" style={{ backgroundColor: 'var(--border-default)' }} />
+    <div className="flex items-center justify-center py-12" aria-busy="true" aria-label="Loading tournaments">
+      <div
+        className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
+      />
     </div>
   )
 }
@@ -352,11 +353,7 @@ export default function TournamentsPage() {
         <p className="text-sm text-center py-4" style={{ color: 'var(--color-red-600)' }}>{error}</p>
       )}
 
-      {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => <CardSkeleton key={i} />)}
-        </div>
-      )}
+      {loading && <LoadingSpinner />}
 
       {!loading && tournaments.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -230,14 +230,17 @@ function TableCard({ table }) {
 }
 
 function LoadingGrid() {
+  // Minimal centered spinner. The previous placeholder-grid "skeleton" looked
+  // like a matrix of shadows that flashed briefly on every filter change —
+  // distracting for a list page where the payload is small and the fetch is
+  // typically < 200ms. A single spinner is quieter.
   return (
-    <ul className="grid gap-3 sm:grid-cols-2" aria-busy="true">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <li key={i}>
-          <div className="card p-4 h-24" style={{ background: 'var(--bg-surface-hover)', opacity: 0.6 }} />
-        </li>
-      ))}
-    </ul>
+    <div className="flex items-center justify-center py-12" aria-busy="true" aria-label="Loading tables">
+      <div
+        className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
+      />
+    </div>
   )
 }
 
