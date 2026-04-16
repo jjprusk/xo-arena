@@ -242,4 +242,34 @@ export const api = {
       return api.get(`/puzzles${qs ? `?${qs}` : ''}`)
     },
   },
+
+  // ── Tables (Phase 3.2) ──────────────────────────────────────────────
+  tables: {
+    /**
+     * List tables.
+     * @param {object}  [opts]
+     * @param {boolean} [opts.mine]     — only tables the caller created (requires token)
+     * @param {string}  [opts.status]   — 'FORMING' | 'ACTIVE' | 'COMPLETED'
+     * @param {string}  [opts.gameId]   — filter by game
+     * @param {number}  [opts.limit]    — default 50, max 200
+     * @param {string}  [token]         — required when opts.mine is true
+     */
+    list: ({ mine, status, gameId, limit } = {}, token) => {
+      const p = new URLSearchParams()
+      if (mine)   p.set('mine',   'true')
+      if (status) p.set('status', status)
+      if (gameId) p.set('gameId', gameId)
+      if (limit)  p.set('limit',  String(limit))
+      const qs = p.toString()
+      return api.get(`/tables${qs ? `?${qs}` : ''}`, token)
+    },
+    /** Fetch a single table by id. Private tables are reachable by direct URL. */
+    get:    (id, token) => api.get(`/tables/${id}`, token),
+    /** Create a new table. body: { gameId, minPlayers, maxPlayers, isPrivate?, isTournament? } */
+    create: (body, token) => api.post('/tables', body, token),
+    /** Claim an empty seat. Idempotent. */
+    join:   (id, token) => api.post(`/tables/${id}/join`,  null, token),
+    /** Vacate the caller's seat. Idempotent. */
+    leave:  (id, token) => api.post(`/tables/${id}/leave`, null, token),
+  },
 }

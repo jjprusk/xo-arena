@@ -30,6 +30,8 @@ import SupportPage from './pages/SupportPage.jsx'
 import GymPage from './pages/GymPage.jsx'
 import GymGuidePage from './pages/GymGuidePage.jsx'
 import PuzzlePage from './pages/PuzzlePage.jsx'
+import TablesPage from './pages/TablesPage.jsx'
+import TableDetailPage from './pages/TableDetailPage.jsx'
 
 export default function App() {
   return (
@@ -54,7 +56,8 @@ export default function App() {
           <Route path="/gym" element={<GymPage />} />
           <Route path="/gym/guide" element={<GymGuidePage />} />
           <Route path="/puzzles" element={<PuzzlePage />} />
-          <Route path="/tables" element={<div className="max-w-2xl mx-auto py-12 text-center"><h1 className="text-3xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>Tables</h1><p style={{ color: 'var(--text-muted)' }}>Coming soon — Phase 3</p></div>} />
+          <Route path="/tables" element={<TablesPage />} />
+          <Route path="/tables/:id" element={<TableDetailPage />} />
 
           {/* Admin routes — all guarded by AdminRoute */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
