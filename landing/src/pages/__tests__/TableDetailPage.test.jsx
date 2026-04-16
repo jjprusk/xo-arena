@@ -98,4 +98,25 @@ describe('TableDetailPage', () => {
     expect(screen.queryByRole('button', { name: /take a seat/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /leave seat/i })).toBeNull()
   })
+
+  it('renders through PlatformShell when table.status is ACTIVE', async () => {
+    api.tables.get.mockResolvedValue({
+      table: {
+        ...baseTable,
+        status: 'ACTIVE',
+        seats: [
+          { userId: 'u1', status: 'occupied' },
+          { userId: 'u2', status: 'occupied' },
+        ],
+      },
+    })
+    renderAt('/tables/tbl_1')
+    await waitFor(() => expect(screen.getByRole('complementary', { name: /table context/i })).toBeInTheDocument())
+    // Shell sidebar surfaces table metadata
+    expect(screen.getByText(/in play/i)).toBeInTheDocument()
+    // Placeholder for Phase 3.4 game-component bridging
+    expect(screen.getByText(/game session lives in the realtime room layer/i)).toBeInTheDocument()
+    // Seat-browsing UI is NOT rendered when shell takes over
+    expect(screen.queryByText(/empty seat/i)).toBeNull()
+  })
 })

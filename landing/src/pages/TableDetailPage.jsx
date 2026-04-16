@@ -1,14 +1,18 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * Table detail page — Phase 3.2.
+ * Table detail page — Phase 3.2 + 3.3.
  *
  * Shows a single table's seats, status, and join/leave affordance for the
  * caller. Accepts all table IDs (including private ones) via direct URL —
  * the share-link mechanism for private tables.
  *
- * TODO Phase 3.3: this page is currently a static detail view; the platform
- * shell phase (3.3) turns it into the live game container that loads the
- * game component via React.lazy once status flips to ACTIVE.
+ * Phase 3.3: when the table's status is ACTIVE, the page renders through
+ * PlatformShell so spectators and players see the unified chrome. The
+ * shell currently shows a placeholder where the game component will load —
+ * Phase 3.4 wires the live session state (today that state lives in the
+ * in-memory Room layer, which Tables don't reach yet). FORMING/COMPLETED
+ * states continue to use the seat-browsing UI since there's no game to
+ * render.
  */
 
 import React, { useEffect, useState, useCallback } from 'react'
@@ -17,6 +21,7 @@ import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
+import PlatformShell from '../components/platform/PlatformShell.jsx'
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',   color: 'var(--color-amber-600)' },
@@ -153,6 +158,62 @@ export default function TableDetailPage() {
   }
 
   const meta = STATUS_META[table.status] ?? STATUS_META.COMPLETED
+
+  // Phase 3.3: ACTIVE tables route through the platform shell. The shell
+  // renders its standard chrome (game column + table context sidebar with
+  // seated players, spectator count, Gym/Puzzles tabs), and a placeholder
+  // sits where the live game component will load once Phase 3.4 bridges
+  // Tables to the realtime session layer.
+  if (table.status === 'ACTIVE') {
+    // Synthesise the minimal session shape PlatformShell needs: it only
+    // reads players + isSpectator. When 3.4 lands, this comes from the
+    // useGameSDK hook driven off db.table instead of in-memory rooms.
+    const shellSession = {
+      isSpectator: !isSeated,
+      players: (table.seats ?? [])
+        .filter(s => s.status === 'occupied' && s.userId)
+        .map(s => ({
+          id:          s.userId,
+          displayName: s.userId === currentUserId ? 'You' : `User ${s.userId.slice(0, 8)}`,
+          isBot:       false,
+        })),
+    }
+    const shellMeta = {
+      id:               table.gameId,
+      title:            gameLabel(table.gameId),
+      layout:           { preferredWidth: 'standard' },
+      supportsTraining: table.gameId === 'xo',  // driven off game registry in 3.4
+      supportsPuzzles:  table.gameId === 'xo',
+    }
+    return (
+      <PlatformShell
+        gameMeta={shellMeta}
+        session={shellSession}
+        phase="playing"
+        table={table}
+        spectatorCount={presence.count}
+        backHref="/tables"
+        onLeave={canLeave ? handleLeave : undefined}
+        // Force chrome-present until Phase 3.4 bridges the real game session.
+        // Without a live board to render, focused mode just shows a placeholder
+        // alone on the page — chrome-present is more useful (context sidebar
+        // is the main content for now).
+        initialMode="chrome-present"
+      >
+        <div className="card p-8 text-center space-y-2"
+             style={{ background: 'var(--bg-surface)', minHeight: 260 }}>
+          <div className="text-3xl">🎮</div>
+          <p className="text-sm font-semibold" style={{ fontFamily: 'var(--font-display)' }}>
+            Game is active
+          </p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            The game session lives in the realtime Room layer today. Phase 3.4
+            wires Tables to Rooms so the board renders here directly.
+          </p>
+        </div>
+      </PlatformShell>
+    )
+  }
 
   return (
     <div className="max-w-2xl mx-auto w-full px-4 py-8 space-y-6">
