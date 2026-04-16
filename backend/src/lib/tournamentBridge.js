@@ -157,6 +157,41 @@ export async function handleEvent(io, channel, data) {
         // Journey step 7: first tournament registration detected at match-ready time (fire-and-forget)
         completeStep(userId, 7, io).catch(() => {})
       }
+
+      // ── Phase 3.1 (Option A): create a Table row alongside the existing
+      // in-memory Room so the Tables page surfaces this tournament match.
+      // TODO Phase 3.4: when Tables become the only primitive, this dual-write
+      // disappears (the Table will be the room itself; the in-memory pending
+      // match map above goes away). See doc/Platform_Implementation_Plan.md
+      // §3.4 for the conversion plan.
+      if (participant1UserId && participant2UserId) {
+        try {
+          const tournament = await db.tournament.findUnique({
+            where: { id: tournamentId },
+            select: { game: true },
+          })
+          if (tournament?.game) {
+            await db.table.create({
+              data: {
+                gameId:       tournament.game,
+                createdById:  participant1UserId,    // bracket placement, not "owner" semantics
+                minPlayers:   2,
+                maxPlayers:   2,
+                isPrivate:    false,                 // tournament tables show on the public Tables list
+                isTournament: true,
+                seats: [
+                  { userId: participant1UserId, status: 'occupied' },
+                  { userId: participant2UserId, status: 'occupied' },
+                ],
+              },
+            })
+          }
+        } catch (err) {
+          // Don't break tournament flow if Table create fails — Tables page
+          // is purely additive UI surface in Phase 3.1.
+          logger.warn({ err: err.message, tournamentId, matchId }, 'tournament Table create failed')
+        }
+      }
       break
     }
     case 'tournament:bot:match:ready': {
@@ -179,6 +214,8 @@ export async function handleEvent(io, channel, data) {
       // Emit real-time to participants with AS_PLAYED pref; queue notification for all.
       // END_OF_TOURNAMENT participants get real-time batch at tournament:completed.
       const { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames } = data
+      let p1UserId = null
+      let p2UserId = null
       try {
         const match = await db.tournamentMatch.findUnique({
           where: { id: matchId },
@@ -191,6 +228,8 @@ export async function handleEvent(io, channel, data) {
         // Get participant1 and participant2 user IDs and their notification prefs
         const p1 = match?.participant1Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant1Id }, select: { userId: true, resultNotifPref: true } }) : null
         const p2 = match?.participant2Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant2Id }, select: { userId: true, resultNotifPref: true } }) : null
+        p1UserId = p1?.userId ?? null
+        p2UserId = p2?.userId ?? null
         const participants = [p1, p2].filter(p => p?.userId)
         for (const { userId, resultNotifPref } of participants) {
           const pref = resultNotifPref ?? 'AS_PLAYED'
@@ -205,6 +244,30 @@ export async function handleEvent(io, channel, data) {
         }
       } catch (err) {
         logger.error({ err, matchId }, 'Failed to deliver match result')
+      }
+
+      // Phase 3.1 (Option A): mark the corresponding Table COMPLETED.
+      // TODO Phase 3.4: this dual-write goes away — Table.status will be
+      // canonical and the result write itself will land on the Table directly.
+      // No tournamentMatchId FK on Table yet (avoids coupling Table → tournament
+      // model); we identify the table by exact-match on the participant pair
+      // we seated at match:ready time.
+      if (p1UserId && p2UserId) {
+        try {
+          await db.table.updateMany({
+            where: {
+              isTournament: true,
+              status: { in: ['FORMING', 'ACTIVE'] },
+              seats: { equals: [
+                { userId: p1UserId, status: 'occupied' },
+                { userId: p2UserId, status: 'occupied' },
+              ] },
+            },
+            data: { status: 'COMPLETED' },
+          })
+        } catch (err) {
+          logger.warn({ err: err.message, matchId }, 'tournament Table COMPLETED update failed')
+        }
       }
       break
     }
