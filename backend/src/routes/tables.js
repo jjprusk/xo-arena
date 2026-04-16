@@ -21,6 +21,7 @@ import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
+import { dispatch } from '../lib/notificationBus.js'
 
 const router = Router()
 
@@ -77,6 +78,16 @@ function isEmpty(seats) {
   return seats.every(s => s.status === 'empty')
 }
 
+/**
+ * Build the cohort for table-scoped notifications: all userIds currently seated.
+ * Spectators will be added to this cohort once presence tracking lands.
+ */
+function tableCohort(seats) {
+  return seats
+    .filter(s => s.status === 'occupied' && typeof s.userId === 'string')
+    .map(s => s.userId)
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 /**
@@ -116,6 +127,16 @@ router.post('/', requireAuth, async (req, res, next) => {
         seats: emptySeats(maxPlayers),
       },
     })
+
+    // Public tables broadcast — Tables page can react in real time.
+    // Private tables don't broadcast (they're share-link only).
+    if (!isPrivate) {
+      dispatch({
+        type: 'table.created',
+        targets: { broadcast: true },
+        payload: { tableId: table.id, gameId, maxPlayers },
+      }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'table.created dispatch failed'))
+    }
 
     res.status(201).json({ table })
   } catch (err) {
@@ -214,6 +235,14 @@ router.post('/:id/join', requireAuth, async (req, res, next) => {
       data: { seats },
     })
 
+    // Notify everyone seated at this table (excluding the joiner themself —
+    // the bus filters them downstream via cohort de-dupe of the dispatcher).
+    dispatch({
+      type: 'player.joined',
+      targets: { cohort: tableCohort(seats) },
+      payload: { tableId: table.id, userId: req.auth.userId, seatIndex: idx },
+    }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'player.joined dispatch failed'))
+
     res.json({ table: updated, seated: true })
   } catch (err) {
     next(err)
@@ -251,6 +280,18 @@ router.post('/:id/leave', requireAuth, async (req, res, next) => {
       where: { id: table.id },
       data: { seats },
     })
+
+    // Last seat vacated while still FORMING → fire table.empty so subscribers
+    // (e.g. realtime layer) can decide whether to GC the table. Cohort is the
+    // soon-to-be-emptied set (just the leaver in practice; spectators added
+    // when presence tracking lands).
+    if (updated.status === 'FORMING' && isEmpty(seats)) {
+      dispatch({
+        type: 'table.empty',
+        targets: { cohort: [req.auth.userId] },
+        payload: { tableId: table.id },
+      }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'table.empty dispatch failed'))
+    }
 
     res.json({ table: updated, seated: false })
   } catch (err) {

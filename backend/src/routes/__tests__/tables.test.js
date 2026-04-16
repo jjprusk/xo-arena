@@ -24,9 +24,14 @@ vi.mock('../../lib/db.js', () => ({
   },
 }))
 
+vi.mock('../../lib/notificationBus.js', () => ({
+  dispatch: vi.fn().mockResolvedValue(undefined),
+}))
+
 const tablesRouter = (await import('../tables.js')).default
 const db = (await import('../../lib/db.js')).default
 const { optionalAuth } = await import('../../middleware/auth.js')
+const { dispatch } = await import('../../lib/notificationBus.js')
 
 function makeApp() {
   const app = express()
@@ -119,6 +124,24 @@ describe('POST /api/v1/tables', () => {
       .send({ gameId: 'xo', minPlayers: 2, maxPlayers: 2, isPrivate: 'yes' })
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/isPrivate/)
+  })
+
+  it('dispatches table.created on the bus for public tables', async () => {
+    db.table.create.mockResolvedValue(baseTable)
+    const app = makeApp()
+    await request(app).post('/api/v1/tables').send({ gameId: 'xo', minPlayers: 2, maxPlayers: 2 })
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'table.created',
+      targets: { broadcast: true },
+      payload: { tableId: 'tbl_1', gameId: 'xo', maxPlayers: 2 },
+    })
+  })
+
+  it('does NOT dispatch for private tables (share-link only)', async () => {
+    db.table.create.mockResolvedValue({ ...baseTable, isPrivate: true })
+    const app = makeApp()
+    await request(app).post('/api/v1/tables').send({ gameId: 'xo', minPlayers: 2, maxPlayers: 2, isPrivate: true })
+    expect(dispatch).not.toHaveBeenCalled()
   })
 })
 
@@ -213,6 +236,12 @@ describe('POST /api/v1/tables/:id/join', () => {
         ],
       },
     }))
+    // Bus dispatches player.joined to the table cohort (just the joiner so far)
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'player.joined',
+      targets: { cohort: ['ba_user_1'] },
+      payload: { tableId: 'tbl_1', userId: 'ba_user_1', seatIndex: 0 },
+    })
   })
 
   it('is idempotent — returns 200 without updating when already seated', async () => {
@@ -284,6 +313,26 @@ describe('POST /api/v1/tables/:id/leave', () => {
         ],
       },
     }))
+    // Other player is still seated → table.empty NOT fired
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'table.empty' }))
+  })
+
+  it('fires table.empty when the last seated player leaves a FORMING table', async () => {
+    db.table.findUnique.mockResolvedValue({
+      ...baseTable,
+      seats: [
+        { userId: 'ba_user_1', status: 'occupied' },
+        { userId: null, status: 'empty' },
+      ],
+    })
+    db.table.update.mockImplementation(({ data }) => Promise.resolve({ ...baseTable, ...data }))
+    const app = makeApp()
+    await request(app).post('/api/v1/tables/tbl_1/leave')
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'table.empty',
+      targets: { cohort: ['ba_user_1'] },
+      payload: { tableId: 'tbl_1' },
+    })
   })
 
   it('is a no-op (200) when the caller was not seated', async () => {

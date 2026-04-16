@@ -31,6 +31,14 @@ const REGISTRY = {
   'admin.announcement':              { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: null },
   'system.alert':                    { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null, systemCritical: true },
   'system.alert.cleared':            { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null, systemCritical: true },
+
+  // ── Tables (Phase 3.1) ─────────────────────────────────────────────────────
+  // Live updates for the Tables page and table-detail views. All ephemeral —
+  // the truth lives in the Table row, the bus just nudges the UI.
+  'table.created':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // appears in public list
+  'player.joined':                   { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // someone took a seat
+  'spectator.joined':                { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // someone is watching (Phase 3.1 presence)
+  'table.empty':                     { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // last seat vacated while still FORMING
 }
 
 // ── Default preferences (used when no NotificationPreference row exists) ──────
@@ -49,6 +57,11 @@ const PREF_DEFAULTS = {
   'admin.announcement':              { inApp: true,  email: false },
   'system.alert':                    { inApp: true,  email: false },
   'system.alert.cleared':            { inApp: true,  email: false },
+  // Tables (Phase 3.1) — UI nudges only, no email.
+  'table.created':                   { inApp: true,  email: false },
+  'player.joined':                   { inApp: true,  email: false },
+  'spectator.joined':                { inApp: true,  email: false },
+  'table.empty':                     { inApp: true,  email: false },
 }
 
 /**
