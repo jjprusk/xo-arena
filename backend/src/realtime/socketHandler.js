@@ -29,6 +29,13 @@ import {
   incrementRedis, decrementRedis,
   trackedOn, startSnapshotInterval,
 } from '../lib/resourceCounters.js'
+import {
+  addWatcher as addTableWatcher,
+  removeWatcher as removeTableWatcher,
+  removeWatcherFromAllTables,
+  getPresence as getTablePresence,
+} from './tablePresence.js'
+import { dispatch as dispatchBus } from '../lib/notificationBus.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -45,6 +52,16 @@ function broadcastOnlineUsers(io) {
     [..._onlineBySocket.values()].map(u => [u.userId, u])
   ).values()]
   io.emit('guide:onlineUsers', { users })
+}
+
+/**
+ * Emit the latest presence snapshot for a single Table to every socket that
+ * is currently watching it (i.e. joined to the `table:${id}` socket.io room).
+ * Phase 3.1 — see backend/src/realtime/tablePresence.js for the underlying state.
+ */
+function broadcastTablePresence(io, tableId) {
+  const presence = getTablePresence(tableId)
+  io.to(`table:${tableId}`).emit('table:presence', { tableId, ...presence })
 }
 
 /** Cancel any pending grace-period removal for a given userId (called on re-subscribe). */
@@ -555,6 +572,59 @@ export async function attachSocketIO(httpServer) {
       if (sessionId) socket.leave(`ml:session:${sessionId}`)
     })
 
+    // ── Table presence (Phase 3.1) ──────────────────────────────────
+    // Subscribe a socket to a table's presence stream. Authed users
+    // contribute their userId (used to fire spectator.joined to the
+    // bus); guests can still watch but only count toward the total.
+    //
+    // TODO Phase 3.4: when Tables are the only primitive, the seated
+    // players in db.table.seats become the natural cohort target for
+    // spectator.joined here — no separate seat lookup needed.
+
+    on('table:watch', async ({ tableId, authToken } = {}) => {
+      if (!tableId || typeof tableId !== 'string') return
+      const user = await resolveSocketUser(authToken)  // null = guest
+      const wasNew = addTableWatcher(tableId, socket.id, {
+        userId:      user?.id ?? null,
+        displayName: user?.displayName ?? user?.username ?? null,
+      })
+      socket.join(`table:${tableId}`)
+      broadcastTablePresence(io, tableId)
+
+      // Fire spectator.joined to the seated players' cohort (only on truly
+      // new authed watchers — duplicate watch calls from the same socket are
+      // a no-op so we don't spam the bus).
+      if (wasNew && user?.id) {
+        try {
+          const table = await db.table.findUnique({
+            where: { id: tableId },
+            select: { seats: true },
+          })
+          const cohort = Array.isArray(table?.seats)
+            ? table.seats
+                .filter(s => s.status === 'occupied' && typeof s.userId === 'string')
+                .map(s => s.userId)
+            : []
+          if (cohort.length > 0) {
+            dispatchBus({
+              type: 'spectator.joined',
+              targets: { cohort },
+              payload: { tableId, userId: user.id },
+            }).catch(err => logger.warn({ err: err.message, tableId }, 'spectator.joined dispatch failed'))
+          }
+        } catch (err) {
+          logger.warn({ err: err.message, tableId }, 'spectator cohort lookup failed')
+        }
+      }
+    })
+
+    on('table:unwatch', ({ tableId } = {}) => {
+      if (!tableId || typeof tableId !== 'string') return
+      const removed = removeTableWatcher(tableId, socket.id)
+      socket.leave(`table:${tableId}`)
+      if (removed) broadcastTablePresence(io, tableId)
+    })
+
     // ── User-specific room (for tournament and other personal events) ─────────
     on('user:subscribe', async ({ authToken } = {}) => {
       const user = await resolveSocketUser(authToken)
@@ -629,6 +699,13 @@ export async function attachSocketIO(httpServer) {
         logger.warn({ socketId: socket.id, remaining: socket._trackedListenerCount }, 'socket disconnected with uncleaned listeners')
       }
       logger.info({ socketId: socket.id }, 'socket disconnected')
+
+      // Phase 3.1: drop this socket from every Table presence map it was in,
+      // and notify each affected table's remaining watchers of the new count.
+      const droppedFromTables = removeWatcherFromAllTables(socket.id)
+      for (const tableId of droppedFromTables) {
+        broadcastTablePresence(io, tableId)
+      }
 
       // Remove from online presence after a grace period (allows brief reconnects
       // to cancel the removal without causing a visible drop in the online list)
