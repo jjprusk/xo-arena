@@ -14,12 +14,26 @@ describe('NeuralNet', () => {
   })
 
   it('forward pass with non-zero input produces non-trivial output', () => {
-    const net = new NeuralNet([4, 8, 4])
+    // Across multiple random initializations, at least one network must
+    // produce a non-zero output for a given non-zero input. The single-net
+    // version of this test is genuinely flaky: biases init to 0, so when
+    // every hidden ReLU happens to be dead (all pre-activations negative —
+    // a few percent chance per net with the small [4, 8, 4] topology) the
+    // linear output layer computes b·1 = 0 across all output neurons.
+    // Trying ~10 random nets makes the failure probability vanishingly small
+    // while still exercising the actual init+forward code path.
     const input = [1, -1, 0.5, -0.5]
-    const { output } = net.forward(input)
-    expect(output).toHaveLength(4)
-    // Output should not all be zero (extremely unlikely with He init)
-    expect(output.some(v => v !== 0)).toBe(true)
+    let producedNonZero = false
+    for (let trial = 0; trial < 10; trial++) {
+      const net = new NeuralNet([4, 8, 4])
+      const { output } = net.forward(input)
+      expect(output).toHaveLength(4)
+      if (output.some(v => v !== 0)) {
+        producedNonZero = true
+        break
+      }
+    }
+    expect(producedNonZero).toBe(true)
   })
 
   it('backward + update reduces loss on a simple linear target', () => {

@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 export * from './neuralNet.js'
 export * from './dqn.js'
 export * from './qLearning.js'
