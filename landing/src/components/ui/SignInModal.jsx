@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
 import { triggerSessionRefresh } from '../../lib/useOptimisticSession.js'
+import { clearTokenCache } from '../../lib/getToken.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
 
@@ -44,6 +45,11 @@ export default function SignInModal({ onClose, defaultView = 'sign-in' }) {
     try {
       const result = await signIn.email({ email: email.trim(), password })
       if (result?.error) { setError(result.error.message || 'Sign in failed.'); return }
+      // Wipe any _nullUntil set during the guest-browse interval so the next
+      // getToken() hits /api/token fresh. Without this, token-gated actions
+      // (delete table, etc.) see a cached null for up to 30s after sign-in,
+      // even though the session is already live.
+      clearTokenCache()
       triggerSessionRefresh()
       onClose()
     } catch (err) {

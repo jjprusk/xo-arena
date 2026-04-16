@@ -22,6 +22,14 @@ vi.mock('../../lib/db.js', () => ({
       update:     vi.fn(),
       delete:     vi.fn(),
     },
+    // withSeatDisplay() hydrates occupied seats with User.displayName/avatarUrl.
+    // buildSeatChangePayload() looks up the actor's displayName.
+    // Defaults return empty so the bare-seats shape is preserved in assertions
+    // and actorDisplayName is null; specific tests override as needed.
+    user: {
+      findMany:   vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
   },
 }))
 
@@ -216,6 +224,36 @@ describe('GET /api/v1/tables', () => {
     await request(app).get('/api/v1/tables?limit=9999')
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 200 }))
   })
+
+  it('enriches occupied seats with displayName/avatarUrl from User', async () => {
+    db.table.findMany.mockResolvedValue([{
+      ...baseTable,
+      seats: [
+        { userId: 'ba_user_1', status: 'occupied' },
+        { userId: null,        status: 'empty'    },
+      ],
+    }])
+    db.user.findMany.mockResolvedValueOnce([
+      { betterAuthId: 'ba_user_1', displayName: 'Joe Pruskowski', avatarUrl: 'https://example/a.png', isBot: false },
+    ])
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables')
+    expect(res.status).toBe(200)
+    expect(res.body.tables[0].seats[0]).toEqual({
+      userId:      'ba_user_1',
+      status:      'occupied',
+      displayName: 'Joe Pruskowski',
+      avatarUrl:   'https://example/a.png',
+      isBot:       false,
+    })
+    // Empty seats left untouched
+    expect(res.body.tables[0].seats[1]).toEqual({ userId: null, status: 'empty' })
+    // One hydration query, no N+1
+    expect(db.user.findMany).toHaveBeenCalledTimes(1)
+    expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { betterAuthId: { in: ['ba_user_1'] } },
+    }))
+  })
 })
 
 // ── GET /api/v1/tables/:id — get one ──────────────────────────────────────────
@@ -257,11 +295,21 @@ describe('POST /api/v1/tables/:id/join', () => {
         ],
       },
     }))
-    // Bus dispatches player.joined to the table cohort (just the joiner so far)
+    // Bus broadcasts player.joined so list + detail pages (and any second
+    // tab of the joiner, and signed-out spectators) all refresh. The payload
+    // carries stakeholders + actorDisplayName so AppLayout can surface a
+    // scoped notification without a round trip.
     expect(dispatch).toHaveBeenCalledWith({
       type: 'player.joined',
-      targets: { cohort: ['ba_user_1'] },
-      payload: { tableId: 'tbl_1', userId: 'ba_user_1', seatIndex: 0 },
+      targets: { broadcast: true },
+      payload: {
+        tableId:          'tbl_1',
+        gameId:           'xo',
+        userId:           'ba_user_1',
+        seatIndex:        0,
+        stakeholders:     ['ba_user_1'],     // creator + newly-seated (same user here)
+        actorDisplayName: null,              // mock returns null
+      },
     })
   })
 
@@ -384,6 +432,21 @@ describe('POST /api/v1/tables/:id/leave', () => {
     }))
     // Other player is still seated → table.empty NOT fired
     expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'table.empty' }))
+    // Every leave broadcasts player.left so other open views refresh. The
+    // creator (ba_user_1, self here) + remaining-seated (ba_user_2) are the
+    // stakeholders the client-side notification filter will match on.
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'player.left',
+      targets: { broadcast: true },
+      payload: {
+        tableId:          'tbl_1',
+        gameId:           'xo',
+        userId:           'ba_user_1',
+        seatIndex:        0,
+        stakeholders:     ['ba_user_1', 'ba_user_2'],
+        actorDisplayName: null,
+      },
+    })
   })
 
   it('fires table.empty when the last seated player leaves a FORMING table', async () => {
@@ -401,6 +464,19 @@ describe('POST /api/v1/tables/:id/leave', () => {
       type: 'table.empty',
       targets: { cohort: ['ba_user_1'] },
       payload: { tableId: 'tbl_1' },
+    })
+    // player.left also fires on every leave regardless of occupancy.
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'player.left',
+      targets: { broadcast: true },
+      payload: {
+        tableId:          'tbl_1',
+        gameId:           'xo',
+        userId:           'ba_user_1',
+        seatIndex:        0,
+        stakeholders:     ['ba_user_1'],     // creator only (nobody left seated)
+        actorDisplayName: null,
+      },
     })
   })
 

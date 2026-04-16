@@ -14,7 +14,7 @@
  *   POST   /api/v1/tables/:id/leave      — vacate the caller's seat
  *
  * Notification-bus events fired by these endpoints (see Phase 3.1 next commit):
- *   table.created, player.joined, table.empty
+ *   table.created, player.joined, player.left, table.empty, table.deleted
  */
 
 import { Router } from 'express'
@@ -86,6 +86,107 @@ function tableCohort(seats) {
   return seats
     .filter(s => s.status === 'occupied' && typeof s.userId === 'string')
     .map(s => s.userId)
+}
+
+/**
+ * Build the enriched payload for player.joined / player.left bus events.
+ *
+ * Consumers:
+ *   - Tables page & detail page re-fetch on every event regardless of
+ *     relationship (they need to keep lists + seat strips live).
+ *   - AppLayout's notification stack only surfaces these for stakeholders —
+ *     the table's creator, or anyone currently seated, minus the actor.
+ *     `stakeholders` is the allowlist the client filters against; we include
+ *     it in the payload so the client doesn't have to fetch anything.
+ *
+ * Also embeds `actorDisplayName` so the toast copy reads "Joe took seat 2"
+ * instead of "ba_user_abc took seat 2" without another round trip.
+ */
+async function buildSeatChangePayload({ table, updatedSeats, actorBaId, seatIndex }) {
+  const seatedBaIds = (updatedSeats ?? [])
+    .filter(s => s?.status === 'occupied' && typeof s.userId === 'string')
+    .map(s => s.userId)
+  const stakeholders = [...new Set([table.createdById, ...seatedBaIds].filter(Boolean))]
+
+  let actorDisplayName = null
+  try {
+    const actor = await db.user.findUnique({
+      where:  { betterAuthId: actorBaId },
+      select: { displayName: true },
+    })
+    actorDisplayName = actor?.displayName ?? null
+  } catch (err) {
+    // Non-fatal — client falls back to a userId-slice label.
+    logger.warn({ err: err.message, actorBaId }, 'buildSeatChangePayload(): actor lookup failed')
+  }
+
+  return {
+    tableId: table.id,
+    gameId:  table.gameId,
+    userId:  actorBaId,
+    seatIndex,
+    stakeholders,
+    actorDisplayName,
+  }
+}
+
+/**
+ * Enrich one or more tables with seated-player display info.
+ *
+ * Seats persist only `{ userId (betterAuthId), status }`. For rendering we also
+ * want the player's `displayName` and `avatarUrl`, but we don't want to
+ * duplicate that data into the Table row (names change, avatars change) —
+ * instead we hydrate on read.
+ *
+ * Accepts a single table or an array. Returns the same shape, with every
+ * occupied seat now also carrying `{ displayName, avatarUrl, isBot }` when
+ * the owning user was found. Unknown userIds fall through unchanged so the
+ * frontend can still show a truncated-id fallback.
+ *
+ * Does a single `findMany({ betterAuthId: { in: [...] } })` regardless of
+ * input size, so this is safe to use on the list endpoint.
+ */
+async function withSeatDisplay(input) {
+  const tables = Array.isArray(input) ? input : [input]
+  if (tables.length === 0) return input
+
+  const baIds = new Set()
+  for (const t of tables) {
+    if (!Array.isArray(t?.seats)) continue
+    for (const s of t.seats) {
+      if (s?.status === 'occupied' && typeof s.userId === 'string') baIds.add(s.userId)
+    }
+  }
+  if (baIds.size === 0) return input
+
+  let users = []
+  try {
+    users = await db.user.findMany({
+      where:  { betterAuthId: { in: [...baIds] } },
+      select: { betterAuthId: true, displayName: true, avatarUrl: true, isBot: true },
+    })
+  } catch (err) {
+    // Failure to hydrate is non-fatal — the frontend has a userId-slice
+    // fallback. Log and return tables unchanged.
+    logger.warn({ err: err.message }, 'withSeatDisplay(): user hydration failed; returning unenriched seats')
+    return input
+  }
+
+  const byBaId = new Map(users.map(u => [u.betterAuthId, u]))
+  const enriched = tables.map(t => {
+    if (!Array.isArray(t?.seats)) return t
+    return {
+      ...t,
+      seats: t.seats.map(s => {
+        if (s?.status !== 'occupied' || typeof s.userId !== 'string') return s
+        const u = byBaId.get(s.userId)
+        if (!u) return s
+        return { ...s, displayName: u.displayName, avatarUrl: u.avatarUrl, isBot: u.isBot }
+      }),
+    }
+  })
+
+  return Array.isArray(input) ? enriched : enriched[0]
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -189,7 +290,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
       take: limit,
     })
 
-    res.json({ tables })
+    res.json({ tables: await withSeatDisplay(tables) })
   } catch (err) {
     next(err)
   }
@@ -205,7 +306,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const table = await db.table.findUnique({ where: { id: req.params.id } })
     if (!table) return res.status(404).json({ error: 'Table not found' })
-    res.json({ table })
+    res.json({ table: await withSeatDisplay(table) })
   } catch (err) {
     next(err)
   }
@@ -237,7 +338,9 @@ router.post('/:id/join', requireAuth, async (req, res, next) => {
     }
 
     // Already seated → no-op success
-    if (userSeatIndex(table.seats, req.auth.userId) !== -1) return res.json({ table, seated: true })
+    if (userSeatIndex(table.seats, req.auth.userId) !== -1) {
+      return res.json({ table: await withSeatDisplay(table), seated: true })
+    }
 
     // Resolve target seat: explicit seatIndex from body, else first empty.
     const { seatIndex } = req.body ?? {}
@@ -265,15 +368,24 @@ router.post('/:id/join', requireAuth, async (req, res, next) => {
       data: { seats },
     })
 
-    // Notify everyone seated at this table (excluding the joiner themself —
-    // the bus filters them downstream via cohort de-dupe of the dispatcher).
+    // Broadcast so every open view of the table — the detail page, the list
+    // page's seat strip, a second tab of the joiner, signed-out spectators —
+    // all see the seat change without refresh. The payload also carries
+    // stakeholders + actorDisplayName so AppLayout can surface a friendly
+    // notification to the creator and co-seated players only.
+    const joinPayload = await buildSeatChangePayload({
+      table,
+      updatedSeats: seats,
+      actorBaId:    req.auth.userId,
+      seatIndex:    idx,
+    })
     dispatch({
       type: 'player.joined',
-      targets: { cohort: tableCohort(seats) },
-      payload: { tableId: table.id, userId: req.auth.userId, seatIndex: idx },
+      targets: { broadcast: true },
+      payload: joinPayload,
     }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'player.joined dispatch failed'))
 
-    res.json({ table: updated, seated: true })
+    res.json({ table: await withSeatDisplay(updated), seated: true })
   } catch (err) {
     next(err)
   }
@@ -299,7 +411,7 @@ router.post('/:id/leave', requireAuth, async (req, res, next) => {
     }
 
     const idx = userSeatIndex(table.seats, req.auth.userId)
-    if (idx === -1) return res.json({ table, seated: false })
+    if (idx === -1) return res.json({ table: await withSeatDisplay(table), seated: false })
 
     // Fresh array — never mutate the findUnique result.
     const seats = table.seats.map((s, i) =>
@@ -310,6 +422,21 @@ router.post('/:id/leave', requireAuth, async (req, res, next) => {
       where: { id: table.id },
       data: { seats },
     })
+
+    // Broadcast every leave so other open pages (list + detail, other tabs)
+    // re-fetch. Mirrors player.joined — payload includes stakeholders +
+    // actorDisplayName so only creator + remaining-seated get a notification.
+    const leavePayload = await buildSeatChangePayload({
+      table,
+      updatedSeats: seats,
+      actorBaId:    req.auth.userId,
+      seatIndex:    idx,
+    })
+    dispatch({
+      type: 'player.left',
+      targets: { broadcast: true },
+      payload: leavePayload,
+    }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'player.left dispatch failed'))
 
     // Last seat vacated while still FORMING → fire table.empty so subscribers
     // (e.g. realtime layer) can decide whether to GC the table. Cohort is the
@@ -323,7 +450,7 @@ router.post('/:id/leave', requireAuth, async (req, res, next) => {
       }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'table.empty dispatch failed'))
     }
 
-    res.json({ table: updated, seated: false })
+    res.json({ table: await withSeatDisplay(updated), seated: false })
   } catch (err) {
     next(err)
   }

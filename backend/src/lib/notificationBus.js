@@ -36,7 +36,8 @@ const REGISTRY = {
   // Live updates for the Tables page and table-detail views. All ephemeral —
   // the truth lives in the Table row, the bus just nudges the UI.
   'table.created':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // appears in public list
-  'player.joined':                   { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // someone took a seat
+  'player.joined':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // someone took a seat — list + detail pages both refresh
+  'player.left':                     { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // someone vacated a seat — list + detail pages both refresh
   'spectator.joined':                { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // someone is watching (Phase 3.1 presence)
   'table.empty':                     { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // last seat vacated while still FORMING
   'table.deleted':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // creator deleted; remove from list
@@ -61,6 +62,7 @@ const PREF_DEFAULTS = {
   // Tables (Phase 3.1) — UI nudges only, no email.
   'table.created':                   { inApp: true,  email: false },
   'player.joined':                   { inApp: true,  email: false },
+  'player.left':                     { inApp: true,  email: false },
   'spectator.joined':                { inApp: true,  email: false },
   'table.empty':                     { inApp: true,  email: false },
   'table.deleted':                   { inApp: true,  email: false },

@@ -62,6 +62,12 @@ export default function TableDetailPage() {
   // reconnect via the 'connect' listener so counts stay accurate even after
   // a network hiccup. Guests can watch too (just don't fire spectator.joined
   // on the server side — see tablePresence.js).
+  //
+  // We also fire `table:unwatch` on `pagehide`, because the React cleanup
+  // return is NOT guaranteed to run on tab close / navigation-away — and
+  // without it the server only detects the disconnect when the polling
+  // transport times out (~45s on default settings), leaving a stale
+  // watcher in the count. `pagehide` fires reliably on close + refresh.
   useEffect(() => {
     const socket = getSocket()
     let cancelled = false
@@ -71,14 +77,22 @@ export default function TableDetailPage() {
       if (cancelled) return
       socket.emit('table:watch', { tableId, authToken: token ?? null })
     }
+    function emitUnwatch() {
+      // socket.emit during pagehide is best-effort over polling — the XHR
+      // may or may not flush. The server still catches orphans on socket
+      // timeout, so this is a latency optimization, not a correctness fix.
+      try { socket.emit('table:unwatch', { tableId }) } catch {}
+    }
 
     emitWatch()
     socket.on('connect', emitWatch)
+    window.addEventListener('pagehide', emitUnwatch)
 
     return () => {
       cancelled = true
       socket.off('connect', emitWatch)
-      socket.emit('table:unwatch', { tableId })
+      window.removeEventListener('pagehide', emitUnwatch)
+      emitUnwatch()
     }
   }, [tableId])
 
@@ -94,7 +108,7 @@ export default function TableDetailPage() {
         navigate('/tables', { replace: true })
         return
       }
-      if (!['player.joined', 'spectator.joined', 'table.empty'].includes(type)) return
+      if (!['player.joined', 'player.left', 'spectator.joined', 'table.empty'].includes(type)) return
       if (payload?.tableId && payload.tableId !== tableId) return
       load()
     }
@@ -203,8 +217,10 @@ export default function TableDetailPage() {
         .filter(s => s.status === 'occupied' && s.userId)
         .map(s => ({
           id:          s.userId,
-          displayName: s.userId === currentUserId ? 'You' : `User ${s.userId.slice(0, 8)}`,
-          isBot:       false,
+          displayName: s.userId === currentUserId
+            ? 'You'
+            : (s.displayName ?? `User ${s.userId.slice(0, 8)}`),
+          isBot:       s.isBot ?? false,
         })),
     }
     const shellMeta = {
@@ -220,7 +236,10 @@ export default function TableDetailPage() {
         session={shellSession}
         phase="playing"
         table={table}
-        spectatorCount={presence.count}
+        spectatorCount={Math.max(
+          0,
+          (presence.count ?? 0) - (currentUserId && presence.userIds?.includes(currentUserId) ? 1 : 0),
+        )}
         backHref="/tables"
         onLeave={canLeave ? handleLeave : undefined}
         // Force chrome-present until Phase 3.4 bridges the real game session.
@@ -252,12 +271,23 @@ export default function TableDetailPage() {
           <h1 className="text-2xl font-bold truncate" style={{ fontFamily: 'var(--font-display)' }}>
             {gameLabel(table.gameId)}
           </h1>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Table · {seated} / {table.maxPlayers} seated
-            {presence.count > 0 && ` · ${presence.count} watching`}
-            {table.isPrivate   && ' · Private'}
-            {table.isTournament && ' · Tournament'}
-          </p>
+          {(() => {
+            // "Watching" = other people, not the viewer themselves. If the
+            // caller is signed in and in the presence userIds, subtract 1
+            // from the count so "3 tabs of me alone" reads 0, not 1.
+            const watchingOthers = Math.max(
+              0,
+              (presence.count ?? 0) - (currentUserId && presence.userIds?.includes(currentUserId) ? 1 : 0),
+            )
+            return (
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Table · {seated} / {table.maxPlayers} seated
+                {watchingOthers > 0 && ` · ${watchingOthers} watching`}
+                {table.isPrivate   && ' · Private'}
+                {table.isTournament && ' · Tournament'}
+              </p>
+            )
+          })()}
         </div>
         <span
           className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold"
@@ -300,7 +330,9 @@ export default function TableDetailPage() {
                 <div className="text-sm flex-1 min-w-0">
                   {seatOccupied ? (
                     <span className="truncate">
-                      {isMine ? (leaveable ? 'You — click to leave' : 'You') : `User ${(seat.userId ?? '').slice(0, 8)}`}
+                      {isMine
+                        ? (leaveable ? 'You — click to leave' : 'You')
+                        : (seat.displayName ?? `User ${(seat.userId ?? '').slice(0, 8)}`)}
                     </span>
                   ) : (
                     <span style={{ color: 'var(--text-muted)' }}>
