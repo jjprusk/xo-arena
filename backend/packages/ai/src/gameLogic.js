@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Core game logic utilities shared across AI implementations and tests.
  */

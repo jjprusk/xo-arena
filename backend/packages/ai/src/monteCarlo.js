@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Monte Carlo control engine (every-visit MC) for XO Arena.
  *

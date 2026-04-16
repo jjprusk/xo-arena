@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Pure-JS feedforward neural network (MLP) — no external dependencies.
  *

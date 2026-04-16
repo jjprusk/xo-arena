@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * REINFORCE policy gradient engine (simplified, tabular softmax policy).
  *
