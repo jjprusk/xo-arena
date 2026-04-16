@@ -22,6 +22,7 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
+import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',   color: 'var(--color-amber-600)' },
@@ -366,6 +367,7 @@ export default function TableDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/tables" className="btn btn-ghost btn-sm">Back</Link>
+          <ShareTableButton tableId={tableId} variant="full" />
           {canLeave && (
             <button onClick={handleLeave} disabled={busy} className="btn btn-secondary btn-sm">
               {busy ? 'Leaving…' : 'Leave seat'}

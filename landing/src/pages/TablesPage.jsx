@@ -18,6 +18,7 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
 import { ListTable, ListTh, ListTd, ListTr } from '../components/ui/ListTable.jsx'
+import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -188,7 +189,7 @@ function TablesList({ tables }) {
     <ListTable
       fitViewport
       bottomPadding={32}
-      columns={['28%', '14%', '16%', '16%', '26%']}
+      columns={['24%', '12%', '14%', '14%', '24%', '56px']}
     >
       <thead>
         <tr>
@@ -197,6 +198,7 @@ function TablesList({ tables }) {
           <ListTh align="center">Seats</ListTh>
           <ListTh align="center">Type</ListTh>
           <ListTh>Seat strip</ListTh>
+          <ListTh align="center"><span className="sr-only">Share</span></ListTh>
         </tr>
       </thead>
       <tbody>
@@ -257,6 +259,10 @@ function TableRow({ table, last, onClick }) {
             )
           })}
         </div>
+      </ListTd>
+      <ListTd align="center">
+        {/* Share button — stops propagation so the row click doesn't navigate */}
+        <ShareTableButton tableId={table.id} variant="icon" />
       </ListTd>
     </ListTr>
   )
