@@ -222,7 +222,14 @@ function TableRow({ table, last, onClick }) {
   return (
     <ListTr last={last} onClick={onClick}>
       <ListTd>
-        <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+        {/* Truncate instead of wrap on narrow viewports so the row stays one
+            line tall. Full name still available via title attribute and the
+            table detail page. */}
+        <span
+          className="font-semibold block truncate"
+          style={{ color: 'var(--text-primary)' }}
+          title={gameLabel(table.gameId)}
+        >
           {gameLabel(table.gameId)}
         </span>
       </ListTd>
@@ -238,7 +245,11 @@ function TableRow({ table, last, onClick }) {
         <span className="tabular-nums">{seated} / {max}</span>
       </ListTd>
       <ListTd align="center">
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        <span
+          className="text-xs block truncate"
+          style={{ color: 'var(--text-muted)' }}
+          title={table.isTournament ? 'Tournament' : table.isPrivate ? 'Private' : 'Public'}
+        >
           {table.isTournament ? 'Tournament' : table.isPrivate ? 'Private' : 'Public'}
         </span>
       </ListTd>
