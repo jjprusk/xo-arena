@@ -69,6 +69,7 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
     case 'table.created':
     case 'spectator.joined':
     case 'table.empty':
+    case 'table.started':
     case 'table.deleted':
       return null
     // Seat changes ARE surfaced, but only for stakeholders (creator or
@@ -83,6 +84,7 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
         id,
         uiType:    'table',
         type:      'table',
+        tableId:   payload.tableId ?? null,
         title:     `${who} took ${seat}`,
         body:      `Your ${gameName} table`,
         href:      payload.tableId ? `/tables/${payload.tableId}` : null,
@@ -97,6 +99,7 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
         id,
         uiType:    'table',
         type:      'table',
+        tableId:   payload.tableId ?? null,
         title:     `${who} left ${seat}`,
         body:      `Your ${gameName} table`,
         href:      payload.tableId ? `/tables/${payload.tableId}` : null,
@@ -207,6 +210,13 @@ export default function AppLayout() {
       if (token) socket.emit('user:subscribe', { authToken: token })
     }
     function onGuideNotification({ type, payload = {}, expiresAt = null }) {
+      // When a game starts, the "took a seat" notifications for that table are
+      // stale — the game is underway so the seat context is already obvious.
+      // Dismiss them before the player finishes their game and opens the Guide.
+      if (type === 'table.started' && payload?.tableId) {
+        useGuideStore.getState().dismissNotificationsForTable(payload.tableId)
+        return
+      }
       // Stakeholder filter for seat-change events. These broadcast to every
       // connected client (list page + detail page seat strips need to react),
       // but the notification drawer should only surface them for users who

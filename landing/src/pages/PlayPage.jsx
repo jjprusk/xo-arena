@@ -28,7 +28,8 @@ function Spinner() {
 
 // Inner component — only mounted once botConfig is resolved (or not needed).
 // Keeps all hook calls stable regardless of async bot fetch.
-function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig }) {
+// Exported so TableDetailPage can render a table-routed game without duplicating this logic.
+export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0 }) {
   const navigate = useNavigate()
 
   // Load game meta asynchronously — see comment at top of file. While null we
@@ -43,7 +44,7 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     ? { id: authSession.user.id, displayName: authSession.user.name ?? authSession.user.email }
     : null
 
-  const { session, sdk, phase, abandoned, kicked, seriesResult } = useGameSDK({
+  const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft } = useGameSDK({
     gameId:           'xo',
     joinSlug,
     tournamentMatchId,
@@ -53,21 +54,28 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     botSkillId: botConfig?.botSkillId ?? null,
   })
 
+  const tablesHref = tournamentId ? `/tournaments/${tournamentId}` : '/tables'
+
   // Register leave-table callback so sdk.leaveTable() navigates away
   useEffect(() => {
     sdk._onGameEnd(({ leave } = {}) => {
-      if (leave) navigate(tournamentId ? `/tournaments/${tournamentId}` : '/', { replace: true })
+      if (leave) navigate(tablesHref, { replace: true })
     })
   }, [sdk]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abandoned → navigate away after brief notice
   useEffect(() => {
     if (!abandoned) return
-    const id = setTimeout(() => {
-      navigate(tournamentId ? `/tournaments/${tournamentId}` : '/', { replace: true })
-    }, 3000)
+    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
     return () => clearTimeout(id)
   }, [abandoned]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Opponent left post-game → navigate after brief notice
+  useEffect(() => {
+    if (!opponentLeft) return
+    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
+    return () => clearTimeout(id)
+  }, [opponentLeft]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kicked (spectator inactivity) → go home
   useEffect(() => {
@@ -93,13 +101,28 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     )
   }
 
-  // Room abandoned
+  // Opponent left after game ended
+  if (opponentLeft) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16">
+        <div className="text-4xl">👋</div>
+        <p className="text-lg font-semibold text-center" style={{ color: 'var(--text-primary)' }}>
+          Opponent has left the table
+        </p>
+        <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
+          Returning to Tables…
+        </p>
+      </div>
+    )
+  }
+
+  // Table abandoned (inactivity)
   if (abandoned) {
     return (
       <div className="flex flex-col items-center gap-4 py-16">
         <div className="text-4xl">💤</div>
         <p className="text-lg font-semibold text-center" style={{ color: 'var(--text-primary)' }}>
-          Room ended due to inactivity
+          Table closed due to inactivity
         </p>
         <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
           No result recorded. Returning…
@@ -119,7 +142,7 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
         {phase === 'waiting' && session?.tableId && (
           <div className="flex flex-col items-center gap-2">
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Room: {session.settings?.displayName}
+              Table: {session.settings?.displayName}
             </p>
             <p className="text-xs font-mono px-3 py-1 rounded-lg select-all"
                style={{ background: 'var(--bg-surface-hover)', color: 'var(--text-secondary)' }}>
@@ -144,6 +167,7 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
         gameMeta={xoMeta}
         session={session}
         phase={phase}
+        spectatorCount={spectatingCount}
         backHref={tournamentId ? `/tournaments/${tournamentId}` : '/'}
       >
         <XOGame session={session} sdk={sdk} />

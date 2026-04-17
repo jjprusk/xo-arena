@@ -411,7 +411,7 @@ export default function GameComponent({ session, sdk }) {
               Still there?
             </h2>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {idleWarning.secondsRemaining}s before the room closes.
+              {idleWarning.secondsRemaining}s before the table closes.
             </p>
             <button onClick={handleIdlePong} className="btn btn-primary w-full py-3 rounded-xl">
               I'm here

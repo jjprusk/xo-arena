@@ -27,22 +27,30 @@ The fastest validation that the new socketHandler is working end-to-end.
 
 ---
 
-## 2. PvP (Player vs Player)
+## 2. PvP (Player vs Player) — via Tables
 
-Requires two browser contexts (e.g., normal window + incognito).
+Phase 3.4 makes Tables the PvP front door. Requires two browser contexts
+(e.g., normal window + incognito) signed in as two different users.
 
-**Tab A (host):** `http://localhost:5174/play` (signed in)
-**Tab B (guest):** incognito window, sign in as a different user
+**Tab A (host):**
+1. Sign in
+2. Go to `http://localhost:5174/tables`
+3. Click **+ Create table**, choose XO, create
 
-- [ ] Tab A: creates a room, shows "Waiting for opponent to join..." with a share URL
-- [ ] Tab B: paste the share URL -> joins as O
+**Tab B (guest):**
+1. Sign in as a different user in incognito
+2. Paste the table URL (`/tables/:id`) OR find the table in the public list
+
+- [ ] Tab A: creates the table with "Forming" status, sits in seat 1
+- [ ] Tab B: opens the table detail page, clicks **Take this seat** on seat 2
+- [ ] Status changes to **In play** on both tabs
 - [ ] Both tabs see the board with correct marks
 - [ ] Moves alternate correctly between tabs
-- [ ] Sound plays on the opponent's move (not your own echo)
-- [ ] Game completes -> both tabs see the result (win/loss/draw)
+- [ ] Sound plays on the opponent's move (not your own)
+- [ ] Game completes → both tabs see the result (win/loss/draw)
 - [ ] Rematch works from either side
-- [ ] **Disconnect test**: close Tab B -> Tab A sees "Opponent disconnected" notice -> after ~60s, auto-forfeit fires and Tab A wins
-- [ ] **Spectator test** (optional): open a third tab with the share URL as spectator -> sees the board live, no input allowed
+- [ ] **Disconnect test**: close Tab B → Tab A sees "Opponent disconnected" notice → after ~60s, auto-forfeit fires and Tab A wins
+- [ ] **Spectator test** (optional): open a third tab to `/tables/:id` → sees the board live, no input allowed
 
 ---
 

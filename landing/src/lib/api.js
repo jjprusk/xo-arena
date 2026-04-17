@@ -190,6 +190,7 @@ export const api = {
       return api.get(`/admin/games${qs ? `?${qs}` : ''}`, token)
     },
     deleteGame:   (id, token)       => request('DELETE', `/admin/games/${id}`, null, token),
+    stopTable:    (id, token)       => request('DELETE', `/admin/tables/${id}`, null, token),
 
     listModels:   (token, search, status, page, limit) => {
       const p = new URLSearchParams()
@@ -249,17 +250,25 @@ export const api = {
      * List tables.
      * @param {object}  [opts]
      * @param {boolean} [opts.mine]     — only tables the caller created (requires token)
-     * @param {string}  [opts.status]   — 'FORMING' | 'ACTIVE' | 'COMPLETED'
+     * @param {string}  [opts.status]   — single status or comma-separated list of
+     *                                    'FORMING' | 'ACTIVE' | 'COMPLETED'
      * @param {string}  [opts.gameId]   — filter by game
-     * @param {number}  [opts.limit]    — default 50, max 200
+     * @param {string}  [opts.search]   — seated-player displayName (case-insensitive partial)
+     * @param {string}  [opts.since]    — ISO date; only tables created on/after
+     * @param {number}  [opts.limit]    — default 20, max 200
+     * @param {number}  [opts.page]     — 1-based page number (default 1)
      * @param {string}  [token]         — required when opts.mine is true
+     * @returns {Promise<{ tables, total, page, limit }>}
      */
-    list: ({ mine, status, gameId, limit } = {}, token) => {
+    list: ({ mine, status, gameId, search, since, limit, page } = {}, token) => {
       const p = new URLSearchParams()
       if (mine)   p.set('mine',   'true')
       if (status) p.set('status', status)
       if (gameId) p.set('gameId', gameId)
+      if (search) p.set('search', search)
+      if (since)  p.set('since',  since)
       if (limit)  p.set('limit',  String(limit))
+      if (page)   p.set('page',   String(page))
       const qs = p.toString()
       return api.get(`/tables${qs ? `?${qs}` : ''}`, token)
     },

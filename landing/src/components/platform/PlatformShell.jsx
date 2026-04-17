@@ -267,7 +267,7 @@ function TableContextSidebar({ gameMeta, session, phase, table, spectatorCount, 
           </span>
           {spectatorCount > 0 && (
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {spectatorCount} watching
+              {spectatorCount} spectating
             </span>
           )}
         </div>

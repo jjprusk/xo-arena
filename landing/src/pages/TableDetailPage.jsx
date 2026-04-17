@@ -23,6 +23,7 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
+import { GameView } from './PlayPage.jsx'
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',   color: 'var(--color-amber-600)' },
@@ -39,6 +40,7 @@ export default function TableDetailPage() {
   const navigate = useNavigate()
   const { data: session } = useOptimisticSession()
   const currentUserId = session?.user?.id ?? null
+  const isAdmin       = session?.user?.role === 'admin'
 
   const [table, setTable] = useState(null)   // null = loading
   const [error, setError] = useState(null)
@@ -98,7 +100,7 @@ export default function TableDetailPage() {
 
   // Real-time: listen to table.* bus events and the table:presence feed,
   // refreshing when this specific table is affected.
-  const [presence, setPresence] = useState({ count: 0, userIds: [] })
+  const [presence, setPresence] = useState({ count: 0, userIds: [], spectatingCount: 0 })
   useEffect(() => {
     const socket = getSocket()
     function onBusEvent({ type, payload }) {
@@ -108,13 +110,13 @@ export default function TableDetailPage() {
         navigate('/tables', { replace: true })
         return
       }
-      if (!['player.joined', 'player.left', 'spectator.joined', 'table.empty'].includes(type)) return
+      if (!['player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.started'].includes(type)) return
       if (payload?.tableId && payload.tableId !== tableId) return
       load()
     }
     function onPresence(data) {
       if (data?.tableId !== tableId) return
-      setPresence({ count: data.count ?? 0, userIds: data.userIds ?? [] })
+      setPresence({ count: data.count ?? 0, userIds: data.userIds ?? [], spectatingCount: data.spectatingCount ?? 0 })
     }
     socket.on('guide:notification', onBusEvent)
     socket.on('table:presence',     onPresence)
@@ -165,6 +167,19 @@ export default function TableDetailPage() {
     }
   }
 
+  async function handleStopGame() {
+    if (!window.confirm('Force-stop this game? Players will be returned to the tables list.')) return
+    setBusy(true); setError(null)
+    try {
+      const token = await getToken()
+      await api.admin.stopTable(tableId, token)
+      // The bus event (table.deleted) will navigate everyone away automatically.
+    } catch (err) {
+      setError(err.message || 'Stop failed')
+      setBusy(false)
+    }
+  }
+
   async function handleDelete() {
     // eslint-disable-next-line no-alert
     if (!window.confirm('Delete this table? This cannot be undone.')) return
@@ -195,7 +210,7 @@ export default function TableDetailPage() {
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           {error || 'It may have been cancelled or the link is wrong.'}
         </p>
-        <Link to="/tables" className="btn btn-primary btn-sm">Back to Tables</Link>
+        <button onClick={() => navigate(-1)} className="btn btn-primary btn-sm">Back to Tables</button>
       </div>
     )
   }
@@ -208,58 +223,32 @@ export default function TableDetailPage() {
   // sits where the live game component will load once Phase 3.4 bridges
   // Tables to the realtime session layer.
   if (table.status === 'ACTIVE') {
-    // Synthesise the minimal session shape PlatformShell needs: it only
-    // reads players + isSpectator. When 3.4 lands, this comes from the
-    // useGameSDK hook driven off db.table instead of in-memory rooms.
-    const shellSession = {
-      isSpectator: !isSeated,
-      players: (table.seats ?? [])
-        .filter(s => s.status === 'occupied' && s.userId)
-        .map(s => ({
-          id:          s.userId,
-          displayName: s.userId === currentUserId
-            ? 'You'
-            : (s.displayName ?? `User ${s.userId.slice(0, 8)}`),
-          isBot:       s.isBot ?? false,
-        })),
-    }
-    const shellMeta = {
-      id:               table.gameId,
-      title:            gameLabel(table.gameId),
-      layout:           { preferredWidth: 'standard' },
-      supportsTraining: table.gameId === 'xo',  // driven off game registry in 3.4
-      supportsPuzzles:  table.gameId === 'xo',
-    }
+    const gameKey = session?.user?.id ?? 'guest'
+    // Spectating count is tracked independently by the backend via _spectatorSockets
+    // (populated when room:join fires with role:'spectator'), so it's accurate even
+    // when players joined via /play?join=slug and never emitted table:watch.
+    const spectatingCount = presence.spectatingCount ?? 0
     return (
-      <PlatformShell
-        gameMeta={shellMeta}
-        session={shellSession}
-        phase="playing"
-        table={table}
-        spectatorCount={Math.max(
-          0,
-          (presence.count ?? 0) - (currentUserId && presence.userIds?.includes(currentUserId) ? 1 : 0),
+      <>
+        <GameView
+          key={gameKey}
+          joinSlug={table.slug}
+          authSession={session}
+          botConfig={null}
+          spectatingCount={spectatingCount}
+        />
+        {isAdmin && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <button
+              onClick={handleStopGame}
+              disabled={busy}
+              className="btn btn-primary btn-sm shadow-lg"
+            >
+              Stop game
+            </button>
+          </div>
         )}
-        backHref="/tables"
-        onLeave={canLeave ? handleLeave : undefined}
-        // Force chrome-present until Phase 3.4 bridges the real game session.
-        // Without a live board to render, focused mode just shows a placeholder
-        // alone on the page — chrome-present is more useful (context sidebar
-        // is the main content for now).
-        initialMode="chrome-present"
-      >
-        <div className="card p-8 text-center space-y-2"
-             style={{ background: 'var(--bg-surface)', minHeight: 260 }}>
-          <div className="text-3xl">🎮</div>
-          <p className="text-sm font-semibold" style={{ fontFamily: 'var(--font-display)' }}>
-            Game is active
-          </p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            The game session lives in the realtime Room layer today. Phase 3.4
-            wires Tables to Rooms so the board renders here directly.
-          </p>
-        </div>
-      </PlatformShell>
+      </>
     )
   }
 
@@ -275,15 +264,10 @@ export default function TableDetailPage() {
             // "Watching" = other people, not the viewer themselves. If the
             // caller is signed in and in the presence userIds, subtract 1
             // from the count so "3 tabs of me alone" reads 0, not 1.
-            const watchingOthers = Math.max(
-              0,
-              (presence.count ?? 0) - (currentUserId && presence.userIds?.includes(currentUserId) ? 1 : 0),
-            )
             return (
               <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                 Table · {seated} / {table.maxPlayers} seated
-                {watchingOthers > 0 && ` · ${watchingOthers} watching`}
-                {table.isPrivate   && ' · Private'}
+                {table.isPrivate    && ' · Private'}
                 {table.isTournament && ' · Tournament'}
               </p>
             )
@@ -296,6 +280,49 @@ export default function TableDetailPage() {
           {meta.label}
         </span>
       </header>
+
+      {(() => {
+        // Two audiences for the FORMING banner:
+        //  - Seated players ("waiting"): need a nudge to share the link.
+        //  - Visitors with a seat available: just need a clear call to sit.
+        // Anyone else (full table about to flip ACTIVE, etc.) gets no banner.
+        if (table.status !== 'FORMING') return null
+        if (seated === 0 || seated >= (table?.maxPlayers ?? 0)) return null
+
+        const headline = isSeated
+          ? 'Waiting for opponent to join…'
+          : 'Take a seat to join this game'
+        const subtext = isSeated
+          ? "Share this table's link (Share button below) to invite someone."
+          : canJoin
+            ? 'Click any empty seat below.'
+            : 'Sign in to claim a seat.'
+
+        return (
+          <div
+            className="flex items-center gap-3 rounded-xl px-4 py-3"
+            style={{
+              background:  'rgba(217, 119, 6, 0.10)',
+              border:      '1px solid rgba(217, 119, 6, 0.25)',
+              color:       'var(--text-primary)',
+            }}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping"
+                    style={{ background: 'var(--color-amber-500, #f59e0b)' }} />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5"
+                    style={{ background: 'var(--color-amber-600, #d97706)' }} />
+            </span>
+            <p className="text-sm">
+              <span className="font-semibold">{headline}</span>
+              {' '}
+              <span style={{ color: 'var(--text-secondary)' }}>{subtext}</span>
+            </p>
+          </div>
+        )
+      })()}
 
       <section>
         <h2 className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Seats</h2>
@@ -384,21 +411,30 @@ export default function TableDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Creator-only delete on the left so it's out of the way of the
             primary join/leave actions on the right. */}
-        <div>
+        <div className="flex items-center gap-2">
           {canDelete && (
             <button
               onClick={handleDelete}
               disabled={busy}
-              className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
-              style={{ color: 'var(--color-red-700)', borderColor: 'var(--color-red-200, var(--border-default))' }}
+              className="btn btn-primary btn-sm"
               title="Delete this table (creator only)"
             >
               Delete table
             </button>
           )}
+          {isAdmin && !canDelete && table.status !== 'COMPLETED' && (
+            <button
+              onClick={handleStopGame}
+              disabled={busy}
+              className="btn btn-primary btn-sm"
+              title="Admin: force-stop this table"
+            >
+              Stop game
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/tables" className="btn btn-ghost btn-sm">Back</Link>
+          <button onClick={() => navigate(-1)} className="btn btn-ghost btn-sm">Back</button>
           <ShareTableButton tableId={tableId} variant="full" />
           {canLeave && (
             <button onClick={handleLeave} disabled={busy} className="btn btn-secondary btn-sm">

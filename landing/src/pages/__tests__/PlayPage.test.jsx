@@ -83,7 +83,7 @@ describe('PlayPage', () => {
   it('shows abandoned message when room is abandoned', () => {
     useGameSDK.mockReturnValue({ ...defaultSDKReturn, abandoned: { reason: 'idle' } })
     renderPlay('?join=some-room')
-    expect(screen.getByText('Room ended due to inactivity')).toBeDefined()
+    expect(screen.getByText('Table closed due to inactivity')).toBeDefined()
   })
 
   it('renders the game board when status is "playing"', async () => {

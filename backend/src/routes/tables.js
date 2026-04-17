@@ -22,6 +22,7 @@ import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 import { dispatch } from '../lib/notificationBus.js'
+import { mountainPool, MountainNamePool } from '../realtime/mountainNames.js'
 
 const router = Router()
 
@@ -217,9 +218,20 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (typeof isPrivate    !== 'boolean')                 return res.status(400).json({ error: 'isPrivate must be boolean' })
     if (typeof isTournament !== 'boolean')                 return res.status(400).json({ error: 'isTournament must be boolean' })
 
+    // Every table gets a mountain-name slug + displayName. The slug is the
+    // room key the socket layer uses for room:join — without it GameView
+    // falls through useGameSDK's `else` branch and emits room:create instead
+    // of attaching, so each player ends up in their own phantom room.
+    const name = mountainPool.acquire()
+    if (!name) return res.status(503).json({ error: 'No mountain names available' })
+    const slug = MountainNamePool.toSlug(name)
+    const displayName = `Mt. ${name}`
+
     const table = await db.table.create({
       data: {
         gameId,
+        slug,
+        displayName,
         createdById: req.auth.userId,
         minPlayers,
         maxPlayers,
@@ -254,43 +266,93 @@ router.post('/', requireAuth, async (req, res, next) => {
  *                         having to toggle a filter. Other users' private
  *                         tables stay hidden.
  *   ?mine=true          — tables created by the caller (private + public only)
- *   ?status=…           — filter to FORMING / ACTIVE / COMPLETED
+ *   ?status=…           — FORMING / ACTIVE / COMPLETED; comma-separate to combine
+ *                         (e.g. ?status=FORMING,ACTIVE). Unknown values ignored.
  *   ?gameId=…           — filter by game
- *   ?limit=N            — page size (default 50, max 200)
+ *   ?search=…           — tables with a seated player whose displayName matches
+ *                         (case-insensitive partial); returns empty if nobody matches
+ *   ?since=ISO          — only tables created on/after this timestamp
+ *   ?limit=N            — page size (default 20, max 200)
+ *   ?page=N             — 1-based page number (default 1)
+ *
+ * Returns `{ tables, total, page, limit }`. `total` is the full filtered
+ * count so the client can render pagination controls.
  *
  * Other users' private tables are never listed; they're accessible only by
  * direct URL via GET /api/v1/tables/:id (share-link mechanism).
  */
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
-    const { mine, status, gameId } = req.query
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200)
+    const { mine, status, gameId, search, since } = req.query
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 200)
+    const page  = Math.max(1, parseInt(req.query.page, 10) || 1)
+    const skip  = (page - 1) * limit
 
-    const where = {}
+    // Visibility clause — mutually exclusive shapes for the three caller modes.
+    let visibility
     if (mine === 'true') {
-      // optionalAuth sets req.auth = null for guests
       if (!req.auth?.userId) return res.status(401).json({ error: 'Auth required for ?mine=true' })
-      where.createdById = req.auth.userId
+      visibility = { createdById: req.auth.userId }
     } else if (req.auth?.userId) {
-      // Authed default: public + caller's own tables (including their private ones)
-      where.OR = [
-        { isPrivate: false },
-        { createdById: req.auth.userId },
-      ]
+      visibility = { OR: [{ isPrivate: false }, { createdById: req.auth.userId }] }
     } else {
-      // Guest default: public only
-      where.isPrivate = false
+      visibility = { isPrivate: false }
     }
-    if (status && ['FORMING', 'ACTIVE', 'COMPLETED'].includes(status)) where.status = status
-    if (gameId && typeof gameId === 'string') where.gameId = gameId
 
-    const tables = await db.table.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    })
+    const conditions = [visibility]
 
-    res.json({ tables: await withSeatDisplay(tables) })
+    if (typeof status === 'string' && status.length > 0) {
+      const valid = new Set(['FORMING', 'ACTIVE', 'COMPLETED'])
+      const statuses = status.split(',').map(s => s.trim().toUpperCase()).filter(s => valid.has(s))
+      if (statuses.length === 1) conditions.push({ status: statuses[0] })
+      else if (statuses.length > 1) conditions.push({ status: { in: statuses } })
+    }
+
+    if (gameId && typeof gameId === 'string') conditions.push({ gameId })
+
+    if (typeof since === 'string' && since.length > 0) {
+      const d = new Date(since)
+      if (!Number.isNaN(d.getTime())) conditions.push({ createdAt: { gte: d } })
+    }
+
+    // Search by seated player displayName. Two-step: find matching users, then
+    // filter tables whose seats JSON contains any of their betterAuthIds. If
+    // no user matches we can short-circuit with an empty result (skip the
+    // table query entirely).
+    if (typeof search === 'string' && search.trim().length > 0) {
+      const term = search.trim()
+      const matchedUsers = await db.user.findMany({
+        where:  { displayName: { contains: term, mode: 'insensitive' } },
+        select: { betterAuthId: true },
+        take:   200,
+      })
+      const baIds = matchedUsers.map(u => u.betterAuthId).filter(Boolean)
+      if (baIds.length === 0) {
+        return res.json({ tables: [], total: 0, page, limit })
+      }
+      conditions.push({
+        OR: baIds.map(id => ({
+          seats: { array_contains: [{ userId: id, status: 'occupied' }] },
+        })),
+      })
+    }
+
+    // Keep the simple-where shape (`{ isPrivate: false }`) when nothing else
+    // is applied — preserves existing test assertions and is easier to read
+    // in logs.
+    const where = conditions.length === 1 ? conditions[0] : { AND: conditions }
+
+    const [tables, total] = await Promise.all([
+      db.table.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      db.table.count({ where }),
+    ])
+
+    res.json({ tables: await withSeatDisplay(tables), total, page, limit })
   } catch (err) {
     next(err)
   }
@@ -363,9 +425,34 @@ router.post('/:id/join', requireAuth, async (req, res, next) => {
       i === idx ? { userId: req.auth.userId, status: 'occupied' } : s
     )
 
+    // If this join fills the last seat, auto-transition FORMING → ACTIVE and
+    // initialize the game's previewState. Seat 0 plays X, seat 1 plays O —
+    // matches the PvP convention used by the realtime room:join handler so
+    // both entry points produce identical game state for the same seating.
+    const nowFull = seats.every(s => s.status === 'occupied')
+    const updateData = { seats }
+    let autoStarted = false
+    if (nowFull) {
+      const marks = {}
+      seats.forEach((s, i) => { marks[s.userId] = i === 0 ? 'X' : 'O' })
+      updateData.status = 'ACTIVE'
+      updateData.previewState = {
+        board:       Array(table.maxPlayers >= 2 ? 9 : 9).fill(null),  // XO board — swap when other games land
+        currentTurn: 'X',
+        scores:      { X: 0, O: 0 },
+        round:       1,
+        winner:      null,
+        winLine:     null,
+        marks,
+        botMark:     null,  // PvP, not HvB
+        moves:       [],
+      }
+      autoStarted = true
+    }
+
     const updated = await db.table.update({
       where: { id: table.id },
-      data: { seats },
+      data:  updateData,
     })
 
     // Broadcast so every open view of the table — the detail page, the list
@@ -384,6 +471,17 @@ router.post('/:id/join', requireAuth, async (req, res, next) => {
       targets: { broadcast: true },
       payload: joinPayload,
     }).catch(err => logger.warn({ err: err.message, tableId: table.id }, 'player.joined dispatch failed'))
+
+    // Separate event so the client can tell "seat fill" from "game begins" —
+    // the Tables list only cares about seat changes; the detail page uses
+    // table.started as a trigger to render the live board.
+    if (autoStarted) {
+      dispatch({
+        type: 'table.started',
+        targets: { broadcast: true },
+        payload: { tableId: updated.id, slug: updated.slug, gameId: updated.gameId },
+      }).catch(err => logger.warn({ err: err.message, tableId: updated.id }, 'table.started dispatch failed'))
+    }
 
     res.json({ table: await withSeatDisplay(updated), seated: true })
   } catch (err) {

@@ -18,6 +18,7 @@ import {
   createReply,
 } from '../lib/feedbackHelpers.js'
 import { replyTemplate } from '../lib/emailTemplates.js'
+import { dispatch, emitToRoom } from '../lib/notificationBus.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
@@ -1211,6 +1212,39 @@ router.post('/feedback/:id/reply', async (req, res, next) => {
     res.status(201).json({ reply: result.reply, replies: result.replies })
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
+    next(err)
+  }
+})
+
+/**
+ * DELETE /api/v1/admin/tables/:id
+ * Force-stop any table (mark COMPLETED + notify connected players).
+ */
+router.delete('/tables/:id', async (req, res, next) => {
+  try {
+    const table = await db.table.findUnique({ where: { id: req.params.id } })
+    if (!table) return res.status(404).json({ error: 'Table not found' })
+
+    await db.table.update({
+      where: { id: req.params.id },
+      data:  { status: 'COMPLETED' },
+    })
+
+    // End the game immediately for connected players so GameComponent transitions
+    // to the finished state before the table.deleted navigation arrives.
+    const scores = table.previewState?.scores ?? { X: 0, O: 0 }
+    emitToRoom(`table:${table.id}`, 'game:forfeit', { winner: null, scores })
+
+    // Bounce connected players/spectators back to the tables list.
+    dispatch({
+      type:    'table.deleted',
+      targets: { broadcast: true },
+      payload: { tableId: req.params.id, slug: table.slug },
+    })
+
+    res.json({ ok: true })
+  } catch (err) {
+    logger.error({ err }, 'Admin force-stop table failed')
     next(err)
   }
 })

@@ -31,11 +31,14 @@ export function useGameSDK({
   botSkillId      = null,
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
-  const [phase, setPhase]           = useState('connecting')   // connecting | waiting | playing | finished
+  const [phase, setPhase_]          = useState('connecting')   // connecting | waiting | playing | finished
+  const phaseRef                    = useRef('connecting')
+  const setPhase = (p) => { phaseRef.current = p; setPhase_(p) }
   const [session, setSession]       = useState(null)
   const [abandoned, setAbandoned]   = useState(null)
   const [kicked, setKicked]         = useState(false)
   const [seriesResult, setSeriesResult] = useState(null)
+  const [opponentLeft, setOpponentLeft] = useState(false)
 
   // currentUser in a ref so auth changes don't re-trigger the socket effect.
   // The effect reads currentUserRef.current so it always has the latest value.
@@ -48,6 +51,10 @@ export function useGameSDK({
   const playersRef  = useRef([])
   const settingsRef = useRef({})
   const slugRef     = useRef(null)
+  // Set to true when leaveTable() fires mid-game. Navigation is deferred until
+  // the server echoes game:forfeit back to this socket — guaranteeing the forfeit
+  // was received and processed before the socket can disconnect.
+  const leavingRef  = useRef(false)
 
   // Registered move handlers (from sdk.onMove / sdk.spectate)
   const moveHandlersRef    = useRef([])
@@ -132,8 +139,19 @@ export function useGameSDK({
     },
 
     leaveTable() {
-      // Handled by PlayPage navigation
-      gameEndCallbackRef.current?.({ leave: true })
+      if (phaseRef.current === 'playing') {
+        // Mid-game: forfeit so the opponent is notified immediately.
+        // Defer navigation until the server echoes game:forfeit back — this
+        // guarantees the forfeit is processed before the socket can disconnect,
+        // eliminating the race where the socket closes first and the opponent
+        // gets room:playerDisconnected instead of game:forfeit.
+        leavingRef.current = true
+        getSocket().emit('game:forfeit')
+      } else if (phaseRef.current === 'finished') {
+        // Post-game: tell the other player the opponent has left.
+        getSocket().emit('game:leave')
+        gameEndCallbackRef.current?.({ leave: true })
+      }
     },
 
     onReaction(handler) {
@@ -266,28 +284,57 @@ export function useGameSDK({
       slugRef.current = slug
       const isSpectator = role === 'spectator'
 
-      const cu = currentUserRef.current
-      const guestId = cu?.id ?? 'guest'
+      // Use seat-based IDs when available (ACTIVE re-attach + FORMING guest join).
+      // The old approach derived hostId from room.hostUserId then wrote the
+      // opposite mark to it — which overwrites the current player's mark when
+      // they ARE the host (seat 0). Instead, always key marks by the canonical
+      // userId from the seat data.
+      const hostId  = room?.hostUserId  ?? 'host'
+      const guestId = room?.guestUserId ?? (role === 'player' ? (currentUserRef.current?.id ?? 'guest') : null)
       if (mark) {
-        marksRef.current[guestId] = mark
-        // Derive host's mark (opposite of guest)
-        const hostMark = mark === 'O' ? 'X' : 'O'
-        const hostId = room?.hostUserId ?? 'host'
-        marksRef.current[hostId] = hostMark
+        marksRef.current[hostId]  = 'X'
+        if (guestId) marksRef.current[guestId] = 'O'
       }
 
+      const cu = currentUserRef.current
       const hostPlayer = {
-        id:          room?.hostUserId ?? 'host',
+        id:          hostId,
         displayName: room?.hostUserDisplayName ?? 'Host',
         isBot:       false,
       }
-      const guestPlayer = { id: guestId, displayName: cu?.displayName ?? 'You', isBot: false }
+      const guestPlayer = guestId ? {
+        id:          guestId,
+        displayName: room?.guestUserDisplayName ?? cu?.displayName ?? 'Guest',
+        isBot:       false,
+      } : null
 
-      playersRef.current = isSpectator ? [hostPlayer] : [hostPlayer, guestPlayer]
+      playersRef.current = guestPlayer ? [hostPlayer, guestPlayer] : [hostPlayer]
       settingsRef.current = {
         displayName:    room?.displayName,
         spectatorCount: room?.spectatorCount ?? 0,
         myMark:         isSpectator ? null : mark,
+      }
+
+      // Re-attach to an already-active game: skip 'waiting' and go straight to
+      // 'playing'. The separate game:start that follows is still handled and is
+      // idempotent. Without this shortcut, if game:start is lost or arrives
+      // while listeners are being re-registered (React StrictMode double-invoke),
+      // the player is permanently stuck in the waiting spinner.
+      const isReattach = !isSpectator && room?.status === 'playing'
+      if (isReattach && room?.board) {
+        boardRef.current = room.board
+        setPhase('playing')
+        buildSession({ isSpectator: false })
+        emitMoveEvent(null, {
+          board:       room.board,
+          currentTurn: room.currentTurn ?? 'X',
+          status:      'playing',
+          winner:      room.winner  ?? null,
+          winLine:     room.winLine ?? null,
+          scores:      room.scores  ?? { X: 0, O: 0 },
+          round:       room.round   ?? 1,
+        })
+        return
       }
 
       setPhase(isSpectator ? 'playing' : 'waiting')
@@ -329,11 +376,18 @@ export function useGameSDK({
     })
 
     socket.on('room:playerDisconnected', () => {
-      // Surface as error state — game component shows a notice
+      // Preserve full prior game state so GameComponent doesn't crash on
+      // missing scores/round. The opponent is gone but the game is still
+      // technically "playing" — the idle/disconnect timer will resolve it.
+      const prev = lastMoveEventRef.current?.state ?? {}
       emitMoveEvent(null, {
-        ...(boardRef.current ? { board: boardRef.current } : {}),
-        status: 'playing',
-        error:  'Opponent disconnected. Waiting 60s for reconnect…',
+        board:       boardRef.current ?? prev.board,
+        currentTurn: prev.currentTurn ?? null,
+        status:      'playing',
+        winner:      null,
+        winLine:     null,
+        scores:      prev.scores ?? { X: 0, O: 0 },
+        round:       prev.round ?? 1,
       })
     })
 
@@ -369,7 +423,7 @@ export function useGameSDK({
 
     socket.on('game:moved', ({ cellIndex, board, currentTurn, status, winner, winLine, scores, round }) => {
       setPhase(status === 'finished' ? 'finished' : 'playing')
-      emitMoveEvent(cellIndex, { board, currentTurn, status, winner, winLine, scores, round })
+      emitMoveEvent(cellIndex, { board, currentTurn, status, winner, winLine, scores: scores ?? { X: 0, O: 0 }, round: round ?? 1 })
     })
 
     socket.on('game:forfeit', ({ winner, scores }) => {
@@ -377,12 +431,23 @@ export function useGameSDK({
         board:       boardRef.current,
         currentTurn: null,
         status:      'finished',
-        winner,
+        winner:      winner ?? null,
         winLine:     null,
-        scores,
+        scores:      scores ?? { X: 0, O: 0 },
         round:       null,
       })
       setPhase('finished')
+      // If this player initiated the leave, navigate now that the server has
+      // confirmed the forfeit (the socket is still alive at this point).
+      if (leavingRef.current) {
+        leavingRef.current = false
+        gameEndCallbackRef.current?.({ leave: true })
+      }
+    })
+
+    // Opponent clicked Leave Table after the game ended.
+    socket.on('game:opponent_left', () => {
+      setOpponentLeft(true)
     })
 
     // ── Reaction + idle ────────────────────────────────────────────────────────
@@ -496,7 +561,7 @@ export function useGameSDK({
         'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
         'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',
         'room:cancelled', 'room:abandoned', 'room:kicked',
-        'game:start', 'game:moved', 'game:forfeit',
+        'game:start', 'game:moved', 'game:forfeit', 'game:opponent_left',
         'game:reaction', 'idle:warning',
         'tournament:series:complete', 'error',
       ].forEach(ev => socket.off(ev))
@@ -511,5 +576,5 @@ export function useGameSDK({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, joinSlug, tournamentMatchId])
 
-  return { session, sdk, phase, abandoned, kicked, seriesResult }
+  return { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft }
 }
