@@ -472,10 +472,13 @@ export function useGameSDK({
 
     function onConnect() {
       perfMark('useGameSDK:socket-connect-fired')
-      if (!slugRef.current) {
-        // No room created yet — safe to re-emit (reset guard so emitRoomAction runs)
-        emitted = false
-      }
+      // Always reset the guard on reconnect. If the user has an existing
+      // game (slugRef set), the server's tryReconnect() will detect the
+      // pending disconnect timer and rejoin the game instead of creating
+      // a new one. Without this reset, the emitted guard prevents ANY
+      // re-emit and the client sits frozen after a socket reconnect
+      // (e.g., macOS desktop switch triggers Safari disconnect).
+      emitted = false
       resolveAndEmit()
     }
 
@@ -491,12 +494,17 @@ export function useGameSDK({
       emitted = true // prevent any in-flight getToken().then from emitting after cleanup
       ;[
         'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
-        'room:spectatorJoined', 'room:playerDisconnected', 'room:cancelled',
-        'room:abandoned', 'room:kicked',
+        'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',
+        'room:cancelled', 'room:abandoned', 'room:kicked',
         'game:start', 'game:moved', 'game:forfeit',
         'game:reaction', 'idle:warning',
         'tournament:series:complete', 'error',
       ].forEach(ev => socket.off(ev))
+      // Cleanup note: we do NOT emit room:cancel here. SPA navigation keeps
+      // the socket alive, and the room:cancel can race with a re-mount
+      // (StrictMode or fast back-navigation). Instead, the server-side
+      // room:create / room:create:hvb handler detects the stale table via
+      // _socketToTable and cleans it up before creating the new one.
     }
   // currentUser intentionally omitted — it's accessed via currentUserRef.current
   // so auth changes don't tear down and re-register socket listeners.

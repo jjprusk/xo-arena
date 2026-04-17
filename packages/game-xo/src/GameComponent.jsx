@@ -47,6 +47,10 @@ export default function GameComponent({ session, sdk }) {
   // Prevent signalEnd from firing more than once per game
   const signalledRef  = useRef(false)
   const reactionTimer = useRef(null)
+  // Track the last cell we submitted so handleMoveEvent can detect its own
+  // echo and skip the duplicate sound. Needed for guests where currentUserId
+  // is null and the `playerId !== currentUserId` check always passes.
+  const pendingMoveRef = useRef(null)
 
   const { board, currentTurn, status, winner, winLine, scores, round } = gameState
 
@@ -119,12 +123,23 @@ export default function GameComponent({ session, sdk }) {
       setLastCell(event.move)
       setTimeout(() => setLastCell(null), 350)
 
-      // Play sounds via the platform SDK (single shared AudioContext — honors mute/volume).
-      // Own moves were already sounded on handleCellClick for instant feedback, so skip
-      // the echo here to avoid doubling.
+      // Detect own-move echo: if this cellIndex matches what we just submitted
+      // in handleCellClick, this is our own move bouncing back from the server.
+      // The sound already played on click — skip it here to avoid doubling.
+      // This covers both signed-in users (where playerId === currentUserId
+      // also works) AND guests (where currentUserId is null so the old
+      // playerId check always passed, causing a double beep).
+      const isOwnEcho = event.move === pendingMoveRef.current
+      if (isOwnEcho) pendingMoveRef.current = null
+
       if (event.state.status === 'finished') {
+        // Win/draw sound always plays regardless of who made the finishing move
         sdk.playSound?.(event.state.winner ? 'win' : 'draw')
-      } else if (event.playerId && event.playerId !== session?.currentUserId) {
+      } else if (!isOwnEcho) {
+        // Only play the move sound for the opponent's moves — the player's
+        // own click is silent (visual feedback from the X/O appearing is
+        // sufficient). This avoids the double-beep feel when the bot
+        // responds almost instantly.
         sdk.playSound?.('move')
       }
 
@@ -153,7 +168,7 @@ export default function GameComponent({ session, sdk }) {
 
   function handleCellClick(index) {
     if (!isMyTurn || board[index] !== null) return
-    sdk.playSound?.('move')   // instant feedback — don't wait for the server echo
+    pendingMoveRef.current = index   // mark for echo detection
     sdk.submitMove(index)
   }
 
@@ -164,7 +179,6 @@ export default function GameComponent({ session, sdk }) {
   }
 
   function handleRematch() {
-    sdk.playSound?.('move')
     sdk.rematch?.()
   }
 

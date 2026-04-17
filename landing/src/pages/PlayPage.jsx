@@ -164,6 +164,12 @@ export default function PlayPage() {
   const tournamentId      = searchParams.get('tournamentId')
   const action            = searchParams.get('action')
 
+  // Key that changes when auth identity changes — forces GameView to fully
+  // unmount and remount (new useGameSDK, new socket mapping, new game).
+  // Without this, a guest signing in mid-game keeps the old GameView mounted
+  // with stale guest:socketId marks that don't match the new betterAuthId.
+  const gameKey = authSession?.user?.id ?? 'guest'
+
   const [botConfig, setBotConfig] = useState(null)   // { botUserId, botSkillId }
   const [botError, setBotError]   = useState(false)
 
@@ -193,6 +199,7 @@ export default function PlayPage() {
 
   return (
     <GameView
+      key={gameKey}
       joinSlug={joinSlug}
       tournamentMatchId={tournamentMatchId}
       tournamentId={tournamentId}

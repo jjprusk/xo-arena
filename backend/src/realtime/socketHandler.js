@@ -364,12 +364,70 @@ export async function attachSocketIO(httpServer) {
     const cleanups = []
     const on = (event, handler) => cleanups.push(trackedOn(socket, event, handler))
 
+    // ── Reconnect handling ────────────────────────────────────────
+    // When a user reconnects (new socket, same userId), check if they have
+    // an ACTIVE table with a pending disconnect timer. If so, cancel the
+    // timer, remap the socket, and rejoin the game instead of creating a
+    // new one. This handles Safari tab-switch (which disconnects the socket
+    // on visibilitychange:hidden) and brief network hiccups.
+
+    async function tryReconnect(user) {
+      if (!user?.betterAuthId) return null
+      const baId = user.betterAuthId
+
+      // Check for a pending disconnect timer for this user
+      for (const [oldSid, info] of _disconnectTimers) {
+        if (info.tableId) {
+          const table = await db.table.findUnique({ where: { id: info.tableId } })
+          if (!table || table.status !== 'ACTIVE') continue
+          const seats = table.seats || []
+          const isMine = seats.some(s => s.userId === baId && s.status === 'occupied')
+          if (!isMine) continue
+
+          // Found it — cancel the forfeit timer, remap socket, rejoin
+          clearTimeout(info.timerId)
+          _disconnectTimers.delete(oldSid)
+          unregisterSocket(oldSid)
+          registerSocket(socket.id, table.id, baId)
+          socket.join(`table:${table.id}`)
+          clearIdleTimer(oldSid)
+
+          // Re-emit game state so the client picks up where it left off
+          const ps = table.previewState || {}
+          socket.emit('room:created:hvb', {
+            slug: table.slug,
+            displayName: table.displayName,
+            mark: ps.marks?.[baId] ?? 'X',
+            board: ps.board,
+            currentTurn: ps.currentTurn,
+          })
+
+          // Notify the room the player reconnected
+          io.to(`table:${table.id}`).emit('room:playerReconnected', { userId: baId })
+
+          // Restart idle timer
+          const { warnMs, graceMs } = await getIdleConfig()
+          const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+          resetIdleTimer({ socketId: socket.id, tableId: table.id, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
+
+          logger.info({ socketId: socket.id, tableId: table.id, userId: baId }, 'Player reconnected to active table')
+          return table
+        }
+      }
+      return null
+    }
+
     // ── Room lifecycle ──────────────────────────────────────────────
 
     on('room:create', async ({ spectatorAllowed = true, authToken = null } = {}) => {
       try {
         const user = await resolveSocketUser(authToken)
         if (!socket.connected) return
+
+        // Check for reconnect first — if the user has an active game with
+        // a pending disconnect timer, rejoin it instead of creating a new one
+        const reconnected = await tryReconnect(user)
+        if (reconnected) return
 
         // If this socket already owns a FORMING table, close it first (StrictMode double-invoke)
         const existingTableId = _socketToTable.get(socket.id)
@@ -383,24 +441,29 @@ export async function attachSocketIO(httpServer) {
         const slug = MountainNamePool.toSlug(name)
         const displayName = `Mt. ${name}`
 
-        // Use betterAuthId for seats/marks — matches session.user.id on the frontend
-        // and the convention established by the Table REST routes (req.auth.userId).
-        const baId = user?.betterAuthId ?? null
-        const marks = {}
-        if (baId) marks[baId] = 'X'
+        // Use betterAuthId for seats/marks — matches session.user.id on the frontend.
+        // For guests (no auth), use a socket-derived sentinel so seats/marks always
+        // have a non-null userId. Without this, findUserIdForSocket can't tell the
+        // guest apart from empty seats and game:move silently fails.
+        const baId = user?.betterAuthId ?? `guest:${socket.id}`
+        const marks = { [baId]: 'X' }
 
+        // Guest tables are always private — they're ephemeral throwaway games
+        // that shouldn't clutter the public Tables list. Table GC auto-cleans
+        // them after completion (COMPLETED + >24h).
+        const isGuest = !user?.betterAuthId
         const table = await db.table.create({
           data: {
             gameId: 'xo',
             slug,
             displayName,
-            createdById: baId ?? 'anonymous',
+            createdById: user?.betterAuthId ?? 'anonymous',
             minPlayers: 2,
             maxPlayers: 2,
-            isPrivate: !spectatorAllowed,
+            isPrivate: isGuest || !spectatorAllowed,
             status: 'FORMING',
             seats: [
-              { userId: baId, status: 'occupied', displayName: user?.displayName ?? null },
+              { userId: baId, status: 'occupied', displayName: user?.displayName ?? 'Guest' },
               { userId: null, status: 'empty' },
             ],
             previewState: makePreviewState({ marks }),
@@ -421,31 +484,58 @@ export async function attachSocketIO(httpServer) {
         const user = await resolveSocketUser(authToken)
         if (!socket.connected) return
 
+        // Check for reconnect — if the user has an active HvB game with a
+        // pending disconnect timer, rejoin it instead of creating a new one
+        const reconnected = await tryReconnect(user)
+        if (reconnected) return
+
+        // If this socket was previously in another table (e.g., guest navigated
+        // away and back), clean up the old game completely — leave the socket
+        // room, mark it COMPLETED, clear timers. Without this, stale events
+        // (room:abandoned, game:forfeit from the old table's timers) corrupt
+        // the new game and leave the board frozen.
+        const existingTableId = _socketToTable.get(socket.id)
+        if (existingTableId) {
+          socket.leave(`table:${existingTableId}`)
+          clearIdleTimer(socket.id)
+          clearAllIdleTimersForTable(existingTableId)
+          // Cancel any pending disconnect timer for this socket
+          const dt = _disconnectTimers.get(socket.id)
+          if (dt) { clearTimeout(dt.timerId); _disconnectTimers.delete(socket.id) }
+          // Release mountain name
+          try {
+            const old = await db.table.findUnique({ where: { id: existingTableId }, select: { displayName: true } })
+            const oldName = old?.displayName?.replace('Mt. ', '')
+            if (oldName) mountainPool.release(oldName)
+          } catch {}
+          await db.table.update({ where: { id: existingTableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          unregisterSocket(socket.id)
+        }
+
         const name = mountainPool.acquire()
         if (!name) return socket.emit('error', { message: 'No mountain names available' })
         const slug = MountainNamePool.toSlug(name)
         const displayName = `Mt. ${name}`
 
-        const baId = user?.betterAuthId ?? null
-        const marks = {}
-        if (baId) marks[baId] = 'X'
-        marks[botUserId] = 'O'
+        const baId = user?.betterAuthId ?? `guest:${socket.id}`
+        const marks = { [baId]: 'X', [botUserId]: 'O' }
 
+        const isGuest = !user?.betterAuthId
         const table = await db.table.create({
           data: {
             gameId: 'xo',
             slug,
             displayName,
-            createdById: baId ?? 'anonymous',
+            createdById: user?.betterAuthId ?? 'anonymous',
             minPlayers: 2,
             maxPlayers: 2,
-            isPrivate: !spectatorAllowed,
+            isPrivate: isGuest || !spectatorAllowed,
             status: 'ACTIVE',
             isHvb: true,
             botUserId,
             botSkillId: botSkillId || null,
             seats: [
-              { userId: baId, status: 'occupied', displayName: user?.displayName ?? null },
+              { userId: baId, status: 'occupied', displayName: user?.displayName ?? 'Guest' },
               { userId: botUserId, status: 'occupied', displayName: 'Bot' },
             ],
             previewState: makePreviewState({ marks, botMark: 'O' }),
@@ -528,16 +618,17 @@ export async function attachSocketIO(httpServer) {
         const seats = table.seats || []
         if (seats[1]?.status === 'occupied') return socket.emit('error', { message: 'Room is full' })
 
-        // Update seats and previewState.marks — betterAuthId for consistency
-        const baId = user?.betterAuthId ?? null
+        // Update seats and previewState.marks — betterAuthId for consistency,
+        // socket-derived sentinel for guests.
+        const baId = user?.betterAuthId ?? `guest:${socket.id}`
         const ps = { ...table.previewState }
         const marks = { ...(ps.marks || {}) }
-        if (baId) marks[baId] = 'O'
+        marks[baId] = 'O'
         ps.marks = marks
 
         const newSeats = [
           seats[0],
-          { userId: baId, status: 'occupied', displayName: user?.displayName ?? null },
+          { userId: baId, status: 'occupied', displayName: user?.displayName ?? 'Guest' },
         ]
 
         const updated = await db.table.update({

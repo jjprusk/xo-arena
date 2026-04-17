@@ -100,6 +100,11 @@ export const useSoundStore = create(
       play(key) {
         const { muted, soundPack } = get()
         if (muted) return
+        // Debug trace — enable via `window.__debugSound = true` in DevTools console
+        if (typeof window !== 'undefined' && window.__debugSound) {
+          // eslint-disable-next-line no-console
+          console.trace(`[sound] play('${key}')`)
+        }
         // Fallback to 'retro' if stored pack is invalid (e.g. 'default' from frontend)
         const pack = SYNTH[soundPack] ? soundPack : 'retro'
         SYNTH[pack][key]?.()
