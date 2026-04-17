@@ -8,7 +8,7 @@
  * Layers:
  *   1. Socket connections  — via socketHandler (connection / disconnect)
  *   2. Event listeners     — via trackedOn helper (socket.on / socket.off + disconnect)
- *   3. Rooms               — via roomManager.roomCount (polled at snapshot time)
+ *   3. Active tables       — via db.table.count (polled at snapshot time; replaces roomManager.roomCount)
  *   4. Redis connections   — via activityService and socketHandler Redis adapter
  *
  * The snapshot buffer (last 20 readings, one per minute) drives the leak detector.

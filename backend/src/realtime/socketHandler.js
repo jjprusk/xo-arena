@@ -1,21 +1,22 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * Socket.io event handler.
- * Wires all room lifecycle and game events to the RoomManager.
+ * Socket.io event handler — Phase 3.4.
+ * All game state is persisted in the DB `Table` model (previewState JSON column).
+ * A thin in-memory `_socketToTable` map provides fast socket→tableId lookup for
+ * disconnect handling. No other game state lives in memory.
  */
 
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import Redis from 'ioredis'
 import { jwtVerify, importJWK } from 'jose'
-import { roomManager } from './roomManager.js'
 import { botGameRunner } from './botGameRunner.js'
 import * as pongRunner from './pongRunner.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
 import { getSystemConfig, getMoveForModel } from '../services/skillService.js'
-import { minimaxMove } from '@xo-arena/ai'
+import { minimaxMove, getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
@@ -36,16 +37,50 @@ import {
   getPresence as getTablePresence,
 } from './tablePresence.js'
 import { dispatch as dispatchBus } from '../lib/notificationBus.js'
+import { mountainPool, MountainNamePool } from './mountainNames.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
 
+// ── In-memory maps ────────────────────────────────────────────────────────────
+// socketId → tableId  (thin lookup for disconnect handling — NO game state)
+const _socketToTable = new Map()
+// socketId → userId   (which user a socket belongs to — for mark resolution)
+const _socketToUser = new Map()
+// socketId → { tableId, timerId }  (disconnect forfeit timers)
+const _disconnectTimers = new Map()
+// socketId → timerId  (idle timers — phase 1 warn + phase 2 abandon/kick)
+const _idleTimers = new Map()
+
+/** Register a socket→table mapping and track the userId. */
+function registerSocket(socketId, tableId, userId) {
+  _socketToTable.set(socketId, tableId)
+  if (userId) _socketToUser.set(socketId, userId)
+}
+
+/** Unregister a socket from all in-memory maps. */
+function unregisterSocket(socketId) {
+  _socketToTable.delete(socketId)
+  _socketToUser.delete(socketId)
+}
+
+/**
+ * Find the userId for a given socket in a given table.
+ * Uses the _socketToUser map, falling back to single-occupied-seat heuristic.
+ */
+function findUserIdForSocket(socketId, tableId, seats) {
+  const cached = _socketToUser.get(socketId)
+  if (cached) return cached
+  const occupied = seats.filter(s => s.status === 'occupied' && s.userId)
+  if (occupied.length === 1) return occupied[0].userId
+  return null
+}
+
 // ── Online presence ───────────────────────────────────────────────────────────
-// socketId → { userId, displayName, avatarUrl }
 const _onlineBySocket = new Map()
-// socketId → timeoutId — grace period before removing a disconnected socket
 const _pendingRemovals = new Map()
 const PRESENCE_GRACE_MS = 8_000
+const RECONNECT_WINDOW_MS = 60_000
 
 function broadcastOnlineUsers(io) {
   const users = [...new Map(
@@ -54,17 +89,11 @@ function broadcastOnlineUsers(io) {
   io.emit('guide:onlineUsers', { users })
 }
 
-/**
- * Emit the latest presence snapshot for a single Table to every socket that
- * is currently watching it (i.e. joined to the `table:${id}` socket.io room).
- * Phase 3.1 — see backend/src/realtime/tablePresence.js for the underlying state.
- */
 function broadcastTablePresence(io, tableId) {
   const presence = getTablePresence(tableId)
   io.to(`table:${tableId}`).emit('table:presence', { tableId, ...presence })
 }
 
-/** Cancel any pending grace-period removal for a given userId (called on re-subscribe). */
 function cancelPendingRemoval(userId) {
   for (const [sid, timer] of _pendingRemovals) {
     if (_onlineBySocket.get(sid)?.userId === userId) {
@@ -75,9 +104,88 @@ function cancelPendingRemoval(userId) {
   }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Create a fresh previewState blob. */
+function makePreviewState({ marks, botMark = null }) {
+  return {
+    board: Array(9).fill(null),
+    currentTurn: 'X',
+    scores: { X: 0, O: 0 },
+    round: 1,
+    winner: null,
+    winLine: null,
+    marks,     // { [userId]: 'X'|'O' }
+    botMark,   // 'O' for HvB, null for PvP
+    moves: [],
+  }
+}
+
+/** Build the sanitised room payload the frontend expects from room:joined / room:guestJoined. */
+function sanitizeTable(table, extras = {}) {
+  const ps = table.previewState || {}
+  const seats = table.seats || []
+  const spectatorCount = 0 // spectator count not tracked in DB seats
+  return {
+    slug: table.slug,
+    displayName: table.displayName,
+    status: mapStatus(table.status),
+    board: ps.board ?? Array(9).fill(null),
+    currentTurn: ps.currentTurn ?? 'X',
+    scores: ps.scores ?? { X: 0, O: 0 },
+    round: ps.round ?? 1,
+    winner: ps.winner ?? null,
+    winLine: ps.winLine ?? null,
+    spectatorCount,
+    spectatorAllowed: !table.isPrivate,
+    // userId fields are betterAuthId — matches session.user.id on the frontend
+    hostUserId: seats[0]?.userId ?? null,
+    hostUserDisplayName: extras.hostUserDisplayName ?? seats[0]?.displayName ?? null,
+    hostUserElo: extras.hostUserElo ?? null,
+    guestUserId: seats[1]?.userId ?? null,
+    guestUserDisplayName: extras.guestUserDisplayName ?? seats[1]?.displayName ?? null,
+    guestUserElo: extras.guestUserElo ?? null,
+  }
+}
+
+/** Map DB TableStatus to the frontend's status string. */
+function mapStatus(dbStatus) {
+  switch (dbStatus) {
+    case 'FORMING':   return 'waiting'
+    case 'ACTIVE':    return 'playing'
+    case 'COMPLETED': return 'finished'
+    default:          return dbStatus
+  }
+}
+
+/** Map frontend status back to DB TableStatus. */
+function toDbStatus(frontendStatus) {
+  switch (frontendStatus) {
+    case 'waiting':  return 'FORMING'
+    case 'playing':  return 'ACTIVE'
+    case 'finished': return 'COMPLETED'
+    default:         return frontendStatus
+  }
+}
+
+/** Find userId for a seat by mark from previewState.marks. */
+function userIdForMark(marks, mark) {
+  if (!marks) return null
+  return Object.entries(marks).find(([, m]) => m === mark)?.[0] ?? null
+}
+
+/** Get the userId of the "host" (X player) from seats. */
+function hostUserId(seats) {
+  return seats?.[0]?.userId ?? null
+}
+
+/** Get the userId of the "guest" (O player) from seats. */
+function guestUserId(seats) {
+  return seats?.[1]?.userId ?? null
+}
+
 /**
  * Report a completed tournament match to the tournament service.
- * Returns true on success, false on failure (caller decides whether to clean up).
  */
 async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGames) {
   try {
@@ -91,12 +199,12 @@ async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGa
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      logger.error({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response — bracket will not advance')
+      logger.error({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response')
       return false
     }
     return true
   } catch (err) {
-    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed — bracket will not advance')
+    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed')
     return false
   }
 }
@@ -116,19 +224,13 @@ async function getIdleConfig() {
   }
 }
 
-/**
- * Build the idle-timer callbacks for a given io instance.
- * Used when starting or resetting timers for players and spectators.
- */
 function makeIdleCallbacks(io) {
   return {
     onWarn: ({ socketId, graceMs }) => {
       io.to(socketId).emit('idle:warning', { secondsRemaining: Math.round(graceMs / 1000) })
     },
-    onAbandon: ({ absentSocketId, absentUserId, allSocketIds }) => {
-      for (const sid of allSocketIds) {
-        io.to(sid).emit('room:abandoned', { reason: 'idle', absentUserId })
-      }
+    onAbandon: ({ absentSocketId, absentUserId, tableId }) => {
+      io.to(`table:${tableId}`).emit('room:abandoned', { reason: 'idle', absentUserId })
     },
     onKick: ({ socketId }) => {
       io.to(socketId).emit('room:kicked', { reason: 'idle' })
@@ -136,10 +238,61 @@ function makeIdleCallbacks(io) {
   }
 }
 
+/**
+ * Reset (or start) the 2-phase idle timer for a single socket.
+ * Phase 1: warn after warnMs.  Phase 2: abandon/kick after graceMs.
+ */
+function resetIdleTimer({ socketId, tableId, isPlayer, warnMs, graceMs, onWarn, onAbandon, onKick }) {
+  clearIdleTimer(socketId)
+
+  const phase1 = setTimeout(() => {
+    onWarn?.({ socketId, graceMs })
+
+    const phase2 = setTimeout(async () => {
+      _idleTimers.delete(socketId)
+      if (isPlayer) {
+        // Look up userId before marking COMPLETED
+        try {
+          const table = await db.table.findUnique({ where: { id: tableId }, select: { seats: true } })
+          const seat = table?.seats?.find(s => _socketToTable.get(socketId) === tableId)
+          const absentUserId = seat?.userId ?? null
+          // Mark table COMPLETED
+          await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        } catch (_) { /* best effort */ }
+        unregisterSocket(socketId)
+        onAbandon?.({ absentSocketId: socketId, absentUserId: null, tableId })
+      } else {
+        unregisterSocket(socketId)
+        onKick?.({ socketId })
+      }
+    }, graceMs)
+
+    _idleTimers.set(socketId, phase2)
+  }, warnMs)
+
+  _idleTimers.set(socketId, phase1)
+}
+
+function clearIdleTimer(socketId) {
+  const t = _idleTimers.get(socketId)
+  if (t) {
+    clearTimeout(t)
+    _idleTimers.delete(socketId)
+  }
+}
+
+/** Clear all idle timers for sockets pointing at a given table. */
+function clearAllIdleTimersForTable(tableId) {
+  for (const [sid, _] of _socketToTable) {
+    if (_socketToTable.get(sid) === tableId) {
+      clearIdleTimer(sid)
+    }
+  }
+}
+
 async function resolveSocketUser(token) {
   if (!token) return null
   try {
-    // Verify the JWT using the same approach as the HTTP middleware (jose + JWKS DB lookup)
     const [rawHeader] = token.split('.')
     const { kid } = JSON.parse(Buffer.from(rawHeader, 'base64url').toString())
     if (!kid) return null
@@ -151,9 +304,6 @@ async function resolveSocketUser(token) {
     const { payload } = await jwtVerify(token, cryptoKey)
     if (!payload?.sub) return null
 
-    // Match the HTTP middleware: require a live BaSession alongside a valid
-    // JWT. Prevents sockets from staying authenticated after the session was
-    // purged by idleSessionPurgeService (or explicitly signed out).
     const activeSession = await db.baSession.findFirst({
       where: { userId: payload.sub, expiresAt: { gt: new Date() } },
       select: { id: true },
@@ -166,6 +316,17 @@ async function resolveSocketUser(token) {
     return null
   }
 }
+
+// ── Active table count (for resource snapshots) ──────────────────────────────
+async function getActiveTableCount() {
+  try {
+    return await db.table.count({ where: { status: { in: ['FORMING', 'ACTIVE'] } } })
+  } catch (_) {
+    return 0
+  }
+}
+
+// ── Main entry point ─────────────────────────────────────────────────────────
 
 /**
  * Attach Socket.io to an HTTP server.
@@ -200,27 +361,55 @@ export async function attachSocketIO(httpServer) {
     incrementSocket()
     logger.info({ socketId: socket.id }, 'socket connected')
 
-    // ── Room lifecycle ──────────────────────────────────────────────
-
     const cleanups = []
     const on = (event, handler) => cleanups.push(trackedOn(socket, event, handler))
+
+    // ── Room lifecycle ──────────────────────────────────────────────
 
     on('room:create', async ({ spectatorAllowed = true, authToken = null } = {}) => {
       try {
         const user = await resolveSocketUser(authToken)
-        if (!socket.connected) return  // disconnected while resolving auth
-        const room = roomManager.createRoom({
-          hostSocketId: socket.id,
-          hostUserId: user?.id || null,
-          spectatorAllowed,
-        })
-        room.hostUserDisplayName = user?.displayName ?? null
-        if (user?.id) {
-          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
-          room.hostUserElo = eloRow?.rating ?? null
+        if (!socket.connected) return
+
+        // If this socket already owns a FORMING table, close it first (StrictMode double-invoke)
+        const existingTableId = _socketToTable.get(socket.id)
+        if (existingTableId) {
+          await db.table.update({ where: { id: existingTableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          unregisterSocket(socket.id)
         }
-        socket.join(room.slug)
-        socket.emit('room:created', { slug: room.slug, displayName: room.displayName, mark: 'X' })
+
+        const name = mountainPool.acquire()
+        if (!name) return socket.emit('error', { message: 'No mountain names available' })
+        const slug = MountainNamePool.toSlug(name)
+        const displayName = `Mt. ${name}`
+
+        // Use betterAuthId for seats/marks — matches session.user.id on the frontend
+        // and the convention established by the Table REST routes (req.auth.userId).
+        const baId = user?.betterAuthId ?? null
+        const marks = {}
+        if (baId) marks[baId] = 'X'
+
+        const table = await db.table.create({
+          data: {
+            gameId: 'xo',
+            slug,
+            displayName,
+            createdById: baId ?? 'anonymous',
+            minPlayers: 2,
+            maxPlayers: 2,
+            isPrivate: !spectatorAllowed,
+            status: 'FORMING',
+            seats: [
+              { userId: baId, status: 'occupied', displayName: user?.displayName ?? null },
+              { userId: null, status: 'empty' },
+            ],
+            previewState: makePreviewState({ marks }),
+          },
+        })
+
+        registerSocket(socket.id, table.id, baId)
+        socket.join(`table:${table.id}`)
+        socket.emit('room:created', { slug: table.slug, displayName: table.displayName, mark: 'X' })
       } catch (err) {
         socket.emit('error', { message: err.message })
       }
@@ -231,39 +420,53 @@ export async function attachSocketIO(httpServer) {
         if (!botUserId) return socket.emit('error', { message: 'botUserId required' })
         const user = await resolveSocketUser(authToken)
         if (!socket.connected) return
-        // Human is X (host), bot is O
-        const room = roomManager.createRoom({
-          hostSocketId: socket.id,
-          hostUserId: user?.id || null,
-          spectatorAllowed,
-          isHvb: true,
-          botUserId,
-          botSkillId: botSkillId || null,
-          botMark: 'O',
+
+        const name = mountainPool.acquire()
+        if (!name) return socket.emit('error', { message: 'No mountain names available' })
+        const slug = MountainNamePool.toSlug(name)
+        const displayName = `Mt. ${name}`
+
+        const baId = user?.betterAuthId ?? null
+        const marks = {}
+        if (baId) marks[baId] = 'X'
+        marks[botUserId] = 'O'
+
+        const table = await db.table.create({
+          data: {
+            gameId: 'xo',
+            slug,
+            displayName,
+            createdById: baId ?? 'anonymous',
+            minPlayers: 2,
+            maxPlayers: 2,
+            isPrivate: !spectatorAllowed,
+            status: 'ACTIVE',
+            isHvb: true,
+            botUserId,
+            botSkillId: botSkillId || null,
+            seats: [
+              { userId: baId, status: 'occupied', displayName: user?.displayName ?? null },
+              { userId: botUserId, status: 'occupied', displayName: 'Bot' },
+            ],
+            previewState: makePreviewState({ marks, botMark: 'O' }),
+          },
         })
-        room.hostUserDisplayName = user?.displayName ?? null
-        if (user?.id) {
-          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
-          room.hostUserElo = eloRow?.rating ?? null
-        }
-        // Join the human and a virtual bot "seat" (no real socket for bot)
-        socket.join(room.slug)
-        // Simulate guest join for the bot — set guestId to a sentinel, update status to playing
-        room.guestId = `bot:${botUserId}`
-        room.guestUserId = botUserId
-        room.playerMarks[`bot:${botUserId}`] = 'O'
-        room.status = 'playing'
+
+        registerSocket(socket.id, table.id, baId)
+        socket.join(`table:${table.id}`)
+        const ps = table.previewState
         socket.emit('room:created:hvb', {
-          slug: room.slug,
-          displayName: room.displayName,
+          slug: table.slug,
+          displayName: table.displayName,
           mark: 'X',
-          board: room.board,
-          currentTurn: room.currentTurn,
+          board: ps.board,
+          currentTurn: ps.currentTurn,
         })
+
         // Start idle timer for the human
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-        roomManager.resetIdleTimer({ socketId: socket.id, warnMs, graceMs, onWarn, onAbandon, onKick })
+        resetIdleTimer({ socketId: socket.id, tableId: table.id, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
       } catch (err) {
         socket.emit('error', { message: err.message })
       }
@@ -271,20 +474,22 @@ export async function attachSocketIO(httpServer) {
 
     on('room:join', async ({ slug, role = 'player', authToken = null }) => {
       const user = await resolveSocketUser(authToken)
-      if (!socket.connected) return  // disconnected while resolving auth
+      if (!socket.connected) return
+
       if (role === 'spectator') {
-        // First try PvP rooms, then bot game rooms
-        if (roomManager.getRoom(slug)) {
-          const result = roomManager.joinAsSpectator({ slug, socketId: socket.id })
-          if (result.error) return socket.emit('error', { message: result.error })
-          socket.join(slug)
-          socket.emit('room:joined', { slug, role: 'spectator', room: sanitizeRoom(result.room) })
-          io.to(slug).emit('room:spectatorJoined', { spectatorCount: result.room.spectatorIds.size })
-          // Start spectator idle timer (only if game is in progress)
-          if (result.room.status === 'playing') {
+        // Try PvP tables first (by slug), then bot game rooms
+        const table = await db.table.findFirst({ where: { slug } })
+        if (table) {
+          if (table.isPrivate) return socket.emit('error', { message: 'Spectators not allowed in this room' })
+          registerSocket(socket.id, table.id, null)
+          socket.join(`table:${table.id}`)
+          socket.emit('room:joined', { slug, role: 'spectator', room: sanitizeTable(table) })
+          io.to(`table:${table.id}`).emit('room:spectatorJoined', { spectatorCount: 0 })
+          // Start spectator idle timer if game is in progress
+          if (table.status === 'ACTIVE') {
             const { graceMs, spectatorMs } = await getIdleConfig()
             const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-            roomManager.resetIdleTimer({ socketId: socket.id, warnMs: spectatorMs, graceMs, onWarn, onAbandon, onKick })
+            resetIdleTimer({ socketId: socket.id, tableId: table.id, isPlayer: false, warnMs: spectatorMs, graceMs, onWarn, onAbandon, onKick })
           }
         } else if (botGameRunner.hasSlug(slug)) {
           const result = botGameRunner.joinAsSpectator({ slug, socketId: socket.id })
@@ -316,93 +521,228 @@ export async function attachSocketIO(httpServer) {
           return socket.emit('error', { message: 'Room not found' })
         }
       } else {
-        const result = roomManager.joinRoom({ slug, guestSocketId: socket.id, guestUserId: user?.id || null })
-        if (result.error) return socket.emit('error', { message: result.error })
+        // Player join — find FORMING table by slug
+        const table = await db.table.findFirst({ where: { slug, status: 'FORMING' } })
+        if (!table) return socket.emit('error', { message: 'Room not found' })
 
-        const room = result.room
-        room.guestUserDisplayName = user?.displayName ?? null
+        const seats = table.seats || []
+        if (seats[1]?.status === 'occupied') return socket.emit('error', { message: 'Room is full' })
+
+        // Update seats and previewState.marks — betterAuthId for consistency
+        const baId = user?.betterAuthId ?? null
+        const ps = { ...table.previewState }
+        const marks = { ...(ps.marks || {}) }
+        if (baId) marks[baId] = 'O'
+        ps.marks = marks
+
+        const newSeats = [
+          seats[0],
+          { userId: baId, status: 'occupied', displayName: user?.displayName ?? null },
+        ]
+
+        const updated = await db.table.update({
+          where: { id: table.id },
+          data: {
+            status: 'ACTIVE',
+            seats: newSeats,
+            previewState: ps,
+          },
+        })
+
+        registerSocket(socket.id, updated.id, baId)
+        socket.join(`table:${updated.id}`)
+
+        // Build extras for sanitize — ELO lookups use domain User.id (GameElo FK)
+        let hostUserElo = null
+        const hostBaId = hostUserId(newSeats) // betterAuthId from seat
+        if (hostBaId) {
+          const hostUser = await db.user.findUnique({ where: { betterAuthId: hostBaId }, select: { id: true } })
+          if (hostUser) {
+            const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: hostUser.id, gameId: 'xo' } } })
+            hostUserElo = eloRow?.rating ?? null
+          }
+        }
+        let guestUserElo = null
         if (user?.id) {
           const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
-          room.guestUserElo = eloRow?.rating ?? null
+          guestUserElo = eloRow?.rating ?? null
         }
-        socket.join(slug)
-        socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeRoom(room) })
-        // Notify host
-        io.to(slug).emit('room:guestJoined', { room: sanitizeRoom(room) })
-        // Start game
-        io.to(slug).emit('game:start', { board: room.board, currentTurn: room.currentTurn, round: room.round })
+
+        const extras = {
+          hostUserDisplayName: newSeats[0]?.displayName ?? null,
+          hostUserElo,
+          guestUserDisplayName: user?.displayName ?? null,
+          guestUserElo,
+        }
+
+        socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeTable(updated, extras) })
+        io.to(`table:${updated.id}`).emit('room:guestJoined', { room: sanitizeTable(updated, extras) })
+        io.to(`table:${updated.id}`).emit('game:start', {
+          board: ps.board,
+          currentTurn: ps.currentTurn,
+          round: ps.round ?? 1,
+        })
 
         // Start idle timers for both players
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-        for (const pid of [room.hostId, room.guestId]) {
-          roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
+        // Host socket — find it from _socketToTable
+        for (const [sid, tid] of _socketToTable) {
+          if (tid === updated.id && sid !== socket.id) {
+            resetIdleTimer({ socketId: sid, tableId: updated.id, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
+          }
         }
+        resetIdleTimer({ socketId: socket.id, tableId: updated.id, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
       }
     })
 
-    on('room:swapName', () => {
-      const result = roomManager.swapName({ socketId: socket.id })
-      if (result.error) return socket.emit('error', { message: result.error })
-      socket.emit('room:renamed', { slug: result.room.slug, displayName: result.room.displayName })
+    on('room:swapName', async () => {
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return socket.emit('error', { message: 'Room not found' })
+
+      const table = await db.table.findUnique({ where: { id: tableId } })
+      if (!table) return socket.emit('error', { message: 'Room not found' })
+      if (table.status !== 'FORMING') return socket.emit('error', { message: 'Cannot rename after opponent joins' })
+
+      // Verify host (seat 0)
+      const seats = table.seats || []
+      const hostSeatUserId = seats[0]?.userId
+      // We can't check by socketId directly; check that this socket is mapped to this table
+      // and that the table is still FORMING (only the creator would be connected)
+
+      const oldName = table.displayName.replace('Mt. ', '')
+      const newName = mountainPool.swap(oldName)
+      if (!newName) return socket.emit('error', { message: 'No names available' })
+
+      const newSlug = MountainNamePool.toSlug(newName)
+      const newDisplayName = `Mt. ${newName}`
+
+      await db.table.update({
+        where: { id: tableId },
+        data: { slug: newSlug, displayName: newDisplayName },
+      })
+
+      socket.emit('room:renamed', { slug: newSlug, displayName: newDisplayName })
     })
 
-    on('room:cancel', () => {
-      const slug = roomManager._socketToRoom.get(socket.id)
-      if (slug) {
-        io.to(slug).emit('room:cancelled')
-        roomManager.closeRoom(slug)
+    on('room:cancel', async () => {
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return
+
+      const table = await db.table.findUnique({ where: { id: tableId } })
+      if (table) {
+        // Release mountain name
+        const name = table.displayName?.replace('Mt. ', '')
+        if (name) mountainPool.release(name)
+
+        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
+      }
+
+      io.to(`table:${tableId}`).emit('room:cancelled')
+      clearAllIdleTimersForTable(tableId)
+      // Remove all socket mappings for this table
+      for (const [sid, tid] of _socketToTable) {
+        if (tid === tableId) unregisterSocket(sid)
       }
     })
 
     // ── Game events ─────────────────────────────────────────────────
 
     on('game:move', async ({ cellIndex }) => {
-      const result = roomManager.makeMove({ socketId: socket.id, cellIndex })
-      if (result.error) return socket.emit('error', { message: result.error })
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return socket.emit('error', { message: 'Not in a room' })
 
-      const room = result.room
-      const slug = room.slug
+      const table = await db.table.findUnique({ where: { id: tableId } })
+      if (!table) return socket.emit('error', { message: 'Room not found' })
+      if (table.status !== 'ACTIVE') return socket.emit('error', { message: 'Game not in progress' })
 
-      io.to(slug).emit('game:moved', {
-        cellIndex,
-        board: room.board,
-        currentTurn: room.currentTurn,
-        status: room.status,
-        winner: room.winner,
-        winLine: room.winLine,
-        scores: room.scores,
+      const ps = { ...table.previewState }
+      const marks = ps.marks || {}
+      const seats = table.seats || []
+
+      // Determine this player's userId — find from seats which userId maps to this socket
+      const myUserId = findUserIdForSocket(socket.id, tableId, seats)
+      if (!myUserId) return socket.emit('error', { message: 'Not a player in this room' })
+
+      const playerMark = marks[myUserId]
+      if (!playerMark) return socket.emit('error', { message: 'Not a player in this room' })
+      if (playerMark !== ps.currentTurn) return socket.emit('error', { message: 'Not your turn' })
+      if (ps.board[cellIndex] !== null) return socket.emit('error', { message: 'Cell already occupied' })
+
+      // Apply move
+      ps.board[cellIndex] = playerMark
+      ps.moves = ps.moves || []
+      ps.moves.push({ n: ps.moves.length + 1, m: playerMark, c: cellIndex })
+
+      const winner = getWinner(ps.board)
+      const draw = !winner && isBoardFull(ps.board)
+
+      let newStatus = table.status
+      if (winner) {
+        ps.winner = winner.mark ?? winner
+        ps.winLine = winner.line ?? WIN_LINES.find(([a, b, c]) =>
+          ps.board[a] === ps.winner && ps.board[b] === ps.winner && ps.board[c] === ps.winner
+        ) ?? null
+        const winMark = ps.winner
+        ps.scores[winMark] = (ps.scores[winMark] || 0) + 1
+        newStatus = 'COMPLETED'
+      } else if (draw) {
+        ps.winner = null
+        newStatus = 'COMPLETED'
+      } else {
+        ps.currentTurn = playerMark === 'X' ? 'O' : 'X'
+      }
+
+      const updated = await db.table.update({
+        where: { id: tableId },
+        data: { previewState: ps, status: newStatus },
       })
 
-      if (room.status === 'finished') {
-        recordPvpGame(room, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
+      io.to(`table:${tableId}`).emit('game:moved', {
+        cellIndex,
+        board: ps.board,
+        currentTurn: ps.currentTurn,
+        status: mapStatus(newStatus),
+        winner: ps.winner,
+        winLine: ps.winLine,
+        scores: ps.scores,
+      })
+
+      if (newStatus === 'COMPLETED') {
+        recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
       } else {
-        // Reset idle timer for the player who just moved; track activity
-        const userId = room.hostId === socket.id ? room.hostUserId : room.guestUserId
-        if (userId) recordActivity(userId)
+        // Track activity for the mover
+        if (myUserId) recordActivity(myUserId)
 
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-        roomManager.resetIdleTimer({ socketId: socket.id, warnMs, graceMs, onWarn, onAbandon, onKick })
+        resetIdleTimer({ socketId: socket.id, tableId, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
 
-        // For HvB rooms, compute and apply bot move server-side
-        if (room.isHvb) {
-          dispatchBotMove(room, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot move'))
+        // HvB: dispatch bot move
+        if (table.isHvb) {
+          dispatchBotMove(updated, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot move'))
         }
       }
     })
 
     on('idle:pong', async () => {
-      // User acknowledged the "Still Active?" popup — reset their idle timer
-      const slug = roomManager._socketToRoom.get(socket.id)
-      const room = slug && roomManager.getRoom(slug)
-      if (!room || room.status !== 'playing') return
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return
 
-      const isPlayer = room.hostId === socket.id || room.guestId === socket.id
+      const table = await db.table.findUnique({ where: { id: tableId } })
+      if (!table || table.status !== 'ACTIVE') return
+
+      const seats = table.seats || []
+      const myUserId = findUserIdForSocket(socket.id, tableId, seats)
+      const isPlayer = seats.some(s => s.userId === myUserId && s.status === 'occupied')
+
       const { warnMs, graceMs, spectatorMs } = await getIdleConfig()
       const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-      roomManager.resetIdleTimer({
+      resetIdleTimer({
         socketId: socket.id,
+        tableId,
+        isPlayer,
         warnMs: isPlayer ? warnMs : spectatorMs,
         graceMs,
         onWarn,
@@ -412,60 +752,92 @@ export async function attachSocketIO(httpServer) {
     })
 
     on('game:rematch', async () => {
-      const result = roomManager.rematch({ socketId: socket.id })
-      if (result.error) return socket.emit('error', { message: result.error })
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return socket.emit('error', { message: 'Room not found' })
 
-      const room = result.room
-      io.to(room.slug).emit('game:start', {
-        board: room.board,
-        currentTurn: room.currentTurn,
-        round: room.round,
-        scores: room.scores,
+      const table = await db.table.findUnique({ where: { id: tableId } })
+      if (!table) return socket.emit('error', { message: 'Room not found' })
+      if (table.status !== 'COMPLETED') return socket.emit('error', { message: 'Game not finished' })
+
+      const ps = { ...table.previewState }
+      ps.board = Array(9).fill(null)
+      ps.currentTurn = ps.currentTurn === 'X' ? 'O' : 'X'
+      ps.winner = null
+      ps.winLine = null
+      ps.moves = []
+      ps.round = (ps.round || 1) + 1
+
+      const updated = await db.table.update({
+        where: { id: tableId },
+        data: { status: 'ACTIVE', previewState: ps },
       })
 
-      // Restart idle timers for both players on rematch
+      io.to(`table:${tableId}`).emit('game:start', {
+        board: ps.board,
+        currentTurn: ps.currentTurn,
+        round: ps.round,
+        scores: ps.scores,
+      })
+
+      // Restart idle timers for both players
       const { warnMs, graceMs } = await getIdleConfig()
       const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-      for (const pid of [room.hostId, room.guestId]) {
-        if (pid) roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
+      for (const [sid, tid] of _socketToTable) {
+        if (tid === tableId) {
+          resetIdleTimer({ socketId: sid, tableId, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
+        }
       }
 
-      // HvB: if alternation gives the bot the opening move, dispatch it now
-      if (room.isHvb && room.currentTurn === room.botMark) {
-        dispatchBotMove(room, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot opening move on rematch'))
+      // HvB: if bot has opening move after alternation, dispatch it
+      if (table.isHvb && ps.currentTurn === ps.botMark) {
+        dispatchBotMove(updated, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot opening move on rematch'))
       }
     })
 
-    on('game:forfeit', () => {
-      const slug = roomManager._socketToRoom.get(socket.id)
-      const room = slug && roomManager.getRoom(slug)
-      if (!room) return
-      const mark = room.playerMarks[socket.id]
+    on('game:forfeit', async () => {
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return
+
+      const table = await db.table.findUnique({ where: { id: tableId } })
+      if (!table) return
+
+      const ps = { ...table.previewState }
+      const seats = table.seats || []
+      const myUserId = findUserIdForSocket(socket.id, tableId, seats)
+      const mark = ps.marks?.[myUserId]
+      if (!mark) return
+
       const oppMark = mark === 'X' ? 'O' : 'X'
-      room.winner = oppMark
-      room.scores[oppMark]++
-      room.status = 'finished'
-      io.to(slug).emit('game:forfeit', { forfeiterMark: mark, winner: oppMark, scores: room.scores })
-      recordPvpGame(room, io).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
+      ps.winner = oppMark
+      ps.scores[oppMark] = (ps.scores[oppMark] || 0) + 1
+
+      const updated = await db.table.update({
+        where: { id: tableId },
+        data: { status: 'COMPLETED', previewState: ps },
+      })
+
+      io.to(`table:${tableId}`).emit('game:forfeit', { forfeiterMark: mark, winner: oppMark, scores: ps.scores })
+      recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
     })
 
     // ── Emoji reactions ──────────────────────────────────────────────
 
-    on('game:reaction', ({ emoji }) => {
+    on('game:reaction', async ({ emoji }) => {
       if (!ALLOWED_REACTIONS.includes(emoji)) return
-      const slug = roomManager._socketToRoom.get(socket.id)
-      if (!slug) return
-      const room = roomManager.getRoom(slug)
-      const fromMark = room?.playerMarks?.[socket.id] ?? 'spectator'
-      // Broadcast to everyone else in the room
-      socket.to(slug).emit('game:reaction', { emoji, fromMark })
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return
+
+      const table = await db.table.findUnique({ where: { id: tableId } })
+      if (!table) return
+
+      const seats = table.seats || []
+      const ps = table.previewState || {}
+      const myUserId = findUserIdForSocket(socket.id, tableId, seats)
+      const fromMark = ps.marks?.[myUserId] ?? 'spectator'
+      socket.to(`table:${tableId}`).emit('game:reaction', { emoji, fromMark })
     })
 
     // ── Tournament PVP room join ─────────────────────────────────────
-    //
-    // When a tournament:match:ready event is received, both players can
-    // request to join a dedicated tournament game room via this event.
-    // The first caller creates the room; the second caller joins it.
 
     on('tournament:room:join', async ({ matchId, authToken } = {}) => {
       if (!matchId) return socket.emit('error', { message: 'matchId required' })
@@ -479,7 +851,6 @@ export async function attachSocketIO(httpServer) {
 
       const { tournamentId, participant1UserId, participant2UserId, bestOfN } = pending
 
-      // Verify the caller is one of the two participants (by betterAuthId)
       if (user.betterAuthId !== participant1UserId && user.betterAuthId !== participant2UserId) {
         return socket.emit('error', { message: 'You are not a participant in this match' })
       }
@@ -488,48 +859,109 @@ export async function attachSocketIO(httpServer) {
       let mark
 
       if (!slug) {
-        // First player to arrive — create the room
-        const room = roomManager.createRoom({
-          hostSocketId: socket.id,
-          hostUserId: user.id,
-          spectatorAllowed: false,
-          tournamentMatchId: matchId,
-          tournamentId,
-          bestOfN,
+        // First player — create the table (use betterAuthId for seats/marks)
+        const name = mountainPool.acquire()
+        if (!name) return socket.emit('error', { message: 'No mountain names available' })
+        slug = MountainNamePool.toSlug(name)
+        const displayName = `Mt. ${name}`
+
+        const baId = user.betterAuthId
+        const marks = { [baId]: 'X' }
+
+        const table = await db.table.create({
+          data: {
+            gameId: 'xo',
+            slug,
+            displayName,
+            createdById: baId,
+            minPlayers: 2,
+            maxPlayers: 2,
+            isPrivate: true,
+            isTournament: true,
+            tournamentMatchId: matchId,
+            tournamentId,
+            bestOfN,
+            status: 'FORMING',
+            seats: [
+              { userId: baId, status: 'occupied', displayName: user.displayName ?? null },
+              { userId: null, status: 'empty' },
+            ],
+            previewState: makePreviewState({ marks }),
+          },
         })
-        room.hostUserDisplayName = user.displayName ?? null
-        {
-          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
-          room.hostUserElo = eloRow?.rating ?? null
-        }
-        socket.join(room.slug)
-        slug = room.slug
+
+        registerSocket(socket.id, table.id, baId)
+        socket.join(`table:${table.id}`)
         mark = 'X'
         setPendingPvpMatchSlug(matchId, slug)
         socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })
       } else {
         // Second player — join as guest
-        const result = roomManager.joinRoom({ slug, guestSocketId: socket.id, guestUserId: user.id })
-        if (result.error) return socket.emit('error', { message: result.error })
+        const table = await db.table.findFirst({ where: { slug, status: 'FORMING' } })
+        if (!table) return socket.emit('error', { message: 'Room not found' })
 
-        const room = result.room
-        room.guestUserDisplayName = user.displayName ?? null
-        {
-          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
-          room.guestUserElo = eloRow?.rating ?? null
-        }
+        const baId = user.betterAuthId
+        const ps = { ...table.previewState }
+        const marks = { ...(ps.marks || {}) }
+        marks[baId] = 'O'
+        ps.marks = marks
+
+        const newSeats = [
+          table.seats[0],
+          { userId: baId, status: 'occupied', displayName: user.displayName ?? null },
+        ]
+
+        const updated = await db.table.update({
+          where: { id: table.id },
+          data: {
+            status: 'ACTIVE',
+            seats: newSeats,
+            previewState: ps,
+          },
+        })
+
+        registerSocket(socket.id, updated.id, baId)
+        socket.join(`table:${updated.id}`)
         mark = 'O'
-        socket.join(slug)
+
+        // Build extras — ELO lookups need domain User.id
+        let hostElo = null
+        const hostBaId = hostUserId(newSeats)
+        if (hostBaId) {
+          const hostUser = await db.user.findUnique({ where: { betterAuthId: hostBaId }, select: { id: true } })
+          if (hostUser) {
+            const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: hostUser.id, gameId: 'xo' } } })
+            hostElo = eloRow?.rating ?? null
+          }
+        }
+        let guestElo = null
+        if (user.id) {
+          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
+          guestElo = eloRow?.rating ?? null
+        }
+
+        const extras = {
+          hostUserDisplayName: newSeats[0]?.displayName ?? null,
+          hostUserElo: hostElo,
+          guestUserDisplayName: user.displayName ?? null,
+          guestUserElo: guestElo,
+        }
+
         socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })
-        // Notify host that guest joined (same as normal room join)
-        io.to(slug).emit('room:guestJoined', { room: sanitizeRoom(room) })
-        io.to(slug).emit('game:start', { board: room.board, currentTurn: room.currentTurn, round: room.round })
+        io.to(`table:${updated.id}`).emit('room:guestJoined', { room: sanitizeTable(updated, extras) })
+        io.to(`table:${updated.id}`).emit('game:start', {
+          board: ps.board,
+          currentTurn: ps.currentTurn,
+          round: ps.round ?? 1,
+        })
 
         // Start idle timers for both players
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-        for (const pid of [room.hostId, room.guestId]) {
-          roomManager.resetIdleTimer({ socketId: pid, warnMs, graceMs, onWarn, onAbandon, onKick })
+        for (const [sid, tid] of _socketToTable) {
+          if (tid === updated.id) {
+            resetIdleTimer({ socketId: sid, tableId: updated.id, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
+          }
         }
       }
     })
@@ -582,17 +1014,10 @@ export async function attachSocketIO(httpServer) {
     })
 
     // ── Table presence (Phase 3.1) ──────────────────────────────────
-    // Subscribe a socket to a table's presence stream. Authed users
-    // contribute their userId (used to fire spectator.joined to the
-    // bus); guests can still watch but only count toward the total.
-    //
-    // TODO Phase 3.4: when Tables are the only primitive, the seated
-    // players in db.table.seats become the natural cohort target for
-    // spectator.joined here — no separate seat lookup needed.
 
     on('table:watch', async ({ tableId, authToken } = {}) => {
       if (!tableId || typeof tableId !== 'string') return
-      const user = await resolveSocketUser(authToken)  // null = guest
+      const user = await resolveSocketUser(authToken)
       const wasNew = addTableWatcher(tableId, socket.id, {
         userId:      user?.id ?? null,
         displayName: user?.displayName ?? user?.username ?? null,
@@ -600,9 +1025,6 @@ export async function attachSocketIO(httpServer) {
       socket.join(`table:${tableId}`)
       broadcastTablePresence(io, tableId)
 
-      // Fire spectator.joined to the seated players' cohort (only on truly
-      // new authed watchers — duplicate watch calls from the same socket are
-      // a no-op so we don't spam the bus).
       if (wasNew && user?.id) {
         try {
           const table = await db.table.findUnique({
@@ -634,30 +1056,23 @@ export async function attachSocketIO(httpServer) {
       if (removed) broadcastTablePresence(io, tableId)
     })
 
-    // ── User-specific room (for tournament and other personal events) ─────────
+    // ── User-specific room ──────────────────────────────────────────
     on('user:subscribe', async ({ authToken } = {}) => {
       const user = await resolveSocketUser(authToken)
       if (!user) return
       socket.join(`user:${user.id}`)
       logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
 
-      // Register presence and broadcast updated online list
       if (!user.isBot) {
-        // Cancel any grace-period removal for this user (handles reconnect after brief disconnect)
         cancelPendingRemoval(user.id)
         _onlineBySocket.set(socket.id, {
           userId:      user.id,
           displayName: user.displayName ?? user.username ?? 'Player',
           avatarUrl:   user.avatarUrl ?? null,
         })
-        // Ack the subscription so the client knows its own presence userId.
-        // The client uses this to detect when it's been dropped from a broadcast
-        // and immediately re-subscribes — no page refresh needed.
         socket.emit('guide:subscribed', { userId: user.id })
         broadcastOnlineUsers(io)
       }
-      // Always send the current list directly to the subscriber (catches up
-      // even if the broadcast is dropped or arrives out of order)
       {
         const users = [...new Map(
           [..._onlineBySocket.values()].map(u => [u.userId, u])
@@ -665,7 +1080,7 @@ export async function attachSocketIO(httpServer) {
         socket.emit('guide:onlineUsers', { users })
       }
 
-      // Flush undelivered, non-expired persistent notifications (cap at 20 most recent)
+      // Flush undelivered notifications
       try {
         const now = new Date()
         const unread = await db.userNotification.findMany({
@@ -678,7 +1093,6 @@ export async function attachSocketIO(httpServer) {
           take: 20,
         })
 
-        // Mark expired notifications delivered so they don't pile up
         await db.userNotification.updateMany({
           where: { userId: user.id, deliveredAt: null, expiresAt: { lte: now } },
           data:  { deliveredAt: now },
@@ -701,7 +1115,7 @@ export async function attachSocketIO(httpServer) {
 
     // ── Disconnect ──────────────────────────────────────────────────
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       decrementSocket()
       cleanups.forEach(fn => fn())
       if (socket._trackedListenerCount !== 0) {
@@ -709,15 +1123,13 @@ export async function attachSocketIO(httpServer) {
       }
       logger.info({ socketId: socket.id }, 'socket disconnected')
 
-      // Phase 3.1: drop this socket from every Table presence map it was in,
-      // and notify each affected table's remaining watchers of the new count.
+      // Phase 3.1: drop from table presence
       const droppedFromTables = removeWatcherFromAllTables(socket.id)
       for (const tableId of droppedFromTables) {
         broadcastTablePresence(io, tableId)
       }
 
-      // Remove from online presence after a grace period (allows brief reconnects
-      // to cancel the removal without causing a visible drop in the online list)
+      // Online presence grace period
       if (_onlineBySocket.has(socket.id)) {
         const sid = socket.id
         const timer = setTimeout(() => {
@@ -728,212 +1140,345 @@ export async function attachSocketIO(httpServer) {
         _pendingRemovals.set(sid, timer)
       }
 
-      const result = roomManager.handleDisconnect({
-        socketId: socket.id,
-        onForfeit: ({ room, forfeiterMark }) => {
-          io.to(room.slug).emit('game:forfeit', {
-            forfeiterMark,
-            winner: forfeiterMark === 'X' ? 'O' : 'X',
-            scores: room.scores,
-            reason: 'disconnect',
-          })
-        },
-      })
-
-      // Also clean up bot game spectator and pong rooms
+      // Bot game spectator + pong cleanup
       botGameRunner.removeSpectator(socket.id)
       pongRunner.removeSocket(socket.id)
 
-      if (result && !result.wasSpectator) {
-        const slug = roomManager._socketToRoom.get(socket.id) ||
-          [...roomManager._rooms.entries()].find(([, r]) => r.hostId === socket.id || r.guestId === socket.id)?.[0]
+      // Handle table disconnect
+      const tableId = _socketToTable.get(socket.id)
+      if (!tableId) return
 
-        if (slug) {
-          io.to(slug).emit('room:playerDisconnected', {
-            mark: result.room?.playerMarks?.[socket.id],
-            reconnectWindowMs: 60000,
-          })
+      let table
+      try {
+        table = await db.table.findUnique({ where: { id: tableId } })
+      } catch (_) {
+        unregisterSocket(socket.id)
+        return
+      }
+      if (!table) {
+        unregisterSocket(socket.id)
+        return
+      }
+
+      const seats = table.seats || []
+      const ps = table.previewState || {}
+      const myUserId = findUserIdForSocket(socket.id, tableId, seats)
+      const isPlayer = seats.some(s => s.userId === myUserId && s.status === 'occupied')
+
+      if (!isPlayer) {
+        // Spectator left — just clean up
+        unregisterSocket(socket.id)
+        clearIdleTimer(socket.id)
+        return
+      }
+
+      if (table.status === 'FORMING') {
+        // Host left before anyone joined — close immediately
+        const name = table.displayName?.replace('Mt. ', '')
+        if (name) mountainPool.release(name)
+        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
+        clearAllIdleTimersForTable(tableId)
+        for (const [sid, tid] of _socketToTable) {
+          if (tid === tableId) unregisterSocket(sid)
+        }
+        return
+      }
+
+      if (table.status === 'COMPLETED') {
+        // Game already over — clean up
+        clearIdleTimer(socket.id)
+        unregisterSocket(socket.id)
+        return
+      }
+
+      // status === ACTIVE — start disconnect forfeit timer
+      // Check if other player already disconnected
+      const otherSeat = seats.find(s => s.userId !== myUserId && s.status === 'occupied')
+      const otherUserId = otherSeat?.userId
+      // Check if other player has a disconnect timer
+      let otherDisconnected = false
+      for (const [sid, info] of _disconnectTimers) {
+        if (info.tableId === tableId && sid !== socket.id) {
+          otherDisconnected = true
+          clearTimeout(info.timerId)
+          _disconnectTimers.delete(sid)
+          break
         }
       }
+
+      if (otherDisconnected) {
+        // Both players disconnected — close immediately
+        const name = table.displayName?.replace('Mt. ', '')
+        if (name) mountainPool.release(name)
+        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
+        clearAllIdleTimersForTable(tableId)
+        for (const [sid, tid] of _socketToTable) {
+          if (tid === tableId) unregisterSocket(sid)
+        }
+        return
+      }
+
+      // Notify the room that this player disconnected
+      const myMark = ps.marks?.[myUserId]
+      io.to(`table:${tableId}`).emit('room:playerDisconnected', {
+        mark: myMark,
+        reconnectWindowMs: RECONNECT_WINDOW_MS,
+      })
+
+      // Start forfeit timer
+      const timerId = setTimeout(async () => {
+        _disconnectTimers.delete(socket.id)
+        try {
+          const t = await db.table.findUnique({ where: { id: tableId } })
+          if (!t || t.status !== 'ACTIVE') return
+
+          const tps = { ...t.previewState }
+          const oppMark = myMark === 'X' ? 'O' : 'X'
+          tps.winner = oppMark
+          tps.scores[oppMark] = (tps.scores[oppMark] || 0) + 1
+
+          const updated = await db.table.update({
+            where: { id: tableId },
+            data: { status: 'COMPLETED', previewState: tps },
+          })
+
+          io.to(`table:${tableId}`).emit('game:forfeit', {
+            forfeiterMark: myMark,
+            winner: oppMark,
+            scores: tps.scores,
+            reason: 'disconnect',
+          })
+
+          recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record disconnect forfeit'))
+        } catch (err) {
+          logger.warn({ err }, 'Disconnect forfeit timer error')
+        }
+      }, RECONNECT_WINDOW_MS)
+
+      _disconnectTimers.set(socket.id, { tableId, timerId })
+      clearIdleTimer(socket.id)
     })
   })
 
   botGameRunner.setIO(io)
   pongRunner.setIO(io)
 
-  // Clean up _pendingPvpMatches when any room closes (abandon, stale sweep, cancel, etc.)
-  // so the map doesn't accumulate entries for matches that ended abnormally.
-  roomManager.onRoomClosed((room) => {
-    if (room.tournamentMatchId) deletePendingPvpMatch(room.tournamentMatchId)
-  })
+  startSnapshotInterval(getActiveTableCount)
 
-  startSnapshotInterval(() => roomManager.roomCount)
-
-  // Periodic re-broadcast so clients that missed the event-driven update
-  // catch up within 30 seconds (handles reconnect races, proxy drops, etc.)
+  // Periodic re-broadcast of online users
   setInterval(() => broadcastOnlineUsers(io), 30_000)
 
   return io
 }
 
-/**
- * Compute and apply a bot move for an HvB room, then emit game:moved.
- * Falls back to minimax master if no skill is configured.
- */
-async function dispatchBotMove(room, io) {
-  if (!room.isHvb || room.status !== 'playing') return
+
+// ── Bot move dispatch ────────────────────────────────────────────────────────
+
+async function dispatchBotMove(table, io) {
+  if (!table.isHvb || table.status !== 'ACTIVE') return
+
+  const ps = table.previewState
+  if (!ps) return
 
   let cellIndex
   try {
-    if (room.botSkillId) {
-      cellIndex = await getMoveForModel(room.botSkillId, room.board)
+    if (table.botSkillId) {
+      cellIndex = await getMoveForModel(table.botSkillId, ps.board)
     } else {
-      cellIndex = minimaxMove(room.board, 'master', room.botMark)
+      cellIndex = minimaxMove(ps.board, 'master', ps.botMark)
     }
   } catch (err) {
-    logger.warn({ err, slug: room.slug }, 'Bot move computation failed, falling back to minimax')
-    cellIndex = minimaxMove(room.board, 'master', room.botMark)
+    logger.warn({ err, tableId: table.id }, 'Bot move computation failed, falling back to minimax')
+    cellIndex = minimaxMove(ps.board, 'master', ps.botMark)
   }
 
-  const result = roomManager.makeBotMove({ slug: room.slug, cellIndex })
-  if (result.error) {
-    logger.warn({ error: result.error, slug: room.slug }, 'makeBotMove failed')
+  // Apply bot move
+  const fresh = await db.table.findUnique({ where: { id: table.id } })
+  if (!fresh || fresh.status !== 'ACTIVE') return
+
+  const fps = { ...fresh.previewState }
+  const botMark = fps.botMark
+  if (botMark !== fps.currentTurn) {
+    logger.warn({ tableId: table.id }, 'makeBotMove: not bot turn')
+    return
+  }
+  if (fps.board[cellIndex] !== null) {
+    logger.warn({ tableId: table.id, cellIndex }, 'makeBotMove: cell occupied')
     return
   }
 
-  const r = result.room
-  io.to(r.slug).emit('game:moved', {
-    cellIndex,
-    board: r.board,
-    currentTurn: r.currentTurn,
-    status: r.status,
-    winner: r.winner,
-    winLine: r.winLine,
-    scores: r.scores,
+  fps.board[cellIndex] = botMark
+  fps.moves = fps.moves || []
+  fps.moves.push({ n: fps.moves.length + 1, m: botMark, c: cellIndex })
+
+  const winner = getWinner(fps.board)
+  const draw = !winner && isBoardFull(fps.board)
+
+  let newStatus = 'ACTIVE'
+  if (winner) {
+    fps.winner = winner.mark ?? winner
+    fps.winLine = winner.line ?? WIN_LINES.find(([a, b, c]) =>
+      fps.board[a] === fps.winner && fps.board[b] === fps.winner && fps.board[c] === fps.winner
+    ) ?? null
+    const winMark = fps.winner
+    fps.scores[winMark] = (fps.scores[winMark] || 0) + 1
+    newStatus = 'COMPLETED'
+  } else if (draw) {
+    fps.winner = null
+    newStatus = 'COMPLETED'
+  } else {
+    fps.currentTurn = botMark === 'X' ? 'O' : 'X'
+  }
+
+  const updated = await db.table.update({
+    where: { id: table.id },
+    data: { previewState: fps, status: newStatus },
   })
 
-  if (r.status === 'finished') {
-    recordPvpGame(r, io).catch((err) => logger.warn({ err }, 'Failed to record HvB game'))
+  io.to(`table:${table.id}`).emit('game:moved', {
+    cellIndex,
+    board: fps.board,
+    currentTurn: fps.currentTurn,
+    status: mapStatus(newStatus),
+    winner: fps.winner,
+    winLine: fps.winLine,
+    scores: fps.scores,
+  })
+
+  if (newStatus === 'COMPLETED') {
+    recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record HvB game'))
   }
 }
 
-/**
- * Record a finished PvP game (one round within a match) for any authenticated players.
- * Skipped silently if neither player has a DB user.
- * For tournament rooms: skips ELO, links game to tournament, checks series completion.
- * Fires credit recording and emits accomplishment events via Socket.IO.
- */
-async function recordPvpGame(room, io) {
-  if (!room.hostUserId && !room.guestUserId) return
+// ── Record PvP game ──────────────────────────────────────────────────────────
 
-  const isTournamentRoom = !!room.tournamentMatchId
-  const totalMoves = room.board.filter(Boolean).length
-  const durationMs = room.lastActivityAt ? room.lastActivityAt - room.createdAt : 0
+async function recordPvpGame(table, io) {
+  const seats = table.seats || []
+  const ps = table.previewState || {}
+  const marks = ps.marks || {}
+
+  // Seats store betterAuthId. Resolve domain User.ids for DB writes (Game FK).
+  const hostBaId = hostUserId(seats)    // betterAuthId from seat 0
+  const guestBaId = guestUserId(seats)  // betterAuthId from seat 1
+
+  if (!hostBaId && !guestBaId) return
+
+  // Resolve domain User.ids (needed for createGame, ELO, tournament participant)
+  const [hostUser, guestUser] = await Promise.all([
+    hostBaId  ? db.user.findUnique({ where: { betterAuthId: hostBaId },  select: { id: true } }) : null,
+    guestBaId ? db.user.findUnique({ where: { betterAuthId: guestBaId }, select: { id: true } }) : null,
+  ])
+  const hostDomainId  = hostUser?.id  ?? null
+  const guestDomainId = guestUser?.id ?? null
+
+  if (!hostDomainId && !guestDomainId) return
+
+  const isTournamentRoom = !!table.tournamentMatchId
+  const totalMoves = (ps.board || []).filter(Boolean).length
+  const createdMs = new Date(table.createdAt).getTime()
+  const updatedMs = new Date(table.updatedAt).getTime()
+  const durationMs = updatedMs - createdMs
 
   // Determine outcome from winner mark
   let outcome = 'DRAW'
-  if (room.winner) {
-    const winnerIsHost = room.playerMarks[room.hostId] === room.winner ||
-      Object.entries(room.playerMarks).find(([, m]) => m === room.winner)?.[0] === room.hostId
+  if (ps.winner) {
+    const winnerIsHost = marks[hostBaId] === ps.winner
     outcome = winnerIsHost ? 'PLAYER1_WIN' : 'PLAYER2_WIN'
   }
 
-  // Determine winnerId
+  // Determine winnerId (domain User.id for Game FK)
   let winnerId = null
-  if (room.winner === 'X') {
-    winnerId = Object.entries(room.playerMarks).find(([, m]) => m === 'X')?.[0] === room.hostId
-      ? room.hostUserId : room.guestUserId
-  } else if (room.winner === 'O') {
-    winnerId = Object.entries(room.playerMarks).find(([, m]) => m === 'O')?.[0] === room.hostId
-      ? room.hostUserId : room.guestUserId
+  if (ps.winner) {
+    const winnerBaId = userIdForMark(marks, ps.winner)
+    if (winnerBaId === hostBaId) winnerId = hostDomainId
+    else if (winnerBaId === guestBaId) winnerId = guestDomainId
   }
 
-  // Record for player1 (host) if authenticated
-  if (room.hostUserId) {
+  // Record game — uses domain User.ids for FK references
+  if (hostDomainId) {
     await createGame({
-      player1Id: room.hostUserId,
-      player2Id: room.guestUserId || null,
+      player1Id: hostDomainId,
+      player2Id: guestDomainId,
       winnerId,
-      mode: room.isHvb ? 'HVB' : 'HVH',
+      mode: table.isHvb ? 'HVB' : 'HVH',
       outcome,
       totalMoves,
       durationMs,
-      startedAt: new Date(room.createdAt),
-      roomName: room.name,
-      tournamentId: room.tournamentId ?? null,
-      tournamentMatchId: room.tournamentMatchId ?? null,
-      moveStream: room.moves?.length ? room.moves : null,
+      startedAt: new Date(table.createdAt),
+      roomName: table.displayName?.replace('Mt. ', '') ?? null,
+      tournamentId: table.tournamentId ?? null,
+      tournamentMatchId: table.tournamentMatchId ?? null,
+      moveStream: ps.moves?.length ? ps.moves : null,
     })
   }
 
-  // Journey step 3: first game played (fire-and-forget, idempotent)
-  if (room.hostUserId)  completeJourneyStep(room.hostUserId,  3, io).catch(() => {})
-  if (room.guestUserId && !room.isHvb) completeJourneyStep(room.guestUserId, 3, io).catch(() => {})
+  // Journey step 3 — uses domain User.id
+  if (hostDomainId)  completeJourneyStep(hostDomainId,  3, io).catch(() => {})
+  if (guestDomainId && !table.isHvb) completeJourneyStep(guestDomainId, 3, io).catch(() => {})
 
-  // ELO update: skip for tournament and HvB games
-  if (!isTournamentRoom && !room.isHvb && room.hostUserId && room.guestUserId) {
-    updatePlayersEloAfterPvP(room.hostUserId, room.guestUserId, outcome).catch(() => {})
+  // ELO update (skip for tournament and HvB) — uses domain User.id
+  if (!isTournamentRoom && !table.isHvb && hostDomainId && guestDomainId) {
+    updatePlayersEloAfterPvP(hostDomainId, guestDomainId, outcome).catch(() => {})
   }
 
   // Tournament series completion check
   if (isTournamentRoom) {
-    const xWins = room.scores.X
-    const oWins = room.scores.O
-    const drawGames = room.round - xWins - oWins
-    const required = Math.ceil((room.bestOfN ?? 1) / 2)
+    const xWins = ps.scores?.X ?? 0
+    const oWins = ps.scores?.O ?? 0
+    const drawGames = (ps.round ?? 1) - xWins - oWins
+    const required = Math.ceil((table.bestOfN ?? 1) / 2)
     const seriesDone = xWins >= required || oWins >= required
 
     if (seriesDone) {
-      // Determine which userId won the series
       const seriesWinnerMark = xWins >= required ? 'X' : 'O'
-      const seriesWinnerUserId = Object.entries(room.playerMarks)
-        .find(([, m]) => m === seriesWinnerMark)?.[0] === room.hostId
-        ? room.hostUserId : room.guestUserId
+      const seriesWinnerBaId = userIdForMark(marks, seriesWinnerMark) // betterAuthId from marks
 
-      // Look up the TournamentParticipant ID for the winner (needed by tournament service)
+      // Tournament participant lookup needs domain User.id
       let winnerParticipantId = null
       try {
-        const participant = await db.tournamentParticipant.findFirst({
-          where: { tournamentId: room.tournamentId, userId: seriesWinnerUserId },
-          select: { id: true },
-        })
+        const winnerUser = seriesWinnerBaId
+          ? await db.user.findUnique({ where: { betterAuthId: seriesWinnerBaId }, select: { id: true } })
+          : null
+        const participant = winnerUser
+          ? await db.tournamentParticipant.findFirst({
+              where: { tournamentId: table.tournamentId, userId: winnerUser.id },
+              select: { id: true },
+            })
+          : null
         winnerParticipantId = participant?.id ?? null
       } catch (err) {
-        logger.warn({ err, tournamentMatchId: room.tournamentMatchId }, 'Could not look up winner participant ID')
+        logger.warn({ err, tournamentMatchId: table.tournamentMatchId }, 'Could not look up winner participant ID')
       }
 
-      // Only remove pending entry after confirmed success — if it fails the entry
-      // remains so an admin retry or future reconciliation can find the match context.
-      const completed = await completeTournamentMatch(room.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames)
-      if (completed) deletePendingPvpMatch(room.tournamentMatchId)
+      const completed = await completeTournamentMatch(table.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames)
+      if (completed) deletePendingPvpMatch(table.tournamentMatchId)
 
-      // Notify both players the series is over
-      io.to(room.slug).emit('tournament:series:complete', {
-        tournamentId: room.tournamentId,
-        matchId: room.tournamentMatchId,
+      io.to(`table:${table.id}`).emit('tournament:series:complete', {
+        tournamentId: table.tournamentId,
+        matchId: table.tournamentMatchId,
         p1Wins: xWins,
         p2Wins: oWins,
-        seriesWinnerUserId,
+        seriesWinnerUserId: seriesWinnerBaId,
       })
     }
-    // Don't record credits for tournament games
     return
   }
 
-  // Record credits and emit accomplishment events (free-play only)
+  // Record credits and emit accomplishments (free-play only) — domain User.ids
   const pvpParticipants = [
-    room.hostUserId  ? { userId: room.hostUserId,  isBot: false, botOwnerId: null } : null,
-    room.guestUserId ? { userId: room.guestUserId, isBot: room.isHvb ?? false, botOwnerId: null } : null,
+    hostDomainId  ? { userId: hostDomainId,  isBot: false, botOwnerId: null } : null,
+    guestDomainId ? { userId: guestDomainId, isBot: table.isHvb ?? false, botOwnerId: null } : null,
   ].filter(Boolean)
 
   if (pvpParticipants.length > 0) {
-    recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: room.isHvb ? 'hvb' : 'hvh' })
+    recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: table.isHvb ? 'hvb' : 'hvh' })
       .then((notifications) => {
         if (!io || !notifications.length) return
         for (const notif of notifications) {
-          const socketId = notif.userId === room.hostUserId ? room.hostId : room.guestId
-          if (socketId) io.to(socketId).emit('accomplishment', notif)
-          // Also push into Guide notification stack
+          // Emit to user room
+          if (notif.userId) io.to(`user:${notif.userId}`).emit('accomplishment', notif)
           const guideType = notif.type === 'tier_upgrade' ? 'admin' : 'match_ready'
           const guideTitle = notif.type === 'tier_upgrade'
             ? 'Tier Upgrade!'
@@ -950,26 +1495,6 @@ async function recordPvpGame(room, io) {
         }
       })
       .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))
-  }
-}
-
-function sanitizeRoom(room) {
-  return {
-    slug: room.slug,
-    displayName: room.displayName,
-    status: room.status,
-    board: room.board,
-    currentTurn: room.currentTurn,
-    scores: room.scores,
-    round: room.round,
-    winner: room.winner,
-    winLine: room.winLine,
-    spectatorCount: room.spectatorIds?.size ?? 0,
-    spectatorAllowed: room.spectatorAllowed,
-    hostUserDisplayName: room.hostUserDisplayName ?? null,
-    hostUserElo: room.hostUserElo ?? null,
-    guestUserDisplayName: room.guestUserDisplayName ?? null,
-    guestUserElo: room.guestUserElo ?? null,
   }
 }
 

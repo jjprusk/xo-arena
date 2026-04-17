@@ -12,7 +12,7 @@ import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
 import leaderboardRouter from './routes/leaderboard.js'
-import roomsRouter from './routes/rooms.js'
+// roomsRouter removed in Phase 3.4 — Tables are the only game primitive
 import adminAiRouter from './routes/adminAi.js'
 import gamesRouter from './routes/games.js'
 import { attachSocketIO } from './realtime/socketHandler.js'
@@ -35,6 +35,7 @@ import { startIdleSessionPurgeJob } from './services/idleSessionPurgeService.js'
 import { startTournamentBridge } from './lib/tournamentBridge.js'
 import { initBus } from './lib/notificationBus.js'
 import { startDispatcher, setIO as schedulerSetIO } from './lib/scheduledJobs.js'
+import { start as startTableGc } from './services/tableGcService.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -43,7 +44,7 @@ registerRoutes(app, {
   '/logs': logsRouter,
   '/users': usersRouter,
   '/leaderboard': leaderboardRouter,
-  '/rooms': roomsRouter,
+  // '/rooms' removed in Phase 3.4 — Tables are the only game primitive
   '/admin/ai': adminAiRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
@@ -114,6 +115,7 @@ attachSocketIO(server).then((io) => {
   schedulerSetIO(io)
   startTournamentBridge(io)
   initBus(io)
+  startTableGc(io)
   server.listen(PORT, () => {
     logger.info(`XO Arena backend running on port ${PORT}`)
   })
