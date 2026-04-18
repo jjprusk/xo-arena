@@ -178,7 +178,11 @@ describe('tableGcService sweep', () => {
     db.table.deleteMany.mockRejectedValue(new Error('DB down'))
 
     const io = makeIO()
-    // Should not throw
-    await expect(sweep(io)).resolves.toBeUndefined()
+    // Should not throw — returns error summary instead
+    const result = await sweep(io)
+    expect(result.error).toBe('DB down')
+    expect(result.deletedForming).toBe(0)
+    expect(result.deletedCompleted).toBe(0)
+    expect(result.abandonedActive).toBe(0)
   })
 })
