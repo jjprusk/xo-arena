@@ -13,17 +13,17 @@ The fastest validation that the new socketHandler is working end-to-end.
 
 **URL:** `http://localhost:5174/play?action=vs-community-bot`
 
-- [ ] Board loads within ~1s (no spinner hang)
-- [ ] You are X, bot is O (or vice versa) — marks display correctly
-- [ ] Click a cell -> X appears immediately, bot responds with O after brief delay
-- [ ] Sound plays exactly once per move (no doubling)
-- [ ] Play to a **win** -> win line highlights, scores update, Rematch / Leave Table buttons appear
-- [ ] Play to a **draw** -> draw banner shows, Rematch / Leave Table appear
-- [ ] Click **Rematch** -> board resets, round increments, opening player alternates, scores carry over
-- [ ] Click **Leave Table** -> returns to `/`
-- [ ] **Focused mode**: `<- Back` and expand button visible at top of game area
-- [ ] **Chrome-present mode** (click expand): sidebar shows game title, status, seated players (You + Bot), Gym/Puzzles links
-- [ ] Toggle focused <-> chrome-present preserves board state (X's and O's don't disappear)
+- [x] Board loads within ~1s (no spinner hang)
+- [x] You are X, bot is O (or vice versa) — marks display correctly
+- [x] Click a cell -> X appears immediately, bot responds with O after brief delay
+- [x] Sound plays exactly once per move (no doubling)
+- [x] Play to a **win** -> win line highlights, scores update, Rematch / Leave Table buttons appear
+- [x] Play to a **draw** -> draw banner shows, Rematch / Leave Table appear
+- [x] Click **Rematch** -> board resets, round increments, opening player alternates, scores carry over
+- [x] Click **Leave Table** -> returns to `/`
+- [x] **Focused mode**: `<- Back` and expand button visible at top of game area
+- [x] **Chrome-present mode** (click expand): sidebar shows game title, status, seated players (You + Bot), Gym/Puzzles links
+- [x] Toggle focused <-> chrome-present preserves board state (X's and O's don't disappear)
 
 ---
 
@@ -41,16 +41,16 @@ Phase 3.4 makes Tables the PvP front door. Requires two browser contexts
 1. Sign in as a different user in incognito
 2. Paste the table URL (`/tables/:id`) OR find the table in the public list
 
-- [ ] Tab A: creates the table with "Forming" status, sits in seat 1
-- [ ] Tab B: opens the table detail page, clicks **Take this seat** on seat 2
-- [ ] Status changes to **In play** on both tabs
-- [ ] Both tabs see the board with correct marks
-- [ ] Moves alternate correctly between tabs
-- [ ] Sound plays on the opponent's move (not your own)
-- [ ] Game completes → both tabs see the result (win/loss/draw)
-- [ ] Rematch works from either side
-- [ ] **Disconnect test**: close Tab B → Tab A sees "Opponent disconnected" notice → after ~60s, auto-forfeit fires and Tab A wins
-- [ ] **Spectator test** (optional): open a third tab to `/tables/:id` → sees the board live, no input allowed
+- [x] Tab A: creates the table with "Forming" status, sits in seat 1
+- [x] Tab B: opens the table detail page, clicks **Take this seat** on seat 2
+- [x] Status changes to **In play** on both tabs
+- [x] Both tabs see the board with correct marks
+- [x] Moves alternate correctly between tabs
+- [x] Sound plays on the opponent's move (not your own)
+- [x] Game completes → both tabs see the result (win/loss/draw)
+- [x] Rematch works from either side
+- [x] **Disconnect test**: close Tab B → Tab A sees "Opponent disconnected" notice → after ~60s, auto-forfeit fires and Tab A wins
+- [x] **Spectator test** (optional): open a third tab to `/tables/:id` → sees the board live, no input allowed
 
 ---
 
@@ -58,80 +58,128 @@ Phase 3.4 makes Tables the PvP front door. Requires two browser contexts
 
 **URL:** `http://localhost:5174/tables`
 
-- [ ] Tables list loads (no errors in console)
-- [ ] Click **+ Create table** -> modal opens, create an XO table
-- [ ] New table appears in list with **Forming** badge
-- [ ] Click into the table detail page -> seats show correctly
-- [ ] **Join a seat** -> seat updates in real time
-- [ ] Second user joins (incognito) -> status changes to **In play** when both seats filled
-- [ ] **Cross-tab sync**: seat changes in one tab appear in the other without refresh
-- [ ] **Share button** copies `/tables/:id` URL to clipboard
-- [ ] **Delete a table** you created (Forming or Completed status)
-- [ ] Creator sees their own private tables in the list; other users do not
-- [ ] **Watcher count**: creator alone = 0 watching; second browser opens detail page = 1 watching
+- [x] Tables list loads (no errors in console)
+- [x] Click **+ Create table** -> modal opens, create an XO table
+- [x] New table appears in list with **Forming** badge
+- [x] Click into the table detail page -> seats show correctly
+- [x] **Join a seat** -> seat updates in real time
+- [x] Second user joins (incognito) -> status changes to **In play** when both seats filled
+- [x] **Cross-tab sync**: seat changes in one tab appear in the other without refresh
+- [x] **Share button** copies `/tables/:id` URL to clipboard
+- [x] **Delete a table** you created (Forming or Completed status)
+- [x] Creator sees their own private tables in the list; other users do not
+- [x] **Watcher count**: creator alone = 0 watching; second browser opens detail page = 1 watching
 
 ---
 
 ## 4. Seat Display Names
 
-- [ ] When another user joins your table, their **real display name** appears (not `User ba_user_xyz`)
-- [ ] Bot seats show **Bot** with a BOT badge
-- [ ] Your own seat shows **You**
+- [x] When another user joins your table, their **real display name** appears (not `User ba_user_xyz`)
+- [x] Bot seats show **Bot** with a BOT badge
+- [x] Your own seat shows **You**
 
 ---
 
 ## 5. Notifications
 
-- [ ] When someone joins your table, you get a teal **Table** notification in the Guide drawer (not "Admin")
-- [ ] When someone leaves your table, same teal notification
-- [ ] Your own join/leave actions do NOT generate a notification for yourself
-- [ ] Random users not associated with the table do NOT get notifications
-- [ ] `table.created`, `spectator.joined`, `table.empty`, `table.deleted` do NOT appear as notifications
+- [x] When someone joins your table, you get a teal **Table** notification in the Guide drawer (not "Admin")
+- [x] When someone leaves your table, same teal notification
+- [x] Your own join/leave actions do NOT generate a notification for yourself
+- [x] Random users not associated with the table do NOT get notifications
+- [x] `table.created`, `spectator.joined`, `table.empty`, `table.deleted` do NOT appear as notifications
 
 ---
 
 ## 6. Idle / Stale Room Handling
 
-- [ ] After ~3 minutes of no moves, you get an idle warning
-- [ ] If you continue idling past the grace period, the game ends with "Room ended due to inactivity"
-- [ ] If you click a cell after the room was idle-kicked, you see an "abandoned" notice and get redirected home (no silent failure / frozen board)
+- [x] After ~3 minutes of no moves, you get an idle warning
+- [x] If you continue idling past the grace period, the game ends with "Room ended due to inactivity"
+- [x] If you click a cell after the room was idle-kicked, you see an "abandoned" notice and get redirected home (no silent failure / frozen board)
 
 ---
 
 ## 7. Table GC (Background Service)
 
-These are harder to test manually — verify via admin health or DB queries.
+These are scripted — run `./doc/qa-scripts/table-gc.sh` (all 5 tests, 10 assertions).
 
-- [ ] FORMING tables with all empty seats older than 30 min are auto-deleted
-- [ ] COMPLETED tables older than 24 hr are auto-deleted
-- [ ] ACTIVE tables idle past the configured threshold are marked COMPLETED
-- [ ] Tournament tables in FORMING state are NOT auto-deleted (they wait for bridge players)
-- [ ] Backend logs: `Table GC: deleted N forming, N completed, abandoned N active` (only when something was cleaned up)
+- [x] FORMING tables with all empty seats older than 30 min are auto-deleted
+- [x] COMPLETED tables older than 24 hr are auto-deleted
+- [x] ACTIVE tables idle past the configured threshold are marked COMPLETED
+- [x] Tournament tables in FORMING state are NOT auto-deleted (they wait for bridge players)
+- [x] Backend logs: `Table GC: deleted N forming, N completed, abandoned N active` (only when something was cleaned up)
 
 ---
 
-## 8. Tournament Match (if convenient)
+## 8. Tournament Match
 
-Requires the tournament service running and 2+ registered users/bots.
+Requires the tournament service running (`docker compose up tournament`) and connected to the same
+Redis instance as the backend. For **BOT_VS_BOT** tests, seed test bots first if not already present:
 
-- [ ] Create a tournament, register 2 participants
-- [ ] Start the tournament -> `match:ready` fires -> both players get notification
-- [ ] Both players join via `tournament:room:join` -> game starts
-- [ ] Play the match to completion -> result recorded
-- [ ] Table status changes to COMPLETED after the match
-- [ ] Bracket advances correctly
-- [ ] ELO is NOT updated for tournament games (tournament ELO is separate)
+```
+docker compose exec backend node backend/src/cli/um.js test-bots
+```
+
+### 8a. Lifecycle
+
+Sign in as a tournament admin. Use the Tournaments UI or the API directly (tournament service at `http://localhost:3001`).
+
+- [ ] Create a tournament in DRAFT status
+- [ ] Publish it (`POST /api/t/tournaments/:id/publish`) → status becomes **REGISTRATION_OPEN**; connected clients receive a tournament notification in the Guide drawer
+- [ ] Register participants (4 test bots via **Fill test players**, or 2 real users for HVH)
+- [ ] Participant count on the tournament detail page matches the number registered
+- [ ] Start the tournament → status becomes **IN_PROGRESS**; round 1 bracket created (2 matches for 4 players, 1 match for 2)
+
+### 8b. BOT_VS_BOT match (no manual play required)
+
+Create the tournament with `mode: BOT_VS_BOT`, `bracketType: SINGLE_ELIM`, and 4 test bots.
+
+- [ ] On start, backend logs show bot matches firing (`tournament:bot:match:ready`) — no `Failed to start bot tournament match` warnings
+- [ ] Both round-1 matches complete automatically (no action needed)
+- [ ] After both round-1 matches: round 2 auto-created with the 2 winners paired into the final
+- [ ] Final match completes → tournament status moves to **COMPLETED**
+- [ ] Winner gets `finalPosition: 1`; runner-up gets `finalPosition: 2`
+- [ ] Bot owners receive a `tournament.completed` notification in the Guide drawer
+
+### 8c. HVH match (requires 2 accounts)
+
+Create the tournament with `mode: HVH`, register 2 real users, start it.
+
+- [ ] Both participants receive a `tournament:match:ready` socket event and see a **"match.ready"** item in their Guide drawer
+- [ ] Both players join via the match UI (emits `tournament:room:join`) → table created → game board visible to both
+- [ ] Game plays to completion — no errors in browser console or backend logs
+- [ ] Table status changes to **COMPLETED** after the series ends
+- [ ] Both participants see a match result notification; tournament completes (2-player bracket = 1 match)
+
+### 8d. ELO isolation
+
+- [ ] Note both participants' ELO on the Rankings page **before** the match
+- [ ] After the match completes, check Rankings again — ELO for both players is **unchanged**
+
+### 8e. Odd-player bracket (optional)
+
+Create a SINGLE_ELIM tournament with 3 participants (2 bots + 1 human, or 3 bots).
+
+- [ ] One participant receives an automatic **bye** (COMPLETED match with no opponent, winner = bye recipient)
+- [ ] Bracket advances correctly: bye recipient goes to round 2 alongside the winner of the real match
+
+### 8f. Auto-cancellation (optional)
+
+Create a tournament with `minParticipants: 4`, register only 1 user, set `registrationCloseAt` to a time 1–2 minutes in the future, wait.
+
+- [ ] Tournament sweep (runs every 60s) auto-cancels the tournament after `registrationCloseAt` passes
+- [ ] Status moves to **CANCELLED**
+- [ ] Registered participant receives a `tournament.cancelled` notification in the Guide drawer
 
 ---
 
 ## 9. Things That Should NOT Happen
 
-- [ ] No `Room not found` errors in browser console
-- [ ] No `400 Bad Request` polling errors on socket.io
-- [ ] No stale socket reconnect cascades
-- [ ] No "Admin" badge on seat-change notifications (should be "Table" badge, teal)
-- [ ] No references to "room" in user-facing UI (except the waiting-for-opponent share URL which still says `/play?join=...`)
-- [ ] No `roomManager` imports anywhere in the codebase (deleted)
+- [x] No `Room not found` errors in browser console
+- [x] No `400 Bad Request` polling errors on socket.io
+- [x] No stale socket reconnect cascades
+- [x] No "Admin" badge on seat-change notifications (should be "Table" badge, teal)
+- [x] No references to "room" in user-facing UI (except the waiting-for-opponent share URL which still says `/play?join=...`)
+- [x] No `roomManager` imports anywhere in the codebase (deleted)
 
 ---
 
@@ -139,14 +187,14 @@ Requires the tournament service running and 2+ registered users/bots.
 
 These existed before Phase 3.4 and should still work:
 
-- [ ] Sign in / sign out works
-- [ ] Navigation: Tables, Tournaments, Rankings, Profile, About all load
-- [ ] Gym page loads at `/gym`
-- [ ] Puzzles page loads at `/puzzles`
-- [ ] Rankings page shows per-game ELO
-- [ ] Bot profile pages load
-- [ ] Replay page loads for completed games
-- [ ] Admin health dashboard shows table metrics (Forming/Active/Completed/Stale/Watchers)
+- [x] Sign in / sign out works
+- [x] Navigation: Tables, Tournaments, Rankings, Profile, About all load
+- [x] Gym page loads at `/gym`
+- [x] Puzzles page loads at `/puzzles`
+- [x] Rankings page shows per-game ELO
+- [x] Bot profile pages load
+- [x] Replay page loads for completed games
+- [x] Admin health dashboard shows table metrics (Forming/Active/Completed/Stale/Watchers)
 
 ---
 
