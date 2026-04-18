@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Table Paradigm — Mockups</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="table-paradigm.css">
+  <style>
+    .hub {
+      max-width: 900px;
+      margin: 2rem auto 5rem;
+      padding: 0 1.25rem;
+    }
+    .hub__hero {
+      text-align: center;
+      padding: 2rem 0 2.5rem;
+      border-bottom: 1px solid var(--border-default);
+      margin-bottom: 2rem;
+    }
+    .hub__hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      letter-spacing: -0.02em;
+      margin: 0 0 0.5rem;
+    }
+    .hub__hero p {
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    .hub__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+    .hub__card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-card);
+      padding: 1.25rem;
+      text-decoration: none;
+      color: inherit;
+      box-shadow: var(--shadow-card);
+      transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .hub__card:hover {
+      transform: translateY(-2px);
+      border-color: var(--color-primary);
+      box-shadow: 0 10px 20px -8px rgba(74, 111, 165, 0.3);
+    }
+    .hub__card h2 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 1.125rem;
+    }
+    .hub__card p { color: var(--text-secondary); font-size: 0.875rem; margin: 0; line-height: 1.55; }
+    .hub__card__eyebrow {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-primary);
+      font-weight: 700;
+    }
+    .hub__card__thumb {
+      height: 90px;
+      border-radius: var(--radius-lg);
+      background:
+        radial-gradient(ellipse at 50% 40%,
+          color-mix(in srgb, var(--color-slate-100) 80%, white),
+          var(--color-slate-200) 100%);
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 0.25rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(25,43,73,0.08);
+    }
+    .hub__card__thumb::before, .hub__card__thumb::after {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--color-slate-400), var(--color-slate-700));
+      box-shadow: 0 1px 3px rgba(25,43,73,0.35);
+    }
+    .hub__card__thumb::before { top: 6px;    left: 50%; transform: translateX(-50%); }
+    .hub__card__thumb::after  { bottom: 6px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700)); }
+
+    .hub__card--court .hub__card__thumb {
+      background: repeating-linear-gradient(to right,
+        var(--color-slate-700) 0 6%,
+        var(--color-slate-800) 6% 12%);
+    }
+    .hub__card--court .hub__card__thumb::before {
+      top: 50%; left: 12%; right: auto;
+      width: 5px; height: 40%;
+      background: white; border-radius: 3px;
+      transform: translateY(-50%);
+      box-shadow: 0 0 6px rgba(255,255,255,0.4);
+    }
+    .hub__card--court .hub__card__thumb::after {
+      top: 50%; right: 12%; left: auto;
+      width: 5px; height: 40%;
+      background: white; border-radius: 3px;
+      transform: translateY(-50%);
+      box-shadow: 0 0 6px rgba(255,255,255,0.4);
+    }
+
+    .hub__card--poker .hub__card__thumb {
+      background: radial-gradient(ellipse at 50% 50%,
+        color-mix(in srgb, var(--color-teal-700) 60%, #0c2a1e),
+        #0c2a1e 70%,
+        #081e17);
+      border-radius: 100px / 60px;
+    }
+    .hub__card--poker .hub__card__thumb::before {
+      width: 10px; height: 14px;
+      background: white; border-radius: 2px;
+      top: 50%; left: 50%; transform: translate(-70%, -50%);
+      box-shadow: -8px 0 0 white, 8px 0 0 white;
+    }
+    .hub__card--poker .hub__card__thumb::after { display: none; }
+
+    .hub__card--list .hub__card__thumb {
+      background: var(--bg-surface-2);
+    }
+    .hub__card--list .hub__card__thumb::before,
+    .hub__card--list .hub__card__thumb::after {
+      width: auto; height: 8px; border-radius: 4px;
+      left: 10%; right: 10%; background: var(--bg-surface-hover); transform: none;
+    }
+    .hub__card--list .hub__card__thumb::before { top: 18px; }
+    .hub__card--list .hub__card__thumb::after  { top: 35px; }
+
+    .breakpoints {
+      display: flex;
+      gap: 0.375rem;
+      flex-wrap: wrap;
+      margin-top: 0.625rem;
+    }
+    .breakpoints span {
+      font-size: 0.6875rem;
+      font-family: var(--font-mono);
+      padding: 2px 7px;
+      border-radius: var(--radius-pill);
+      background: var(--bg-surface-hover);
+      color: var(--text-secondary);
+    }
+
+    .hub__principles {
+      margin-top: 3rem;
+      padding: 1.5rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-card);
+    }
+    .hub__principles h2 {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      margin: 0 0 1rem;
+    }
+    .hub__principles ul {
+      margin: 0;
+      padding-left: 1.25rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      font-size: 0.9375rem;
+    }
+    .hub__principles strong { color: var(--text-primary); }
+  </style>
+</head>
+<body>
+  <nav class="app-nav">
+    <a href="index.html" class="app-nav__brand" style="text-decoration:none;color:inherit">
+      AI<span>·</span>Arena
+    </a>
+    <ul class="app-nav__links">
+      <li><a href="index.html" class="active">Table Paradigm</a></li>
+      <li><a href="../../Table_Paradigm.md">Spec</a></li>
+    </ul>
+  </nav>
+
+  <main class="hub">
+    <section class="hub__hero">
+      <h1>Table Paradigm — Mockups</h1>
+      <p>
+        Responsive HTML mockups of the shared "Table &amp; Seat" visual language
+        the platform will adopt. Each mockup is a self-contained page that
+        reflects the live site's design tokens — slate primary, warm gray
+        surface, Inter typography. Resize the browser to verify the mobile,
+        tablet, and laptop breakpoints.
+      </p>
+    </section>
+
+    <section class="hub__grid">
+      <a href="2p-sitdown.html" class="hub__card">
+        <div class="hub__card__thumb"></div>
+        <span class="hub__card__eyebrow">Sit-down · 2 players</span>
+        <h2>XO / Connect4 / Chess</h2>
+        <p>Rectangle surface with seats on opposite edges. Shows FORMING, PLAYING, and COMPLETED states with winner emphasis, spectator badge, and tournament sidebar variant.</p>
+        <div class="breakpoints">
+          <span>375px</span><span>768px</span><span>1280px</span>
+        </div>
+      </a>
+
+      <a href="head-to-head.html" class="hub__card hub__card--court">
+        <div class="hub__card__thumb"></div>
+        <span class="hub__card__eyebrow">Head-to-head · court</span>
+        <h2>Pong + action games</h2>
+        <p>Long court with players at opposite ends. Orientation flips between horizontal (landscape) and vertical (portrait phone) based on viewport.</p>
+        <div class="breakpoints">
+          <span>portrait</span><span>landscape</span><span>auto-orient</span>
+        </div>
+      </a>
+
+      <a href="8p-oval.html" class="hub__card hub__card--poker">
+        <div class="hub__card__thumb"></div>
+        <span class="hub__card__eyebrow">Sit-down · 8 players</span>
+        <h2>Poker (template)</h2>
+        <p>Oval surface, 8 seats at 45° intervals, per-seat chip stack + hidden-info rendering, community cards + pot in the shared center.</p>
+        <div class="breakpoints">
+          <span>375px</span><span>768px</span><span>1280px</span>
+        </div>
+      </a>
+
+      <a href="tables-list.html" class="hub__card hub__card--list">
+        <div class="hub__card__thumb"></div>
+        <span class="hub__card__eyebrow">Browse · /tables</span>
+        <h2>Tables list</h2>
+        <p>Public tables list with filters. Cards on mobile, density table on laptop. Seat-strip dots and Open/In-play/Completed status chips.</p>
+        <div class="breakpoints">
+          <span>cards</span><span>hybrid</span><span>table</span>
+        </div>
+      </a>
+    </section>
+
+    <section class="hub__principles">
+      <h2>Guiding principles</h2>
+      <ul>
+        <li><strong>Name = visual.</strong> A "table" looks like a rendered surface; a "seat" feels like a place, not a slot in an array.</li>
+        <li><strong>Continuity of place.</strong> Seats stay put through FORMING → PLAYING → COMPLETED. Only the center changes.</li>
+        <li><strong>One paradigm, many games.</strong> Shell owns layout from <code>meta.tableArchetype</code> + <code>maxPlayers</code>; games fill the center and per-seat slots.</li>
+        <li><strong>Relative POV.</strong> You at bottom (sit-down) or near-end (head-to-head). Data stays absolute; only the render rotates.</li>
+        <li><strong>Spectators are visible.</strong> Cluster-badge on the rim with click-to-expand avatars — never invisible integers, never over the play surface.</li>
+        <li><strong>Tournaments aren't special.</strong> Same table + seats. Tournament context lives in a sidebar card; no bespoke chrome.</li>
+      </ul>
+    </section>
+  </main>
+
+  <aside class="mockup-meta" role="status">
+    <span>Design tokens synced with <kbd>landing/src/index.css</kbd></span>
+    <button class="theme-toggle" aria-label="Toggle theme" onclick="
+      const root = document.documentElement;
+      const isDark = root.getAttribute('data-theme') === 'dark';
+      root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      this.textContent = isDark ? '☾' : '☀';
+    ">☾</button>
+  </aside>
+</body>
+</html>

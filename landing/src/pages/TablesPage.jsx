@@ -500,17 +500,36 @@ function EmptyState({ canCreate, onCreate }) {
 
 function CreateTableModal({ onClose, onCreated }) {
   const navigate = useNavigate()
-  const [gameId,    setGameId]    = useState(GAME_OPTIONS[0].id)
-  const [isPrivate, setIsPrivate] = useState(false)
-  const [busy,      setBusy]      = useState(false)
-  const [err,       setErr]       = useState(null)
+  const [gameId,     setGameId]     = useState(GAME_OPTIONS[0].id)
+  const [isPrivate,  setIsPrivate]  = useState(false)
+  const [opponentId, setOpponentId] = useState('human')  // 'human' | bot domain User.id
+  const [myBots,     setMyBots]     = useState([])
+  const [busy,       setBusy]       = useState(false)
+  const [err,        setErr]        = useState(null)
 
   const game = useMemo(() => GAME_OPTIONS.find(g => g.id === gameId) ?? GAME_OPTIONS[0], [gameId])
+
+  // Fetch the user's own bots to populate the opponent dropdown
+  useEffect(() => {
+    getToken().then(token => {
+      if (!token) return
+      api.bots.mine(token).then(res => setMyBots(res.bots ?? [])).catch(() => {})
+    })
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
     setBusy(true); setErr(null)
     try {
+      if (opponentId !== 'human') {
+        const bot = myBots.find(b => b.id === opponentId)
+        if (!bot) throw new Error('Bot not found')
+        const qs = new URLSearchParams({ botUserId: bot.id })
+        if (bot.botModelId) qs.set('botSkillId', bot.botModelId)
+        navigate(`/play?${qs}`)
+        onClose()
+        return
+      }
       const token = await getToken()
       if (!token) throw new Error('Sign in to create a table.')
       const { table } = await api.tables.create({
@@ -526,6 +545,8 @@ function CreateTableModal({ onClose, onCreated }) {
       setBusy(false)
     }
   }
+
+  const hasBots = myBots.length > 0
 
   return (
     <div
@@ -559,20 +580,39 @@ function CreateTableModal({ onClose, onCreated }) {
           </select>
         </label>
 
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={isPrivate}
-            onChange={e => setIsPrivate(e.target.checked)}
-            className="mt-1"
-          />
-          <span>
-            <span className="font-semibold">Private</span>
-            <span className="block text-xs" style={{ color: 'var(--text-muted)' }}>
-              Not listed publicly. Share the direct link with anyone you want to join.
+        {hasBots && (
+          <label className="block space-y-1">
+            <span className="text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Opponent</span>
+            <select
+              value={opponentId}
+              onChange={e => setOpponentId(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            >
+              <option value="human">Human (open seat)</option>
+              {myBots.map(b => (
+                <option key={b.id} value={b.id}>{b.displayName}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {opponentId === 'human' && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={e => setIsPrivate(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-semibold">Private</span>
+              <span className="block text-xs" style={{ color: 'var(--text-muted)' }}>
+                Not listed publicly. Share the direct link with anyone you want to join.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        )}
 
         {err && (
           <p className="rounded-lg px-3 py-2 text-sm"

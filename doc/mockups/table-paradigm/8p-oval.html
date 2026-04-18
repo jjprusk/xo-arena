@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8p Oval (Poker) — AI Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="table-paradigm.css">
+  <style>
+    /* Seat pods for Poker sit tighter than 2p — names truncate, chip stack sits
+       below the avatar. On mobile, the oval rotates to tall and pods shrink. */
+    .table-8p .seat-oval {
+      min-width: 72px;
+      text-align: center;
+    }
+    .table-8p .seat__avatar {
+      width: 44px; height: 44px;
+      font-size: 1rem;
+      border-width: 2px;
+    }
+    .table-8p .seat__name { font-size: 0.75rem; max-width: 80px; }
+    .table-8p .seat__meta { font-size: 0.625rem; }
+
+    /* Your seat (s1) gets visual emphasis — it's the viewer's POV. */
+    .seat--s1 .seat__avatar {
+      background: linear-gradient(135deg, var(--color-slate-300), var(--color-slate-600));
+      width: 52px; height: 52px;
+      font-size: 1.125rem;
+    }
+
+    /* On narrow viewports, swap the oval to a portrait configuration and
+       reduce per-seat info (avatar + chip count only). */
+    @media (max-width: 640px) {
+      .table-8p {
+        padding: 3rem 3rem;
+      }
+      .table-8p .table-surface {
+        aspect-ratio: 9 / 14;
+        border-radius: 120px / 180px;
+        max-width: 280px;
+      }
+      .table-8p .seat-oval {
+        min-width: 56px;
+      }
+      .table-8p .seat__avatar { width: 38px; height: 38px; font-size: 0.875rem; }
+      .seat--s1 .seat__avatar { width: 46px; height: 46px; font-size: 1rem; }
+      .table-8p .seat__name { font-size: 0.6875rem; max-width: 60px; }
+      .seat-state { margin-top: 2px; font-size: 0.625rem; }
+      .card-face { width: 24px; }
+
+      /* Portrait oval — seat positions capped to stay within the viewport.
+         Percentages are of .table-container width, NOT the surface, so the
+         original 103%/-3% values pushed seats off-screen on phones. */
+      .table-8p .seat-oval.seat--s1 { top: 98%; left: 50%; }
+      .table-8p .seat-oval.seat--s2 { top: 82%; left: 78%; }
+      .table-8p .seat-oval.seat--s3 { top: 58%; left: 85%; }
+      .table-8p .seat-oval.seat--s4 { top: 34%; left: 85%; }
+      .table-8p .seat-oval.seat--s5 { top: 2%;  left: 50%; }
+      .table-8p .seat-oval.seat--s6 { top: 34%; left: 15%; }
+      .table-8p .seat-oval.seat--s7 { top: 58%; left: 15%; }
+      .table-8p .seat-oval.seat--s8 { top: 82%; left: 22%; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="app-nav">
+    <a href="index.html" class="app-nav__brand" style="text-decoration:none;color:inherit">
+      AI<span>·</span>Arena
+    </a>
+    <ul class="app-nav__links">
+      <li><a href="index.html">← Mockup index</a></li>
+      <li><a href="2p-sitdown.html">2p sit-down</a></li>
+      <li><a href="head-to-head.html">Head-to-head</a></li>
+      <li><a href="tables-list.html">Tables list</a></li>
+    </ul>
+  </nav>
+
+  <div class="state-switcher" role="tablist" aria-label="Table state">
+    <button type="button" role="tab" data-state="forming">Forming</button>
+    <button type="button" role="tab" data-state="playing" class="active">Playing</button>
+    <button type="button" role="tab" data-state="showdown">Showdown</button>
+  </div>
+
+  <main class="shell">
+    <div class="shell__grid">
+      <section class="game-column">
+        <button type="button" class="mode-toggle" title="Focus mode (hide chrome)">⤡</button>
+
+        <article class="table-container table-8p" id="table">
+          <!-- Surface with community cards + pot in the shared center -->
+          <div class="table-surface">
+
+            <div class="table-center" id="center">
+              <!-- Community cards -->
+              <div class="poker-community" id="community">
+                <div class="card-face">A♠</div>
+                <div class="card-face red">K♥</div>
+                <div class="card-face red">Q♦</div>
+                <div class="card-face back"></div>
+                <div class="card-face back"></div>
+              </div>
+              <!-- Pot -->
+              <div class="poker-pot" id="pot">420</div>
+              <!-- "Current turn — seat 3" indicator text -->
+              <div id="turnHint" style="font-size:0.75rem;color:rgba(255,255,255,0.75);letter-spacing:0.05em;text-transform:uppercase">
+                <span style="color:var(--color-amber-500)">●</span> Seat 3's turn
+              </div>
+            </div>
+          </div>
+
+          <!-- Seats around the oval — seat 1 is "you" at bottom-center -->
+          <div class="seat seat-oval seat--s1" id="s1">
+            <div class="seat__avatar" aria-label="You" style="position:relative">
+              J
+              <span class="seat__index-badge">1</span>
+            </div>
+            <div class="seat__name">You</div>
+            <div class="seat-state">
+              <span class="seat-state__chips">1,840</span>
+            </div>
+          </div>
+
+          <div class="seat seat-oval seat--s2" id="s2">
+            <div class="seat__avatar" style="background:linear-gradient(135deg,#f59e0b,#b45309);position:relative">
+              A
+              <span class="seat__index-badge">2</span>
+            </div>
+            <div class="seat__name">alice</div>
+            <div class="seat-state">
+              <span class="seat-state__chips">2,100</span>
+              <span class="seat-state__bet">call 40</span>
+            </div>
+          </div>
+
+          <div class="seat seat-oval seat--s3 seat--turn" id="s3">
+            <div class="seat__avatar seat__avatar--bot" style="position:relative">
+              R
+              <span class="seat__index-badge">3</span>
+              <span class="role-dealer" title="Dealer">D</span>
+            </div>
+            <div class="seat__name">rusty · BOT</div>
+            <div class="seat-state">
+              <span class="seat-state__chips">980</span>
+            </div>
+          </div>
+
+          <div class="seat seat-oval seat--s4 seat--folded" id="s4">
+            <div class="seat__avatar" style="background:linear-gradient(135deg,#10b981,#065f46);position:relative">
+              B
+              <span class="seat__index-badge">4</span>
+            </div>
+            <div class="seat__name">brad</div>
+            <div class="seat-state">
+              <span class="seat-state__chips">1,250</span>
+            </div>
+          </div>
+
+          <div class="seat seat-oval seat--s5" id="s5">
+            <div class="seat__avatar" style="background:linear-gradient(135deg,#ec4899,#9d174d);position:relative">
+              C
+              <span class="seat__index-badge">5</span>
+            </div>
+            <div class="seat__name">carol</div>
+            <div class="seat-state">
+              <span class="seat-state__chips">3,420</span>
+              <span class="seat-state__bet">raise 80</span>
+            </div>
+          </div>
+
+          <div class="seat seat-oval seat--s6 seat--disconnected" id="s6">
+            <div class="seat__avatar" style="background:linear-gradient(135deg,#6b7280,#374151);position:relative">
+              D
+              <span class="seat__index-badge">6</span>
+            </div>
+            <div class="seat__name">dave</div>
+            <div class="seat-state">
+              <span class="seat-state__chips">520</span>
+            </div>
+          </div>
+
+          <div class="seat seat-oval seat--s7" id="s7">
+            <div class="seat__avatar" style="background:linear-gradient(135deg,#22c55e,#15803d);position:relative">
+              E
+              <span class="seat__index-badge">7</span>
+            </div>
+            <div class="seat__name">eve</div>
+            <div class="seat-state">
+              <span class="seat-state__chips">1,640</span>
+            </div>
+          </div>
+
+          <div class="seat seat-oval seat--s8" id="s8">
+            <div class="seat__avatar seat__avatar--empty" style="position:relative">
+              ?
+              <span class="seat__index-badge">8</span>
+            </div>
+            <div class="seat__name" style="color:var(--text-muted);font-style:italic">Open</div>
+            <div class="seat-state">&nbsp;</div>
+          </div>
+        </article>
+      </section>
+
+      <aside class="sidebar" aria-label="Table context">
+        <div>
+          <h3>Game</h3>
+          <p class="game-title">Texas Hold'em</p>
+          <div class="status-row" style="margin-top:0.5rem">
+            <span class="status-chip active" id="statusChip">In play</span>
+            <span id="spectatorText">12 spectating</span>
+          </div>
+        </div>
+
+        <div>
+          <h3>Seated · 7 of 8</h3>
+          <ul class="seated-list">
+            <li><span class="seat__avatar" style="width:24px;height:24px;font-size:0.6875rem;">J</span><span>You</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">1,840</span></li>
+            <li><span class="seat__avatar" style="width:24px;height:24px;font-size:0.6875rem;background:linear-gradient(135deg,#f59e0b,#b45309)">A</span><span>alice</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">2,100</span></li>
+            <li><span class="seat__avatar seat__avatar--bot" style="width:24px;height:24px;font-size:0.6875rem;">R</span><span>rusty</span><span class="seat__bot-tag" style="margin-left:auto">BOT</span></li>
+            <li><span class="seat__avatar" style="width:24px;height:24px;font-size:0.6875rem;background:linear-gradient(135deg,#10b981,#065f46);opacity:0.5">B</span><span style="color:var(--text-muted)">brad (folded)</span></li>
+            <li><span class="seat__avatar" style="width:24px;height:24px;font-size:0.6875rem;background:linear-gradient(135deg,#ec4899,#9d174d)">C</span><span>carol</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">3,420</span></li>
+            <li><span class="seat__avatar" style="width:24px;height:24px;font-size:0.6875rem;background:linear-gradient(135deg,#6b7280,#374151);opacity:0.5">D</span><span style="color:var(--text-muted)">dave (away)</span></li>
+            <li><span class="seat__avatar" style="width:24px;height:24px;font-size:0.6875rem;background:linear-gradient(135deg,#22c55e,#15803d)">E</span><span>eve</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">1,640</span></li>
+          </ul>
+        </div>
+
+        <div>
+          <h3>This hand</h3>
+          <p style="font-size:0.8125rem;color:var(--text-secondary);margin:0;line-height:1.5">
+            Blinds 10/20 · Pot <strong style="color:var(--text-primary)">420</strong><br>
+            Turn — waiting on <strong style="color:var(--text-primary)">rusty</strong>.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn btn-secondary btn-sm">Stand up</button>
+        </div>
+
+        <div class="spectator-badge spectator-badge--sidebar" title="12 spectating">
+          <span>👁</span><span>12 spectating</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <aside class="mockup-meta" role="status">
+    <span>8p Oval — Poker (template for multi-seat games)</span>
+    <kbd>narrow = portrait oval</kbd>
+    <button class="theme-toggle" aria-label="Toggle theme" onclick="
+      const root = document.documentElement;
+      const isDark = root.getAttribute('data-theme') === 'dark';
+      root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      this.textContent = isDark ? '☾' : '☀';
+    ">☾</button>
+  </aside>
+
+  <script>
+    const states = {
+      forming: () => {
+        setChip('forming', 'Forming');
+        setSpectatorText('4 watching');
+        // Empty the center
+        document.getElementById('community').innerHTML = '';
+        document.getElementById('pot').textContent = '—';
+        document.getElementById('turnHint').innerHTML = '<span style="color:var(--color-amber-500)">●</span> Waiting for more players';
+        // Leave only 3 seats filled to show partial forming
+        ['s4','s5','s6','s7'].forEach(id => fillEmpty(id));
+        document.querySelectorAll('.seat-oval').forEach(s => s.classList.remove('seat--turn','seat--folded','seat--winner','seat--loser','seat--disconnected'));
+      },
+      playing: () => {
+        setChip('active', 'In play');
+        setSpectatorText('12 spectating');
+        document.getElementById('community').innerHTML = communityCardsPlaying();
+        document.getElementById('pot').textContent = '420';
+        document.getElementById('turnHint').innerHTML = '<span style="color:var(--color-amber-500)">●</span> Seat 3\'s turn';
+        rebuildAllSeats();
+        document.getElementById('s3').classList.add('seat--turn');
+        document.getElementById('s4').classList.add('seat--folded');
+        document.getElementById('s6').classList.add('seat--disconnected');
+      },
+      showdown: () => {
+        setChip('completed', 'Completed');
+        setSpectatorText('12 spectating');
+        document.getElementById('community').innerHTML = communityCardsShowdown();
+        document.getElementById('pot').textContent = '0';
+        document.getElementById('turnHint').innerHTML = '<span style="color:var(--color-amber-500)">●</span> Carol wins with flush!';
+        rebuildAllSeats();
+        document.getElementById('s5').classList.add('seat--winner');
+        ['s1','s2','s3','s7'].forEach(id => document.getElementById(id).classList.add('seat--loser'));
+        document.getElementById('s4').classList.add('seat--folded');
+        document.getElementById('s6').classList.add('seat--disconnected');
+      }
+    };
+
+    function setChip(cls, text) {
+      const chip = document.getElementById('statusChip');
+      chip.className = 'status-chip ' + cls;
+      chip.textContent = text;
+    }
+    function setSpectatorText(text) { document.getElementById('spectatorText').textContent = text; }
+
+    function communityCardsPlaying() {
+      return `
+        <div class="card-face">A♠</div>
+        <div class="card-face red">K♥</div>
+        <div class="card-face red">Q♦</div>
+        <div class="card-face back"></div>
+        <div class="card-face back"></div>
+      `;
+    }
+    function communityCardsShowdown() {
+      return `
+        <div class="card-face">A♠</div>
+        <div class="card-face red">K♥</div>
+        <div class="card-face red">Q♦</div>
+        <div class="card-face">9♠</div>
+        <div class="card-face">7♠</div>
+      `;
+    }
+
+    const defaultSeats = {
+      s1: { initial: 'J',       label: 'You',          style: 'background:linear-gradient(135deg,var(--color-slate-300),var(--color-slate-600))', idx: 1, chips: '1,840' },
+      s2: { initial: 'A',       label: 'alice',        style: 'background:linear-gradient(135deg,#f59e0b,#b45309)', idx: 2, chips: '2,100', bet: 'call 40' },
+      s3: { initial: 'R',       label: 'rusty · BOT',  style: 'background:linear-gradient(135deg,var(--color-teal-500),var(--color-teal-700))', idx: 3, chips: '980',   dealer: true, bot: true },
+      s4: { initial: 'B',       label: 'brad',         style: 'background:linear-gradient(135deg,#10b981,#065f46)', idx: 4, chips: '1,250' },
+      s5: { initial: 'C',       label: 'carol',        style: 'background:linear-gradient(135deg,#ec4899,#9d174d)', idx: 5, chips: '3,420', bet: 'raise 80' },
+      s6: { initial: 'D',       label: 'dave',         style: 'background:linear-gradient(135deg,#6b7280,#374151)', idx: 6, chips: '520' },
+      s7: { initial: 'E',       label: 'eve',          style: 'background:linear-gradient(135deg,#22c55e,#15803d)', idx: 7, chips: '1,640' },
+      s8: { empty: true, idx: 8 },
+    };
+
+    function rebuildAllSeats() {
+      for (const id of Object.keys(defaultSeats)) {
+        const s = document.getElementById(id);
+        s.className = 'seat seat-oval seat--' + id;
+        const d = defaultSeats[id];
+        if (d.empty) {
+          s.innerHTML = `
+            <div class="seat__avatar seat__avatar--empty" style="position:relative">
+              ?<span class="seat__index-badge">${d.idx}</span>
+            </div>
+            <div class="seat__name" style="color:var(--text-muted);font-style:italic">Open</div>
+            <div class="seat-state">&nbsp;</div>
+          `;
+          return;
+        }
+        s.innerHTML = `
+          <div class="seat__avatar ${d.bot ? 'seat__avatar--bot' : ''}" style="${d.style};position:relative">
+            ${d.initial}
+            <span class="seat__index-badge">${d.idx}</span>
+            ${d.dealer ? '<span class="role-dealer" title="Dealer">D</span>' : ''}
+          </div>
+          <div class="seat__name">${d.label}</div>
+          <div class="seat-state">
+            <span class="seat-state__chips">${d.chips}</span>
+            ${d.bet ? `<span class="seat-state__bet">${d.bet}</span>` : ''}
+          </div>
+        `;
+      }
+    }
+
+    function fillEmpty(id) {
+      const s = document.getElementById(id);
+      s.className = 'seat seat-oval seat--' + id;
+      const idx = defaultSeats[id].idx;
+      s.innerHTML = `
+        <div class="seat__avatar seat__avatar--empty" style="position:relative">
+          ?<span class="seat__index-badge">${idx}</span>
+        </div>
+        <div class="seat__name" style="color:var(--text-muted);font-style:italic">Open</div>
+        <div class="seat-state">&nbsp;</div>
+      `;
+    }
+
+    document.querySelectorAll('.state-switcher button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.state-switcher button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        states[btn.dataset.state]?.();
+      });
+    });
+    states.playing();
+  </script>
+</body>
+</html>

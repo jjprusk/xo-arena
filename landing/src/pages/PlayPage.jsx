@@ -187,6 +187,8 @@ export default function PlayPage() {
   const tournamentMatchId = searchParams.get('tournamentMatch')
   const tournamentId      = searchParams.get('tournamentId')
   const action            = searchParams.get('action')
+  const botUserId         = searchParams.get('botUserId')
+  const botSkillId        = searchParams.get('botSkillId')
 
   // Key that changes when auth identity changes — forces GameView to fully
   // unmount and remount (new useGameSDK, new socket mapping, new game).
@@ -212,14 +214,21 @@ export default function PlayPage() {
       .catch(() => setBotError(true))
   }, [action, joinSlug])
 
-  // No join slug and no recognised action → home
-  if (!joinSlug && !action) return <Navigate to="/" replace />
+  // No join slug, no recognised action, and no direct bot params → home
+  if (!joinSlug && !action && !botUserId) return <Navigate to="/" replace />
 
   // Bot fetch failed → back to home
   if (botError) return <Navigate to="/" replace />
 
   // Waiting for community bot to be resolved
   if (action === 'vs-community-bot' && !joinSlug && !botConfig) return <Spinner />
+
+  // Resolve final botConfig: community-bot fetch result or direct URL params
+  const resolvedBotConfig = action === 'vs-community-bot'
+    ? botConfig
+    : botUserId
+      ? { botUserId, botSkillId: botSkillId ?? null }
+      : null
 
   return (
     <GameView
@@ -228,7 +237,7 @@ export default function PlayPage() {
       tournamentMatchId={tournamentMatchId}
       tournamentId={tournamentId}
       authSession={authSession}
-      botConfig={action === 'vs-community-bot' ? botConfig : null}
+      botConfig={resolvedBotConfig}
     />
   )
 }

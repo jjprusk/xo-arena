@@ -1,0 +1,942 @@
+/* Copyright © 2026 Joe Pruskowski. All rights reserved.
+ * Table paradigm — the shared visual language for tables across every game.
+ * Pure CSS; no images, no JS required. Safe to ship to any browser with
+ * support for CSS custom properties and container queries.
+ */
+
+/* Author CSS (display: grid/flex) overrides the UA [hidden] rule — force it back. */
+[hidden] { display: none !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  App shell (nav + main content)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+  backdrop-filter: blur(12px) saturate(1.3);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  border-bottom: 1px solid var(--border-default);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.app-nav__brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+.app-nav__brand span { color: var(--color-primary); }
+.app-nav__links {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.app-nav__links a {
+  text-decoration: none;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+}
+.app-nav__links a:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.app-nav__links a.active { color: var(--color-primary); font-weight: 600; }
+
+/* State switcher (mockup-only — lets reviewers flip FORMING / PLAYING / COMPLETED). */
+.state-switcher {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: color-mix(in srgb, var(--bg-surface) 78%, transparent);
+  backdrop-filter: blur(10px) saturate(1.3);
+  -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  margin: 1.25rem auto;
+  max-width: max-content;
+}
+.state-switcher button {
+  border: 0;
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.state-switcher button:hover { background: var(--bg-surface-hover); }
+.state-switcher button.active {
+  background: linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700));
+  color: white;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Shell layout — chrome-present vs focused
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+  container-type: inline-size;
+}
+.shell__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  .shell__grid { grid-template-columns: minmax(0, 1fr) 280px; align-items: start; }
+}
+
+.game-column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.mode-toggle {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: color-mix(in srgb, var(--bg-surface) 75%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
+}
+.mode-toggle:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Generic table surface
+ *  Provides a subtle "place" — radial bevel + elevated shadow, no images.
+ *  Extended by the per-archetype classes below.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.table-container {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  padding: 3.5rem 1rem; /* room for seat pods above/below */
+  display: grid;
+  place-items: center;
+}
+
+.table-surface {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 28px;
+  /* Subtle felt-like bevel. Center lifted, edges seated. */
+  background:
+    radial-gradient(ellipse 75% 75% at 50% 42%,
+      color-mix(in srgb, var(--color-slate-50) 85%, white),
+      var(--color-slate-100) 65%,
+      var(--color-slate-200) 100%);
+  box-shadow:
+    0 0 0 1px rgba(180, 140, 70, 0.12),
+    0 14px 30px -10px rgba(25, 43, 73, 0.22),
+    0 4px 12px -6px rgba(25, 43, 73, 0.12),
+    0 20px 60px -15px rgba(160, 110, 40, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(25, 43, 73, 0.06);
+  display: grid;
+  place-items: center;
+  transition: filter 0.3s ease;
+}
+
+.dark .table-surface {
+  background:
+    radial-gradient(ellipse 75% 75% at 50% 42%,
+      color-mix(in srgb, var(--color-slate-800) 80%, black),
+      var(--color-slate-900) 65%,
+      #0E1A2B 100%);
+  box-shadow:
+    0 14px 32px -8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(148, 174, 206, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* The inner area where the game actually renders. */
+.table-center {
+  width: 82%;
+  height: 82%;
+  display: grid;
+  place-items: center;
+  gap: 0.75rem;
+  color: var(--text-primary);
+}
+
+/* Spectator cluster-badge — sits on the rim, never on the play surface. */
+.spectator-badge {
+  position: absolute;
+  top: -0.75rem;
+  right: -0.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 0.25rem 0.5rem 0.25rem 0.625rem;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-card);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  z-index: 3;
+}
+.spectator-badge::before {
+  content: "";
+  width: 0.5rem; height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-teal-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-teal-500) 30%, transparent);
+}
+.spectator-badge:hover { background: var(--bg-surface-hover); }
+
+/* Sidebar placement — static flow, centered below the action buttons */
+.spectator-badge--sidebar {
+  position: static;
+  top: auto;
+  right: auto;
+  margin: 0 auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Seats
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.seat {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 92px;
+  text-align: center;
+}
+
+.seat__avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--color-slate-400), var(--color-slate-700));
+  color: white;
+  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  box-shadow: 0 2px 6px -1px rgba(25, 43, 73, 0.3);
+  border: 3px solid var(--bg-surface);
+  overflow: hidden;
+}
+
+.seat__avatar--bot {
+  background: linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700));
+}
+
+.seat__avatar--empty {
+  background: repeating-linear-gradient(45deg,
+    var(--bg-surface-hover) 0 6px,
+    var(--bg-surface) 6px 12px);
+  color: var(--text-muted);
+  border-style: dashed;
+  border-color: var(--border-default);
+}
+
+.seat__name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat__meta {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.seat__bot-tag {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-teal-50);
+  color: var(--color-teal-700);
+}
+.dark .seat__bot-tag {
+  background: rgba(36,181,135,0.18);
+  color: var(--color-teal-500);
+}
+
+/* State modifiers */
+.seat--turn .seat__avatar {
+  box-shadow:
+    0 0 0 3px rgba(212, 137, 30, 0.95),
+    0 0 0 6px rgba(212, 137, 30, 0.2),
+    0 0 14px 4px rgba(212, 137, 30, 0.35);
+  animation: seat-turn-pulse 1.8s ease-in-out infinite;
+}
+@keyframes seat-turn-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(212, 137, 30, 0.95), 0 0 0 6px rgba(212, 137, 30, 0.25), 0 0 12px 3px rgba(212, 137, 30, 0.30); }
+  50%      { box-shadow: 0 0 0 3px rgba(212, 137, 30, 0.95), 0 0 0 9px rgba(212, 137, 30, 0.05), 0 0 18px 6px rgba(212, 137, 30, 0.45); }
+}
+
+.seat--winner .seat__avatar {
+  box-shadow:
+    0 0 0 3px var(--color-amber-500),
+    0 0 0 6px rgba(212, 137, 30, 0.2),
+    0 0 18px 6px rgba(212, 137, 30, 0.4);
+}
+.seat--winner .seat__name::after {
+  content: "👑";
+  margin-left: 0.25rem;
+}
+
+.seat--loser {
+  opacity: 0.55;
+  filter: saturate(0.75);
+}
+
+.seat--disconnected .seat__avatar { opacity: 0.4; }
+.seat--disconnected .seat__avatar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: seat-disconnect-pulse 1.8s ease-in-out infinite;
+  background: rgba(232, 85, 84, 0.2);
+}
+@keyframes seat-disconnect-pulse {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Seat positions — 2-player sit-down (seats on short edges)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.seat--top {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column-reverse;
+}
+.seat--bottom {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Seat positions — 8-player oval
+ *  Seats live on a conceptual circle around the table, relative-POV means
+ *  seat 1 ("you") is at bottom-center.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.seat-oval {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  transform: translate(-50%, -50%);
+}
+.seat-oval.seat--s1 { top: 96%;  left: 50%; } /* you, bottom-center */
+.seat-oval.seat--s2 { top: 86%;  left: 88%; }
+.seat-oval.seat--s3 { top: 50%;  left: 100%; }
+.seat-oval.seat--s4 { top: 14%;  left: 88%; }
+.seat-oval.seat--s5 { top: 4%;   left: 50%; }
+.seat-oval.seat--s6 { top: 14%;  left: 12%; }
+.seat-oval.seat--s7 { top: 50%;  left: 0%; }
+.seat-oval.seat--s8 { top: 86%;  left: 12%; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  2-player sit-down (landscape rectangle)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.table-container.table-2p {
+  padding-top: 6.25rem;
+  padding-bottom: 6.25rem;
+}
+.table-2p .table-surface {
+  aspect-ratio: 1 / 1.15;    /* slightly taller than wide on mobile */
+  max-width: 360px;
+}
+@media (min-width: 640px) {
+  .table-2p .table-surface {
+    aspect-ratio: 1.15 / 1;  /* landscape on wider screens */
+    max-width: 480px;
+  }
+}
+
+/* Board for XO games */
+.xo-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows:    repeat(3, 1fr);
+  width: min(78%, 280px);
+  aspect-ratio: 1;
+  background: var(--color-slate-50);
+  border-radius: var(--radius-lg);
+  padding: 0.5rem;
+  gap: 0.375rem;
+  box-shadow:
+    0 4px 12px -4px rgba(25, 43, 73, 0.18),
+    inset 0 0 0 1px rgba(74, 111, 165, 0.2);
+}
+.dark .xo-board {
+  background: var(--color-slate-800);
+  box-shadow:
+    0 4px 12px -4px rgba(0,0,0,0.55),
+    inset 0 0 0 1px rgba(74, 111, 165, 0.3);
+}
+.xo-cell {
+  background: color-mix(in srgb, white 55%, var(--color-slate-100));
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 8cqw, 2.75rem);
+  font-weight: 700;
+  color: var(--text-secondary);
+  transition: background 0.15s, transform 0.1s;
+  cursor: pointer;
+}
+.xo-cell:hover { background: var(--color-slate-100); transform: scale(1.02); }
+.xo-cell.x { color: var(--color-slate-600); }
+.xo-cell.o { color: var(--color-teal-600); }
+.dark .xo-cell { background: var(--color-slate-900); }
+.dark .xo-cell:hover { background: color-mix(in srgb, var(--color-slate-700) 50%, var(--color-slate-800)); }
+.dark .xo-cell.x { color: var(--color-slate-300); }
+.dark .xo-cell.o { color: var(--color-teal-500); }
+
+.xo-cell.win {
+  background: color-mix(in srgb, var(--color-amber-500) 20%, var(--bg-surface));
+  box-shadow: inset 0 0 0 2px var(--color-amber-500);
+}
+.dark .xo-cell.win {
+  background: rgba(212, 137, 30, 0.18);
+}
+
+/* ── Forming-state "waiting for opponent" panel (inside the center rect) ── */
+.forming-panel {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+.forming-panel__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+.forming-panel__hint {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  max-width: 220px;
+}
+.forming-panel__share {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.forming-dots {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+.forming-dots span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--color-slate-400);
+  animation: dot-bounce 1.2s infinite ease-in-out both;
+}
+.forming-dots span:nth-child(2) { animation-delay: .15s; }
+.forming-dots span:nth-child(3) { animation-delay: .30s; }
+@keyframes dot-bounce {
+  0%,80%,100% { transform: translateY(0); opacity: 0.4; }
+  40%         { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Outcome banner — lives at the bottom edge of the table, not over seats */
+.outcome-banner {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.375rem 1rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+  box-shadow: var(--shadow-card);
+}
+.outcome-banner--win  { background: linear-gradient(135deg, var(--color-amber-500), var(--color-amber-700)); color: white; }
+.outcome-banner--lose { background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border-default); }
+.outcome-banner--draw { background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-default); }
+
+/* Short "game starting" transition — pulses the center briefly
+   when the table flips FORMING → ACTIVE. */
+.table-starting .table-center {
+  animation: table-start 0.8s ease both;
+}
+@keyframes table-start {
+  0%   { opacity: 0.2; transform: scale(0.94); filter: blur(2px); }
+  70%  { opacity: 1;   transform: scale(1.02); filter: blur(0); }
+  100% { opacity: 1;   transform: scale(1); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Head-to-head court (Pong)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.table-container.table-court {
+  padding-left: 5.5rem;
+  padding-right: 5.5rem;
+}
+.table-court .table-surface {
+  aspect-ratio: 16 / 9;
+  max-width: 640px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), transparent 40%),
+    repeating-linear-gradient(
+      to right,
+      var(--color-slate-700) 0 6%,
+      color-mix(in srgb, var(--color-slate-800) 85%, black) 6% 12%);
+  /* overflow: hidden removed — border-radius clips the bg automatically;
+     keeping it would clip the spectator badge that hangs off the corner */
+}
+.dark .table-court .table-surface {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%),
+    repeating-linear-gradient(
+      to right,
+      #0f1928 0 6%,
+      #0a121d 6% 12%);
+}
+
+.court {
+  position: relative;
+  width: 100%; height: 100%;
+}
+.court__center-line {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  bottom: 8%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: repeating-linear-gradient(to bottom,
+    rgba(255,255,255,0.7) 0 12px,
+    transparent 12px 22px);
+}
+.court__paddle {
+  position: absolute;
+  width: 8px;
+  height: 18%;
+  border-radius: 4px;
+  background: white;
+  box-shadow: 0 0 12px rgba(255,255,255,0.55);
+}
+.court__paddle--left  { left: 3%;  top: 45%; }
+.court__paddle--right { right: 3%; top: 32%; }
+.court__ball {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0 16px rgba(255,255,255,0.65);
+  top: 48%; left: 60%;
+}
+.court__score {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.25rem, 4vw, 2rem);
+  letter-spacing: 0.25em;
+  text-shadow: 0 0 10px rgba(0,0,0,0.35);
+}
+
+/* Player indicators at each end (head-to-head uses ends, not rim) */
+.court-end {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-primary);
+}
+.court-end--left  { top: 50%; left: 0.5rem; right: auto; transform: translateY(-1.375rem); }
+.court-end--right { top: 50%; right: 0.5rem; left: auto; transform: translateY(-1.375rem); }
+
+/* Portrait-orientation override (tall viewport) */
+@media (max-aspect-ratio: 3/4) and (max-width: 620px) {
+  .table-court .table-surface {
+    aspect-ratio: 9 / 16;
+    max-width: 340px;
+  }
+  .court__center-line {
+    left: 8%;
+    right: 8%;
+    top: 50%;
+    width: auto;
+    height: 2px;
+    transform: translateY(-50%);
+    background: repeating-linear-gradient(to right,
+      rgba(255,255,255,0.7) 0 12px,
+      transparent 12px 22px);
+  }
+  .court__paddle {
+    width: 18%;
+    height: 8px;
+    border-radius: 4px;
+  }
+  .court__paddle--left  { left: 45%; top: 3%; right: auto; }
+  .court__paddle--right { left: 32%; top: auto; bottom: 3%; right: auto; }
+  .court__score { top: 4%; font-size: 1.5rem; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  8-player oval (Poker)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.table-8p {
+  padding: 4.5rem 3rem; /* extra perimeter room for seat pods */
+}
+.table-8p .table-surface {
+  aspect-ratio: 16 / 10;
+  max-width: 720px;
+  border-radius: 200px / 140px;
+  background:
+    radial-gradient(ellipse 85% 65% at 50% 45%,
+      color-mix(in srgb, var(--color-teal-700) 55%, #0c2a1e) 0%,
+      color-mix(in srgb, var(--color-teal-800, #0c4030) 85%, black) 70%,
+      #081e17 100%);
+  box-shadow:
+    0 18px 50px -10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(36, 181, 135, 0.35),
+    inset 0 -2px 0 rgba(0,0,0,0.4);
+}
+
+.table-8p .table-center {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  color: white;
+}
+
+/* Community cards + pot area */
+.poker-community {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  justify-content: center;
+}
+.card-face {
+  width: clamp(28px, 4.5cqw, 42px);
+  aspect-ratio: 2/3;
+  border-radius: 4px;
+  background: white;
+  color: var(--color-gray-900);
+  font-family: var(--font-display);
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+.card-face.red { color: var(--color-red-600); }
+.card-face.back {
+  background: repeating-linear-gradient(45deg,
+    var(--color-slate-600) 0 4px,
+    var(--color-slate-800) 4px 8px);
+  color: transparent;
+}
+.poker-pot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: rgba(0,0,0,0.35);
+  color: white;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.15);
+  font-family: var(--font-mono);
+}
+.poker-pot::before { content: "🪙"; }
+
+/* Per-seat chip stack + bet indicators — lives near the seat, not on it */
+.seat-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+.seat-state__chips {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.seat-state__bet {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-amber-50);
+  color: var(--color-amber-700);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.dark .seat-state__bet { background: rgba(212,137,30,0.18); color: var(--color-amber-500); }
+
+/* Folded overlay */
+.seat--folded .seat__avatar { opacity: 0.35; filter: grayscale(1); }
+.seat--folded .seat__name    { color: var(--text-muted); }
+.seat--folded .seat-state__chips { color: var(--text-muted); }
+
+/* Seat-index badge — immutable; stays with the seat */
+.seat__index-badge {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+/* Dealer button — example of a role badge; games can emit any */
+.role-dealer {
+  position: absolute;
+  right: -8px;
+  bottom: -4px;
+  background: white;
+  color: var(--color-gray-900);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  font-size: 0.625rem;
+  font-weight: 800;
+  font-family: var(--font-display);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Sidebar (chrome-present)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.sidebar {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.sidebar h3 {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+.sidebar .game-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+.sidebar .status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.status-chip.forming   { background: var(--color-amber-50);  color: var(--color-amber-700); }
+.status-chip.active    { background: var(--color-teal-50);   color: var(--color-teal-700); }
+.status-chip.completed { background: var(--color-gray-100);  color: var(--text-secondary); }
+.dark .status-chip.forming   { background: rgba(212,137,30,0.18); color: var(--color-amber-500); }
+.dark .status-chip.active    { background: rgba(36,181,135,0.18); color: var(--color-teal-500); }
+.dark .status-chip.completed { background: var(--color-gray-700); color: var(--text-muted); }
+
+.sidebar .seated-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.sidebar .seated-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+.sidebar .seated-list .seat__avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 0.75rem;
+  border-width: 2px;
+}
+
+.sidebar .tournament-card {
+  background: var(--color-primary-light);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 20%, var(--border-default));
+  padding: 0.75rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.tournament-card__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+}
+.tournament-card__meta { color: var(--text-muted); font-size: 0.75rem; }
+.tournament-card__series {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+.tournament-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.375rem;
+  border-top: 1px dashed color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+.tournament-card__footer a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.sidebar .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid var(--border-default);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Mockup meta — a footer bar shown on each mockup page describing the
+ *  responsive breakpoints so a reviewer knows at a glance what to resize to.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.mockup-meta {
+  position: fixed;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--bg-surface) 78%, transparent);
+  backdrop-filter: blur(12px) saturate(1.3);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  padding: 0.375rem 0.875rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-card);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 15;
+}
+.mockup-meta kbd {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+.mockup-meta .theme-toggle {
+  margin-left: 0.25rem;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.mockup-meta .theme-toggle:hover { color: var(--text-primary); }
