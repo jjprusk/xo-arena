@@ -51,8 +51,11 @@ export async function sweep(io) {
         `Table GC: deleted ${deletedForming} forming, ${deletedCompleted} completed, abandoned ${abandonedActive} active`,
       )
     }
+
+    return { deletedForming, deletedCompleted, abandonedActive }
   } catch (err) {
     logger.warn({ err: err.message }, 'Table GC sweep failed')
+    return { deletedForming: 0, deletedCompleted: 0, abandonedActive: 0, error: err.message }
   }
 }
 

@@ -19,6 +19,7 @@ import {
 } from '../lib/feedbackHelpers.js'
 import { replyTemplate } from '../lib/emailTemplates.js'
 import { dispatch, emitToRoom } from '../lib/notificationBus.js'
+import { sweep as gcSweep } from '../services/tableGcService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
@@ -39,6 +40,22 @@ router.get('/health/sockets', (req, res) => {
     alerts: getAlerts(),
     uptime: Math.round(process.uptime()),
   })
+})
+
+// ─── GC trigger (manual QA / on-demand sweep) ────────────────────────────────
+
+/**
+ * POST /api/v1/admin/gc/run
+ * Triggers a Table GC sweep immediately and returns the counts.
+ * Sockets are not notified (io = null) — DB state changes are what matter for QA.
+ */
+router.post('/gc/run', async (_req, res, next) => {
+  try {
+    const result = await gcSweep(null)
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
 })
 
 // ─── Platform stats ───────────────────────────────────────────────────────────
