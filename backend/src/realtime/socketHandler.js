@@ -1573,6 +1573,9 @@ async function recordPvpGame(table, io) {
   const guestBaId = guestUserId(seats)  // betterAuthId from seat 1
 
   if (!hostBaId && !guestBaId) return
+  // No moves played — nothing worth recording (abandoned / forfeited before start).
+  const moveCount = (ps.board || []).filter(Boolean).length
+  if (moveCount === 0) return
 
   // Resolve domain User.ids (needed for createGame, ELO, tournament participant)
   const [hostUser, guestUser] = await Promise.all([

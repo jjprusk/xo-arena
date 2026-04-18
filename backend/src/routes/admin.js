@@ -386,7 +386,7 @@ router.get('/games', async (req, res, next) => {
     const limit = Math.min(100, parseInt(req.query.limit) || 25)
     const skip = (page - 1) * limit
 
-    const where = {}
+    const where = { totalMoves: { gt: 0 } }
     if (req.query.mode) where.mode = req.query.mode.toUpperCase()
     if (req.query.outcome) where.outcome = req.query.outcome.toUpperCase()
     if (req.query.player) {
