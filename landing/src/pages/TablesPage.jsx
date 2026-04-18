@@ -166,7 +166,7 @@ export default function TablesPage() {
   useEffect(() => {
     const socket = getSocket()
     function onBusEvent({ type }) {
-      if (!['table.created', 'player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.deleted'].includes(type)) return
+      if (!['table.created', 'player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.completed', 'table.deleted'].includes(type)) return
       clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => { fetchTables() }, 250)
     }

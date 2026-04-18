@@ -21,7 +21,7 @@ router.get('/players', optionalAuth, async (req, res, next) => {
       db.playerClassification.findMany({
         where,
         include: {
-          user: { select: { id: true, displayName: true, avatarUrl: true, eloRating: true } },
+          user: { select: { id: true, username: true, displayName: true, isBot: true } },
         },
         orderBy: [{ merits: 'desc' }],
         skip: (page - 1) * limit,

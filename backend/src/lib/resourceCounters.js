@@ -95,18 +95,12 @@ const LEAK_MIN_GROWTH = {
 
 const _snapshots = []          // circular, newest last
 const _alerts = {}             // { sockets: bool, rooms: bool, redisConnections: bool, memoryMb: bool }
-let _roomCountFn = null        // injected by startSnapshotInterval to avoid circular import
 
 export function getSnapshots() { return [..._snapshots] }
 export function getLatestSnapshot() { return _snapshots.at(-1) ?? null }
 export function getAlerts() { return { ..._alerts } }
 
-/**
- * Start the periodic snapshot interval.
- * @param {() => number} getRoomCount  — function that returns current room count
- */
-export function startSnapshotInterval(getRoomCount) {
-  _roomCountFn = getRoomCount
+export function startSnapshotInterval() {
   // Take one immediately so the health endpoint always returns non-null data
   takeSnapshot()
   const id = setInterval(() => takeSnapshot(), SNAPSHOT_INTERVAL_MS)
@@ -151,6 +145,7 @@ async function takeTablesSnapshot() {
     db.table.count({ where: { status: 'FORMING', createdAt: { lt: cutoff } } }),
   ])
   return {
+    rooms:              forming + active,
     tablesForming:      forming,
     tablesActive:       active,
     tablesCompleted:    completed,
@@ -168,7 +163,6 @@ async function takeSnapshot() {
   const snap = {
     ts: Date.now(),
     sockets: _socketCount,
-    rooms: _roomCountFn ? _roomCountFn() : 0,
     redisConnections: _redisConnectionCount,
     memoryMb:      Math.round(mem.heapUsed  / 1024 / 1024),
     heapTotalMb:   Math.round(mem.heapTotal / 1024 / 1024),

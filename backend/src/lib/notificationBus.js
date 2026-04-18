@@ -42,6 +42,7 @@ const REGISTRY = {
   'spectator.joined':                { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // someone is watching (Phase 3.1 presence)
   'table.empty':                     { mode: 'cohort',    persist: 'ephemeral',  email: false, ttlMs: null }, // last seat vacated while still FORMING
   'table.started':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // all seats filled, game beginning — clients clear stale seat-change notifs
+  'table.completed':                 { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // game finished (normal end or idle timeout) — remove from active list
   'table.deleted':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // creator deleted; remove from list
 }
 
@@ -68,6 +69,7 @@ const PREF_DEFAULTS = {
   'spectator.joined':                { inApp: true,  email: false },
   'table.empty':                     { inApp: true,  email: false },
   'table.started':                   { inApp: true,  email: false },
+  'table.completed':                 { inApp: true,  email: false },
   'table.deleted':                   { inApp: true,  email: false },
 }
 

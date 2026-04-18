@@ -244,6 +244,8 @@ function makeIdleCallbacks(io) {
     },
     onAbandon: ({ absentSocketId, absentUserId, tableId }) => {
       io.to(`table:${tableId}`).emit('room:abandoned', { reason: 'idle', absentUserId })
+      dispatchBus({ type: 'table.completed', targets: { broadcast: true }, payload: { tableId } })
+        .catch(() => {})
     },
     onKick: ({ socketId }) => {
       io.to(socketId).emit('room:kicked', { reason: 'idle' })
@@ -367,14 +369,6 @@ async function resolveSocketUser(token) {
   }
 }
 
-// ── Active table count (for resource snapshots) ──────────────────────────────
-async function getActiveTableCount() {
-  try {
-    return await db.table.count({ where: { status: { in: ['FORMING', 'ACTIVE'] } } })
-  } catch (_) {
-    return 0
-  }
-}
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
@@ -1479,7 +1473,7 @@ export async function attachSocketIO(httpServer) {
   botGameRunner.setIO(io)
   pongRunner.setIO(io)
 
-  startSnapshotInterval(getActiveTableCount)
+  startSnapshotInterval()
 
   // Periodic re-broadcast of online users
   setInterval(() => broadcastOnlineUsers(io), 30_000)

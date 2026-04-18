@@ -70,6 +70,7 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
     case 'spectator.joined':
     case 'table.empty':
     case 'table.started':
+    case 'table.completed':
     case 'table.deleted':
       return null
     // Seat changes ARE surfaced, but only for stakeholders (creator or
