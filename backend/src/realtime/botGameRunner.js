@@ -50,7 +50,7 @@ function parseBotModelId(botModelId) {
     return { impl: 'minimax', difficulty: diff }
   }
 
-  if (botModelId.startsWith('testbot:')) {
+  if (botModelId.startsWith('testbot:') || botModelId.startsWith('seed:')) {
     const diff = botModelId.split(':')[2] || 'novice'
     return { impl: 'minimax', difficulty: diff }
   }

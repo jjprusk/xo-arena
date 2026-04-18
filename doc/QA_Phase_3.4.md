@@ -198,6 +198,64 @@ These existed before Phase 3.4 and should still work:
 
 ---
 
+## 9. Tournament Seed Bots
+
+Seed bots are admin-configured bot accounts that are automatically registered as participants in every recurring tournament occurrence, ensuring matches can run even with low human attendance.
+
+### 9a. Add seed bots to a recurring tournament
+
+- [ ] Open the admin panel for a recurring tournament in `REGISTRATION_OPEN` status
+- [ ] Navigate to the **Seed Bots** tab
+- [ ] Click **Add Seed Bot**, enter a name (e.g. "Rusty Pete") and set skill level to `Rusty`
+- [ ] Add a second bot (e.g. "Magnus Jr.") at skill level `Magnus`
+- [ ] Verify both bots appear in the seed bot list with their configured skill levels
+- [ ] Verify both bots are listed as participants in the **Participants** tab with `registrationMode: RECURRING` shown
+- [ ] Verify each bot has a `TournamentSeedBot` config row: `SELECT * FROM tournament_seed_bots WHERE "tournamentId" = '<id>';`
+
+### 9b. Seed bots propagate to new recurring occurrences
+
+- [ ] Mark the current recurring tournament COMPLETED (or wait for natural completion)
+- [ ] Wait for the scheduler to run (up to 1 min) or trigger manually: `checkRecurringOccurrences()`
+- [ ] Verify a new occurrence is created with `status: REGISTRATION_OPEN`
+- [ ] Verify the new occurrence's participant list includes both seed bots
+- [ ] Verify `tournament_seed_bots` rows exist on the **new occurrence** (not just the template)
+- [ ] Verify recurring human participants are also carried over (if any)
+
+### 9c. Seed bots participate in BOT_VS_BOT automated play
+
+- [ ] Start a `BOT_VS_BOT` tournament that includes seed bots as participants
+- [ ] Trigger tournament start (auto at `startTime` or manual via admin)
+- [ ] Verify the bracket is generated and first-round matches are created
+- [ ] Open the bot game spectator URL for a seed-bot match
+- [ ] Verify the game plays to completion automatically (moves appear with ~1.5s delay)
+- [ ] Verify the match result is reported back to the tournament bracket
+- [ ] Verify the losing bot is eliminated and the bracket advances correctly
+
+### 9d. Remove a seed bot from a tournament
+
+- [ ] In the admin panel, click **Remove** next to a seed bot
+- [ ] Verify the bot disappears from the seed bot list
+- [ ] Verify the bot's participant row is set to `WITHDRAWN`
+- [ ] Verify that subsequent new occurrences do **not** include the removed bot
+
+### 9e. Seed bot skill levels map correctly
+
+| Admin skill label | Expected `botModelId` suffix | Expected AI difficulty |
+|---|---|---|
+| Rusty | `novice` | novice (easy) |
+| Copper | `intermediate` | intermediate |
+| Sterling | `advanced` | advanced |
+| Magnus | `master` | master (hardest) |
+
+- [ ] Verify `botModelId` in DB matches `seed:{username}:{skill}` format for each level
+- [ ] Verify `parseBotModelId('seed:rusty-pete-abc123:novice')` returns `{ impl: 'minimax', difficulty: 'novice' }`
+
+### 9f. Scheduler unit tests pass
+
+- [ ] Run `npx vitest run src/__tests__/seedBots.test.js` from `packages/tournament/` — all 3 tests pass
+
+---
+
 ## Sign-off
 
 | Area | Tested by | Date | Pass/Fail | Notes |
@@ -210,4 +268,5 @@ These existed before Phase 3.4 and should still work:
 | Idle handling | | | | |
 | Table GC | | | | |
 | Tournament | | | | |
+| Tournament Seed Bots | | | | |
 | Regressions | | | | |

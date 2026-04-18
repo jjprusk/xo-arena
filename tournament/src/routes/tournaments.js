@@ -594,4 +594,123 @@ router.delete('/:id/register', requireAuth, async (req, res, next) => {
   }
 })
 
+// ─── Seed bots ───────────────────────────────────────────────────────────────
+// Admin-managed bots that are automatically registered in every occurrence of a
+// recurring tournament.  For one-off tournaments they register immediately.
+
+const SKILL_LEVEL_MAP = {
+  rusty: 'novice', novice: 'novice',
+  copper: 'intermediate', intermediate: 'intermediate',
+  sterling: 'advanced', advanced: 'advanced',
+  magnus: 'master', master: 'master',
+}
+
+function makeSeedBotUsername(name) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
+  const uid = Math.random().toString(36).slice(2, 8)
+  return `seedbot-${slug}-${uid}`
+}
+
+// GET /api/tournaments/:id/seed-bots
+router.get('/:id/seed-bots', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const seeds = await db.tournamentSeedBot.findMany({
+      where: { tournamentId: req.params.id },
+      include: { user: { select: { id: true, displayName: true, botModelId: true } } },
+      orderBy: { createdAt: 'asc' },
+    })
+    res.json({ seedBots: seeds.map(s => ({
+      id: s.id,
+      userId: s.userId,
+      displayName: s.user.displayName,
+      botModelId: s.user.botModelId,
+      skillLevel: s.user.botModelId?.split(':')[2] ?? null,
+      createdAt: s.createdAt,
+    })) })
+  } catch (e) { next(e) }
+})
+
+// POST /api/tournaments/:id/seed-bots
+// Body: { bots: [{ name: "Scarlett", skillLevel: "sterling" }] }
+// Creates new bot users and registers them as participants + seed-bot config.
+router.post('/:id/seed-bots', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const tournament = await db.tournament.findUnique({ where: { id: req.params.id } })
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
+    if (['COMPLETED', 'CANCELLED'].includes(tournament.status)) {
+      return res.status(400).json({ error: `Cannot add seed bots to a ${tournament.status.toLowerCase()} tournament` })
+    }
+
+    const bots = req.body.bots
+    if (!Array.isArray(bots) || bots.length === 0) {
+      return res.status(400).json({ error: 'bots must be a non-empty array' })
+    }
+
+    const added = []
+    for (const { name, skillLevel } of bots) {
+      if (!name?.trim()) return res.status(400).json({ error: 'Each bot must have a name' })
+
+      const skill = SKILL_LEVEL_MAP[skillLevel?.toLowerCase()] ?? 'intermediate'
+      const username = makeSeedBotUsername(name.trim())
+      const botModelId = `seed:${username}:${skill}`
+
+      const user = await db.user.create({
+        data: {
+          username,
+          email: `${username}@arena.test`,
+          displayName: name.trim(),
+          isBot: true,
+          botActive: true,
+          botAvailable: true,
+          botCompetitive: true,
+          botModelId,
+          botModelType: 'minimax',
+          nameConfirmed: true,
+        },
+      })
+
+      await db.tournamentParticipant.upsert({
+        where: { tournamentId_userId: { tournamentId: tournament.id, userId: user.id } },
+        create: { tournamentId: tournament.id, userId: user.id, status: 'REGISTERED', registrationMode: 'SINGLE' },
+        update: { status: 'REGISTERED' },
+      })
+
+      await db.tournamentSeedBot.upsert({
+        where: { tournamentId_userId: { tournamentId: tournament.id, userId: user.id } },
+        create: { tournamentId: tournament.id, userId: user.id },
+        update: {},
+      })
+
+      added.push({ userId: user.id, displayName: user.displayName, botModelId, skillLevel: skill })
+    }
+
+    res.status(201).json({ added })
+  } catch (e) { next(e) }
+})
+
+// DELETE /api/tournaments/:id/seed-bots/:botUserId
+// Removes the seed-bot config and withdraws the bot from the tournament.
+router.delete('/:id/seed-bots/:botUserId', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const { id: tournamentId, botUserId } = req.params
+
+    const seed = await db.tournamentSeedBot.findUnique({
+      where: { tournamentId_userId: { tournamentId, userId: botUserId } },
+    })
+    if (!seed) return res.status(404).json({ error: 'Seed bot not found in this tournament' })
+
+    await db.tournamentSeedBot.delete({
+      where: { tournamentId_userId: { tournamentId, userId: botUserId } },
+    })
+
+    // Withdraw participant if registered (best-effort — may already be eliminated/completed)
+    await db.tournamentParticipant.updateMany({
+      where: { tournamentId, userId: botUserId, status: 'REGISTERED' },
+      data: { status: 'WITHDRAWN' },
+    })
+
+    res.status(204).send()
+  } catch (e) { next(e) }
+})
+
 export default router

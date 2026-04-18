@@ -51,6 +51,7 @@ model User {
   eloHistory             UserEloHistory[]
   notifications          UserNotification[]
   userRoles              UserRole[]
+  seedBotConfigs         TournamentSeedBot[]
 
   @@map("users")
 }
@@ -524,6 +525,7 @@ model Tournament {
   games                   Game[]
   participants            TournamentParticipant[]
   rounds                  TournamentRound[]
+  seedBots                TournamentSeedBot[]
 
   @@index([status])
   @@index([game])
@@ -657,6 +659,19 @@ model RecurringTournamentRegistration {
   @@index([templateId])
   @@index([userId])
   @@map("recurring_tournament_registrations")
+}
+
+model TournamentSeedBot {
+  id           String     @id @default(cuid())
+  tournamentId String
+  userId       String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@map("tournament_seed_bots")
 }
 
 model Table {

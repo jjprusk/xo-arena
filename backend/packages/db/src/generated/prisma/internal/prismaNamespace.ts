@@ -420,7 +420,8 @@ export const ModelName = {
   MeritTransaction: 'MeritTransaction',
   ClassificationHistory: 'ClassificationHistory',
   MeritThreshold: 'MeritThreshold',
-  RecurringTournamentRegistration: 'RecurringTournamentRegistration'
+  RecurringTournamentRegistration: 'RecurringTournamentRegistration',
+  Table: 'Table'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -436,7 +437,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "gameElo" | "game" | "move" | "aIError" | "botSkill" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "notificationPreference" | "scheduledJob" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration"
+    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "gameElo" | "game" | "move" | "aIError" | "botSkill" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "notificationPreference" | "scheduledJob" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration" | "table"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -3178,6 +3179,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    Table: {
+      payload: Prisma.$TablePayload<ExtArgs>
+      fields: Prisma.TableFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TableFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TableFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>
+        }
+        findFirst: {
+          args: Prisma.TableFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TableFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>
+        }
+        findMany: {
+          args: Prisma.TableFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>[]
+        }
+        create: {
+          args: Prisma.TableCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>
+        }
+        createMany: {
+          args: Prisma.TableCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TableCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>[]
+        }
+        delete: {
+          args: Prisma.TableDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>
+        }
+        update: {
+          args: Prisma.TableUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>
+        }
+        deleteMany: {
+          args: Prisma.TableDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TableUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TableUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>[]
+        }
+        upsert: {
+          args: Prisma.TableUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TablePayload>
+        }
+        aggregate: {
+          args: Prisma.TableAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTable>
+        }
+        groupBy: {
+          args: Prisma.TableGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TableGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TableCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TableCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -3792,6 +3867,25 @@ export const RecurringTournamentRegistrationScalarFieldEnum = {
 export type RecurringTournamentRegistrationScalarFieldEnum = (typeof RecurringTournamentRegistrationScalarFieldEnum)[keyof typeof RecurringTournamentRegistrationScalarFieldEnum]
 
 
+export const TableScalarFieldEnum = {
+  id: 'id',
+  gameId: 'gameId',
+  status: 'status',
+  createdById: 'createdById',
+  minPlayers: 'minPlayers',
+  maxPlayers: 'maxPlayers',
+  isPrivate: 'isPrivate',
+  chatEnabled: 'chatEnabled',
+  isTournament: 'isTournament',
+  seats: 'seats',
+  previewState: 'previewState',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TableScalarFieldEnum = (typeof TableScalarFieldEnum)[keyof typeof TableScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -4258,6 +4352,20 @@ export type EnumClassificationTierFieldRefInput<$PrismaModel> = FieldRefInputTyp
 export type ListEnumClassificationTierFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ClassificationTier[]'>
     
 
+
+/**
+ * Reference to a field of type 'TableStatus'
+ */
+export type EnumTableStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TableStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'TableStatus[]'
+ */
+export type ListEnumTableStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TableStatus[]'>
+    
+
 /**
  * Batch Payload for updateMany & deleteMany & createMany
  */
@@ -4390,6 +4498,7 @@ export type GlobalOmitConfig = {
   classificationHistory?: Prisma.ClassificationHistoryOmit
   meritThreshold?: Prisma.MeritThresholdOmit
   recurringTournamentRegistration?: Prisma.RecurringTournamentRegistrationOmit
+  table?: Prisma.TableOmit
 }
 
 /* Types for Logging */

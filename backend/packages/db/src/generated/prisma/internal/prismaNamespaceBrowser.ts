@@ -87,7 +87,8 @@ export const ModelName = {
   MeritTransaction: 'MeritTransaction',
   ClassificationHistory: 'ClassificationHistory',
   MeritThreshold: 'MeritThreshold',
-  RecurringTournamentRegistration: 'RecurringTournamentRegistration'
+  RecurringTournamentRegistration: 'RecurringTournamentRegistration',
+  Table: 'Table'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -679,6 +680,25 @@ export const RecurringTournamentRegistrationScalarFieldEnum = {
 } as const
 
 export type RecurringTournamentRegistrationScalarFieldEnum = (typeof RecurringTournamentRegistrationScalarFieldEnum)[keyof typeof RecurringTournamentRegistrationScalarFieldEnum]
+
+
+export const TableScalarFieldEnum = {
+  id: 'id',
+  gameId: 'gameId',
+  status: 'status',
+  createdById: 'createdById',
+  minPlayers: 'minPlayers',
+  maxPlayers: 'maxPlayers',
+  isPrivate: 'isPrivate',
+  chatEnabled: 'chatEnabled',
+  isTournament: 'isTournament',
+  seats: 'seats',
+  previewState: 'previewState',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TableScalarFieldEnum = (typeof TableScalarFieldEnum)[keyof typeof TableScalarFieldEnum]
 
 
 export const SortOrder = {

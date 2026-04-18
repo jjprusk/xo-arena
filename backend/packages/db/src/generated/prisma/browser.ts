@@ -203,3 +203,8 @@ export type MeritThreshold = Prisma.MeritThresholdModel
  * 
  */
 export type RecurringTournamentRegistration = Prisma.RecurringTournamentRegistrationModel
+/**
+ * Model Table
+ * 
+ */
+export type Table = Prisma.TableModel

@@ -294,7 +294,7 @@ async function checkFlashClose() {
 
 // ─── Recurring tournament occurrence generation ────────────────────────────────
 
-async function checkRecurringOccurrences() {
+export async function checkRecurringOccurrences() {
   try {
     // Find recurring template tournaments that have COMPLETED and need a new occurrence
     const templates = await db.tournament.findMany({
@@ -371,6 +371,27 @@ async function checkRecurringOccurrences() {
             })
           } catch {
             // May already be registered; skip
+          }
+        }
+
+        // Auto-enroll seed bots from the template into the new occurrence
+        const seedBots = await db.tournamentSeedBot.findMany({
+          where: { tournamentId: template.id },
+        })
+        for (const seed of seedBots) {
+          try {
+            await db.tournamentParticipant.upsert({
+              where: { tournamentId_userId: { tournamentId: occurrence.id, userId: seed.userId } },
+              create: { tournamentId: occurrence.id, userId: seed.userId, status: 'REGISTERED', registrationMode: 'SINGLE' },
+              update: { status: 'REGISTERED' },
+            })
+            await db.tournamentSeedBot.upsert({
+              where: { tournamentId_userId: { tournamentId: occurrence.id, userId: seed.userId } },
+              create: { tournamentId: occurrence.id, userId: seed.userId },
+              update: {},
+            })
+          } catch (err) {
+            logger.warn({ err, seedBotUserId: seed.userId }, 'Failed to enroll seed bot in recurring occurrence')
           }
         }
 
