@@ -25,6 +25,26 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 
 const router = Router()
+
+// ─── GC trigger (manual QA / on-demand sweep) ────────────────────────────────
+// Placed before requireAuth so it can accept either a valid admin JWT or the
+// QA_SECRET env var (read by qa-scripts/*.sh — no browser token needed).
+
+router.post('/gc/run', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) {
+      // Fall through to normal admin auth — still works with a real JWT too
+      return next('route')
+    }
+    const result = await gcSweep(null)
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.use(requireAuth, requireAdmin)
 
 // ─── Resource health ─────────────────────────────────────────────────────────
@@ -40,22 +60,6 @@ router.get('/health/sockets', (req, res) => {
     alerts: getAlerts(),
     uptime: Math.round(process.uptime()),
   })
-})
-
-// ─── GC trigger (manual QA / on-demand sweep) ────────────────────────────────
-
-/**
- * POST /api/v1/admin/gc/run
- * Triggers a Table GC sweep immediately and returns the counts.
- * Sockets are not notified (io = null) — DB state changes are what matter for QA.
- */
-router.post('/gc/run', async (_req, res, next) => {
-  try {
-    const result = await gcSweep(null)
-    res.json(result)
-  } catch (err) {
-    next(err)
-  }
 })
 
 // ─── Platform stats ───────────────────────────────────────────────────────────
