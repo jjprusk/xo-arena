@@ -827,37 +827,43 @@ function ParticipantTable({ participants }) {
 
   return (
     <ListTable>
-      <ListTh>Seed</ListTh>
-      <ListTh>Player</ListTh>
-      <ListTh>ELO</ListTh>
-      <ListTh>Status</ListTh>
-      {sorted.map((p, i) => (
-        <ListTr
-          key={p.id}
-          last={i === sorted.length - 1}
-          dimmed={p.status === 'WITHDRAWN' || p.status === 'ELIMINATED'}
-        >
-          <ListTd className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
-            {p.seedPosition ?? '—'}
-          </ListTd>
-          <ListTd>
-            <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-              {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
-            </span>
-            {p.finalPosition && (
-              <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
-                #{p.finalPosition}
+      <thead>
+        <tr>
+          <ListTh>Seed</ListTh>
+          <ListTh>Player</ListTh>
+          <ListTh>ELO</ListTh>
+          <ListTh>Status</ListTh>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((p, i) => (
+          <ListTr
+            key={p.id}
+            last={i === sorted.length - 1}
+            dimmed={p.status === 'WITHDRAWN' || p.status === 'ELIMINATED'}
+          >
+            <ListTd className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+              {p.seedPosition ?? '—'}
+            </ListTd>
+            <ListTd>
+              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
               </span>
-            )}
-          </ListTd>
-          <ListTd className="text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
-            {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
-          </ListTd>
-          <ListTd>
-            <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
-          </ListTd>
-        </ListTr>
-      ))}
+              {p.finalPosition && (
+                <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
+                  #{p.finalPosition}
+                </span>
+              )}
+            </ListTd>
+            <ListTd className="text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
+              {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
+            </ListTd>
+            <ListTd>
+              <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
+            </ListTd>
+          </ListTr>
+        ))}
+      </tbody>
     </ListTable>
   )
 }
