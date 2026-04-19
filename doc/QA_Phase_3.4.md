@@ -128,10 +128,10 @@ docker compose exec backend node backend/src/cli/um.js test-bots
 
 ### 8a. Lifecycle
 
-Sign in as a tournament admin. Use the Tournaments UI or the API directly (tournament service at `http://localhost:3001`).
+Sign in as a tournament admin. Use the Tournaments UI at `http://localhost:5174/admin/tournaments`, or call the tournament API directly at `http://localhost:3001/api/tournaments` (API-only service — returns raw JSON; browsing to the root `/` returns 404).
 
-- [ ] Create a tournament in DRAFT status
-- [ ] Publish it (`POST /api/t/tournaments/:id/publish`) → status becomes **REGISTRATION_OPEN**; connected clients receive a tournament notification in the Guide drawer
+- [x] Create a tournament in DRAFT status
+- [x] Publish it (`POST /api/t/tournaments/:id/publish`) → status becomes **REGISTRATION_OPEN**; connected clients receive a tournament notification in the Guide drawer
 - [ ] Register participants (4 test bots via **Fill test players**, or 2 real users for HVH)
 - [ ] Participant count on the tournament detail page matches the number registered
 - [ ] Start the tournament → status becomes **IN_PROGRESS**; round 1 bracket created (2 matches for 4 players, 1 match for 2)

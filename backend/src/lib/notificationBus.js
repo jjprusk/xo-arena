@@ -122,7 +122,10 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
 
     if (userIds.length === 0) return
 
-    // For broadcast+persistent: respect preferences, then use createMany for efficiency
+    // For broadcast+persistent: respect preferences, use createMany for efficiency,
+    // then mark rows as delivered for users who are currently connected. Without this,
+    // the reconnect flush in user:subscribe re-delivers rows that were already received
+    // live via the _io.emit() broadcast above, producing duplicate notifications.
     if (targets?.broadcast && entry.persist === 'persistent') {
       const optedOut = await db.notificationPreference.findMany({
         where: { userId: { in: userIds }, eventType: type, inApp: false },
@@ -135,6 +138,22 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
           data: eligible.map(userId => ({ userId, type, payload, ...(expiresAt && { expiresAt }) })),
           skipDuplicates: true,
         })
+        if (_io) {
+          const now = new Date()
+          const connected = await Promise.all(
+            eligible.map(async (userId) => {
+              const sockets = await _io.in(`user:${userId}`).fetchSockets()
+              return sockets.length > 0 ? userId : null
+            })
+          )
+          const connectedIds = connected.filter(Boolean)
+          if (connectedIds.length > 0) {
+            await db.userNotification.updateMany({
+              where: { userId: { in: connectedIds }, type, deliveredAt: null },
+              data: { deliveredAt: now },
+            })
+          }
+        }
       }
       return
     }

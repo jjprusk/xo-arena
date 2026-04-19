@@ -65,7 +65,7 @@ router.get('/:templateId/registrations', requireTournamentAdmin, async (req, res
     const userIds = registrations.map(r => r.userId)
     const users = await db.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, displayName: true, avatarUrl: true, eloRating: true },
+      select: { id: true, displayName: true, avatarUrl: true },
     })
 
     const userMap = Object.fromEntries(users.map(u => [u.id, u]))

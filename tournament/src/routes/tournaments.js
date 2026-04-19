@@ -64,7 +64,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       include: {
         participants: {
           include: {
-            user: { select: { id: true, displayName: true, avatarUrl: true, eloRating: true } },
+            user: { select: { id: true, displayName: true, avatarUrl: true } },
           },
         },
         rounds: {
@@ -442,7 +442,7 @@ router.post('/:id/fill-test-players', requireTournamentAdmin, async (req, res, n
     // Look up test bots — they must be seeded first via `um test-bots`
     const bots = await db.user.findMany({
       where: { username: { in: TEST_BOT_USERNAMES }, isBot: true },
-      select: { id: true, username: true, displayName: true, eloRating: true },
+      select: { id: true, username: true, displayName: true },
     })
 
     if (bots.length === 0) {
@@ -466,8 +466,8 @@ router.post('/:id/fill-test-players', requireTournamentAdmin, async (req, res, n
 
       await db.tournamentParticipant.upsert({
         where: { tournamentId_userId: { tournamentId, userId: bot.id } },
-        create: { tournamentId, userId: bot.id, eloAtRegistration: bot.eloRating, status: 'REGISTERED' },
-        update: { status: 'REGISTERED', eloAtRegistration: bot.eloRating },
+        create: { tournamentId, userId: bot.id, eloAtRegistration: null, status: 'REGISTERED' },
+        update: { status: 'REGISTERED', eloAtRegistration: null },
       })
 
       registered.push(bot.username)
@@ -531,6 +531,12 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
     const user = await db.user.findUnique({ where: { id: userId } })
     if (!user) return res.status(404).json({ error: 'User not found' })
 
+    const gameEloRow = await db.gameElo.findUnique({
+      where: { userId_gameId: { userId, gameId: tournament.game } },
+      select: { rating: true },
+    })
+    const currentElo = gameEloRow?.rating ?? null
+
     let registrationMode = 'SINGLE'
     if (tournament.isRecurring) {
       const recurringReg = await db.recurringTournamentRegistration.findUnique({
@@ -546,14 +552,14 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
       create: {
         tournamentId,
         userId,
-        eloAtRegistration: user.eloRating,
+        eloAtRegistration: currentElo,
         status: 'REGISTERED',
         registrationMode,
         ...(resultNotifPref && { resultNotifPref }),
       },
       update: {
         status: 'REGISTERED',
-        eloAtRegistration: user.eloRating,
+        eloAtRegistration: currentElo,
         registrationMode,
         ...(resultNotifPref && { resultNotifPref }),
       },

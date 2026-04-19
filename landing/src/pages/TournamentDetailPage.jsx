@@ -881,7 +881,7 @@ export default function TournamentDetailPage() {
   const [tournament, setTournament] = useState(null)
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
-  const [token, setToken]           = useState(null)
+  const [token, setToken]           = useState(undefined) // undefined = resolving; null = unauthenticated; string = token
   const [dbUserId, setDbUserId]     = useState(null)
   const [activeMatchEvent, setActiveMatchEvent] = useState(null)
 
@@ -913,6 +913,7 @@ export default function TournamentDetailPage() {
   }, [session?.user?.id])
 
   const load = useCallback(async () => {
+    if (token === undefined) return  // auth not yet resolved — wait before making API calls
     setLoading(true)
     setError(null)
     try {

@@ -8,7 +8,6 @@ const POLL_INTERVAL_MS = 15_000
 
 const COUNTER_LABELS = {
   sockets:            'Sockets',
-  rooms:              'Rooms',
   redisConnections:   'Redis Connections',
   memoryMb:           'Heap Used (MB)',
   heapTotalMb:        'Heap Total (MB)',
@@ -67,7 +66,7 @@ function HistoryTable({ history }) {
   }
 
   const keys = [
-    'sockets', 'rooms', 'redisConnections',
+    'sockets', 'redisConnections',
     'memoryMb', 'heapTotalMb', 'rssMb',
     'tablesForming', 'tablesActive', 'tablesCompleted',
     'tablesStaleForming', 'tableWatchers',

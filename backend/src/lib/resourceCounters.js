@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * Resource counters — obtain/release tracking for sockets, rooms, and Redis connections.
+ * Resource counters — obtain/release tracking for sockets, tables, and Redis connections.
  *
  * All four layers use the same pattern: increment on obtain, decrement on release.
  * A counter that only increments is a leak. A counter that goes negative is a double-release bug.
@@ -8,7 +8,7 @@
  * Layers:
  *   1. Socket connections  — via socketHandler (connection / disconnect)
  *   2. Event listeners     — via trackedOn helper (socket.on / socket.off + disconnect)
- *   3. Active tables       — via db.table.count (polled at snapshot time; replaces roomManager.roomCount)
+ *   3. Active tables       — via db.table.count (polled at snapshot time)
  *   4. Redis connections   — via activityService and socketHandler Redis adapter
  *
  * The snapshot buffer (last 20 readings, one per minute) drives the leak detector.
@@ -79,7 +79,7 @@ const SNAPSHOT_INTERVAL_MS = 60_000
 // Low counts rising from near-zero are normal startup/idle behaviour.
 const LEAK_MIN = {
   sockets:          10,   // fewer than 10 open sockets is idle noise
-  rooms:             5,   // a handful of rooms is normal
+  tablesActive:      5,   // a handful of active tables is normal
   redisConnections:  5,   // adapter creates a few connections on startup
   memoryMb:        150,   // heap below 150 MB rising slightly is fine
 }
@@ -88,13 +88,13 @@ const LEAK_MIN = {
 // Filters out slow natural drift where each tick rises by just 1.
 const LEAK_MIN_GROWTH = {
   sockets:          3,
-  rooms:            2,
+  tablesActive:     2,
   redisConnections: 3,
   memoryMb:        20,   // MB
 }
 
 const _snapshots = []          // circular, newest last
-const _alerts = {}             // { sockets: bool, rooms: bool, redisConnections: bool, memoryMb: bool }
+const _alerts = {}             // { sockets: bool, tablesActive: bool, redisConnections: bool, memoryMb: bool }
 
 export function getSnapshots() { return [..._snapshots] }
 export function getLatestSnapshot() { return _snapshots.at(-1) ?? null }
@@ -145,7 +145,6 @@ async function takeTablesSnapshot() {
     db.table.count({ where: { status: 'FORMING', createdAt: { lt: cutoff } } }),
   ])
   return {
-    rooms:              forming + active,
     tablesForming:      forming,
     tablesActive:       active,
     tablesCompleted:    completed,
@@ -186,7 +185,7 @@ function checkForLeaks() {
 
   const window = _snapshots.slice(-LEAK_WINDOW)
 
-  for (const key of ['sockets', 'rooms', 'redisConnections', 'memoryMb']) {
+  for (const key of ['sockets', 'tablesActive', 'redisConnections', 'memoryMb']) {
     const latest = window.at(-1)[key]
     const first  = window[0][key]
     const rising = window.every((s, i) => i === 0 || s[key] > window[i - 1][key])
