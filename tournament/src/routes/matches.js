@@ -257,6 +257,7 @@ async function advanceBracketIfReady(match) {
               tournamentId: tournament.id,
               matchId: newMatch.id,
               bestOfN: tournament.bestOfN,
+              gameId: tournament.game,
               bot1: { id: p1?.user.id, displayName: p1?.user.displayName, botModelId: p1?.user.botModelId },
               bot2: { id: p2?.user.id, displayName: p2?.user.displayName, botModelId: p2?.user.botModelId },
             }])

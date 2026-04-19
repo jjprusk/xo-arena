@@ -19,6 +19,11 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
 import { ListTable, ListTh, ListTd, ListTr, ListPagination, SearchBar } from '../components/ui/ListTable.jsx'
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
+import { BoardPreview as XoBoardPreview } from '@callidity/game-xo'
+import { GAMES } from '../lib/gameRegistry.js'
+
+// Map game IDs to their preview component. Add new games here as they ship.
+const GAME_PREVIEWS = { xo: XoBoardPreview }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -37,10 +42,8 @@ const STATUS_META = {
   COMPLETED: { label: 'Completed',  color: 'var(--color-slate-500)', bg: 'rgba(100, 116, 139, 0.08)' },
 }
 
-// Games available to create a table for. Add entries here as new games ship.
-const GAME_OPTIONS = [
-  { id: 'xo', label: 'XO (Tic-Tac-Toe)', minPlayers: 2, maxPlayers: 2 },
-]
+// Games available to create a table for. Sourced from the shared registry.
+const GAME_OPTIONS = GAMES
 
 // Date presets. Values are the key into `dateRangeSince()` below.
 const DATE_OPTIONS = [
@@ -402,19 +405,22 @@ function TableRow({ table, last, onClick }) {
   const meta    = STATUS_META[table.status] ?? STATUS_META.COMPLETED
   const seated  = countSeated(table.seats)
   const max     = table.maxPlayers
+  const Preview = table.status === 'ACTIVE' ? (GAME_PREVIEWS[table.gameId] ?? null) : null
   return (
     <ListTr last={last} onClick={onClick}>
       <ListTd>
-        {/* Truncate instead of wrap on narrow viewports so the row stays one
-            line tall. Full name still available via title attribute and the
-            table detail page. */}
-        <span
-          className="font-semibold block truncate"
-          style={{ color: 'var(--text-primary)' }}
-          title={gameLabel(table.gameId)}
-        >
-          {gameLabel(table.gameId)}
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          {Preview && (
+            <Preview previewState={table.previewState} size={36} />
+          )}
+          <span
+            className="font-semibold truncate"
+            style={{ color: 'var(--text-primary)' }}
+            title={gameLabel(table.gameId)}
+          >
+            {gameLabel(table.gameId)}
+          </span>
+        </div>
       </ListTd>
       <ListTd>
         <span

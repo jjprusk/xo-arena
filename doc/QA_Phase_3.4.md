@@ -1,9 +1,16 @@
 <!-- Copyright (c) 2026 Joe Pruskowski. All rights reserved. -->
-# Phase 3.4 QA Checklist — Retire In-Memory Room Layer
+# Phase 3.4 / 3.5 QA Checklist
 
 **Version:** v1.3.0-alpha-1.13 (pending)
-**Date:** 2026-04-16
-**Scope:** Tables are now the single source of truth for all game sessions. The in-memory `roomManager` and `rooms.js` HTTP routes have been deleted. All game state lives in `Table.previewState` (DB-backed JSON blob). Socket event names and payloads are unchanged — frontend code was not modified.
+**Date updated:** 2026-04-19
+
+## Phase 3.4 scope (sections 1–10)
+Tables are the single source of truth for all game sessions. The in-memory `roomManager` and `rooms.js` HTTP routes have been deleted. All game state lives in `Table.previewState`. **Status: implementation complete, manual QA pass done (items marked ✓).**
+
+## Phase 3.5 scope (section 11)
+Multi-game infrastructure, per-game bot skills, mobile sidebar auto-hide, active table preview thumbnails, admin skills column. **Status: implementation complete as of 2026-04-19, manual QA not yet run.**
+
+Automated coverage: `e2e/tests/phase35.spec.js` — 6 tests run without auth (API + tables page DOM), 5 more activate when `TEST_USER_EMAIL` / `TEST_ADMIN_EMAIL` env vars are set.
 
 ---
 
@@ -256,6 +263,90 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 
 ---
 
+---
+
+## 11. Phase 3.5 Additions
+
+> **Implementation status:** All items below are code-complete as of 2026-04-19. None have been manually QA tested yet. Automated Playwright coverage noted inline where applicable.
+
+### 11a. Mobile sidebar auto-hide
+
+> Automated: `phase35.spec.js` — "sidebar auto-hides on mobile when game starts" + "sidebar does NOT auto-hide on desktop" (both require `TEST_USER_EMAIL`).
+
+Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
+
+- [ ] Start an HvB game on a mobile viewport → sidebar is hidden automatically when the game transitions to `playing`
+- [ ] Toggle button is visible at the top of the board area → tap it → sidebar slides in
+- [ ] Tap toggle again → sidebar hides again; board fills the full width
+- [ ] On a desktop viewport (≥ 768 px) the sidebar does **not** auto-hide when the game starts
+
+### 11b. Active table preview thumbnail
+
+> Not automated (requires live active table state). Manual test only. The `phase35.spec.js` tables page test confirms the Game column exists but not thumbnail rendering.
+
+**URL:** `http://localhost:5174/tables`
+
+- [ ] A table in **Forming** status shows the game label only (no thumbnail)
+- [ ] A table in **Active** status shows a 3×3 mini board thumbnail alongside the game label
+- [ ] The thumbnail reflects the current board state (X/O marks visible at the correct cells)
+- [ ] Win line cells are highlighted in amber when a game ends before the table completes
+- [ ] Thumbnail does **not** appear for Completed tables
+
+### 11c. Multi-game infrastructure — Tournament form
+
+> Automated (partial): `phase35.spec.js` — skills API endpoint and `gameId` filter checks run without auth. Tournament form UI check requires admin auth (set `TEST_ADMIN_EMAIL`).
+
+- [ ] Open the **Create Tournament** form (admin or user)
+- [ ] **Game** dropdown is present and populated from `gameRegistry.js` (currently shows XO only)
+- [ ] Create a tournament with game = XO → `game` field stored correctly in DB (`SELECT game FROM tournaments WHERE id = '<id>'`)
+- [ ] No hardcoded `'xo'` strings remain in the tournament form component
+
+### 11d. Bot creation — Game field
+
+> Automated: `phase35.spec.js` — "bot creation panel has a Game dropdown" (requires `TEST_USER_EMAIL`).
+
+**URL:** `http://localhost:5174/profile` (signed in, non-bot user)
+
+- [ ] Open the **My Bots** section → click **+ Create Bot**
+- [ ] **Game** dropdown is present, showing all registered games (currently XO only)
+- [ ] Default selection is XO
+- [ ] Create a bot with Game = XO → `BotSkill` row created with `game_id = 'xo'`
+  - Verify: `SELECT game_id FROM bot_skills WHERE bot_id = (SELECT id FROM users WHERE display_name = '<botname>')`
+- [ ] When a second game is added to `gameRegistry.js`, it appears in the dropdown without any other code changes
+
+### 11e. Multi-skill bots — Server-side skill resolution
+
+> Not automated (requires backend log inspection). Manual test only.
+
+These verify that the HvB path resolves skill server-side rather than trusting a client value.
+
+- [ ] Start an HvB game via `?action=vs-community-bot` — game plays normally (skill resolved from `BotSkill` table)
+- [ ] Confirm backend log shows no `resolveSkillForGame returned null` warning for community bots (they always have an XO skill)
+- [ ] Manually POST `room:create:hvb` with a fake `botSkillId` — server ignores it and resolves the real skill from DB
+
+### 11f. Multi-skill bots — Admin skills column
+
+> Automated: `phase35.spec.js` — "admin bots table has Skills column" + "admin bots API returns skills array per bot" (both require `TEST_ADMIN_EMAIL`).
+
+**URL:** `http://localhost:5174/admin/bots`
+
+- [ ] Bot list table has a **Skills** column (visible at ≥ 1024 px viewport)
+- [ ] Each bot row shows a teal `XO` badge for any bot that has an XO skill
+- [ ] Bots with no `BotSkill` rows show `none` in the Skills column
+- [ ] Hovering a badge shows a tooltip with `gameId: algorithm — status` (e.g., `xo: ml — TRAINED`)
+
+### 11g. Multi-skill bots — Tournament `gameId` propagation
+
+> Not automated (requires Redis event payload inspection). Manual test only.
+
+Requires a `BOT_VS_BOT` tournament. Run after section 8b passes.
+
+- [ ] Start a BOT_VS_BOT tournament → check backend logs for `tournament:bot:match:ready` events — each event payload includes `gameId: 'xo'`
+- [ ] After round completion, bracket-advancement path fires a new `tournament:bot:match:ready` event — it also includes `gameId`
+- [ ] `recoverPendingBotMatches` on backend restart re-publishes events with `gameId` included (check logs)
+
+---
+
 ## Sign-off
 
 | Area | Tested by | Date | Pass/Fail | Notes |
@@ -269,4 +360,10 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 | Table GC | | | | |
 | Tournament | | | | |
 | Tournament Seed Bots | | | | |
+| Mobile sidebar auto-hide | | | | |
+| Active table preview | | | | |
+| Multi-game infrastructure | | | | |
+| Bot creation game field | | | | |
+| Admin skills column | | | | |
+| Tournament gameId propagation | | | | |
 | Regressions | | | | |

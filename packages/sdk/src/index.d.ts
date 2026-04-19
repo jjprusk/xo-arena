@@ -4,6 +4,57 @@
  * Every game package must satisfy the GameContract interface.
  * The platform creates a GameSDK instance and passes it into the game component.
  * Bots implement BotInterface so the platform can dispatch moves and run training.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * RESPONSIBILITIES — what the platform owns vs. what the game developer owns
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * PLATFORM PROVIDES — never implement these in your game package:
+ *
+ *   Visual shell
+ *     • Table surface (background, depth shadow, seat pods above/below)
+ *     • Outcome banner (Win / Lose / Draw) after the game ends
+ *     • Forming panel (waiting-for-opponent screen with invite link)
+ *     • Info sidebar (game title, status badge, player list, spectator count,
+ *       Gym & Puzzles links, Leave / Back-to-Tables action)
+ *     • Navigation bar (← Back, sidebar toggle)
+ *     • Spectator count badge on the table surface
+ *
+ *   Infrastructure
+ *     • Authentication and user identity
+ *     • WebSocket connection, reconnect, and session hydration
+ *     • Move validation, commit, and broadcast
+ *     • ELO rating updates and match recording
+ *     • Tournament bracket UI and series tracking
+ *     • Bot dispatch — the platform calls botInterface.makeMove() server-side
+ *     • Training infrastructure — the platform calls botInterface.train() in a worker
+ *     • Audio system — shared AudioContext with master gain, mute, and tab-resume;
+ *       route all sounds through sdk.playSound() (see GameSDK.playSound for details)
+ *
+ * GAME DEVELOPER PROVIDES — you must implement these in your game package:
+ *
+ *   Required exports (see GameContract)
+ *     • default   — the game's React component (board, pieces, interaction logic)
+ *     • meta      — GameMeta (id, title, layout, theme, player counts, flags)
+ *     • botInterface — BotInterface (required when meta.supportsBots is true)
+ *
+ *   Component responsibilities
+ *     • Render the playable board inside the platform's table surface container
+ *     • Manage game state locally (subscribe to sdk.onMove, call sdk.submitMove)
+ *     • Disable all input and hide private state when session.isSpectator is true
+ *     • Call sdk.signalEnd() exactly once when a win, draw, or forfeit is detected
+ *     • Route all audio through sdk.playSound() — never create your own AudioContext
+ *
+ *   Bot interface (when meta.supportsBots: true)
+ *     • makeMove()         — choose a move given board state and persona
+ *     • getTrainingConfig() — describe hyperparameters for the Gym UI
+ *     • train()            — run a training session and return updated weights
+ *     • serializeState() / deserializeMove() — storage and replay support
+ *     • personas           — named BotPersona array shown at table creation
+ *     • GymComponent       — Gym UI (required when meta.supportsTraining: true)
+ *     • puzzles            — puzzle set (required when meta.supportsPuzzles: true)
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import type { ComponentType } from 'react'
@@ -256,6 +307,15 @@ export interface GameMeta {
   maxPlayers: number
 
   /**
+   * Visual archetype for the table surface rendered by the platform shell.
+   *
+   *   'sit-down' — two players face each other across a table (default for 2p turn-based games)
+   *
+   * Defaults to 'sit-down' if omitted.
+   */
+  tableArchetype?: 'sit-down'
+
+  /**
    * Layout preferences for the platform container.
    * Declare your game's preferred width here instead of hardcoding max-w in GameComponent.
    * Defaults to standard (max-w-md) if omitted.
@@ -313,10 +373,14 @@ export interface GameMeta {
 export interface GameContract {
   /**
    * The game's React component. Receives session + sdk as props.
-   * Must support both rendering modes:
-   *   - Focused: active player, full viewport, platform chrome hidden
-   *   - Chrome-present: spectator or idle, nav + sidebar visible
-   * The platform sets the mode automatically based on session.isSpectator.
+   *
+   * Render only the board and interaction logic here. The platform shell provides
+   * everything around it: table surface, seat pods, outcome banner, forming panel,
+   * sidebar, and navigation. Do not replicate any of those in your component.
+   *
+   * When session.isSpectator is true the component must:
+   *   - Disable all input (prevent move submission)
+   *   - Hide any private state (hole cards, hidden hands, etc.)
    */
   default: ComponentType<{ session: GameSession; sdk: GameSDK }>
 
@@ -329,6 +393,19 @@ export interface GameContract {
    * Optional otherwise — the platform will not attempt to use it.
    */
   botInterface?: BotInterface
+
+  /**
+   * Compact board thumbnail rendered on the Tables list page for ACTIVE tables.
+   * Receives the raw `previewState` blob stored on the Table row and should
+   * render a small (~40×40px) visual snapshot of the current board position.
+   *
+   * Optional — if absent the platform falls back to the seat-strip dots.
+   *
+   * @example
+   * // In TablesPage, rendered as:
+   * <PreviewComponent previewState={table.previewState} />
+   */
+  PreviewComponent?: ComponentType<{ previewState: unknown }>
 }
 
 // ---------------------------------------------------------------------------

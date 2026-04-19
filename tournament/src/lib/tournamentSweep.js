@@ -72,6 +72,7 @@ async function recoverPendingBotMatches(onlyStale = false) {
           tournamentId: t.id,
           matchId: match.id,
           bestOfN: t.bestOfN,
+          gameId: t.game,
           bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
           bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
         }).catch(() => {})
@@ -274,6 +275,7 @@ async function autoStartTournament(tournament) {
               tournamentId: tournament.id,
               matchId: match.id,
               bestOfN: tournament.bestOfN,
+              gameId: tournament.game,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
             })
@@ -313,6 +315,7 @@ async function autoStartTournament(tournament) {
               tournamentId: tournament.id,
               matchId: match.id,
               bestOfN: tournament.bestOfN,
+              gameId: tournament.game,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
             })

@@ -13,13 +13,12 @@
  *   • game-specific tabs (Gym / Puzzles) driven off meta.supportsTraining
  *     and meta.supportsPuzzles — links route to /gym and /puzzles on landing
  *
- * Rendering-mode semantics:
- *   focused         → full viewport, platform chrome hidden, only the game
- *                      and a minimal escape affordance are visible. The
- *                      natural default when a seated player is in an
- *                      ACTIVE/PLAYING state — see selectDefaultMode.
- *   chrome-present  → game sits at its preferred width with a sidebar
- *                      alongside that surfaces table context + tabs.
+ * Layout:
+ *   The table surface (seat pods, surface background, outcome banner) is
+ *   always visible — players sit at the table for the duration of the session.
+ *   The info sidebar (game title, status, Gym/Puzzles links, Leave button) is
+ *   toggleable via a ▣/◫ button so players can focus on the board without
+ *   leaving the table.
  *
  * The shell is agnostic about where its data comes from. Today it's
  * used by PlayPage (with a session from useGameSDK). Phase 3.4 will
@@ -27,17 +26,10 @@
  * truth for live game sessions.
  */
 
-import React, { Suspense, useState, useMemo } from 'react'
+import React, { Suspense, useState, useMemo, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const WIDTH_CLASS = {
-  compact:    'max-w-sm',
-  standard:   'max-w-md',
-  wide:       'max-w-2xl',
-  fullscreen: 'max-w-full',
-}
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',    color: 'var(--color-amber-600)' },
@@ -61,16 +53,11 @@ export function resolveThemeVars(theme, isDark) {
 // ── Default-mode selection ────────────────────────────────────────────────────
 
 /**
- * Choose the default rendering mode based on the session snapshot.
- * - Seated players with an active/playing game → focused (maximize board)
- * - Everyone else (spectators, idle, waiting)   → chrome-present
- *
- * Exported so callers can override via the `initialMode` prop without
- * re-implementing the heuristic.
+ * Legacy helper — kept for backward compat with existing callers.
+ * The 'focused' mode has been removed; the table surface is always rendered.
+ * Sidebar visibility is now a toggle, defaulting to shown.
  */
-export function selectDefaultMode({ isSpectator, phase }) {
-  if (isSpectator) return 'chrome-present'
-  if (phase === 'playing') return 'focused'
+export function selectDefaultMode({ isSpectator: _s, phase: _p }) {
   return 'chrome-present'
 }
 
@@ -81,9 +68,11 @@ export function selectDefaultMode({ isSpectator, phase }) {
  * @param {object}     props.gameMeta       GameMeta from the loaded game module
  * @param {object}     [props.session]      GameSession (for mode defaulting)
  * @param {string}     [props.phase]        'connecting' | 'waiting' | 'playing' | 'finished'
+ * @param {object}     [props.gameState]    { currentTurn, winner, isDraw } from onMove
  * @param {object}     [props.table]        Table row (optional; enables sidebar)
  * @param {number}     [props.spectatorCount]
- * @param {'focused'|'chrome-present'} [props.initialMode]
+ * @param {string}     [props.tournamentId]
+ * @param {'focused'|'chrome-present'} [props.initialMode]  'focused' → sidebar hidden initially
  * @param {string|null}[props.backHref]     where the escape affordance links to
  * @param {() => void} [props.onLeave]      if provided, shows a Leave button in the sidebar
  * @param {ReactNode}  props.children       the game component
@@ -92,152 +81,288 @@ export default function PlatformShell({
   gameMeta,
   session,
   phase,
+  gameState,
   table,
   spectatorCount = 0,
+  tournamentId,
   initialMode,
   backHref = '/',
   onLeave,
   children,
 }) {
-  const defaultMode = useMemo(
-    () => initialMode ?? selectDefaultMode({
-      isSpectator: !!session?.isSpectator,
-      phase,
-    }),
-    [initialMode, session?.isSpectator, phase],
-  )
-  const [mode, setMode] = useState(defaultMode)
+  // On mobile (< 768px), sidebar starts hidden when already playing (e.g. reconnect).
+  // initialMode='focused' also starts hidden (backward compat).
+  const [showSidebar, setShowSidebar] = useState(() => {
+    if (initialMode === 'focused') return false
+    if (typeof window !== 'undefined' && window.innerWidth < 768 && phase === 'playing') return false
+    return true
+  })
 
-  const widthClass = WIDTH_CLASS[gameMeta?.layout?.preferredWidth ?? 'standard'] ?? 'max-w-md'
+  // Auto-hide sidebar on mobile when game transitions from waiting → playing
+  const _prevPhaseRef = useRef(phase)
+  useEffect(() => {
+    if (_prevPhaseRef.current !== 'playing' && phase === 'playing' && window.innerWidth < 768) {
+      setShowSidebar(false)
+    }
+    _prevPhaseRef.current = phase
+  }, [phase])
+
   const themeStyle = useMemo(() => {
     if (typeof document === 'undefined') return resolveThemeVars(gameMeta?.theme, false)
     return resolveThemeVars(gameMeta?.theme, document.documentElement.classList.contains('dark'))
   }, [gameMeta?.theme])
 
-  if (mode === 'focused') {
-    return (
-      <FocusedFrame themeStyle={themeStyle} widthClass={widthClass}
-                    onExpand={() => setMode('chrome-present')}
-                    backHref={backHref}>
-        {children}
-      </FocusedFrame>
-    )
-  }
-
   return (
-    <ChromePresentFrame
+    <GameFrame
       gameMeta={gameMeta}
       session={session}
       phase={phase}
+      gameState={gameState}
       table={table}
       spectatorCount={spectatorCount}
+      tournamentId={tournamentId}
       themeStyle={themeStyle}
-      widthClass={widthClass}
-      onFocus={() => setMode('focused')}
+      backHref={backHref}
+      showSidebar={showSidebar}
+      onToggleSidebar={() => setShowSidebar(v => !v)}
       onLeave={onLeave}
     >
       {children}
-    </ChromePresentFrame>
+    </GameFrame>
   )
 }
 
-// ── Focused frame ─────────────────────────────────────────────────────────────
+// ── Game frame ────────────────────────────────────────────────────────────────
 
-function FocusedFrame({ children, themeStyle, widthClass, onExpand, backHref }) {
+function GameFrame({
+  children, gameMeta, session, phase, gameState, table, spectatorCount,
+  tournamentId, themeStyle, backHref, showSidebar, onToggleSidebar, onLeave,
+}) {
+  const controlStyle = {
+    color: 'var(--text-secondary)',
+    background: 'var(--bg-surface)',
+    boxShadow: 'var(--shadow-card)',
+  }
   return (
-    <div
-      className={`relative mx-auto w-full ${widthClass} flex flex-col items-center py-6 px-4`}
-      style={themeStyle}
-      data-shell-mode="focused"
-    >
-      {/* Affordance chrome: semi-transparent so it doesn't compete with the
-          board, but high-enough opacity + a surface background that the
-          buttons are unambiguously discoverable against busy page backgrounds
-          (Colosseum). Previous 30% opacity on muted text was effectively
-          invisible. */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-1 pt-1 pointer-events-none">
-        <Link
-          to={backHref}
-          className="pointer-events-auto flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100"
-          style={{
-            color: 'var(--text-secondary)',
-            background: 'var(--bg-surface)',
-            boxShadow: 'var(--shadow-card)',
-          }}
-          title="Back"
-        >
-          ← Back
-        </Link>
-        <button
-          onClick={onExpand}
-          className="pointer-events-auto text-xs px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100"
-          style={{
-            color: 'var(--text-secondary)',
-            background: 'var(--bg-surface)',
-            boxShadow: 'var(--shadow-card)',
-          }}
-          title="Show table context"
-          aria-label="Show table context"
-        >
-          ⤢
-        </button>
+    <div className="max-w-5xl mx-auto w-full px-4 py-6" data-shell-mode="chrome-present">
+      <div className={`grid gap-4 items-start${showSidebar ? ' md:grid-cols-[1fr_260px]' : ''}`}>
+        {/* Game column */}
+        <div className="w-full flex flex-col items-center" style={themeStyle}>
+          {/* Control bar: ← Back on left, sidebar toggle on right */}
+          <div className="w-full max-w-[440px] flex items-center justify-between mb-2 px-1">
+            <Link
+              to={backHref}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
+              style={controlStyle}
+            >
+              ← Back
+            </Link>
+            <button
+              onClick={onToggleSidebar}
+              className="text-xs px-2 py-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
+              style={controlStyle}
+              title={showSidebar ? 'Hide info panel' : 'Show info panel'}
+              aria-label={showSidebar ? 'Hide info panel' : 'Show info panel'}
+            >
+              {showSidebar ? '◫' : '▣'}
+            </button>
+          </div>
+          <TableSurface
+            phase={phase}
+            session={session}
+            gameState={gameState}
+            spectatorCount={spectatorCount}
+          >
+            <Suspense fallback={<ShellSpinner />}>
+              {children}
+            </Suspense>
+          </TableSurface>
+        </div>
+
+        {/* Info sidebar — toggleable */}
+        {showSidebar && (
+          <TableContextSidebar
+            gameMeta={gameMeta}
+            session={session}
+            phase={phase}
+            table={table}
+            spectatorCount={spectatorCount}
+            tournamentId={tournamentId}
+            onLeave={onLeave}
+          />
+        )}
       </div>
-      <Suspense fallback={<ShellSpinner />}>
-        {children}
-      </Suspense>
     </div>
   )
 }
 
-// ── Chrome-present frame ──────────────────────────────────────────────────────
+// ── Table surface ─────────────────────────────────────────────────────────────
 
-function ChromePresentFrame({
-  children, gameMeta, session, phase, table, spectatorCount,
-  themeStyle, widthClass, onFocus, onLeave,
-}) {
+function getSeatState(player, session, gameState, phase) {
+  if (!player || phase === 'waiting') return 'idle'
+  const mark = session?.settings?.marks?.[player.id]
+  if (phase === 'playing') {
+    if (!mark || !gameState?.currentTurn) return 'idle'
+    return mark === gameState.currentTurn ? 'turn' : 'idle'
+  }
+  if (phase === 'finished') {
+    if (gameState?.isDraw || !gameState?.winner) return 'idle'
+    return mark === gameState.winner ? 'winner' : 'loser'
+  }
+  return 'idle'
+}
+
+function TableSurface({ phase, session, gameState, spectatorCount, children }) {
+  const prevPhaseRef = useRef(phase)
+  const [starting, setStarting] = useState(false)
+
+  useEffect(() => {
+    if (prevPhaseRef.current === 'waiting' && phase === 'playing') {
+      setStarting(true)
+      const t = setTimeout(() => setStarting(false), 800)
+      prevPhaseRef.current = phase
+      return () => clearTimeout(t)
+    }
+    prevPhaseRef.current = phase
+  }, [phase])
+
+  const players       = session?.players ?? []
+  const currentUserId = session?.currentUserId
+  const isSpectator   = session?.isSpectator
+
+  // Relative POV: you at bottom, opponent at top.
+  // For spectators: seat 0 bottom, seat 1 top (canonical).
+  const bottomPlayer = isSpectator || !currentUserId
+    ? (players[0] ?? null)
+    : (players.find(p => p.id === currentUserId) ?? null)
+  const topPlayer = isSpectator || !currentUserId
+    ? (players[1] ?? null)
+    : (players.find(p => p.id !== currentUserId) ?? null)
+
+  // Outcome banner
+  let outcomeLabel = null, outcomeVariant = null
+  if (phase === 'finished' && gameState) {
+    if (gameState.isDraw) {
+      outcomeLabel = 'Draw'; outcomeVariant = 'draw'
+    } else if (gameState.winner) {
+      if (isSpectator) {
+        const winnerPlayer = players.find(
+          p => session?.settings?.marks?.[p.id] === gameState.winner
+        )
+        outcomeLabel = winnerPlayer ? `${winnerPlayer.displayName} wins` : 'Win'
+        outcomeVariant = 'win'
+      } else {
+        const myMark = session?.settings?.myMark
+          ?? session?.settings?.marks?.[currentUserId]
+        if (gameState.winner === myMark) {
+          outcomeLabel = 'You Win'; outcomeVariant = 'win'
+        } else {
+          outcomeLabel = 'You Lose'; outcomeVariant = 'lose'
+        }
+      }
+    }
+  }
+
+  const archetype = 'table-2p' // sit-down 2p — extend per meta.tableArchetype later
+
   return (
-    <div className="max-w-5xl mx-auto w-full px-4 py-6" data-shell-mode="chrome-present">
-      <div className="grid gap-4 md:grid-cols-[1fr_260px]">
-        {/* Game column */}
-        <div
-          className={`relative ${widthClass} mx-auto w-full flex flex-col items-center`}
-          style={themeStyle}
-        >
-          <button
-            onClick={onFocus}
-            className="absolute top-0 right-0 text-xs px-2 py-1 rounded-lg transition-opacity opacity-70 hover:opacity-100 z-10"
-            style={{
-              color: 'var(--text-secondary)',
-              background: 'var(--bg-surface)',
-              boxShadow: 'var(--shadow-card)',
-            }}
-            title="Focus mode (hide chrome)"
-            aria-label="Focus mode"
-          >
-            ⤡
-          </button>
-          <Suspense fallback={<ShellSpinner />}>
-            {children}
-          </Suspense>
+    <div className={`table-container ${archetype}`}>
+      {/* Table surface first so both seat pods (rendered after) paint on top */}
+      <div className={`table-surface${starting ? ' table-starting' : ''}`}>
+        {spectatorCount > 0 && <SpectatorBadge count={spectatorCount} />}
+        <div className="table-center">
+          {phase === 'waiting'
+            ? <FormingPanel session={session} />
+            : children
+          }
         </div>
-
-        {/* Context sidebar */}
-        <TableContextSidebar
-          gameMeta={gameMeta}
-          session={session}
-          phase={phase}
-          table={table}
-          spectatorCount={spectatorCount}
-          onLeave={onLeave}
-        />
+        {outcomeLabel && (
+          <OutcomeBanner label={outcomeLabel} variant={outcomeVariant} />
+        )}
       </div>
+
+      {topPlayer && (
+        <SeatPod
+          player={topPlayer}
+          position="top"
+          state={getSeatState(topPlayer, session, gameState, phase)}
+          isYou={!isSpectator && topPlayer.id === currentUserId}
+        />
+      )}
+      {bottomPlayer && (
+        <SeatPod
+          player={bottomPlayer}
+          position="bottom"
+          state={getSeatState(bottomPlayer, session, gameState, phase)}
+          isYou={!isSpectator && bottomPlayer.id === currentUserId}
+        />
+      )}
+    </div>
+  )
+}
+
+function SeatPod({ player, position, state, isYou }) {
+  const initials = (player.displayName ?? '?')[0].toUpperCase()
+  const stateClass = state === 'idle' ? '' : `seat--${state}`
+  return (
+    <div className={['seat', `seat--${position}`, stateClass].filter(Boolean).join(' ')}>
+      <div className={`seat__avatar${player.isBot ? ' seat__avatar--bot' : ''}`}>
+        {initials}
+      </div>
+      <div className="seat__name">
+        {isYou ? 'You' : (player.displayName ?? '—')}
+      </div>
+      {player.isBot && (
+        <div className="seat__meta">
+          <span className="seat__bot-tag">BOT</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SpectatorBadge({ count }) {
+  return (
+    <div className="spectator-badge" aria-label={`${count} watching`}>
+      {count} watching
+    </div>
+  )
+}
+
+function OutcomeBanner({ label, variant }) {
+  return (
+    <div className={`outcome-banner outcome-banner--${variant}`} role="status">
+      {label}
+    </div>
+  )
+}
+
+function FormingPanel({ session }) {
+  const shareUrl = session?.tableId
+    ? `${window.location.origin}/play?join=${session.tableId}`
+    : null
+  const copyUrl = () => shareUrl && navigator.clipboard?.writeText(shareUrl).catch(() => {})
+  return (
+    <div className="forming-panel">
+      <p className="forming-panel__title">Waiting for opponent</p>
+      <div className="forming-dots">
+        <span /><span /><span />
+      </div>
+      {shareUrl && (
+        <>
+          <p className="forming-panel__hint">Share this link to invite someone</p>
+          <button className="forming-panel__share" onClick={copyUrl} title="Copy invite link">
+            📋 /play?join={session.tableId}
+          </button>
+        </>
+      )}
     </div>
   )
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-function TableContextSidebar({ gameMeta, session, phase, table, spectatorCount, onLeave }) {
+function TableContextSidebar({ gameMeta, session, phase, table, spectatorCount, tournamentId, onLeave }) {
   const status = table?.status ?? (phase === 'playing' ? 'ACTIVE' : phase === 'waiting' ? 'FORMING' : null)
   const meta = status ? STATUS_META[status] ?? null : null
   const players = session?.players ?? []
@@ -267,7 +392,7 @@ function TableContextSidebar({ gameMeta, session, phase, table, spectatorCount, 
           </span>
           {spectatorCount > 0 && (
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {spectatorCount} spectating
+              {spectatorCount} watching
             </span>
           )}
         </div>
@@ -298,6 +423,23 @@ function TableContextSidebar({ gameMeta, session, phase, table, spectatorCount, 
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Tournament card */}
+      {tournamentId && (
+        <div className="rounded-lg border px-3 py-2.5 space-y-1"
+             style={{ background: 'var(--color-primary-light)', borderColor: 'rgba(74,111,165,0.2)' }}>
+          <p className="text-xs font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+            Tournament Match
+          </p>
+          <Link
+            to={`/tournaments/${tournamentId}`}
+            className="text-xs no-underline font-medium"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            Back to bracket →
+          </Link>
         </div>
       )}
 

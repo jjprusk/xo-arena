@@ -820,11 +820,26 @@ router.get('/bots', async (req, res, next) => {
       : []
     const ownerMap = Object.fromEntries(owners.map(o => [o.id, o]))
 
+    // Enrich with per-game skills
+    const botIds = bots.map(b => b.id)
+    const allSkills = botIds.length
+      ? await db.botSkill.findMany({
+          where: { botId: { in: botIds } },
+          select: { botId: true, gameId: true, algorithm: true, status: true },
+        })
+      : []
+    const skillsByBot = {}
+    for (const s of allSkills) {
+      if (!skillsByBot[s.botId]) skillsByBot[s.botId] = []
+      skillsByBot[s.botId].push({ gameId: s.gameId, algorithm: s.algorithm, status: s.status })
+    }
+
     const enriched = bots.map(b => ({
       ...b,
       eloRating: b.gameElo?.[0]?.rating ?? 1200,
       gameElo: undefined,
       owner: b.botOwnerId ? (ownerMap[b.botOwnerId] ?? null) : null,
+      skills: skillsByBot[b.id] ?? [],
     }))
 
     res.json({ bots: enriched, total, page, limit })

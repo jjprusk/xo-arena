@@ -11,6 +11,7 @@
  *   React.lazy(() => import('@callidity/game-xo'))
  */
 
-export { default }    from './GameComponent.jsx'
-export { meta }       from './meta.js'
-export { botInterface } from './botInterface.js'
+export { default }       from './GameComponent.jsx'
+export { meta }          from './meta.js'
+export { botInterface }  from './botInterface.js'
+export { default as BoardPreview } from './BoardPreview.jsx'

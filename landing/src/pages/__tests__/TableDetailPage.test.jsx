@@ -22,7 +22,9 @@ vi.mock('../../lib/useOptimisticSession.js', () => ({
 }))
 
 vi.mock('../../lib/socket.js', () => ({
-  getSocket: vi.fn(() => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn() })),
+  getSocket:        vi.fn(() => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn() })),
+  connectSocket:    vi.fn(() => ({ on: vi.fn(), off: vi.fn(), once: vi.fn(), emit: vi.fn(), connect: vi.fn(), connected: false })),
+  disconnectSocket: vi.fn(),
 }))
 
 import TableDetailPage from '../TableDetailPage.jsx'
@@ -73,7 +75,7 @@ describe('TableDetailPage', () => {
     api.tables.get.mockRejectedValue(err)
     renderAt('/tables/missing')
     await waitFor(() => expect(screen.getAllByText(/table not found/i).length).toBeGreaterThan(0))
-    expect(screen.getByRole('link', { name: /back to tables/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /back to tables/i })).toBeInTheDocument()
   })
 
   it('shows "You" in the seat the caller is in, and offers Leave instead of Join', async () => {
@@ -157,7 +159,7 @@ describe('TableDetailPage', () => {
     expect(screen.queryByRole('button', { name: /take seat \d/i })).toBeNull()
   })
 
-  it('renders through PlatformShell when table.status is ACTIVE', async () => {
+  it('routes ACTIVE tables through GameView — no seat-browsing UI shown', async () => {
     api.tables.get.mockResolvedValue({
       table: {
         ...baseTable,
@@ -169,12 +171,10 @@ describe('TableDetailPage', () => {
       },
     })
     renderAt('/tables/tbl_1')
-    await waitFor(() => expect(screen.getByRole('complementary', { name: /table context/i })).toBeInTheDocument())
-    // Shell sidebar surfaces table metadata
-    expect(screen.getByText(/in play/i)).toBeInTheDocument()
-    // Placeholder for Phase 3.4 game-component bridging
-    expect(screen.getByText(/game session lives in the realtime room layer/i)).toBeInTheDocument()
-    // Seat-browsing UI is NOT rendered when shell takes over
+    // GameView takes over: spinner shown while connecting (socket mock never fires 'connect')
+    await waitFor(() => expect(document.querySelector('.animate-spin')).not.toBeNull())
+    // Seat-browsing UI is NOT rendered when GameView takes over
     expect(screen.queryByText(/empty seat/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /take a seat/i })).toBeNull()
   })
 })

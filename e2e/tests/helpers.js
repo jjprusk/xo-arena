@@ -61,6 +61,25 @@ export async function getInviteUrl(page) {
   return input.inputValue()
 }
 
+/**
+ * Sign in a user via the BetterAuth email endpoint and store the session in the
+ * page's browser context. Subsequent page.goto() calls will be authenticated.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} email
+ * @param {string} password
+ * @param {string} backendUrl  e.g. 'http://localhost:3000'
+ */
+export async function signIn(page, email, password, backendUrl) {
+  const res = await page.context().request.post(`${backendUrl}/api/auth/sign-in/email`, {
+    data: { email, password },
+  })
+  if (!res.ok()) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Sign-in failed (${res.status()}): ${body}`)
+  }
+}
+
 // Map legacy difficulty names to current select values
 const DIFFICULTY_MAP = { easy: 'novice', medium: 'intermediate', hard: 'advanced', novice: 'novice', intermediate: 'intermediate', advanced: 'advanced', master: 'master' }
 

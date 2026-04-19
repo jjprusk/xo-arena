@@ -165,9 +165,9 @@ export async function handleEvent(io, channel, data) {
     }
     case 'tournament:bot:match:ready': {
       // Start a bot vs bot game for this tournament match
-      const { tournamentId, matchId, bot1, bot2, bestOfN } = data
+      const { tournamentId, matchId, gameId = 'xo', bot1, bot2, bestOfN } = data
       try {
-        await botGameRunner.startGame({ bot1, bot2, tournamentId, tournamentMatchId: matchId, bestOfN: bestOfN ?? 1 })
+        await botGameRunner.startGame({ bot1, bot2, gameId, tournamentId, tournamentMatchId: matchId, bestOfN: bestOfN ?? 1 })
         logger.info({ tournamentId, matchId, bot1: bot1.displayName, bot2: bot2.displayName }, 'Bot tournament match started')
       } catch (err) {
         logger.warn({ err, tournamentId, matchId }, 'Failed to start bot tournament match')

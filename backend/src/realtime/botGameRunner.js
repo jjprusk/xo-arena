@@ -92,7 +92,7 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1 }) {
+  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1 }) {
     const name = mountainPool.acquire()
     if (!name) throw new Error('No mountain names available for bot game')
 
@@ -114,6 +114,7 @@ class BotGameRunner {
       createdAt: now,
       lastActivityAt: now,
       moveDelayMs,
+      gameId,
       tournamentId,
       tournamentMatchId,
       bestOfN: bestOfN ?? 1,

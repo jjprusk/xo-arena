@@ -30,7 +30,7 @@ vi.mock('../../lib/socket.js', () => ({
 import { useGameSDK } from '../../lib/useGameSDK.js'
 import PlayPage from '../PlayPage.jsx'
 
-const mockSdk = { _onGameEnd: vi.fn() }
+const mockSdk = { _onGameEnd: vi.fn(), onMove: vi.fn(() => () => {}) }
 const defaultSDKReturn = {
   session: null,
   sdk: mockSdk,
@@ -69,15 +69,19 @@ describe('PlayPage', () => {
     expect(spinner).not.toBeNull()
   })
 
-  it('shows "Waiting for opponent" text for tournament matches', () => {
-    useGameSDK.mockReturnValue({ ...defaultSDKReturn, phase: 'waiting' })
+  it('shows FormingPanel when waiting with an active session', () => {
+    useGameSDK.mockReturnValue({
+      ...defaultSDKReturn,
+      phase: 'waiting',
+      session: { tableId: 'tbl-1', players: [], settings: {}, isSpectator: false },
+    })
     renderPlay('?join=some-room&tournamentMatch=match-1&tournamentId=t-1')
-    expect(screen.getByText('Waiting for opponent…')).toBeDefined()
+    expect(screen.getByText('Waiting for opponent')).toBeDefined()
   })
 
-  it('shows "Connecting" text while joining a non-tournament room', () => {
+  it('shows a spinner while connecting to a non-tournament room', () => {
     renderPlay('?join=some-room')
-    expect(screen.getByText('Connecting…')).toBeDefined()
+    expect(document.querySelector('.animate-spin')).not.toBeNull()
   })
 
   it('shows abandoned message when room is abandoned', () => {

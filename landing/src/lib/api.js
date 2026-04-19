@@ -146,6 +146,16 @@ export const api = {
     start: (body, token) => request('POST', '/bot-games', body, token),
   },
 
+  skills: {
+    list: (params = {}) => {
+      const p = new URLSearchParams()
+      if (params.gameId) p.set('gameId', params.gameId)
+      const qs = p.toString()
+      return request('GET', `/skills/models${qs ? `?${qs}` : ''}`, null, params.token)
+    },
+    create: (body, token) => request('POST', '/skills/models', body, token),
+  },
+
   logs: {
     list: (token, params = {}) => {
       const p = new URLSearchParams()

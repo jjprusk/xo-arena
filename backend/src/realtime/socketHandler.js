@@ -15,7 +15,7 @@ import * as pongRunner from './pongRunner.js'
 import { getUserByBetterAuthId, createGame } from '../services/userService.js'
 import db from '../lib/db.js'
 import { updatePlayersEloAfterPvP } from '../services/eloService.js'
-import { getSystemConfig, getMoveForModel } from '../services/skillService.js'
+import { getSystemConfig, getMoveForModel, resolveSkillForGame } from '../services/skillService.js'
 import { minimaxMove, getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
@@ -523,7 +523,7 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    on('room:create:hvb', async ({ botUserId, botSkillId, spectatorAllowed = true, authToken = null } = {}) => {
+    on('room:create:hvb', async ({ gameId = 'xo', botUserId, botSkillId, spectatorAllowed = true, authToken = null } = {}) => {
       try {
         if (!botUserId) return socket.emit('error', { message: 'botUserId required' })
         const user = await resolveSocketUser(authToken)
@@ -566,10 +566,25 @@ export async function attachSocketIO(httpServer) {
         const baId = user?.betterAuthId ?? `guest:${socket.id}`
         const marks = { [baId]: 'X', [botUserId]: 'O' }
 
+        // Resolve the game-specific skill server-side so the wrong-game skill
+        // can never be used (e.g. an XO skill running in a Connect4 game).
+        // Look up the bot's User.id (internal PK) via its betterAuthId, then
+        // find the skill for (botId, gameId). Falls back to the client-supplied
+        // botSkillId if no game-specific skill exists (e.g. built-in bots).
+        let resolvedSkillId = botSkillId || null
+        const botUserRow = await db.user.findFirst({
+          where: { betterAuthId: botUserId },
+          select: { id: true },
+        })
+        if (botUserRow) {
+          const skill = await resolveSkillForGame(botUserRow.id, gameId)
+          if (skill) resolvedSkillId = skill.id
+        }
+
         const isGuest = !user?.betterAuthId
         const table = await db.table.create({
           data: {
-            gameId: 'xo',
+            gameId,
             slug,
             displayName,
             createdById: user?.betterAuthId ?? 'anonymous',
@@ -579,7 +594,7 @@ export async function attachSocketIO(httpServer) {
             status: 'ACTIVE',
             isHvb: true,
             botUserId,
-            botSkillId: botSkillId || null,
+            botSkillId: resolvedSkillId,
             seats: [
               { userId: baId, status: 'occupied', displayName: user?.displayName ?? 'Guest' },
               { userId: botUserId, status: 'occupied', displayName: 'Bot' },

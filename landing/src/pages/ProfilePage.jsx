@@ -10,6 +10,7 @@ import { disconnectSocket } from '../lib/socket.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
+import { GAMES } from '../lib/gameRegistry.js'
 
 const BOT_MODEL_LABELS = {
   ml: 'ML',
@@ -50,7 +51,7 @@ export default function ProfilePage() {
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null)
-  const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: true })
+  const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: true, gameId: 'xo' })
   const [showBotCreatedPopup, setShowBotCreatedPopup] = useState(false)
   const [creatingBot, setCreatingBot] = useState(false)
 
@@ -309,6 +310,7 @@ export default function ProfilePage() {
         algorithm: 'ml',
         modelType: createForm.modelType,
         competitive: createForm.competitive,
+        gameId: createForm.gameId,
       }
       const { bot: newBot } = await api.bots.create(payload, token)
       setBots(prev => [newBot, ...prev])
@@ -518,6 +520,17 @@ export default function ProfilePage() {
                     className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
                     style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                   />
+                </label>
+                <label className="space-y-1 block">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Game</span>
+                  <select
+                    value={createForm.gameId}
+                    onChange={e => setCreateForm(f => ({ ...f, gameId: e.target.value }))}
+                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
+                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                  </select>
                 </label>
                 <label className="space-y-1 block">
                   <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>

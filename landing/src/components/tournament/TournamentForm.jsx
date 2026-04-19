@@ -1,5 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState } from 'react'
+import { GAMES } from '../../lib/gameRegistry.js'
 
 const FIELD_STYLE = {
   backgroundColor: 'var(--bg-base)',
@@ -178,7 +179,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Game" required>
           <select value={form.game} onChange={e => set('game', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            <option value="xo">XO (Tic-Tac-Toe)</option>
+            {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
           </select>
         </Field>
         <Field label="Mode" required>

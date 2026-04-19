@@ -512,7 +512,7 @@ export function useGameSDK({
       } else if (joinSlug) {
         socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token ?? null })
       } else if (botUserId) {
-        socket.emit('room:create:hvb', { botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null })
+        socket.emit('room:create:hvb', { gameId, botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null })
       } else {
         socket.emit('room:create', { spectatorAllowed: true, authToken: token ?? null })
       }

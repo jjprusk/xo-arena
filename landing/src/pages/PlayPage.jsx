@@ -44,6 +44,8 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     ? { id: authSession.user.id, displayName: authSession.user.name ?? authSession.user.email }
     : null
 
+  const [gameState, setGameState] = useState({ currentTurn: null, winner: null, isDraw: false })
+
   const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft } = useGameSDK({
     gameId:           'xo',
     joinSlug,
@@ -53,6 +55,17 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     botUserId:  botConfig?.botUserId  ?? null,
     botSkillId: botConfig?.botSkillId ?? null,
   })
+
+  // Subscribe to move events to drive seat-pod states in the shell
+  useEffect(() => {
+    return sdk.onMove(({ state }) => {
+      setGameState({
+        currentTurn: state.currentTurn ?? null,
+        winner:      state.winner      ?? null,
+        isDraw:      state.status === 'finished' && !state.winner,
+      })
+    })
+  }, [sdk])
 
   const tablesHref = tournamentId ? `/tournaments/${tournamentId}` : '/tables'
 
@@ -131,46 +144,28 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     )
   }
 
-  // Waiting for opponent (PvP only — bot games go straight to playing)
-  if (phase === 'connecting' || phase === 'waiting') {
-    return (
-      <div className="flex flex-col items-center gap-4 py-12">
-        <Spinner />
-        <p style={{ color: 'var(--text-secondary)' }}>
-          {tournamentMatchId ? 'Waiting for opponent…' : phase === 'waiting' ? 'Waiting for opponent to join…' : 'Connecting…'}
-        </p>
-        {phase === 'waiting' && session?.tableId && (
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Table: {session.settings?.displayName}
-            </p>
-            <p className="text-xs font-mono px-3 py-1 rounded-lg select-all"
-               style={{ background: 'var(--bg-surface-hover)', color: 'var(--text-secondary)' }}>
-              {window.location.origin}/play?join={session.tableId}
-            </p>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Share this link with your opponent
-            </p>
-          </div>
-        )}
-      </div>
-    )
-  }
+  // Still connecting (no session yet) — raw spinner
+  if (phase === 'connecting') return <Spinner />
 
-  // Active or finished game — route through the platform shell so the same
-  // chrome renders on /play and (Phase 3.4) /tables/:id.
-  if ((phase === 'playing' || phase === 'finished') && session) {
-    perfMark('PlayPage:board-renderable')
-    perfDumpSummary('/play?action=vs-community-bot')
+  // Waiting, playing, or finished — all route through the platform shell
+  if ((phase === 'waiting' || phase === 'playing' || phase === 'finished') && session) {
+    if (phase === 'playing') {
+      perfMark('PlayPage:board-renderable')
+      perfDumpSummary('/play?action=vs-community-bot')
+    }
     return (
       <PlatformShell
         gameMeta={xoMeta}
         session={session}
         phase={phase}
+        gameState={gameState}
         spectatorCount={spectatingCount}
+        tournamentId={tournamentId}
         backHref={tournamentId ? `/tournaments/${tournamentId}` : '/'}
       >
-        <XOGame session={session} sdk={sdk} />
+        {(phase === 'playing' || phase === 'finished') && (
+          <XOGame session={session} sdk={sdk} />
+        )}
       </PlatformShell>
     )
   }
