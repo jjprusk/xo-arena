@@ -39,7 +39,7 @@ async function recoverPendingBotMatches(onlyStale = false) {
     ? { status: 'PENDING', createdAt: { lte: new Date(Date.now() - BOT_MATCH_STALE_MS) } }
     : { status: 'PENDING' }
   const inProgress = await db.tournament.findMany({
-    where: { status: 'IN_PROGRESS', mode: 'BOT_VS_BOT' },
+    where: { status: 'IN_PROGRESS' },
     include: {
       rounds: {
         include: {
@@ -58,15 +58,16 @@ async function recoverPendingBotMatches(onlyStale = false) {
         const [p1, p2] = await Promise.all([
           db.tournamentParticipant.findUnique({
             where: { id: match.participant1Id },
-            include: { user: { select: { id: true, displayName: true, botModelId: true } } },
+            include: { user: { select: { id: true, displayName: true, botModelId: true, isBot: true } } },
           }),
           db.tournamentParticipant.findUnique({
             where: { id: match.participant2Id },
-            include: { user: { select: { id: true, displayName: true, botModelId: true } } },
+            include: { user: { select: { id: true, displayName: true, botModelId: true, isBot: true } } },
           }),
         ])
 
         if (!p1?.user || !p2?.user) continue
+        if (!p1.user.isBot || !p2.user.isBot) continue  // only recover bot vs bot matches
 
         await publish('tournament:bot:match:ready', {
           tournamentId: t.id,
@@ -135,7 +136,7 @@ async function sweep() {
         include: {
           participants: {
             where: { status: { in: ['REGISTERED'] } },
-            include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true } } },
+            include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true, isBot: true } } },
           },
         },
       })
@@ -159,7 +160,7 @@ async function sweep() {
       include: {
         participants: {
           where: { status: { in: ['REGISTERED'] } },
-          include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true } } },
+          include: { user: { select: { id: true, betterAuthId: true, displayName: true, botModelId: true, isBot: true } } },
         },
       },
     })
@@ -262,15 +263,7 @@ async function autoStartTournament(tournament) {
             },
           })
 
-          if (tournament.mode === 'HVH') {
-            await publish('tournament:match:ready', {
-              tournamentId: tournament.id,
-              matchId: match.id,
-              participant1UserId: p1.user.betterAuthId,
-              participant2UserId: p2.user.betterAuthId,
-              bestOfN: tournament.bestOfN,
-            })
-          } else {
+          if (p1.user.isBot && p2.user.isBot) {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
@@ -278,6 +271,14 @@ async function autoStartTournament(tournament) {
               gameId: tournament.game,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          } else {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
+              bestOfN: tournament.bestOfN,
             })
           }
         }
@@ -302,15 +303,7 @@ async function autoStartTournament(tournament) {
             },
           })
 
-          if (tournament.mode === 'HVH') {
-            await publish('tournament:match:ready', {
-              tournamentId: tournament.id,
-              matchId: match.id,
-              participant1UserId: p1.user.betterAuthId,
-              participant2UserId: p2.user.betterAuthId,
-              bestOfN: tournament.bestOfN,
-            })
-          } else {
+          if (p1.user.isBot && p2.user.isBot) {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
@@ -318,6 +311,14 @@ async function autoStartTournament(tournament) {
               gameId: tournament.game,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          } else {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
+              bestOfN: tournament.bestOfN,
             })
           }
         }

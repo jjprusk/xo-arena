@@ -241,7 +241,8 @@ export const api = {
     setReplayConfig: (body, token) => api.patch('/admin/replay-config', body, token),
   },
   games: {
-    getReplay: (id, token) => api.get(`/games/${id}/replay`, token),
+    getReplay:    (id, token)      => api.get(`/games/${id}/replay`, token),
+    getByMatchId: (matchId, token) => api.get(`/games?tournamentMatchId=${encodeURIComponent(matchId)}`, token),
   },
 
   puzzles: {

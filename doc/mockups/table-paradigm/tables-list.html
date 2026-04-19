@@ -338,6 +338,8 @@
       <button class="filter-chip" type="button">Pickup</button>
       <button class="filter-chip" type="button">Tournament</button>
       <button class="filter-chip" type="button">Mine</button>
+      <button class="filter-chip active" type="button">XO</button>
+      <button class="filter-chip" type="button">Connect 4</button>
       <div class="search-wrap">
         <input type="search" placeholder="Search by name…" aria-label="Search tables">
       </div>
@@ -428,6 +430,45 @@
         <div class="table-card__footer">
           <span class="seated">1 / 2 <small>seated</small></span>
           <span class="watching">👁 1 watching</span>
+        </div>
+      </a>
+      <a href="2p-sitdown.html" class="table-card">
+        <div class="table-card__head">
+          <div>
+            <h3 class="table-card__name">Mt. Kilimanjaro</h3>
+            <div class="table-card__meta">
+              <span>Connect 4</span> · <span>PvP</span> · <span class="type-tag">Pickup</span>
+            </div>
+          </div>
+          <span class="status-chip forming">Forming</span>
+        </div>
+        <div class="seat-strip">
+          <span class="seat-strip__dot filled"></span>
+          <span class="seat-strip__dot"></span>
+        </div>
+        <div class="table-card__footer">
+          <span class="seated">1 / 2 <small>seated</small></span>
+          <span class="watching">👁 2 watching</span>
+        </div>
+      </a>
+
+      <a href="2p-sitdown.html" class="table-card">
+        <div class="table-card__head">
+          <div>
+            <h3 class="table-card__name">Mt. Blanc</h3>
+            <div class="table-card__meta">
+              <span>Connect 4</span> · <span>HvB</span> · <span class="type-tag">Pickup</span>
+            </div>
+          </div>
+          <span class="status-chip active">In play</span>
+        </div>
+        <div class="seat-strip">
+          <span class="seat-strip__dot filled"></span>
+          <span class="seat-strip__dot filled bot"></span>
+        </div>
+        <div class="table-card__footer">
+          <span class="seated">2 / 2 <small>seated</small></span>
+          <span class="watching">👁 5 spectating</span>
         </div>
       </a>
     </section>
@@ -538,12 +579,46 @@
             <td>—</td>
             <td>1h ago</td>
           </tr>
+          <tr>
+            <td class="room-name">Mt. Kilimanjaro<small>PvP · shared link open</small></td>
+            <td>Connect 4</td>
+            <td><span class="type-tag" style="font-size:0.625rem;text-transform:uppercase;padding:1px 5px;border-radius:4px;background:var(--bg-surface-hover);color:var(--text-secondary);font-weight:700;letter-spacing:0.05em">Pickup</span></td>
+            <td><span class="status-chip forming">Forming</span></td>
+            <td>
+              <div class="seats-col">
+                <span class="count">1 / 2</span>
+                <span class="seat-strip">
+                  <span class="seat-strip__dot filled"></span>
+                  <span class="seat-strip__dot"></span>
+                </span>
+              </div>
+            </td>
+            <td>👁 2</td>
+            <td>4m ago</td>
+          </tr>
+          <tr>
+            <td class="room-name">Mt. Blanc<small>HvB · auto-started</small></td>
+            <td>Connect 4</td>
+            <td><span class="type-tag" style="font-size:0.625rem;text-transform:uppercase;padding:1px 5px;border-radius:4px;background:var(--bg-surface-hover);color:var(--text-secondary);font-weight:700;letter-spacing:0.05em">Pickup</span></td>
+            <td><span class="status-chip active">In play</span></td>
+            <td>
+              <div class="seats-col">
+                <span class="count">2 / 2</span>
+                <span class="seat-strip">
+                  <span class="seat-strip__dot filled"></span>
+                  <span class="seat-strip__dot filled bot"></span>
+                </span>
+              </div>
+            </td>
+            <td>👁 5</td>
+            <td>9m ago</td>
+          </tr>
         </tbody>
       </table>
     </section>
 
     <div class="pagination">
-      <span>Showing 5 of 23 tables</span>
+      <span>Showing 7 of 31 tables</span>
       <div class="pages">
         <button type="button">‹</button>
         <button type="button" class="active">1</button>

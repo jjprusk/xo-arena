@@ -1,12 +1,17 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
+import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
 import { connectSocket } from '../lib/socket.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
+import { useReplaySDK } from '../lib/useReplaySDK.js'
+import { meta as xoMeta } from '@callidity/game-xo'
+
+const XOGame = lazy(() => import('@callidity/game-xo'))
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -65,7 +70,7 @@ function ErrorMsg({ children }) {
 
 // ── Bracket visualization ─────────────────────────────────────────────────────
 
-function TournamentBracket({ rounds, participants }) {
+function TournamentBracket({ rounds, participants, onMatchClick }) {
   if (!rounds || rounds.length === 0) {
     return (
       <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -107,6 +112,7 @@ function TournamentBracket({ rounds, participants }) {
                     matchCount={sortedMatches.length}
                     roundIndex={roundIdx}
                     totalRounds={totalRounds}
+                    onWatch={onMatchClick}
                   />
                 ))}
               </div>
@@ -118,7 +124,7 @@ function TournamentBracket({ rounds, participants }) {
   )
 }
 
-function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, totalRounds }) {
+function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch }) {
   const p1Name = match.participant1Id ? (nameOf[match.participant1Id] ?? 'TBD') : 'BYE'
   const p2Name = match.participant2Id ? (nameOf[match.participant2Id] ?? 'TBD') : 'BYE'
   const isCompleted  = match.status === 'COMPLETED'
@@ -175,6 +181,15 @@ function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, total
             </span>
           )}
         </div>
+        {isCompleted && onWatch && (
+          <button
+            onClick={() => onWatch(match.id, `${p1Name} vs ${p2Name}`)}
+            className="w-full text-[10px] py-1 font-medium border-t"
+            style={{ color: 'var(--color-primary)', borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+          >
+            ▶ Watch replay
+          </button>
+        )}
       </div>
       {roundIndex < totalRounds - 1 && (
         <div
@@ -182,6 +197,145 @@ function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, total
           style={{ borderColor: 'var(--border-default)', transform: 'translateY(-50%)' }}
         />
       )}
+    </div>
+  )
+}
+
+// ── Replay ────────────────────────────────────────────────────────────────────
+
+function resolveThemeVars(theme, isDark) {
+  return { ...theme?.tokens, ...(isDark ? theme?.dark : theme?.light) }
+}
+
+const REPLAY_SPEEDS = [0.5, 1, 2]
+
+function ReplayControls({ controls, gameData }) {
+  const { step, totalSteps, playing, speed, play, pause, stepForward, stepBack, scrub, setSpeed, reset } = controls
+  const pct = totalSteps > 1 ? (step / (totalSteps - 1)) * 100 : 0
+  return (
+    <div className="w-full rounded-xl border p-3 space-y-3" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+      {gameData && (
+        <div className="flex justify-between text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+          <span><span className="font-bold" style={{ color: 'var(--color-blue-600)' }}>X</span>{' '}{gameData.player1?.displayName ?? 'Player 1'}</span>
+          <span style={{ color: 'var(--text-muted)' }}>Move {step} / {totalSteps - 1}</span>
+          <span>{gameData.player2?.displayName ?? 'Player 2'}{' '}<span className="font-bold" style={{ color: 'var(--color-teal-600)' }}>O</span></span>
+        </div>
+      )}
+      <input type="range" min={0} max={totalSteps - 1} value={step} onChange={e => scrub(Number(e.target.value))}
+        className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+        style={{ background: `linear-gradient(to right, var(--color-primary) ${pct}%, var(--border-default) ${pct}%)`, accentColor: 'var(--color-primary)' }}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <button onClick={reset} className="px-2 py-1 rounded text-xs" style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-surface-hover)' }} title="Reset">⏮</button>
+          <button onClick={stepBack} className="px-2 py-1 rounded text-xs" style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-surface-hover)' }} title="Step back">◀</button>
+          <button onClick={playing ? pause : play} className="px-3 py-1 rounded text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}>
+            {playing ? '⏸' : '▶'}
+          </button>
+          <button onClick={stepForward} className="px-2 py-1 rounded text-xs" style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-surface-hover)' }} title="Step forward">▶</button>
+        </div>
+        <div className="flex items-center gap-1">
+          {REPLAY_SPEEDS.map(s => (
+            <button key={s} onClick={() => setSpeed(s)} className="px-2 py-0.5 rounded text-xs font-medium"
+              style={{ backgroundColor: speed === s ? 'var(--color-primary)' : 'var(--bg-surface-hover)', color: speed === s ? 'white' : 'var(--text-secondary)' }}>
+              {s}×
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GameReplayPlayer({ gameId }) {
+  const [gameData, setGameData] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setGameData(null)
+    setLoadError(null)
+    getToken()
+      .then(t => api.games.getReplay(gameId, t))
+      .then(data => { if (!cancelled) setGameData(data) })
+      .catch(e => { if (!cancelled) setLoadError(e?.status === 410 ? 'Replay has been purged.' : 'Failed to load replay.') })
+    return () => { cancelled = true }
+  }, [gameId])
+
+  const { session, sdk, controls } = useReplaySDK({ gameData })
+
+  if (loadError) return <ErrorMsg>{loadError}</ErrorMsg>
+  if (!gameData) return <Spinner />
+
+  const themeStyle = resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))
+  return (
+    <div className="flex flex-col items-center gap-3 w-full" style={themeStyle}>
+      <Suspense fallback={<Spinner />}><XOGame session={session} sdk={sdk} /></Suspense>
+      <ReplayControls controls={controls} gameData={gameData} />
+    </div>
+  )
+}
+
+function MatchReplayModal({ matchId, matchLabel, onClose }) {
+  const [games, setGames]         = useState(null)
+  const [selectedIdx, setSelectedIdx] = useState(0)
+  const [fetchError, setFetchError]   = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setGames(null); setFetchError(null)
+    getToken()
+      .then(t => api.games.getByMatchId(matchId, t))
+      .then(data => { if (!cancelled) setGames(data.games) })
+      .catch(() => { if (!cancelled) setFetchError('Could not load games for this match.') })
+    return () => { cancelled = true }
+  }, [matchId])
+
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const selectedGame = games?.[selectedIdx]
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl flex flex-col gap-3 p-4 max-h-[90vh] overflow-y-auto"
+        style={{ backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{matchLabel}</span>
+          <button onClick={onClose} className="shrink-0 px-2 py-1 rounded text-xs"
+            style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}>
+            ✕ Close
+          </button>
+        </div>
+
+        {games && games.length > 1 && (
+          <div className="flex gap-1 flex-wrap">
+            {games.map((g, i) => (
+              <button key={g.id} onClick={() => setSelectedIdx(i)} className="px-2 py-0.5 rounded text-xs font-medium"
+                style={{ backgroundColor: selectedIdx === i ? 'var(--color-primary)' : 'var(--bg-surface-hover)', color: selectedIdx === i ? 'white' : 'var(--text-secondary)' }}>
+                Game {i + 1}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {fetchError && <ErrorMsg>{fetchError}</ErrorMsg>}
+        {!games && !fetchError && <Spinner />}
+        {games?.length === 0 && (
+          <p className="text-sm text-center py-4" style={{ color: 'var(--text-muted)' }}>No replays recorded yet for this match.</p>
+        )}
+        {selectedGame && <GameReplayPlayer key={selectedGame.id} gameId={selectedGame.id} />}
+      </div>
     </div>
   )
 }
@@ -895,6 +1049,10 @@ export default function TournamentDetailPage() {
   const [token, setToken]           = useState(undefined) // undefined = resolving; null = unauthenticated; string = token
   const [dbUserId, setDbUserId]     = useState(null)
   const [activeMatchEvent, setActiveMatchEvent] = useState(null)
+  const [replayMatch, setReplayMatch]           = useState(null) // { id, label }
+  // Tracks whether we have successfully loaded tournament data at least once.
+  // Used to skip the loading spinner on silent re-fetches (e.g. after auth resolves).
+  const tournamentRef = useRef(null)
 
   const { lastEvent } = useTournamentSocket()
 
@@ -923,19 +1081,34 @@ export default function TournamentDetailPage() {
     }).catch(() => {})
   }, [session?.user?.id])
 
+  // Reset cached data when navigating to a different tournament.
+  useEffect(() => { tournamentRef.current = null }, [id])
+
   const load = useCallback(async () => {
-    if (token === undefined) return  // auth not yet resolved — wait before making API calls
-    setLoading(true)
-    setError(null)
+    // If a session user is known but the token hasn't resolved yet, skip the pre-fetch.
+    // Doing it unauthenticated would 404 on DRAFT tournaments (console noise).
+    // The warm-cached /api/token response arrives in ~100ms so the delay is minimal.
+    if (token === undefined && session?.user?.id) return
+
+    // For unauthenticated visitors (token stays undefined with no session user),
+    // treat undefined as null so public tournaments render immediately.
+    const effectiveToken = token === undefined ? null : token
+    if (!tournamentRef.current) { setLoading(true); setError(null) }
     try {
-      const data = await tournamentApi.get(id, token)
-      setTournament(data.tournament ?? data)
-    } catch (e) {
-      setError(e.message || 'Failed to load tournament.')
-    } finally {
+      const data = await tournamentApi.get(id, effectiveToken)
+      tournamentRef.current = data.tournament ?? data
+      setTournament(tournamentRef.current)
       setLoading(false)
+    } catch (e) {
+      if (!tournamentRef.current && token !== undefined) {
+        // Auth is settled and we still have no data — surface the error.
+        setError(e.message || 'Failed to load tournament.')
+        setLoading(false)
+      }
+      // token === undefined: auth pending — keep spinner, retry when token resolves
+      // tournamentRef.current set: silent re-auth re-fetch failed — keep existing data
     }
-  }, [id, token])
+  }, [id, token, session?.user?.id])
 
   useEffect(() => { load() }, [load])
 
@@ -1026,7 +1199,8 @@ export default function TournamentDetailPage() {
             className="rounded-xl border p-4"
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
           >
-            <TournamentBracket rounds={t.rounds ?? []} participants={t.participants ?? []} />
+            <TournamentBracket rounds={t.rounds ?? []} participants={t.participants ?? []}
+              onMatchClick={(id, label) => setReplayMatch({ id, label })} />
           </div>
         </Section>
       )}
@@ -1034,6 +1208,14 @@ export default function TournamentDetailPage() {
       <Section title={`Participants (${(t.participants ?? []).length})`}>
         <ParticipantTable participants={t.participants ?? []} />
       </Section>
+
+      {replayMatch && (
+        <MatchReplayModal
+          matchId={replayMatch.id}
+          matchLabel={replayMatch.label}
+          onClose={() => setReplayMatch(null)}
+        />
+      )}
     </div>
   )
 }

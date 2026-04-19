@@ -318,8 +318,6 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
       data: updateData,
     })
 
-    const isPvp = existing.mode === 'HVH'
-
     if (existing.bracketType === 'SINGLE_ELIM') {
       const shuffled = [...participants].sort(() => Math.random() - 0.5)
 
@@ -354,15 +352,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             },
           })
 
-          if (isPvp) {
-            await publish('tournament:match:ready', {
-              tournamentId: tournament.id,
-              matchId: match.id,
-              participant1UserId: p1.user.betterAuthId,
-              participant2UserId: p2.user.betterAuthId,
-              bestOfN: tournament.bestOfN,
-            })
-          } else {
+          if (p1.user.isBot && p2.user.isBot) {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
@@ -370,6 +360,14 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
               bestOfN: tournament.bestOfN,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          } else {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
+              bestOfN: tournament.bestOfN,
             })
           }
         }
@@ -394,15 +392,7 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
             },
           })
 
-          if (isPvp) {
-            await publish('tournament:match:ready', {
-              tournamentId: tournament.id,
-              matchId: match.id,
-              participant1UserId: p1.user.betterAuthId,
-              participant2UserId: p2.user.betterAuthId,
-              bestOfN: tournament.bestOfN,
-            })
-          } else {
+          if (p1.user.isBot && p2.user.isBot) {
             await publish('tournament:bot:match:ready', {
               tournamentId: tournament.id,
               matchId: match.id,
@@ -410,6 +400,14 @@ router.post('/:id/start', requireTournamentAdmin, async (req, res, next) => {
               bestOfN: tournament.bestOfN,
               bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
               bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
+            })
+          } else {
+            await publish('tournament:match:ready', {
+              tournamentId: tournament.id,
+              matchId: match.id,
+              participant1UserId: p1.user.betterAuthId,
+              participant2UserId: p2.user.betterAuthId,
+              bestOfN: tournament.bestOfN,
             })
           }
         }
