@@ -763,6 +763,14 @@ export async function attachSocketIO(httpServer) {
           return
         }
 
+        // Tournament rooms require an authenticated player in the second seat.
+        // If authToken didn't resolve on the client before room:join fired (race
+        // between optimistic session hydration and socket emit), reject cleanly.
+        // The frontend retries via its getToken() path on the next connect event.
+        if (table.isTournament && !user?.betterAuthId) {
+          return socket.emit('error', { message: 'Authentication required for this match' })
+        }
+
         // Update seats and previewState.marks — betterAuthId for consistency,
         // socket-derived sentinel for guests.
         const ps = { ...table.previewState }
@@ -1128,7 +1136,7 @@ export async function attachSocketIO(httpServer) {
       } else {
         // Second player — join as guest
         const table = await db.table.findFirst({ where: { slug, status: 'FORMING' } })
-        if (!table) return socket.emit('error', { message: 'Room not found' })
+        if (!table) return socket.emit('error', { message: 'Match not ready yet — please try again' })
 
         const baId = user.betterAuthId
         const ps = { ...table.previewState }
@@ -1410,7 +1418,12 @@ export async function attachSocketIO(httpServer) {
         if (name) mountainPool.release(name)
         await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
         await deleteIfGuestTable(table)
-        if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
+        if (table.tournamentMatchId) {
+          // For tournament matches: reset slug so player 1 can rejoin after a
+          // disconnect (e.g., brief network drop during page navigation).
+          // Do NOT delete the pending match — both players still need to play.
+          setPendingPvpMatchSlug(table.tournamentMatchId, null)
+        }
         clearAllIdleTimersForTable(tableId)
         for (const [sid, tid] of _socketToTable) {
           if (tid === tableId) unregisterSocket(sid)

@@ -492,6 +492,15 @@ export function useGameSDK({
         setAbandoned({ reason: 'stale', message: 'Game ended (idle). Returning…' })
         return
       }
+      // Tournament table rejected join because token hadn't resolved yet — retry
+      // once with a fresh token. With the getToken() fix in resolveAndEmit this
+      // path should be rare, but guard it defensively.
+      if (message === 'Authentication required for this match' && joinSlug) {
+        getToken().then(token => {
+          if (token) socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token })
+        })
+        return
+      }
       // Any other unrecognized error: log to the console so it's visible in
       // devtools instead of eaten silently. Pre-existing behavior swallowed
       // everything, which is how this bug hid.
@@ -529,7 +538,12 @@ export function useGameSDK({
     // Skip the /api/token round trip for guests — we already know there's no
     // auth to send. Eliminates an async hop on the /play hot path.
     function resolveAndEmit() {
-      if (!currentUserRef.current?.id) {
+      if (joinSlug || tournamentMatchId) {
+        // For room joins, always try to get a token — currentUser may be null
+        // briefly even for logged-in users (optimistic session hasn't propagated
+        // yet on the initial render). getToken() returns null for genuine guests.
+        getToken().then(token => emitRoomAction(token ?? null))
+      } else if (!currentUserRef.current?.id) {
         emitRoomAction(null)
       } else {
         getToken().then(emitRoomAction)
