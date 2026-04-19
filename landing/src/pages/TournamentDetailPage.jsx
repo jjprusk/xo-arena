@@ -211,8 +211,11 @@ function AdminControls({ tournament, token, onRefresh }) {
   }
 
   const { status, startMode } = tournament
-  const participantCount = tournament.participants?.length ?? 0
-  const isFull      = tournament.maxParticipants ? participantCount >= tournament.maxParticipants : false
+  const participantCount  = tournament.participants?.length ?? 0
+  const botCount          = (tournament.participants ?? []).filter(p => p.user?.isBot).length
+  const isFull      = tournament.maxParticipants
+    ? participantCount >= tournament.maxParticipants
+    : botCount >= 4  // all 4 test bots already registered
   const canPublish  = status === 'DRAFT'
   const canStart    = (status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED') && startMode === 'MANUAL'
   const canCancel   = status !== 'COMPLETED' && status !== 'CANCELLED'

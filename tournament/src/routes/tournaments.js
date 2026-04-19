@@ -64,7 +64,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       include: {
         participants: {
           include: {
-            user: { select: { id: true, displayName: true, avatarUrl: true } },
+            user: { select: { id: true, displayName: true, avatarUrl: true, isBot: true } },
           },
         },
         rounds: {
