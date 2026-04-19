@@ -211,10 +211,12 @@ function AdminControls({ tournament, token, onRefresh }) {
   }
 
   const { status, startMode } = tournament
+  const participantCount = tournament.participants?.length ?? 0
+  const isFull      = tournament.maxParticipants ? participantCount >= tournament.maxParticipants : false
   const canPublish  = status === 'DRAFT'
   const canStart    = (status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED') && startMode === 'MANUAL'
   const canCancel   = status !== 'COMPLETED' && status !== 'CANCELLED'
-  const canFillBots = status === 'DRAFT' || status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED'
+  const canFillBots = !isFull && (status === 'DRAFT' || status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED')
 
   async function fillBots() {
     if (!confirm('Fill empty slots with test bots?')) return
