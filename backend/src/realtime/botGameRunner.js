@@ -10,6 +10,7 @@
 import { mountainPool, MountainNamePool } from './mountainNames.js'
 import { getWinner, isBoardFull, getEmptyCells, WIN_LINES } from '@xo-arena/ai'
 import registry from '../ai/registry.js'
+import { getMoveForModel } from '../services/skillService.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
@@ -63,9 +64,8 @@ function parseBotModelId(botModelId) {
     return { impl, difficulty: diff }
   }
 
-  // ML model ID or unknown — fall back to minimax master
-  logger.warn({ botModelId }, 'Unknown botModelId format — falling back to minimax/master')
-  return { impl: 'minimax', difficulty: 'master' }
+  // Raw ML skill ID (UUID) — use ML implementation with this skill
+  return { impl: 'ml', difficulty: 'intermediate' }
 }
 
 class BotGameRunner {
@@ -187,7 +187,7 @@ class BotGameRunner {
         let cellIndex
         try {
           const aiImpl = registry.get(impl)
-          cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn)
+          cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn, bot.botModelId)
         } catch (err) {
           logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
           game.winner = game.currentTurn === 'X' ? 'O' : 'X'
@@ -389,6 +389,15 @@ class BotGameRunner {
 
   getGame(slug) {
     return this._games.get(slug) || null
+  }
+
+  getSlugForMatch(tournamentMatchId) {
+    for (const game of this._games.values()) {
+      if (game.tournamentMatchId === tournamentMatchId && game.status === 'playing') {
+        return game.slug
+      }
+    }
+    return null
   }
 
   /** List active/playing bot games for the room list. */

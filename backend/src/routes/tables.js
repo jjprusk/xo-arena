@@ -23,6 +23,7 @@ import db from '../lib/db.js'
 import logger from '../logger.js'
 import { dispatch } from '../lib/notificationBus.js'
 import { mountainPool, MountainNamePool } from '../realtime/mountainNames.js'
+import { botGameRunner } from '../realtime/botGameRunner.js'
 
 const router = Router()
 
@@ -353,6 +354,28 @@ router.get('/', optionalAuth, async (req, res, next) => {
     ])
 
     res.json({ tables: await withSeatDisplay(tables), total, page, limit })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/tables/active-match?tournamentMatchId=X
+ * Returns the slug of the currently active table for a tournament match,
+ * checking both DB-persisted PvP tables and in-memory bot game rooms.
+ * Used by the live spectator view.
+ */
+router.get('/active-match', async (req, res, next) => {
+  try {
+    const { tournamentMatchId } = req.query
+    if (!tournamentMatchId) return res.status(400).json({ error: 'tournamentMatchId required' })
+    const table = await db.table.findFirst({
+      where: { tournamentMatchId, status: 'ACTIVE' },
+      select: { slug: true },
+    })
+    if (table) return res.json({ slug: table.slug })
+    const slug = botGameRunner.getSlugForMatch(tournamentMatchId)
+    res.json({ slug: slug ?? null })
   } catch (err) {
     next(err)
   }

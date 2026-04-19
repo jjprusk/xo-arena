@@ -133,8 +133,8 @@ Sign in as a tournament admin. Use the Tournaments UI at `http://localhost:5174/
 - [x] Create a tournament in DRAFT status
 - [x] Publish it (`POST /api/t/tournaments/:id/publish`) → status becomes **REGISTRATION_OPEN**; connected clients receive a tournament notification in the Guide drawer
 - [ ] Register participants (4 test bots via **Fill test players**, or 2 real users for HVH)
-- [ ] Participant count on the tournament detail page matches the number registered
-- [ ] Start the tournament → status becomes **IN_PROGRESS**; round 1 bracket created (2 matches for 4 players, 1 match for 2)
+- [x] Participant count on the tournament detail page matches the number registered
+- [x] Start the tournament → status becomes **IN_PROGRESS**; round 1 bracket created (2 matches for 4 players, 1 match for 2)
 
 ### 8b. BOT_VS_BOT match (no manual play required)
 

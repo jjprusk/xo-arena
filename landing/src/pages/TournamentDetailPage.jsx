@@ -70,7 +70,7 @@ function ErrorMsg({ children }) {
 
 // ── Bracket visualization ─────────────────────────────────────────────────────
 
-function TournamentBracket({ rounds, participants, onMatchClick }) {
+function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate }) {
   if (!rounds || rounds.length === 0) {
     return (
       <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -113,6 +113,7 @@ function TournamentBracket({ rounds, participants, onMatchClick }) {
                     roundIndex={roundIdx}
                     totalRounds={totalRounds}
                     onWatch={onMatchClick}
+                    onSpectate={onMatchSpectate}
                   />
                 ))}
               </div>
@@ -124,13 +125,14 @@ function TournamentBracket({ rounds, participants, onMatchClick }) {
   )
 }
 
-function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch }) {
+function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch, onSpectate }) {
   const p1Name = match.participant1Id ? (nameOf[match.participant1Id] ?? 'TBD') : 'BYE'
   const p2Name = match.participant2Id ? (nameOf[match.participant2Id] ?? 'TBD') : 'BYE'
   const isCompleted  = match.status === 'COMPLETED'
   const isInProgress = match.status === 'IN_PROGRESS'
   const p1Won = isCompleted && match.winnerId === match.participant1Id
   const p2Won = isCompleted && match.winnerId === match.participant2Id
+  const drawGames = match.drawGames ?? 0
   const verticalPad = 12 * Math.pow(2, roundIndex)
 
   return (
@@ -181,6 +183,23 @@ function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, total
             </span>
           )}
         </div>
+        {isCompleted && drawGames > 0 && (
+          <div
+            className="px-2 py-1 text-[10px] text-center border-t"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
+          >
+            {drawGames} draw{drawGames !== 1 ? 's' : ''}
+          </div>
+        )}
+        {isInProgress && onSpectate && (
+          <button
+            onClick={() => onSpectate(match.id, `${p1Name} vs ${p2Name}`)}
+            className="w-full text-[10px] py-1 font-medium border-t"
+            style={{ color: 'var(--color-primary)', borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+          >
+            ◉ Watch live
+          </button>
+        )}
         {isCompleted && onWatch && (
           <button
             onClick={() => onWatch(match.id, `${p1Name} vs ${p2Name}`)}
@@ -340,12 +359,102 @@ function MatchReplayModal({ matchId, matchLabel, onClose }) {
   )
 }
 
+// ── Live spectator modal ──────────────────────────────────────────────────────
+
+function SpectatorGame({ slug }) {
+  const themeStyle = resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))
+  const { session, sdk } = useGameSDK({
+    gameId: 'xo',
+    joinSlug: slug,
+    spectate: true,
+    currentUser: null,
+  })
+  return (
+    <div className="flex flex-col items-center gap-3 w-full" style={themeStyle}>
+      <Suspense fallback={<Spinner />}>
+        {session ? <XOGame session={session} sdk={sdk} /> : <Spinner />}
+      </Suspense>
+    </div>
+  )
+}
+
+function MatchSpectateModal({ matchId, matchLabel, onClose }) {
+  const [slug, setSlug]       = useState(null)
+  const [fetching, setFetching] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api.tables.getActiveByMatchId(matchId)
+      .then(data => {
+        if (!cancelled) {
+          if (data.slug) setSlug(data.slug)
+          else setFetchError('No live game in progress for this match.')
+          setFetching(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) { setFetchError('Could not find live game.'); setFetching(false) }
+      })
+    return () => { cancelled = true }
+  }, [matchId])
+
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl flex flex-col gap-3 p-4 max-h-[90vh] overflow-y-auto"
+        style={{ backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full animate-pulse"
+              style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
+            >
+              Live
+            </span>
+            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{matchLabel}</span>
+          </div>
+          <button onClick={onClose} className="shrink-0 px-2 py-1 rounded text-xs"
+            style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}>
+            ✕ Close
+          </button>
+        </div>
+        {fetching && <Spinner />}
+        {fetchError && <ErrorMsg>{fetchError}</ErrorMsg>}
+        {slug && <SpectatorGame key={slug} slug={slug} />}
+      </div>
+    </div>
+  )
+}
+
 // ── Admin controls ────────────────────────────────────────────────────────────
+
+const BOT_DIFFICULTIES = [
+  { value: 'novice',       label: 'Novice' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced',     label: 'Advanced' },
+  { value: 'master',       label: 'Master' },
+]
 
 function AdminControls({ tournament, token, onRefresh }) {
   const [busy, setBusy]       = useState(null)
   const [err, setErr]         = useState(null)
   const [success, setSuccess] = useState(null)
+  const [addBotOpen, setAddBotOpen]       = useState(false)
+  const [botDifficulty, setBotDifficulty] = useState('intermediate')
+  const [botName, setBotName]             = useState('')
 
   async function act(action, label) {
     if (!confirm(`${label} this tournament?`)) return
@@ -387,6 +496,27 @@ function AdminControls({ tournament, token, onRefresh }) {
       onRefresh()
     } catch (e) {
       setErr(e.message || 'Fill failed.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function handleAddBot() {
+    setBusy('addBot')
+    setErr(null)
+    setSuccess(null)
+    try {
+      const result = await tournamentApi.addSeededBot(tournament.id, {
+        difficulty: botDifficulty,
+        displayName: botName.trim() || undefined,
+      }, token)
+      setSuccess(`Added "${result.displayName}".`)
+      setBotName('')
+      setAddBotOpen(false)
+      setTimeout(() => setSuccess(null), 3000)
+      onRefresh()
+    } catch (e) {
+      setErr(e.message || 'Add bot failed.')
     } finally {
       setBusy(null)
     }
@@ -437,6 +567,16 @@ function AdminControls({ tournament, token, onRefresh }) {
             {busy === 'fillBots' ? 'Filling…' : 'Fill with test bots'}
           </button>
         )}
+        {canFillBots && (
+          <button
+            onClick={() => setAddBotOpen(o => !o)}
+            disabled={!!busy}
+            className="text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+          >
+            + Add bot
+          </button>
+        )}
         {canCancel && (
           <button
             onClick={() => act('cancel', 'Cancel')}
@@ -448,6 +588,48 @@ function AdminControls({ tournament, token, onRefresh }) {
           </button>
         )}
       </div>
+      {addBotOpen && (
+        <div className="pt-2 border-t space-y-2" style={{ borderColor: 'var(--border-default)' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Add bot entrant
+          </p>
+          <div className="flex gap-1 flex-wrap">
+            {BOT_DIFFICULTIES.map(d => (
+              <button
+                key={d.value}
+                onClick={() => setBotDifficulty(d.value)}
+                className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
+                style={{
+                  backgroundColor: botDifficulty === d.value ? 'var(--color-primary)' : 'var(--bg-surface-hover)',
+                  color: botDifficulty === d.value ? 'white' : 'var(--text-secondary)',
+                }}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={botName}
+              onChange={e => setBotName(e.target.value)}
+              placeholder={`${BOT_DIFFICULTIES.find(d => d.value === botDifficulty)?.label} Bot`}
+              maxLength={40}
+              className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border bg-transparent outline-none"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddBot() }}
+            />
+            <button
+              onClick={handleAddBot}
+              disabled={!!busy}
+              className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))' }}
+            >
+              {busy === 'addBot' ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+        </div>
+      )}
       {(status === 'REGISTRATION_OPEN' || status === 'REGISTRATION_CLOSED') && startMode !== 'MANUAL' && (
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           {startMode === 'AUTO'
@@ -1050,6 +1232,7 @@ export default function TournamentDetailPage() {
   const [dbUserId, setDbUserId]     = useState(null)
   const [activeMatchEvent, setActiveMatchEvent] = useState(null)
   const [replayMatch, setReplayMatch]           = useState(null) // { id, label }
+  const [watchMatch, setWatchMatch]             = useState(null) // { id, label }
   // Tracks whether we have successfully loaded tournament data at least once.
   // Used to skip the loading spinner on silent re-fetches (e.g. after auth resolves).
   const tournamentRef = useRef(null)
@@ -1120,10 +1303,20 @@ export default function TournamentDetailPage() {
     load()
   }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Poll every 10s while in progress — match:result events are per-participant
+  // only, so viewers (including admins) don't receive them via socket.
+  useEffect(() => {
+    if (tournament?.status !== 'IN_PROGRESS') return
+    const timer = setInterval(load, 10_000)
+    return () => clearInterval(timer)
+  }, [tournament?.status, load])
+
+  const backTo = isAdmin ? '/admin/tournaments' : '/tournaments'
+
   if (loading) return <div className="max-w-4xl mx-auto px-4 py-8"><Spinner /></div>
   if (error) return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
-      <Link to="/tournaments" className="text-sm" style={{ color: 'var(--color-primary)' }}>← Back to Tournaments</Link>
+      <Link to={backTo} className="text-sm" style={{ color: 'var(--color-primary)' }}>← Back to Tournaments</Link>
       <ErrorMsg>{error}</ErrorMsg>
     </div>
   )
@@ -1152,7 +1345,7 @@ export default function TournamentDetailPage() {
         />
       )}
 
-      <Link to="/tournaments" className="text-sm" style={{ color: 'var(--color-primary)' }}>
+      <Link to={backTo} className="text-sm" style={{ color: 'var(--color-primary)' }}>
         ← Tournaments
       </Link>
 
@@ -1200,7 +1393,8 @@ export default function TournamentDetailPage() {
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
           >
             <TournamentBracket rounds={t.rounds ?? []} participants={t.participants ?? []}
-              onMatchClick={(id, label) => setReplayMatch({ id, label })} />
+              onMatchClick={(id, label) => setReplayMatch({ id, label })}
+              onMatchSpectate={(id, label) => setWatchMatch({ id, label })} />
           </div>
         </Section>
       )}
@@ -1214,6 +1408,13 @@ export default function TournamentDetailPage() {
           matchId={replayMatch.id}
           matchLabel={replayMatch.label}
           onClose={() => setReplayMatch(null)}
+        />
+      )}
+      {watchMatch && (
+        <MatchSpectateModal
+          matchId={watchMatch.id}
+          matchLabel={watchMatch.label}
+          onClose={() => setWatchMatch(null)}
         />
       )}
     </div>

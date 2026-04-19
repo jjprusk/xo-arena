@@ -334,3 +334,28 @@ async function autoStartTournament(tournament) {
     logger.warn({ tournamentId: tournament.id, err: err.message }, 'Tournament sweep — auto-start failed')
   }
 }
+
+/**
+ * Delete disposable seeded-bot users created by the add-seeded-bot endpoint
+ * for a given tournament. Safe to call on completion or cancellation.
+ * Returns the count of deleted user rows.
+ */
+export async function cleanupSeededBots(tournamentId) {
+  const participants = await db.tournamentParticipant.findMany({
+    where: { tournamentId },
+    include: { user: { select: { id: true, username: true } } },
+  })
+
+  const seededIds = participants
+    .filter(p => p.user?.username?.startsWith('seeded-'))
+    .map(p => p.user.id)
+
+  if (seededIds.length === 0) return 0
+
+  await db.tournamentParticipant.deleteMany({
+    where: { tournamentId, userId: { in: seededIds } },
+  })
+
+  const { count } = await db.user.deleteMany({ where: { id: { in: seededIds } } })
+  return count
+}

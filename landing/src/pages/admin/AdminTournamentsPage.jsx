@@ -700,6 +700,7 @@ export default function AdminTournamentsPage() {
   const [token, setToken]     = useState(null)
   const [modal, setModal]         = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
+  const [purging, setPurging]     = useState(false)
 
   const totalPages = Math.ceil(total / LIMIT)
   const isAdmin = session?.user?.role === 'admin'
@@ -736,6 +737,17 @@ export default function AdminTournamentsPage() {
     </div>
   )
   if (!isAdmin) return <Navigate to="/" replace />
+
+  async function handlePurgeCancelled() {
+    if (!confirm('Delete ALL cancelled tournaments permanently? This cannot be undone.')) return
+    setPurging(true); setActionError(null)
+    try {
+      const { deleted } = await tournamentApi.purgeCancelled(token)
+      alert(`Deleted ${deleted} cancelled tournament${deleted === 1 ? '' : 's'}.`)
+      load(page, statusFilter)
+    } catch (e) { setActionError(e.message || 'Purge failed.') }
+    finally { setPurging(false) }
+  }
 
   async function performAction(action, tournament, label) {
     if (!confirm(`${label} "${tournament.name}"?`)) return
@@ -776,11 +788,18 @@ export default function AdminTournamentsPage() {
               </button>
             ))}
           </div>
-          <button onClick={() => setModal('create')}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 shrink-0"
-            style={{ background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))' }}>
-            + Create Tournament
-          </button>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={handlePurgeCancelled} disabled={purging}
+              className="px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--color-red-50)] disabled:opacity-40"
+              style={{ borderColor: 'var(--color-red-300)', color: 'var(--color-red-600)' }}>
+              {purging ? 'Purging…' : 'Purge Cancelled'}
+            </button>
+            <button onClick={() => setModal('create')}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))' }}>
+              + Create Tournament
+            </button>
+          </div>
         </div>
 
         {actionError && <ErrorMsg>{actionError}</ErrorMsg>}

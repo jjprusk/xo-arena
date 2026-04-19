@@ -29,6 +29,7 @@ export function useGameSDK({
   currentUser     = null,
   botUserId       = null,
   botSkillId      = null,
+  spectate        = false,
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [phase, setPhase_]          = useState('connecting')   // connecting | waiting | playing | finished
@@ -510,7 +511,7 @@ export function useGameSDK({
       if (tournamentMatchId) {
         socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else if (joinSlug) {
-        socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token ?? null })
+        socket.emit('room:join', { slug: joinSlug, role: spectate ? 'spectator' : 'player', authToken: token ?? null })
       } else if (botUserId) {
         socket.emit('room:create:hvb', { gameId, botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null })
       } else {

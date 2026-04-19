@@ -3,6 +3,7 @@ import { Router } from 'express'
 import db from '../lib/db.js'
 import { publish } from '../lib/redis.js'
 import { optionalAuth, requireAuth, requireTournamentAdmin, isTournamentAdmin } from '../middleware/auth.js'
+import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 
 const router = Router()
 
@@ -268,6 +269,8 @@ router.post('/:id/cancel', requireTournamentAdmin, async (req, res, next) => {
       participantUserIds,
     })
 
+    cleanupSeededBots(tournament.id).catch(() => {})
+
     res.json({ tournament })
   } catch (e) {
     next(e)
@@ -472,6 +475,121 @@ router.post('/:id/fill-test-players', requireTournamentAdmin, async (req, res, n
     }
 
     res.json({ registered, skipped })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/:id/fill-qa-bots
+// Creates (if needed) and registers N QA bots into a tournament.
+// Bots are named qabot-01..qabot-N with botModelId testbot:qabot-NN:<difficulty>.
+// Not idempotent on the bot accounts themselves (upsert), but idempotent on registration.
+const QA_DIFFICULTIES = ['novice', 'intermediate', 'advanced', 'master']
+router.post('/:id/fill-qa-bots', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const rawCount = Number(req.body.count)
+    const count = isNaN(rawCount) ? 20 : Math.max(2, Math.min(32, rawCount))
+    const difficulty = QA_DIFFICULTIES.includes(req.body.difficulty) ? req.body.difficulty : 'novice'
+    const tournamentId = req.params.id
+
+    const tournament = await db.tournament.findUnique({ where: { id: tournamentId } })
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
+    if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(tournament.status)) {
+      return res.status(400).json({ error: `Cannot add bots to a ${tournament.status.toLowerCase()} tournament` })
+    }
+
+    const registered = []
+    const skipped    = []
+
+    for (let i = 1; i <= count; i++) {
+      const username  = `qabot-${String(i).padStart(2, '0')}`
+      const modelId   = `testbot:${username}:${difficulty}`
+
+      const bot = await db.user.upsert({
+        where:  { username },
+        create: {
+          username,
+          email:         `${username}@arena.test`,
+          displayName:   `QA Bot ${String(i).padStart(2, '0')}`,
+          isBot:         true,
+          botActive:     true,
+          botModelId:    modelId,
+          nameConfirmed: true,
+          gameElo: { create: { gameId: 'xo', rating: 1200 } },
+        },
+        update: { botModelId: modelId, botActive: true },
+      })
+
+      const existing = await db.tournamentParticipant.findUnique({
+        where: { tournamentId_userId: { tournamentId, userId: bot.id } },
+      })
+      if (existing && existing.status !== 'WITHDRAWN') {
+        skipped.push(username)
+        continue
+      }
+
+      await db.tournamentParticipant.upsert({
+        where:  { tournamentId_userId: { tournamentId, userId: bot.id } },
+        create: { tournamentId, userId: bot.id, status: 'REGISTERED' },
+        update: { status: 'REGISTERED' },
+      })
+      registered.push(username)
+    }
+
+    res.json({ registered, skipped, total: count })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/:id/add-seeded-bot
+// Creates a one-off disposable bot at a chosen difficulty and registers it.
+// Body: { difficulty: 'novice'|'intermediate'|'advanced'|'master', displayName?: string }
+const SEEDED_BOT_DIFFICULTIES = { novice: 'Novice', intermediate: 'Intermediate', advanced: 'Advanced', master: 'Master' }
+router.post('/:id/add-seeded-bot', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const tournamentId = req.params.id
+    const difficulty = SEEDED_BOT_DIFFICULTIES[req.body.difficulty] ? req.body.difficulty : 'intermediate'
+    const rawName = typeof req.body.displayName === 'string' ? req.body.displayName.trim() : ''
+    const displayName = rawName.length > 0 ? rawName.slice(0, 40) : `${SEEDED_BOT_DIFFICULTIES[difficulty]} Bot`
+
+    const tournament = await db.tournament.findUnique({ where: { id: tournamentId } })
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
+    if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(tournament.status)) {
+      return res.status(400).json({ error: `Cannot add bots to a ${tournament.status.toLowerCase()} tournament` })
+    }
+    if (tournament.maxParticipants) {
+      const count = await db.tournamentParticipant.count({
+        where: { tournamentId, status: { not: 'WITHDRAWN' } },
+      })
+      if (count >= tournament.maxParticipants) {
+        return res.status(400).json({ error: 'Tournament is full' })
+      }
+    }
+
+    // Generate a short unique suffix so the bot username is unique across tournaments
+    const suffix = `${tournamentId.slice(-6)}-${Date.now().toString(36)}`
+    const username  = `seeded-${difficulty}-${suffix}`
+    const modelId   = `testbot:${username}:${difficulty}`
+
+    const bot = await db.user.create({
+      data: {
+        username,
+        email:         `${username}@arena.test`,
+        displayName,
+        isBot:         true,
+        botActive:     true,
+        botModelId:    modelId,
+        nameConfirmed: true,
+        gameElo: { create: { gameId: tournament.game ?? 'xo', rating: 1200 } },
+      },
+    })
+
+    await db.tournamentParticipant.create({
+      data: { tournamentId, userId: bot.id, status: 'REGISTERED' },
+    })
+
+    res.json({ added: 1, displayName: bot.displayName, difficulty, userId: bot.id })
   } catch (e) {
     next(e)
   }
@@ -717,6 +835,37 @@ router.delete('/:id/seed-bots/:botUserId', requireTournamentAdmin, async (req, r
 
     res.status(204).send()
   } catch (e) { next(e) }
+})
+
+// DELETE /api/tournaments/admin/purge-cancelled
+// Hard-deletes all CANCELLED tournaments and their related data (admin only).
+router.delete('/admin/purge-cancelled', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    // Collect seeded-bot user IDs before cascade-deleting participants
+    const cancelled = await db.tournament.findMany({
+      where: { status: 'CANCELLED' },
+      select: { id: true },
+    })
+    const tournamentIds = cancelled.map(t => t.id)
+
+    if (tournamentIds.length > 0) {
+      const seededParticipants = await db.tournamentParticipant.findMany({
+        where: { tournamentId: { in: tournamentIds } },
+        include: { user: { select: { id: true, username: true } } },
+      })
+      const seededIds = seededParticipants
+        .filter(p => p.user?.username?.startsWith('seeded-'))
+        .map(p => p.user.id)
+      if (seededIds.length > 0) {
+        await db.user.deleteMany({ where: { id: { in: seededIds } } })
+      }
+    }
+
+    const result = await db.tournament.deleteMany({ where: { status: 'CANCELLED' } })
+    res.json({ deleted: result.count })
+  } catch (e) {
+    next(e)
+  }
 })
 
 export default router

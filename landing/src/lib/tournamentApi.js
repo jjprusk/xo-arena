@@ -62,6 +62,9 @@ export const tournamentApi = {
   listRecurringRegistrations:   (templateId, token) => request('GET',    `/api/recurring/${templateId}/registrations`, undefined, token),
 
   fillTestPlayers: (id, token) => request('POST', `/api/tournaments/${id}/fill-test-players`, {}, token),
+  fillQaBots:      (id, data, token) => request('POST', `/api/tournaments/${id}/fill-qa-bots`, data, token),
+  addSeededBot:    (id, data, token) => request('POST', `/api/tournaments/${id}/add-seeded-bot`, data, token),
+  purgeCancelled:  (token) => request('DELETE', '/api/tournaments/admin/purge-cancelled', undefined, token),
 
   getBotMatchConfig:    (token)       => request('GET',   '/api/bot-matches/config', undefined, token),
   updateBotMatchConfig: (data, token) => request('PATCH', '/api/bot-matches/config', data, token),

@@ -285,6 +285,8 @@ export const api = {
     },
     /** Fetch a single table by id. Private tables are reachable by direct URL. */
     get:    (id, token) => api.get(`/tables/${id}`, token),
+    /** Get the slug of the active (in-progress) table for a tournament match. */
+    getActiveByMatchId: (matchId) => api.get(`/tables/active-match?tournamentMatchId=${encodeURIComponent(matchId)}`),
     /** Create a new table. body: { gameId, minPlayers, maxPlayers, isPrivate?, isTournament? } */
     create: (body, token) => api.post('/tables', body, token),
     /** Claim an empty seat. Idempotent. Pass { seatIndex } to target a specific seat. */

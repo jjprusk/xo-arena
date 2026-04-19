@@ -38,10 +38,17 @@ vi.mock('../../lib/notificationBus.js', () => ({
   dispatch: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('../../realtime/botGameRunner.js', () => ({
+  botGameRunner: {
+    getSlugForMatch: vi.fn().mockReturnValue(null),
+  },
+}))
+
 const tablesRouter = (await import('../tables.js')).default
 const db = (await import('../../lib/db.js')).default
 const { optionalAuth } = await import('../../middleware/auth.js')
 const { dispatch } = await import('../../lib/notificationBus.js')
+const { botGameRunner } = await import('../../realtime/botGameRunner.js')
 
 function makeApp() {
   const app = express()
@@ -609,5 +616,47 @@ describe('DELETE /api/v1/tables/:id', () => {
     const app = makeApp()
     const res = await request(app).delete('/api/v1/tables/nope')
     expect(res.status).toBe(404)
+  })
+})
+
+// ── GET /api/v1/tables/active-match — live spectator lookup ───────────────────
+
+describe('GET /api/v1/tables/active-match', () => {
+  it('returns 400 when tournamentMatchId is missing', async () => {
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match')
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/tournamentMatchId/)
+  })
+
+  it('returns slug from DB when an ACTIVE table is found', async () => {
+    db.table.findFirst = vi.fn().mockResolvedValue({ slug: 'mt-everest' })
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match?tournamentMatchId=match_1')
+    expect(res.status).toBe(200)
+    expect(res.body.slug).toBe('mt-everest')
+    expect(db.table.findFirst).toHaveBeenCalledWith({
+      where: { tournamentMatchId: 'match_1', status: 'ACTIVE' },
+      select: { slug: true },
+    })
+  })
+
+  it('falls back to botGameRunner when no DB table found', async () => {
+    db.table.findFirst = vi.fn().mockResolvedValue(null)
+    botGameRunner.getSlugForMatch.mockReturnValue('mt-fuji')
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match?tournamentMatchId=match_2')
+    expect(res.status).toBe(200)
+    expect(res.body.slug).toBe('mt-fuji')
+    expect(botGameRunner.getSlugForMatch).toHaveBeenCalledWith('match_2')
+  })
+
+  it('returns null slug when neither DB nor bot runner has a match', async () => {
+    db.table.findFirst = vi.fn().mockResolvedValue(null)
+    botGameRunner.getSlugForMatch.mockReturnValue(null)
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match?tournamentMatchId=match_3')
+    expect(res.status).toBe(200)
+    expect(res.body.slug).toBeNull()
   })
 })

@@ -9,6 +9,9 @@
     "e2e",
     "packages/*"
   ],
+  "bin": {
+    "qa": "./e2e/qa.mjs"
+  },
   "scripts": {
     "dev:all": "concurrently \"npm run dev --workspace=landing\" \"npm run dev --workspace=backend\"",
     "dev:tournament": "npm run dev --workspace=tournament",
@@ -17,6 +20,7 @@
     "test:backend": "npm run test --workspace=backend",
     "test:tournament": "npm run test --workspace=tournament",
     "test:e2e": "npm run test --workspace=e2e",
+    "qa": "node e2e/qa.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

@@ -3,6 +3,7 @@ import { Router } from 'express'
 import db from '../lib/db.js'
 import { publish } from '../lib/redis.js'
 import { requireTournamentAdminOrInternal } from '../middleware/auth.js'
+import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import logger from '../logger.js'
 
 const router = Router()
@@ -155,6 +156,10 @@ async function advanceBracketIfReady(match) {
         where: { id: tournament.id },
         data: { status: 'COMPLETED', endTime: new Date() },
       })
+
+      cleanupSeededBots(tournament.id).catch(err =>
+        logger.warn({ err: err.message, tournamentId: tournament.id }, 'seeded bot cleanup failed')
+      )
 
       const winnerPart = await db.tournamentParticipant.findUnique({
         where: { id: winners[0] },
@@ -318,6 +323,10 @@ async function advanceBracketIfReady(match) {
         where: { id: tournament.id },
         data: { status: 'COMPLETED', endTime: new Date() },
       })
+
+      cleanupSeededBots(tournament.id).catch(err =>
+        logger.warn({ err: err.message, tournamentId: tournament.id }, 'seeded bot cleanup failed')
+      )
 
       pendingPublishes.push(['tournament:completed', {
         tournamentId: tournament.id,
