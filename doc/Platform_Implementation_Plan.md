@@ -334,6 +334,7 @@
 
 - [ ] Sit-down animation on seat claim (Table_Paradigm §4.4 option C).
 - [ ] Showdown / chip / card animations for card games (per-game assets; arrives with Poker).
+- [ ] **ELO in seat pod.** Shell fetches `GameElo` for each seated user on table load and displays the rating below the display name. Shell owns the fetch (not the game package) via a join on `GET /api/v1/tables/:id` or a dedicated enrichment endpoint. Deferred from 3.5 — display name + avatar is sufficient for the core paradigm.
 - [ ] Any additional visual refinements from live use.
 
 ---
