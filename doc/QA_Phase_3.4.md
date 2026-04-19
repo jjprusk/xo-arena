@@ -132,7 +132,7 @@ Sign in as a tournament admin. Use the Tournaments UI at `http://localhost:5174/
 
 - [x] Create a tournament in DRAFT status
 - [x] Publish it (`POST /api/t/tournaments/:id/publish`) → status becomes **REGISTRATION_OPEN**; connected clients receive a tournament notification in the Guide drawer
-- [ ] Register participants (4 test bots via **Fill test players**, or 2 real users for HVH)
+- [x] Register participants (4 test bots via **Fill test players**, or 2 real users for HVH)
 - [x] Participant count on the tournament detail page matches the number registered
 - [x] Start the tournament → status becomes **IN_PROGRESS**; round 1 bracket created (2 matches for 4 players, 1 match for 2)
 
@@ -140,12 +140,12 @@ Sign in as a tournament admin. Use the Tournaments UI at `http://localhost:5174/
 
 Create the tournament with `mode: BOT_VS_BOT`, `bracketType: SINGLE_ELIM`, and 4 test bots.
 
-- [ ] On start, backend logs show bot matches firing (`tournament:bot:match:ready`) — no `Failed to start bot tournament match` warnings
-- [ ] Both round-1 matches complete automatically (no action needed)
-- [ ] After both round-1 matches: round 2 auto-created with the 2 winners paired into the final
-- [ ] Final match completes → tournament status moves to **COMPLETED**
-- [ ] Winner gets `finalPosition: 1`; runner-up gets `finalPosition: 2`
-- [ ] Bot owners receive a `tournament.completed` notification in the Guide drawer
+- [x] On start, backend logs show bot matches firing (`tournament:bot:match:ready`) — no `Failed to start bot tournament match` warnings
+- [x] Both round-1 matches complete automatically (no action needed)
+- [x] After both round-1 matches: round 2 auto-created with the 2 winners paired into the final
+- [x] Final match completes → tournament status moves to **COMPLETED**
+- [x] Winner gets `finalPosition: 1`; runner-up gets `finalPosition: 2`
+- [x] Bot owners receive a `tournament.completed` notification in the Guide drawer
 
 ### 8c. HVH match (requires 2 accounts)
 

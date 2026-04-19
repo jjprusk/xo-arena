@@ -104,7 +104,7 @@ function BotMatchConfig({ token }) {
 // ── Bot Match Monitor ─────────────────────────────────────────────────────────
 
 function BotMatchMonitor({ token }) {
-  const [status, setStatus]   = useState(null)
+  const [status, setStatus]   = useState({ activeCount: 0, queueDepth: 0, jobs: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
@@ -116,11 +116,7 @@ function BotMatchMonitor({ token }) {
     finally { setLoading(false) }
   }, [token])
 
-  useEffect(() => {
-    fetchStatus()
-    const id = setInterval(fetchStatus, 10000)
-    return () => clearInterval(id)
-  }, [fetchStatus])
+  useEffect(() => { fetchStatus() }, [fetchStatus])
 
   function truncId(id) {
     if (!id) return '—'

@@ -751,6 +751,18 @@ export async function attachSocketIO(httpServer) {
         if (table.status !== 'FORMING') return socket.emit('error', { message: 'Room not found' })
         if (seats[1]?.status === 'occupied') return socket.emit('error', { message: 'Room is full' })
 
+        // Tournament room host reconnecting — caller is already in seat 0.
+        // Re-attach the socket without changing seats or activating the table;
+        // it stays FORMING until the second player arrives.
+        if (seats[0]?.userId === baId && seats[0]?.status === 'occupied') {
+          registerSocket(socket.id, table.id, baId)
+          socket.join(`table:${table.id}`)
+          const mark = table.previewState?.marks?.[baId] ?? 'X'
+          const extras = await buildExtras(seats[0], seats[1], user?.id ?? null)
+          socket.emit('room:joined', { slug, role: 'player', mark, room: sanitizeTable(table, extras) })
+          return
+        }
+
         // Update seats and previewState.marks — betterAuthId for consistency,
         // socket-derived sentinel for guests.
         const ps = { ...table.previewState }

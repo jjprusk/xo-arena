@@ -165,6 +165,9 @@ class BotGameRunner {
 
     // Series loop
     while (true) {
+      game.moves = []
+      const gameStartedAt = new Date(game.createdAt)
+
       // Emit game:start for each game in the series
       this._io?.to(slug).emit('game:start', {
         board: game.board,
@@ -236,6 +239,23 @@ class BotGameRunner {
         })
       }
 
+      // Save a DB record for this individual game in the series
+      const gameWinnerId = game.winner === 'X' ? game.bot1.id : game.winner === 'O' ? game.bot2.id : null
+      const gameOutcome = game.winner === 'X' ? 'PLAYER1_WIN' : game.winner === 'O' ? 'PLAYER2_WIN' : 'DRAW'
+      await createGame({
+        player1Id: game.bot1.id,
+        player2Id: game.bot2.id,
+        winnerId: gameWinnerId,
+        mode: 'BVB',
+        outcome: gameOutcome,
+        totalMoves: game.board.filter(Boolean).length,
+        durationMs: game.lastActivityAt - game.createdAt,
+        startedAt: gameStartedAt,
+        tournamentId: game.tournamentId ?? null,
+        tournamentMatchId: game.tournamentMatchId ?? null,
+        moveStream: game.moves.length ? game.moves : null,
+      }).catch(err => logger.warn({ err, slug }, 'Failed to write per-game bot record'))
+
       // Update series counters after this game
       if (game.winner === 'X') game.seriesBot1Wins++
       else if (game.winner === 'O') game.seriesBot2Wins++
@@ -261,7 +281,6 @@ class BotGameRunner {
       game.winLine = null
       game.createdAt = Date.now()
       game.lastActivityAt = Date.now()
-      game.moves = []
     }
 
     // Record the finished series
@@ -274,9 +293,6 @@ class BotGameRunner {
   async _recordGame(slug) {
     const game = this._games.get(slug)
     if (!game) return
-
-    const totalMoves = game.board.filter(Boolean).length
-    const durationMs = game.lastActivityAt - game.createdAt
 
     const isTournamentGame = !!(game.tournamentMatchId)
 
@@ -299,26 +315,10 @@ class BotGameRunner {
       )
     }
 
-    // Outcome from bot1 (X) perspective for the last game (used for single-game ELO)
+    // Outcome from bot1 (X) perspective for the last game (used for ELO)
     let outcome = 'DRAW'
     if (game.winner === 'X') outcome = 'PLAYER1_WIN'
     else if (game.winner === 'O') outcome = 'PLAYER2_WIN'
-
-    // Bug #11: separate DB record write from tournament completion so a DB error
-    // can't silently prevent bracket advancement.
-    await createGame({
-      player1Id: game.bot1.id,
-      player2Id: game.bot2.id,
-      winnerId: seriesWinnerId,
-      mode: 'BVB',
-      outcome: seriesWinnerId === game.bot1.id ? 'PLAYER1_WIN' : seriesWinnerId === game.bot2.id ? 'PLAYER2_WIN' : 'DRAW',
-      totalMoves,
-      durationMs,
-      startedAt: new Date(game.createdAt),
-      tournamentId: game.tournamentId ?? null,
-      tournamentMatchId: game.tournamentMatchId ?? null,
-      moveStream: game.moves?.length ? game.moves : null,
-    }).catch(err => logger.warn({ err, slug }, 'Failed to write bot game record — will still attempt tournament completion'))
 
     if (!isTournamentGame) {
       await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})

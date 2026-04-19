@@ -62,6 +62,7 @@ export const api = {
 
   users: {
     sync:        (token)        => api.post('/users/sync', {}, token),
+    getProfile:  (id)           => api.get(`/users/${id}`),
     stats:       (id)           => api.get(`/users/${id}/stats`),
     eloHistory:  (id)           => api.get(`/users/${id}/elo-history`),
     mlProfiles:  (id, token)    => api.get(`/users/${id}/ml-profiles`, token),

@@ -49,7 +49,25 @@ router.get('/', optionalAuth, async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
     })
 
-    res.json({ tournaments })
+    // If authenticated, annotate each tournament with whether the viewer is already registered
+    let myTournamentIds = new Set()
+    if (req.auth?.userId && tournaments.length > 0) {
+      const myParticipations = await db.tournamentParticipant.findMany({
+        where: {
+          tournamentId: { in: tournaments.map(t => t.id) },
+          user: { betterAuthId: req.auth.userId },
+        },
+        select: { tournamentId: true },
+      })
+      myTournamentIds = new Set(myParticipations.map(p => p.tournamentId))
+    }
+
+    res.json({
+      tournaments: tournaments.map(t => ({
+        ...t,
+        isRegisteredByViewer: myTournamentIds.has(t.id),
+      })),
+    })
   } catch (e) {
     next(e)
   }
@@ -65,7 +83,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       include: {
         participants: {
           include: {
-            user: { select: { id: true, displayName: true, avatarUrl: true, isBot: true } },
+            user: { select: { id: true, betterAuthId: true, displayName: true, avatarUrl: true, isBot: true } },
           },
         },
         rounds: {

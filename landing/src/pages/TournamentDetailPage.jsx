@@ -68,6 +68,127 @@ function ErrorMsg({ children }) {
   return <p className="text-sm text-center py-4" style={{ color: 'var(--color-red-600)' }}>{children}</p>
 }
 
+// ── Player card popup ─────────────────────────────────────────────────────────
+
+function PlayerCard({ userId, onClose }) {
+  const [profile, setProfile] = useState(null)
+  const [stats,   setStats]   = useState(null)
+  const [error,   setError]   = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([api.users.getProfile(userId), api.users.stats(userId)])
+      .then(([prof, st]) => { if (!cancelled) { setProfile(prof.user); setStats(st.stats) } })
+      .catch(() => { if (!cancelled) setError('Failed to load player info.') })
+    return () => { cancelled = true }
+  }, [userId])
+
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="w-full max-w-xs rounded-2xl flex flex-col gap-3 p-4"
+        style={{ backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-card)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+              {profile?.displayName ?? '…'}
+            </span>
+            {profile?.isBot && (
+              <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}>
+                Bot
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} className="shrink-0 px-2 py-1 rounded text-xs"
+            style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}>
+            ✕ Close
+          </button>
+        </div>
+
+        {error && <ErrorMsg>{error}</ErrorMsg>}
+        {!profile && !error && <Spinner />}
+
+        {profile && (
+          <>
+            {profile.owner && (
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Owner: <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{profile.owner.displayName}</span>
+              </p>
+            )}
+
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-0.5 px-3 py-2 rounded-lg border flex-1"
+                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>ELO</span>
+                <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-blue-600)' }}>
+                  {Math.round(profile.eloRating ?? 1200)}
+                </span>
+              </div>
+              {stats && (
+                <div className="flex flex-col gap-0.5 px-3 py-2 rounded-lg border flex-1"
+                  style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                  <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Win Rate</span>
+                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>
+                    {stats.totalGames > 0 ? `${Math.round(stats.winRate * 100)}%` : '—'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {stats && stats.totalGames > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2 py-1 rounded font-semibold tabular-nums"
+                  style={{ backgroundColor: 'var(--color-green-50)', color: 'var(--color-green-700)' }}>
+                  {stats.wins}W
+                </span>
+                <span className="px-2 py-1 rounded font-semibold tabular-nums"
+                  style={{ backgroundColor: 'var(--color-red-50)', color: 'var(--color-red-600)' }}>
+                  {stats.losses}L
+                </span>
+                <span className="px-2 py-1 rounded font-semibold tabular-nums"
+                  style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-muted)' }}>
+                  {stats.draws}D
+                </span>
+                <span className="ml-auto" style={{ color: 'var(--text-muted)' }}>{stats.totalGames} games</span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PlayerLink({ userId, children, className, style }) {
+  const [open, setOpen] = useState(false)
+  if (!userId) return <span className={className} style={style}>{children}</span>
+  return (
+    <>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(true) }}
+        className={`hover:underline text-left ${className ?? ''}`}
+        style={style}
+      >
+        {children}
+      </button>
+      {open && <PlayerCard userId={userId} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
 // ── Bracket visualization ─────────────────────────────────────────────────────
 
 function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate }) {
@@ -79,9 +200,11 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
     )
   }
 
-  const nameOf = {}
+  const nameOf   = {}
+  const userIdOf = {}
   ;(participants ?? []).forEach(p => {
-    nameOf[p.id] = p.user?.displayName ?? `Seed ${p.seedPosition}`
+    nameOf[p.id]   = p.user?.displayName ?? `Seed ${p.seedPosition}`
+    userIdOf[p.id] = p.user?.id ?? null
   })
 
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber)
@@ -108,6 +231,7 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
                     key={match.id}
                     match={match}
                     nameOf={nameOf}
+                    userIdOf={userIdOf}
                     matchIndex={matchIdx}
                     matchCount={sortedMatches.length}
                     roundIndex={roundIdx}
@@ -125,9 +249,11 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
   )
 }
 
-function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch, onSpectate }) {
-  const p1Name = match.participant1Id ? (nameOf[match.participant1Id] ?? 'TBD') : 'BYE'
-  const p2Name = match.participant2Id ? (nameOf[match.participant2Id] ?? 'TBD') : 'BYE'
+function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch, onSpectate }) {
+  const p1Name   = match.participant1Id ? (nameOf[match.participant1Id] ?? 'TBD') : 'BYE'
+  const p2Name   = match.participant2Id ? (nameOf[match.participant2Id] ?? 'TBD') : 'BYE'
+  const p1UserId = match.participant1Id ? (userIdOf?.[match.participant1Id] ?? null) : null
+  const p2UserId = match.participant2Id ? (userIdOf?.[match.participant2Id] ?? null) : null
   const isCompleted  = match.status === 'COMPLETED'
   const isInProgress = match.status === 'IN_PROGRESS'
   const p1Won = isCompleted && match.winnerId === match.participant1Id
@@ -152,12 +278,13 @@ function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, total
             opacity: isCompleted && !p1Won ? 0.5 : 1,
           }}
         >
-          <span
+          <PlayerLink
+            userId={p1UserId}
             className={`text-xs truncate max-w-[100px] ${p1Won ? 'font-bold' : 'font-medium'}`}
             style={{ color: p1Won ? 'var(--color-slate-700)' : 'var(--text-primary)' }}
           >
             {p1Name}
-          </span>
+          </PlayerLink>
           {(isCompleted || isInProgress) && match.participant1Id && (
             <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--text-secondary)' }}>
               {match.p1Wins ?? 0}
@@ -171,12 +298,13 @@ function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, total
             opacity: isCompleted && !p2Won ? 0.5 : 1,
           }}
         >
-          <span
+          <PlayerLink
+            userId={p2UserId}
             className={`text-xs truncate max-w-[100px] ${p2Won ? 'font-bold' : 'font-medium'}`}
             style={{ color: p2Won ? 'var(--color-slate-700)' : 'var(--text-primary)' }}
           >
             {p2Name}
-          </span>
+          </PlayerLink>
           {(isCompleted || isInProgress) && match.participant2Id && (
             <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--text-secondary)' }}>
               {match.p2Wins ?? 0}
@@ -197,7 +325,7 @@ function BracketMatch({ match, nameOf, matchIndex, matchCount, roundIndex, total
             className="w-full text-[10px] py-1 font-medium border-t"
             style={{ color: 'var(--color-primary)', borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
           >
-            ◉ Watch live
+            👁 Watch live
           </button>
         )}
         {isCompleted && onWatch && (
@@ -337,14 +465,30 @@ function MatchReplayModal({ matchId, matchLabel, onClose }) {
           </button>
         </div>
 
-        {games && games.length > 1 && (
-          <div className="flex gap-1 flex-wrap">
-            {games.map((g, i) => (
-              <button key={g.id} onClick={() => setSelectedIdx(i)} className="px-2 py-0.5 rounded text-xs font-medium"
-                style={{ backgroundColor: selectedIdx === i ? 'var(--color-primary)' : 'var(--bg-surface-hover)', color: selectedIdx === i ? 'white' : 'var(--text-secondary)' }}>
-                Game {i + 1}
+        {games && games.length > 0 && (
+          <div className="flex items-center justify-center gap-1">
+            <button
+              onClick={() => setSelectedIdx(i => Math.max(0, i - 1))}
+              disabled={selectedIdx === 0 || games.length === 1}
+              className="px-2 py-1 rounded text-xs font-bold disabled:opacity-30 hover:bg-[var(--bg-surface-hover)] transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+            >‹‹</button>
+            {games.map((_, i) => (
+              <button key={i} onClick={() => setSelectedIdx(i)}
+                className="w-7 h-7 rounded text-xs font-semibold transition-colors"
+                style={{
+                  backgroundColor: selectedIdx === i ? 'var(--color-primary)' : 'var(--bg-surface-hover)',
+                  color: selectedIdx === i ? 'white' : 'var(--text-secondary)',
+                }}>
+                {i + 1}
               </button>
             ))}
+            <button
+              onClick={() => setSelectedIdx(i => Math.min(games.length - 1, i + 1))}
+              disabled={selectedIdx === games.length - 1 || games.length === 1}
+              className="px-2 py-1 rounded text-xs font-bold disabled:opacity-30 hover:bg-[var(--bg-surface-hover)] transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+            >››</button>
           </div>
         )}
 
@@ -869,6 +1013,7 @@ function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDis
 
     function onReady({ slug, tournamentId }) {
       cleanup()
+      sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1')
       onDismiss()
       navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
     }
@@ -929,6 +1074,69 @@ function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDis
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Persistent inline match-ready card (HvH) ─────────────────────────────────
+// Always visible in the page body when the current user has a pending HvH match.
+// Complements the overlay banner so players always have a way to join even after
+// dismissing the popup or hard-reloading the page.
+
+function HvhMatchReadyCard({ matchData, token }) {
+  const navigate = useNavigate()
+  const [joining, setJoining] = useState(false)
+  const [err, setErr]         = useState(null)
+
+  const { matchId, bestOfN, opponentName } = matchData
+
+  function handleJoin() {
+    setJoining(true)
+    setErr(null)
+    const socket = connectSocket()
+
+    function cleanup() {
+      socket.off('tournament:room:ready', onReady)
+      socket.off('error', onError)
+    }
+    function onReady({ slug, tournamentId }) {
+      cleanup()
+      sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1')
+      navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
+    }
+    function onError({ message }) {
+      cleanup()
+      setJoining(false)
+      setErr(message || 'Failed to join match room')
+    }
+
+    socket.once('tournament:room:ready', onReady)
+    socket.once('error', onError)
+    getToken().then(authToken => socket.emit('tournament:room:join', { matchId, authToken }))
+  }
+
+  return (
+    <div
+      className="rounded-xl border p-4 flex items-center justify-between gap-4"
+      style={{ backgroundColor: 'var(--color-blue-50)', borderColor: 'var(--color-blue-200)' }}
+    >
+      <div className="space-y-0.5 min-w-0">
+        <p className="text-sm font-bold" style={{ color: 'var(--color-blue-800)' }}>
+          Your match is ready!
+        </p>
+        <p className="text-xs truncate" style={{ color: 'var(--color-blue-600)' }}>
+          vs {opponentName} · Best of {bestOfN}
+        </p>
+        {err && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
+      </div>
+      <button
+        onClick={handleJoin}
+        disabled={joining}
+        className="shrink-0 px-5 py-2 rounded-lg font-semibold text-sm text-white transition-all hover:brightness-110 disabled:opacity-50"
+        style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+      >
+        {joining ? 'Joining…' : 'Join Match'}
+      </button>
     </div>
   )
 }
@@ -1126,8 +1334,18 @@ function computeStandings(tournament) {
   return []
 }
 
-const POSITION_LABELS = { 1: '1st', 2: '2nd', 3: '3rd' }
-function posLabel(n) { return POSITION_LABELS[n] ?? `${n}th` }
+function posLabel(n) {
+  if (n === 1) return '1st'
+  if (n === 2) return '2nd'
+  if (n === 3) return '3rd'
+  return `${n}th`
+}
+
+const PODIUM = {
+  1: { medal: '🥇', rowBg: 'rgba(251,191,36,0.10)', accent: '#f59e0b', nameColor: '#92400e' },
+  2: { medal: '🥈', rowBg: 'rgba(148,163,184,0.12)', accent: '#94a3b8', nameColor: 'var(--text-primary)' },
+  3: { medal: '🥉', rowBg: 'rgba(180,83,9,0.08)',   accent: '#b45309', nameColor: '#7c2d12' },
+}
 
 function FinalStandings({ tournament }) {
   const standings = computeStandings(tournament)
@@ -1136,23 +1354,41 @@ function FinalStandings({ tournament }) {
   }
 
   return (
-    <div
-      className="rounded-xl border divide-y"
+    <div className="rounded-xl border overflow-hidden divide-y"
       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
     >
-      {standings.map(s => (
-        <div key={s.id} className="flex items-center gap-3 px-4 py-3">
-          <span
-            className="text-xs font-bold tabular-nums w-8 text-center shrink-0"
-            style={{ color: s.position != null && s.position <= 3 ? 'var(--color-amber-600)' : 'var(--text-muted)' }}
+      {standings.map(s => {
+        const podium = s.position != null ? PODIUM[s.position] : null
+        return (
+          <div key={s.id}
+            className="flex items-center gap-3 px-4 py-3"
+            style={{
+              backgroundColor: podium?.rowBg,
+              borderLeft: podium ? `3px solid ${podium.accent}` : '3px solid transparent',
+            }}
           >
-            {s.position != null ? posLabel(s.position) : '—'}
-          </span>
-          <span className="text-sm font-medium flex-1" style={{ color: 'var(--text-primary)' }}>
-            {s.user?.displayName ?? `Participant ${s.id?.slice(0, 6)}`}
-          </span>
-        </div>
-      ))}
+            <span className="text-xl leading-none w-8 text-center shrink-0">
+              {podium
+                ? podium.medal
+                : <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--text-muted)' }}>{s.position != null ? posLabel(s.position) : '—'}</span>
+              }
+            </span>
+            <PlayerLink
+              userId={s.user?.id}
+              className={`text-sm flex-1 ${podium ? 'font-bold' : 'font-medium'}`}
+              style={{ color: podium?.nameColor ?? 'var(--text-primary)' }}
+            >
+              {s.user?.displayName ?? `Participant ${s.id?.slice(0, 6)}`}
+            </PlayerLink>
+            {s.position === 1 && (
+              <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: 'rgba(251,191,36,0.2)', color: '#92400e' }}>
+                Champion
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1187,9 +1423,13 @@ function ParticipantTable({ participants }) {
               {p.seedPosition ?? '—'}
             </ListTd>
             <ListTd>
-              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              <PlayerLink
+                userId={p.user?.id}
+                className="text-sm font-medium"
+                style={{ color: 'var(--text-primary)' }}
+              >
                 {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
-              </span>
+              </PlayerLink>
               {p.finalPosition && (
                 <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
                   #{p.finalPosition}
@@ -1236,6 +1476,9 @@ export default function TournamentDetailPage() {
   // Tracks whether we have successfully loaded tournament data at least once.
   // Used to skip the loading spinner on silent re-fetches (e.g. after auth resolves).
   const tournamentRef = useRef(null)
+  // Tracks match IDs for which the overlay was dismissed ("Later") so the synthesis
+  // doesn't immediately re-show it. Cleared when the match changes (next round).
+  const dismissedOverlayMatchRef = useRef(null)
 
   const { lastEvent } = useTournamentSocket()
 
@@ -1303,6 +1546,49 @@ export default function TournamentDetailPage() {
     load()
   }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Derive pending match for the current user from tournament data.
+  // Used for both the overlay synthesis and the persistent inline card.
+  // Falls back to dbUserId if betterAuthId isn't populated in participant data.
+  const myPendingHvhMatch = React.useMemo(() => {
+    if (!tournament || tournament.status !== 'IN_PROGRESS' || tournament.mode !== 'HVH') return null
+    if (!userBetterAuthId && !dbUserId) return null
+
+    const myParticipant = (tournament.participants ?? []).find(p =>
+      (userBetterAuthId && p.user?.betterAuthId === userBetterAuthId) ||
+      (dbUserId && p.user?.id === dbUserId)
+    )
+    if (!myParticipant) return null
+
+    const match = (tournament.rounds ?? [])
+      .flatMap(r => r.matches ?? [])
+      .find(m => m.status === 'PENDING' &&
+        (m.participant1Id === myParticipant.id || m.participant2Id === myParticipant.id))
+    if (!match) return null
+
+    const opponentId = match.participant1Id === myParticipant.id
+      ? match.participant2Id : match.participant1Id
+    const opponent = (tournament.participants ?? []).find(p => p.id === opponentId)
+
+    return {
+      tournamentId: tournament.id,
+      matchId: match.id,
+      bestOfN: tournament.bestOfN ?? 1,
+      participant1UserId: myParticipant.user?.betterAuthId,
+      participant2UserId: opponent?.user?.betterAuthId,
+      opponentName: opponent?.user?.displayName ?? 'Opponent',
+    }
+  }, [tournament, userBetterAuthId, dbUserId])
+
+  // Synthesize activeMatchEvent from tournament data (for overlay) when not already set.
+  // Skips if the user dismissed this overlay ("Later") or has already joined the match.
+  useEffect(() => {
+    if (!myPendingHvhMatch) return
+    if (activeMatchEvent) return
+    if (dismissedOverlayMatchRef.current === myPendingHvhMatch.matchId) return
+    if (sessionStorage.getItem(`aiarena_joined_match_${myPendingHvhMatch.matchId}`)) return
+    setActiveMatchEvent(myPendingHvhMatch)
+  }, [myPendingHvhMatch, activeMatchEvent])
+
   // Poll every 10s while in progress — match:result events are per-participant
   // only, so viewers (including admins) don't receive them via socket.
   useEffect(() => {
@@ -1332,7 +1618,10 @@ export default function TournamentDetailPage() {
           userBetterAuthId={userBetterAuthId}
           token={token}
           matchEvent={activeMatchEvent}
-          onDismiss={() => setActiveMatchEvent(null)}
+          onDismiss={() => {
+            dismissedOverlayMatchRef.current = activeMatchEvent?.matchId ?? null
+            setActiveMatchEvent(null)
+          }}
         />
       )}
       {tournament && activeMatchEvent && (
@@ -1372,7 +1661,7 @@ export default function TournamentDetailPage() {
         </div>
       </div>
 
-      {isAdmin && <AdminControls tournament={t} token={token} onRefresh={load} />}
+      {myPendingHvhMatch && <HvhMatchReadyCard matchData={myPendingHvhMatch} token={token} />}
 
       {t.status === 'REGISTRATION_OPEN' && (!t.registrationCloseAt || new Date(t.registrationCloseAt) > new Date()) && (
         <Section title="Registration">

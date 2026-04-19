@@ -242,7 +242,16 @@ function TournamentCard({ tournament, token, dbUserId, onRegistered }) {
 
         {isOpen && token && (
           <div onClick={e => e.preventDefault()}>
-            <RegisterButton tournament={tournament} token={token} dbUserId={dbUserId} onSuccess={onRegistered} />
+            {tournament.isRegisteredByViewer ? (
+              <span
+                className="inline-block text-xs px-4 py-2 rounded-lg font-semibold"
+                style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+              >
+                ✓ Registered
+              </span>
+            ) : (
+              <RegisterButton tournament={tournament} token={token} dbUserId={dbUserId} onSuccess={onRegistered} />
+            )}
           </div>
         )}
       </div>

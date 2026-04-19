@@ -151,11 +151,16 @@ export async function handleEvent(io, channel, data) {
         })
       }
 
-      for (const userId of userIds) {
-        io.to(`user:${userId}`).emit('tournament:match:ready', { tournamentId, matchId, bestOfN: bestOfN ?? 1 })
-        await dispatch({ type: 'match.ready', targets: { userId }, payload: { tournamentId, matchId } })
-        // Journey step 7: first tournament registration detected at match-ready time (fire-and-forget)
-        completeStep(userId, 7, io).catch(() => {})
+      // userIds contains betterAuthIds. Socket rooms and DB foreign keys use
+      // the DB User.id (CUID), so look up the mapping for each participant.
+      for (const betterAuthId of userIds) {
+        const dbUser = await db.user.findUnique({ where: { betterAuthId }, select: { id: true } })
+        const dbUserId = dbUser?.id ?? betterAuthId // fallback: emit to betterAuthId room if lookup fails
+
+        io.to(`user:${dbUserId}`).emit('tournament:match:ready', { tournamentId, matchId, bestOfN: bestOfN ?? 1, participant1UserId, participant2UserId })
+        await dispatch({ type: 'match.ready', targets: { userId: dbUserId }, payload: { tournamentId, matchId } })
+        // Journey step 7: first tournament registration detected at match-ready time
+        completeStep(dbUserId, 7, io).catch(() => {})
       }
 
       // Phase 3.4: Table creation is now handled by socketHandler when
