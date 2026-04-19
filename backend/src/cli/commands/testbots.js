@@ -58,8 +58,10 @@ export async function seedTestBots(level = DEFAULT_LEVEL, ownerIdentifier = null
         botActive:     true,
         botModelId:    modelId,
         nameConfirmed: true,
-        eloRating:     1200,
         ...(ownerId && { botOwnerId: ownerId }),
+        gameElo: {
+          create: { gameId: 'xo', rating: 1200 },
+        },
       },
     })
     results.push({ ...bot, botModelId: modelId, status: 'created', id: created.id, ownerId })
