@@ -13,14 +13,18 @@ let _audioCtx = null
 let _masterGain = null
 let _synthVolume = 0.15
 
+function resumeCtx() {
+  if (_audioCtx && _audioCtx.state !== 'running') _audioCtx.resume().catch(() => {})
+}
+
 function ctx() {
-  if (!_audioCtx) {
+  if (!_audioCtx || _audioCtx.state === 'closed') {
     _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
     _masterGain = _audioCtx.createGain()
     _masterGain.gain.value = _synthVolume
     _masterGain.connect(_audioCtx.destination)
   }
-  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {})
+  resumeCtx()
   return _audioCtx
 }
 
@@ -30,15 +34,17 @@ function ctx() {
 // creates the context outside a gesture (e.g. on game:start) and it starts suspended.
 if (typeof window !== 'undefined') {
   document.addEventListener('pointerdown', () => {
-    if (!_audioCtx) { ctx() } else if (_audioCtx.state === 'suspended') { _audioCtx.resume().catch(() => {}) }
+    if (!_audioCtx || _audioCtx.state === 'closed') { ctx() } else { resumeCtx() }
   }, { capture: true, passive: true })
 
-  // Also resume on tab-show: PvP socket events (opponent moves) fire without
-  // any user gesture, so the pointerdown listener won't pre-warm in time.
+  // Resume when the window regains focus (macOS window-switch suspends the context
+  // without triggering visibilitychange, so we need both events).
+  window.addEventListener('focus', resumeCtx)
+
+  // Resume on tab-show: PvP socket events (opponent moves) fire without any user
+  // gesture, so the pointerdown listener won't pre-warm in time.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
-    }
+    if (document.visibilityState === 'visible') resumeCtx()
   })
 }
 

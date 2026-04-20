@@ -947,6 +947,7 @@ export async function attachSocketIO(httpServer) {
         winner: ps.winner,
         winLine: ps.winLine,
         scores: ps.scores,
+        round: ps.round ?? 1,
       })
 
       if (newStatus === 'COMPLETED') {

@@ -159,8 +159,8 @@ Create the tournament with `mode: HVH`, register 2 real users, start it.
 
 ### 8d. ELO isolation
 
-- [ ] Note both participants' ELO on the Rankings page **before** the match
-- [ ] After the match completes, check Rankings again — ELO for both players is **unchanged**
+- [x] Note both participants' ELO on the Rankings page **before** the match
+- [x] After the match completes, check Rankings again — ELO for both players is **unchanged**
 
 ### 8e. Odd-player bracket (optional)
 

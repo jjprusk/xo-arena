@@ -571,10 +571,26 @@ export function useGameSDK({
       resolveAndEmit()
     }
 
+    // Auto-pong when the user returns from another window/desktop — resets the
+    // server-side idle timer without requiring the user to click "I'm here".
+    // This prevents spurious timeouts caused by macOS Spaces switching.
+    function autoIdlePong() {
+      if (phaseRef.current === 'playing') {
+        try { getSocket().emit('idle:pong') } catch (_) {}
+      }
+    }
+    function onVisibilityShow() {
+      if (document.visibilityState === 'visible') autoIdlePong()
+    }
+    document.addEventListener('visibilitychange', onVisibilityShow)
+    window.addEventListener('focus', autoIdlePong)
+
     return () => {
       // Cancel pending connect handler and all event listeners
       socket.off('connect', onConnect)
       emitted = true // prevent any in-flight getToken().then from emitting after cleanup
+      document.removeEventListener('visibilitychange', onVisibilityShow)
+      window.removeEventListener('focus', autoIdlePong)
       ;[
         'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
         'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',
