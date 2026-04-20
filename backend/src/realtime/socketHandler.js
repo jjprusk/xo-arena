@@ -268,11 +268,12 @@ function resetIdleTimer({ socketId, tableId, isPlayer, warnMs, graceMs, onWarn, 
       if (isPlayer) {
         // Look up userId before marking COMPLETED
         try {
-          const table = await db.table.findUnique({ where: { id: tableId }, select: { seats: true } })
+          const table = await db.table.findUnique({ where: { id: tableId }, select: { seats: true, tournamentMatchId: true } })
           const seat = table?.seats?.find(s => _socketToTable.get(socketId) === tableId)
           const absentUserId = seat?.userId ?? null
           // Mark table COMPLETED
           await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          if (table?.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
           await deleteIfGuestTable(tableId)
         } catch (_) { /* best effort */ }
         unregisterSocket(socketId)
@@ -720,6 +721,22 @@ export async function attachSocketIO(httpServer) {
             // correct UX: the table is indeed full for this caller.
             return socket.emit('error', { message: 'Room is full' })
           }
+          // Cancel any pending forfeit timer for this user+table (socket
+          // reconnect after brief disconnect — same user, new socket.id).
+          for (const [oldSid, info] of _disconnectTimers) {
+            if (info.tableId === table.id) {
+              const oldSeats = table.seats || []
+              const wasMe = oldSeats.some(s => s.userId === baId && s.status === 'occupied')
+              if (wasMe) {
+                clearTimeout(info.timerId)
+                _disconnectTimers.delete(oldSid)
+                unregisterSocket(oldSid)
+                io.to(`table:${table.id}`).emit('room:playerReconnected', { mark: table.previewState?.marks?.[baId] })
+                break
+              }
+            }
+          }
+
           registerSocket(socket.id, table.id, baId)
           socket.join(`table:${table.id}`)
           const ps = table.previewState || {}
@@ -942,7 +959,11 @@ export async function attachSocketIO(httpServer) {
 
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
-        resetIdleTimer({ socketId: socket.id, tableId, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
+        for (const [sid, tid] of _socketToTable) {
+          if (tid === tableId && !_spectatorSockets.has(sid)) {
+            resetIdleTimer({ socketId: sid, tableId, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
+          }
+        }
 
         // HvB: dispatch bot move
         if (table.isHvb) {

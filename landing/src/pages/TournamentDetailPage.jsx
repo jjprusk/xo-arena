@@ -1022,6 +1022,13 @@ function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDis
     function onError({ message }) {
       cleanup()
       setJoining(false)
+      const gone = message === 'Tournament match not found or already started' ||
+                   message === 'Match not ready yet — please try again'
+      if (gone) {
+        onDismiss()
+        navigate('/tournaments')
+        return
+      }
       setErr(message || 'Failed to join match room')
     }
 

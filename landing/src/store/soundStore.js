@@ -25,9 +25,12 @@ function ctx() {
 }
 
 // Pre-warm AudioContext on pointer interaction (capture phase fires before component handlers).
+// Also CREATE the context here if it doesn't exist yet — creating it inside a user gesture
+// ensures the browser starts it in 'running' state. Without this, the first sound call
+// creates the context outside a gesture (e.g. on game:start) and it starts suspended.
 if (typeof window !== 'undefined') {
   document.addEventListener('pointerdown', () => {
-    if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
+    if (!_audioCtx) { ctx() } else if (_audioCtx.state === 'suspended') { _audioCtx.resume().catch(() => {}) }
   }, { capture: true, passive: true })
 
   // Also resume on tab-show: PvP socket events (opponent moves) fire without

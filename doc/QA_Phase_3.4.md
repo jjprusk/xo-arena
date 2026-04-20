@@ -151,11 +151,11 @@ Create the tournament with `mode: BOT_VS_BOT`, `bracketType: SINGLE_ELIM`, and 4
 
 Create the tournament with `mode: HVH`, register 2 real users, start it.
 
-- [ ] Both participants receive a `tournament:match:ready` socket event and see a **"match.ready"** item in their Guide drawer
-- [ ] Both players join via the match UI (emits `tournament:room:join`) → table created → game board visible to both
-- [ ] Game plays to completion — no errors in browser console or backend logs
-- [ ] Table status changes to **COMPLETED** after the series ends
-- [ ] Both participants see a match result notification; tournament completes (2-player bracket = 1 match)
+- [x] Both participants receive a `tournament:match:ready` socket event and see a **"match.ready"** item in their Guide drawer
+- [x] Both players join via the match UI (emits `tournament:room:join`) → table created → game board visible to both
+- [x] Game plays to completion — no errors in browser console or backend logs
+- [x] Table status changes to **COMPLETED** after the series ends
+- [x] Both participants see a match result notification; tournament completes (2-player bracket = 1 match)
 
 ### 8d. ELO isolation
 

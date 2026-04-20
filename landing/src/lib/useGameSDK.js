@@ -285,13 +285,13 @@ export function useGameSDK({
       slugRef.current = slug
       const isSpectator = role === 'spectator'
 
-      // Use seat-based IDs when available (ACTIVE re-attach + FORMING guest join).
-      // The old approach derived hostId from room.hostUserId then wrote the
-      // opposite mark to it — which overwrites the current player's mark when
-      // they ARE the host (seat 0). Instead, always key marks by the canonical
-      // userId from the seat data.
+      // Key marks by canonical seat userId from the room object.
+      // Do NOT fall back to currentUserRef for guestId: when the table is FORMING
+      // (no guest yet), room.guestUserId is null and we must leave it null.
+      // The fallback caused hostId === guestId, overwriting 'X' with 'O' for
+      // the host player and making them see "X Opponent's turn" instead of "Your turn".
       const hostId  = room?.hostUserId  ?? 'host'
-      const guestId = room?.guestUserId ?? (role === 'player' ? (currentUserRef.current?.id ?? 'guest') : null)
+      const guestId = room?.guestUserId ?? null
       if (mark) {
         marksRef.current[hostId]  = 'X'
         if (guestId) marksRef.current[guestId] = 'O'
@@ -517,7 +517,10 @@ export function useGameSDK({
       if (emitted) return
       emitted = true
       perfMark('useGameSDK:emitRoomAction', { hasToken: !!token, botUserId, joinSlug })
-      if (tournamentMatchId) {
+      if (tournamentMatchId && !joinSlug) {
+        // No slug yet — emit tournament:room:join to discover/create the room.
+        // If joinSlug is also present (post-redirect from TournamentDetailPage),
+        // the room already exists — fall through to room:join below.
         socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else if (joinSlug) {
         socket.emit('room:join', { slug: joinSlug, role: spectate ? 'spectator' : 'player', authToken: token ?? null })
