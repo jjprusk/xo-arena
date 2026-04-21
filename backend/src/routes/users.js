@@ -433,10 +433,11 @@ router.put('/notification-preferences/:eventType', requireAuth, async (req, res,
     const domainUser = await db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { id: true } })
     if (!domainUser) return res.status(404).json({ error: 'User not found' })
 
-    const { inApp, email } = req.body
+    const { inApp, email, push } = req.body
     const data = {}
     if (typeof inApp === 'boolean') data.inApp = inApp
     if (typeof email === 'boolean') data.email = email
+    if (typeof push  === 'boolean') data.push  = push
 
     const pref = await db.notificationPreference.upsert({
       where:  { userId_eventType: { userId: domainUser.id, eventType } },
@@ -444,7 +445,7 @@ router.put('/notification-preferences/:eventType', requireAuth, async (req, res,
       create: { userId: domainUser.id, eventType, ...data },
     })
 
-    res.json({ eventType: pref.eventType, inApp: pref.inApp, email: pref.email })
+    res.json({ eventType: pref.eventType, inApp: pref.inApp, email: pref.email, push: pref.push })
   } catch (err) {
     next(err)
   }

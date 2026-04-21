@@ -50,6 +50,7 @@ model User {
   tournamentParticipants TournamentParticipant[]
   eloHistory             UserEloHistory[]
   notifications          UserNotification[]
+  pushSubscriptions      PushSubscription[]
   userRoles              UserRole[]
   seedBotConfigs         TournamentSeedBot[]
 
@@ -470,10 +471,26 @@ model NotificationPreference {
   inApp     Boolean @default(true)
   email     Boolean @default(false)
   sms       Boolean @default(false)
+  push      Boolean @default(false)
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventType])
   @@map("notification_preferences")
+}
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model ScheduledJob {

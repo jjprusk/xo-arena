@@ -31,10 +31,10 @@ export type TournamentAvgAggregateOutputType = {
   maxParticipants: number | null
   bestOfN: number | null
   botMinGamesPlayed: number | null
-  paceMs: number | null
   noticePeriodMinutes: number | null
   durationMinutes: number | null
   autoOptOutAfterMissed: number | null
+  paceMs: number | null
 }
 
 export type TournamentSumAggregateOutputType = {
@@ -42,10 +42,10 @@ export type TournamentSumAggregateOutputType = {
   maxParticipants: number | null
   bestOfN: number | null
   botMinGamesPlayed: number | null
-  paceMs: number | null
   noticePeriodMinutes: number | null
   durationMinutes: number | null
   autoOptOutAfterMissed: number | null
+  paceMs: number | null
 }
 
 export type TournamentMinAggregateOutputType = {
@@ -62,9 +62,7 @@ export type TournamentMinAggregateOutputType = {
   bestOfN: number | null
   botMinGamesPlayed: number | null
   allowNonCompetitiveBots: boolean | null
-  paceMs: number | null
   allowSpectators: boolean | null
-  startMode: $Enums.TournamentStartMode | null
   startTime: Date | null
   endTime: Date | null
   registrationOpenAt: Date | null
@@ -72,12 +70,14 @@ export type TournamentMinAggregateOutputType = {
   noticePeriodMinutes: number | null
   durationMinutes: number | null
   isRecurring: boolean | null
-  recurrenceInterval: $Enums.RecurrenceInterval | null
-  recurrenceEndDate: Date | null
   autoOptOutAfterMissed: number | null
   createdById: string | null
   createdAt: Date | null
   updatedAt: Date | null
+  paceMs: number | null
+  recurrenceInterval: $Enums.RecurrenceInterval | null
+  recurrenceEndDate: Date | null
+  startMode: $Enums.TournamentStartMode | null
 }
 
 export type TournamentMaxAggregateOutputType = {
@@ -94,9 +94,7 @@ export type TournamentMaxAggregateOutputType = {
   bestOfN: number | null
   botMinGamesPlayed: number | null
   allowNonCompetitiveBots: boolean | null
-  paceMs: number | null
   allowSpectators: boolean | null
-  startMode: $Enums.TournamentStartMode | null
   startTime: Date | null
   endTime: Date | null
   registrationOpenAt: Date | null
@@ -104,12 +102,14 @@ export type TournamentMaxAggregateOutputType = {
   noticePeriodMinutes: number | null
   durationMinutes: number | null
   isRecurring: boolean | null
-  recurrenceInterval: $Enums.RecurrenceInterval | null
-  recurrenceEndDate: Date | null
   autoOptOutAfterMissed: number | null
   createdById: string | null
   createdAt: Date | null
   updatedAt: Date | null
+  paceMs: number | null
+  recurrenceInterval: $Enums.RecurrenceInterval | null
+  recurrenceEndDate: Date | null
+  startMode: $Enums.TournamentStartMode | null
 }
 
 export type TournamentCountAggregateOutputType = {
@@ -126,9 +126,7 @@ export type TournamentCountAggregateOutputType = {
   bestOfN: number
   botMinGamesPlayed: number
   allowNonCompetitiveBots: number
-  paceMs: number
   allowSpectators: number
-  startMode: number
   startTime: number
   endTime: number
   registrationOpenAt: number
@@ -136,12 +134,14 @@ export type TournamentCountAggregateOutputType = {
   noticePeriodMinutes: number
   durationMinutes: number
   isRecurring: number
-  recurrenceInterval: number
-  recurrenceEndDate: number
   autoOptOutAfterMissed: number
   createdById: number
   createdAt: number
   updatedAt: number
+  paceMs: number
+  recurrenceInterval: number
+  recurrenceEndDate: number
+  startMode: number
   _all: number
 }
 
@@ -151,10 +151,10 @@ export type TournamentAvgAggregateInputType = {
   maxParticipants?: true
   bestOfN?: true
   botMinGamesPlayed?: true
-  paceMs?: true
   noticePeriodMinutes?: true
   durationMinutes?: true
   autoOptOutAfterMissed?: true
+  paceMs?: true
 }
 
 export type TournamentSumAggregateInputType = {
@@ -162,10 +162,10 @@ export type TournamentSumAggregateInputType = {
   maxParticipants?: true
   bestOfN?: true
   botMinGamesPlayed?: true
-  paceMs?: true
   noticePeriodMinutes?: true
   durationMinutes?: true
   autoOptOutAfterMissed?: true
+  paceMs?: true
 }
 
 export type TournamentMinAggregateInputType = {
@@ -182,9 +182,7 @@ export type TournamentMinAggregateInputType = {
   bestOfN?: true
   botMinGamesPlayed?: true
   allowNonCompetitiveBots?: true
-  paceMs?: true
   allowSpectators?: true
-  startMode?: true
   startTime?: true
   endTime?: true
   registrationOpenAt?: true
@@ -192,12 +190,14 @@ export type TournamentMinAggregateInputType = {
   noticePeriodMinutes?: true
   durationMinutes?: true
   isRecurring?: true
-  recurrenceInterval?: true
-  recurrenceEndDate?: true
   autoOptOutAfterMissed?: true
   createdById?: true
   createdAt?: true
   updatedAt?: true
+  paceMs?: true
+  recurrenceInterval?: true
+  recurrenceEndDate?: true
+  startMode?: true
 }
 
 export type TournamentMaxAggregateInputType = {
@@ -214,9 +214,7 @@ export type TournamentMaxAggregateInputType = {
   bestOfN?: true
   botMinGamesPlayed?: true
   allowNonCompetitiveBots?: true
-  paceMs?: true
   allowSpectators?: true
-  startMode?: true
   startTime?: true
   endTime?: true
   registrationOpenAt?: true
@@ -224,12 +222,14 @@ export type TournamentMaxAggregateInputType = {
   noticePeriodMinutes?: true
   durationMinutes?: true
   isRecurring?: true
-  recurrenceInterval?: true
-  recurrenceEndDate?: true
   autoOptOutAfterMissed?: true
   createdById?: true
   createdAt?: true
   updatedAt?: true
+  paceMs?: true
+  recurrenceInterval?: true
+  recurrenceEndDate?: true
+  startMode?: true
 }
 
 export type TournamentCountAggregateInputType = {
@@ -246,9 +246,7 @@ export type TournamentCountAggregateInputType = {
   bestOfN?: true
   botMinGamesPlayed?: true
   allowNonCompetitiveBots?: true
-  paceMs?: true
   allowSpectators?: true
-  startMode?: true
   startTime?: true
   endTime?: true
   registrationOpenAt?: true
@@ -256,12 +254,14 @@ export type TournamentCountAggregateInputType = {
   noticePeriodMinutes?: true
   durationMinutes?: true
   isRecurring?: true
-  recurrenceInterval?: true
-  recurrenceEndDate?: true
   autoOptOutAfterMissed?: true
   createdById?: true
   createdAt?: true
   updatedAt?: true
+  paceMs?: true
+  recurrenceInterval?: true
+  recurrenceEndDate?: true
+  startMode?: true
   _all?: true
 }
 
@@ -365,9 +365,7 @@ export type TournamentGroupByOutputType = {
   bestOfN: number
   botMinGamesPlayed: number | null
   allowNonCompetitiveBots: boolean
-  paceMs: number | null
   allowSpectators: boolean
-  startMode: $Enums.TournamentStartMode
   startTime: Date | null
   endTime: Date | null
   registrationOpenAt: Date | null
@@ -375,12 +373,14 @@ export type TournamentGroupByOutputType = {
   noticePeriodMinutes: number | null
   durationMinutes: number | null
   isRecurring: boolean
-  recurrenceInterval: $Enums.RecurrenceInterval | null
-  recurrenceEndDate: Date | null
   autoOptOutAfterMissed: number | null
   createdById: string
   createdAt: Date
   updatedAt: Date
+  paceMs: number | null
+  recurrenceInterval: $Enums.RecurrenceInterval | null
+  recurrenceEndDate: Date | null
+  startMode: $Enums.TournamentStartMode
   _count: TournamentCountAggregateOutputType | null
   _avg: TournamentAvgAggregateOutputType | null
   _sum: TournamentSumAggregateOutputType | null
@@ -420,9 +420,7 @@ export type TournamentWhereInput = {
   bestOfN?: Prisma.IntFilter<"Tournament"> | number
   botMinGamesPlayed?: Prisma.IntNullableFilter<"Tournament"> | number | null
   allowNonCompetitiveBots?: Prisma.BoolFilter<"Tournament"> | boolean
-  paceMs?: Prisma.IntNullableFilter<"Tournament"> | number | null
   allowSpectators?: Prisma.BoolFilter<"Tournament"> | boolean
-  startMode?: Prisma.EnumTournamentStartModeFilter<"Tournament"> | $Enums.TournamentStartMode
   startTime?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
   endTime?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
   registrationOpenAt?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
@@ -430,15 +428,18 @@ export type TournamentWhereInput = {
   noticePeriodMinutes?: Prisma.IntNullableFilter<"Tournament"> | number | null
   durationMinutes?: Prisma.IntNullableFilter<"Tournament"> | number | null
   isRecurring?: Prisma.BoolFilter<"Tournament"> | boolean
-  recurrenceInterval?: Prisma.EnumRecurrenceIntervalNullableFilter<"Tournament"> | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
   autoOptOutAfterMissed?: Prisma.IntNullableFilter<"Tournament"> | number | null
   createdById?: Prisma.StringFilter<"Tournament"> | string
   createdAt?: Prisma.DateTimeFilter<"Tournament"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Tournament"> | Date | string
+  paceMs?: Prisma.IntNullableFilter<"Tournament"> | number | null
+  recurrenceInterval?: Prisma.EnumRecurrenceIntervalNullableFilter<"Tournament"> | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFilter<"Tournament"> | $Enums.TournamentStartMode
+  games?: Prisma.GameListRelationFilter
   participants?: Prisma.TournamentParticipantListRelationFilter
   rounds?: Prisma.TournamentRoundListRelationFilter
-  games?: Prisma.GameListRelationFilter
+  seedBots?: Prisma.TournamentSeedBotListRelationFilter
 }
 
 export type TournamentOrderByWithRelationInput = {
@@ -455,9 +456,7 @@ export type TournamentOrderByWithRelationInput = {
   bestOfN?: Prisma.SortOrder
   botMinGamesPlayed?: Prisma.SortOrderInput | Prisma.SortOrder
   allowNonCompetitiveBots?: Prisma.SortOrder
-  paceMs?: Prisma.SortOrderInput | Prisma.SortOrder
   allowSpectators?: Prisma.SortOrder
-  startMode?: Prisma.SortOrder
   startTime?: Prisma.SortOrderInput | Prisma.SortOrder
   endTime?: Prisma.SortOrderInput | Prisma.SortOrder
   registrationOpenAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -465,15 +464,18 @@ export type TournamentOrderByWithRelationInput = {
   noticePeriodMinutes?: Prisma.SortOrderInput | Prisma.SortOrder
   durationMinutes?: Prisma.SortOrderInput | Prisma.SortOrder
   isRecurring?: Prisma.SortOrder
-  recurrenceInterval?: Prisma.SortOrderInput | Prisma.SortOrder
-  recurrenceEndDate?: Prisma.SortOrderInput | Prisma.SortOrder
   autoOptOutAfterMissed?: Prisma.SortOrderInput | Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  paceMs?: Prisma.SortOrderInput | Prisma.SortOrder
+  recurrenceInterval?: Prisma.SortOrderInput | Prisma.SortOrder
+  recurrenceEndDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  startMode?: Prisma.SortOrder
+  games?: Prisma.GameOrderByRelationAggregateInput
   participants?: Prisma.TournamentParticipantOrderByRelationAggregateInput
   rounds?: Prisma.TournamentRoundOrderByRelationAggregateInput
-  games?: Prisma.GameOrderByRelationAggregateInput
+  seedBots?: Prisma.TournamentSeedBotOrderByRelationAggregateInput
 }
 
 export type TournamentWhereUniqueInput = Prisma.AtLeast<{
@@ -493,9 +495,7 @@ export type TournamentWhereUniqueInput = Prisma.AtLeast<{
   bestOfN?: Prisma.IntFilter<"Tournament"> | number
   botMinGamesPlayed?: Prisma.IntNullableFilter<"Tournament"> | number | null
   allowNonCompetitiveBots?: Prisma.BoolFilter<"Tournament"> | boolean
-  paceMs?: Prisma.IntNullableFilter<"Tournament"> | number | null
   allowSpectators?: Prisma.BoolFilter<"Tournament"> | boolean
-  startMode?: Prisma.EnumTournamentStartModeFilter<"Tournament"> | $Enums.TournamentStartMode
   startTime?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
   endTime?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
   registrationOpenAt?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
@@ -503,15 +503,18 @@ export type TournamentWhereUniqueInput = Prisma.AtLeast<{
   noticePeriodMinutes?: Prisma.IntNullableFilter<"Tournament"> | number | null
   durationMinutes?: Prisma.IntNullableFilter<"Tournament"> | number | null
   isRecurring?: Prisma.BoolFilter<"Tournament"> | boolean
-  recurrenceInterval?: Prisma.EnumRecurrenceIntervalNullableFilter<"Tournament"> | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
   autoOptOutAfterMissed?: Prisma.IntNullableFilter<"Tournament"> | number | null
   createdById?: Prisma.StringFilter<"Tournament"> | string
   createdAt?: Prisma.DateTimeFilter<"Tournament"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Tournament"> | Date | string
+  paceMs?: Prisma.IntNullableFilter<"Tournament"> | number | null
+  recurrenceInterval?: Prisma.EnumRecurrenceIntervalNullableFilter<"Tournament"> | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.DateTimeNullableFilter<"Tournament"> | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFilter<"Tournament"> | $Enums.TournamentStartMode
+  games?: Prisma.GameListRelationFilter
   participants?: Prisma.TournamentParticipantListRelationFilter
   rounds?: Prisma.TournamentRoundListRelationFilter
-  games?: Prisma.GameListRelationFilter
+  seedBots?: Prisma.TournamentSeedBotListRelationFilter
 }, "id">
 
 export type TournamentOrderByWithAggregationInput = {
@@ -528,9 +531,7 @@ export type TournamentOrderByWithAggregationInput = {
   bestOfN?: Prisma.SortOrder
   botMinGamesPlayed?: Prisma.SortOrderInput | Prisma.SortOrder
   allowNonCompetitiveBots?: Prisma.SortOrder
-  paceMs?: Prisma.SortOrderInput | Prisma.SortOrder
   allowSpectators?: Prisma.SortOrder
-  startMode?: Prisma.SortOrder
   startTime?: Prisma.SortOrderInput | Prisma.SortOrder
   endTime?: Prisma.SortOrderInput | Prisma.SortOrder
   registrationOpenAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -538,12 +539,14 @@ export type TournamentOrderByWithAggregationInput = {
   noticePeriodMinutes?: Prisma.SortOrderInput | Prisma.SortOrder
   durationMinutes?: Prisma.SortOrderInput | Prisma.SortOrder
   isRecurring?: Prisma.SortOrder
-  recurrenceInterval?: Prisma.SortOrderInput | Prisma.SortOrder
-  recurrenceEndDate?: Prisma.SortOrderInput | Prisma.SortOrder
   autoOptOutAfterMissed?: Prisma.SortOrderInput | Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  paceMs?: Prisma.SortOrderInput | Prisma.SortOrder
+  recurrenceInterval?: Prisma.SortOrderInput | Prisma.SortOrder
+  recurrenceEndDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  startMode?: Prisma.SortOrder
   _count?: Prisma.TournamentCountOrderByAggregateInput
   _avg?: Prisma.TournamentAvgOrderByAggregateInput
   _max?: Prisma.TournamentMaxOrderByAggregateInput
@@ -568,9 +571,7 @@ export type TournamentScalarWhereWithAggregatesInput = {
   bestOfN?: Prisma.IntWithAggregatesFilter<"Tournament"> | number
   botMinGamesPlayed?: Prisma.IntNullableWithAggregatesFilter<"Tournament"> | number | null
   allowNonCompetitiveBots?: Prisma.BoolWithAggregatesFilter<"Tournament"> | boolean
-  paceMs?: Prisma.IntNullableWithAggregatesFilter<"Tournament"> | number | null
   allowSpectators?: Prisma.BoolWithAggregatesFilter<"Tournament"> | boolean
-  startMode?: Prisma.EnumTournamentStartModeWithAggregatesFilter<"Tournament"> | $Enums.TournamentStartMode
   startTime?: Prisma.DateTimeNullableWithAggregatesFilter<"Tournament"> | Date | string | null
   endTime?: Prisma.DateTimeNullableWithAggregatesFilter<"Tournament"> | Date | string | null
   registrationOpenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tournament"> | Date | string | null
@@ -578,12 +579,14 @@ export type TournamentScalarWhereWithAggregatesInput = {
   noticePeriodMinutes?: Prisma.IntNullableWithAggregatesFilter<"Tournament"> | number | null
   durationMinutes?: Prisma.IntNullableWithAggregatesFilter<"Tournament"> | number | null
   isRecurring?: Prisma.BoolWithAggregatesFilter<"Tournament"> | boolean
-  recurrenceInterval?: Prisma.EnumRecurrenceIntervalNullableWithAggregatesFilter<"Tournament"> | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.DateTimeNullableWithAggregatesFilter<"Tournament"> | Date | string | null
   autoOptOutAfterMissed?: Prisma.IntNullableWithAggregatesFilter<"Tournament"> | number | null
   createdById?: Prisma.StringWithAggregatesFilter<"Tournament"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Tournament"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Tournament"> | Date | string
+  paceMs?: Prisma.IntNullableWithAggregatesFilter<"Tournament"> | number | null
+  recurrenceInterval?: Prisma.EnumRecurrenceIntervalNullableWithAggregatesFilter<"Tournament"> | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.DateTimeNullableWithAggregatesFilter<"Tournament"> | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeWithAggregatesFilter<"Tournament"> | $Enums.TournamentStartMode
 }
 
 export type TournamentCreateInput = {
@@ -600,9 +603,7 @@ export type TournamentCreateInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -610,15 +611,18 @@ export type TournamentCreateInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
+  games?: Prisma.GameCreateNestedManyWithoutTournamentInput
   participants?: Prisma.TournamentParticipantCreateNestedManyWithoutTournamentInput
   rounds?: Prisma.TournamentRoundCreateNestedManyWithoutTournamentInput
-  games?: Prisma.GameCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentUncheckedCreateInput = {
@@ -635,9 +639,7 @@ export type TournamentUncheckedCreateInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -645,15 +647,18 @@ export type TournamentUncheckedCreateInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
+  games?: Prisma.GameUncheckedCreateNestedManyWithoutTournamentInput
   participants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutTournamentInput
   rounds?: Prisma.TournamentRoundUncheckedCreateNestedManyWithoutTournamentInput
-  games?: Prisma.GameUncheckedCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentUpdateInput = {
@@ -670,9 +675,7 @@ export type TournamentUpdateInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -680,15 +683,18 @@ export type TournamentUpdateInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
+  games?: Prisma.GameUpdateManyWithoutTournamentNestedInput
   participants?: Prisma.TournamentParticipantUpdateManyWithoutTournamentNestedInput
   rounds?: Prisma.TournamentRoundUpdateManyWithoutTournamentNestedInput
-  games?: Prisma.GameUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUpdateManyWithoutTournamentNestedInput
 }
 
 export type TournamentUncheckedUpdateInput = {
@@ -705,9 +711,7 @@ export type TournamentUncheckedUpdateInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -715,15 +719,18 @@ export type TournamentUncheckedUpdateInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
+  games?: Prisma.GameUncheckedUpdateManyWithoutTournamentNestedInput
   participants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutTournamentNestedInput
   rounds?: Prisma.TournamentRoundUncheckedUpdateManyWithoutTournamentNestedInput
-  games?: Prisma.GameUncheckedUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutTournamentNestedInput
 }
 
 export type TournamentCreateManyInput = {
@@ -740,9 +747,7 @@ export type TournamentCreateManyInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -750,12 +755,14 @@ export type TournamentCreateManyInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
 }
 
 export type TournamentUpdateManyMutationInput = {
@@ -772,9 +779,7 @@ export type TournamentUpdateManyMutationInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -782,12 +787,14 @@ export type TournamentUpdateManyMutationInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
 }
 
 export type TournamentUncheckedUpdateManyInput = {
@@ -804,9 +811,7 @@ export type TournamentUncheckedUpdateManyInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -814,12 +819,14 @@ export type TournamentUncheckedUpdateManyInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
 }
 
 export type TournamentNullableScalarRelationFilter = {
@@ -841,9 +848,7 @@ export type TournamentCountOrderByAggregateInput = {
   bestOfN?: Prisma.SortOrder
   botMinGamesPlayed?: Prisma.SortOrder
   allowNonCompetitiveBots?: Prisma.SortOrder
-  paceMs?: Prisma.SortOrder
   allowSpectators?: Prisma.SortOrder
-  startMode?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   registrationOpenAt?: Prisma.SortOrder
@@ -851,12 +856,14 @@ export type TournamentCountOrderByAggregateInput = {
   noticePeriodMinutes?: Prisma.SortOrder
   durationMinutes?: Prisma.SortOrder
   isRecurring?: Prisma.SortOrder
-  recurrenceInterval?: Prisma.SortOrder
-  recurrenceEndDate?: Prisma.SortOrder
   autoOptOutAfterMissed?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  paceMs?: Prisma.SortOrder
+  recurrenceInterval?: Prisma.SortOrder
+  recurrenceEndDate?: Prisma.SortOrder
+  startMode?: Prisma.SortOrder
 }
 
 export type TournamentAvgOrderByAggregateInput = {
@@ -864,10 +871,10 @@ export type TournamentAvgOrderByAggregateInput = {
   maxParticipants?: Prisma.SortOrder
   bestOfN?: Prisma.SortOrder
   botMinGamesPlayed?: Prisma.SortOrder
-  paceMs?: Prisma.SortOrder
   noticePeriodMinutes?: Prisma.SortOrder
   durationMinutes?: Prisma.SortOrder
   autoOptOutAfterMissed?: Prisma.SortOrder
+  paceMs?: Prisma.SortOrder
 }
 
 export type TournamentMaxOrderByAggregateInput = {
@@ -884,9 +891,7 @@ export type TournamentMaxOrderByAggregateInput = {
   bestOfN?: Prisma.SortOrder
   botMinGamesPlayed?: Prisma.SortOrder
   allowNonCompetitiveBots?: Prisma.SortOrder
-  paceMs?: Prisma.SortOrder
   allowSpectators?: Prisma.SortOrder
-  startMode?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   registrationOpenAt?: Prisma.SortOrder
@@ -894,12 +899,14 @@ export type TournamentMaxOrderByAggregateInput = {
   noticePeriodMinutes?: Prisma.SortOrder
   durationMinutes?: Prisma.SortOrder
   isRecurring?: Prisma.SortOrder
-  recurrenceInterval?: Prisma.SortOrder
-  recurrenceEndDate?: Prisma.SortOrder
   autoOptOutAfterMissed?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  paceMs?: Prisma.SortOrder
+  recurrenceInterval?: Prisma.SortOrder
+  recurrenceEndDate?: Prisma.SortOrder
+  startMode?: Prisma.SortOrder
 }
 
 export type TournamentMinOrderByAggregateInput = {
@@ -916,9 +923,7 @@ export type TournamentMinOrderByAggregateInput = {
   bestOfN?: Prisma.SortOrder
   botMinGamesPlayed?: Prisma.SortOrder
   allowNonCompetitiveBots?: Prisma.SortOrder
-  paceMs?: Prisma.SortOrder
   allowSpectators?: Prisma.SortOrder
-  startMode?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   registrationOpenAt?: Prisma.SortOrder
@@ -926,12 +931,14 @@ export type TournamentMinOrderByAggregateInput = {
   noticePeriodMinutes?: Prisma.SortOrder
   durationMinutes?: Prisma.SortOrder
   isRecurring?: Prisma.SortOrder
-  recurrenceInterval?: Prisma.SortOrder
-  recurrenceEndDate?: Prisma.SortOrder
   autoOptOutAfterMissed?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  paceMs?: Prisma.SortOrder
+  recurrenceInterval?: Prisma.SortOrder
+  recurrenceEndDate?: Prisma.SortOrder
+  startMode?: Prisma.SortOrder
 }
 
 export type TournamentSumOrderByAggregateInput = {
@@ -939,10 +946,10 @@ export type TournamentSumOrderByAggregateInput = {
   maxParticipants?: Prisma.SortOrder
   bestOfN?: Prisma.SortOrder
   botMinGamesPlayed?: Prisma.SortOrder
-  paceMs?: Prisma.SortOrder
   noticePeriodMinutes?: Prisma.SortOrder
   durationMinutes?: Prisma.SortOrder
   autoOptOutAfterMissed?: Prisma.SortOrder
+  paceMs?: Prisma.SortOrder
 }
 
 export type TournamentScalarRelationFilter = {
@@ -982,12 +989,12 @@ export type EnumTournamentStatusFieldUpdateOperationsInput = {
   set?: $Enums.TournamentStatus
 }
 
-export type EnumTournamentStartModeFieldUpdateOperationsInput = {
-  set?: $Enums.TournamentStartMode
-}
-
 export type NullableEnumRecurrenceIntervalFieldUpdateOperationsInput = {
   set?: $Enums.RecurrenceInterval | null
+}
+
+export type EnumTournamentStartModeFieldUpdateOperationsInput = {
+  set?: $Enums.TournamentStartMode
 }
 
 export type TournamentCreateNestedOneWithoutParticipantsInput = {
@@ -1018,6 +1025,20 @@ export type TournamentUpdateOneRequiredWithoutRoundsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TournamentUpdateToOneWithWhereWithoutRoundsInput, Prisma.TournamentUpdateWithoutRoundsInput>, Prisma.TournamentUncheckedUpdateWithoutRoundsInput>
 }
 
+export type TournamentCreateNestedOneWithoutSeedBotsInput = {
+  create?: Prisma.XOR<Prisma.TournamentCreateWithoutSeedBotsInput, Prisma.TournamentUncheckedCreateWithoutSeedBotsInput>
+  connectOrCreate?: Prisma.TournamentCreateOrConnectWithoutSeedBotsInput
+  connect?: Prisma.TournamentWhereUniqueInput
+}
+
+export type TournamentUpdateOneRequiredWithoutSeedBotsNestedInput = {
+  create?: Prisma.XOR<Prisma.TournamentCreateWithoutSeedBotsInput, Prisma.TournamentUncheckedCreateWithoutSeedBotsInput>
+  connectOrCreate?: Prisma.TournamentCreateOrConnectWithoutSeedBotsInput
+  upsert?: Prisma.TournamentUpsertWithoutSeedBotsInput
+  connect?: Prisma.TournamentWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TournamentUpdateToOneWithWhereWithoutSeedBotsInput, Prisma.TournamentUpdateWithoutSeedBotsInput>, Prisma.TournamentUncheckedUpdateWithoutSeedBotsInput>
+}
+
 export type TournamentCreateWithoutGamesInput = {
   id?: string
   name: string
@@ -1032,9 +1053,7 @@ export type TournamentCreateWithoutGamesInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -1042,14 +1061,17 @@ export type TournamentCreateWithoutGamesInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
   participants?: Prisma.TournamentParticipantCreateNestedManyWithoutTournamentInput
   rounds?: Prisma.TournamentRoundCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentUncheckedCreateWithoutGamesInput = {
@@ -1066,9 +1088,7 @@ export type TournamentUncheckedCreateWithoutGamesInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -1076,14 +1096,17 @@ export type TournamentUncheckedCreateWithoutGamesInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
   participants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutTournamentInput
   rounds?: Prisma.TournamentRoundUncheckedCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentCreateOrConnectWithoutGamesInput = {
@@ -1116,9 +1139,7 @@ export type TournamentUpdateWithoutGamesInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1126,14 +1147,17 @@ export type TournamentUpdateWithoutGamesInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   participants?: Prisma.TournamentParticipantUpdateManyWithoutTournamentNestedInput
   rounds?: Prisma.TournamentRoundUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUpdateManyWithoutTournamentNestedInput
 }
 
 export type TournamentUncheckedUpdateWithoutGamesInput = {
@@ -1150,9 +1174,7 @@ export type TournamentUncheckedUpdateWithoutGamesInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1160,14 +1182,17 @@ export type TournamentUncheckedUpdateWithoutGamesInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   participants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutTournamentNestedInput
   rounds?: Prisma.TournamentRoundUncheckedUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutTournamentNestedInput
 }
 
 export type TournamentCreateWithoutParticipantsInput = {
@@ -1184,9 +1209,7 @@ export type TournamentCreateWithoutParticipantsInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -1194,14 +1217,17 @@ export type TournamentCreateWithoutParticipantsInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
-  rounds?: Prisma.TournamentRoundCreateNestedManyWithoutTournamentInput
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
   games?: Prisma.GameCreateNestedManyWithoutTournamentInput
+  rounds?: Prisma.TournamentRoundCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentUncheckedCreateWithoutParticipantsInput = {
@@ -1218,9 +1244,7 @@ export type TournamentUncheckedCreateWithoutParticipantsInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -1228,14 +1252,17 @@ export type TournamentUncheckedCreateWithoutParticipantsInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
-  rounds?: Prisma.TournamentRoundUncheckedCreateNestedManyWithoutTournamentInput
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
   games?: Prisma.GameUncheckedCreateNestedManyWithoutTournamentInput
+  rounds?: Prisma.TournamentRoundUncheckedCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentCreateOrConnectWithoutParticipantsInput = {
@@ -1268,9 +1295,7 @@ export type TournamentUpdateWithoutParticipantsInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1278,14 +1303,17 @@ export type TournamentUpdateWithoutParticipantsInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  rounds?: Prisma.TournamentRoundUpdateManyWithoutTournamentNestedInput
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   games?: Prisma.GameUpdateManyWithoutTournamentNestedInput
+  rounds?: Prisma.TournamentRoundUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUpdateManyWithoutTournamentNestedInput
 }
 
 export type TournamentUncheckedUpdateWithoutParticipantsInput = {
@@ -1302,9 +1330,7 @@ export type TournamentUncheckedUpdateWithoutParticipantsInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1312,14 +1338,17 @@ export type TournamentUncheckedUpdateWithoutParticipantsInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  rounds?: Prisma.TournamentRoundUncheckedUpdateManyWithoutTournamentNestedInput
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   games?: Prisma.GameUncheckedUpdateManyWithoutTournamentNestedInput
+  rounds?: Prisma.TournamentRoundUncheckedUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutTournamentNestedInput
 }
 
 export type TournamentCreateWithoutRoundsInput = {
@@ -1336,9 +1365,7 @@ export type TournamentCreateWithoutRoundsInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -1346,14 +1373,17 @@ export type TournamentCreateWithoutRoundsInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
-  participants?: Prisma.TournamentParticipantCreateNestedManyWithoutTournamentInput
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
   games?: Prisma.GameCreateNestedManyWithoutTournamentInput
+  participants?: Prisma.TournamentParticipantCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentUncheckedCreateWithoutRoundsInput = {
@@ -1370,9 +1400,7 @@ export type TournamentUncheckedCreateWithoutRoundsInput = {
   bestOfN?: number
   botMinGamesPlayed?: number | null
   allowNonCompetitiveBots?: boolean
-  paceMs?: number | null
   allowSpectators?: boolean
-  startMode?: $Enums.TournamentStartMode
   startTime?: Date | string | null
   endTime?: Date | string | null
   registrationOpenAt?: Date | string | null
@@ -1380,14 +1408,17 @@ export type TournamentUncheckedCreateWithoutRoundsInput = {
   noticePeriodMinutes?: number | null
   durationMinutes?: number | null
   isRecurring?: boolean
-  recurrenceInterval?: $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Date | string | null
   autoOptOutAfterMissed?: number | null
   createdById: string
   createdAt?: Date | string
   updatedAt?: Date | string
-  participants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutTournamentInput
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
   games?: Prisma.GameUncheckedCreateNestedManyWithoutTournamentInput
+  participants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutTournamentInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutTournamentInput
 }
 
 export type TournamentCreateOrConnectWithoutRoundsInput = {
@@ -1420,9 +1451,7 @@ export type TournamentUpdateWithoutRoundsInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1430,14 +1459,17 @@ export type TournamentUpdateWithoutRoundsInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  participants?: Prisma.TournamentParticipantUpdateManyWithoutTournamentNestedInput
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   games?: Prisma.GameUpdateManyWithoutTournamentNestedInput
+  participants?: Prisma.TournamentParticipantUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUpdateManyWithoutTournamentNestedInput
 }
 
 export type TournamentUncheckedUpdateWithoutRoundsInput = {
@@ -1454,9 +1486,7 @@ export type TournamentUncheckedUpdateWithoutRoundsInput = {
   bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
   botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1464,14 +1494,173 @@ export type TournamentUncheckedUpdateWithoutRoundsInput = {
   noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
-  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdById?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  participants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutTournamentNestedInput
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
   games?: Prisma.GameUncheckedUpdateManyWithoutTournamentNestedInput
+  participants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutTournamentNestedInput
+  seedBots?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutTournamentNestedInput
+}
+
+export type TournamentCreateWithoutSeedBotsInput = {
+  id?: string
+  name: string
+  description?: string | null
+  game: string
+  mode: $Enums.TournamentMode
+  format: $Enums.TournamentFormat
+  bracketType: $Enums.BracketType
+  status?: $Enums.TournamentStatus
+  minParticipants?: number
+  maxParticipants?: number | null
+  bestOfN?: number
+  botMinGamesPlayed?: number | null
+  allowNonCompetitiveBots?: boolean
+  allowSpectators?: boolean
+  startTime?: Date | string | null
+  endTime?: Date | string | null
+  registrationOpenAt?: Date | string | null
+  registrationCloseAt?: Date | string | null
+  noticePeriodMinutes?: number | null
+  durationMinutes?: number | null
+  isRecurring?: boolean
+  autoOptOutAfterMissed?: number | null
+  createdById: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
+  games?: Prisma.GameCreateNestedManyWithoutTournamentInput
+  participants?: Prisma.TournamentParticipantCreateNestedManyWithoutTournamentInput
+  rounds?: Prisma.TournamentRoundCreateNestedManyWithoutTournamentInput
+}
+
+export type TournamentUncheckedCreateWithoutSeedBotsInput = {
+  id?: string
+  name: string
+  description?: string | null
+  game: string
+  mode: $Enums.TournamentMode
+  format: $Enums.TournamentFormat
+  bracketType: $Enums.BracketType
+  status?: $Enums.TournamentStatus
+  minParticipants?: number
+  maxParticipants?: number | null
+  bestOfN?: number
+  botMinGamesPlayed?: number | null
+  allowNonCompetitiveBots?: boolean
+  allowSpectators?: boolean
+  startTime?: Date | string | null
+  endTime?: Date | string | null
+  registrationOpenAt?: Date | string | null
+  registrationCloseAt?: Date | string | null
+  noticePeriodMinutes?: number | null
+  durationMinutes?: number | null
+  isRecurring?: boolean
+  autoOptOutAfterMissed?: number | null
+  createdById: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  paceMs?: number | null
+  recurrenceInterval?: $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Date | string | null
+  startMode?: $Enums.TournamentStartMode
+  games?: Prisma.GameUncheckedCreateNestedManyWithoutTournamentInput
+  participants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutTournamentInput
+  rounds?: Prisma.TournamentRoundUncheckedCreateNestedManyWithoutTournamentInput
+}
+
+export type TournamentCreateOrConnectWithoutSeedBotsInput = {
+  where: Prisma.TournamentWhereUniqueInput
+  create: Prisma.XOR<Prisma.TournamentCreateWithoutSeedBotsInput, Prisma.TournamentUncheckedCreateWithoutSeedBotsInput>
+}
+
+export type TournamentUpsertWithoutSeedBotsInput = {
+  update: Prisma.XOR<Prisma.TournamentUpdateWithoutSeedBotsInput, Prisma.TournamentUncheckedUpdateWithoutSeedBotsInput>
+  create: Prisma.XOR<Prisma.TournamentCreateWithoutSeedBotsInput, Prisma.TournamentUncheckedCreateWithoutSeedBotsInput>
+  where?: Prisma.TournamentWhereInput
+}
+
+export type TournamentUpdateToOneWithWhereWithoutSeedBotsInput = {
+  where?: Prisma.TournamentWhereInput
+  data: Prisma.XOR<Prisma.TournamentUpdateWithoutSeedBotsInput, Prisma.TournamentUncheckedUpdateWithoutSeedBotsInput>
+}
+
+export type TournamentUpdateWithoutSeedBotsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  game?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.EnumTournamentModeFieldUpdateOperationsInput | $Enums.TournamentMode
+  format?: Prisma.EnumTournamentFormatFieldUpdateOperationsInput | $Enums.TournamentFormat
+  bracketType?: Prisma.EnumBracketTypeFieldUpdateOperationsInput | $Enums.BracketType
+  status?: Prisma.EnumTournamentStatusFieldUpdateOperationsInput | $Enums.TournamentStatus
+  minParticipants?: Prisma.IntFieldUpdateOperationsInput | number
+  maxParticipants?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
+  botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  registrationCloseAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdById?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
+  games?: Prisma.GameUpdateManyWithoutTournamentNestedInput
+  participants?: Prisma.TournamentParticipantUpdateManyWithoutTournamentNestedInput
+  rounds?: Prisma.TournamentRoundUpdateManyWithoutTournamentNestedInput
+}
+
+export type TournamentUncheckedUpdateWithoutSeedBotsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  game?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.EnumTournamentModeFieldUpdateOperationsInput | $Enums.TournamentMode
+  format?: Prisma.EnumTournamentFormatFieldUpdateOperationsInput | $Enums.TournamentFormat
+  bracketType?: Prisma.EnumBracketTypeFieldUpdateOperationsInput | $Enums.BracketType
+  status?: Prisma.EnumTournamentStatusFieldUpdateOperationsInput | $Enums.TournamentStatus
+  minParticipants?: Prisma.IntFieldUpdateOperationsInput | number
+  maxParticipants?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  bestOfN?: Prisma.IntFieldUpdateOperationsInput | number
+  botMinGamesPlayed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  allowNonCompetitiveBots?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  allowSpectators?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  startTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  registrationOpenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  registrationCloseAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  noticePeriodMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  durationMinutes?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  isRecurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  autoOptOutAfterMissed?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdById?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paceMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  recurrenceInterval?: Prisma.NullableEnumRecurrenceIntervalFieldUpdateOperationsInput | $Enums.RecurrenceInterval | null
+  recurrenceEndDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  startMode?: Prisma.EnumTournamentStartModeFieldUpdateOperationsInput | $Enums.TournamentStartMode
+  games?: Prisma.GameUncheckedUpdateManyWithoutTournamentNestedInput
+  participants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutTournamentNestedInput
+  rounds?: Prisma.TournamentRoundUncheckedUpdateManyWithoutTournamentNestedInput
 }
 
 
@@ -1480,15 +1669,17 @@ export type TournamentUncheckedUpdateWithoutRoundsInput = {
  */
 
 export type TournamentCountOutputType = {
+  games: number
   participants: number
   rounds: number
-  games: number
+  seedBots: number
 }
 
 export type TournamentCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  games?: boolean | TournamentCountOutputTypeCountGamesArgs
   participants?: boolean | TournamentCountOutputTypeCountParticipantsArgs
   rounds?: boolean | TournamentCountOutputTypeCountRoundsArgs
-  games?: boolean | TournamentCountOutputTypeCountGamesArgs
+  seedBots?: boolean | TournamentCountOutputTypeCountSeedBotsArgs
 }
 
 /**
@@ -1499,6 +1690,13 @@ export type TournamentCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.E
    * Select specific fields to fetch from the TournamentCountOutputType
    */
   select?: Prisma.TournamentCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * TournamentCountOutputType without action
+ */
+export type TournamentCountOutputTypeCountGamesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.GameWhereInput
 }
 
 /**
@@ -1518,8 +1716,8 @@ export type TournamentCountOutputTypeCountRoundsArgs<ExtArgs extends runtime.Typ
 /**
  * TournamentCountOutputType without action
  */
-export type TournamentCountOutputTypeCountGamesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.GameWhereInput
+export type TournamentCountOutputTypeCountSeedBotsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TournamentSeedBotWhereInput
 }
 
 
@@ -1537,9 +1735,7 @@ export type TournamentSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   bestOfN?: boolean
   botMinGamesPlayed?: boolean
   allowNonCompetitiveBots?: boolean
-  paceMs?: boolean
   allowSpectators?: boolean
-  startMode?: boolean
   startTime?: boolean
   endTime?: boolean
   registrationOpenAt?: boolean
@@ -1547,15 +1743,18 @@ export type TournamentSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   noticePeriodMinutes?: boolean
   durationMinutes?: boolean
   isRecurring?: boolean
-  recurrenceInterval?: boolean
-  recurrenceEndDate?: boolean
   autoOptOutAfterMissed?: boolean
   createdById?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  paceMs?: boolean
+  recurrenceInterval?: boolean
+  recurrenceEndDate?: boolean
+  startMode?: boolean
+  games?: boolean | Prisma.Tournament$gamesArgs<ExtArgs>
   participants?: boolean | Prisma.Tournament$participantsArgs<ExtArgs>
   rounds?: boolean | Prisma.Tournament$roundsArgs<ExtArgs>
-  games?: boolean | Prisma.Tournament$gamesArgs<ExtArgs>
+  seedBots?: boolean | Prisma.Tournament$seedBotsArgs<ExtArgs>
   _count?: boolean | Prisma.TournamentCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tournament"]>
 
@@ -1573,9 +1772,7 @@ export type TournamentSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   bestOfN?: boolean
   botMinGamesPlayed?: boolean
   allowNonCompetitiveBots?: boolean
-  paceMs?: boolean
   allowSpectators?: boolean
-  startMode?: boolean
   startTime?: boolean
   endTime?: boolean
   registrationOpenAt?: boolean
@@ -1583,12 +1780,14 @@ export type TournamentSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   noticePeriodMinutes?: boolean
   durationMinutes?: boolean
   isRecurring?: boolean
-  recurrenceInterval?: boolean
-  recurrenceEndDate?: boolean
   autoOptOutAfterMissed?: boolean
   createdById?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  paceMs?: boolean
+  recurrenceInterval?: boolean
+  recurrenceEndDate?: boolean
+  startMode?: boolean
 }, ExtArgs["result"]["tournament"]>
 
 export type TournamentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -1605,9 +1804,7 @@ export type TournamentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   bestOfN?: boolean
   botMinGamesPlayed?: boolean
   allowNonCompetitiveBots?: boolean
-  paceMs?: boolean
   allowSpectators?: boolean
-  startMode?: boolean
   startTime?: boolean
   endTime?: boolean
   registrationOpenAt?: boolean
@@ -1615,12 +1812,14 @@ export type TournamentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   noticePeriodMinutes?: boolean
   durationMinutes?: boolean
   isRecurring?: boolean
-  recurrenceInterval?: boolean
-  recurrenceEndDate?: boolean
   autoOptOutAfterMissed?: boolean
   createdById?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  paceMs?: boolean
+  recurrenceInterval?: boolean
+  recurrenceEndDate?: boolean
+  startMode?: boolean
 }, ExtArgs["result"]["tournament"]>
 
 export type TournamentSelectScalar = {
@@ -1637,9 +1836,7 @@ export type TournamentSelectScalar = {
   bestOfN?: boolean
   botMinGamesPlayed?: boolean
   allowNonCompetitiveBots?: boolean
-  paceMs?: boolean
   allowSpectators?: boolean
-  startMode?: boolean
   startTime?: boolean
   endTime?: boolean
   registrationOpenAt?: boolean
@@ -1647,19 +1844,22 @@ export type TournamentSelectScalar = {
   noticePeriodMinutes?: boolean
   durationMinutes?: boolean
   isRecurring?: boolean
-  recurrenceInterval?: boolean
-  recurrenceEndDate?: boolean
   autoOptOutAfterMissed?: boolean
   createdById?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  paceMs?: boolean
+  recurrenceInterval?: boolean
+  recurrenceEndDate?: boolean
+  startMode?: boolean
 }
 
-export type TournamentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "description" | "game" | "mode" | "format" | "bracketType" | "status" | "minParticipants" | "maxParticipants" | "bestOfN" | "botMinGamesPlayed" | "allowNonCompetitiveBots" | "paceMs" | "allowSpectators" | "startMode" | "startTime" | "endTime" | "registrationOpenAt" | "registrationCloseAt" | "noticePeriodMinutes" | "durationMinutes" | "isRecurring" | "recurrenceInterval" | "recurrenceEndDate" | "autoOptOutAfterMissed" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["tournament"]>
+export type TournamentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "description" | "game" | "mode" | "format" | "bracketType" | "status" | "minParticipants" | "maxParticipants" | "bestOfN" | "botMinGamesPlayed" | "allowNonCompetitiveBots" | "allowSpectators" | "startTime" | "endTime" | "registrationOpenAt" | "registrationCloseAt" | "noticePeriodMinutes" | "durationMinutes" | "isRecurring" | "autoOptOutAfterMissed" | "createdById" | "createdAt" | "updatedAt" | "paceMs" | "recurrenceInterval" | "recurrenceEndDate" | "startMode", ExtArgs["result"]["tournament"]>
 export type TournamentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  games?: boolean | Prisma.Tournament$gamesArgs<ExtArgs>
   participants?: boolean | Prisma.Tournament$participantsArgs<ExtArgs>
   rounds?: boolean | Prisma.Tournament$roundsArgs<ExtArgs>
-  games?: boolean | Prisma.Tournament$gamesArgs<ExtArgs>
+  seedBots?: boolean | Prisma.Tournament$seedBotsArgs<ExtArgs>
   _count?: boolean | Prisma.TournamentCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type TournamentIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -1668,9 +1868,10 @@ export type TournamentIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.E
 export type $TournamentPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Tournament"
   objects: {
+    games: Prisma.$GamePayload<ExtArgs>[]
     participants: Prisma.$TournamentParticipantPayload<ExtArgs>[]
     rounds: Prisma.$TournamentRoundPayload<ExtArgs>[]
-    games: Prisma.$GamePayload<ExtArgs>[]
+    seedBots: Prisma.$TournamentSeedBotPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1686,9 +1887,7 @@ export type $TournamentPayload<ExtArgs extends runtime.Types.Extensions.Internal
     bestOfN: number
     botMinGamesPlayed: number | null
     allowNonCompetitiveBots: boolean
-    paceMs: number | null
     allowSpectators: boolean
-    startMode: $Enums.TournamentStartMode
     startTime: Date | null
     endTime: Date | null
     registrationOpenAt: Date | null
@@ -1696,12 +1895,14 @@ export type $TournamentPayload<ExtArgs extends runtime.Types.Extensions.Internal
     noticePeriodMinutes: number | null
     durationMinutes: number | null
     isRecurring: boolean
-    recurrenceInterval: $Enums.RecurrenceInterval | null
-    recurrenceEndDate: Date | null
     autoOptOutAfterMissed: number | null
     createdById: string
     createdAt: Date
     updatedAt: Date
+    paceMs: number | null
+    recurrenceInterval: $Enums.RecurrenceInterval | null
+    recurrenceEndDate: Date | null
+    startMode: $Enums.TournamentStartMode
   }, ExtArgs["result"]["tournament"]>
   composites: {}
 }
@@ -2096,9 +2297,10 @@ readonly fields: TournamentFieldRefs;
  */
 export interface Prisma__TournamentClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  games<T extends Prisma.Tournament$gamesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tournament$gamesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GamePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   participants<T extends Prisma.Tournament$participantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tournament$participantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentParticipantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   rounds<T extends Prisma.Tournament$roundsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tournament$roundsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentRoundPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  games<T extends Prisma.Tournament$gamesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tournament$gamesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GamePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  seedBots<T extends Prisma.Tournament$seedBotsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tournament$seedBotsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentSeedBotPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2141,9 +2343,7 @@ export interface TournamentFieldRefs {
   readonly bestOfN: Prisma.FieldRef<"Tournament", 'Int'>
   readonly botMinGamesPlayed: Prisma.FieldRef<"Tournament", 'Int'>
   readonly allowNonCompetitiveBots: Prisma.FieldRef<"Tournament", 'Boolean'>
-  readonly paceMs: Prisma.FieldRef<"Tournament", 'Int'>
   readonly allowSpectators: Prisma.FieldRef<"Tournament", 'Boolean'>
-  readonly startMode: Prisma.FieldRef<"Tournament", 'TournamentStartMode'>
   readonly startTime: Prisma.FieldRef<"Tournament", 'DateTime'>
   readonly endTime: Prisma.FieldRef<"Tournament", 'DateTime'>
   readonly registrationOpenAt: Prisma.FieldRef<"Tournament", 'DateTime'>
@@ -2151,12 +2351,14 @@ export interface TournamentFieldRefs {
   readonly noticePeriodMinutes: Prisma.FieldRef<"Tournament", 'Int'>
   readonly durationMinutes: Prisma.FieldRef<"Tournament", 'Int'>
   readonly isRecurring: Prisma.FieldRef<"Tournament", 'Boolean'>
-  readonly recurrenceInterval: Prisma.FieldRef<"Tournament", 'RecurrenceInterval'>
-  readonly recurrenceEndDate: Prisma.FieldRef<"Tournament", 'DateTime'>
   readonly autoOptOutAfterMissed: Prisma.FieldRef<"Tournament", 'Int'>
   readonly createdById: Prisma.FieldRef<"Tournament", 'String'>
   readonly createdAt: Prisma.FieldRef<"Tournament", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Tournament", 'DateTime'>
+  readonly paceMs: Prisma.FieldRef<"Tournament", 'Int'>
+  readonly recurrenceInterval: Prisma.FieldRef<"Tournament", 'RecurrenceInterval'>
+  readonly recurrenceEndDate: Prisma.FieldRef<"Tournament", 'DateTime'>
+  readonly startMode: Prisma.FieldRef<"Tournament", 'TournamentStartMode'>
 }
     
 
@@ -2550,6 +2752,30 @@ export type TournamentDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.In
 }
 
 /**
+ * Tournament.games
+ */
+export type Tournament$gamesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Game
+   */
+  select?: Prisma.GameSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Game
+   */
+  omit?: Prisma.GameOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.GameInclude<ExtArgs> | null
+  where?: Prisma.GameWhereInput
+  orderBy?: Prisma.GameOrderByWithRelationInput | Prisma.GameOrderByWithRelationInput[]
+  cursor?: Prisma.GameWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.GameScalarFieldEnum | Prisma.GameScalarFieldEnum[]
+}
+
+/**
  * Tournament.participants
  */
 export type Tournament$participantsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2598,27 +2824,27 @@ export type Tournament$roundsArgs<ExtArgs extends runtime.Types.Extensions.Inter
 }
 
 /**
- * Tournament.games
+ * Tournament.seedBots
  */
-export type Tournament$gamesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type Tournament$seedBotsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
-   * Select specific fields to fetch from the Game
+   * Select specific fields to fetch from the TournamentSeedBot
    */
-  select?: Prisma.GameSelect<ExtArgs> | null
+  select?: Prisma.TournamentSeedBotSelect<ExtArgs> | null
   /**
-   * Omit specific fields from the Game
+   * Omit specific fields from the TournamentSeedBot
    */
-  omit?: Prisma.GameOmit<ExtArgs> | null
+  omit?: Prisma.TournamentSeedBotOmit<ExtArgs> | null
   /**
    * Choose, which related nodes to fetch as well
    */
-  include?: Prisma.GameInclude<ExtArgs> | null
-  where?: Prisma.GameWhereInput
-  orderBy?: Prisma.GameOrderByWithRelationInput | Prisma.GameOrderByWithRelationInput[]
-  cursor?: Prisma.GameWhereUniqueInput
+  include?: Prisma.TournamentSeedBotInclude<ExtArgs> | null
+  where?: Prisma.TournamentSeedBotWhereInput
+  orderBy?: Prisma.TournamentSeedBotOrderByWithRelationInput | Prisma.TournamentSeedBotOrderByWithRelationInput[]
+  cursor?: Prisma.TournamentSeedBotWhereUniqueInput
   take?: number
   skip?: number
-  distinct?: Prisma.GameScalarFieldEnum | Prisma.GameScalarFieldEnum[]
+  distinct?: Prisma.TournamentSeedBotScalarFieldEnum | Prisma.TournamentSeedBotScalarFieldEnum[]
 }
 
 /**

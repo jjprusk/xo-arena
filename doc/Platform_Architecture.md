@@ -510,12 +510,24 @@ All migrations gated behind `VITE_TIER2_SSE` feature flag. The new path runs *al
 
 **Remaining non-Tier-2 socket responsibilities:** gameplay rooms (`room:*`, `game:*`), table-room presence (`table:presence`), journey step nudges (`guide:journeyStep`). Everything else flows via REST + SSE.
 
-### Phase E — Web Push (Tier 3)
+### Phase E — Web Push (Tier 3) ✅ Done
 
-Separate scope, picks up after Tier 2 stabilizes. Adds:
-- Web Push subscription registration in Profile settings.
-- Server pushes for "match ready", "tournament starts soon", "your bot match completed" (all opt-in).
-- Triggered from the same event bus as SSE — Tier 2 emits an event, a worker routes to Web Push for users whose tab isn't open.
+VAPID keys live in `backend/.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_CONTACT_EMAIL`). The public key is exposed to the client via `VITE_VAPID_PUBLIC_KEY` in `docker-compose.yml` and via the unauthenticated `GET /api/v1/push/public-key` endpoint.
+
+**Backend:**
+- `PushSubscription` model (per-browser rows; unique on `endpoint`, cascade-deleted with user).
+- `NotificationPreference` gains a `push: boolean` column (default `false` — opt-in).
+- `backend/src/lib/pushService.js`: `sendToUser(userId, payload)` fans out to every subscription via `web-push`, auto-purges 404/410 endpoints, refreshes `lastUsedAt`. `buildPushPayload(type, payload)` maps bus events to `{ title, body, url }` for the SW.
+- `backend/src/routes/push.js`: `GET /public-key`, `POST /subscribe`, `DELETE /subscribe`, `GET /subscriptions`.
+- `notificationBus.dispatch` now calls `pushService.sendToUser` when: the REGISTRY entry has `push: true`, the `NotificationPreference.push` is true for that event type, AND the user has no active SSE client (`sseBroker.clientCountForUser === 0`). Push is a backup for offline; online users already got the SSE entry.
+- Push-eligible events: `match.ready`, `tournament.starting_soon`, `tournament.started`, `tournament.cancelled`, `achievement.tier_upgrade`.
+
+**Frontend:**
+- `landing/public/sw.js`: handles `push` + `notificationclick`. Tag per event type collapses duplicates; click focuses an existing tab (or opens one) at the event's `url`.
+- `landing/src/lib/pushSubscribe.js`: `subscribePush`, `unsubscribePush`, `hasActiveSubscription`, `isPushSupported`, `currentPermission`. Handles permission prompt, VAPID key fetch, SW registration, and REST registration.
+- `SettingsPage`: "Push notifications" section with a per-browser enable toggle and per-event-type push preferences (stored on `NotificationPreference.push` via `PUT /users/notification-preferences/:eventType`).
+
+**Tests:** `pushService.test.js` (12) + `push.test.js` (9) covering the VAPID config, send/purge, unknown types, auth, and validation. 996 backend + 46 landing, all green.
 
 ### Reconnect policy summary
 

@@ -29,11 +29,13 @@ export type AggregateTable = {
 export type TableAvgAggregateOutputType = {
   minPlayers: number | null
   maxPlayers: number | null
+  bestOfN: number | null
 }
 
 export type TableSumAggregateOutputType = {
   minPlayers: number | null
   maxPlayers: number | null
+  bestOfN: number | null
 }
 
 export type TableMinAggregateOutputType = {
@@ -48,6 +50,14 @@ export type TableMinAggregateOutputType = {
   isTournament: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  tournamentMatchId: string | null
+  tournamentId: string | null
+  bestOfN: number | null
+  isHvb: boolean | null
+  botUserId: string | null
+  botSkillId: string | null
+  slug: string | null
+  displayName: string | null
 }
 
 export type TableMaxAggregateOutputType = {
@@ -62,6 +72,14 @@ export type TableMaxAggregateOutputType = {
   isTournament: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  tournamentMatchId: string | null
+  tournamentId: string | null
+  bestOfN: number | null
+  isHvb: boolean | null
+  botUserId: string | null
+  botSkillId: string | null
+  slug: string | null
+  displayName: string | null
 }
 
 export type TableCountAggregateOutputType = {
@@ -78,6 +96,14 @@ export type TableCountAggregateOutputType = {
   previewState: number
   createdAt: number
   updatedAt: number
+  tournamentMatchId: number
+  tournamentId: number
+  bestOfN: number
+  isHvb: number
+  botUserId: number
+  botSkillId: number
+  slug: number
+  displayName: number
   _all: number
 }
 
@@ -85,11 +111,13 @@ export type TableCountAggregateOutputType = {
 export type TableAvgAggregateInputType = {
   minPlayers?: true
   maxPlayers?: true
+  bestOfN?: true
 }
 
 export type TableSumAggregateInputType = {
   minPlayers?: true
   maxPlayers?: true
+  bestOfN?: true
 }
 
 export type TableMinAggregateInputType = {
@@ -104,6 +132,14 @@ export type TableMinAggregateInputType = {
   isTournament?: true
   createdAt?: true
   updatedAt?: true
+  tournamentMatchId?: true
+  tournamentId?: true
+  bestOfN?: true
+  isHvb?: true
+  botUserId?: true
+  botSkillId?: true
+  slug?: true
+  displayName?: true
 }
 
 export type TableMaxAggregateInputType = {
@@ -118,6 +154,14 @@ export type TableMaxAggregateInputType = {
   isTournament?: true
   createdAt?: true
   updatedAt?: true
+  tournamentMatchId?: true
+  tournamentId?: true
+  bestOfN?: true
+  isHvb?: true
+  botUserId?: true
+  botSkillId?: true
+  slug?: true
+  displayName?: true
 }
 
 export type TableCountAggregateInputType = {
@@ -134,6 +178,14 @@ export type TableCountAggregateInputType = {
   previewState?: true
   createdAt?: true
   updatedAt?: true
+  tournamentMatchId?: true
+  tournamentId?: true
+  bestOfN?: true
+  isHvb?: true
+  botUserId?: true
+  botSkillId?: true
+  slug?: true
+  displayName?: true
   _all?: true
 }
 
@@ -237,6 +289,14 @@ export type TableGroupByOutputType = {
   previewState: runtime.JsonValue | null
   createdAt: Date
   updatedAt: Date
+  tournamentMatchId: string | null
+  tournamentId: string | null
+  bestOfN: number | null
+  isHvb: boolean
+  botUserId: string | null
+  botSkillId: string | null
+  slug: string | null
+  displayName: string | null
   _count: TableCountAggregateOutputType | null
   _avg: TableAvgAggregateOutputType | null
   _sum: TableSumAggregateOutputType | null
@@ -276,6 +336,14 @@ export type TableWhereInput = {
   previewState?: Prisma.JsonNullableFilter<"Table">
   createdAt?: Prisma.DateTimeFilter<"Table"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Table"> | Date | string
+  tournamentMatchId?: Prisma.StringNullableFilter<"Table"> | string | null
+  tournamentId?: Prisma.StringNullableFilter<"Table"> | string | null
+  bestOfN?: Prisma.IntNullableFilter<"Table"> | number | null
+  isHvb?: Prisma.BoolFilter<"Table"> | boolean
+  botUserId?: Prisma.StringNullableFilter<"Table"> | string | null
+  botSkillId?: Prisma.StringNullableFilter<"Table"> | string | null
+  slug?: Prisma.StringNullableFilter<"Table"> | string | null
+  displayName?: Prisma.StringNullableFilter<"Table"> | string | null
 }
 
 export type TableOrderByWithRelationInput = {
@@ -292,10 +360,19 @@ export type TableOrderByWithRelationInput = {
   previewState?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  tournamentMatchId?: Prisma.SortOrderInput | Prisma.SortOrder
+  tournamentId?: Prisma.SortOrderInput | Prisma.SortOrder
+  bestOfN?: Prisma.SortOrderInput | Prisma.SortOrder
+  isHvb?: Prisma.SortOrder
+  botUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  botSkillId?: Prisma.SortOrderInput | Prisma.SortOrder
+  slug?: Prisma.SortOrderInput | Prisma.SortOrder
+  displayName?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type TableWhereUniqueInput = Prisma.AtLeast<{
   id?: string
+  slug?: string
   AND?: Prisma.TableWhereInput | Prisma.TableWhereInput[]
   OR?: Prisma.TableWhereInput[]
   NOT?: Prisma.TableWhereInput | Prisma.TableWhereInput[]
@@ -311,7 +388,14 @@ export type TableWhereUniqueInput = Prisma.AtLeast<{
   previewState?: Prisma.JsonNullableFilter<"Table">
   createdAt?: Prisma.DateTimeFilter<"Table"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Table"> | Date | string
-}, "id">
+  tournamentMatchId?: Prisma.StringNullableFilter<"Table"> | string | null
+  tournamentId?: Prisma.StringNullableFilter<"Table"> | string | null
+  bestOfN?: Prisma.IntNullableFilter<"Table"> | number | null
+  isHvb?: Prisma.BoolFilter<"Table"> | boolean
+  botUserId?: Prisma.StringNullableFilter<"Table"> | string | null
+  botSkillId?: Prisma.StringNullableFilter<"Table"> | string | null
+  displayName?: Prisma.StringNullableFilter<"Table"> | string | null
+}, "id" | "slug">
 
 export type TableOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -327,6 +411,14 @@ export type TableOrderByWithAggregationInput = {
   previewState?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  tournamentMatchId?: Prisma.SortOrderInput | Prisma.SortOrder
+  tournamentId?: Prisma.SortOrderInput | Prisma.SortOrder
+  bestOfN?: Prisma.SortOrderInput | Prisma.SortOrder
+  isHvb?: Prisma.SortOrder
+  botUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  botSkillId?: Prisma.SortOrderInput | Prisma.SortOrder
+  slug?: Prisma.SortOrderInput | Prisma.SortOrder
+  displayName?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.TableCountOrderByAggregateInput
   _avg?: Prisma.TableAvgOrderByAggregateInput
   _max?: Prisma.TableMaxOrderByAggregateInput
@@ -351,6 +443,14 @@ export type TableScalarWhereWithAggregatesInput = {
   previewState?: Prisma.JsonNullableWithAggregatesFilter<"Table">
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Table"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Table"> | Date | string
+  tournamentMatchId?: Prisma.StringNullableWithAggregatesFilter<"Table"> | string | null
+  tournamentId?: Prisma.StringNullableWithAggregatesFilter<"Table"> | string | null
+  bestOfN?: Prisma.IntNullableWithAggregatesFilter<"Table"> | number | null
+  isHvb?: Prisma.BoolWithAggregatesFilter<"Table"> | boolean
+  botUserId?: Prisma.StringNullableWithAggregatesFilter<"Table"> | string | null
+  botSkillId?: Prisma.StringNullableWithAggregatesFilter<"Table"> | string | null
+  slug?: Prisma.StringNullableWithAggregatesFilter<"Table"> | string | null
+  displayName?: Prisma.StringNullableWithAggregatesFilter<"Table"> | string | null
 }
 
 export type TableCreateInput = {
@@ -367,6 +467,14 @@ export type TableCreateInput = {
   previewState?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
+  tournamentMatchId?: string | null
+  tournamentId?: string | null
+  bestOfN?: number | null
+  isHvb?: boolean
+  botUserId?: string | null
+  botSkillId?: string | null
+  slug?: string | null
+  displayName?: string | null
 }
 
 export type TableUncheckedCreateInput = {
@@ -383,6 +491,14 @@ export type TableUncheckedCreateInput = {
   previewState?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
+  tournamentMatchId?: string | null
+  tournamentId?: string | null
+  bestOfN?: number | null
+  isHvb?: boolean
+  botUserId?: string | null
+  botSkillId?: string | null
+  slug?: string | null
+  displayName?: string | null
 }
 
 export type TableUpdateInput = {
@@ -399,6 +515,14 @@ export type TableUpdateInput = {
   previewState?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  bestOfN?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  isHvb?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botSkillId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  slug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  displayName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type TableUncheckedUpdateInput = {
@@ -415,6 +539,14 @@ export type TableUncheckedUpdateInput = {
   previewState?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  bestOfN?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  isHvb?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botSkillId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  slug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  displayName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type TableCreateManyInput = {
@@ -431,6 +563,14 @@ export type TableCreateManyInput = {
   previewState?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
+  tournamentMatchId?: string | null
+  tournamentId?: string | null
+  bestOfN?: number | null
+  isHvb?: boolean
+  botUserId?: string | null
+  botSkillId?: string | null
+  slug?: string | null
+  displayName?: string | null
 }
 
 export type TableUpdateManyMutationInput = {
@@ -447,6 +587,14 @@ export type TableUpdateManyMutationInput = {
   previewState?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  bestOfN?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  isHvb?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botSkillId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  slug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  displayName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type TableUncheckedUpdateManyInput = {
@@ -463,6 +611,14 @@ export type TableUncheckedUpdateManyInput = {
   previewState?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tournamentMatchId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tournamentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  bestOfN?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  isHvb?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botSkillId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  slug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  displayName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type TableCountOrderByAggregateInput = {
@@ -479,11 +635,20 @@ export type TableCountOrderByAggregateInput = {
   previewState?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  tournamentMatchId?: Prisma.SortOrder
+  tournamentId?: Prisma.SortOrder
+  bestOfN?: Prisma.SortOrder
+  isHvb?: Prisma.SortOrder
+  botUserId?: Prisma.SortOrder
+  botSkillId?: Prisma.SortOrder
+  slug?: Prisma.SortOrder
+  displayName?: Prisma.SortOrder
 }
 
 export type TableAvgOrderByAggregateInput = {
   minPlayers?: Prisma.SortOrder
   maxPlayers?: Prisma.SortOrder
+  bestOfN?: Prisma.SortOrder
 }
 
 export type TableMaxOrderByAggregateInput = {
@@ -498,6 +663,14 @@ export type TableMaxOrderByAggregateInput = {
   isTournament?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  tournamentMatchId?: Prisma.SortOrder
+  tournamentId?: Prisma.SortOrder
+  bestOfN?: Prisma.SortOrder
+  isHvb?: Prisma.SortOrder
+  botUserId?: Prisma.SortOrder
+  botSkillId?: Prisma.SortOrder
+  slug?: Prisma.SortOrder
+  displayName?: Prisma.SortOrder
 }
 
 export type TableMinOrderByAggregateInput = {
@@ -512,11 +685,20 @@ export type TableMinOrderByAggregateInput = {
   isTournament?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  tournamentMatchId?: Prisma.SortOrder
+  tournamentId?: Prisma.SortOrder
+  bestOfN?: Prisma.SortOrder
+  isHvb?: Prisma.SortOrder
+  botUserId?: Prisma.SortOrder
+  botSkillId?: Prisma.SortOrder
+  slug?: Prisma.SortOrder
+  displayName?: Prisma.SortOrder
 }
 
 export type TableSumOrderByAggregateInput = {
   minPlayers?: Prisma.SortOrder
   maxPlayers?: Prisma.SortOrder
+  bestOfN?: Prisma.SortOrder
 }
 
 export type EnumTableStatusFieldUpdateOperationsInput = {
@@ -539,6 +721,14 @@ export type TableSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   previewState?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  tournamentMatchId?: boolean
+  tournamentId?: boolean
+  bestOfN?: boolean
+  isHvb?: boolean
+  botUserId?: boolean
+  botSkillId?: boolean
+  slug?: boolean
+  displayName?: boolean
 }, ExtArgs["result"]["table"]>
 
 export type TableSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -555,6 +745,14 @@ export type TableSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   previewState?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  tournamentMatchId?: boolean
+  tournamentId?: boolean
+  bestOfN?: boolean
+  isHvb?: boolean
+  botUserId?: boolean
+  botSkillId?: boolean
+  slug?: boolean
+  displayName?: boolean
 }, ExtArgs["result"]["table"]>
 
 export type TableSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -571,6 +769,14 @@ export type TableSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   previewState?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  tournamentMatchId?: boolean
+  tournamentId?: boolean
+  bestOfN?: boolean
+  isHvb?: boolean
+  botUserId?: boolean
+  botSkillId?: boolean
+  slug?: boolean
+  displayName?: boolean
 }, ExtArgs["result"]["table"]>
 
 export type TableSelectScalar = {
@@ -587,9 +793,17 @@ export type TableSelectScalar = {
   previewState?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  tournamentMatchId?: boolean
+  tournamentId?: boolean
+  bestOfN?: boolean
+  isHvb?: boolean
+  botUserId?: boolean
+  botSkillId?: boolean
+  slug?: boolean
+  displayName?: boolean
 }
 
-export type TableOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "gameId" | "status" | "createdById" | "minPlayers" | "maxPlayers" | "isPrivate" | "chatEnabled" | "isTournament" | "seats" | "previewState" | "createdAt" | "updatedAt", ExtArgs["result"]["table"]>
+export type TableOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "gameId" | "status" | "createdById" | "minPlayers" | "maxPlayers" | "isPrivate" | "chatEnabled" | "isTournament" | "seats" | "previewState" | "createdAt" | "updatedAt" | "tournamentMatchId" | "tournamentId" | "bestOfN" | "isHvb" | "botUserId" | "botSkillId" | "slug" | "displayName", ExtArgs["result"]["table"]>
 
 export type $TablePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Table"
@@ -610,12 +824,28 @@ export type $TablePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs 
      */
     seats: runtime.JsonValue
     /**
-     * Lightweight snapshot from sdk.getPreviewState(); refreshed on each move.
-     * Game-defined shape — opaque to the platform.
+     * Full game state blob — replaces the in-memory Room's board/turn/scores.
+     * Shape: { board, currentTurn, scores, round, winner, winLine, marks, botMark, moves }
+     * Updated on every move; game-defined but platform reads status fields for
+     * lifecycle decisions (e.g., marking Table COMPLETED on winner).
      */
     previewState: runtime.JsonValue | null
     createdAt: Date
     updatedAt: Date
+    /**
+     * Phase 3.4 — tournament context (null for free-play tables).
+     */
+    tournamentMatchId: string | null
+    tournamentId: string | null
+    bestOfN: number | null
+    /**
+     * Phase 3.4 — bot context (null for PvP tables).
+     */
+    isHvb: boolean
+    botUserId: string | null
+    botSkillId: string | null
+    slug: string | null
+    displayName: string | null
   }, ExtArgs["result"]["table"]>
   composites: {}
 }
@@ -1052,6 +1282,14 @@ export interface TableFieldRefs {
   readonly previewState: Prisma.FieldRef<"Table", 'Json'>
   readonly createdAt: Prisma.FieldRef<"Table", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Table", 'DateTime'>
+  readonly tournamentMatchId: Prisma.FieldRef<"Table", 'String'>
+  readonly tournamentId: Prisma.FieldRef<"Table", 'String'>
+  readonly bestOfN: Prisma.FieldRef<"Table", 'Int'>
+  readonly isHvb: Prisma.FieldRef<"Table", 'Boolean'>
+  readonly botUserId: Prisma.FieldRef<"Table", 'String'>
+  readonly botSkillId: Prisma.FieldRef<"Table", 'String'>
+  readonly slug: Prisma.FieldRef<"Table", 'String'>
+  readonly displayName: Prisma.FieldRef<"Table", 'String'>
 }
     
 

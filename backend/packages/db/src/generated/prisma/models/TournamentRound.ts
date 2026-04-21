@@ -216,8 +216,8 @@ export type TournamentRoundWhereInput = {
   roundNumber?: Prisma.IntFilter<"TournamentRound"> | number
   status?: Prisma.EnumRoundStatusFilter<"TournamentRound"> | $Enums.RoundStatus
   createdAt?: Prisma.DateTimeFilter<"TournamentRound"> | Date | string
-  tournament?: Prisma.XOR<Prisma.TournamentScalarRelationFilter, Prisma.TournamentWhereInput>
   matches?: Prisma.TournamentMatchListRelationFilter
+  tournament?: Prisma.XOR<Prisma.TournamentScalarRelationFilter, Prisma.TournamentWhereInput>
 }
 
 export type TournamentRoundOrderByWithRelationInput = {
@@ -226,8 +226,8 @@ export type TournamentRoundOrderByWithRelationInput = {
   roundNumber?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
-  tournament?: Prisma.TournamentOrderByWithRelationInput
   matches?: Prisma.TournamentMatchOrderByRelationAggregateInput
+  tournament?: Prisma.TournamentOrderByWithRelationInput
 }
 
 export type TournamentRoundWhereUniqueInput = Prisma.AtLeast<{
@@ -240,8 +240,8 @@ export type TournamentRoundWhereUniqueInput = Prisma.AtLeast<{
   roundNumber?: Prisma.IntFilter<"TournamentRound"> | number
   status?: Prisma.EnumRoundStatusFilter<"TournamentRound"> | $Enums.RoundStatus
   createdAt?: Prisma.DateTimeFilter<"TournamentRound"> | Date | string
-  tournament?: Prisma.XOR<Prisma.TournamentScalarRelationFilter, Prisma.TournamentWhereInput>
   matches?: Prisma.TournamentMatchListRelationFilter
+  tournament?: Prisma.XOR<Prisma.TournamentScalarRelationFilter, Prisma.TournamentWhereInput>
 }, "id" | "tournamentId_roundNumber">
 
 export type TournamentRoundOrderByWithAggregationInput = {
@@ -273,8 +273,8 @@ export type TournamentRoundCreateInput = {
   roundNumber: number
   status?: $Enums.RoundStatus
   createdAt?: Date | string
-  tournament: Prisma.TournamentCreateNestedOneWithoutRoundsInput
   matches?: Prisma.TournamentMatchCreateNestedManyWithoutRoundInput
+  tournament: Prisma.TournamentCreateNestedOneWithoutRoundsInput
 }
 
 export type TournamentRoundUncheckedCreateInput = {
@@ -291,8 +291,8 @@ export type TournamentRoundUpdateInput = {
   roundNumber?: Prisma.IntFieldUpdateOperationsInput | number
   status?: Prisma.EnumRoundStatusFieldUpdateOperationsInput | $Enums.RoundStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  tournament?: Prisma.TournamentUpdateOneRequiredWithoutRoundsNestedInput
   matches?: Prisma.TournamentMatchUpdateManyWithoutRoundNestedInput
+  tournament?: Prisma.TournamentUpdateOneRequiredWithoutRoundsNestedInput
 }
 
 export type TournamentRoundUncheckedUpdateInput = {
@@ -607,8 +607,8 @@ export type TournamentRoundSelect<ExtArgs extends runtime.Types.Extensions.Inter
   roundNumber?: boolean
   status?: boolean
   createdAt?: boolean
-  tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   matches?: boolean | Prisma.TournamentRound$matchesArgs<ExtArgs>
+  tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   _count?: boolean | Prisma.TournamentRoundCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tournamentRound"]>
 
@@ -640,8 +640,8 @@ export type TournamentRoundSelectScalar = {
 
 export type TournamentRoundOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tournamentId" | "roundNumber" | "status" | "createdAt", ExtArgs["result"]["tournamentRound"]>
 export type TournamentRoundInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   matches?: boolean | Prisma.TournamentRound$matchesArgs<ExtArgs>
+  tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   _count?: boolean | Prisma.TournamentRoundCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type TournamentRoundIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -654,8 +654,8 @@ export type TournamentRoundIncludeUpdateManyAndReturn<ExtArgs extends runtime.Ty
 export type $TournamentRoundPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "TournamentRound"
   objects: {
-    tournament: Prisma.$TournamentPayload<ExtArgs>
     matches: Prisma.$TournamentMatchPayload<ExtArgs>[]
+    tournament: Prisma.$TournamentPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1057,8 +1057,8 @@ readonly fields: TournamentRoundFieldRefs;
  */
 export interface Prisma__TournamentRoundClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  tournament<T extends Prisma.TournamentDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TournamentDefaultArgs<ExtArgs>>): Prisma.Prisma__TournamentClient<runtime.Types.Result.GetResult<Prisma.$TournamentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   matches<T extends Prisma.TournamentRound$matchesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TournamentRound$matchesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentMatchPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  tournament<T extends Prisma.TournamentDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TournamentDefaultArgs<ExtArgs>>): Prisma.Prisma__TournamentClient<runtime.Types.Result.GetResult<Prisma.$TournamentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.

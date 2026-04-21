@@ -52,9 +52,9 @@ export type TournamentParticipantMinAggregateOutputType = {
   resultNotifPref: $Enums.ResultNotifPref | null
   finalPosition: number | null
   finalPositionPct: number | null
+  registeredAt: Date | null
   points: number | null
   registrationMode: $Enums.RegistrationMode | null
-  registeredAt: Date | null
 }
 
 export type TournamentParticipantMaxAggregateOutputType = {
@@ -67,9 +67,9 @@ export type TournamentParticipantMaxAggregateOutputType = {
   resultNotifPref: $Enums.ResultNotifPref | null
   finalPosition: number | null
   finalPositionPct: number | null
+  registeredAt: Date | null
   points: number | null
   registrationMode: $Enums.RegistrationMode | null
-  registeredAt: Date | null
 }
 
 export type TournamentParticipantCountAggregateOutputType = {
@@ -82,9 +82,9 @@ export type TournamentParticipantCountAggregateOutputType = {
   resultNotifPref: number
   finalPosition: number
   finalPositionPct: number
+  registeredAt: number
   points: number
   registrationMode: number
-  registeredAt: number
   _all: number
 }
 
@@ -115,9 +115,9 @@ export type TournamentParticipantMinAggregateInputType = {
   resultNotifPref?: true
   finalPosition?: true
   finalPositionPct?: true
+  registeredAt?: true
   points?: true
   registrationMode?: true
-  registeredAt?: true
 }
 
 export type TournamentParticipantMaxAggregateInputType = {
@@ -130,9 +130,9 @@ export type TournamentParticipantMaxAggregateInputType = {
   resultNotifPref?: true
   finalPosition?: true
   finalPositionPct?: true
+  registeredAt?: true
   points?: true
   registrationMode?: true
-  registeredAt?: true
 }
 
 export type TournamentParticipantCountAggregateInputType = {
@@ -145,9 +145,9 @@ export type TournamentParticipantCountAggregateInputType = {
   resultNotifPref?: true
   finalPosition?: true
   finalPositionPct?: true
+  registeredAt?: true
   points?: true
   registrationMode?: true
-  registeredAt?: true
   _all?: true
 }
 
@@ -247,9 +247,9 @@ export type TournamentParticipantGroupByOutputType = {
   resultNotifPref: $Enums.ResultNotifPref
   finalPosition: number | null
   finalPositionPct: number | null
+  registeredAt: Date
   points: number
   registrationMode: $Enums.RegistrationMode
-  registeredAt: Date
   _count: TournamentParticipantCountAggregateOutputType | null
   _avg: TournamentParticipantAvgAggregateOutputType | null
   _sum: TournamentParticipantSumAggregateOutputType | null
@@ -285,9 +285,9 @@ export type TournamentParticipantWhereInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFilter<"TournamentParticipant"> | $Enums.ResultNotifPref
   finalPosition?: Prisma.IntNullableFilter<"TournamentParticipant"> | number | null
   finalPositionPct?: Prisma.FloatNullableFilter<"TournamentParticipant"> | number | null
+  registeredAt?: Prisma.DateTimeFilter<"TournamentParticipant"> | Date | string
   points?: Prisma.IntFilter<"TournamentParticipant"> | number
   registrationMode?: Prisma.EnumRegistrationModeFilter<"TournamentParticipant"> | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFilter<"TournamentParticipant"> | Date | string
   tournament?: Prisma.XOR<Prisma.TournamentScalarRelationFilter, Prisma.TournamentWhereInput>
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }
@@ -302,9 +302,9 @@ export type TournamentParticipantOrderByWithRelationInput = {
   resultNotifPref?: Prisma.SortOrder
   finalPosition?: Prisma.SortOrderInput | Prisma.SortOrder
   finalPositionPct?: Prisma.SortOrderInput | Prisma.SortOrder
+  registeredAt?: Prisma.SortOrder
   points?: Prisma.SortOrder
   registrationMode?: Prisma.SortOrder
-  registeredAt?: Prisma.SortOrder
   tournament?: Prisma.TournamentOrderByWithRelationInput
   user?: Prisma.UserOrderByWithRelationInput
 }
@@ -323,9 +323,9 @@ export type TournamentParticipantWhereUniqueInput = Prisma.AtLeast<{
   resultNotifPref?: Prisma.EnumResultNotifPrefFilter<"TournamentParticipant"> | $Enums.ResultNotifPref
   finalPosition?: Prisma.IntNullableFilter<"TournamentParticipant"> | number | null
   finalPositionPct?: Prisma.FloatNullableFilter<"TournamentParticipant"> | number | null
+  registeredAt?: Prisma.DateTimeFilter<"TournamentParticipant"> | Date | string
   points?: Prisma.IntFilter<"TournamentParticipant"> | number
   registrationMode?: Prisma.EnumRegistrationModeFilter<"TournamentParticipant"> | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFilter<"TournamentParticipant"> | Date | string
   tournament?: Prisma.XOR<Prisma.TournamentScalarRelationFilter, Prisma.TournamentWhereInput>
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }, "id" | "tournamentId_userId">
@@ -340,9 +340,9 @@ export type TournamentParticipantOrderByWithAggregationInput = {
   resultNotifPref?: Prisma.SortOrder
   finalPosition?: Prisma.SortOrderInput | Prisma.SortOrder
   finalPositionPct?: Prisma.SortOrderInput | Prisma.SortOrder
+  registeredAt?: Prisma.SortOrder
   points?: Prisma.SortOrder
   registrationMode?: Prisma.SortOrder
-  registeredAt?: Prisma.SortOrder
   _count?: Prisma.TournamentParticipantCountOrderByAggregateInput
   _avg?: Prisma.TournamentParticipantAvgOrderByAggregateInput
   _max?: Prisma.TournamentParticipantMaxOrderByAggregateInput
@@ -363,9 +363,9 @@ export type TournamentParticipantScalarWhereWithAggregatesInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefWithAggregatesFilter<"TournamentParticipant"> | $Enums.ResultNotifPref
   finalPosition?: Prisma.IntNullableWithAggregatesFilter<"TournamentParticipant"> | number | null
   finalPositionPct?: Prisma.FloatNullableWithAggregatesFilter<"TournamentParticipant"> | number | null
+  registeredAt?: Prisma.DateTimeWithAggregatesFilter<"TournamentParticipant"> | Date | string
   points?: Prisma.IntWithAggregatesFilter<"TournamentParticipant"> | number
   registrationMode?: Prisma.EnumRegistrationModeWithAggregatesFilter<"TournamentParticipant"> | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeWithAggregatesFilter<"TournamentParticipant"> | Date | string
 }
 
 export type TournamentParticipantCreateInput = {
@@ -376,9 +376,9 @@ export type TournamentParticipantCreateInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
   tournament: Prisma.TournamentCreateNestedOneWithoutParticipantsInput
   user: Prisma.UserCreateNestedOneWithoutTournamentParticipantsInput
 }
@@ -393,9 +393,9 @@ export type TournamentParticipantUncheckedCreateInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
 }
 
 export type TournamentParticipantUpdateInput = {
@@ -406,9 +406,9 @@ export type TournamentParticipantUpdateInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tournament?: Prisma.TournamentUpdateOneRequiredWithoutParticipantsNestedInput
   user?: Prisma.UserUpdateOneRequiredWithoutTournamentParticipantsNestedInput
 }
@@ -423,9 +423,9 @@ export type TournamentParticipantUncheckedUpdateInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type TournamentParticipantCreateManyInput = {
@@ -438,9 +438,9 @@ export type TournamentParticipantCreateManyInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
 }
 
 export type TournamentParticipantUpdateManyMutationInput = {
@@ -451,9 +451,9 @@ export type TournamentParticipantUpdateManyMutationInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type TournamentParticipantUncheckedUpdateManyInput = {
@@ -466,9 +466,9 @@ export type TournamentParticipantUncheckedUpdateManyInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type TournamentParticipantListRelationFilter = {
@@ -496,9 +496,9 @@ export type TournamentParticipantCountOrderByAggregateInput = {
   resultNotifPref?: Prisma.SortOrder
   finalPosition?: Prisma.SortOrder
   finalPositionPct?: Prisma.SortOrder
+  registeredAt?: Prisma.SortOrder
   points?: Prisma.SortOrder
   registrationMode?: Prisma.SortOrder
-  registeredAt?: Prisma.SortOrder
 }
 
 export type TournamentParticipantAvgOrderByAggregateInput = {
@@ -519,9 +519,9 @@ export type TournamentParticipantMaxOrderByAggregateInput = {
   resultNotifPref?: Prisma.SortOrder
   finalPosition?: Prisma.SortOrder
   finalPositionPct?: Prisma.SortOrder
+  registeredAt?: Prisma.SortOrder
   points?: Prisma.SortOrder
   registrationMode?: Prisma.SortOrder
-  registeredAt?: Prisma.SortOrder
 }
 
 export type TournamentParticipantMinOrderByAggregateInput = {
@@ -534,9 +534,9 @@ export type TournamentParticipantMinOrderByAggregateInput = {
   resultNotifPref?: Prisma.SortOrder
   finalPosition?: Prisma.SortOrder
   finalPositionPct?: Prisma.SortOrder
+  registeredAt?: Prisma.SortOrder
   points?: Prisma.SortOrder
   registrationMode?: Prisma.SortOrder
-  registeredAt?: Prisma.SortOrder
 }
 
 export type TournamentParticipantSumOrderByAggregateInput = {
@@ -659,9 +659,9 @@ export type TournamentParticipantCreateWithoutUserInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
   tournament: Prisma.TournamentCreateNestedOneWithoutParticipantsInput
 }
 
@@ -674,9 +674,9 @@ export type TournamentParticipantUncheckedCreateWithoutUserInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
 }
 
 export type TournamentParticipantCreateOrConnectWithoutUserInput = {
@@ -718,9 +718,9 @@ export type TournamentParticipantScalarWhereInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFilter<"TournamentParticipant"> | $Enums.ResultNotifPref
   finalPosition?: Prisma.IntNullableFilter<"TournamentParticipant"> | number | null
   finalPositionPct?: Prisma.FloatNullableFilter<"TournamentParticipant"> | number | null
+  registeredAt?: Prisma.DateTimeFilter<"TournamentParticipant"> | Date | string
   points?: Prisma.IntFilter<"TournamentParticipant"> | number
   registrationMode?: Prisma.EnumRegistrationModeFilter<"TournamentParticipant"> | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFilter<"TournamentParticipant"> | Date | string
 }
 
 export type TournamentParticipantCreateWithoutTournamentInput = {
@@ -731,9 +731,9 @@ export type TournamentParticipantCreateWithoutTournamentInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutTournamentParticipantsInput
 }
 
@@ -746,9 +746,9 @@ export type TournamentParticipantUncheckedCreateWithoutTournamentInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
 }
 
 export type TournamentParticipantCreateOrConnectWithoutTournamentInput = {
@@ -786,9 +786,9 @@ export type TournamentParticipantCreateManyUserInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
 }
 
 export type TournamentParticipantUpdateWithoutUserInput = {
@@ -799,9 +799,9 @@ export type TournamentParticipantUpdateWithoutUserInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tournament?: Prisma.TournamentUpdateOneRequiredWithoutParticipantsNestedInput
 }
 
@@ -814,9 +814,9 @@ export type TournamentParticipantUncheckedUpdateWithoutUserInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type TournamentParticipantUncheckedUpdateManyWithoutUserInput = {
@@ -828,9 +828,9 @@ export type TournamentParticipantUncheckedUpdateManyWithoutUserInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type TournamentParticipantCreateManyTournamentInput = {
@@ -842,9 +842,9 @@ export type TournamentParticipantCreateManyTournamentInput = {
   resultNotifPref?: $Enums.ResultNotifPref
   finalPosition?: number | null
   finalPositionPct?: number | null
+  registeredAt?: Date | string
   points?: number
   registrationMode?: $Enums.RegistrationMode
-  registeredAt?: Date | string
 }
 
 export type TournamentParticipantUpdateWithoutTournamentInput = {
@@ -855,9 +855,9 @@ export type TournamentParticipantUpdateWithoutTournamentInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutTournamentParticipantsNestedInput
 }
 
@@ -870,9 +870,9 @@ export type TournamentParticipantUncheckedUpdateWithoutTournamentInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type TournamentParticipantUncheckedUpdateManyWithoutTournamentInput = {
@@ -884,9 +884,9 @@ export type TournamentParticipantUncheckedUpdateManyWithoutTournamentInput = {
   resultNotifPref?: Prisma.EnumResultNotifPrefFieldUpdateOperationsInput | $Enums.ResultNotifPref
   finalPosition?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   finalPositionPct?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   points?: Prisma.IntFieldUpdateOperationsInput | number
   registrationMode?: Prisma.EnumRegistrationModeFieldUpdateOperationsInput | $Enums.RegistrationMode
-  registeredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 
@@ -901,9 +901,9 @@ export type TournamentParticipantSelect<ExtArgs extends runtime.Types.Extensions
   resultNotifPref?: boolean
   finalPosition?: boolean
   finalPositionPct?: boolean
+  registeredAt?: boolean
   points?: boolean
   registrationMode?: boolean
-  registeredAt?: boolean
   tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tournamentParticipant"]>
@@ -918,9 +918,9 @@ export type TournamentParticipantSelectCreateManyAndReturn<ExtArgs extends runti
   resultNotifPref?: boolean
   finalPosition?: boolean
   finalPositionPct?: boolean
+  registeredAt?: boolean
   points?: boolean
   registrationMode?: boolean
-  registeredAt?: boolean
   tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tournamentParticipant"]>
@@ -935,9 +935,9 @@ export type TournamentParticipantSelectUpdateManyAndReturn<ExtArgs extends runti
   resultNotifPref?: boolean
   finalPosition?: boolean
   finalPositionPct?: boolean
+  registeredAt?: boolean
   points?: boolean
   registrationMode?: boolean
-  registeredAt?: boolean
   tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tournamentParticipant"]>
@@ -952,12 +952,12 @@ export type TournamentParticipantSelectScalar = {
   resultNotifPref?: boolean
   finalPosition?: boolean
   finalPositionPct?: boolean
+  registeredAt?: boolean
   points?: boolean
   registrationMode?: boolean
-  registeredAt?: boolean
 }
 
-export type TournamentParticipantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tournamentId" | "userId" | "seedPosition" | "eloAtRegistration" | "status" | "resultNotifPref" | "finalPosition" | "finalPositionPct" | "points" | "registrationMode" | "registeredAt", ExtArgs["result"]["tournamentParticipant"]>
+export type TournamentParticipantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tournamentId" | "userId" | "seedPosition" | "eloAtRegistration" | "status" | "resultNotifPref" | "finalPosition" | "finalPositionPct" | "registeredAt" | "points" | "registrationMode", ExtArgs["result"]["tournamentParticipant"]>
 export type TournamentParticipantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tournament?: boolean | Prisma.TournamentDefaultArgs<ExtArgs>
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -990,9 +990,9 @@ export type $TournamentParticipantPayload<ExtArgs extends runtime.Types.Extensio
      * Normalised rank: 0.0 = winner (best), 1.0 = last place (worst). Null until tournament ends.
      */
     finalPositionPct: number | null
+    registeredAt: Date
     points: number
     registrationMode: $Enums.RegistrationMode
-    registeredAt: Date
   }, ExtArgs["result"]["tournamentParticipant"]>
   composites: {}
 }
@@ -1427,9 +1427,9 @@ export interface TournamentParticipantFieldRefs {
   readonly resultNotifPref: Prisma.FieldRef<"TournamentParticipant", 'ResultNotifPref'>
   readonly finalPosition: Prisma.FieldRef<"TournamentParticipant", 'Int'>
   readonly finalPositionPct: Prisma.FieldRef<"TournamentParticipant", 'Float'>
+  readonly registeredAt: Prisma.FieldRef<"TournamentParticipant", 'DateTime'>
   readonly points: Prisma.FieldRef<"TournamentParticipant", 'Int'>
   readonly registrationMode: Prisma.FieldRef<"TournamentParticipant", 'RegistrationMode'>
-  readonly registeredAt: Prisma.FieldRef<"TournamentParticipant", 'DateTime'>
 }
     
 

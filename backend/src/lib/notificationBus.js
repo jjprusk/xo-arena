@@ -5,6 +5,8 @@
 import db from './db.js'
 import logger from '../logger.js'
 import { appendToStream } from './eventStream.js'
+import { sendToUser as pushToUser, buildPushPayload } from './pushService.js'
+import * as sseBroker from './sseBroker.js'
 
 let _io = null
 export function initBus(io) { _io = io }
@@ -22,13 +24,13 @@ const REGISTRY = {
   'tournament.published':            { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h
   'tournament.flash_announced':      { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
   'tournament.registration_closing': { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  2 * 60 * 60 * 1000 },  // 2h
-  'tournament.starting_soon':        { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
-  'tournament.started':              { mode: 'cohort',    persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 },  // 24h
-  'tournament.cancelled':            { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'tournament.starting_soon':        { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
+  'tournament.started':              { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs: 24 * 60 * 60 * 1000 },  // 24h
+  'tournament.cancelled':            { mode: 'cohort',    persist: 'persistent', email: true,  push: true, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
   'tournament.completed':            { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
-  'match.ready':                     { mode: 'personal',  persist: 'persistent', email: true,  ttlMs:  6 * 60 * 60 * 1000, systemCritical: true },  // 6h
+  'match.ready':                     { mode: 'personal',  persist: 'persistent', email: true,  push: true, ttlMs:  6 * 60 * 60 * 1000, systemCritical: true },  // 6h
   'match.result':                    { mode: 'personal',  persist: 'persistent', email: false, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
-  'achievement.tier_upgrade':        { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null },
+  'achievement.tier_upgrade':        { mode: 'personal',  persist: 'persistent', email: false, push: true, ttlMs: null },
   'achievement.milestone':           { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null },
   'admin.announcement':              { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: null },
   'system.alert':                    { mode: 'personal',  persist: 'persistent', email: false, ttlMs: null, systemCritical: true },
@@ -49,17 +51,17 @@ const REGISTRY = {
 
 // ── Default preferences (used when no NotificationPreference row exists) ──────
 const PREF_DEFAULTS = {
-  'tournament.published':            { inApp: true,  email: false },
-  'tournament.flash_announced':      { inApp: true,  email: false },
-  'tournament.registration_closing': { inApp: true,  email: false },
-  'tournament.starting_soon':        { inApp: true,  email: false },
-  'tournament.started':              { inApp: true,  email: false },
-  'tournament.cancelled':            { inApp: true,  email: true  },
-  'tournament.completed':            { inApp: true,  email: true  },
-  'match.ready':                     { inApp: true,  email: true  },
-  'match.result':                    { inApp: true,  email: false },
-  'achievement.tier_upgrade':        { inApp: true,  email: false },
-  'achievement.milestone':           { inApp: true,  email: false },
+  'tournament.published':            { inApp: true,  email: false, push: false },
+  'tournament.flash_announced':      { inApp: true,  email: false, push: false },
+  'tournament.registration_closing': { inApp: true,  email: false, push: false },
+  'tournament.starting_soon':        { inApp: true,  email: false, push: false },
+  'tournament.started':              { inApp: true,  email: false, push: false },
+  'tournament.cancelled':            { inApp: true,  email: true,  push: false },
+  'tournament.completed':            { inApp: true,  email: true,  push: false },
+  'match.ready':                     { inApp: true,  email: true,  push: false },
+  'match.result':                    { inApp: true,  email: false, push: false },
+  'achievement.tier_upgrade':        { inApp: true,  email: false, push: false },
+  'achievement.milestone':           { inApp: true,  email: false, push: false },
   'admin.announcement':              { inApp: true,  email: false },
   'system.alert':                    { inApp: true,  email: false },
   'system.alert.cleared':            { inApp: true,  email: false },
@@ -172,6 +174,19 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
         // on next sign-in.
         appendToStream('guide:notification', { type, payload, expiresAt: expiresAtIso }, { userId })
           .catch(() => {})
+
+        // Tier 3 Web Push — fire only when the event is push-eligible in the
+        // REGISTRY, the user has opted in, and they have no active SSE client
+        // right now (push is a backup for offline — online users already got
+        // the SSE entry above).
+        if (entry.push && pref.push && sseBroker.clientCountForUser(userId) === 0) {
+          const pushPayload = buildPushPayload(type, payload)
+          if (pushPayload) {
+            pushToUser(userId, pushPayload).catch(err =>
+              logger.warn({ err, userId, type }, 'pushService.sendToUser failed (non-fatal)'),
+            )
+          }
+        }
 
         // TODO: email delivery (Phase 4 — notificationService.js refactor will wire this)
       } catch (err) {

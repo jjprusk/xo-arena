@@ -78,6 +78,7 @@ export const ModelName = {
   BaVerification: 'BaVerification',
   UserNotification: 'UserNotification',
   NotificationPreference: 'NotificationPreference',
+  PushSubscription: 'PushSubscription',
   ScheduledJob: 'ScheduledJob',
   Tournament: 'Tournament',
   TournamentParticipant: 'TournamentParticipant',
@@ -88,6 +89,7 @@ export const ModelName = {
   ClassificationHistory: 'ClassificationHistory',
   MeritThreshold: 'MeritThreshold',
   RecurringTournamentRegistration: 'RecurringTournamentRegistration',
+  TournamentSeedBot: 'TournamentSeedBot',
   Table: 'Table'
 } as const
 
@@ -131,13 +133,13 @@ export const UserScalarFieldEnum = {
   botModelType: 'botModelType',
   botOwnerId: 'botOwnerId',
   isBot: 'isBot',
-  nameConfirmed: 'nameConfirmed',
-  lastActiveAt: 'lastActiveAt',
   botEloResetAt: 'botEloResetAt',
   botGamesPlayed: 'botGamesPlayed',
-  creditsHpc: 'creditsHpc',
   creditsBpc: 'creditsBpc',
+  creditsHpc: 'creditsHpc',
   creditsTc: 'creditsTc',
+  nameConfirmed: 'nameConfirmed',
+  lastActiveAt: 'lastActiveAt',
   emailAchievements: 'emailAchievements'
 } as const
 
@@ -215,7 +217,6 @@ export type GameEloScalarFieldEnum = (typeof GameEloScalarFieldEnum)[keyof typeo
 
 export const GameScalarFieldEnum = {
   id: 'id',
-  appId: 'appId',
   player1Id: 'player1Id',
   player2Id: 'player2Id',
   winnerId: 'winnerId',
@@ -228,6 +229,7 @@ export const GameScalarFieldEnum = {
   startedAt: 'startedAt',
   endedAt: 'endedAt',
   roomName: 'roomName',
+  appId: 'appId',
   tournamentId: 'tournamentId',
   tournamentMatchId: 'tournamentMatchId',
   isTournament: 'isTournament',
@@ -499,10 +501,10 @@ export const UserNotificationScalarFieldEnum = {
   type: 'type',
   payload: 'payload',
   createdAt: 'createdAt',
-  expiresAt: 'expiresAt',
   deliveredAt: 'deliveredAt',
   emailedAt: 'emailedAt',
-  readAt: 'readAt'
+  readAt: 'readAt',
+  expiresAt: 'expiresAt'
 } as const
 
 export type UserNotificationScalarFieldEnum = (typeof UserNotificationScalarFieldEnum)[keyof typeof UserNotificationScalarFieldEnum]
@@ -514,10 +516,25 @@ export const NotificationPreferenceScalarFieldEnum = {
   eventType: 'eventType',
   inApp: 'inApp',
   email: 'email',
-  sms: 'sms'
+  sms: 'sms',
+  push: 'push'
 } as const
 
 export type NotificationPreferenceScalarFieldEnum = (typeof NotificationPreferenceScalarFieldEnum)[keyof typeof NotificationPreferenceScalarFieldEnum]
+
+
+export const PushSubscriptionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  endpoint: 'endpoint',
+  p256dh: 'p256dh',
+  auth: 'auth',
+  userAgent: 'userAgent',
+  createdAt: 'createdAt',
+  lastUsedAt: 'lastUsedAt'
+} as const
+
+export type PushSubscriptionScalarFieldEnum = (typeof PushSubscriptionScalarFieldEnum)[keyof typeof PushSubscriptionScalarFieldEnum]
 
 
 export const ScheduledJobScalarFieldEnum = {
@@ -550,9 +567,7 @@ export const TournamentScalarFieldEnum = {
   bestOfN: 'bestOfN',
   botMinGamesPlayed: 'botMinGamesPlayed',
   allowNonCompetitiveBots: 'allowNonCompetitiveBots',
-  paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
-  startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
   registrationOpenAt: 'registrationOpenAt',
@@ -560,12 +575,14 @@ export const TournamentScalarFieldEnum = {
   noticePeriodMinutes: 'noticePeriodMinutes',
   durationMinutes: 'durationMinutes',
   isRecurring: 'isRecurring',
-  recurrenceInterval: 'recurrenceInterval',
-  recurrenceEndDate: 'recurrenceEndDate',
   autoOptOutAfterMissed: 'autoOptOutAfterMissed',
   createdById: 'createdById',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  paceMs: 'paceMs',
+  recurrenceInterval: 'recurrenceInterval',
+  recurrenceEndDate: 'recurrenceEndDate',
+  startMode: 'startMode'
 } as const
 
 export type TournamentScalarFieldEnum = (typeof TournamentScalarFieldEnum)[keyof typeof TournamentScalarFieldEnum]
@@ -581,9 +598,9 @@ export const TournamentParticipantScalarFieldEnum = {
   resultNotifPref: 'resultNotifPref',
   finalPosition: 'finalPosition',
   finalPositionPct: 'finalPositionPct',
+  registeredAt: 'registeredAt',
   points: 'points',
-  registrationMode: 'registrationMode',
-  registeredAt: 'registeredAt'
+  registrationMode: 'registrationMode'
 } as const
 
 export type TournamentParticipantScalarFieldEnum = (typeof TournamentParticipantScalarFieldEnum)[keyof typeof TournamentParticipantScalarFieldEnum]
@@ -624,9 +641,9 @@ export const PlayerClassificationScalarFieldEnum = {
   userId: 'userId',
   tier: 'tier',
   merits: 'merits',
-  demotionOptOutUsedAt: 'demotionOptOutUsedAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  demotionOptOutUsedAt: 'demotionOptOutUsedAt'
 } as const
 
 export type PlayerClassificationScalarFieldEnum = (typeof PlayerClassificationScalarFieldEnum)[keyof typeof PlayerClassificationScalarFieldEnum]
@@ -682,6 +699,16 @@ export const RecurringTournamentRegistrationScalarFieldEnum = {
 export type RecurringTournamentRegistrationScalarFieldEnum = (typeof RecurringTournamentRegistrationScalarFieldEnum)[keyof typeof RecurringTournamentRegistrationScalarFieldEnum]
 
 
+export const TournamentSeedBotScalarFieldEnum = {
+  id: 'id',
+  tournamentId: 'tournamentId',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type TournamentSeedBotScalarFieldEnum = (typeof TournamentSeedBotScalarFieldEnum)[keyof typeof TournamentSeedBotScalarFieldEnum]
+
+
 export const TableScalarFieldEnum = {
   id: 'id',
   gameId: 'gameId',
@@ -695,7 +722,15 @@ export const TableScalarFieldEnum = {
   seats: 'seats',
   previewState: 'previewState',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  tournamentMatchId: 'tournamentMatchId',
+  tournamentId: 'tournamentId',
+  bestOfN: 'bestOfN',
+  isHvb: 'isHvb',
+  botUserId: 'botUserId',
+  botSkillId: 'botSkillId',
+  slug: 'slug',
+  displayName: 'displayName'
 } as const
 
 export type TableScalarFieldEnum = (typeof TableScalarFieldEnum)[keyof typeof TableScalarFieldEnum]

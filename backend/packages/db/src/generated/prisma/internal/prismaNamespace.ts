@@ -411,6 +411,7 @@ export const ModelName = {
   BaVerification: 'BaVerification',
   UserNotification: 'UserNotification',
   NotificationPreference: 'NotificationPreference',
+  PushSubscription: 'PushSubscription',
   ScheduledJob: 'ScheduledJob',
   Tournament: 'Tournament',
   TournamentParticipant: 'TournamentParticipant',
@@ -421,6 +422,7 @@ export const ModelName = {
   ClassificationHistory: 'ClassificationHistory',
   MeritThreshold: 'MeritThreshold',
   RecurringTournamentRegistration: 'RecurringTournamentRegistration',
+  TournamentSeedBot: 'TournamentSeedBot',
   Table: 'Table'
 } as const
 
@@ -437,7 +439,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "gameElo" | "game" | "move" | "aIError" | "botSkill" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "notificationPreference" | "scheduledJob" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration" | "table"
+    modelProps: "user" | "feedback" | "feedbackReply" | "userRole" | "userEloHistory" | "gameElo" | "game" | "move" | "aIError" | "botSkill" | "mLPlayerProfile" | "trainingSession" | "trainingEpisode" | "mLCheckpoint" | "mLBenchmarkResult" | "mLEloHistory" | "ruleSet" | "mLTournament" | "log" | "systemConfig" | "baUser" | "baSession" | "baAccount" | "jwks" | "baVerification" | "userNotification" | "notificationPreference" | "pushSubscription" | "scheduledJob" | "tournament" | "tournamentParticipant" | "tournamentRound" | "tournamentMatch" | "playerClassification" | "meritTransaction" | "classificationHistory" | "meritThreshold" | "recurringTournamentRegistration" | "tournamentSeedBot" | "table"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2439,6 +2441,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PushSubscription: {
+      payload: Prisma.$PushSubscriptionPayload<ExtArgs>
+      fields: Prisma.PushSubscriptionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PushSubscriptionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PushSubscriptionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>
+        }
+        findFirst: {
+          args: Prisma.PushSubscriptionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PushSubscriptionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>
+        }
+        findMany: {
+          args: Prisma.PushSubscriptionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>[]
+        }
+        create: {
+          args: Prisma.PushSubscriptionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>
+        }
+        createMany: {
+          args: Prisma.PushSubscriptionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PushSubscriptionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>[]
+        }
+        delete: {
+          args: Prisma.PushSubscriptionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>
+        }
+        update: {
+          args: Prisma.PushSubscriptionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>
+        }
+        deleteMany: {
+          args: Prisma.PushSubscriptionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PushSubscriptionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PushSubscriptionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>[]
+        }
+        upsert: {
+          args: Prisma.PushSubscriptionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushSubscriptionPayload>
+        }
+        aggregate: {
+          args: Prisma.PushSubscriptionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePushSubscription>
+        }
+        groupBy: {
+          args: Prisma.PushSubscriptionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PushSubscriptionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PushSubscriptionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PushSubscriptionCountAggregateOutputType> | number
+        }
+      }
+    }
     ScheduledJob: {
       payload: Prisma.$ScheduledJobPayload<ExtArgs>
       fields: Prisma.ScheduledJobFieldRefs
@@ -3179,6 +3255,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    TournamentSeedBot: {
+      payload: Prisma.$TournamentSeedBotPayload<ExtArgs>
+      fields: Prisma.TournamentSeedBotFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TournamentSeedBotFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TournamentSeedBotFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>
+        }
+        findFirst: {
+          args: Prisma.TournamentSeedBotFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TournamentSeedBotFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>
+        }
+        findMany: {
+          args: Prisma.TournamentSeedBotFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>[]
+        }
+        create: {
+          args: Prisma.TournamentSeedBotCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>
+        }
+        createMany: {
+          args: Prisma.TournamentSeedBotCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TournamentSeedBotCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>[]
+        }
+        delete: {
+          args: Prisma.TournamentSeedBotDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>
+        }
+        update: {
+          args: Prisma.TournamentSeedBotUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>
+        }
+        deleteMany: {
+          args: Prisma.TournamentSeedBotDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TournamentSeedBotUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TournamentSeedBotUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>[]
+        }
+        upsert: {
+          args: Prisma.TournamentSeedBotUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TournamentSeedBotPayload>
+        }
+        aggregate: {
+          args: Prisma.TournamentSeedBotAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTournamentSeedBot>
+        }
+        groupBy: {
+          args: Prisma.TournamentSeedBotGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TournamentSeedBotGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TournamentSeedBotCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TournamentSeedBotCountAggregateOutputType> | number
+        }
+      }
+    }
     Table: {
       payload: Prisma.$TablePayload<ExtArgs>
       fields: Prisma.TableFieldRefs
@@ -3316,13 +3466,13 @@ export const UserScalarFieldEnum = {
   botModelType: 'botModelType',
   botOwnerId: 'botOwnerId',
   isBot: 'isBot',
-  nameConfirmed: 'nameConfirmed',
-  lastActiveAt: 'lastActiveAt',
   botEloResetAt: 'botEloResetAt',
   botGamesPlayed: 'botGamesPlayed',
-  creditsHpc: 'creditsHpc',
   creditsBpc: 'creditsBpc',
+  creditsHpc: 'creditsHpc',
   creditsTc: 'creditsTc',
+  nameConfirmed: 'nameConfirmed',
+  lastActiveAt: 'lastActiveAt',
   emailAchievements: 'emailAchievements'
 } as const
 
@@ -3400,7 +3550,6 @@ export type GameEloScalarFieldEnum = (typeof GameEloScalarFieldEnum)[keyof typeo
 
 export const GameScalarFieldEnum = {
   id: 'id',
-  appId: 'appId',
   player1Id: 'player1Id',
   player2Id: 'player2Id',
   winnerId: 'winnerId',
@@ -3413,6 +3562,7 @@ export const GameScalarFieldEnum = {
   startedAt: 'startedAt',
   endedAt: 'endedAt',
   roomName: 'roomName',
+  appId: 'appId',
   tournamentId: 'tournamentId',
   tournamentMatchId: 'tournamentMatchId',
   isTournament: 'isTournament',
@@ -3684,10 +3834,10 @@ export const UserNotificationScalarFieldEnum = {
   type: 'type',
   payload: 'payload',
   createdAt: 'createdAt',
-  expiresAt: 'expiresAt',
   deliveredAt: 'deliveredAt',
   emailedAt: 'emailedAt',
-  readAt: 'readAt'
+  readAt: 'readAt',
+  expiresAt: 'expiresAt'
 } as const
 
 export type UserNotificationScalarFieldEnum = (typeof UserNotificationScalarFieldEnum)[keyof typeof UserNotificationScalarFieldEnum]
@@ -3699,10 +3849,25 @@ export const NotificationPreferenceScalarFieldEnum = {
   eventType: 'eventType',
   inApp: 'inApp',
   email: 'email',
-  sms: 'sms'
+  sms: 'sms',
+  push: 'push'
 } as const
 
 export type NotificationPreferenceScalarFieldEnum = (typeof NotificationPreferenceScalarFieldEnum)[keyof typeof NotificationPreferenceScalarFieldEnum]
+
+
+export const PushSubscriptionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  endpoint: 'endpoint',
+  p256dh: 'p256dh',
+  auth: 'auth',
+  userAgent: 'userAgent',
+  createdAt: 'createdAt',
+  lastUsedAt: 'lastUsedAt'
+} as const
+
+export type PushSubscriptionScalarFieldEnum = (typeof PushSubscriptionScalarFieldEnum)[keyof typeof PushSubscriptionScalarFieldEnum]
 
 
 export const ScheduledJobScalarFieldEnum = {
@@ -3735,9 +3900,7 @@ export const TournamentScalarFieldEnum = {
   bestOfN: 'bestOfN',
   botMinGamesPlayed: 'botMinGamesPlayed',
   allowNonCompetitiveBots: 'allowNonCompetitiveBots',
-  paceMs: 'paceMs',
   allowSpectators: 'allowSpectators',
-  startMode: 'startMode',
   startTime: 'startTime',
   endTime: 'endTime',
   registrationOpenAt: 'registrationOpenAt',
@@ -3745,12 +3908,14 @@ export const TournamentScalarFieldEnum = {
   noticePeriodMinutes: 'noticePeriodMinutes',
   durationMinutes: 'durationMinutes',
   isRecurring: 'isRecurring',
-  recurrenceInterval: 'recurrenceInterval',
-  recurrenceEndDate: 'recurrenceEndDate',
   autoOptOutAfterMissed: 'autoOptOutAfterMissed',
   createdById: 'createdById',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  paceMs: 'paceMs',
+  recurrenceInterval: 'recurrenceInterval',
+  recurrenceEndDate: 'recurrenceEndDate',
+  startMode: 'startMode'
 } as const
 
 export type TournamentScalarFieldEnum = (typeof TournamentScalarFieldEnum)[keyof typeof TournamentScalarFieldEnum]
@@ -3766,9 +3931,9 @@ export const TournamentParticipantScalarFieldEnum = {
   resultNotifPref: 'resultNotifPref',
   finalPosition: 'finalPosition',
   finalPositionPct: 'finalPositionPct',
+  registeredAt: 'registeredAt',
   points: 'points',
-  registrationMode: 'registrationMode',
-  registeredAt: 'registeredAt'
+  registrationMode: 'registrationMode'
 } as const
 
 export type TournamentParticipantScalarFieldEnum = (typeof TournamentParticipantScalarFieldEnum)[keyof typeof TournamentParticipantScalarFieldEnum]
@@ -3809,9 +3974,9 @@ export const PlayerClassificationScalarFieldEnum = {
   userId: 'userId',
   tier: 'tier',
   merits: 'merits',
-  demotionOptOutUsedAt: 'demotionOptOutUsedAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  demotionOptOutUsedAt: 'demotionOptOutUsedAt'
 } as const
 
 export type PlayerClassificationScalarFieldEnum = (typeof PlayerClassificationScalarFieldEnum)[keyof typeof PlayerClassificationScalarFieldEnum]
@@ -3867,6 +4032,16 @@ export const RecurringTournamentRegistrationScalarFieldEnum = {
 export type RecurringTournamentRegistrationScalarFieldEnum = (typeof RecurringTournamentRegistrationScalarFieldEnum)[keyof typeof RecurringTournamentRegistrationScalarFieldEnum]
 
 
+export const TournamentSeedBotScalarFieldEnum = {
+  id: 'id',
+  tournamentId: 'tournamentId',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type TournamentSeedBotScalarFieldEnum = (typeof TournamentSeedBotScalarFieldEnum)[keyof typeof TournamentSeedBotScalarFieldEnum]
+
+
 export const TableScalarFieldEnum = {
   id: 'id',
   gameId: 'gameId',
@@ -3880,7 +4055,15 @@ export const TableScalarFieldEnum = {
   seats: 'seats',
   previewState: 'previewState',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  tournamentMatchId: 'tournamentMatchId',
+  tournamentId: 'tournamentId',
+  bestOfN: 'bestOfN',
+  isHvb: 'isHvb',
+  botUserId: 'botUserId',
+  botSkillId: 'botSkillId',
+  slug: 'slug',
+  displayName: 'displayName'
 } as const
 
 export type TableScalarFieldEnum = (typeof TableScalarFieldEnum)[keyof typeof TableScalarFieldEnum]
@@ -4242,20 +4425,6 @@ export type ListEnumTournamentStatusFieldRefInput<$PrismaModel> = FieldRefInputT
 
 
 /**
- * Reference to a field of type 'TournamentStartMode'
- */
-export type EnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode'>
-    
-
-
-/**
- * Reference to a field of type 'TournamentStartMode[]'
- */
-export type ListEnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode[]'>
-    
-
-
-/**
  * Reference to a field of type 'RecurrenceInterval'
  */
 export type EnumRecurrenceIntervalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RecurrenceInterval'>
@@ -4266,6 +4435,20 @@ export type EnumRecurrenceIntervalFieldRefInput<$PrismaModel> = FieldRefInputTyp
  * Reference to a field of type 'RecurrenceInterval[]'
  */
 export type ListEnumRecurrenceIntervalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RecurrenceInterval[]'>
+    
+
+
+/**
+ * Reference to a field of type 'TournamentStartMode'
+ */
+export type EnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode'>
+    
+
+
+/**
+ * Reference to a field of type 'TournamentStartMode[]'
+ */
+export type ListEnumTournamentStartModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TournamentStartMode[]'>
     
 
 
@@ -4488,6 +4671,7 @@ export type GlobalOmitConfig = {
   baVerification?: Prisma.BaVerificationOmit
   userNotification?: Prisma.UserNotificationOmit
   notificationPreference?: Prisma.NotificationPreferenceOmit
+  pushSubscription?: Prisma.PushSubscriptionOmit
   scheduledJob?: Prisma.ScheduledJobOmit
   tournament?: Prisma.TournamentOmit
   tournamentParticipant?: Prisma.TournamentParticipantOmit
@@ -4498,6 +4682,7 @@ export type GlobalOmitConfig = {
   classificationHistory?: Prisma.ClassificationHistoryOmit
   meritThreshold?: Prisma.MeritThresholdOmit
   recurringTournamentRegistration?: Prisma.RecurringTournamentRegistrationOmit
+  tournamentSeedBot?: Prisma.TournamentSeedBotOmit
   table?: Prisma.TableOmit
 }
 

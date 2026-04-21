@@ -178,6 +178,11 @@ export type UserNotification = Prisma.UserNotificationModel
  */
 export type NotificationPreference = Prisma.NotificationPreferenceModel
 /**
+ * Model PushSubscription
+ * 
+ */
+export type PushSubscription = Prisma.PushSubscriptionModel
+/**
  * Model ScheduledJob
  * 
  */
@@ -227,6 +232,11 @@ export type MeritThreshold = Prisma.MeritThresholdModel
  * 
  */
 export type RecurringTournamentRegistration = Prisma.RecurringTournamentRegistrationModel
+/**
+ * Model TournamentSeedBot
+ * 
+ */
+export type TournamentSeedBot = Prisma.TournamentSeedBotModel
 /**
  * Model Table
  * 
