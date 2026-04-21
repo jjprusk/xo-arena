@@ -5,6 +5,7 @@ import { tournamentApi } from '../lib/tournamentApi.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
+import { useEventStream, isTier2SseEnabled } from '../lib/useEventStream.js'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -344,6 +345,13 @@ export default function TournamentsPage() {
   useEffect(() => {
     if (lastEvent) load(statusFilter)
   }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Tier 2 SSE — any tournament:* event refetches the list ─────────────────
+  useEventStream({
+    channels: ['tournament:'],
+    enabled: isTier2SseEnabled(),
+    onEvent: () => load(statusFilter),
+  })
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">

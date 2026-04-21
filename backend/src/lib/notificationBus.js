@@ -4,6 +4,7 @@
  */
 import db from './db.js'
 import logger from '../logger.js'
+import { appendToStream } from './eventStream.js'
 
 let _io = null
 export function initBus(io) { _io = io }
@@ -113,6 +114,9 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
       if (_io) {
         _io.emit('guide:notification', { type, payload, expiresAt: expiresAtIso })
       }
+      // Tier 2 replay stream — broadcast entry.
+      appendToStream('guide:notification', { type, payload, expiresAt: expiresAtIso }, { userId: null })
+        .catch(() => {})
       if (entry.persist !== 'persistent') return  // ephemeral broadcast done
     } else if (targets?.cohort) {
       userIds = targets.cohort.filter(Boolean)
@@ -199,6 +203,11 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
             }
           }
         }
+        // Tier 2 replay stream — personal entry. Always append, whether or not
+        // the socket was reachable — the replay endpoint is exactly for the
+        // "connected later" case.
+        appendToStream('guide:notification', { type, payload, expiresAt: expiresAtIso }, { userId })
+          .catch(() => {})
 
         // TODO: email delivery (Phase 4 — notificationService.js refactor will wire this)
       } catch (err) {

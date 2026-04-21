@@ -157,9 +157,10 @@ async function advanceBracketIfReady(match) {
         data: { status: 'COMPLETED', endTime: new Date() },
       })
 
-      cleanupSeededBots(tournament.id).catch(err =>
-        logger.warn({ err: err.message, tournamentId: tournament.id }, 'seeded bot cleanup failed')
-      )
+      // Intentionally do NOT cleanup seeded bots on completion — match rows
+      // reference participant IDs, so deleting the participants would leave
+      // the historical bracket showing "TBD" for every seeded-bot slot.
+      // Cancellation still runs cleanup (tournament never happened).
 
       const winnerPart = await db.tournamentParticipant.findUnique({
         where: { id: winners[0] },
@@ -324,9 +325,8 @@ async function advanceBracketIfReady(match) {
         data: { status: 'COMPLETED', endTime: new Date() },
       })
 
-      cleanupSeededBots(tournament.id).catch(err =>
-        logger.warn({ err: err.message, tournamentId: tournament.id }, 'seeded bot cleanup failed')
-      )
+      // See matches.js:160 — cleanup skipped on completion to preserve
+      // historical bracket names.
 
       pendingPublishes.push(['tournament:completed', {
         tournamentId: tournament.id,

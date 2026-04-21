@@ -344,7 +344,7 @@ export default function GameComponent({ session, sdk }) {
               className="flex-1 py-3 rounded-xl font-semibold border-2 transition-colors"
               style={{ borderColor: 'var(--color-blue-600)', color: 'var(--color-blue-600)' }}
             >
-              Rematch
+              {session?.settings?.isTournament ? 'Continue' : 'Rematch'}
             </button>
           )}
           <button

@@ -6,6 +6,7 @@
  */
 
 const BASE = import.meta.env.VITE_TOURNAMENT_URL ?? ''
+const BACKEND_BASE = import.meta.env.VITE_API_URL ?? ''
 
 async function request(method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' }
@@ -39,8 +40,19 @@ export const tournamentApi = {
   start:    (id, token)         => request('POST',   `/api/tournaments/${id}/start`, {}, token),
   register: (id, token, body={})=> request('POST',   `/api/tournaments/${id}/register`, body, token),
   withdraw: (id, token)         => request('DELETE', `/api/tournaments/${id}/register`, undefined, token),
-  completeMatch: (matchId, data, token) =>
-    request('POST', `/api/matches/${matchId}/complete`, data, token),
+  completeMatch: async (matchId, data, token) => {
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const res = await fetch(`${BACKEND_BASE}/api/v1/tournament-matches/${matchId}/complete`, {
+      method: 'POST', headers,
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+      throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status })
+    }
+    return res.status === 204 ? null : res.json()
+  },
 
   getClassificationPlayers: ({ page=1, limit=50, tier }={}, token) => {
     const p = new URLSearchParams({ page, limit })

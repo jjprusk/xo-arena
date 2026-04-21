@@ -6,11 +6,13 @@ import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
+import { useEventStream, isTier2SseEnabled } from '../lib/useEventStream.js'
 import { connectSocket } from '../lib/socket.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import { useReplaySDK } from '../lib/useReplaySDK.js'
 import { meta as xoMeta } from '@callidity/game-xo'
+import { useSoundStore } from '../store/soundStore.js'
 
 const XOGame = lazy(() => import('@callidity/game-xo'))
 
@@ -257,6 +259,7 @@ function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIn
   const p2UserId = match.participant2Id ? (userIdOf?.[match.participant2Id] ?? null) : null
   const isCompleted  = match.status === 'COMPLETED'
   const isInProgress = match.status === 'IN_PROGRESS'
+  const isBye = !match.participant1Id || !match.participant2Id
   const p1Won = isCompleted && match.winnerId === match.participant1Id
   const p2Won = isCompleted && match.winnerId === match.participant2Id
   const drawGames = match.drawGames ?? 0
@@ -320,7 +323,7 @@ function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIn
             {drawGames} draw{drawGames !== 1 ? 's' : ''}
           </div>
         )}
-        {isInProgress && onSpectate && (
+        {isInProgress && !isBye && onSpectate && (
           <button
             onClick={() => onSpectate(match.id, `${p1Name} vs ${p2Name}`)}
             className="w-full text-[10px] py-1 font-medium border-t"
@@ -329,7 +332,7 @@ function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIn
             👁 Watch live
           </button>
         )}
-        {isCompleted && onWatch && (
+        {isCompleted && !isBye && onWatch && (
           <button
             onClick={() => onWatch(match.id, `${p1Name} vs ${p2Name}`)}
             className="w-full text-[10px] py-1 font-medium border-t"
@@ -1014,7 +1017,8 @@ function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDis
 
     function onReady({ slug, tournamentId }) {
       cleanup()
-      sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1')
+      // Safari Private Browsing has sessionStorage quota = 0; setItem throws.
+      try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
       onDismiss()
       navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
     }
@@ -1109,7 +1113,8 @@ function HvhMatchReadyCard({ matchData, token }) {
     }
     function onReady({ slug, tournamentId }) {
       cleanup()
-      sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1')
+      // Safari Private Browsing has sessionStorage quota = 0; setItem throws.
+      try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
       navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
     }
     function onError({ message }) {
@@ -1149,6 +1154,86 @@ function HvhMatchReadyCard({ matchData, token }) {
   )
 }
 
+// ── Persistent inline match-ready card (Mixed) ───────────────────────────────
+// Always visible in the page body when the current user has a pending MIXED match.
+// Complements the overlay banner so players always have a way to play.
+
+function MixedMatchReadyCard({ matchData, tournament }) {
+  const navigate = useNavigate()
+  const [joining, setJoining] = useState(false)
+  const [joinErr, setJoinErr] = useState(null)
+  const { matchId, opponentName, opponentBetterAuthId, isOpponentBot, bestOfN } = matchData
+
+  function markJoined() {
+    // Safari Private Browsing has sessionStorage quota = 0; setItem throws.
+    try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
+  }
+
+  function playVsBot() {
+    if (!opponentBetterAuthId) return
+    markJoined()
+    const params = new URLSearchParams({
+      botUserId: opponentBetterAuthId,
+      tournamentMatch: matchId,
+      tournamentId: tournament.id,
+    })
+    navigate(`/play?${params.toString()}`)
+  }
+
+  // MIXED mode can pair two humans just like HVH. When the opponent is human
+  // we must use the shared HvH room flow (tournament:room:join) — otherwise
+  // BOTH players would navigate into separate HvB rooms where each treats
+  // the other as a bot and the games never connect.
+  function playVsHuman() {
+    setJoining(true)
+    setJoinErr(null)
+    const socket = connectSocket()
+    function cleanup() {
+      socket.off('tournament:room:ready', onReady)
+      socket.off('error', onError)
+    }
+    function onReady({ slug, tournamentId }) {
+      cleanup()
+      markJoined()
+      navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
+    }
+    function onError({ message }) {
+      cleanup()
+      setJoining(false)
+      setJoinErr(message || 'Failed to join match room')
+    }
+    socket.once('tournament:room:ready', onReady)
+    socket.once('error', onError)
+    getToken().then(authToken => socket.emit('tournament:room:join', { matchId, authToken }))
+  }
+
+  const handlePlay = isOpponentBot ? playVsBot : playVsHuman
+  const disabled = isOpponentBot ? !opponentBetterAuthId : joining
+
+  return (
+    <div
+      className="rounded-xl border p-4 flex items-center justify-between gap-4"
+      style={{ backgroundColor: 'var(--color-blue-50)', borderColor: 'var(--color-blue-200)' }}
+    >
+      <div className="space-y-0.5 min-w-0">
+        <p className="text-sm font-bold" style={{ color: 'var(--color-blue-800)' }}>Your match is ready!</p>
+        <p className="text-xs truncate" style={{ color: 'var(--color-blue-600)' }}>
+          vs {opponentName} · Best of {bestOfN}
+        </p>
+        {joinErr && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{joinErr}</p>}
+      </div>
+      <button
+        onClick={handlePlay}
+        disabled={disabled}
+        className="shrink-0 px-5 py-2 rounded-lg font-semibold text-sm text-white transition-all hover:brightness-110 disabled:opacity-50"
+        style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+      >
+        {joining ? 'Joining…' : 'Play Match'}
+      </button>
+    </div>
+  )
+}
+
 // ── Mixed match banner ────────────────────────────────────────────────────────
 
 const WIN_LINES = [
@@ -1157,26 +1242,36 @@ const WIN_LINES = [
   [0, 4, 8], [2, 4, 6],
 ]
 
-function checkWinner(cells) {
-  for (const [a, b, c] of WIN_LINES) {
-    if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) return cells[a]
+function checkWinnerWithLine(cells) {
+  for (const line of WIN_LINES) {
+    const [a, b, c] = line
+    if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) return { mark: cells[a], line }
   }
-  return cells.every(Boolean) ? 'DRAW' : null
+  if (cells.every(Boolean)) return { mark: 'DRAW', line: null }
+  return null
 }
 
 function MixedMatchBoard({ matchId, tournament, userId, token, onDone }) {
+  const playSound = useSoundStore(s => s.play)
   const participants = tournament.participants ?? []
   const myParticipant = participants.find(p => p.userId === userId)
   const sortedParticipants = [...participants].sort((a, b) => {
     if (a.seedPosition != null && b.seedPosition != null) return a.seedPosition - b.seedPosition
     return a.id < b.id ? -1 : 1
   })
-  const myMark = myParticipant ? (sortedParticipants[0]?.id === myParticipant.id ? 'X' : 'O') : 'X'
+  const myMark  = myParticipant ? (sortedParticipants[0]?.id === myParticipant.id ? 'X' : 'O') : 'X'
   const botMark = myMark === 'X' ? 'O' : 'X'
+
+  const myDisplayName  = myParticipant?.user?.displayName ?? 'You'
+  const botParticipant = sortedParticipants.find(p => p.id !== myParticipant?.id)
+  const botDisplayName = botParticipant?.user?.displayName ?? 'Bot'
+  const myElo  = myParticipant?.eloAtRegistration ? Math.round(myParticipant.eloAtRegistration) : null
+  const botElo = botParticipant?.eloAtRegistration ? Math.round(botParticipant.eloAtRegistration) : null
 
   const [cells, setCells]           = useState(Array(9).fill(null))
   const [current, setCurrent]       = useState('X')
-  const [outcome, setOutcome]       = useState(null)
+  const [outcome, setOutcome]       = useState(null)     // 'X' | 'O' | 'DRAW' | null
+  const [winLine, setWinLine]       = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitErr, setSubmitErr]   = useState(null)
 
@@ -1189,23 +1284,41 @@ function MixedMatchBoard({ matchId, tournament, userId, token, onDone }) {
         const pick = empty[Math.floor(Math.random() * empty.length)]
         const next = [...prev]
         next[pick] = botMark
-        const result = checkWinner(next)
-        if (result) setOutcome(result)
-        else setCurrent(myMark)
+        playSound('move')
+        const result = checkWinnerWithLine(next)
+        if (result) {
+          setWinLine(result.line)
+          setOutcome(result.mark)
+        } else {
+          setCurrent(myMark)
+        }
         return next
       })
-    }, 400)
+    }, 500)
     return () => clearTimeout(timer)
-  }, [current, outcome, botMark, myMark])
+  }, [current, outcome, botMark, myMark, playSound])
+
+  // Play win/draw sound when the game ends.
+  useEffect(() => {
+    if (!outcome) return
+    if (outcome === 'DRAW') playSound('draw')
+    else if (outcome === myMark) playSound('win')
+    else playSound('forfeit')
+  }, [outcome, myMark, playSound])
 
   function handleCellClick(idx) {
     if (outcome || cells[idx] || current !== myMark) return
     const next = [...cells]
     next[idx] = myMark
-    const result = checkWinner(next)
+    playSound('move')
+    const result = checkWinnerWithLine(next)
     setCells(next)
-    if (result) setOutcome(result)
-    else setCurrent(botMark)
+    if (result) {
+      setWinLine(result.line)
+      setOutcome(result.mark)
+    } else {
+      setCurrent(botMark)
+    }
   }
 
   useEffect(() => {
@@ -1245,29 +1358,54 @@ function MixedMatchBoard({ matchId, tournament, userId, token, onDone }) {
   const statusText = submitting ? 'Submitting result…'
     : outcome === 'DRAW' ? "It's a draw!"
     : outcome === myMark ? 'You win!'
-    : outcome ? 'Bot wins!'
+    : outcome ? `${botDisplayName} wins!`
     : current === myMark ? 'Your turn'
-    : 'Bot is thinking…'
+    : `${botDisplayName} is thinking…`
 
   return (
     <div className="space-y-4">
-      <p className="text-sm font-medium text-center" style={{ color: 'var(--text-secondary)' }}>{statusText}</p>
-      <div className="grid mx-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', maxWidth: '240px' }}>
+      {/* Player strips — mirrors XOGame layout */}
+      <div className="flex items-stretch gap-2">
+        <PlayerStrip
+          mark={myMark}
+          name={myDisplayName}
+          elo={myElo}
+          active={!outcome && current === myMark}
+        />
+        <div className="flex items-center px-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>vs</div>
+        <PlayerStrip
+          mark={botMark}
+          name={botDisplayName}
+          elo={botElo}
+          active={!outcome && current === botMark}
+        />
+      </div>
+
+      <p className="text-sm font-semibold text-center" style={{ color: 'var(--text-primary)' }}>{statusText}</p>
+
+      <div className="grid mx-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', maxWidth: '360px' }}>
         {cells.map((cell, idx) => {
-          const isClickable = !outcome && !cell && current === myMark
+          const isClickable  = !outcome && !cell && current === myMark
+          const isWinCell    = winLine?.includes(idx)
           return (
             <button
               key={idx}
               onClick={() => handleCellClick(idx)}
               disabled={!isClickable}
-              className="flex items-center justify-center rounded-lg border font-bold text-2xl transition-all"
+              className="flex items-center justify-center rounded-xl border-2 font-bold transition-all"
               style={{
-                height: '72px',
-                borderColor: 'var(--border-default)',
-                backgroundColor: cell ? (cell === 'X' ? 'var(--color-slate-50)' : 'var(--color-orange-50)') : 'var(--bg-surface)',
+                aspectRatio: '1',
+                fontSize: '2.5rem',
+                borderColor: isWinCell ? 'var(--color-primary)' : 'var(--border-default)',
+                backgroundColor: isWinCell
+                  ? 'var(--color-amber-50)'
+                  : cell
+                    ? (cell === 'X' ? 'var(--color-slate-50)' : 'var(--color-orange-50)')
+                    : 'var(--bg-surface)',
                 color: cell === 'X' ? 'var(--color-slate-700)' : 'var(--color-orange-500)',
                 cursor: isClickable ? 'pointer' : 'default',
-                boxShadow: isClickable ? 'var(--shadow-card)' : 'none',
+                boxShadow: isWinCell ? 'var(--shadow-card)' : (isClickable ? 'var(--shadow-card)' : 'none'),
+                transform: isWinCell ? 'scale(1.02)' : 'none',
                 opacity: outcome && !cell ? 0.4 : 1,
               }}
             >
@@ -1276,20 +1414,91 @@ function MixedMatchBoard({ matchId, tournament, userId, token, onDone }) {
           )
         })}
       </div>
-      <div className="flex items-center justify-center gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
-        <span>You: <strong style={{ color: 'var(--color-slate-700)' }}>{myMark}</strong></span>
-        <span>Bot: <strong style={{ color: 'var(--color-orange-500)' }}>{botMark}</strong></span>
-      </div>
+
       {submitErr && <p className="text-xs text-center" style={{ color: 'var(--color-red-600)' }}>{submitErr}</p>}
     </div>
   )
 }
 
-function MixedMatchBanner({ tournament, userId, token, matchEvent, onDismiss }) {
+function PlayerStrip({ mark, name, elo, active }) {
+  const markColor = mark === 'X' ? 'var(--color-slate-700)' : 'var(--color-orange-500)'
+  const markBg    = mark === 'X' ? 'var(--color-slate-100)' : 'var(--color-orange-50)'
+  return (
+    <div
+      className="flex-1 flex items-center gap-3 rounded-lg border px-3 py-2 transition-all"
+      style={{
+        borderColor: active ? 'var(--color-primary)' : 'var(--border-default)',
+        backgroundColor: 'var(--bg-surface)',
+        boxShadow: active ? 'var(--shadow-card)' : 'none',
+      }}
+    >
+      <div
+        className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xl shrink-0"
+        style={{ backgroundColor: markBg, color: markColor }}
+      >
+        {mark}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{name}</div>
+        {elo != null && (
+          <div className="text-[10px] tabular-nums" style={{ color: 'var(--text-muted)' }}>ELO {elo}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MixedMatchBanner({ tournament, userId, matchEvent, onDismiss }) {
+  const navigate = useNavigate()
   if (!matchEvent || tournament.mode !== 'MIXED') return null
   const { matchId, participant1UserId, participant2UserId } = matchEvent
   const isParticipant = userId && (userId === participant1UserId || userId === participant2UserId)
   if (!isParticipant) return null
+
+  // Resolve opponent's betterAuthId from the current tournament snapshot.
+  const participants = tournament.participants ?? []
+  const me = participants.find(p => p.user?.id === userId || p.userId === userId)
+  const match = (tournament.rounds ?? []).flatMap(r => r.matches ?? []).find(m => m.id === matchId)
+  const opponentId = match?.participant1Id === me?.id ? match?.participant2Id : match?.participant1Id
+  const opponent = participants.find(p => p.id === opponentId)
+  // Seeded bots have no betterAuthId — fall back to User.id.
+  const opponentBetterAuthId = opponent?.user?.betterAuthId ?? opponent?.user?.id ?? null
+  const opponentName         = opponent?.user?.displayName ?? 'Opponent'
+  const isOpponentBot        = !!opponent?.user?.isBot
+
+  function playVsBot() {
+    if (!opponentBetterAuthId) return
+    try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
+    const params = new URLSearchParams({
+      botUserId: opponentBetterAuthId,
+      tournamentMatch: matchId,
+      tournamentId: tournament.id,
+    })
+    onDismiss?.()
+    navigate(`/play?${params.toString()}`)
+  }
+
+  // MIXED mode can pair two humans — route them through the HvH room flow
+  // so both land in the same room instead of independent HvB games.
+  function playVsHuman() {
+    const socket = connectSocket()
+    function cleanup() {
+      socket.off('tournament:room:ready', onReady)
+      socket.off('error', onError)
+    }
+    function onReady({ slug, tournamentId }) {
+      cleanup()
+      try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
+      onDismiss?.()
+      navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
+    }
+    function onError() { cleanup() }
+    socket.once('tournament:room:ready', onReady)
+    socket.once('error', onError)
+    getToken().then(authToken => socket.emit('tournament:room:join', { matchId, authToken }))
+  }
+
+  const handlePlay = isOpponentBot ? playVsBot : playVsHuman
 
   return (
     <div
@@ -1308,13 +1517,29 @@ function MixedMatchBanner({ tournament, userId, token, matchEvent, onDismiss }) 
             Match Ready
           </div>
           <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-            Your turn to play
+            Play vs {opponentName}
           </h2>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Play your tournament match below. The result will be submitted automatically.
+            Best of {tournament.bestOfN ?? 3}. Result is submitted automatically.
           </p>
         </div>
-        <MixedMatchBoard matchId={matchId} tournament={tournament} userId={userId} token={token} onDone={onDismiss} />
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={onDismiss}
+            className="px-4 py-2 rounded-lg text-sm font-semibold border"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+          >
+            Later
+          </button>
+          <button
+            onClick={handlePlay}
+            disabled={!opponentBetterAuthId}
+            className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}
+          >
+            Play Match
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -1554,6 +1779,49 @@ export default function TournamentDetailPage() {
     load()
   }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Tier 2 SSE subscription (feature-flagged via VITE_TIER2_SSE) ────────────
+  // Any tournament:* SSE event for this tournament triggers a REST refetch.
+  // This is the authoritative source of "something changed on this tournament" —
+  // replaces the socket-payload-to-state derivation above when the flag is on.
+  useEventStream({
+    channels: ['tournament:'],
+    enabled: isTier2SseEnabled(),
+    onEvent: (channel, payload) => {
+      if (payload?.tournamentId !== id) return
+      if (channel === 'tournament:match:ready') setActiveMatchEvent(payload)
+      load()
+    },
+  })
+
+  // ── Backstop polling while the page is visible and the tournament is active ──
+  // Catches any events that slipped past both socket and SSE — e.g. during a
+  // backend restart that occurs between the event firing and any client being
+  // connected. Paused on document.hidden so background tabs don't thrash.
+  useEffect(() => {
+    if (!isTier2SseEnabled()) return
+    if (!tournament) return
+    // Poll only while the tournament is in an actively-changing state.
+    const activeStatuses = ['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS']
+    if (!activeStatuses.includes(tournament.status)) return
+
+    let cancelled = false
+    const tick = () => {
+      if (cancelled) return
+      if (typeof document !== 'undefined' && document.hidden) return
+      load()
+    }
+    const timer = setInterval(tick, 20_000)
+    // Refetch immediately on tab-become-visible so users who switched away
+    // for a while get up-to-date state on return.
+    const onVis = () => { if (!document.hidden) load() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [tournament?.status, load]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Derive pending match for the current user from tournament data.
   // Used for both the overlay synthesis and the persistent inline card.
   // Falls back to dbUserId if betterAuthId isn't populated in participant data.
@@ -1586,6 +1854,38 @@ export default function TournamentDetailPage() {
       opponentName: opponent?.user?.displayName ?? 'Opponent',
     }
   }, [tournament, userBetterAuthId, dbUserId])
+
+  // Derive pending MIXED match (human vs bot) that the current user needs to play inline.
+  const myPendingMixedMatch = React.useMemo(() => {
+    if (!tournament || tournament.status !== 'IN_PROGRESS' || tournament.mode !== 'MIXED') return null
+    if (!dbUserId && !userId) return null
+
+    const myParticipant = (tournament.participants ?? []).find(p =>
+      (dbUserId && p.user?.id === dbUserId) ||
+      (userId && p.userId === userId)
+    )
+    if (!myParticipant || myParticipant.user?.isBot) return null
+
+    const match = (tournament.rounds ?? [])
+      .flatMap(r => r.matches ?? [])
+      .find(m => m.status === 'PENDING' && m.participant1Id && m.participant2Id &&
+        (m.participant1Id === myParticipant.id || m.participant2Id === myParticipant.id))
+    if (!match) return null
+
+    const opponentId = match.participant1Id === myParticipant.id
+      ? match.participant2Id : match.participant1Id
+    const opponent = (tournament.participants ?? []).find(p => p.id === opponentId)
+
+    return {
+      matchId: match.id,
+      opponentName: opponent?.user?.displayName ?? 'Opponent',
+      // Seeded bots have no betterAuthId — fall back to User.id. Backend
+      // resolves both when joining the HvB room.
+      opponentBetterAuthId: opponent?.user?.betterAuthId ?? opponent?.user?.id ?? null,
+      isOpponentBot: !!opponent?.user?.isBot,
+      bestOfN: tournament.bestOfN ?? 3,
+    }
+  }, [tournament, dbUserId, userId])
 
   // Synthesize activeMatchEvent from tournament data (for overlay) when not already set.
   // Skips if the user dismissed this overlay ("Later") or has already joined the match.
@@ -1669,7 +1969,18 @@ export default function TournamentDetailPage() {
         </div>
       </div>
 
+      {isAdmin && token && <AdminControls tournament={t} token={token} onRefresh={load} />}
+
       {myPendingHvhMatch && <HvhMatchReadyCard matchData={myPendingHvhMatch} token={token} />}
+      {myPendingMixedMatch && (
+        <MixedMatchReadyCard
+          matchData={myPendingMixedMatch}
+          tournament={tournament}
+          userId={dbUserId ?? userId}
+          token={token}
+          onDone={load}
+        />
+      )}
 
       {t.status === 'REGISTRATION_OPEN' && (!t.registrationCloseAt || new Date(t.registrationCloseAt) > new Date()) && (
         <Section title="Registration">

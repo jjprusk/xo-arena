@@ -80,6 +80,109 @@ export async function signIn(page, email, password, backendUrl) {
   }
 }
 
+/**
+ * Fetch a Better Auth JWT for the current context (must be signed in already).
+ * The landing dev server proxies /api/token to backend /api/auth/token.
+ *
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} backendUrl
+ * @returns {Promise<string>}
+ */
+export async function fetchAuthToken(request, backendUrl) {
+  // Backend mounts /api/token → auth.api.getToken (Better Auth JWT plugin).
+  const res = await request.get(`${backendUrl}/api/token`)
+  if (!res.ok()) throw new Error(`Failed to fetch auth token: ${res.status()}`)
+  const data = await res.json()
+  if (!data.token) throw new Error('No token in response — user may not be signed in on this context')
+  return data.token
+}
+
+/**
+ * Tournament API client for tests. `base` must point at the tournament service
+ * (typically via the landing dev server proxy, e.g. http://localhost:5174).
+ *
+ * All methods accept `{ request, token }`:
+ *   request — Playwright APIRequestContext (page.context().request or test `request`)
+ *   token   — Bearer JWT (use fetchAuthToken after signIn)
+ */
+export function tournamentApi(base) {
+  const url = (path) => `${base}${path}`
+  const hdr = (token) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
+  return {
+    async create({ request, token }, body) {
+      const res = await request.post(url('/api/tournaments'), { headers: hdr(token), data: body })
+      if (!res.ok()) throw new Error(`tournaments.create ${res.status()}: ${await res.text()}`)
+      return (await res.json()).tournament
+    },
+    async get({ request, token }, id) {
+      const res = await request.get(url(`/api/tournaments/${id}`), { headers: hdr(token) })
+      if (!res.ok()) throw new Error(`tournaments.get ${res.status()}: ${await res.text()}`)
+      return (await res.json()).tournament
+    },
+    async publish({ request, token }, id) {
+      const res = await request.post(url(`/api/tournaments/${id}/publish`), { headers: hdr(token), data: {} })
+      if (!res.ok()) throw new Error(`tournaments.publish ${res.status()}: ${await res.text()}`)
+      return (await res.json()).tournament
+    },
+    async start({ request, token }, id) {
+      const res = await request.post(url(`/api/tournaments/${id}/start`), { headers: hdr(token), data: {} })
+      if (!res.ok()) throw new Error(`tournaments.start ${res.status()}: ${await res.text()}`)
+      return (await res.json()).tournament
+    },
+    async addSeededBot({ request, token }, id, body) {
+      const res = await request.post(url(`/api/tournaments/${id}/add-seeded-bot`), { headers: hdr(token), data: body })
+      if (!res.ok()) throw new Error(`tournaments.addSeededBot ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+    async register({ request, token }, id, body = {}) {
+      const res = await request.post(url(`/api/tournaments/${id}/register`), { headers: hdr(token), data: body })
+      if (!res.ok()) throw new Error(`tournaments.register ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+    async cancel({ request, token }, id) {
+      const res = await request.post(url(`/api/tournaments/${id}/cancel`), { headers: hdr(token), data: {} })
+      if (!res.ok()) throw new Error(`tournaments.cancel ${res.status()}: ${await res.text()}`)
+      return (await res.json()).tournament
+    },
+
+    // Admin-authenticated match completion directly on the tournament service.
+    // Use for bot-vs-bot matches in tests where you need deterministic outcomes
+    // without waiting for the server-side bot runner.
+    async completeMatchAsAdmin({ request, token }, matchId, body) {
+      const res = await request.post(url(`/api/matches/${matchId}/complete`), { headers: hdr(token), data: body })
+      if (!res.ok()) throw new Error(`matches.complete ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+
+    // User-authenticated match completion through the backend proxy.
+    // Mirrors the MIXED match flow: user submits their own result, backend
+    // validates they're a participant, forwards to tournament service with
+    // the internal secret.
+    async completeMatchAsUser({ request, token, backendBase }, matchId, body) {
+      const res = await request.post(`${backendBase}/api/v1/tournament-matches/${matchId}/complete`, {
+        headers: hdr(token), data: body,
+      })
+      if (!res.ok()) throw new Error(`tournament-matches.complete ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+  }
+}
+
+/**
+ * Poll a predicate every `intervalMs` until it returns truthy, or timeout.
+ * Returns the last value when predicate succeeds; throws on timeout.
+ */
+export async function pollUntil(predicate, { timeoutMs = 30_000, intervalMs = 500, label = 'condition' } = {}) {
+  const deadline = Date.now() + timeoutMs
+  let last
+  while (Date.now() < deadline) {
+    last = await predicate()
+    if (last) return last
+    await new Promise(r => setTimeout(r, intervalMs))
+  }
+  throw new Error(`pollUntil timed out waiting for ${label}`)
+}
+
 // Map legacy difficulty names to current select values
 const DIFFICULTY_MAP = { easy: 'novice', medium: 'intermediate', hard: 'advanced', novice: 'novice', intermediate: 'intermediate', advanced: 'advanced', master: 'master' }
 

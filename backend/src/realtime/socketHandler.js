@@ -37,6 +37,7 @@ import {
   getPresence as getTablePresence,
 } from './tablePresence.js'
 import { dispatch as dispatchBus } from '../lib/notificationBus.js'
+import { appendToStream } from '../lib/eventStream.js'
 import { mountainPool, MountainNamePool } from './mountainNames.js'
 import logger from '../logger.js'
 
@@ -524,8 +525,9 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    on('room:create:hvb', async ({ gameId = 'xo', botUserId, botSkillId, spectatorAllowed = true, authToken = null } = {}) => {
+    on('room:create:hvb', async ({ gameId = 'xo', botUserId, botSkillId, spectatorAllowed = true, authToken = null, tournamentMatchId = null } = {}) => {
       try {
+        logger.info({ socketId: socket.id, gameId, botUserId, tournamentMatchId, hasAuthToken: !!authToken }, 'room:create:hvb received')
         if (!botUserId) return socket.emit('error', { message: 'botUserId required' })
         const user = await resolveSocketUser(authToken)
         if (!socket.connected) return
@@ -534,6 +536,91 @@ export async function attachSocketIO(httpServer) {
         // pending disconnect timer, rejoin it instead of creating a new one
         const reconnected = await tryReconnect(user)
         if (reconnected) return
+
+        logger.info({ tournamentMatchId, hasUser: !!user, hasBetterAuthId: !!user?.betterAuthId }, 'room:create:hvb — about to check tournament reuse')
+
+        // Tournament HvB series reuse. Without this, every "Play Match" click
+        // creates a fresh Table with scores={X:0,O:0}, so a player who
+        // navigates away mid-series loses all accumulated wins and the series
+        // never reaches the required win count.
+        if (tournamentMatchId && user?.betterAuthId) {
+          const existing = await db.table.findFirst({
+            where: { tournamentMatchId },
+            orderBy: { createdAt: 'desc' },
+          })
+          if (existing) {
+            const eps = existing.previewState || {}
+            const hostSeatId = existing.seats?.[0]?.userId
+            if (hostSeatId === user.betterAuthId) {
+              const xWins = eps.scores?.X ?? 0
+              const oWins = eps.scores?.O ?? 0
+              const required = Math.ceil((existing.bestOfN ?? 1) / 2)
+              const seriesDone = xWins >= required || oWins >= required
+
+              if (existing.status === 'ACTIVE') {
+                // Rejoin in-progress game.
+                const prev = _socketToTable.get(socket.id)
+                if (prev && prev !== existing.id) {
+                  socket.leave(`table:${prev}`)
+                  clearIdleTimer(socket.id)
+                }
+                registerSocket(socket.id, existing.id, user.betterAuthId)
+                socket.join(`table:${existing.id}`)
+                socket.emit('room:created:hvb', {
+                  slug: existing.slug,
+                  displayName: existing.displayName,
+                  mark: eps.marks?.[user.betterAuthId] ?? 'X',
+                  board: eps.board,
+                  currentTurn: eps.currentTurn,
+                })
+                logger.info({ tableId: existing.id, tournamentMatchId }, 'hvb tournament table rejoined (active)')
+                return
+              }
+
+              if (existing.status === 'COMPLETED' && !seriesDone) {
+                // Rematch-in-place: preserve scores, increment round, new board.
+                const fps = { ...eps }
+                fps.board = Array(9).fill(null)
+                fps.currentTurn = fps.currentTurn === 'X' ? 'O' : 'X'
+                fps.winner = null
+                fps.winLine = null
+                fps.moves = []
+                fps.round = (fps.round || 1) + 1
+
+                const refreshed = await db.table.update({
+                  where: { id: existing.id },
+                  data: { status: 'ACTIVE', previewState: fps },
+                })
+
+                const prev = _socketToTable.get(socket.id)
+                if (prev && prev !== refreshed.id) {
+                  socket.leave(`table:${prev}`)
+                  clearIdleTimer(socket.id)
+                }
+                registerSocket(socket.id, refreshed.id, user.betterAuthId)
+                socket.join(`table:${refreshed.id}`)
+                socket.emit('room:created:hvb', {
+                  slug: refreshed.slug,
+                  displayName: refreshed.displayName,
+                  mark: fps.marks?.[user.betterAuthId] ?? 'X',
+                  board: fps.board,
+                  currentTurn: fps.currentTurn,
+                })
+                logger.info({ tableId: refreshed.id, tournamentMatchId, round: fps.round, scores: fps.scores }, 'hvb tournament table reused (rematch-in-place)')
+
+                // Bot opening if alternation put the bot on move.
+                if (refreshed.isHvb && fps.currentTurn === fps.botMark) {
+                  dispatchBotMove(refreshed, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot opening on tournament reuse'))
+                }
+                return
+              }
+
+              // COMPLETED + seriesDone → fall through (defensive; UI shouldn't
+              // offer Play again, but create a fresh table if it does).
+              logger.warn({ tableId: existing.id, tournamentMatchId }, 'tournament series already complete — creating new table')
+            }
+          }
+        }
 
         // If this socket was previously in another table (e.g., guest navigated
         // away and back), clean up the old game completely — leave the socket
@@ -565,21 +652,86 @@ export async function attachSocketIO(httpServer) {
         const displayName = `Mt. ${name}`
 
         const baId = user?.betterAuthId ?? `guest:${socket.id}`
-        const marks = { [baId]: 'X', [botUserId]: 'O' }
+
+        // `botUserId` from the client is betterAuthId for real community bots,
+        // but seeded tournament bots have no betterAuthId — callers pass the
+        // plain User.id instead. Accept either and resolve to a canonical
+        // seat identifier (`betterAuthId ?? User.id`) the rest of the code
+        // can rely on.
+        let botUserRow = await db.user.findFirst({
+          where: { betterAuthId: botUserId },
+          select: { id: true, betterAuthId: true },
+        })
+        if (!botUserRow) {
+          botUserRow = await db.user.findUnique({
+            where: { id: botUserId },
+            select: { id: true, betterAuthId: true },
+          })
+        }
+        if (!botUserRow) return socket.emit('error', { message: 'Bot not found' })
+        const botSeatId = botUserRow.betterAuthId ?? botUserRow.id
+        const marks = { [baId]: 'X', [botSeatId]: 'O' }
 
         // Resolve the game-specific skill server-side so the wrong-game skill
         // can never be used (e.g. an XO skill running in a Connect4 game).
-        // Look up the bot's User.id (internal PK) via its betterAuthId, then
-        // find the skill for (botId, gameId). Falls back to the client-supplied
-        // botSkillId if no game-specific skill exists (e.g. built-in bots).
         let resolvedSkillId = botSkillId || null
-        const botUserRow = await db.user.findFirst({
-          where: { betterAuthId: botUserId },
-          select: { id: true },
-        })
-        if (botUserRow) {
+        {
           const skill = await resolveSkillForGame(botUserRow.id, gameId)
           if (skill) resolvedSkillId = skill.id
+        }
+
+        // For tournament MIXED matches: resolve tournamentId + bestOfN from the
+        // match's tournament so the series play and result recording work like
+        // a first-class tournament game. Unauthenticated or spectator callers
+        // shouldn't create tournament HvB tables — silently drop the hint.
+        let tourIdForTable = null
+        let tourMatchIdForTable = null
+        let tourBestOfN = null
+        let tourMatchOpponentName = null
+        if (tournamentMatchId && user?.betterAuthId) {
+          try {
+            const tm = await db.tournamentMatch.findUnique({
+              where: { id: tournamentMatchId },
+              select: {
+                tournamentId: true,
+                participant1Id: true,
+                participant2Id: true,
+              },
+            })
+            const tour = tm?.tournamentId
+              ? await db.tournament.findUnique({
+                  where: { id: tm.tournamentId },
+                  select: { bestOfN: true, mode: true },
+                })
+              : null
+            if (tm && tour && tour.mode === 'MIXED') {
+              tourIdForTable     = tm.tournamentId
+              tourMatchIdForTable = tournamentMatchId
+              tourBestOfN        = tour.bestOfN ?? null
+              logger.info({ tournamentMatchId, tourBestOfN, mode: tour.mode }, 'hvb table linked to tournament match')
+            } else {
+              logger.warn({ tournamentMatchId, mode: tour?.mode, hasTM: !!tm }, 'hvb tournament link skipped — mode not MIXED or match not found')
+
+              if (tm) {
+                // Look up the opponent participant's display name for the seat
+                const me = await db.user.findUnique({
+                  where: { betterAuthId: user.betterAuthId },
+                  select: { id: true },
+                })
+                if (me?.id) {
+                  const participantIds = [tm.participant1Id, tm.participant2Id].filter(Boolean)
+                  const participants = await db.tournamentParticipant.findMany({
+                    where: { id: { in: participantIds } },
+                    select: { userId: true, user: { select: { displayName: true } } },
+                  })
+                  const opponent = participants.find(p => p.userId !== me.id)
+                  tourMatchOpponentName = opponent?.user?.displayName ?? null
+                }
+              }
+            }
+          } catch (err) {
+            logger.warn({ err, tournamentMatchId }, 'failed to resolve tournament match for hvb table')
+          }
         }
 
         const isGuest = !user?.betterAuthId
@@ -594,11 +746,15 @@ export async function attachSocketIO(httpServer) {
             isPrivate: isGuest || !spectatorAllowed,
             status: 'ACTIVE',
             isHvb: true,
-            botUserId,
+            botUserId: botSeatId,
             botSkillId: resolvedSkillId,
+            tournamentId:      tourIdForTable,
+            tournamentMatchId: tourMatchIdForTable,
+            isTournament:      !!tourMatchIdForTable,
+            bestOfN:           tourBestOfN,
             seats: [
-              { userId: baId, status: 'occupied', displayName: user?.displayName ?? 'Guest' },
-              { userId: botUserId, status: 'occupied', displayName: 'Bot' },
+              { userId: baId,       status: 'occupied', displayName: user?.displayName ?? 'Guest' },
+              { userId: botSeatId,  status: 'occupied', displayName: tourMatchOpponentName ?? 'Bot' },
             ],
             previewState: makePreviewState({ marks, botMark: 'O' }),
           },
@@ -1013,6 +1169,7 @@ export async function attachSocketIO(httpServer) {
       ps.winLine = null
       ps.moves = []
       ps.round = (ps.round || 1) + 1
+      logger.info({ tableId, tournamentMatchId: table.tournamentMatchId, isHvb: table.isHvb, round: ps.round, scores: ps.scores }, 'game:rematch starting new game')
 
       const updated = await db.table.update({
         where: { id: tableId },
@@ -1615,6 +1772,7 @@ async function dispatchBotMove(table, io) {
     winner: fps.winner,
     winLine: fps.winLine,
     scores: fps.scores,
+    round: fps.round ?? 1,
   })
 
   if (newStatus === 'COMPLETED') {
@@ -1701,12 +1859,21 @@ async function recordPvpGame(table, io) {
   if (isTournamentRoom) {
     const xWins = ps.scores?.X ?? 0
     const oWins = ps.scores?.O ?? 0
-    const drawGames = (ps.round ?? 1) - xWins - oWins
-    const required = Math.ceil((table.bestOfN ?? 1) / 2)
-    const seriesDone = xWins >= required || oWins >= required
+    const gamesPlayed = ps.round ?? 1
+    const drawGames = gamesPlayed - xWins - oWins
+    const bestOfN = table.bestOfN ?? 1
+    const required = Math.ceil(bestOfN / 2)
+    // Majority reached OR max games played (prevents infinite draws in TTT
+    // where two optimal players will draw every game). If max games reached
+    // with neither side at `required`, the side with more wins takes the
+    // series; if tied on wins, X (host) wins as the default tiebreaker.
+    const majorityReached = xWins >= required || oWins >= required
+    const maxGamesReached = gamesPlayed >= bestOfN
+    const seriesDone = majorityReached || maxGamesReached
+    logger.info({ tableId: table.id, tournamentMatchId: table.tournamentMatchId, bestOfN, xWins, oWins, required, gamesPlayed, majorityReached, maxGamesReached, seriesDone }, 'tournament series check')
 
     if (seriesDone) {
-      const seriesWinnerMark = xWins >= required ? 'X' : 'O'
+      const seriesWinnerMark = xWins >= oWins ? 'X' : 'O'
       const seriesWinnerBaId = userIdForMark(marks, seriesWinnerMark) // betterAuthId from marks
 
       // Tournament participant lookup needs domain User.id
@@ -1736,6 +1903,21 @@ async function recordPvpGame(table, io) {
         p2Wins: oWins,
         seriesWinnerUserId: seriesWinnerBaId,
       })
+    } else {
+      // Mid-series: persist the current score so the bracket updates live.
+      db.tournamentMatch.update({
+        where: { id: table.tournamentMatchId },
+        data: { p1Wins: xWins, p2Wins: oWins, drawGames, status: 'IN_PROGRESS' },
+      }).catch(err => logger.warn({ err, tournamentMatchId: table.tournamentMatchId }, 'Failed to update mid-series score'))
+
+      const scorePayload = {
+        tournamentId: table.tournamentId,
+        matchId: table.tournamentMatchId,
+        p1Wins: xWins,
+        p2Wins: oWins,
+      }
+      io.emit('tournament:match:score', scorePayload)
+      appendToStream('tournament:match:score', scorePayload).catch(() => {})
     }
     return
   }

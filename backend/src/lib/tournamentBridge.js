@@ -113,6 +113,35 @@ export async function handleEvent(io, channel, data) {
     case 'tournament:started': {
       const { tournamentId, name } = data
       io.emit('tournament:started', { tournamentId, name })
+      // Also fan out via the notification bus so registered participants get a
+      // persistent guide notification and a Tier 2 SSE stream entry. Without
+      // this, the bare io.emit() above only reaches users who happen to be
+      // socket-connected at the exact moment of start — anyone whose Guide
+      // relies on SSE sees nothing.
+      try {
+        const participants = await db.tournamentParticipant.findMany({
+          where: { tournamentId },
+          select: { userId: true, user: { select: { isBot: true, botOwnerId: true } } },
+        })
+        const notifyIds = new Set()
+        for (const p of participants) {
+          if (!p.userId) continue
+          if (p.user?.isBot) {
+            if (p.user.botOwnerId) notifyIds.add(p.user.botOwnerId)
+          } else {
+            notifyIds.add(p.userId)
+          }
+        }
+        if (notifyIds.size > 0) {
+          await dispatch({
+            type: 'tournament.started',
+            targets: { cohort: Array.from(notifyIds) },
+            payload: { tournamentId, name },
+          })
+        }
+      } catch (err) {
+        logger.warn({ err, tournamentId }, 'Failed to dispatch tournament.started notifications')
+      }
       logger.info({ tournamentId }, 'Tournament started — notified all connected clients')
       break
     }

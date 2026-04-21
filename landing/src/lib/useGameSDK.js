@@ -260,7 +260,7 @@ export function useGameSDK({
         { id: hostId, displayName: cu?.displayName ?? 'You', isBot: false },
         { id: botId, displayName: 'Bot', isBot: true },
       ]
-      settingsRef.current = { displayName, myMark: mark }
+      settingsRef.current = { displayName, myMark: mark, isTournament: !!tournamentMatchId }
       boardRef.current = board
       setPhase('playing')
       buildSession({ isSpectator: false })
@@ -314,6 +314,7 @@ export function useGameSDK({
         displayName:    room?.displayName,
         spectatorCount: room?.spectatorCount ?? 0,
         myMark:         isSpectator ? null : mark,
+        isTournament:   !!tournamentMatchId,
       }
 
       // Re-attach to an already-active game: skip 'waiting' and go straight to
@@ -517,15 +518,16 @@ export function useGameSDK({
       if (emitted) return
       emitted = true
       perfMark('useGameSDK:emitRoomAction', { hasToken: !!token, botUserId, joinSlug })
-      if (tournamentMatchId && !joinSlug) {
-        // No slug yet — emit tournament:room:join to discover/create the room.
-        // If joinSlug is also present (post-redirect from TournamentDetailPage),
-        // the room already exists — fall through to room:join below.
-        socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
-      } else if (joinSlug) {
+      if (joinSlug) {
         socket.emit('room:join', { slug: joinSlug, role: spectate ? 'spectator' : 'player', authToken: token ?? null })
       } else if (botUserId) {
-        socket.emit('room:create:hvb', { gameId, botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null })
+        // MIXED tournament (tournamentMatchId + botUserId) and free-play PvE
+        // both land here — tournamentMatchId is forwarded so the server can
+        // link the table to the tournament match and set bestOfN.
+        socket.emit('room:create:hvb', { gameId, botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null, tournamentMatchId: tournamentMatchId ?? null })
+      } else if (tournamentMatchId) {
+        // HvH tournament match — emit tournament:room:join to discover/create the room.
+        socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else {
         socket.emit('room:create', { spectatorAllowed: true, authToken: token ?? null })
       }

@@ -11,6 +11,7 @@ const TOURNAMENT_EVENTS = [
   'tournament:participant:left',
   'tournament:round:started',
   'tournament:match:ready',
+  'tournament:match:score',
   'tournament:match:result',
   'tournament:warning',
   'tournament:completed',
