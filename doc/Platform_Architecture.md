@@ -501,16 +501,14 @@ All migrations gated behind `VITE_TIER2_SSE` feature flag. The new path runs *al
 
 **Exit criteria (Phase C):** all four Tier 2 features behave correctly with the feature flag on. Manual QA matches API-level expectations. Playwright tests for each added.
 
-### Phase D — Retire socket Tier 2 channels
+### Phase D — Retire socket Tier 2 channels ✅ Done
 
-**Client-side cleanup (done):**
-1. `VITE_TIER2_SSE` flag removed — SSE is always-on when a user is signed in.
-2. `useTournamentSocket` deleted; `TournamentsPage` and `TournamentDetailPage` drive off `useEventStream` only.
-3. Flag-gated socket fallbacks removed from `AppLayout` (`guide:notification`, `guide:onlineUsers`). The socket now carries only `guide:journeyStep` and `user:subscribe` for per-user targeting still used by pages that haven't migrated yet.
+1. **Feature flag retired.** `VITE_TIER2_SSE` removed; SSE is the default and only Tier 2 transport for new Guide, tournament, and presence events.
+2. **Client migrated.** `useTournamentSocket` deleted; `TournamentsPage`, `TournamentDetailPage`, `TablesPage`, `TableDetailPage`, and `AppLayout` all consume Tier 2 via `useEventStream`. `AppLayout` also REST-bootstraps undelivered `UserNotification` rows on sign-in (the replacement for the old socket reconnect flush).
+3. **Backend dual-writes removed.** `notificationBus.dispatch` no longer calls `_io.emit('guide:notification')`; it writes a `UserNotification` row (when persistent) and appends to the Tier 2 Redis stream. `tournamentBridge.handleEvent` and `scheduledJobs` no longer emit `tournament:*` over socket.io — those are fanned out via the `tournament/redis.js::publish` → XADD pipeline that the SSE broker already reads.
+4. **Socket surface area shrunk.** `socketHandler.user:subscribe` now just joins the `user:${id}` room (for journeyService's `guide:journeyStep`); the old presence tracking (`_onlineBySocket`, `broadcastOnlineUsers`, 30s broadcast timer, reconnect flush, disconnect grace-period removal) is gone. Online presence lives entirely in `presenceStore.js` / heartbeats.
 
-**Remaining (follow-up):**
-4. Migrate `TablesPage` and `TableDetailPage` `socket.on('guide:notification')` listeners to `useEventStream` (they're table list state-nudges, not Guide-panel notifications). Once done, the dual-write in `notificationBus.js` (`_io.emit('guide:notification', ...)` alongside `appendToStream`) can be removed.
-5. After the dual-write is gone: shrink `socketHandler.js` Tier 2 subscription/broadcast code; document the remaining WebSocket surface area (gameplay rooms only).
+**Remaining non-Tier-2 socket responsibilities:** gameplay rooms (`room:*`, `game:*`), table-room presence (`table:presence`), journey step nudges (`guide:journeyStep`). Everything else flows via REST + SSE.
 
 ### Phase E — Web Push (Tier 3)
 

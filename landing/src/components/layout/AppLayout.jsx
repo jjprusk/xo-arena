@@ -181,18 +181,14 @@ export default function AppLayout() {
           }
         })
       }
-      // Connect socket and explicitly subscribe — covers the case where the socket
-      // was already connected (so 'connect' won't fire) or reconnects mid-await.
+      // Connect the socket so journeyService can emit guide:journeyStep into
+      // our per-user room and so /play can reuse the live connection.
       getToken().then(token => {
         perfMark('AppLayout:token-resolved', token ? 'ok' : 'null')
         if (!token) return
         const socket = connectSocket(token)
-        if (socket.connected) {
-          perfMark('AppLayout:socket-already-connected')
-          socket.emit('user:subscribe', { authToken: token })
-        } else {
-          socket.once('connect', () => perfMark('AppLayout:socket-connected'))
-        }
+        if (socket.connected) perfMark('AppLayout:socket-already-connected')
+        else socket.once('connect', () => perfMark('AppLayout:socket-connected'))
       }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
@@ -209,8 +205,8 @@ export default function AppLayout() {
   function refreshOnlineFromRest() { refreshOnlineFromRestRef.current?.() }
 
   // Socket guide listeners — registered once on mount.
-  // The 'connect' handler fires on EVERY connect/reconnect, ensuring user:subscribe
-  // is re-sent after backend restarts without needing a page reload.
+  // On every (re)connect, re-join the per-user socket room so journeyService
+  // can push guide:journeyStep to this tab after a backend restart.
   useEffect(() => {
     const socket = getSocket()
 
@@ -255,25 +251,13 @@ export default function AppLayout() {
 
     socket.on('connect',            onConnect)
     socket.on('guide:journeyStep',  onJourneyStep)
-
-    // If already connected when this effect runs, subscribe immediately.
-    // user:subscribe still matters: backend uses the per-user socket room for
-    // targeted emissions consumed by pages that haven't migrated to SSE yet
-    // (TablesPage, TableDetailPage).
     if (socket.connected) onConnect()
 
-    const keepalive = setInterval(async () => {
-      if (!socket.connected) return
-      const token = await getToken()
-      if (token) socket.emit('user:subscribe', { authToken: token })
-    }, 3 * 60_000)
-
     // Expose the notification handler so the SSE hook below reuses the same
-    // filtering, sound, and panel-open logic as the original socket path did.
+    // filtering, sound, and panel-open logic.
     guideNotifHandlerRef.current = onGuideNotification
 
     return () => {
-      clearInterval(keepalive)
       socket.off('connect',            onConnect)
       socket.off('guide:journeyStep',  onJourneyStep)
       guideNotifHandlerRef.current = null
@@ -329,6 +313,37 @@ export default function AppLayout() {
       document.removeEventListener('visibilitychange', onVis)
       refreshOnlineFromRestRef.current = null
     }
+  }, [user?.id])
+
+  // ── Bootstrap undelivered notifications on sign-in ─────────────────────────
+  // SSE delivers live events, but a user signing in after being offline needs
+  // to catch up on queued UserNotification rows older than the Redis stream's
+  // 5-min replay horizon. One-shot REST fetch on sign-in, then POST-deliver.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = await getToken()
+        if (!token || cancelled) return
+        const res = await fetch('/api/v1/users/me/notifications', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok || cancelled) return
+        const { notifications } = await res.json()
+        if (!Array.isArray(notifications) || notifications.length === 0) return
+        const handler = guideNotifHandlerRef.current
+        for (const n of notifications) {
+          handler?.({ type: n.type, payload: n.payload ?? {}, expiresAt: n.expiresAt })
+        }
+        await fetch('/api/v1/users/me/notifications/deliver', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ids: notifications.map(n => n.id) }),
+        }).catch(() => {})
+      } catch {}
+    })()
+    return () => { cancelled = true }
   }, [user?.id])
 
   async function handleSignOut() {

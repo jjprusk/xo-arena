@@ -81,18 +81,11 @@ function findUserIdForSocket(socketId, tableId, seats) {
   return null
 }
 
-// ── Online presence ───────────────────────────────────────────────────────────
-const _onlineBySocket = new Map()
-const _pendingRemovals = new Map()
-const PRESENCE_GRACE_MS = 8_000
+// ── Table presence / disconnect ──────────────────────────────────────────────
+// Online-users presence now lives in presenceStore.js (heartbeat-based) and is
+// exposed via /api/v1/presence/online + the presence:changed SSE channel. The
+// disconnect-forfeit timer below still uses RECONNECT_WINDOW_MS for gameplay.
 const RECONNECT_WINDOW_MS = 60_000
-
-function broadcastOnlineUsers(io) {
-  const users = [...new Map(
-    [..._onlineBySocket.values()].map(u => [u.userId, u])
-  ).values()]
-  io.emit('guide:onlineUsers', { users })
-}
 
 function getSpectatorCount(tableId) {
   let count = 0
@@ -106,16 +99,6 @@ function broadcastTablePresence(io, tableId) {
   const presence = getTablePresence(tableId)
   const spectatingCount = getSpectatorCount(tableId)
   io.to(`table:${tableId}`).emit('table:presence', { tableId, ...presence, spectatingCount })
-}
-
-function cancelPendingRemoval(userId) {
-  for (const [sid, timer] of _pendingRemovals) {
-    if (_onlineBySocket.get(sid)?.userId === userId) {
-      clearTimeout(timer)
-      _pendingRemovals.delete(sid)
-      _onlineBySocket.delete(sid)
-    }
-  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1474,60 +1457,13 @@ export async function attachSocketIO(httpServer) {
     })
 
     // ── User-specific room ──────────────────────────────────────────
+    // Joins a `user:${id}` room so journeyService can push guide:journeyStep
+    // events to this user's connected sockets. All other Tier 2 notifications
+    // flow through SSE; online presence is tracked via presenceStore.
     on('user:subscribe', async ({ authToken } = {}) => {
       const user = await resolveSocketUser(authToken)
       if (!user) return
       socket.join(`user:${user.id}`)
-      logger.info({ socketId: socket.id, userId: user.id }, 'user subscribed to personal room')
-
-      if (!user.isBot) {
-        cancelPendingRemoval(user.id)
-        _onlineBySocket.set(socket.id, {
-          userId:      user.id,
-          displayName: user.displayName ?? user.username ?? 'Player',
-          avatarUrl:   user.avatarUrl ?? null,
-        })
-        socket.emit('guide:subscribed', { userId: user.id })
-        broadcastOnlineUsers(io)
-      }
-      {
-        const users = [...new Map(
-          [..._onlineBySocket.values()].map(u => [u.userId, u])
-        ).values()]
-        socket.emit('guide:onlineUsers', { users })
-      }
-
-      // Flush undelivered notifications
-      try {
-        const now = new Date()
-        const unread = await db.userNotification.findMany({
-          where: {
-            userId: user.id,
-            deliveredAt: null,
-            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-          },
-          orderBy: { createdAt: 'asc' },
-          take: 20,
-        })
-
-        await db.userNotification.updateMany({
-          where: { userId: user.id, deliveredAt: null, expiresAt: { lte: now } },
-          data:  { deliveredAt: now },
-        }).catch(() => {})
-
-        if (unread.length > 0) {
-          for (const n of unread) {
-            socket.emit('guide:notification', { type: n.type, payload: n.payload, expiresAt: n.expiresAt?.toISOString() ?? null })
-          }
-          await db.userNotification.updateMany({
-            where: { id: { in: unread.map(n => n.id) } },
-            data:  { deliveredAt: now },
-          })
-          logger.info({ userId: user.id, count: unread.length }, 'Flushed queued notifications on reconnect')
-        }
-      } catch (err) {
-        logger.warn({ err, userId: user.id }, 'Failed to flush queued notifications (non-fatal)')
-      }
     })
 
     // ── Disconnect ──────────────────────────────────────────────────
@@ -1544,17 +1480,6 @@ export async function attachSocketIO(httpServer) {
       const droppedFromTables = removeWatcherFromAllTables(socket.id)
       for (const tableId of droppedFromTables) {
         broadcastTablePresence(io, tableId)
-      }
-
-      // Online presence grace period
-      if (_onlineBySocket.has(socket.id)) {
-        const sid = socket.id
-        const timer = setTimeout(() => {
-          _onlineBySocket.delete(sid)
-          _pendingRemovals.delete(sid)
-          broadcastOnlineUsers(io)
-        }, PRESENCE_GRACE_MS)
-        _pendingRemovals.set(sid, timer)
       }
 
       // Bot game spectator + pong cleanup
@@ -1693,9 +1618,6 @@ export async function attachSocketIO(httpServer) {
   pongRunner.setIO(io)
 
   startSnapshotInterval()
-
-  // Periodic re-broadcast of online users
-  setInterval(() => broadcastOnlineUsers(io), 30_000)
 
   return io
 }
@@ -1930,27 +1852,10 @@ async function recordPvpGame(table, io) {
 
   if (pvpParticipants.length > 0) {
     recordGameCompletion({ appId: 'xo-arena', participants: pvpParticipants, mode: table.isHvb ? 'hvb' : 'hvh' })
-      .then((notifications) => {
-        if (!io || !notifications.length) return
-        for (const notif of notifications) {
-          // Emit to user room
-          if (notif.userId) io.to(`user:${notif.userId}`).emit('accomplishment', notif)
-          const guideType = notif.type === 'tier_upgrade' ? 'admin' : 'match_ready'
-          const guideTitle = notif.type === 'tier_upgrade'
-            ? 'Tier Upgrade!'
-            : notif.type === 'credit_milestone'
-              ? 'Milestone Reached!'
-              : 'Achievement Unlocked'
-          io.to(`user:${notif.userId}`).emit('guide:notification', {
-            id:        notif.id,
-            type:      guideType,
-            title:     guideTitle,
-            body:      notif.payload?.description ?? notif.payload?.message ?? '',
-            createdAt: (notif.createdAt ?? new Date()).toISOString(),
-          })
-        }
-      })
       .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))
+    // TODO: surface achievement/tier notifications via notificationBus.dispatch
+    // once an appropriate REGISTRY entry exists. The prior socket emits
+    // (accomplishment, guide:notification) had no listeners after Phase D.
   }
 }
 

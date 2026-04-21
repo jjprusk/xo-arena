@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockDb = {
   tournamentMatch: { findUnique: vi.fn() },
   tournamentParticipant: { findUnique: vi.fn(), findMany: vi.fn() },
-  userNotification: { findMany: vi.fn(), updateMany: vi.fn() },
+  userNotification: { findMany: vi.fn(), updateMany: vi.fn(), create: vi.fn() },
   user: { findUnique: vi.fn() },
 }
 
@@ -85,6 +85,7 @@ beforeEach(() => {
   mockCompleteStep.mockResolvedValue(undefined)
   mockDb.userNotification.findMany.mockResolvedValue([])
   mockDb.userNotification.updateMany.mockResolvedValue({ count: 0 })
+  mockDb.userNotification.create.mockResolvedValue({ id: 'n_created' })
   mockDb.tournamentParticipant.findMany.mockResolvedValue([])
   mockDb.user.findUnique.mockResolvedValue(null) // non-bot by default
 })
@@ -194,7 +195,7 @@ describe('tournament:warning — 2-min warning persistence', () => {
     })
   })
 
-  it('emits real-time socket event for all warning tiers', async () => {
+  it('does not emit real-time socket events — all warning tiers flow via SSE', async () => {
     const io = makeIo()
 
     for (const minutesUntilStart of [60, 15, 2]) {
@@ -205,16 +206,16 @@ describe('tournament:warning — 2-min warning persistence', () => {
       })
     }
 
-    // io.to called once per tier (one participant each)
-    expect(io.to).toHaveBeenCalledTimes(3)
-    expect(io.to).toHaveBeenCalledWith('user:user_1')
+    // 15-min is delivered by scheduledJobs directly via appendToStream; 60/2
+    // flow through dispatch(). Neither path touches io.to anymore.
+    expect(io.to).not.toHaveBeenCalled()
   })
 })
 
 // ─── Per-registration pref takes precedence over global default ───────────────
 
 describe('tournament:match:result — per-registration pref takes precedence over global default', () => {
-  it('delivers AS_PLAYED for a participant registered with AS_PLAYED', async () => {
+  it('dispatches match.result live for a participant registered with AS_PLAYED', async () => {
     const io = makeIo()
 
     mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
@@ -229,17 +230,16 @@ describe('tournament:match:result — per-registration pref takes precedence ove
       p1Wins: 2, p2Wins: 0, drawGames: 0,
     })
 
-    // Real-time emit fired immediately (AS_PLAYED behaviour)
-    expect(io.to).toHaveBeenCalledWith('user:user_1')
-    // Notification dispatched via bus
+    expect(io.to).not.toHaveBeenCalled()
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'match.result',
       targets: { userId: 'user_1' },
       payload: expect.any(Object),
     })
+    expect(mockDb.userNotification.create).not.toHaveBeenCalled()
   })
 
-  it('withholds real-time for a participant registered with END_OF_TOURNAMENT', async () => {
+  it('holds match.result for a participant registered with END_OF_TOURNAMENT', async () => {
     const io = makeIo()
 
     mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
@@ -254,20 +254,24 @@ describe('tournament:match:result — per-registration pref takes precedence ove
       p1Wins: 2, p2Wins: 0, drawGames: 0,
     })
 
-    // No real-time emit — END_OF_TOURNAMENT holds results until tournament end
-    const toCallArgs = io.to.mock.calls.map(c => c[0])
-    expect(toCallArgs).not.toContain('user:user_1')
-    // But notification is still queued for the end-of-tournament flush
-    expect(mockDispatch).toHaveBeenCalledWith({
+    // EOT: no live dispatch; a UserNotification row is persisted for the
+    // tournament:completed flush to surface later.
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
       type: 'match.result',
       targets: { userId: 'user_1' },
-      payload: expect.any(Object),
+    }))
+    expect(mockDb.userNotification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'user_1',
+        type: 'match.result',
+        payload: expect.objectContaining({ tournamentId: 'tour_1', matchId: 'match_1' }),
+      }),
     })
   })
 })
 
 describe('tournament:match:result — notification preference gating', () => {
-  it('emits real-time immediately for AS_PLAYED participant', async () => {
+  it('dispatches live for all AS_PLAYED participants', async () => {
     const io = makeIo()
 
     mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
@@ -284,10 +288,7 @@ describe('tournament:match:result — notification preference gating', () => {
       drawGames: 0,
     })
 
-    // Both AS_PLAYED participants should get real-time emit
-    expect(io.to).toHaveBeenCalledWith('user:user_1')
-    expect(io.to).toHaveBeenCalledWith('user:user_2')
-    // Both dispatched via bus
+    expect(io.to).not.toHaveBeenCalled()
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'match.result',
       targets: { userId: 'user_1' },
@@ -300,7 +301,7 @@ describe('tournament:match:result — notification preference gating', () => {
     })
   })
 
-  it('does NOT emit real-time for END_OF_TOURNAMENT participant but queues notification', async () => {
+  it('persists a UserNotification (without dispatch) for END_OF_TOURNAMENT and dispatches AS_PLAYED live', async () => {
     const io = makeIo()
 
     mockDb.tournamentMatch.findUnique.mockResolvedValue(makeMatch())
@@ -317,19 +318,18 @@ describe('tournament:match:result — notification preference gating', () => {
       drawGames: 0,
     })
 
-    // user_1 is END_OF_TOURNAMENT: should NOT get a real-time emit
-    const toCallArgs = io.to.mock.calls.map(c => c[0])
-    expect(toCallArgs).not.toContain('user:user_1')
+    expect(io.to).not.toHaveBeenCalled()
 
-    // user_2 is AS_PLAYED: should get real-time emit
-    expect(toCallArgs).toContain('user:user_2')
-
-    // Both should have their notification dispatched via bus
-    expect(mockDispatch).toHaveBeenCalledWith({
+    // user_1 is END_OF_TOURNAMENT: no dispatch, row is persisted directly.
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
       type: 'match.result',
       targets: { userId: 'user_1' },
-      payload: expect.any(Object),
+    }))
+    expect(mockDb.userNotification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'user_1', type: 'match.result' }),
     })
+
+    // user_2 is AS_PLAYED: dispatched live.
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'match.result',
       targets: { userId: 'user_2' },
@@ -339,46 +339,41 @@ describe('tournament:match:result — notification preference gating', () => {
 })
 
 describe('tournament:completed — END_OF_TOURNAMENT flush', () => {
-  it('emits batch of match results to END_OF_TOURNAMENT participant at tournament end', async () => {
+  it('dispatches held match.result notifications for END_OF_TOURNAMENT participants at tournament end', async () => {
     const io = makeIo()
 
-    // END_OF_TOURNAMENT participant
+    // One EOT participant with two previously-held match.result rows.
     mockDb.tournamentParticipant.findMany.mockResolvedValue([
       { userId: 'user_eot' },
     ])
-
-    // Two pending match result notifications for this user
     mockDb.userNotification.findMany.mockResolvedValue([
       { id: 'n1', userId: 'user_eot', payload: { tournamentId: 'tour_1', matchId: 'match_1' } },
       { id: 'n2', userId: 'user_eot', payload: { tournamentId: 'tour_1', matchId: 'match_2' } },
     ])
-    mockDb.userNotification.updateMany.mockResolvedValue({ count: 2 })
 
     await handleEvent(io, 'tournament:completed', {
       tournamentId: 'tour_1',
       finalStandings: [{ userId: 'user_eot', position: 1 }],
     })
 
-    // Collect all (room, event, data) tuples from io.to(...).emit(...)
-    const allEmits = []
-    for (let i = 0; i < io.to.mock.calls.length; i++) {
-      const room = io.to.mock.calls[i][0]
-      const emitResult = io.to.mock.results[i].value
-      for (const emitCall of emitResult.emit.mock.calls) {
-        allEmits.push({ room, event: emitCall[0], data: emitCall[1] })
-      }
-    }
+    expect(io.to).not.toHaveBeenCalled()
 
-    const batchEmit = allEmits.find(
-      c => c.event === 'tournament:match:results:batch' && c.room === 'user:user_eot'
-    )
-    expect(batchEmit).toBeDefined()
-    expect(batchEmit.data.matchIds).toEqual(['match_1', 'match_2'])
+    // Dispatches the tournament-complete notification to the EOT participant.
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'tournament.completed',
+      targets: { userId: 'user_eot' },
+    }))
 
-    // Notifications should be marked delivered
-    expect(mockDb.userNotification.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['n1', 'n2'] } },
-      data: { deliveredAt: expect.any(Date) },
-    })
+    // And re-dispatches each held match.result so SSE subscribers surface them.
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'match.result',
+      targets: { userId: 'user_eot' },
+      payload: expect.objectContaining({ matchId: 'match_1' }),
+    }))
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'match.result',
+      targets: { userId: 'user_eot' },
+      payload: expect.objectContaining({ matchId: 'match_2' }),
+    }))
   })
 })

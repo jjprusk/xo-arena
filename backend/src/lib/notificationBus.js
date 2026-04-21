@@ -110,11 +110,8 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
         const users = await db.user.findMany({ select: { id: true } })
         userIds = users.map(u => u.id)
       }
-      // Emit to all sockets regardless
-      if (_io) {
-        _io.emit('guide:notification', { type, payload, expiresAt: expiresAtIso })
-      }
-      // Tier 2 replay stream — broadcast entry.
+      // Tier 2 broadcast — SSE clients receive it live; the replay endpoint
+      // covers reconnects up to the 5-min Redis stream horizon.
       appendToStream('guide:notification', { type, payload, expiresAt: expiresAtIso }, { userId: null })
         .catch(() => {})
       if (entry.persist !== 'persistent') return  // ephemeral broadcast done
@@ -126,10 +123,9 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
 
     if (userIds.length === 0) return
 
-    // For broadcast+persistent: respect preferences, use createMany for efficiency,
-    // then mark rows as delivered for users who are currently connected. Without this,
-    // the reconnect flush in user:subscribe re-delivers rows that were already received
-    // live via the _io.emit() broadcast above, producing duplicate notifications.
+    // Broadcast+persistent: write one UserNotification row per eligible user so
+    // the REST bootstrap (/me/notifications) can surface it beyond the SSE
+    // replay window. Opted-out users are excluded per their preference.
     if (targets?.broadcast && entry.persist === 'persistent') {
       const optedOut = await db.notificationPreference.findMany({
         where: { userId: { in: userIds }, eventType: type, inApp: false },
@@ -142,22 +138,6 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
           data: eligible.map(userId => ({ userId, type, payload, ...(expiresAt && { expiresAt }) })),
           skipDuplicates: true,
         })
-        if (_io) {
-          const now = new Date()
-          const connected = await Promise.all(
-            eligible.map(async (userId) => {
-              const sockets = await _io.in(`user:${userId}`).fetchSockets()
-              return sockets.length > 0 ? userId : null
-            })
-          )
-          const connectedIds = connected.filter(Boolean)
-          if (connectedIds.length > 0) {
-            await db.userNotification.updateMany({
-              where: { userId: { in: connectedIds }, type, deliveredAt: null },
-              data: { deliveredAt: now },
-            })
-          }
-        }
       }
       return
     }
@@ -178,34 +158,18 @@ export async function dispatch({ type, targets, payload = {}, expiresAt: explici
         if (!pref.inApp && !entry.systemCritical) return
 
         // Dedup: skip if undelivered row already exists for same type+key
-        let notifId = null
         if (entry.persist === 'persistent') {
           const dedupFilter = buildDedupFilter(type, payload)
           const existing = await db.userNotification.findFirst({
             where: { userId, type, deliveredAt: null, ...dedupFilter },
           })
           if (existing) return
-          const notif = await db.userNotification.create({ data: { userId, type, payload, ...(expiresAt && { expiresAt }) } })
-          notifId = notif.id
+          await db.userNotification.create({ data: { userId, type, payload, ...(expiresAt && { expiresAt }) } })
         }
 
-        // Emit to socket room; mark delivered immediately if the user is connected
-        // so the reconnect flush doesn't re-send what was already received live.
-        if (_io) {
-          const sockets = await _io.in(`user:${userId}`).fetchSockets()
-          if (sockets.length > 0) {
-            _io.to(`user:${userId}`).emit('guide:notification', { type, payload, expiresAt: expiresAtIso })
-            if (notifId) {
-              await db.userNotification.update({
-                where: { id: notifId },
-                data:  { deliveredAt: new Date() },
-              })
-            }
-          }
-        }
-        // Tier 2 replay stream — personal entry. Always append, whether or not
-        // the socket was reachable — the replay endpoint is exactly for the
-        // "connected later" case.
+        // Tier 2 personal stream — SSE broker fans out to the matching user's
+        // live connection. Offline users get it from the DB via /me/notifications
+        // on next sign-in.
         appendToStream('guide:notification', { type, payload, expiresAt: expiresAtIso }, { userId })
           .catch(() => {})
 

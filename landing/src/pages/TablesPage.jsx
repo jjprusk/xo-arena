@@ -16,7 +16,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import { getSocket } from '../lib/socket.js'
+import { useEventStream } from '../lib/useEventStream.js'
 import { ListTable, ListTh, ListTd, ListTr, ListPagination, SearchBar } from '../components/ui/ListTable.jsx'
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 import { BoardPreview as XoBoardPreview } from '@callidity/game-xo'
@@ -161,24 +161,24 @@ export default function TablesPage() {
 
   useEffect(() => { fetchTables() }, [fetchTables])
 
-  // Real-time: listen to table.* bus events and refresh the list when any
-  // of them fires. Small events stream so a full re-fetch is simpler and
-  // correct vs. reconciling individual mutations — revisit if volume grows.
-  // Coalesces bursts of events into a single fetch via a short debounce.
+  // Real-time: listen to table.* bus events via SSE and refresh the list.
+  // Small events stream, so a full re-fetch is simpler and correct vs.
+  // reconciling individual mutations. Coalesces bursts into a single fetch
+  // via a short debounce.
   const debounceRef = useRef(null)
-  useEffect(() => {
-    const socket = getSocket()
-    function onBusEvent({ type }) {
-      if (!['table.created', 'player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.completed', 'table.deleted'].includes(type)) return
+  const TABLE_EVENT_TYPES = new Set([
+    'table.created', 'player.joined', 'player.left',
+    'spectator.joined', 'table.empty', 'table.completed', 'table.deleted',
+  ])
+  useEventStream({
+    channels: ['guide:notification'],
+    onEvent: (_channel, payload) => {
+      if (!TABLE_EVENT_TYPES.has(payload?.type)) return
       clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => { fetchTables() }, 250)
-    }
-    socket.on('guide:notification', onBusEvent)
-    return () => {
-      clearTimeout(debounceRef.current)
-      socket.off('guide:notification', onBusEvent)
-    }
-  }, [fetchTables])
+    },
+  })
+  useEffect(() => () => clearTimeout(debounceRef.current), [])
 
   return (
     <div className="max-w-4xl mx-auto w-full px-4 py-6 space-y-6">

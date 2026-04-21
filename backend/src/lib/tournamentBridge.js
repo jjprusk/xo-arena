@@ -112,12 +112,9 @@ export async function handleEvent(io, channel, data) {
     }
     case 'tournament:started': {
       const { tournamentId, name } = data
-      io.emit('tournament:started', { tournamentId, name })
-      // Also fan out via the notification bus so registered participants get a
-      // persistent guide notification and a Tier 2 SSE stream entry. Without
-      // this, the bare io.emit() above only reaches users who happen to be
-      // socket-connected at the exact moment of start — anyone whose Guide
-      // relies on SSE sees nothing.
+      // tournament:started is already fanned out to SSE via tournament/redis.js
+      // (publish → xadd). This case only handles the per-participant guide
+      // notification + UserNotification row via the bus.
       try {
         const participants = await db.tournamentParticipant.findMany({
           where: { tournamentId },
@@ -142,18 +139,14 @@ export async function handleEvent(io, channel, data) {
       } catch (err) {
         logger.warn({ err, tournamentId }, 'Failed to dispatch tournament.started notifications')
       }
-      logger.info({ tournamentId }, 'Tournament started — notified all connected clients')
+      logger.info({ tournamentId }, 'Tournament started — notified registered participants')
       break
     }
-    case 'tournament:registration_closed': {
-      io.emit('tournament:registration_closed', { tournamentId: data.tournamentId })
-      break
-    }
+    case 'tournament:registration_closed':
     case 'tournament:participant:joined':
-    case 'tournament:participant:left': {
-      io.emit(channel, { tournamentId: data.tournamentId })
+    case 'tournament:participant:left':
+      // No-op: already appended to the SSE stream by tournament/redis.js.
       break
-    }
     case 'tournament:flash:announced': {
       // Broadcast to all connected sockets — flash tournaments are live events.
       // No UserNotification row: if you're not online, the window has likely passed.
@@ -163,7 +156,6 @@ export async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:match:ready': {
-      // Emit real-time to both participants
       const { tournamentId, matchId, participant1UserId, participant2UserId, bestOfN } = data
       const userIds = [participant1UserId, participant2UserId].filter(Boolean)
 
@@ -180,21 +172,13 @@ export async function handleEvent(io, channel, data) {
         })
       }
 
-      // userIds contains betterAuthIds. Socket rooms and DB foreign keys use
-      // the DB User.id (CUID), so look up the mapping for each participant.
+      // userIds contains betterAuthIds; dispatch() expects the DB User.id.
       for (const betterAuthId of userIds) {
         const dbUser = await db.user.findUnique({ where: { betterAuthId }, select: { id: true } })
-        const dbUserId = dbUser?.id ?? betterAuthId // fallback: emit to betterAuthId room if lookup fails
-
-        io.to(`user:${dbUserId}`).emit('tournament:match:ready', { tournamentId, matchId, bestOfN: bestOfN ?? 1, participant1UserId, participant2UserId })
+        const dbUserId = dbUser?.id ?? betterAuthId
         await dispatch({ type: 'match.ready', targets: { userId: dbUserId }, payload: { tournamentId, matchId } })
-        // Journey step 7: first tournament registration detected at match-ready time
         completeStep(dbUserId, 7, io).catch(() => {})
       }
-
-      // Phase 3.4: Table creation is now handled by socketHandler when
-      // players emit `tournament:room:join`. The dual-write from Phase 3.1
-      // (Option A) is deleted — Table IS the room.
       break
     }
     case 'tournament:bot:match:ready': {
@@ -208,58 +192,41 @@ export async function handleEvent(io, channel, data) {
       }
       break
     }
-    case 'tournament:round:started': {
-      const { tournamentId, roundNumber } = data
-      io.emit('tournament:round:started', { tournamentId, roundNumber })
+    case 'tournament:round:started':
+      // No-op: already appended to SSE by tournament/redis.js.
       break
-    }
     case 'tournament:match:result': {
-      // Emit real-time to participants with AS_PLAYED pref; queue notification for all.
-      // END_OF_TOURNAMENT participants get real-time batch at tournament:completed.
-      const { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames } = data
-      let p1UserId = null
-      let p2UserId = null
+      const { tournamentId, matchId } = data
       try {
         const match = await db.tournamentMatch.findUnique({
           where: { id: matchId },
-          include: {
-            round: {
-              include: { tournament: { include: { participants: { select: { userId: true } } } } }
-            }
-          }
+          select: { participant1Id: true, participant2Id: true },
         })
-        // Get participant1 and participant2 user IDs and their notification prefs
         const p1 = match?.participant1Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant1Id }, select: { userId: true, resultNotifPref: true } }) : null
         const p2 = match?.participant2Id ? await db.tournamentParticipant.findUnique({ where: { id: match.participant2Id }, select: { userId: true, resultNotifPref: true } }) : null
-        p1UserId = p1?.userId ?? null
-        p2UserId = p2?.userId ?? null
         const participants = [p1, p2].filter(p => p?.userId)
         for (const { userId, resultNotifPref } of participants) {
           const pref = resultNotifPref ?? 'AS_PLAYED'
-          // Always persist notification so it can be flushed at tournament end
-          await dispatch({ type: 'match.result', targets: { userId }, payload: { tournamentId, matchId } })
-          // Only emit real-time immediately for AS_PLAYED preference
           if (pref === 'AS_PLAYED') {
-            io.to(`user:${userId}`).emit('tournament:match:result', { tournamentId, matchId, winnerId, p1Wins, p2Wins, drawGames })
+            await dispatch({ type: 'match.result', targets: { userId }, payload: { tournamentId, matchId } })
+          } else {
+            // END_OF_TOURNAMENT: persist the row but skip live SSE fan-out.
+            // The tournament:completed handler below flips these rows delivered
+            // and clients surface them via /me/notifications on next sign-in.
+            await db.userNotification.create({
+              data: { userId, type: 'match.result', payload: { tournamentId, matchId } },
+            }).catch(() => {})
           }
-          // Journey step 8: first tournament match played (fire-and-forget)
           completeStep(userId, 8, io).catch(() => {})
         }
       } catch (err) {
-        logger.error({ err, matchId }, 'Failed to deliver match result')
+        logger.error({ err, matchId }, 'Failed to record match result notification')
       }
-
-      // Phase 3.4: Table.status is now set to COMPLETED by socketHandler
-      // when the game finishes (game:move or game:forfeit). The dual-write
-      // seat-pair lookup from Phase 3.1 is deleted — Tables have a
-      // tournamentMatchId FK for direct lookup if needed.
       break
     }
     case 'tournament:warning': {
       const { tournamentId, minutesUntilStart, participantUserIds } = data
       for (const userId of participantUserIds) {
-        io.to(`user:${userId}`).emit('tournament:warning', { tournamentId, minutesUntilStart })
-        // Persist 60-min and 2-min warnings via dispatch; 15-min is real-time only
         if (minutesUntilStart === 60 || minutesUntilStart === 2) {
           await dispatch({ type: 'tournament.starting_soon', targets: { userId }, payload: { tournamentId, minutesUntilStart } })
         }
@@ -305,14 +272,12 @@ export async function handleEvent(io, channel, data) {
         logger.warn({ err, tournamentId }, 'Failed to collect all participants for completion notification')
       }
 
-      // Emit once per unique owner/participant
       for (const [notifyUserId, position] of ownerPositionMap) {
-        io.to(`user:${notifyUserId}`).emit('tournament:completed', { tournamentId, position })
         await dispatch({ type: 'tournament.completed', targets: { userId: notifyUserId }, payload: { tournamentId, name, position } })
       }
 
-      // Flush pending match result notifications for END_OF_TOURNAMENT participants.
-      // Batched: one findMany for all EOT users instead of N individual queries.
+      // Surface EOT participants' previously-held match.result notifications
+      // into the SSE stream now that the tournament is done.
       try {
         const eotParticipants = await db.tournamentParticipant.findMany({
           where: { tournamentId, resultNotifPref: 'END_OF_TOURNAMENT' },
@@ -320,7 +285,6 @@ export async function handleEvent(io, channel, data) {
         })
         if (eotParticipants.length > 0) {
           const eotUserIds = eotParticipants.map(p => p.userId)
-
           const allPending = await db.userNotification.findMany({
             where: {
               userId: { in: eotUserIds },
@@ -329,27 +293,11 @@ export async function handleEvent(io, channel, data) {
               payload: { path: ['tournamentId'], equals: tournamentId },
             },
           })
-
-          // Group by userId
-          const byUser = {}
           for (const n of allPending) {
-            if (!byUser[n.userId]) byUser[n.userId] = []
-            byUser[n.userId].push(n)
-          }
-
-          const deliveredIds = []
-          for (const userId of eotUserIds) {
-            const pending = byUser[userId] ?? []
-            if (pending.length === 0) continue
-            const matchIds = pending.map(n => n.payload?.matchId).filter(Boolean)
-            io.to(`user:${userId}`).emit('tournament:match:results:batch', { tournamentId, matchIds })
-            deliveredIds.push(...pending.map(n => n.id))
-          }
-
-          if (deliveredIds.length > 0) {
-            await db.userNotification.updateMany({
-              where: { id: { in: deliveredIds } },
-              data: { deliveredAt: new Date() },
+            await dispatch({
+              type: 'match.result',
+              targets: { userId: n.userId },
+              payload: n.payload ?? { tournamentId },
             })
           }
         }
@@ -361,13 +309,9 @@ export async function handleEvent(io, channel, data) {
     case 'tournament:cancelled': {
       const { tournamentId, name, participantUserIds } = data
       for (const userId of participantUserIds) {
-        io.to(`user:${userId}`).emit('tournament:cancelled', { tournamentId })
         await dispatch({ type: 'tournament.cancelled', targets: { userId }, payload: { tournamentId, name } })
-
-        // Also notify bot owners
         const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
         if (botUser?.isBot && botUser.botOwnerId) {
-          io.to(`user:${botUser.botOwnerId}`).emit('tournament:cancelled', { tournamentId })
           await dispatch({ type: 'tournament.cancelled', targets: { userId: botUser.botOwnerId }, payload: { tournamentId, name } })
         }
       }

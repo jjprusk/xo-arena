@@ -21,6 +21,7 @@ import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
+import { useEventStream } from '../lib/useEventStream.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 import { GameView } from './PlayPage.jsx'
@@ -98,33 +99,32 @@ export default function TableDetailPage() {
     }
   }, [tableId])
 
-  // Real-time: listen to table.* bus events and the table:presence feed,
-  // refreshing when this specific table is affected.
+  // Real-time: table.* bus events via SSE trigger a refetch when this table
+  // is affected. table:presence stays on the socket — it's a per-table room
+  // broadcast, not a Tier 2 SSE channel.
   const [presence, setPresence] = useState({ count: 0, userIds: [], spectatingCount: 0 })
-  useEffect(() => {
-    const socket = getSocket()
-    function onBusEvent({ type, payload }) {
-      // If this specific table was deleted (by the creator or admin), bounce
-      // back to the Tables list — no point staying on a 404 page.
-      if (type === 'table.deleted' && payload?.tableId === tableId) {
+  useEventStream({
+    channels: ['guide:notification'],
+    onEvent: (_channel, payload) => {
+      const { type, payload: data } = payload ?? {}
+      if (type === 'table.deleted' && data?.tableId === tableId) {
         navigate('/tables', { replace: true })
         return
       }
       if (!['player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.started'].includes(type)) return
-      if (payload?.tableId && payload.tableId !== tableId) return
+      if (data?.tableId && data.tableId !== tableId) return
       load()
-    }
+    },
+  })
+  useEffect(() => {
+    const socket = getSocket()
     function onPresence(data) {
       if (data?.tableId !== tableId) return
       setPresence({ count: data.count ?? 0, userIds: data.userIds ?? [], spectatingCount: data.spectatingCount ?? 0 })
     }
-    socket.on('guide:notification', onBusEvent)
-    socket.on('table:presence',     onPresence)
-    return () => {
-      socket.off('guide:notification', onBusEvent)
-      socket.off('table:presence',     onPresence)
-    }
-  }, [tableId, load])
+    socket.on('table:presence', onPresence)
+    return () => socket.off('table:presence', onPresence)
+  }, [tableId])
 
   const mySeatIndex = table?.seats?.findIndex?.(s => s.userId && s.userId === currentUserId) ?? -1
   const isSeated    = mySeatIndex !== -1
