@@ -775,7 +775,14 @@ export async function attachSocketIO(httpServer) {
           registerSocket(socket.id, table.id, null)
           _spectatorSockets.set(socket.id, table.id)
           socket.join(`table:${table.id}`)
-          socket.emit('room:joined', { slug, role: 'spectator', room: sanitizeTable(table) })
+          const spectatorCount = getSpectatorCount(table.id)
+          socket.emit('room:joined', { slug, role: 'spectator', room: { ...sanitizeTable(table), spectatorCount } })
+          // Notify the rest of the room (host + guest + other spectators) so
+          // their useGameSDK updates session.settings.spectatorCount and the
+          // sidebar shows "N watching". `broadcastTablePresence` below powers
+          // TableDetailPage's SSE fallback but doesn't feed useGameSDK, which
+          // listens for room:spectatorJoined specifically.
+          socket.to(`table:${table.id}`).emit('room:spectatorJoined', { spectatorCount })
           broadcastTablePresence(io, table.id)
           // Start spectator idle timer if game is in progress
           if (table.status === 'ACTIVE') {
@@ -927,22 +934,71 @@ export async function attachSocketIO(httpServer) {
           return socket.emit('error', { message: 'Authentication required for this match' })
         }
 
-        // Update seats and previewState.marks — betterAuthId for consistency,
-        // socket-derived sentinel for guests.
-        const ps = { ...table.previewState }
-        const marks = { ...(ps.marks || {}) }
+        // Table was created via REST with empty seats (Tables paradigm) and the
+        // creator is the first to hit the share URL. Seat them at seat 0 with
+        // mark X. If the guest beat them to it (their room:join already took
+        // seat 1), both seats are now full — promote to ACTIVE and emit
+        // game:start so both sides receive an initialized board.
+        if (seats[0]?.status !== 'occupied' && baId === table.createdById) {
+          const priorPs = table.previewState || {}
+          const marks = { ...(priorPs.marks || {}), [baId]: 'X' }
+          const newSeats = [
+            { userId: baId, status: 'occupied', displayName: user?.displayName ?? 'Host' },
+            seats[1] || { userId: null, status: 'empty' },
+          ]
+          const bothSeated = newSeats.every(s => s?.status === 'occupied')
+          const ps = bothSeated
+            ? { ...makePreviewState({ marks }), scores: priorPs.scores ?? { X: 0, O: 0 } }
+            : { ...priorPs, marks }
+          const updated = await db.table.update({
+            where: { id: table.id },
+            data: {
+              status: bothSeated ? 'ACTIVE' : 'FORMING',
+              seats: newSeats,
+              previewState: ps,
+            },
+          })
+          registerSocket(socket.id, updated.id, baId)
+          socket.join(`table:${updated.id}`)
+          const extras = await buildExtras(newSeats[0], newSeats[1], user?.id ?? null)
+          socket.emit('room:joined', { slug, role: 'player', mark: 'X', room: sanitizeTable(updated, extras) })
+          if (bothSeated) {
+            io.to(`table:${updated.id}`).emit('room:guestJoined', { room: sanitizeTable(updated, extras) })
+            io.to(`table:${updated.id}`).emit('game:start', {
+              board: ps.board,
+              currentTurn: ps.currentTurn,
+              round: ps.round ?? 1,
+            })
+          }
+          return
+        }
+
+        // Guest joining a FORMING table. Seat them at seat 1 regardless of
+        // whether seat 0 is currently occupied — when host and guest arrive
+        // nearly simultaneously (share-link flow), the guest's room:join may
+        // reach the server before host's seat-0 update commits. Only promote
+        // the table to ACTIVE and emit game:start once BOTH seats end up
+        // occupied; until then the table stays FORMING and the host's own
+        // room:join (which runs the creator→seat-0 branch above) fills the
+        // last empty seat before emitting the activation events.
+        const priorPs = table.previewState || {}
+        const marks = { ...(priorPs.marks || {}) }
+        if (seats[0]?.userId) marks[seats[0].userId] = marks[seats[0].userId] || 'X'
         marks[baId] = 'O'
-        ps.marks = marks
 
         const newSeats = [
-          seats[0],
+          seats[0] || { userId: null, status: 'empty' },
           { userId: baId, status: 'occupied', displayName: user?.displayName ?? 'Guest' },
         ]
+        const bothSeated = newSeats.every(s => s?.status === 'occupied')
+        const ps = bothSeated
+          ? { ...makePreviewState({ marks }), scores: priorPs.scores ?? { X: 0, O: 0 } }
+          : { ...priorPs, marks }
 
         const updated = await db.table.update({
           where: { id: table.id },
           data: {
-            status: 'ACTIVE',
+            status: bothSeated ? 'ACTIVE' : 'FORMING',
             seats: newSeats,
             previewState: ps,
           },
@@ -955,11 +1011,13 @@ export async function attachSocketIO(httpServer) {
 
         socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeTable(updated, extras) })
         io.to(`table:${updated.id}`).emit('room:guestJoined', { room: sanitizeTable(updated, extras) })
-        io.to(`table:${updated.id}`).emit('game:start', {
-          board: ps.board,
-          currentTurn: ps.currentTurn,
-          round: ps.round ?? 1,
-        })
+        if (bothSeated) {
+          io.to(`table:${updated.id}`).emit('game:start', {
+            board: ps.board,
+            currentTurn: ps.currentTurn,
+            round: ps.round ?? 1,
+          })
+        }
 
         // Start idle timers for both players
         const { warnMs, graceMs } = await getIdleConfig()

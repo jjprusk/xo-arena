@@ -123,24 +123,10 @@ test.describe('PvP game flow', () => {
     }
   })
 
-  test('table display name is shown on the board', async ({ browser }) => {
-    test.skip(!haveUsers, 'Set TEST_USER_EMAIL + TEST_USER2_EMAIL + passwords in qa.env')
-
-    const { hostCtx, guestCtx, hostPage, guestPage, inviteUrl } = await setupHostAndGuest(browser)
-    try {
-      await hostPage.goto(inviteUrl)
-      await guestPage.goto(inviteUrl)
-      await expect(boardLocator(hostPage)).toBeVisible({ timeout: 15_000 })
-
-      // Display name starts with "Mt. <name>" — pulled from mountainPool.
-      const name = await hostPage.locator('span, h1').filter({ hasText: /^Mt\. / }).first().textContent()
-      expect(name).toMatch(/^Mt\. /)
-      await expect(guestPage.locator('span, h1').filter({ hasText: name })).toBeVisible({ timeout: 5_000 })
-    } finally {
-      await hostCtx.close()
-      await guestCtx.close()
-    }
-  })
+  // Dropped: "table display name is shown on the board" (pre-Phase-3.4). The
+  // PlatformShell no longer renders "Mt. <name>" anywhere on the game surface
+  // in the Tables paradigm — that label now lives in the Tables list only. The
+  // mountain-name allocation itself is covered by mountainNames unit tests.
 })
 
 test.describe('Spectator flow', () => {
@@ -172,7 +158,10 @@ test.describe('Spectator flow', () => {
       const spectatorCells = spectatorPage.locator('button[aria-label^="Cell "]:not([disabled])')
       expect(await spectatorCells.count()).toBe(0)
 
-      await expect(hostPage.getByText(/👁/)).toBeVisible({ timeout: 5_000 })
+      // Watcher count surfaces in the sidebar as "N watching". PlatformShell
+      // dropped the emoji-only indicator during the Phase 3.4 redesign. Both
+      // the badge over the board and the sidebar show it, so pick the first.
+      await expect(hostPage.getByText(/\d+ watching/).first()).toBeVisible({ timeout: 5_000 })
 
       for (const p of [hostPage, guestPage]) {
         if (await p.getByText('Your turn').isVisible().catch(() => false)) {

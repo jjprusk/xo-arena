@@ -375,6 +375,9 @@ export function useGameSDK({
 
     socket.on('room:spectatorJoined', ({ spectatorCount }) => {
       settingsRef.current = { ...settingsRef.current, spectatorCount }
+      // Rebuild the session so downstream consumers (PlatformShell's
+      // TableSurface / TableContextSidebar) re-render with the new count.
+      buildSession()
     })
 
     socket.on('room:playerDisconnected', () => {
@@ -473,13 +476,16 @@ export function useGameSDK({
     // ── Error ──────────────────────────────────────────────────────────────────
 
     socket.on('error', ({ message }) => {
-      // Room full when joining as player — fall back to spectator
-      const state = { slug: slugRef.current, role: session?.isSpectator ? 'spectator' : 'guest' }
+      // Room full when joining as player — fall back to spectator. Use
+      // joinSlug as a fallback because slugRef is only populated after a
+      // successful room:joined, which this caller never got.
+      const slug = slugRef.current ?? joinSlug
       if (
         !session?.isSpectator &&
+        slug &&
         (message === 'Room is not waiting for a player' || message === 'Room is full')
       ) {
-        socket.emit('room:join', { slug: state.slug, role: 'spectator' })
+        socket.emit('room:join', { slug, role: 'spectator' })
         return
       }
       // "Room not found" happens when the server-side room has been cleaned

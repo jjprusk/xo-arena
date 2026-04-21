@@ -1,8 +1,8 @@
 <!-- Copyright (c) 2026 Joe Pruskowski. All rights reserved. -->
 # Phase 3.4 / 3.5 QA Checklist
 
-**Version:** v1.3.0-alpha-1.13 (pending)
-**Date updated:** 2026-04-19
+**Version:** v1.3.0-alpha-1.13
+**Date updated:** 2026-04-21
 
 ## Phase 3.4 scope (sections 1–10)
 Tables are the single source of truth for all game sessions. The in-memory `roomManager` and `rooms.js` HTTP routes have been deleted. All game state lives in `Table.previewState`. **Status: implementation complete, manual QA pass done (items marked ✓).**
@@ -168,7 +168,7 @@ Create a SINGLE_ELIM tournament with 3 participants (2 bots + 1 human, or 3 bots
 
 - [x] One participant receives an automatic **bye** (COMPLETED match with no opponent, winner = bye recipient)
 - [x] Bracket advances correctly: bye recipient goes to round 2 alongside the winner of the real match
-n
+
 ### 8f. Auto-cancellation (optional)
 
 Create a tournament with `minParticipants: 4`, register only 1 user, set `registrationCloseAt` to a time 1–2 minutes in the future, wait.
@@ -287,10 +287,10 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 
 Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
-- [ ] Start an HvB game on a mobile viewport → sidebar is hidden automatically when the game transitions to `playing`
-- [ ] Toggle button is visible at the top of the board area → tap it → sidebar slides in
-- [ ] Tap toggle again → sidebar hides again; board fills the full width
-- [ ] On a desktop viewport (≥ 768 px) the sidebar does **not** auto-hide when the game starts
+- [x] Start an HvB game on a mobile viewport → sidebar is hidden automatically when the game transitions to `playing`
+- [x] Toggle button is visible at the top of the board area → tap it → sidebar slides in
+- [x] Tap toggle again → sidebar hides again; board fills the full width
+- [x] On a desktop viewport (≥ 768 px) the sidebar does **not** auto-hide when the game starts
 
 ### 11b. Active table preview thumbnail
 
@@ -320,8 +320,8 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 **URL:** `http://localhost:5174/profile` (signed in, non-bot user)
 
-- [ ] Open the **My Bots** section → click **+ Create Bot**
-- [ ] **Game** dropdown is present, showing all registered games (currently XO only)
+- [x] Open the **My Bots** section → click **+ Create Bot**
+- [x] **Game** dropdown is present, showing all registered games (currently XO only)
 - [ ] Default selection is XO
 - [ ] Create a bot with Game = XO → `BotSkill` row created with `game_id = 'xo'`
   - Verify: `SELECT game_id FROM bot_skills WHERE bot_id = (SELECT id FROM users WHERE display_name = '<botname>')`
@@ -343,8 +343,8 @@ These verify that the HvB path resolves skill server-side rather than trusting a
 
 **URL:** `http://localhost:5174/admin/bots`
 
-- [ ] Bot list table has a **Skills** column (visible at ≥ 1024 px viewport)
-- [ ] Each bot row shows a teal `XO` badge for any bot that has an XO skill
+- [x] Bot list table has a **Skills** column (visible at ≥ 1024 px viewport)
+- [x] Each bot row shows a teal `XO` badge for any bot that has an XO skill
 - [ ] Bots with no `BotSkill` rows show `none` in the Skills column
 - [ ] Hovering a badge shows a tooltip with `gameId: algorithm — status` (e.g., `xo: ml — TRAINED`)
 

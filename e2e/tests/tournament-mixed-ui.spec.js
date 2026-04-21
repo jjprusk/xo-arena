@@ -86,9 +86,14 @@ test.describe('MIXED tournament — UI smoke', () => {
       await expect(playBtn).toBeEnabled()
 
       // ── Assertion 2: clicking it lands on /play with expected params ──────
-      // Force-click: the Guide sidebar may be layered over the main content
-      // on a freshly-loaded page; we're testing navigation, not layering.
-      await playBtn.click({ force: true })
+      // Dispatch click via DOM instead of pointer coords. The Guide panel
+      // auto-opens on tournament.started notifications (match_ready uiType,
+      // see AppLayout.jsx) and its z-40 backdrop covers the page. Playwright's
+      // { force: true } skips actionability checks but still delivers the
+      // click to whatever element sits at the button's viewport coordinates,
+      // so the backdrop catches it. evaluate(el => el.click()) goes straight
+      // to the button's onClick handler regardless of layering.
+      await playBtn.evaluate(el => el.click())
       await userPage.waitForURL(/\/play/, { timeout: 10_000 })
       const url = new URL(userPage.url())
       expect(url.pathname).toBe('/play')

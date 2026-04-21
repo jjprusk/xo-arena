@@ -223,24 +223,44 @@ router.post('/', requireAuth, async (req, res, next) => {
     // room key the socket layer uses for room:join — without it GameView
     // falls through useGameSDK's `else` branch and emits room:create instead
     // of attaching, so each player ends up in their own phantom room.
-    const name = mountainPool.acquire()
-    if (!name) return res.status(503).json({ error: 'No mountain names available' })
-    const slug = MountainNamePool.toSlug(name)
-    const displayName = `Mt. ${name}`
-
-    const table = await db.table.create({
-      data: {
-        gameId,
-        slug,
-        displayName,
-        createdById: req.auth.userId,
-        minPlayers,
-        maxPlayers,
-        isPrivate,
-        isTournament,
-        seats: emptySeats(maxPlayers),
-      },
-    })
+    //
+    // The pool is in-memory; it doesn't know about tables persisted from a
+    // previous process. If `acquire()` picks a name whose slug already exists
+    // in the DB we'd get a P2002 unique-constraint error, so retry a few times
+    // with fresh names before giving up.
+    let table
+    let lastErr
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const name = mountainPool.acquire()
+      if (!name) return res.status(503).json({ error: 'No mountain names available' })
+      const slug = MountainNamePool.toSlug(name)
+      const displayName = `Mt. ${name}`
+      try {
+        table = await db.table.create({
+          data: {
+            gameId,
+            slug,
+            displayName,
+            createdById: req.auth.userId,
+            minPlayers,
+            maxPlayers,
+            isPrivate,
+            isTournament,
+            seats: emptySeats(maxPlayers),
+          },
+        })
+        break
+      } catch (err) {
+        lastErr = err
+        // P2002 = unique-constraint violation. The only unique constraint on a
+        // fresh `table.create` is the slug, so any P2002 here is a slug
+        // collision — retry with a different mountain name. Keep the colliding
+        // name out of the pool so acquire() won't pick it again this session.
+        if (err?.code === 'P2002') continue
+        throw err
+      }
+    }
+    if (!table) return res.status(503).json({ error: 'Could not allocate table slug', detail: lastErr?.message })
 
     // Public tables broadcast — Tables page can react in real time.
     // Private tables don't broadcast (they're share-link only).

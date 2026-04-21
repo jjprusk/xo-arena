@@ -153,13 +153,18 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
       perfMark('PlayPage:board-renderable')
       perfDumpSummary('/play?action=vs-community-bot')
     }
+    // Spectator count: prefer the socket-driven value in session.settings
+    // (populated by useGameSDK on room:joined + room:spectatorJoined). Fall
+    // back to the SSE presence stream count passed in from TableDetailPage.
+    const liveSpectatorCount = session?.settings?.spectatorCount ?? spectatingCount
+
     return (
       <PlatformShell
         gameMeta={xoMeta}
         session={session}
         phase={phase}
         gameState={gameState}
-        spectatorCount={spectatingCount}
+        spectatorCount={liveSpectatorCount}
         tournamentId={tournamentId}
         backHref={tournamentId ? `/tournaments/${tournamentId}` : '/'}
       >
