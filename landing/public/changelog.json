@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.3.0-alpha-1.13",
+    "date": "2026-04-21",
+    "description": "Tournament bug fixing"
+  },
+  {
     "version": "1.3.0-alpha-1.12",
     "date": "2026-04-16",
     "description": "QA fixes: shell button visibility, mode-switch board reset, stale-room error handling, and perf instrumentation"
