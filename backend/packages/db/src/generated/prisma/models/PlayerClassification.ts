@@ -39,9 +39,9 @@ export type PlayerClassificationMinAggregateOutputType = {
   userId: string | null
   tier: $Enums.ClassificationTier | null
   merits: number | null
-  demotionOptOutUsedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
+  demotionOptOutUsedAt: Date | null
 }
 
 export type PlayerClassificationMaxAggregateOutputType = {
@@ -49,9 +49,9 @@ export type PlayerClassificationMaxAggregateOutputType = {
   userId: string | null
   tier: $Enums.ClassificationTier | null
   merits: number | null
-  demotionOptOutUsedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
+  demotionOptOutUsedAt: Date | null
 }
 
 export type PlayerClassificationCountAggregateOutputType = {
@@ -59,9 +59,9 @@ export type PlayerClassificationCountAggregateOutputType = {
   userId: number
   tier: number
   merits: number
-  demotionOptOutUsedAt: number
   createdAt: number
   updatedAt: number
+  demotionOptOutUsedAt: number
   _all: number
 }
 
@@ -79,9 +79,9 @@ export type PlayerClassificationMinAggregateInputType = {
   userId?: true
   tier?: true
   merits?: true
-  demotionOptOutUsedAt?: true
   createdAt?: true
   updatedAt?: true
+  demotionOptOutUsedAt?: true
 }
 
 export type PlayerClassificationMaxAggregateInputType = {
@@ -89,9 +89,9 @@ export type PlayerClassificationMaxAggregateInputType = {
   userId?: true
   tier?: true
   merits?: true
-  demotionOptOutUsedAt?: true
   createdAt?: true
   updatedAt?: true
+  demotionOptOutUsedAt?: true
 }
 
 export type PlayerClassificationCountAggregateInputType = {
@@ -99,9 +99,9 @@ export type PlayerClassificationCountAggregateInputType = {
   userId?: true
   tier?: true
   merits?: true
-  demotionOptOutUsedAt?: true
   createdAt?: true
   updatedAt?: true
+  demotionOptOutUsedAt?: true
   _all?: true
 }
 
@@ -196,9 +196,9 @@ export type PlayerClassificationGroupByOutputType = {
   userId: string
   tier: $Enums.ClassificationTier
   merits: number
-  demotionOptOutUsedAt: Date | null
   createdAt: Date
   updatedAt: Date
+  demotionOptOutUsedAt: Date | null
   _count: PlayerClassificationCountAggregateOutputType | null
   _avg: PlayerClassificationAvgAggregateOutputType | null
   _sum: PlayerClassificationSumAggregateOutputType | null
@@ -229,12 +229,12 @@ export type PlayerClassificationWhereInput = {
   userId?: Prisma.StringFilter<"PlayerClassification"> | string
   tier?: Prisma.EnumClassificationTierFilter<"PlayerClassification"> | $Enums.ClassificationTier
   merits?: Prisma.IntFilter<"PlayerClassification"> | number
-  demotionOptOutUsedAt?: Prisma.DateTimeNullableFilter<"PlayerClassification"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"PlayerClassification"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"PlayerClassification"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
-  meritTx?: Prisma.MeritTransactionListRelationFilter
+  demotionOptOutUsedAt?: Prisma.DateTimeNullableFilter<"PlayerClassification"> | Date | string | null
   history?: Prisma.ClassificationHistoryListRelationFilter
+  meritTx?: Prisma.MeritTransactionListRelationFilter
+  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }
 
 export type PlayerClassificationOrderByWithRelationInput = {
@@ -242,12 +242,12 @@ export type PlayerClassificationOrderByWithRelationInput = {
   userId?: Prisma.SortOrder
   tier?: Prisma.SortOrder
   merits?: Prisma.SortOrder
-  demotionOptOutUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  user?: Prisma.UserOrderByWithRelationInput
-  meritTx?: Prisma.MeritTransactionOrderByRelationAggregateInput
+  demotionOptOutUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   history?: Prisma.ClassificationHistoryOrderByRelationAggregateInput
+  meritTx?: Prisma.MeritTransactionOrderByRelationAggregateInput
+  user?: Prisma.UserOrderByWithRelationInput
 }
 
 export type PlayerClassificationWhereUniqueInput = Prisma.AtLeast<{
@@ -258,12 +258,12 @@ export type PlayerClassificationWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.PlayerClassificationWhereInput | Prisma.PlayerClassificationWhereInput[]
   tier?: Prisma.EnumClassificationTierFilter<"PlayerClassification"> | $Enums.ClassificationTier
   merits?: Prisma.IntFilter<"PlayerClassification"> | number
-  demotionOptOutUsedAt?: Prisma.DateTimeNullableFilter<"PlayerClassification"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"PlayerClassification"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"PlayerClassification"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
-  meritTx?: Prisma.MeritTransactionListRelationFilter
+  demotionOptOutUsedAt?: Prisma.DateTimeNullableFilter<"PlayerClassification"> | Date | string | null
   history?: Prisma.ClassificationHistoryListRelationFilter
+  meritTx?: Prisma.MeritTransactionListRelationFilter
+  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }, "id" | "userId">
 
 export type PlayerClassificationOrderByWithAggregationInput = {
@@ -271,9 +271,9 @@ export type PlayerClassificationOrderByWithAggregationInput = {
   userId?: Prisma.SortOrder
   tier?: Prisma.SortOrder
   merits?: Prisma.SortOrder
-  demotionOptOutUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  demotionOptOutUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.PlayerClassificationCountOrderByAggregateInput
   _avg?: Prisma.PlayerClassificationAvgOrderByAggregateInput
   _max?: Prisma.PlayerClassificationMaxOrderByAggregateInput
@@ -289,21 +289,21 @@ export type PlayerClassificationScalarWhereWithAggregatesInput = {
   userId?: Prisma.StringWithAggregatesFilter<"PlayerClassification"> | string
   tier?: Prisma.EnumClassificationTierWithAggregatesFilter<"PlayerClassification"> | $Enums.ClassificationTier
   merits?: Prisma.IntWithAggregatesFilter<"PlayerClassification"> | number
-  demotionOptOutUsedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"PlayerClassification"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"PlayerClassification"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"PlayerClassification"> | Date | string
+  demotionOptOutUsedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"PlayerClassification"> | Date | string | null
 }
 
 export type PlayerClassificationCreateInput = {
   id?: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  user: Prisma.UserCreateNestedOneWithoutClassificationInput
-  meritTx?: Prisma.MeritTransactionCreateNestedManyWithoutClassificationInput
+  demotionOptOutUsedAt?: Date | string | null
   history?: Prisma.ClassificationHistoryCreateNestedManyWithoutClassificationInput
+  meritTx?: Prisma.MeritTransactionCreateNestedManyWithoutClassificationInput
+  user: Prisma.UserCreateNestedOneWithoutClassificationInput
 }
 
 export type PlayerClassificationUncheckedCreateInput = {
@@ -311,23 +311,23 @@ export type PlayerClassificationUncheckedCreateInput = {
   userId: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  meritTx?: Prisma.MeritTransactionUncheckedCreateNestedManyWithoutClassificationInput
+  demotionOptOutUsedAt?: Date | string | null
   history?: Prisma.ClassificationHistoryUncheckedCreateNestedManyWithoutClassificationInput
+  meritTx?: Prisma.MeritTransactionUncheckedCreateNestedManyWithoutClassificationInput
 }
 
 export type PlayerClassificationUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  user?: Prisma.UserUpdateOneRequiredWithoutClassificationNestedInput
-  meritTx?: Prisma.MeritTransactionUpdateManyWithoutClassificationNestedInput
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   history?: Prisma.ClassificationHistoryUpdateManyWithoutClassificationNestedInput
+  meritTx?: Prisma.MeritTransactionUpdateManyWithoutClassificationNestedInput
+  user?: Prisma.UserUpdateOneRequiredWithoutClassificationNestedInput
 }
 
 export type PlayerClassificationUncheckedUpdateInput = {
@@ -335,11 +335,11 @@ export type PlayerClassificationUncheckedUpdateInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  meritTx?: Prisma.MeritTransactionUncheckedUpdateManyWithoutClassificationNestedInput
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   history?: Prisma.ClassificationHistoryUncheckedUpdateManyWithoutClassificationNestedInput
+  meritTx?: Prisma.MeritTransactionUncheckedUpdateManyWithoutClassificationNestedInput
 }
 
 export type PlayerClassificationCreateManyInput = {
@@ -347,18 +347,18 @@ export type PlayerClassificationCreateManyInput = {
   userId: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  demotionOptOutUsedAt?: Date | string | null
 }
 
 export type PlayerClassificationUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type PlayerClassificationUncheckedUpdateManyInput = {
@@ -366,9 +366,9 @@ export type PlayerClassificationUncheckedUpdateManyInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type PlayerClassificationNullableScalarRelationFilter = {
@@ -381,9 +381,9 @@ export type PlayerClassificationCountOrderByAggregateInput = {
   userId?: Prisma.SortOrder
   tier?: Prisma.SortOrder
   merits?: Prisma.SortOrder
-  demotionOptOutUsedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  demotionOptOutUsedAt?: Prisma.SortOrder
 }
 
 export type PlayerClassificationAvgOrderByAggregateInput = {
@@ -395,9 +395,9 @@ export type PlayerClassificationMaxOrderByAggregateInput = {
   userId?: Prisma.SortOrder
   tier?: Prisma.SortOrder
   merits?: Prisma.SortOrder
-  demotionOptOutUsedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  demotionOptOutUsedAt?: Prisma.SortOrder
 }
 
 export type PlayerClassificationMinOrderByAggregateInput = {
@@ -405,9 +405,9 @@ export type PlayerClassificationMinOrderByAggregateInput = {
   userId?: Prisma.SortOrder
   tier?: Prisma.SortOrder
   merits?: Prisma.SortOrder
-  demotionOptOutUsedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  demotionOptOutUsedAt?: Prisma.SortOrder
 }
 
 export type PlayerClassificationSumOrderByAggregateInput = {
@@ -487,22 +487,22 @@ export type PlayerClassificationCreateWithoutUserInput = {
   id?: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  meritTx?: Prisma.MeritTransactionCreateNestedManyWithoutClassificationInput
+  demotionOptOutUsedAt?: Date | string | null
   history?: Prisma.ClassificationHistoryCreateNestedManyWithoutClassificationInput
+  meritTx?: Prisma.MeritTransactionCreateNestedManyWithoutClassificationInput
 }
 
 export type PlayerClassificationUncheckedCreateWithoutUserInput = {
   id?: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  meritTx?: Prisma.MeritTransactionUncheckedCreateNestedManyWithoutClassificationInput
+  demotionOptOutUsedAt?: Date | string | null
   history?: Prisma.ClassificationHistoryUncheckedCreateNestedManyWithoutClassificationInput
+  meritTx?: Prisma.MeritTransactionUncheckedCreateNestedManyWithoutClassificationInput
 }
 
 export type PlayerClassificationCreateOrConnectWithoutUserInput = {
@@ -525,33 +525,33 @@ export type PlayerClassificationUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  meritTx?: Prisma.MeritTransactionUpdateManyWithoutClassificationNestedInput
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   history?: Prisma.ClassificationHistoryUpdateManyWithoutClassificationNestedInput
+  meritTx?: Prisma.MeritTransactionUpdateManyWithoutClassificationNestedInput
 }
 
 export type PlayerClassificationUncheckedUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  meritTx?: Prisma.MeritTransactionUncheckedUpdateManyWithoutClassificationNestedInput
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   history?: Prisma.ClassificationHistoryUncheckedUpdateManyWithoutClassificationNestedInput
+  meritTx?: Prisma.MeritTransactionUncheckedUpdateManyWithoutClassificationNestedInput
 }
 
 export type PlayerClassificationCreateWithoutMeritTxInput = {
   id?: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  user: Prisma.UserCreateNestedOneWithoutClassificationInput
+  demotionOptOutUsedAt?: Date | string | null
   history?: Prisma.ClassificationHistoryCreateNestedManyWithoutClassificationInput
+  user: Prisma.UserCreateNestedOneWithoutClassificationInput
 }
 
 export type PlayerClassificationUncheckedCreateWithoutMeritTxInput = {
@@ -559,9 +559,9 @@ export type PlayerClassificationUncheckedCreateWithoutMeritTxInput = {
   userId: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  demotionOptOutUsedAt?: Date | string | null
   history?: Prisma.ClassificationHistoryUncheckedCreateNestedManyWithoutClassificationInput
 }
 
@@ -585,11 +585,11 @@ export type PlayerClassificationUpdateWithoutMeritTxInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  user?: Prisma.UserUpdateOneRequiredWithoutClassificationNestedInput
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   history?: Prisma.ClassificationHistoryUpdateManyWithoutClassificationNestedInput
+  user?: Prisma.UserUpdateOneRequiredWithoutClassificationNestedInput
 }
 
 export type PlayerClassificationUncheckedUpdateWithoutMeritTxInput = {
@@ -597,9 +597,9 @@ export type PlayerClassificationUncheckedUpdateWithoutMeritTxInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   history?: Prisma.ClassificationHistoryUncheckedUpdateManyWithoutClassificationNestedInput
 }
 
@@ -607,11 +607,11 @@ export type PlayerClassificationCreateWithoutHistoryInput = {
   id?: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  user: Prisma.UserCreateNestedOneWithoutClassificationInput
+  demotionOptOutUsedAt?: Date | string | null
   meritTx?: Prisma.MeritTransactionCreateNestedManyWithoutClassificationInput
+  user: Prisma.UserCreateNestedOneWithoutClassificationInput
 }
 
 export type PlayerClassificationUncheckedCreateWithoutHistoryInput = {
@@ -619,9 +619,9 @@ export type PlayerClassificationUncheckedCreateWithoutHistoryInput = {
   userId: string
   tier?: $Enums.ClassificationTier
   merits?: number
-  demotionOptOutUsedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  demotionOptOutUsedAt?: Date | string | null
   meritTx?: Prisma.MeritTransactionUncheckedCreateNestedManyWithoutClassificationInput
 }
 
@@ -645,11 +645,11 @@ export type PlayerClassificationUpdateWithoutHistoryInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  user?: Prisma.UserUpdateOneRequiredWithoutClassificationNestedInput
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   meritTx?: Prisma.MeritTransactionUpdateManyWithoutClassificationNestedInput
+  user?: Prisma.UserUpdateOneRequiredWithoutClassificationNestedInput
 }
 
 export type PlayerClassificationUncheckedUpdateWithoutHistoryInput = {
@@ -657,9 +657,9 @@ export type PlayerClassificationUncheckedUpdateWithoutHistoryInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.EnumClassificationTierFieldUpdateOperationsInput | $Enums.ClassificationTier
   merits?: Prisma.IntFieldUpdateOperationsInput | number
-  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  demotionOptOutUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   meritTx?: Prisma.MeritTransactionUncheckedUpdateManyWithoutClassificationNestedInput
 }
 
@@ -669,13 +669,13 @@ export type PlayerClassificationUncheckedUpdateWithoutHistoryInput = {
  */
 
 export type PlayerClassificationCountOutputType = {
-  meritTx: number
   history: number
+  meritTx: number
 }
 
 export type PlayerClassificationCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  meritTx?: boolean | PlayerClassificationCountOutputTypeCountMeritTxArgs
   history?: boolean | PlayerClassificationCountOutputTypeCountHistoryArgs
+  meritTx?: boolean | PlayerClassificationCountOutputTypeCountMeritTxArgs
 }
 
 /**
@@ -691,15 +691,15 @@ export type PlayerClassificationCountOutputTypeDefaultArgs<ExtArgs extends runti
 /**
  * PlayerClassificationCountOutputType without action
  */
-export type PlayerClassificationCountOutputTypeCountMeritTxArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.MeritTransactionWhereInput
+export type PlayerClassificationCountOutputTypeCountHistoryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ClassificationHistoryWhereInput
 }
 
 /**
  * PlayerClassificationCountOutputType without action
  */
-export type PlayerClassificationCountOutputTypeCountHistoryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.ClassificationHistoryWhereInput
+export type PlayerClassificationCountOutputTypeCountMeritTxArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.MeritTransactionWhereInput
 }
 
 
@@ -708,12 +708,12 @@ export type PlayerClassificationSelect<ExtArgs extends runtime.Types.Extensions.
   userId?: boolean
   tier?: boolean
   merits?: boolean
-  demotionOptOutUsedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
-  meritTx?: boolean | Prisma.PlayerClassification$meritTxArgs<ExtArgs>
+  demotionOptOutUsedAt?: boolean
   history?: boolean | Prisma.PlayerClassification$historyArgs<ExtArgs>
+  meritTx?: boolean | Prisma.PlayerClassification$meritTxArgs<ExtArgs>
+  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   _count?: boolean | Prisma.PlayerClassificationCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["playerClassification"]>
 
@@ -722,9 +722,9 @@ export type PlayerClassificationSelectCreateManyAndReturn<ExtArgs extends runtim
   userId?: boolean
   tier?: boolean
   merits?: boolean
-  demotionOptOutUsedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  demotionOptOutUsedAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["playerClassification"]>
 
@@ -733,9 +733,9 @@ export type PlayerClassificationSelectUpdateManyAndReturn<ExtArgs extends runtim
   userId?: boolean
   tier?: boolean
   merits?: boolean
-  demotionOptOutUsedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  demotionOptOutUsedAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["playerClassification"]>
 
@@ -744,16 +744,16 @@ export type PlayerClassificationSelectScalar = {
   userId?: boolean
   tier?: boolean
   merits?: boolean
-  demotionOptOutUsedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  demotionOptOutUsedAt?: boolean
 }
 
-export type PlayerClassificationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "tier" | "merits" | "demotionOptOutUsedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["playerClassification"]>
+export type PlayerClassificationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "tier" | "merits" | "createdAt" | "updatedAt" | "demotionOptOutUsedAt", ExtArgs["result"]["playerClassification"]>
 export type PlayerClassificationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
-  meritTx?: boolean | Prisma.PlayerClassification$meritTxArgs<ExtArgs>
   history?: boolean | Prisma.PlayerClassification$historyArgs<ExtArgs>
+  meritTx?: boolean | Prisma.PlayerClassification$meritTxArgs<ExtArgs>
+  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   _count?: boolean | Prisma.PlayerClassificationCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type PlayerClassificationIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -766,18 +766,18 @@ export type PlayerClassificationIncludeUpdateManyAndReturn<ExtArgs extends runti
 export type $PlayerClassificationPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "PlayerClassification"
   objects: {
-    user: Prisma.$UserPayload<ExtArgs>
-    meritTx: Prisma.$MeritTransactionPayload<ExtArgs>[]
     history: Prisma.$ClassificationHistoryPayload<ExtArgs>[]
+    meritTx: Prisma.$MeritTransactionPayload<ExtArgs>[]
+    user: Prisma.$UserPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     userId: string
     tier: $Enums.ClassificationTier
     merits: number
-    demotionOptOutUsedAt: Date | null
     createdAt: Date
     updatedAt: Date
+    demotionOptOutUsedAt: Date | null
   }, ExtArgs["result"]["playerClassification"]>
   composites: {}
 }
@@ -1172,9 +1172,9 @@ readonly fields: PlayerClassificationFieldRefs;
  */
 export interface Prisma__PlayerClassificationClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
-  meritTx<T extends Prisma.PlayerClassification$meritTxArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PlayerClassification$meritTxArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MeritTransactionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   history<T extends Prisma.PlayerClassification$historyArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PlayerClassification$historyArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ClassificationHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  meritTx<T extends Prisma.PlayerClassification$meritTxArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PlayerClassification$meritTxArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MeritTransactionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1208,9 +1208,9 @@ export interface PlayerClassificationFieldRefs {
   readonly userId: Prisma.FieldRef<"PlayerClassification", 'String'>
   readonly tier: Prisma.FieldRef<"PlayerClassification", 'ClassificationTier'>
   readonly merits: Prisma.FieldRef<"PlayerClassification", 'Int'>
-  readonly demotionOptOutUsedAt: Prisma.FieldRef<"PlayerClassification", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"PlayerClassification", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"PlayerClassification", 'DateTime'>
+  readonly demotionOptOutUsedAt: Prisma.FieldRef<"PlayerClassification", 'DateTime'>
 }
     
 
@@ -1612,30 +1612,6 @@ export type PlayerClassificationDeleteManyArgs<ExtArgs extends runtime.Types.Ext
 }
 
 /**
- * PlayerClassification.meritTx
- */
-export type PlayerClassification$meritTxArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the MeritTransaction
-   */
-  select?: Prisma.MeritTransactionSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the MeritTransaction
-   */
-  omit?: Prisma.MeritTransactionOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.MeritTransactionInclude<ExtArgs> | null
-  where?: Prisma.MeritTransactionWhereInput
-  orderBy?: Prisma.MeritTransactionOrderByWithRelationInput | Prisma.MeritTransactionOrderByWithRelationInput[]
-  cursor?: Prisma.MeritTransactionWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.MeritTransactionScalarFieldEnum | Prisma.MeritTransactionScalarFieldEnum[]
-}
-
-/**
  * PlayerClassification.history
  */
 export type PlayerClassification$historyArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1657,6 +1633,30 @@ export type PlayerClassification$historyArgs<ExtArgs extends runtime.Types.Exten
   take?: number
   skip?: number
   distinct?: Prisma.ClassificationHistoryScalarFieldEnum | Prisma.ClassificationHistoryScalarFieldEnum[]
+}
+
+/**
+ * PlayerClassification.meritTx
+ */
+export type PlayerClassification$meritTxArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the MeritTransaction
+   */
+  select?: Prisma.MeritTransactionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the MeritTransaction
+   */
+  omit?: Prisma.MeritTransactionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.MeritTransactionInclude<ExtArgs> | null
+  where?: Prisma.MeritTransactionWhereInput
+  orderBy?: Prisma.MeritTransactionOrderByWithRelationInput | Prisma.MeritTransactionOrderByWithRelationInput[]
+  cursor?: Prisma.MeritTransactionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.MeritTransactionScalarFieldEnum | Prisma.MeritTransactionScalarFieldEnum[]
 }
 
 /**

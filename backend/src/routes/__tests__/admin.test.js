@@ -552,6 +552,7 @@ describe('GET /api/v1/admin/bots', () => {
       .mockResolvedValueOnce([mockBot])       // bots query
       .mockResolvedValueOnce([{ id: 'usr_1', displayName: 'Alice', username: 'alice' }]) // owners
     db.user.count.mockResolvedValue(1)
+    db.botSkill.findMany.mockResolvedValue([])  // skills enrichment
 
     const res = await request(app).get('/api/v1/admin/bots')
 

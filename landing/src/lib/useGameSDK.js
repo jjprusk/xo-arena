@@ -29,13 +29,17 @@ export function useGameSDK({
   currentUser     = null,
   botUserId       = null,
   botSkillId      = null,
+  spectate        = false,
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
-  const [phase, setPhase]           = useState('connecting')   // connecting | waiting | playing | finished
+  const [phase, setPhase_]          = useState('connecting')   // connecting | waiting | playing | finished
+  const phaseRef                    = useRef('connecting')
+  const setPhase = (p) => { phaseRef.current = p; setPhase_(p) }
   const [session, setSession]       = useState(null)
   const [abandoned, setAbandoned]   = useState(null)
   const [kicked, setKicked]         = useState(false)
   const [seriesResult, setSeriesResult] = useState(null)
+  const [opponentLeft, setOpponentLeft] = useState(false)
 
   // currentUser in a ref so auth changes don't re-trigger the socket effect.
   // The effect reads currentUserRef.current so it always has the latest value.
@@ -48,6 +52,10 @@ export function useGameSDK({
   const playersRef  = useRef([])
   const settingsRef = useRef({})
   const slugRef     = useRef(null)
+  // Set to true when leaveTable() fires mid-game. Navigation is deferred until
+  // the server echoes game:forfeit back to this socket — guaranteeing the forfeit
+  // was received and processed before the socket can disconnect.
+  const leavingRef  = useRef(false)
 
   // Registered move handlers (from sdk.onMove / sdk.spectate)
   const moveHandlersRef    = useRef([])
@@ -132,8 +140,19 @@ export function useGameSDK({
     },
 
     leaveTable() {
-      // Handled by PlayPage navigation
-      gameEndCallbackRef.current?.({ leave: true })
+      if (phaseRef.current === 'playing') {
+        // Mid-game: forfeit so the opponent is notified immediately.
+        // Defer navigation until the server echoes game:forfeit back — this
+        // guarantees the forfeit is processed before the socket can disconnect,
+        // eliminating the race where the socket closes first and the opponent
+        // gets room:playerDisconnected instead of game:forfeit.
+        leavingRef.current = true
+        getSocket().emit('game:forfeit')
+      } else if (phaseRef.current === 'finished') {
+        // Post-game: tell the other player the opponent has left.
+        getSocket().emit('game:leave')
+        gameEndCallbackRef.current?.({ leave: true })
+      }
     },
 
     onReaction(handler) {
@@ -241,7 +260,7 @@ export function useGameSDK({
         { id: hostId, displayName: cu?.displayName ?? 'You', isBot: false },
         { id: botId, displayName: 'Bot', isBot: true },
       ]
-      settingsRef.current = { displayName, myMark: mark }
+      settingsRef.current = { displayName, myMark: mark, isTournament: !!tournamentMatchId }
       boardRef.current = board
       setPhase('playing')
       buildSession({ isSpectator: false })
@@ -266,28 +285,58 @@ export function useGameSDK({
       slugRef.current = slug
       const isSpectator = role === 'spectator'
 
-      const cu = currentUserRef.current
-      const guestId = cu?.id ?? 'guest'
+      // Key marks by canonical seat userId from the room object.
+      // Do NOT fall back to currentUserRef for guestId: when the table is FORMING
+      // (no guest yet), room.guestUserId is null and we must leave it null.
+      // The fallback caused hostId === guestId, overwriting 'X' with 'O' for
+      // the host player and making them see "X Opponent's turn" instead of "Your turn".
+      const hostId  = room?.hostUserId  ?? 'host'
+      const guestId = room?.guestUserId ?? null
       if (mark) {
-        marksRef.current[guestId] = mark
-        // Derive host's mark (opposite of guest)
-        const hostMark = mark === 'O' ? 'X' : 'O'
-        const hostId = room?.hostUserId ?? 'host'
-        marksRef.current[hostId] = hostMark
+        marksRef.current[hostId]  = 'X'
+        if (guestId) marksRef.current[guestId] = 'O'
       }
 
+      const cu = currentUserRef.current
       const hostPlayer = {
-        id:          room?.hostUserId ?? 'host',
+        id:          hostId,
         displayName: room?.hostUserDisplayName ?? 'Host',
         isBot:       false,
       }
-      const guestPlayer = { id: guestId, displayName: cu?.displayName ?? 'You', isBot: false }
+      const guestPlayer = guestId ? {
+        id:          guestId,
+        displayName: room?.guestUserDisplayName ?? cu?.displayName ?? 'Guest',
+        isBot:       false,
+      } : null
 
-      playersRef.current = isSpectator ? [hostPlayer] : [hostPlayer, guestPlayer]
+      playersRef.current = guestPlayer ? [hostPlayer, guestPlayer] : [hostPlayer]
       settingsRef.current = {
         displayName:    room?.displayName,
         spectatorCount: room?.spectatorCount ?? 0,
         myMark:         isSpectator ? null : mark,
+        isTournament:   !!tournamentMatchId,
+      }
+
+      // Re-attach to an already-active game: skip 'waiting' and go straight to
+      // 'playing'. The separate game:start that follows is still handled and is
+      // idempotent. Without this shortcut, if game:start is lost or arrives
+      // while listeners are being re-registered (React StrictMode double-invoke),
+      // the player is permanently stuck in the waiting spinner.
+      const isReattach = !isSpectator && room?.status === 'playing'
+      if (isReattach && room?.board) {
+        boardRef.current = room.board
+        setPhase('playing')
+        buildSession({ isSpectator: false })
+        emitMoveEvent(null, {
+          board:       room.board,
+          currentTurn: room.currentTurn ?? 'X',
+          status:      'playing',
+          winner:      room.winner  ?? null,
+          winLine:     room.winLine ?? null,
+          scores:      room.scores  ?? { X: 0, O: 0 },
+          round:       room.round   ?? 1,
+        })
+        return
       }
 
       setPhase(isSpectator ? 'playing' : 'waiting')
@@ -329,11 +378,18 @@ export function useGameSDK({
     })
 
     socket.on('room:playerDisconnected', () => {
-      // Surface as error state — game component shows a notice
+      // Preserve full prior game state so GameComponent doesn't crash on
+      // missing scores/round. The opponent is gone but the game is still
+      // technically "playing" — the idle/disconnect timer will resolve it.
+      const prev = lastMoveEventRef.current?.state ?? {}
       emitMoveEvent(null, {
-        ...(boardRef.current ? { board: boardRef.current } : {}),
-        status: 'playing',
-        error:  'Opponent disconnected. Waiting 60s for reconnect…',
+        board:       boardRef.current ?? prev.board,
+        currentTurn: prev.currentTurn ?? null,
+        status:      'playing',
+        winner:      null,
+        winLine:     null,
+        scores:      prev.scores ?? { X: 0, O: 0 },
+        round:       prev.round ?? 1,
       })
     })
 
@@ -369,7 +425,7 @@ export function useGameSDK({
 
     socket.on('game:moved', ({ cellIndex, board, currentTurn, status, winner, winLine, scores, round }) => {
       setPhase(status === 'finished' ? 'finished' : 'playing')
-      emitMoveEvent(cellIndex, { board, currentTurn, status, winner, winLine, scores, round })
+      emitMoveEvent(cellIndex, { board, currentTurn, status, winner, winLine, scores: scores ?? { X: 0, O: 0 }, round: round ?? 1 })
     })
 
     socket.on('game:forfeit', ({ winner, scores }) => {
@@ -377,12 +433,23 @@ export function useGameSDK({
         board:       boardRef.current,
         currentTurn: null,
         status:      'finished',
-        winner,
+        winner:      winner ?? null,
         winLine:     null,
-        scores,
+        scores:      scores ?? { X: 0, O: 0 },
         round:       null,
       })
       setPhase('finished')
+      // If this player initiated the leave, navigate now that the server has
+      // confirmed the forfeit (the socket is still alive at this point).
+      if (leavingRef.current) {
+        leavingRef.current = false
+        gameEndCallbackRef.current?.({ leave: true })
+      }
+    })
+
+    // Opponent clicked Leave Table after the game ended.
+    socket.on('game:opponent_left', () => {
+      setOpponentLeft(true)
     })
 
     // ── Reaction + idle ────────────────────────────────────────────────────────
@@ -426,6 +493,15 @@ export function useGameSDK({
         setAbandoned({ reason: 'stale', message: 'Game ended (idle). Returning…' })
         return
       }
+      // Tournament table rejected join because token hadn't resolved yet — retry
+      // once with a fresh token. With the getToken() fix in resolveAndEmit this
+      // path should be rare, but guard it defensively.
+      if (message === 'Authentication required for this match' && joinSlug) {
+        getToken().then(token => {
+          if (token) socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token })
+        })
+        return
+      }
       // Any other unrecognized error: log to the console so it's visible in
       // devtools instead of eaten silently. Pre-existing behavior swallowed
       // everything, which is how this bug hid.
@@ -442,12 +518,16 @@ export function useGameSDK({
       if (emitted) return
       emitted = true
       perfMark('useGameSDK:emitRoomAction', { hasToken: !!token, botUserId, joinSlug })
-      if (tournamentMatchId) {
-        socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
-      } else if (joinSlug) {
-        socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token ?? null })
+      if (joinSlug) {
+        socket.emit('room:join', { slug: joinSlug, role: spectate ? 'spectator' : 'player', authToken: token ?? null })
       } else if (botUserId) {
-        socket.emit('room:create:hvb', { botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null })
+        // MIXED tournament (tournamentMatchId + botUserId) and free-play PvE
+        // both land here — tournamentMatchId is forwarded so the server can
+        // link the table to the tournament match and set bestOfN.
+        socket.emit('room:create:hvb', { gameId, botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null, tournamentMatchId: tournamentMatchId ?? null })
+      } else if (tournamentMatchId) {
+        // HvH tournament match — emit tournament:room:join to discover/create the room.
+        socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else {
         socket.emit('room:create', { spectatorAllowed: true, authToken: token ?? null })
       }
@@ -463,7 +543,12 @@ export function useGameSDK({
     // Skip the /api/token round trip for guests — we already know there's no
     // auth to send. Eliminates an async hop on the /play hot path.
     function resolveAndEmit() {
-      if (!currentUserRef.current?.id) {
+      if (joinSlug || tournamentMatchId) {
+        // For room joins, always try to get a token — currentUser may be null
+        // briefly even for logged-in users (optimistic session hasn't propagated
+        // yet on the initial render). getToken() returns null for genuine guests.
+        getToken().then(token => emitRoomAction(token ?? null))
+      } else if (!currentUserRef.current?.id) {
         emitRoomAction(null)
       } else {
         getToken().then(emitRoomAction)
@@ -472,10 +557,13 @@ export function useGameSDK({
 
     function onConnect() {
       perfMark('useGameSDK:socket-connect-fired')
-      if (!slugRef.current) {
-        // No room created yet — safe to re-emit (reset guard so emitRoomAction runs)
-        emitted = false
-      }
+      // Always reset the guard on reconnect. If the user has an existing
+      // game (slugRef set), the server's tryReconnect() will detect the
+      // pending disconnect timer and rejoin the game instead of creating
+      // a new one. Without this reset, the emitted guard prevents ANY
+      // re-emit and the client sits frozen after a socket reconnect
+      // (e.g., macOS desktop switch triggers Safari disconnect).
+      emitted = false
       resolveAndEmit()
     }
 
@@ -485,23 +573,44 @@ export function useGameSDK({
       resolveAndEmit()
     }
 
+    // Auto-pong when the user returns from another window/desktop — resets the
+    // server-side idle timer without requiring the user to click "I'm here".
+    // This prevents spurious timeouts caused by macOS Spaces switching.
+    function autoIdlePong() {
+      if (phaseRef.current === 'playing') {
+        try { getSocket().emit('idle:pong') } catch (_) {}
+      }
+    }
+    function onVisibilityShow() {
+      if (document.visibilityState === 'visible') autoIdlePong()
+    }
+    document.addEventListener('visibilitychange', onVisibilityShow)
+    window.addEventListener('focus', autoIdlePong)
+
     return () => {
       // Cancel pending connect handler and all event listeners
       socket.off('connect', onConnect)
       emitted = true // prevent any in-flight getToken().then from emitting after cleanup
+      document.removeEventListener('visibilitychange', onVisibilityShow)
+      window.removeEventListener('focus', autoIdlePong)
       ;[
         'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
-        'room:spectatorJoined', 'room:playerDisconnected', 'room:cancelled',
-        'room:abandoned', 'room:kicked',
-        'game:start', 'game:moved', 'game:forfeit',
+        'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',
+        'room:cancelled', 'room:abandoned', 'room:kicked',
+        'game:start', 'game:moved', 'game:forfeit', 'game:opponent_left',
         'game:reaction', 'idle:warning',
         'tournament:series:complete', 'error',
       ].forEach(ev => socket.off(ev))
+      // Cleanup note: we do NOT emit room:cancel here. SPA navigation keeps
+      // the socket alive, and the room:cancel can race with a re-mount
+      // (StrictMode or fast back-navigation). Instead, the server-side
+      // room:create / room:create:hvb handler detects the stale table via
+      // _socketToTable and cleans it up before creating the new one.
     }
   // currentUser intentionally omitted — it's accessed via currentUserRef.current
   // so auth changes don't tear down and re-register socket listeners.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, joinSlug, tournamentMatchId])
 
-  return { session, sdk, phase, abandoned, kicked, seriesResult }
+  return { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft }
 }

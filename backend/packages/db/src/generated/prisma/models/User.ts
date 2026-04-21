@@ -30,8 +30,8 @@ export type UserAvgAggregateOutputType = {
   skillLimit: number | null
   botLimit: number | null
   botGamesPlayed: number | null
-  creditsHpc: number | null
   creditsBpc: number | null
+  creditsHpc: number | null
   creditsTc: number | null
 }
 
@@ -39,8 +39,8 @@ export type UserSumAggregateOutputType = {
   skillLimit: number | null
   botLimit: number | null
   botGamesPlayed: number | null
-  creditsHpc: number | null
   creditsBpc: number | null
+  creditsHpc: number | null
   creditsTc: number | null
 }
 
@@ -67,13 +67,13 @@ export type UserMinAggregateOutputType = {
   botModelType: string | null
   botOwnerId: string | null
   isBot: boolean | null
-  nameConfirmed: boolean | null
-  lastActiveAt: Date | null
   botEloResetAt: Date | null
   botGamesPlayed: number | null
-  creditsHpc: number | null
   creditsBpc: number | null
+  creditsHpc: number | null
   creditsTc: number | null
+  nameConfirmed: boolean | null
+  lastActiveAt: Date | null
   emailAchievements: boolean | null
 }
 
@@ -100,13 +100,13 @@ export type UserMaxAggregateOutputType = {
   botModelType: string | null
   botOwnerId: string | null
   isBot: boolean | null
-  nameConfirmed: boolean | null
-  lastActiveAt: Date | null
   botEloResetAt: Date | null
   botGamesPlayed: number | null
-  creditsHpc: number | null
   creditsBpc: number | null
+  creditsHpc: number | null
   creditsTc: number | null
+  nameConfirmed: boolean | null
+  lastActiveAt: Date | null
   emailAchievements: boolean | null
 }
 
@@ -134,13 +134,13 @@ export type UserCountAggregateOutputType = {
   botModelType: number
   botOwnerId: number
   isBot: number
-  nameConfirmed: number
-  lastActiveAt: number
   botEloResetAt: number
   botGamesPlayed: number
-  creditsHpc: number
   creditsBpc: number
+  creditsHpc: number
   creditsTc: number
+  nameConfirmed: number
+  lastActiveAt: number
   emailAchievements: number
   _all: number
 }
@@ -150,8 +150,8 @@ export type UserAvgAggregateInputType = {
   skillLimit?: true
   botLimit?: true
   botGamesPlayed?: true
-  creditsHpc?: true
   creditsBpc?: true
+  creditsHpc?: true
   creditsTc?: true
 }
 
@@ -159,8 +159,8 @@ export type UserSumAggregateInputType = {
   skillLimit?: true
   botLimit?: true
   botGamesPlayed?: true
-  creditsHpc?: true
   creditsBpc?: true
+  creditsHpc?: true
   creditsTc?: true
 }
 
@@ -187,13 +187,13 @@ export type UserMinAggregateInputType = {
   botModelType?: true
   botOwnerId?: true
   isBot?: true
-  nameConfirmed?: true
-  lastActiveAt?: true
   botEloResetAt?: true
   botGamesPlayed?: true
-  creditsHpc?: true
   creditsBpc?: true
+  creditsHpc?: true
   creditsTc?: true
+  nameConfirmed?: true
+  lastActiveAt?: true
   emailAchievements?: true
 }
 
@@ -220,13 +220,13 @@ export type UserMaxAggregateInputType = {
   botModelType?: true
   botOwnerId?: true
   isBot?: true
-  nameConfirmed?: true
-  lastActiveAt?: true
   botEloResetAt?: true
   botGamesPlayed?: true
-  creditsHpc?: true
   creditsBpc?: true
+  creditsHpc?: true
   creditsTc?: true
+  nameConfirmed?: true
+  lastActiveAt?: true
   emailAchievements?: true
 }
 
@@ -254,13 +254,13 @@ export type UserCountAggregateInputType = {
   botModelType?: true
   botOwnerId?: true
   isBot?: true
-  nameConfirmed?: true
-  lastActiveAt?: true
   botEloResetAt?: true
   botGamesPlayed?: true
-  creditsHpc?: true
   creditsBpc?: true
+  creditsHpc?: true
   creditsTc?: true
+  nameConfirmed?: true
+  lastActiveAt?: true
   emailAchievements?: true
   _all?: true
 }
@@ -375,13 +375,13 @@ export type UserGroupByOutputType = {
   botModelType: string | null
   botOwnerId: string | null
   isBot: boolean
-  nameConfirmed: boolean
-  lastActiveAt: Date | null
   botEloResetAt: Date | null
   botGamesPlayed: number
-  creditsHpc: number
   creditsBpc: number
+  creditsHpc: number
   creditsTc: number
+  nameConfirmed: boolean
+  lastActiveAt: Date | null
   emailAchievements: boolean
   _count: UserCountAggregateOutputType | null
   _avg: UserAvgAggregateOutputType | null
@@ -432,25 +432,27 @@ export type UserWhereInput = {
   botModelType?: Prisma.StringNullableFilter<"User"> | string | null
   botOwnerId?: Prisma.StringNullableFilter<"User"> | string | null
   isBot?: Prisma.BoolFilter<"User"> | boolean
-  nameConfirmed?: Prisma.BoolFilter<"User"> | boolean
-  lastActiveAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   botEloResetAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   botGamesPlayed?: Prisma.IntFilter<"User"> | number
-  creditsHpc?: Prisma.IntFilter<"User"> | number
   creditsBpc?: Prisma.IntFilter<"User"> | number
+  creditsHpc?: Prisma.IntFilter<"User"> | number
   creditsTc?: Prisma.IntFilter<"User"> | number
+  nameConfirmed?: Prisma.BoolFilter<"User"> | boolean
+  lastActiveAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   emailAchievements?: Prisma.BoolFilter<"User"> | boolean
+  feedback?: Prisma.FeedbackListRelationFilter
+  gameElo?: Prisma.GameEloListRelationFilter
   gamesAsPlayer1?: Prisma.GameListRelationFilter
   gamesAsPlayer2?: Prisma.GameListRelationFilter
   gamesWon?: Prisma.GameListRelationFilter
-  eloHistory?: Prisma.UserEloHistoryListRelationFilter
-  userRoles?: Prisma.UserRoleListRelationFilter
-  notifications?: Prisma.UserNotificationListRelationFilter
   notifPreferences?: Prisma.NotificationPreferenceListRelationFilter
-  feedback?: Prisma.FeedbackListRelationFilter
-  tournamentParticipants?: Prisma.TournamentParticipantListRelationFilter
   classification?: Prisma.XOR<Prisma.PlayerClassificationNullableScalarRelationFilter, Prisma.PlayerClassificationWhereInput> | null
-  gameElo?: Prisma.GameEloListRelationFilter
+  tournamentParticipants?: Prisma.TournamentParticipantListRelationFilter
+  eloHistory?: Prisma.UserEloHistoryListRelationFilter
+  notifications?: Prisma.UserNotificationListRelationFilter
+  pushSubscriptions?: Prisma.PushSubscriptionListRelationFilter
+  userRoles?: Prisma.UserRoleListRelationFilter
+  seedBotConfigs?: Prisma.TournamentSeedBotListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -477,25 +479,27 @@ export type UserOrderByWithRelationInput = {
   botModelType?: Prisma.SortOrderInput | Prisma.SortOrder
   botOwnerId?: Prisma.SortOrderInput | Prisma.SortOrder
   isBot?: Prisma.SortOrder
-  nameConfirmed?: Prisma.SortOrder
-  lastActiveAt?: Prisma.SortOrderInput | Prisma.SortOrder
   botEloResetAt?: Prisma.SortOrderInput | Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
-  creditsHpc?: Prisma.SortOrder
   creditsBpc?: Prisma.SortOrder
+  creditsHpc?: Prisma.SortOrder
   creditsTc?: Prisma.SortOrder
+  nameConfirmed?: Prisma.SortOrder
+  lastActiveAt?: Prisma.SortOrderInput | Prisma.SortOrder
   emailAchievements?: Prisma.SortOrder
+  feedback?: Prisma.FeedbackOrderByRelationAggregateInput
+  gameElo?: Prisma.GameEloOrderByRelationAggregateInput
   gamesAsPlayer1?: Prisma.GameOrderByRelationAggregateInput
   gamesAsPlayer2?: Prisma.GameOrderByRelationAggregateInput
   gamesWon?: Prisma.GameOrderByRelationAggregateInput
-  eloHistory?: Prisma.UserEloHistoryOrderByRelationAggregateInput
-  userRoles?: Prisma.UserRoleOrderByRelationAggregateInput
-  notifications?: Prisma.UserNotificationOrderByRelationAggregateInput
   notifPreferences?: Prisma.NotificationPreferenceOrderByRelationAggregateInput
-  feedback?: Prisma.FeedbackOrderByRelationAggregateInput
-  tournamentParticipants?: Prisma.TournamentParticipantOrderByRelationAggregateInput
   classification?: Prisma.PlayerClassificationOrderByWithRelationInput
-  gameElo?: Prisma.GameEloOrderByRelationAggregateInput
+  tournamentParticipants?: Prisma.TournamentParticipantOrderByRelationAggregateInput
+  eloHistory?: Prisma.UserEloHistoryOrderByRelationAggregateInput
+  notifications?: Prisma.UserNotificationOrderByRelationAggregateInput
+  pushSubscriptions?: Prisma.PushSubscriptionOrderByRelationAggregateInput
+  userRoles?: Prisma.UserRoleOrderByRelationAggregateInput
+  seedBotConfigs?: Prisma.TournamentSeedBotOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -525,25 +529,27 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   botModelType?: Prisma.StringNullableFilter<"User"> | string | null
   botOwnerId?: Prisma.StringNullableFilter<"User"> | string | null
   isBot?: Prisma.BoolFilter<"User"> | boolean
-  nameConfirmed?: Prisma.BoolFilter<"User"> | boolean
-  lastActiveAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   botEloResetAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   botGamesPlayed?: Prisma.IntFilter<"User"> | number
-  creditsHpc?: Prisma.IntFilter<"User"> | number
   creditsBpc?: Prisma.IntFilter<"User"> | number
+  creditsHpc?: Prisma.IntFilter<"User"> | number
   creditsTc?: Prisma.IntFilter<"User"> | number
+  nameConfirmed?: Prisma.BoolFilter<"User"> | boolean
+  lastActiveAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   emailAchievements?: Prisma.BoolFilter<"User"> | boolean
+  feedback?: Prisma.FeedbackListRelationFilter
+  gameElo?: Prisma.GameEloListRelationFilter
   gamesAsPlayer1?: Prisma.GameListRelationFilter
   gamesAsPlayer2?: Prisma.GameListRelationFilter
   gamesWon?: Prisma.GameListRelationFilter
-  eloHistory?: Prisma.UserEloHistoryListRelationFilter
-  userRoles?: Prisma.UserRoleListRelationFilter
-  notifications?: Prisma.UserNotificationListRelationFilter
   notifPreferences?: Prisma.NotificationPreferenceListRelationFilter
-  feedback?: Prisma.FeedbackListRelationFilter
-  tournamentParticipants?: Prisma.TournamentParticipantListRelationFilter
   classification?: Prisma.XOR<Prisma.PlayerClassificationNullableScalarRelationFilter, Prisma.PlayerClassificationWhereInput> | null
-  gameElo?: Prisma.GameEloListRelationFilter
+  tournamentParticipants?: Prisma.TournamentParticipantListRelationFilter
+  eloHistory?: Prisma.UserEloHistoryListRelationFilter
+  notifications?: Prisma.UserNotificationListRelationFilter
+  pushSubscriptions?: Prisma.PushSubscriptionListRelationFilter
+  userRoles?: Prisma.UserRoleListRelationFilter
+  seedBotConfigs?: Prisma.TournamentSeedBotListRelationFilter
 }, "id" | "clerkId" | "username" | "email" | "betterAuthId" | "botModelId">
 
 export type UserOrderByWithAggregationInput = {
@@ -570,13 +576,13 @@ export type UserOrderByWithAggregationInput = {
   botModelType?: Prisma.SortOrderInput | Prisma.SortOrder
   botOwnerId?: Prisma.SortOrderInput | Prisma.SortOrder
   isBot?: Prisma.SortOrder
-  nameConfirmed?: Prisma.SortOrder
-  lastActiveAt?: Prisma.SortOrderInput | Prisma.SortOrder
   botEloResetAt?: Prisma.SortOrderInput | Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
-  creditsHpc?: Prisma.SortOrder
   creditsBpc?: Prisma.SortOrder
+  creditsHpc?: Prisma.SortOrder
   creditsTc?: Prisma.SortOrder
+  nameConfirmed?: Prisma.SortOrder
+  lastActiveAt?: Prisma.SortOrderInput | Prisma.SortOrder
   emailAchievements?: Prisma.SortOrder
   _count?: Prisma.UserCountOrderByAggregateInput
   _avg?: Prisma.UserAvgOrderByAggregateInput
@@ -612,13 +618,13 @@ export type UserScalarWhereWithAggregatesInput = {
   botModelType?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   botOwnerId?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   isBot?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
-  nameConfirmed?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
-  lastActiveAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   botEloResetAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   botGamesPlayed?: Prisma.IntWithAggregatesFilter<"User"> | number
-  creditsHpc?: Prisma.IntWithAggregatesFilter<"User"> | number
   creditsBpc?: Prisma.IntWithAggregatesFilter<"User"> | number
+  creditsHpc?: Prisma.IntWithAggregatesFilter<"User"> | number
   creditsTc?: Prisma.IntWithAggregatesFilter<"User"> | number
+  nameConfirmed?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
+  lastActiveAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   emailAchievements?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
 }
 
@@ -646,25 +652,27 @@ export type UserCreateInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -691,25 +699,27 @@ export type UserUncheckedCreateInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -736,25 +746,27 @@ export type UserUpdateInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -781,25 +793,27 @@ export type UserUncheckedUpdateInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -826,13 +840,13 @@ export type UserCreateManyInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
 }
 
@@ -860,13 +874,13 @@ export type UserUpdateManyMutationInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
@@ -894,13 +908,13 @@ export type UserUncheckedUpdateManyInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
@@ -928,13 +942,13 @@ export type UserCountOrderByAggregateInput = {
   botModelType?: Prisma.SortOrder
   botOwnerId?: Prisma.SortOrder
   isBot?: Prisma.SortOrder
-  nameConfirmed?: Prisma.SortOrder
-  lastActiveAt?: Prisma.SortOrder
   botEloResetAt?: Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
-  creditsHpc?: Prisma.SortOrder
   creditsBpc?: Prisma.SortOrder
+  creditsHpc?: Prisma.SortOrder
   creditsTc?: Prisma.SortOrder
+  nameConfirmed?: Prisma.SortOrder
+  lastActiveAt?: Prisma.SortOrder
   emailAchievements?: Prisma.SortOrder
 }
 
@@ -942,8 +956,8 @@ export type UserAvgOrderByAggregateInput = {
   skillLimit?: Prisma.SortOrder
   botLimit?: Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
-  creditsHpc?: Prisma.SortOrder
   creditsBpc?: Prisma.SortOrder
+  creditsHpc?: Prisma.SortOrder
   creditsTc?: Prisma.SortOrder
 }
 
@@ -970,13 +984,13 @@ export type UserMaxOrderByAggregateInput = {
   botModelType?: Prisma.SortOrder
   botOwnerId?: Prisma.SortOrder
   isBot?: Prisma.SortOrder
-  nameConfirmed?: Prisma.SortOrder
-  lastActiveAt?: Prisma.SortOrder
   botEloResetAt?: Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
-  creditsHpc?: Prisma.SortOrder
   creditsBpc?: Prisma.SortOrder
+  creditsHpc?: Prisma.SortOrder
   creditsTc?: Prisma.SortOrder
+  nameConfirmed?: Prisma.SortOrder
+  lastActiveAt?: Prisma.SortOrder
   emailAchievements?: Prisma.SortOrder
 }
 
@@ -1003,13 +1017,13 @@ export type UserMinOrderByAggregateInput = {
   botModelType?: Prisma.SortOrder
   botOwnerId?: Prisma.SortOrder
   isBot?: Prisma.SortOrder
-  nameConfirmed?: Prisma.SortOrder
-  lastActiveAt?: Prisma.SortOrder
   botEloResetAt?: Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
-  creditsHpc?: Prisma.SortOrder
   creditsBpc?: Prisma.SortOrder
+  creditsHpc?: Prisma.SortOrder
   creditsTc?: Prisma.SortOrder
+  nameConfirmed?: Prisma.SortOrder
+  lastActiveAt?: Prisma.SortOrder
   emailAchievements?: Prisma.SortOrder
 }
 
@@ -1017,8 +1031,8 @@ export type UserSumOrderByAggregateInput = {
   skillLimit?: Prisma.SortOrder
   botLimit?: Prisma.SortOrder
   botGamesPlayed?: Prisma.SortOrder
-  creditsHpc?: Prisma.SortOrder
   creditsBpc?: Prisma.SortOrder
+  creditsHpc?: Prisma.SortOrder
   creditsTc?: Prisma.SortOrder
 }
 
@@ -1200,6 +1214,20 @@ export type UserUpdateOneRequiredWithoutNotifPreferencesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutNotifPreferencesInput, Prisma.UserUpdateWithoutNotifPreferencesInput>, Prisma.UserUncheckedUpdateWithoutNotifPreferencesInput>
 }
 
+export type UserCreateNestedOneWithoutPushSubscriptionsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPushSubscriptionsInput, Prisma.UserUncheckedCreateWithoutPushSubscriptionsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPushSubscriptionsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutPushSubscriptionsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPushSubscriptionsInput, Prisma.UserUncheckedCreateWithoutPushSubscriptionsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPushSubscriptionsInput
+  upsert?: Prisma.UserUpsertWithoutPushSubscriptionsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutPushSubscriptionsInput, Prisma.UserUpdateWithoutPushSubscriptionsInput>, Prisma.UserUncheckedUpdateWithoutPushSubscriptionsInput>
+}
+
 export type UserCreateNestedOneWithoutTournamentParticipantsInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutTournamentParticipantsInput, Prisma.UserUncheckedCreateWithoutTournamentParticipantsInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutTournamentParticipantsInput
@@ -1228,6 +1256,20 @@ export type UserUpdateOneRequiredWithoutClassificationNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutClassificationInput, Prisma.UserUpdateWithoutClassificationInput>, Prisma.UserUncheckedUpdateWithoutClassificationInput>
 }
 
+export type UserCreateNestedOneWithoutSeedBotConfigsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutSeedBotConfigsInput, Prisma.UserUncheckedCreateWithoutSeedBotConfigsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutSeedBotConfigsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutSeedBotConfigsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutSeedBotConfigsInput, Prisma.UserUncheckedCreateWithoutSeedBotConfigsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutSeedBotConfigsInput
+  upsert?: Prisma.UserUpsertWithoutSeedBotConfigsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutSeedBotConfigsInput, Prisma.UserUpdateWithoutSeedBotConfigsInput>, Prisma.UserUncheckedUpdateWithoutSeedBotConfigsInput>
+}
+
 export type UserCreateWithoutFeedbackInput = {
   id?: string
   clerkId?: string | null
@@ -1252,24 +1294,26 @@ export type UserCreateWithoutFeedbackInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutFeedbackInput = {
@@ -1296,24 +1340,26 @@ export type UserUncheckedCreateWithoutFeedbackInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutFeedbackInput = {
@@ -1356,24 +1402,26 @@ export type UserUpdateWithoutFeedbackInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutFeedbackInput = {
@@ -1400,24 +1448,26 @@ export type UserUncheckedUpdateWithoutFeedbackInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUserRolesInput = {
@@ -1444,24 +1494,26 @@ export type UserCreateWithoutUserRolesInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
+  notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
-  notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
-  classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUserRolesInput = {
@@ -1488,24 +1540,26 @@ export type UserUncheckedCreateWithoutUserRolesInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
-  notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
-  classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUserRolesInput = {
@@ -1548,24 +1602,26 @@ export type UserUpdateWithoutUserRolesInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
-  notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
-  classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUserRolesInput = {
@@ -1592,24 +1648,26 @@ export type UserUncheckedUpdateWithoutUserRolesInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
-  notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
-  classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutEloHistoryInput = {
@@ -1636,24 +1694,26 @@ export type UserCreateWithoutEloHistoryInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutEloHistoryInput = {
@@ -1680,24 +1740,26 @@ export type UserUncheckedCreateWithoutEloHistoryInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutEloHistoryInput = {
@@ -1740,24 +1802,26 @@ export type UserUpdateWithoutEloHistoryInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutEloHistoryInput = {
@@ -1784,24 +1848,26 @@ export type UserUncheckedUpdateWithoutEloHistoryInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutGameEloInput = {
@@ -1828,24 +1894,26 @@ export type UserCreateWithoutGameEloInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGameEloInput = {
@@ -1872,24 +1940,26 @@ export type UserUncheckedCreateWithoutGameEloInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGameEloInput = {
@@ -1932,24 +2002,26 @@ export type UserUpdateWithoutGameEloInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGameEloInput = {
@@ -1976,24 +2048,26 @@ export type UserUncheckedUpdateWithoutGameEloInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutGamesAsPlayer1Input = {
@@ -2020,24 +2094,26 @@ export type UserCreateWithoutGamesAsPlayer1Input = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGamesAsPlayer1Input = {
@@ -2064,24 +2140,26 @@ export type UserUncheckedCreateWithoutGamesAsPlayer1Input = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGamesAsPlayer1Input = {
@@ -2113,24 +2191,26 @@ export type UserCreateWithoutGamesAsPlayer2Input = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGamesAsPlayer2Input = {
@@ -2157,24 +2237,26 @@ export type UserUncheckedCreateWithoutGamesAsPlayer2Input = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGamesAsPlayer2Input = {
@@ -2206,24 +2288,26 @@ export type UserCreateWithoutGamesWonInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGamesWonInput = {
@@ -2250,24 +2334,26 @@ export type UserUncheckedCreateWithoutGamesWonInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGamesWonInput = {
@@ -2310,24 +2396,26 @@ export type UserUpdateWithoutGamesAsPlayer1Input = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGamesAsPlayer1Input = {
@@ -2354,24 +2442,26 @@ export type UserUncheckedUpdateWithoutGamesAsPlayer1Input = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserUpsertWithoutGamesAsPlayer2Input = {
@@ -2409,24 +2499,26 @@ export type UserUpdateWithoutGamesAsPlayer2Input = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGamesAsPlayer2Input = {
@@ -2453,24 +2545,26 @@ export type UserUncheckedUpdateWithoutGamesAsPlayer2Input = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserUpsertWithoutGamesWonInput = {
@@ -2508,24 +2602,26 @@ export type UserUpdateWithoutGamesWonInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGamesWonInput = {
@@ -2552,24 +2648,26 @@ export type UserUncheckedUpdateWithoutGamesWonInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutNotificationsInput = {
@@ -2596,24 +2694,26 @@ export type UserCreateWithoutNotificationsInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutNotificationsInput = {
@@ -2640,24 +2740,26 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutNotificationsInput = {
@@ -2700,24 +2802,26 @@ export type UserUpdateWithoutNotificationsInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutNotificationsInput = {
@@ -2744,24 +2848,26 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutNotifPreferencesInput = {
@@ -2788,24 +2894,26 @@ export type UserCreateWithoutNotifPreferencesInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutNotifPreferencesInput = {
@@ -2832,24 +2940,26 @@ export type UserUncheckedCreateWithoutNotifPreferencesInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutNotifPreferencesInput = {
@@ -2892,24 +3002,26 @@ export type UserUpdateWithoutNotifPreferencesInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutNotifPreferencesInput = {
@@ -2936,24 +3048,226 @@ export type UserUncheckedUpdateWithoutNotifPreferencesInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
-  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutPushSubscriptionsInput = {
+  id?: string
+  clerkId?: string | null
+  username: string
+  email: string
+  displayName: string
+  avatarUrl?: string | null
+  oauthProvider?: string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  banned?: boolean
+  skillLimit?: number | null
+  betterAuthId?: string | null
+  botActive?: boolean
+  botAvailable?: boolean
+  botProvisional?: boolean
+  botCompetitive?: boolean
+  botInTournament?: boolean
+  botLimit?: number | null
+  botModelId?: string | null
+  botModelType?: string | null
+  botOwnerId?: string | null
+  isBot?: boolean
+  botEloResetAt?: Date | string | null
+  botGamesPlayed?: number
+  creditsBpc?: number
+  creditsHpc?: number
+  creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
+  emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
+  gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
+  gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
+  notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutPushSubscriptionsInput = {
+  id?: string
+  clerkId?: string | null
+  username: string
+  email: string
+  displayName: string
+  avatarUrl?: string | null
+  oauthProvider?: string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  banned?: boolean
+  skillLimit?: number | null
+  betterAuthId?: string | null
+  botActive?: boolean
+  botAvailable?: boolean
+  botProvisional?: boolean
+  botCompetitive?: boolean
+  botInTournament?: boolean
+  botLimit?: number | null
+  botModelId?: string | null
+  botModelType?: string | null
+  botOwnerId?: string | null
+  isBot?: boolean
+  botEloResetAt?: Date | string | null
+  botGamesPlayed?: number
+  creditsBpc?: number
+  creditsHpc?: number
+  creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
+  emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
+  gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
+  gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutPushSubscriptionsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutPushSubscriptionsInput, Prisma.UserUncheckedCreateWithoutPushSubscriptionsInput>
+}
+
+export type UserUpsertWithoutPushSubscriptionsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutPushSubscriptionsInput, Prisma.UserUncheckedUpdateWithoutPushSubscriptionsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutPushSubscriptionsInput, Prisma.UserUncheckedCreateWithoutPushSubscriptionsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutPushSubscriptionsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutPushSubscriptionsInput, Prisma.UserUncheckedUpdateWithoutPushSubscriptionsInput>
+}
+
+export type UserUpdateWithoutPushSubscriptionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  clerkId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  oauthProvider?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botProvisional?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botCompetitive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botInTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  botModelId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
+  gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
+  gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutPushSubscriptionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  clerkId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  oauthProvider?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botProvisional?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botCompetitive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botInTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  botModelId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
+  gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
+  gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutTournamentParticipantsInput = {
@@ -2980,24 +3294,26 @@ export type UserCreateWithoutTournamentParticipantsInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutTournamentParticipantsInput = {
@@ -3024,24 +3340,26 @@ export type UserUncheckedCreateWithoutTournamentParticipantsInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutTournamentParticipantsInput = {
@@ -3084,24 +3402,26 @@ export type UserUpdateWithoutTournamentParticipantsInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutTournamentParticipantsInput = {
@@ -3128,24 +3448,26 @@ export type UserUncheckedUpdateWithoutTournamentParticipantsInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutClassificationInput = {
@@ -3172,24 +3494,26 @@ export type UserCreateWithoutClassificationInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
-  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutClassificationInput = {
@@ -3216,24 +3540,26 @@ export type UserUncheckedCreateWithoutClassificationInput = {
   botModelType?: string | null
   botOwnerId?: string | null
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: Date | string | null
   botEloResetAt?: Date | string | null
   botGamesPlayed?: number
-  creditsHpc?: number
   creditsBpc?: number
+  creditsHpc?: number
   creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
   emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
   gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
   gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
   gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
-  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
-  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
-  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
-  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutClassificationInput = {
@@ -3276,24 +3602,26 @@ export type UserUpdateWithoutClassificationInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
-  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutClassificationInput = {
@@ -3320,24 +3648,226 @@ export type UserUncheckedUpdateWithoutClassificationInput = {
   botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
-  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
   creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
   gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
   gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
   gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
-  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
-  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
-  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
-  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  seedBotConfigs?: Prisma.TournamentSeedBotUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutSeedBotConfigsInput = {
+  id?: string
+  clerkId?: string | null
+  username: string
+  email: string
+  displayName: string
+  avatarUrl?: string | null
+  oauthProvider?: string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  banned?: boolean
+  skillLimit?: number | null
+  betterAuthId?: string | null
+  botActive?: boolean
+  botAvailable?: boolean
+  botProvisional?: boolean
+  botCompetitive?: boolean
+  botInTournament?: boolean
+  botLimit?: number | null
+  botModelId?: string | null
+  botModelType?: string | null
+  botOwnerId?: string | null
+  isBot?: boolean
+  botEloResetAt?: Date | string | null
+  botGamesPlayed?: number
+  creditsBpc?: number
+  creditsHpc?: number
+  creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
+  emailAchievements?: boolean
+  feedback?: Prisma.FeedbackCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloCreateNestedManyWithoutUserInput
+  gamesAsPlayer1?: Prisma.GameCreateNestedManyWithoutPlayer1Input
+  gamesAsPlayer2?: Prisma.GameCreateNestedManyWithoutPlayer2Input
+  gamesWon?: Prisma.GameCreateNestedManyWithoutWinnerInput
+  notifPreferences?: Prisma.NotificationPreferenceCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutSeedBotConfigsInput = {
+  id?: string
+  clerkId?: string | null
+  username: string
+  email: string
+  displayName: string
+  avatarUrl?: string | null
+  oauthProvider?: string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  banned?: boolean
+  skillLimit?: number | null
+  betterAuthId?: string | null
+  botActive?: boolean
+  botAvailable?: boolean
+  botProvisional?: boolean
+  botCompetitive?: boolean
+  botInTournament?: boolean
+  botLimit?: number | null
+  botModelId?: string | null
+  botModelType?: string | null
+  botOwnerId?: string | null
+  isBot?: boolean
+  botEloResetAt?: Date | string | null
+  botGamesPlayed?: number
+  creditsBpc?: number
+  creditsHpc?: number
+  creditsTc?: number
+  nameConfirmed?: boolean
+  lastActiveAt?: Date | string | null
+  emailAchievements?: boolean
+  feedback?: Prisma.FeedbackUncheckedCreateNestedManyWithoutUserInput
+  gameElo?: Prisma.GameEloUncheckedCreateNestedManyWithoutUserInput
+  gamesAsPlayer1?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer1Input
+  gamesAsPlayer2?: Prisma.GameUncheckedCreateNestedManyWithoutPlayer2Input
+  gamesWon?: Prisma.GameUncheckedCreateNestedManyWithoutWinnerInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedCreateNestedManyWithoutUserInput
+  classification?: Prisma.PlayerClassificationUncheckedCreateNestedOneWithoutUserInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedCreateNestedManyWithoutUserInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+  userRoles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutSeedBotConfigsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutSeedBotConfigsInput, Prisma.UserUncheckedCreateWithoutSeedBotConfigsInput>
+}
+
+export type UserUpsertWithoutSeedBotConfigsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutSeedBotConfigsInput, Prisma.UserUncheckedUpdateWithoutSeedBotConfigsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutSeedBotConfigsInput, Prisma.UserUncheckedCreateWithoutSeedBotConfigsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutSeedBotConfigsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutSeedBotConfigsInput, Prisma.UserUncheckedUpdateWithoutSeedBotConfigsInput>
+}
+
+export type UserUpdateWithoutSeedBotConfigsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  clerkId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  oauthProvider?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botProvisional?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botCompetitive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botInTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  botModelId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUpdateManyWithoutUserNestedInput
+  gameElo?: Prisma.GameEloUpdateManyWithoutUserNestedInput
+  gamesAsPlayer1?: Prisma.GameUpdateManyWithoutPlayer1NestedInput
+  gamesAsPlayer2?: Prisma.GameUpdateManyWithoutPlayer2NestedInput
+  gamesWon?: Prisma.GameUpdateManyWithoutWinnerNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutSeedBotConfigsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  clerkId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  oauthProvider?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  preferences?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  banned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  skillLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  betterAuthId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botAvailable?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botProvisional?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botCompetitive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botInTournament?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  botModelId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botModelType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  botOwnerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isBot?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  botEloResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  botGamesPlayed?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsBpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsHpc?: Prisma.IntFieldUpdateOperationsInput | number
+  creditsTc?: Prisma.IntFieldUpdateOperationsInput | number
+  nameConfirmed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastActiveAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  emailAchievements?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  feedback?: Prisma.FeedbackUncheckedUpdateManyWithoutUserNestedInput
   gameElo?: Prisma.GameEloUncheckedUpdateManyWithoutUserNestedInput
+  gamesAsPlayer1?: Prisma.GameUncheckedUpdateManyWithoutPlayer1NestedInput
+  gamesAsPlayer2?: Prisma.GameUncheckedUpdateManyWithoutPlayer2NestedInput
+  gamesWon?: Prisma.GameUncheckedUpdateManyWithoutWinnerNestedInput
+  notifPreferences?: Prisma.NotificationPreferenceUncheckedUpdateManyWithoutUserNestedInput
+  classification?: Prisma.PlayerClassificationUncheckedUpdateOneWithoutUserNestedInput
+  tournamentParticipants?: Prisma.TournamentParticipantUncheckedUpdateManyWithoutUserNestedInput
+  eloHistory?: Prisma.UserEloHistoryUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  pushSubscriptions?: Prisma.PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+  userRoles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -3346,29 +3876,33 @@ export type UserUncheckedUpdateWithoutClassificationInput = {
  */
 
 export type UserCountOutputType = {
+  feedback: number
+  gameElo: number
   gamesAsPlayer1: number
   gamesAsPlayer2: number
   gamesWon: number
-  eloHistory: number
-  userRoles: number
-  notifications: number
   notifPreferences: number
-  feedback: number
   tournamentParticipants: number
-  gameElo: number
+  eloHistory: number
+  notifications: number
+  pushSubscriptions: number
+  userRoles: number
+  seedBotConfigs: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  feedback?: boolean | UserCountOutputTypeCountFeedbackArgs
+  gameElo?: boolean | UserCountOutputTypeCountGameEloArgs
   gamesAsPlayer1?: boolean | UserCountOutputTypeCountGamesAsPlayer1Args
   gamesAsPlayer2?: boolean | UserCountOutputTypeCountGamesAsPlayer2Args
   gamesWon?: boolean | UserCountOutputTypeCountGamesWonArgs
-  eloHistory?: boolean | UserCountOutputTypeCountEloHistoryArgs
-  userRoles?: boolean | UserCountOutputTypeCountUserRolesArgs
-  notifications?: boolean | UserCountOutputTypeCountNotificationsArgs
   notifPreferences?: boolean | UserCountOutputTypeCountNotifPreferencesArgs
-  feedback?: boolean | UserCountOutputTypeCountFeedbackArgs
   tournamentParticipants?: boolean | UserCountOutputTypeCountTournamentParticipantsArgs
-  gameElo?: boolean | UserCountOutputTypeCountGameEloArgs
+  eloHistory?: boolean | UserCountOutputTypeCountEloHistoryArgs
+  notifications?: boolean | UserCountOutputTypeCountNotificationsArgs
+  pushSubscriptions?: boolean | UserCountOutputTypeCountPushSubscriptionsArgs
+  userRoles?: boolean | UserCountOutputTypeCountUserRolesArgs
+  seedBotConfigs?: boolean | UserCountOutputTypeCountSeedBotConfigsArgs
 }
 
 /**
@@ -3379,6 +3913,20 @@ export type UserCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensi
    * Select specific fields to fetch from the UserCountOutputType
    */
   select?: Prisma.UserCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountFeedbackArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.FeedbackWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountGameEloArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.GameEloWhereInput
 }
 
 /**
@@ -3405,36 +3953,8 @@ export type UserCountOutputTypeCountGamesWonArgs<ExtArgs extends runtime.Types.E
 /**
  * UserCountOutputType without action
  */
-export type UserCountOutputTypeCountEloHistoryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.UserEloHistoryWhereInput
-}
-
-/**
- * UserCountOutputType without action
- */
-export type UserCountOutputTypeCountUserRolesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.UserRoleWhereInput
-}
-
-/**
- * UserCountOutputType without action
- */
-export type UserCountOutputTypeCountNotificationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.UserNotificationWhereInput
-}
-
-/**
- * UserCountOutputType without action
- */
 export type UserCountOutputTypeCountNotifPreferencesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.NotificationPreferenceWhereInput
-}
-
-/**
- * UserCountOutputType without action
- */
-export type UserCountOutputTypeCountFeedbackArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.FeedbackWhereInput
 }
 
 /**
@@ -3447,8 +3967,36 @@ export type UserCountOutputTypeCountTournamentParticipantsArgs<ExtArgs extends r
 /**
  * UserCountOutputType without action
  */
-export type UserCountOutputTypeCountGameEloArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.GameEloWhereInput
+export type UserCountOutputTypeCountEloHistoryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UserEloHistoryWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountNotificationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UserNotificationWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountPushSubscriptionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PushSubscriptionWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountUserRolesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UserRoleWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountSeedBotConfigsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TournamentSeedBotWhereInput
 }
 
 
@@ -3476,25 +4024,27 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   botModelType?: boolean
   botOwnerId?: boolean
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: boolean
   botEloResetAt?: boolean
   botGamesPlayed?: boolean
-  creditsHpc?: boolean
   creditsBpc?: boolean
+  creditsHpc?: boolean
   creditsTc?: boolean
+  nameConfirmed?: boolean
+  lastActiveAt?: boolean
   emailAchievements?: boolean
+  feedback?: boolean | Prisma.User$feedbackArgs<ExtArgs>
+  gameElo?: boolean | Prisma.User$gameEloArgs<ExtArgs>
   gamesAsPlayer1?: boolean | Prisma.User$gamesAsPlayer1Args<ExtArgs>
   gamesAsPlayer2?: boolean | Prisma.User$gamesAsPlayer2Args<ExtArgs>
   gamesWon?: boolean | Prisma.User$gamesWonArgs<ExtArgs>
-  eloHistory?: boolean | Prisma.User$eloHistoryArgs<ExtArgs>
-  userRoles?: boolean | Prisma.User$userRolesArgs<ExtArgs>
-  notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
   notifPreferences?: boolean | Prisma.User$notifPreferencesArgs<ExtArgs>
-  feedback?: boolean | Prisma.User$feedbackArgs<ExtArgs>
-  tournamentParticipants?: boolean | Prisma.User$tournamentParticipantsArgs<ExtArgs>
   classification?: boolean | Prisma.User$classificationArgs<ExtArgs>
-  gameElo?: boolean | Prisma.User$gameEloArgs<ExtArgs>
+  tournamentParticipants?: boolean | Prisma.User$tournamentParticipantsArgs<ExtArgs>
+  eloHistory?: boolean | Prisma.User$eloHistoryArgs<ExtArgs>
+  notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
+  pushSubscriptions?: boolean | Prisma.User$pushSubscriptionsArgs<ExtArgs>
+  userRoles?: boolean | Prisma.User$userRolesArgs<ExtArgs>
+  seedBotConfigs?: boolean | Prisma.User$seedBotConfigsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -3522,13 +4072,13 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   botModelType?: boolean
   botOwnerId?: boolean
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: boolean
   botEloResetAt?: boolean
   botGamesPlayed?: boolean
-  creditsHpc?: boolean
   creditsBpc?: boolean
+  creditsHpc?: boolean
   creditsTc?: boolean
+  nameConfirmed?: boolean
+  lastActiveAt?: boolean
   emailAchievements?: boolean
 }, ExtArgs["result"]["user"]>
 
@@ -3556,13 +4106,13 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   botModelType?: boolean
   botOwnerId?: boolean
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: boolean
   botEloResetAt?: boolean
   botGamesPlayed?: boolean
-  creditsHpc?: boolean
   creditsBpc?: boolean
+  creditsHpc?: boolean
   creditsTc?: boolean
+  nameConfirmed?: boolean
+  lastActiveAt?: boolean
   emailAchievements?: boolean
 }, ExtArgs["result"]["user"]>
 
@@ -3590,29 +4140,31 @@ export type UserSelectScalar = {
   botModelType?: boolean
   botOwnerId?: boolean
   isBot?: boolean
-  nameConfirmed?: boolean
-  lastActiveAt?: boolean
   botEloResetAt?: boolean
   botGamesPlayed?: boolean
-  creditsHpc?: boolean
   creditsBpc?: boolean
+  creditsHpc?: boolean
   creditsTc?: boolean
+  nameConfirmed?: boolean
+  lastActiveAt?: boolean
   emailAchievements?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "clerkId" | "username" | "email" | "displayName" | "avatarUrl" | "oauthProvider" | "preferences" | "createdAt" | "updatedAt" | "banned" | "skillLimit" | "betterAuthId" | "botActive" | "botAvailable" | "botProvisional" | "botCompetitive" | "botInTournament" | "botLimit" | "botModelId" | "botModelType" | "botOwnerId" | "isBot" | "nameConfirmed" | "lastActiveAt" | "botEloResetAt" | "botGamesPlayed" | "creditsHpc" | "creditsBpc" | "creditsTc" | "emailAchievements", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "clerkId" | "username" | "email" | "displayName" | "avatarUrl" | "oauthProvider" | "preferences" | "createdAt" | "updatedAt" | "banned" | "skillLimit" | "betterAuthId" | "botActive" | "botAvailable" | "botProvisional" | "botCompetitive" | "botInTournament" | "botLimit" | "botModelId" | "botModelType" | "botOwnerId" | "isBot" | "botEloResetAt" | "botGamesPlayed" | "creditsBpc" | "creditsHpc" | "creditsTc" | "nameConfirmed" | "lastActiveAt" | "emailAchievements", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  feedback?: boolean | Prisma.User$feedbackArgs<ExtArgs>
+  gameElo?: boolean | Prisma.User$gameEloArgs<ExtArgs>
   gamesAsPlayer1?: boolean | Prisma.User$gamesAsPlayer1Args<ExtArgs>
   gamesAsPlayer2?: boolean | Prisma.User$gamesAsPlayer2Args<ExtArgs>
   gamesWon?: boolean | Prisma.User$gamesWonArgs<ExtArgs>
-  eloHistory?: boolean | Prisma.User$eloHistoryArgs<ExtArgs>
-  userRoles?: boolean | Prisma.User$userRolesArgs<ExtArgs>
-  notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
   notifPreferences?: boolean | Prisma.User$notifPreferencesArgs<ExtArgs>
-  feedback?: boolean | Prisma.User$feedbackArgs<ExtArgs>
-  tournamentParticipants?: boolean | Prisma.User$tournamentParticipantsArgs<ExtArgs>
   classification?: boolean | Prisma.User$classificationArgs<ExtArgs>
-  gameElo?: boolean | Prisma.User$gameEloArgs<ExtArgs>
+  tournamentParticipants?: boolean | Prisma.User$tournamentParticipantsArgs<ExtArgs>
+  eloHistory?: boolean | Prisma.User$eloHistoryArgs<ExtArgs>
+  notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
+  pushSubscriptions?: boolean | Prisma.User$pushSubscriptionsArgs<ExtArgs>
+  userRoles?: boolean | Prisma.User$userRolesArgs<ExtArgs>
+  seedBotConfigs?: boolean | Prisma.User$seedBotConfigsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -3621,17 +4173,19 @@ export type UserIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
 export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "User"
   objects: {
+    feedback: Prisma.$FeedbackPayload<ExtArgs>[]
+    gameElo: Prisma.$GameEloPayload<ExtArgs>[]
     gamesAsPlayer1: Prisma.$GamePayload<ExtArgs>[]
     gamesAsPlayer2: Prisma.$GamePayload<ExtArgs>[]
     gamesWon: Prisma.$GamePayload<ExtArgs>[]
-    eloHistory: Prisma.$UserEloHistoryPayload<ExtArgs>[]
-    userRoles: Prisma.$UserRolePayload<ExtArgs>[]
-    notifications: Prisma.$UserNotificationPayload<ExtArgs>[]
     notifPreferences: Prisma.$NotificationPreferencePayload<ExtArgs>[]
-    feedback: Prisma.$FeedbackPayload<ExtArgs>[]
-    tournamentParticipants: Prisma.$TournamentParticipantPayload<ExtArgs>[]
     classification: Prisma.$PlayerClassificationPayload<ExtArgs> | null
-    gameElo: Prisma.$GameEloPayload<ExtArgs>[]
+    tournamentParticipants: Prisma.$TournamentParticipantPayload<ExtArgs>[]
+    eloHistory: Prisma.$UserEloHistoryPayload<ExtArgs>[]
+    notifications: Prisma.$UserNotificationPayload<ExtArgs>[]
+    pushSubscriptions: Prisma.$PushSubscriptionPayload<ExtArgs>[]
+    userRoles: Prisma.$UserRolePayload<ExtArgs>[]
+    seedBotConfigs: Prisma.$TournamentSeedBotPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -3657,13 +4211,13 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     botModelType: string | null
     botOwnerId: string | null
     isBot: boolean
-    nameConfirmed: boolean
-    lastActiveAt: Date | null
     botEloResetAt: Date | null
     botGamesPlayed: number
-    creditsHpc: number
     creditsBpc: number
+    creditsHpc: number
     creditsTc: number
+    nameConfirmed: boolean
+    lastActiveAt: Date | null
     emailAchievements: boolean
   }, ExtArgs["result"]["user"]>
   composites: {}
@@ -4059,17 +4613,19 @@ readonly fields: UserFieldRefs;
  */
 export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  feedback<T extends Prisma.User$feedbackArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$feedbackArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FeedbackPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  gameElo<T extends Prisma.User$gameEloArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$gameEloArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GameEloPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   gamesAsPlayer1<T extends Prisma.User$gamesAsPlayer1Args<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$gamesAsPlayer1Args<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GamePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   gamesAsPlayer2<T extends Prisma.User$gamesAsPlayer2Args<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$gamesAsPlayer2Args<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GamePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   gamesWon<T extends Prisma.User$gamesWonArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$gamesWonArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GamePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  eloHistory<T extends Prisma.User$eloHistoryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$eloHistoryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserEloHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  userRoles<T extends Prisma.User$userRolesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$userRolesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  notifications<T extends Prisma.User$notificationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$notificationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserNotificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   notifPreferences<T extends Prisma.User$notifPreferencesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$notifPreferencesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$NotificationPreferencePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  feedback<T extends Prisma.User$feedbackArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$feedbackArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FeedbackPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  tournamentParticipants<T extends Prisma.User$tournamentParticipantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$tournamentParticipantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentParticipantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   classification<T extends Prisma.User$classificationArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$classificationArgs<ExtArgs>>): Prisma.Prisma__PlayerClassificationClient<runtime.Types.Result.GetResult<Prisma.$PlayerClassificationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-  gameElo<T extends Prisma.User$gameEloArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$gameEloArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$GameEloPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  tournamentParticipants<T extends Prisma.User$tournamentParticipantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$tournamentParticipantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentParticipantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  eloHistory<T extends Prisma.User$eloHistoryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$eloHistoryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserEloHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  notifications<T extends Prisma.User$notificationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$notificationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserNotificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  pushSubscriptions<T extends Prisma.User$pushSubscriptionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$pushSubscriptionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PushSubscriptionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  userRoles<T extends Prisma.User$userRolesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$userRolesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  seedBotConfigs<T extends Prisma.User$seedBotConfigsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$seedBotConfigsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TournamentSeedBotPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -4122,13 +4678,13 @@ export interface UserFieldRefs {
   readonly botModelType: Prisma.FieldRef<"User", 'String'>
   readonly botOwnerId: Prisma.FieldRef<"User", 'String'>
   readonly isBot: Prisma.FieldRef<"User", 'Boolean'>
-  readonly nameConfirmed: Prisma.FieldRef<"User", 'Boolean'>
-  readonly lastActiveAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly botEloResetAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly botGamesPlayed: Prisma.FieldRef<"User", 'Int'>
-  readonly creditsHpc: Prisma.FieldRef<"User", 'Int'>
   readonly creditsBpc: Prisma.FieldRef<"User", 'Int'>
+  readonly creditsHpc: Prisma.FieldRef<"User", 'Int'>
   readonly creditsTc: Prisma.FieldRef<"User", 'Int'>
+  readonly nameConfirmed: Prisma.FieldRef<"User", 'Boolean'>
+  readonly lastActiveAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly emailAchievements: Prisma.FieldRef<"User", 'Boolean'>
 }
     
@@ -4523,6 +5079,54 @@ export type UserDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Internal
 }
 
 /**
+ * User.feedback
+ */
+export type User$feedbackArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Feedback
+   */
+  select?: Prisma.FeedbackSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Feedback
+   */
+  omit?: Prisma.FeedbackOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.FeedbackInclude<ExtArgs> | null
+  where?: Prisma.FeedbackWhereInput
+  orderBy?: Prisma.FeedbackOrderByWithRelationInput | Prisma.FeedbackOrderByWithRelationInput[]
+  cursor?: Prisma.FeedbackWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.FeedbackScalarFieldEnum | Prisma.FeedbackScalarFieldEnum[]
+}
+
+/**
+ * User.gameElo
+ */
+export type User$gameEloArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the GameElo
+   */
+  select?: Prisma.GameEloSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the GameElo
+   */
+  omit?: Prisma.GameEloOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.GameEloInclude<ExtArgs> | null
+  where?: Prisma.GameEloWhereInput
+  orderBy?: Prisma.GameEloOrderByWithRelationInput | Prisma.GameEloOrderByWithRelationInput[]
+  cursor?: Prisma.GameEloWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.GameEloScalarFieldEnum | Prisma.GameEloScalarFieldEnum[]
+}
+
+/**
  * User.gamesAsPlayer1
  */
 export type User$gamesAsPlayer1Args<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -4595,78 +5199,6 @@ export type User$gamesWonArgs<ExtArgs extends runtime.Types.Extensions.InternalA
 }
 
 /**
- * User.eloHistory
- */
-export type User$eloHistoryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the UserEloHistory
-   */
-  select?: Prisma.UserEloHistorySelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the UserEloHistory
-   */
-  omit?: Prisma.UserEloHistoryOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.UserEloHistoryInclude<ExtArgs> | null
-  where?: Prisma.UserEloHistoryWhereInput
-  orderBy?: Prisma.UserEloHistoryOrderByWithRelationInput | Prisma.UserEloHistoryOrderByWithRelationInput[]
-  cursor?: Prisma.UserEloHistoryWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.UserEloHistoryScalarFieldEnum | Prisma.UserEloHistoryScalarFieldEnum[]
-}
-
-/**
- * User.userRoles
- */
-export type User$userRolesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the UserRole
-   */
-  select?: Prisma.UserRoleSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the UserRole
-   */
-  omit?: Prisma.UserRoleOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.UserRoleInclude<ExtArgs> | null
-  where?: Prisma.UserRoleWhereInput
-  orderBy?: Prisma.UserRoleOrderByWithRelationInput | Prisma.UserRoleOrderByWithRelationInput[]
-  cursor?: Prisma.UserRoleWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.UserRoleScalarFieldEnum | Prisma.UserRoleScalarFieldEnum[]
-}
-
-/**
- * User.notifications
- */
-export type User$notificationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the UserNotification
-   */
-  select?: Prisma.UserNotificationSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the UserNotification
-   */
-  omit?: Prisma.UserNotificationOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.UserNotificationInclude<ExtArgs> | null
-  where?: Prisma.UserNotificationWhereInput
-  orderBy?: Prisma.UserNotificationOrderByWithRelationInput | Prisma.UserNotificationOrderByWithRelationInput[]
-  cursor?: Prisma.UserNotificationWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.UserNotificationScalarFieldEnum | Prisma.UserNotificationScalarFieldEnum[]
-}
-
-/**
  * User.notifPreferences
  */
 export type User$notifPreferencesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -4691,27 +5223,22 @@ export type User$notifPreferencesArgs<ExtArgs extends runtime.Types.Extensions.I
 }
 
 /**
- * User.feedback
+ * User.classification
  */
-export type User$feedbackArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type User$classificationArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
-   * Select specific fields to fetch from the Feedback
+   * Select specific fields to fetch from the PlayerClassification
    */
-  select?: Prisma.FeedbackSelect<ExtArgs> | null
+  select?: Prisma.PlayerClassificationSelect<ExtArgs> | null
   /**
-   * Omit specific fields from the Feedback
+   * Omit specific fields from the PlayerClassification
    */
-  omit?: Prisma.FeedbackOmit<ExtArgs> | null
+  omit?: Prisma.PlayerClassificationOmit<ExtArgs> | null
   /**
    * Choose, which related nodes to fetch as well
    */
-  include?: Prisma.FeedbackInclude<ExtArgs> | null
-  where?: Prisma.FeedbackWhereInput
-  orderBy?: Prisma.FeedbackOrderByWithRelationInput | Prisma.FeedbackOrderByWithRelationInput[]
-  cursor?: Prisma.FeedbackWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.FeedbackScalarFieldEnum | Prisma.FeedbackScalarFieldEnum[]
+  include?: Prisma.PlayerClassificationInclude<ExtArgs> | null
+  where?: Prisma.PlayerClassificationWhereInput
 }
 
 /**
@@ -4739,46 +5266,123 @@ export type User$tournamentParticipantsArgs<ExtArgs extends runtime.Types.Extens
 }
 
 /**
- * User.classification
+ * User.eloHistory
  */
-export type User$classificationArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type User$eloHistoryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
-   * Select specific fields to fetch from the PlayerClassification
+   * Select specific fields to fetch from the UserEloHistory
    */
-  select?: Prisma.PlayerClassificationSelect<ExtArgs> | null
+  select?: Prisma.UserEloHistorySelect<ExtArgs> | null
   /**
-   * Omit specific fields from the PlayerClassification
+   * Omit specific fields from the UserEloHistory
    */
-  omit?: Prisma.PlayerClassificationOmit<ExtArgs> | null
+  omit?: Prisma.UserEloHistoryOmit<ExtArgs> | null
   /**
    * Choose, which related nodes to fetch as well
    */
-  include?: Prisma.PlayerClassificationInclude<ExtArgs> | null
-  where?: Prisma.PlayerClassificationWhereInput
+  include?: Prisma.UserEloHistoryInclude<ExtArgs> | null
+  where?: Prisma.UserEloHistoryWhereInput
+  orderBy?: Prisma.UserEloHistoryOrderByWithRelationInput | Prisma.UserEloHistoryOrderByWithRelationInput[]
+  cursor?: Prisma.UserEloHistoryWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.UserEloHistoryScalarFieldEnum | Prisma.UserEloHistoryScalarFieldEnum[]
 }
 
 /**
- * User.gameElo
+ * User.notifications
  */
-export type User$gameEloArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type User$notificationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
-   * Select specific fields to fetch from the GameElo
+   * Select specific fields to fetch from the UserNotification
    */
-  select?: Prisma.GameEloSelect<ExtArgs> | null
+  select?: Prisma.UserNotificationSelect<ExtArgs> | null
   /**
-   * Omit specific fields from the GameElo
+   * Omit specific fields from the UserNotification
    */
-  omit?: Prisma.GameEloOmit<ExtArgs> | null
+  omit?: Prisma.UserNotificationOmit<ExtArgs> | null
   /**
    * Choose, which related nodes to fetch as well
    */
-  include?: Prisma.GameEloInclude<ExtArgs> | null
-  where?: Prisma.GameEloWhereInput
-  orderBy?: Prisma.GameEloOrderByWithRelationInput | Prisma.GameEloOrderByWithRelationInput[]
-  cursor?: Prisma.GameEloWhereUniqueInput
+  include?: Prisma.UserNotificationInclude<ExtArgs> | null
+  where?: Prisma.UserNotificationWhereInput
+  orderBy?: Prisma.UserNotificationOrderByWithRelationInput | Prisma.UserNotificationOrderByWithRelationInput[]
+  cursor?: Prisma.UserNotificationWhereUniqueInput
   take?: number
   skip?: number
-  distinct?: Prisma.GameEloScalarFieldEnum | Prisma.GameEloScalarFieldEnum[]
+  distinct?: Prisma.UserNotificationScalarFieldEnum | Prisma.UserNotificationScalarFieldEnum[]
+}
+
+/**
+ * User.pushSubscriptions
+ */
+export type User$pushSubscriptionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PushSubscription
+   */
+  select?: Prisma.PushSubscriptionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PushSubscription
+   */
+  omit?: Prisma.PushSubscriptionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PushSubscriptionInclude<ExtArgs> | null
+  where?: Prisma.PushSubscriptionWhereInput
+  orderBy?: Prisma.PushSubscriptionOrderByWithRelationInput | Prisma.PushSubscriptionOrderByWithRelationInput[]
+  cursor?: Prisma.PushSubscriptionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PushSubscriptionScalarFieldEnum | Prisma.PushSubscriptionScalarFieldEnum[]
+}
+
+/**
+ * User.userRoles
+ */
+export type User$userRolesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the UserRole
+   */
+  select?: Prisma.UserRoleSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the UserRole
+   */
+  omit?: Prisma.UserRoleOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.UserRoleInclude<ExtArgs> | null
+  where?: Prisma.UserRoleWhereInput
+  orderBy?: Prisma.UserRoleOrderByWithRelationInput | Prisma.UserRoleOrderByWithRelationInput[]
+  cursor?: Prisma.UserRoleWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.UserRoleScalarFieldEnum | Prisma.UserRoleScalarFieldEnum[]
+}
+
+/**
+ * User.seedBotConfigs
+ */
+export type User$seedBotConfigsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TournamentSeedBot
+   */
+  select?: Prisma.TournamentSeedBotSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TournamentSeedBot
+   */
+  omit?: Prisma.TournamentSeedBotOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TournamentSeedBotInclude<ExtArgs> | null
+  where?: Prisma.TournamentSeedBotWhereInput
+  orderBy?: Prisma.TournamentSeedBotOrderByWithRelationInput | Prisma.TournamentSeedBotOrderByWithRelationInput[]
+  cursor?: Prisma.TournamentSeedBotWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.TournamentSeedBotScalarFieldEnum | Prisma.TournamentSeedBotScalarFieldEnum[]
 }
 
 /**

@@ -9,10 +9,11 @@ import logger from '../logger.js'
 const DISPATCH_INTERVAL_MS = 30_000
 
 let _lastTickAt = null
-let _io = null
 
 export function getDispatcherHeartbeat() { return _lastTickAt }
-export function setIO(io) { _io = io }
+// Retained for index.js compat — scheduledJobs no longer uses socket.io directly
+// since the 15-min warning moved to the SSE stream (dispatcher appends per-user).
+export function setIO() {}
 
 // ── Job handlers ──────────────────────────────────────────────────────────────
 // Each handler receives job.payload and should return a Promise.
@@ -74,13 +75,14 @@ export async function startDispatcher() {
   })
 
   registerHandler('tournament.warn.15', async ({ tournamentId, name, participantIds }) => {
-    // 15-min warning: socket-only (no persistence in DB)
-    // dispatch() handles ephemeral vs persistent, but tournament.starting_soon is persistent
-    // So we emit directly to cohort sockets — skip the bus for this one
-    if (_io) {
-      for (const userId of (participantIds ?? [])) {
-        _io.to(`user:${userId}`).emit('tournament:warning', { tournamentId, minutesUntilStart: 15 })
-      }
+    // 15-min warning: ephemeral, delivered only to online participants via SSE.
+    // Skips the UserNotification DB row that dispatch() would create for the
+    // 60- and 2-minute warnings (those are persistent via the REGISTRY entry).
+    const { appendToStream } = await import('./eventStream.js')
+    const payload = { tournamentId, name, minutesUntilStart: 15 }
+    for (const userId of (participantIds ?? [])) {
+      appendToStream('guide:notification', { type: 'tournament.starting_soon', payload }, { userId })
+        .catch(() => {})
     }
   })
 

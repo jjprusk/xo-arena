@@ -34,6 +34,10 @@ export const useGuideStore = create((set, get) => ({
     set(s => ({ notifications: s.notifications.filter(n => n.id !== id) }))
   },
 
+  dismissNotificationsForTable(tableId) {
+    set(s => ({ notifications: s.notifications.filter(n => n.tableId !== tableId) }))
+  },
+
   clearNotifications() {
     set({ notifications: [] })
   },

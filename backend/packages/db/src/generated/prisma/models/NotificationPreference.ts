@@ -31,6 +31,7 @@ export type NotificationPreferenceMinAggregateOutputType = {
   inApp: boolean | null
   email: boolean | null
   sms: boolean | null
+  push: boolean | null
 }
 
 export type NotificationPreferenceMaxAggregateOutputType = {
@@ -40,6 +41,7 @@ export type NotificationPreferenceMaxAggregateOutputType = {
   inApp: boolean | null
   email: boolean | null
   sms: boolean | null
+  push: boolean | null
 }
 
 export type NotificationPreferenceCountAggregateOutputType = {
@@ -49,6 +51,7 @@ export type NotificationPreferenceCountAggregateOutputType = {
   inApp: number
   email: number
   sms: number
+  push: number
   _all: number
 }
 
@@ -60,6 +63,7 @@ export type NotificationPreferenceMinAggregateInputType = {
   inApp?: true
   email?: true
   sms?: true
+  push?: true
 }
 
 export type NotificationPreferenceMaxAggregateInputType = {
@@ -69,6 +73,7 @@ export type NotificationPreferenceMaxAggregateInputType = {
   inApp?: true
   email?: true
   sms?: true
+  push?: true
 }
 
 export type NotificationPreferenceCountAggregateInputType = {
@@ -78,6 +83,7 @@ export type NotificationPreferenceCountAggregateInputType = {
   inApp?: true
   email?: true
   sms?: true
+  push?: true
   _all?: true
 }
 
@@ -160,6 +166,7 @@ export type NotificationPreferenceGroupByOutputType = {
   inApp: boolean
   email: boolean
   sms: boolean
+  push: boolean
   _count: NotificationPreferenceCountAggregateOutputType | null
   _min: NotificationPreferenceMinAggregateOutputType | null
   _max: NotificationPreferenceMaxAggregateOutputType | null
@@ -190,6 +197,7 @@ export type NotificationPreferenceWhereInput = {
   inApp?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   email?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   sms?: Prisma.BoolFilter<"NotificationPreference"> | boolean
+  push?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }
 
@@ -200,6 +208,7 @@ export type NotificationPreferenceOrderByWithRelationInput = {
   inApp?: Prisma.SortOrder
   email?: Prisma.SortOrder
   sms?: Prisma.SortOrder
+  push?: Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
 }
 
@@ -214,6 +223,7 @@ export type NotificationPreferenceWhereUniqueInput = Prisma.AtLeast<{
   inApp?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   email?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   sms?: Prisma.BoolFilter<"NotificationPreference"> | boolean
+  push?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }, "id" | "userId_eventType">
 
@@ -224,6 +234,7 @@ export type NotificationPreferenceOrderByWithAggregationInput = {
   inApp?: Prisma.SortOrder
   email?: Prisma.SortOrder
   sms?: Prisma.SortOrder
+  push?: Prisma.SortOrder
   _count?: Prisma.NotificationPreferenceCountOrderByAggregateInput
   _max?: Prisma.NotificationPreferenceMaxOrderByAggregateInput
   _min?: Prisma.NotificationPreferenceMinOrderByAggregateInput
@@ -239,6 +250,7 @@ export type NotificationPreferenceScalarWhereWithAggregatesInput = {
   inApp?: Prisma.BoolWithAggregatesFilter<"NotificationPreference"> | boolean
   email?: Prisma.BoolWithAggregatesFilter<"NotificationPreference"> | boolean
   sms?: Prisma.BoolWithAggregatesFilter<"NotificationPreference"> | boolean
+  push?: Prisma.BoolWithAggregatesFilter<"NotificationPreference"> | boolean
 }
 
 export type NotificationPreferenceCreateInput = {
@@ -247,6 +259,7 @@ export type NotificationPreferenceCreateInput = {
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
   user: Prisma.UserCreateNestedOneWithoutNotifPreferencesInput
 }
 
@@ -257,6 +270,7 @@ export type NotificationPreferenceUncheckedCreateInput = {
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
 }
 
 export type NotificationPreferenceUpdateInput = {
@@ -265,6 +279,7 @@ export type NotificationPreferenceUpdateInput = {
   inApp?: Prisma.BoolFieldUpdateOperationsInput | boolean
   email?: Prisma.BoolFieldUpdateOperationsInput | boolean
   sms?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  push?: Prisma.BoolFieldUpdateOperationsInput | boolean
   user?: Prisma.UserUpdateOneRequiredWithoutNotifPreferencesNestedInput
 }
 
@@ -275,6 +290,7 @@ export type NotificationPreferenceUncheckedUpdateInput = {
   inApp?: Prisma.BoolFieldUpdateOperationsInput | boolean
   email?: Prisma.BoolFieldUpdateOperationsInput | boolean
   sms?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  push?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 export type NotificationPreferenceCreateManyInput = {
@@ -284,6 +300,7 @@ export type NotificationPreferenceCreateManyInput = {
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
 }
 
 export type NotificationPreferenceUpdateManyMutationInput = {
@@ -292,6 +309,7 @@ export type NotificationPreferenceUpdateManyMutationInput = {
   inApp?: Prisma.BoolFieldUpdateOperationsInput | boolean
   email?: Prisma.BoolFieldUpdateOperationsInput | boolean
   sms?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  push?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 export type NotificationPreferenceUncheckedUpdateManyInput = {
@@ -301,6 +319,7 @@ export type NotificationPreferenceUncheckedUpdateManyInput = {
   inApp?: Prisma.BoolFieldUpdateOperationsInput | boolean
   email?: Prisma.BoolFieldUpdateOperationsInput | boolean
   sms?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  push?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 export type NotificationPreferenceListRelationFilter = {
@@ -325,6 +344,7 @@ export type NotificationPreferenceCountOrderByAggregateInput = {
   inApp?: Prisma.SortOrder
   email?: Prisma.SortOrder
   sms?: Prisma.SortOrder
+  push?: Prisma.SortOrder
 }
 
 export type NotificationPreferenceMaxOrderByAggregateInput = {
@@ -334,6 +354,7 @@ export type NotificationPreferenceMaxOrderByAggregateInput = {
   inApp?: Prisma.SortOrder
   email?: Prisma.SortOrder
   sms?: Prisma.SortOrder
+  push?: Prisma.SortOrder
 }
 
 export type NotificationPreferenceMinOrderByAggregateInput = {
@@ -343,6 +364,7 @@ export type NotificationPreferenceMinOrderByAggregateInput = {
   inApp?: Prisma.SortOrder
   email?: Prisma.SortOrder
   sms?: Prisma.SortOrder
+  push?: Prisma.SortOrder
 }
 
 export type NotificationPreferenceCreateNestedManyWithoutUserInput = {
@@ -393,6 +415,7 @@ export type NotificationPreferenceCreateWithoutUserInput = {
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
 }
 
 export type NotificationPreferenceUncheckedCreateWithoutUserInput = {
@@ -401,6 +424,7 @@ export type NotificationPreferenceUncheckedCreateWithoutUserInput = {
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
 }
 
 export type NotificationPreferenceCreateOrConnectWithoutUserInput = {
@@ -439,6 +463,7 @@ export type NotificationPreferenceScalarWhereInput = {
   inApp?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   email?: Prisma.BoolFilter<"NotificationPreference"> | boolean
   sms?: Prisma.BoolFilter<"NotificationPreference"> | boolean
+  push?: Prisma.BoolFilter<"NotificationPreference"> | boolean
 }
 
 export type NotificationPreferenceCreateManyUserInput = {
@@ -447,6 +472,7 @@ export type NotificationPreferenceCreateManyUserInput = {
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
 }
 
 export type NotificationPreferenceUpdateWithoutUserInput = {
@@ -455,6 +481,7 @@ export type NotificationPreferenceUpdateWithoutUserInput = {
   inApp?: Prisma.BoolFieldUpdateOperationsInput | boolean
   email?: Prisma.BoolFieldUpdateOperationsInput | boolean
   sms?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  push?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 export type NotificationPreferenceUncheckedUpdateWithoutUserInput = {
@@ -463,6 +490,7 @@ export type NotificationPreferenceUncheckedUpdateWithoutUserInput = {
   inApp?: Prisma.BoolFieldUpdateOperationsInput | boolean
   email?: Prisma.BoolFieldUpdateOperationsInput | boolean
   sms?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  push?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 export type NotificationPreferenceUncheckedUpdateManyWithoutUserInput = {
@@ -471,6 +499,7 @@ export type NotificationPreferenceUncheckedUpdateManyWithoutUserInput = {
   inApp?: Prisma.BoolFieldUpdateOperationsInput | boolean
   email?: Prisma.BoolFieldUpdateOperationsInput | boolean
   sms?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  push?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 
@@ -482,6 +511,7 @@ export type NotificationPreferenceSelect<ExtArgs extends runtime.Types.Extension
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["notificationPreference"]>
 
@@ -492,6 +522,7 @@ export type NotificationPreferenceSelectCreateManyAndReturn<ExtArgs extends runt
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["notificationPreference"]>
 
@@ -502,6 +533,7 @@ export type NotificationPreferenceSelectUpdateManyAndReturn<ExtArgs extends runt
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["notificationPreference"]>
 
@@ -512,9 +544,10 @@ export type NotificationPreferenceSelectScalar = {
   inApp?: boolean
   email?: boolean
   sms?: boolean
+  push?: boolean
 }
 
-export type NotificationPreferenceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "eventType" | "inApp" | "email" | "sms", ExtArgs["result"]["notificationPreference"]>
+export type NotificationPreferenceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "eventType" | "inApp" | "email" | "sms" | "push", ExtArgs["result"]["notificationPreference"]>
 export type NotificationPreferenceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
@@ -537,6 +570,7 @@ export type $NotificationPreferencePayload<ExtArgs extends runtime.Types.Extensi
     inApp: boolean
     email: boolean
     sms: boolean
+    push: boolean
   }, ExtArgs["result"]["notificationPreference"]>
   composites: {}
 }
@@ -967,6 +1001,7 @@ export interface NotificationPreferenceFieldRefs {
   readonly inApp: Prisma.FieldRef<"NotificationPreference", 'Boolean'>
   readonly email: Prisma.FieldRef<"NotificationPreference", 'Boolean'>
   readonly sms: Prisma.FieldRef<"NotificationPreference", 'Boolean'>
+  readonly push: Prisma.FieldRef<"NotificationPreference", 'Boolean'>
 }
     
 

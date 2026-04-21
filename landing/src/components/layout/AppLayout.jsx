@@ -13,6 +13,8 @@ import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
+import { useEventStream } from '../../lib/useEventStream.js'
+import { useHeartbeat } from '../../lib/useHeartbeat.js'
 import { JOURNEY_DEFAULT_SLOTS } from '../guide/slotActions.js'
 import { AppNav } from '@xo-arena/nav'
 
@@ -69,6 +71,8 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
     case 'table.created':
     case 'spectator.joined':
     case 'table.empty':
+    case 'table.started':
+    case 'table.completed':
     case 'table.deleted':
       return null
     // Seat changes ARE surfaced, but only for stakeholders (creator or
@@ -83,6 +87,7 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
         id,
         uiType:    'table',
         type:      'table',
+        tableId:   payload.tableId ?? null,
         title:     `${who} took ${seat}`,
         body:      `Your ${gameName} table`,
         href:      payload.tableId ? `/tables/${payload.tableId}` : null,
@@ -97,6 +102,7 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
         id,
         uiType:    'table',
         type:      'table',
+        tableId:   payload.tableId ?? null,
         title:     `${who} left ${seat}`,
         body:      `Your ${gameName} table`,
         href:      payload.tableId ? `/tables/${payload.tableId}` : null,
@@ -116,9 +122,6 @@ export default function AppLayout() {
   const isAdmin = location.pathname.startsWith('/admin')
   const [showSignIn, setShowSignIn] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  // Tracks the DB userId confirmed by the server after user:subscribe.
-  // Used to detect when the server dropped us from the online list.
-  const myPresenceIdRef = useRef(null)
 
   // Mirror of session?.user?.id (the betterAuthId) so the long-lived
   // guide:notification listener — registered once on mount — can filter
@@ -178,27 +181,32 @@ export default function AppLayout() {
           }
         })
       }
-      // Connect socket and explicitly subscribe — covers the case where the socket
-      // was already connected (so 'connect' won't fire) or reconnects mid-await.
+      // Connect the socket so journeyService can emit guide:journeyStep into
+      // our per-user room and so /play can reuse the live connection.
       getToken().then(token => {
         perfMark('AppLayout:token-resolved', token ? 'ok' : 'null')
         if (!token) return
         const socket = connectSocket(token)
-        if (socket.connected) {
-          perfMark('AppLayout:socket-already-connected')
-          socket.emit('user:subscribe', { authToken: token })
-        } else {
-          socket.once('connect', () => perfMark('AppLayout:socket-connected'))
-        }
+        if (socket.connected) perfMark('AppLayout:socket-already-connected')
+        else socket.once('connect', () => perfMark('AppLayout:socket-connected'))
       }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Holds the guide-notification handler so both the socket path and the
+  // Tier 2 SSE hook (below) can invoke the same logic. Declared here so the
+  // useEffect below can write into it.
+  const guideNotifHandlerRef      = useRef(null)
+  // Set by the presence effect below; called from the SSE 'presence:changed'
+  // handler to trigger a REST refetch.
+  const refreshOnlineFromRestRef  = useRef(null)
+  function refreshOnlineFromRest() { refreshOnlineFromRestRef.current?.() }
+
   // Socket guide listeners — registered once on mount.
-  // The 'connect' handler fires on EVERY connect/reconnect, ensuring user:subscribe
-  // is re-sent after backend restarts without needing a page reload.
+  // On every (re)connect, re-join the per-user socket room so journeyService
+  // can push guide:journeyStep to this tab after a backend restart.
   useEffect(() => {
     const socket = getSocket()
 
@@ -207,6 +215,13 @@ export default function AppLayout() {
       if (token) socket.emit('user:subscribe', { authToken: token })
     }
     function onGuideNotification({ type, payload = {}, expiresAt = null }) {
+      // When a game starts, the "took a seat" notifications for that table are
+      // stale — the game is underway so the seat context is already obvious.
+      // Dismiss them before the player finishes their game and opens the Guide.
+      if (type === 'table.started' && payload?.tableId) {
+        useGuideStore.getState().dismissNotificationsForTable(payload.tableId)
+        return
+      }
       // Stakeholder filter for seat-change events. These broadcast to every
       // connected client (list page + detail page seat strips need to react),
       // but the notification drawer should only surface them for users who
@@ -234,49 +249,102 @@ export default function AppLayout() {
       useGuideStore.getState().open()
     }
 
-    // Server confirms our presence DB userId — store it so we can detect self-removal.
-    function onSubscribed({ userId }) {
-      myPresenceIdRef.current = userId
-    }
-
-    function onOnlineUsers({ users }) {
-      useGuideStore.getState().setOnlineUsers(users)
-      // If the server no longer has us in the broadcast, re-subscribe immediately.
-      // This self-heals any silent presence drop without requiring a page refresh.
-      const myId = myPresenceIdRef.current
-      if (myId && socket.connected && !users.some(u => u.userId === myId)) {
-        getToken().then(token => {
-          if (token) socket.emit('user:subscribe', { authToken: token })
-        }).catch(() => {})
-      }
-    }
-
     socket.on('connect',            onConnect)
-    socket.on('guide:subscribed',   onSubscribed)
-    socket.on('guide:notification', onGuideNotification)
     socket.on('guide:journeyStep',  onJourneyStep)
-    socket.on('guide:onlineUsers',  onOnlineUsers)
-
-    // If already connected when this effect runs, subscribe immediately
     if (socket.connected) onConnect()
 
-    // Presence keepalive — fallback re-subscribe in case no broadcast arrives
-    // for an extended period (e.g. no other users connecting or disconnecting).
-    const keepalive = setInterval(async () => {
-      if (!socket.connected) return
-      const token = await getToken()
-      if (token) socket.emit('user:subscribe', { authToken: token })
-    }, 3 * 60_000)
+    // Expose the notification handler so the SSE hook below reuses the same
+    // filtering, sound, and panel-open logic.
+    guideNotifHandlerRef.current = onGuideNotification
 
     return () => {
-      clearInterval(keepalive)
       socket.off('connect',            onConnect)
-      socket.off('guide:subscribed',   onSubscribed)
-      socket.off('guide:notification', onGuideNotification)
       socket.off('guide:journeyStep',  onJourneyStep)
-      socket.off('guide:onlineUsers',  onOnlineUsers)
+      guideNotifHandlerRef.current = null
     }
   }, [])
+
+  // ── Tier 2 SSE subscription for guide notifications + presence ─────────────
+  // Presence membership changes trigger a REST refetch — state always derives
+  // from /presence/online rather than from socket payloads.
+  useEventStream({
+    channels: ['guide:', 'presence:'],
+    enabled: !!user?.id,
+    onEvent: (channel, payload) => {
+      if (channel === 'guide:notification') {
+        const handler = guideNotifHandlerRef.current
+        if (handler) handler(payload)
+        return
+      }
+      if (channel === 'presence:changed') {
+        refreshOnlineFromRest()
+      }
+    },
+  })
+
+  // ── Heartbeat: keep the user marked online on the backend ──────────────────
+  useHeartbeat({ enabled: !!user?.id })
+
+  // ── Initial + periodic /presence/online reconcile ──────────────────────────
+  // Refetched on presence:changed hints (above) and on tab-become-visible.
+  // 60s backstop poll catches membership changes on the rare path where a hint
+  // is missed.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    async function refresh() {
+      if (cancelled) return
+      try {
+        const r = await fetch('/api/v1/presence/online', { credentials: 'include' })
+        if (!r.ok) return
+        const { users } = await r.json()
+        useGuideStore.getState().setOnlineUsers(users ?? [])
+      } catch {}
+    }
+    // Exposed so the SSE handler above can trigger refetches on presence events.
+    refreshOnlineFromRestRef.current = refresh
+    refresh()
+    const timer = setInterval(refresh, 60_000)
+    const onVis = () => { if (!document.hidden) refresh() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVis)
+      refreshOnlineFromRestRef.current = null
+    }
+  }, [user?.id])
+
+  // ── Bootstrap undelivered notifications on sign-in ─────────────────────────
+  // SSE delivers live events, but a user signing in after being offline needs
+  // to catch up on queued UserNotification rows older than the Redis stream's
+  // 5-min replay horizon. One-shot REST fetch on sign-in, then POST-deliver.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = await getToken()
+        if (!token || cancelled) return
+        const res = await fetch('/api/v1/users/me/notifications', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok || cancelled) return
+        const { notifications } = await res.json()
+        if (!Array.isArray(notifications) || notifications.length === 0) return
+        const handler = guideNotifHandlerRef.current
+        for (const n of notifications) {
+          handler?.({ type: n.type, payload: n.payload ?? {}, expiresAt: n.expiresAt })
+        }
+        await fetch('/api/v1/users/me/notifications/deliver', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ids: notifications.map(n => n.id) }),
+        }).catch(() => {})
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [user?.id])
 
   async function handleSignOut() {
     await signOut()

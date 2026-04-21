@@ -1,5 +1,5 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { tournamentApi } from '../../lib/tournamentApi.js'
 import { getToken } from '../../lib/getToken.js'
@@ -38,6 +38,185 @@ function Spinner() {
 
 function ErrorMsg({ children }) {
   return <p className="text-sm py-2" style={{ color: 'var(--color-red-600)' }}>{children}</p>
+}
+
+/**
+ * Multi-select dropdown with checkbox items. `values` is a Set of selected
+ * option values; changes go through `onChange(nextSet)`. The button label
+ * is derived from the selected count: "All" when empty, a single option's
+ * label when exactly one is picked, "<first> +N" for more than one.
+ */
+function MultiSelectDropdown({ label, options, values, onChange, align = 'left' }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handle(e) { if (!rootRef.current?.contains(e.target)) setOpen(false) }
+    function onKey(e)  { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handle)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', handle)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  function toggle(v) {
+    const next = new Set(values)
+    if (next.has(v)) next.delete(v); else next.add(v)
+    onChange(next)
+  }
+  function clearAll() { onChange(new Set()) }
+
+  const summary = values.size === 0
+    ? 'All'
+    : values.size === 1
+      ? options.find(o => o.value === [...values][0])?.label ?? '1'
+      : `${options.find(o => o.value === [...values][0])?.label ?? '1'} +${values.size - 1}`
+
+  return (
+    <div ref={rootRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="appearance-none pl-3.5 pr-8 py-1.5 rounded-full border text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] relative"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+      >
+        {label}: {summary}
+        <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ color: 'var(--text-muted)' }}>
+          <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 min-w-[12rem] rounded-lg border py-1 z-30 shadow-lg`}
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+        >
+          <button
+            type="button"
+            onClick={clearAll}
+            className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-[var(--bg-surface-hover)] border-b"
+            style={{ color: values.size === 0 ? 'var(--color-primary)' : 'var(--text-muted)', borderColor: 'var(--border-default)' }}
+          >
+            {values.size === 0 ? '✓ All' : 'All (clear)'}
+          </button>
+          {options.map(opt => {
+            const on = values.has(opt.value)
+            return (
+              <label
+                key={opt.value}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => toggle(opt.value)}
+                  className="w-4 h-4 rounded accent-[var(--color-blue-600)]"
+                />
+                <span>{opt.label}</span>
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Single-select dropdown menu. `trigger` is the visible button; `items` is
+ * an array of { label, onSelect, disabled?, tone? ('default'|'danger'|'warn'),
+ * href? } — if `href` is set the item renders as a <Link>.
+ *
+ * Used both for per-row actions ("⋯" trigger) and top-of-list bulk actions.
+ * Closes on outside click, Escape, and after selecting an item.
+ */
+function ActionMenu({ trigger, items, align = 'right' }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handle(e) {
+      if (!rootRef.current?.contains(e.target)) setOpen(false)
+    }
+    function onKey(e) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handle)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', handle)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const visible = items.filter(Boolean)
+  const toneColor = {
+    default: 'var(--text-primary)',
+    danger:  'var(--color-red-600)',
+    warn:    'var(--color-amber-700)',
+  }
+
+  return (
+    <div ref={rootRef} className="relative inline-block">
+      {React.cloneElement(trigger, {
+        onClick: (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setOpen(o => !o)
+          trigger.props.onClick?.(e)
+        },
+        'aria-haspopup': 'menu',
+        'aria-expanded': open,
+      })}
+      {open && visible.length > 0 && (
+        <div
+          role="menu"
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 min-w-[11rem] rounded-lg border py-1 z-30 shadow-lg`}
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+        >
+          {visible.map((item, idx) => {
+            const color = toneColor[item.tone ?? 'default']
+            const disabled = !!item.disabled
+            const base = 'w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2'
+            if (item.href && !disabled) {
+              return (
+                <Link
+                  key={idx}
+                  to={item.href}
+                  state={item.state}
+                  role="menuitem"
+                  className={base + ' no-underline'}
+                  style={{ color }}
+                  onClick={() => setOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              )
+            }
+            return (
+              <button
+                key={idx}
+                role="menuitem"
+                type="button"
+                disabled={disabled}
+                onClick={() => { setOpen(false); item.onSelect?.() }}
+                className={base}
+                style={{ color }}
+                title={item.hint}
+              >
+                {item.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Bot Match Config ──────────────────────────────────────────────────────────
@@ -104,7 +283,7 @@ function BotMatchConfig({ token }) {
 // ── Bot Match Monitor ─────────────────────────────────────────────────────────
 
 function BotMatchMonitor({ token }) {
-  const [status, setStatus]   = useState(null)
+  const [status, setStatus]   = useState({ activeCount: 0, queueDepth: 0, jobs: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
@@ -116,11 +295,7 @@ function BotMatchMonitor({ token }) {
     finally { setLoading(false) }
   }, [token])
 
-  useEffect(() => {
-    fetchStatus()
-    const id = setInterval(fetchStatus, 10000)
-    return () => clearInterval(id)
-  }, [fetchStatus])
+  useEffect(() => { fetchStatus() }, [fetchStatus])
 
   function truncId(id) {
     if (!id) return '—'
@@ -699,7 +874,18 @@ export default function AdminTournamentsPage() {
   const [actionError, setActionError] = useState(null)
   const [token, setToken]     = useState(null)
   const [modal, setModal]         = useState(null)
-  const [statusFilter, setStatusFilter] = useState('')
+  // Multi-select status filter. Empty Set == show all. Filtering is applied
+  // client-side because the list endpoint only supports a single status
+  // query param and the admin page already loads + paginates in-browser.
+  const [statusFilters, setStatusFilters] = useState(() => new Set())
+  const [showTest, setShowTest]   = useState(false)   // default OFF
+  const [purging, setPurging]     = useState(false)
+  // Bulk selection — keyed by tournament id. Clears whenever the page or
+  // filter changes (stale selections across filter switches would be
+  // confusing and the server-side state may have moved on).
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [bulkBusy, setBulkBusy]       = useState(false)
+  useEffect(() => { setSelectedIds(new Set()) }, [page, statusFilters, showTest])
 
   const totalPages = Math.ceil(total / LIMIT)
   const isAdmin = session?.user?.role === 'admin'
@@ -708,15 +894,22 @@ export default function AdminTournamentsPage() {
     getToken().then(setToken).catch(() => {})
   }, [])
 
-  const load = useCallback(async (p, filter) => {
+  const load = useCallback(async (p, filters, withTest) => {
     if (!token) return
     setLoading(true); setError(null)
     try {
-      const params = filter ? { status: filter } : {}
+      const params = {}
+      if (withTest) params.includeTest = true
       const data = await tournamentApi.list(params, token)
       let list = Array.isArray(data) ? data : (data.tournaments ?? [])
-      // Hide cancelled-before-publish drafts unless explicitly viewing Cancelled
-      if (filter !== 'CANCELLED') {
+      // Multi-status filter: empty set == show all.
+      if (filters && filters.size > 0) {
+        list = list.filter(t => filters.has(t.status))
+      }
+      // Hide cancelled-before-publish drafts unless explicitly viewing Cancelled.
+      // Works with multi-select: only applies when CANCELLED isn't selected.
+      const viewingCancelled = filters?.has('CANCELLED')
+      if (!viewingCancelled) {
         list = list.filter(t =>
           t.status !== 'CANCELLED' || (t._count?.participants ?? 0) > 0
         )
@@ -728,7 +921,7 @@ export default function AdminTournamentsPage() {
     finally { setLoading(false) }
   }, [token])
 
-  useEffect(() => { if (token) load(page, statusFilter) }, [token, page, statusFilter, load])
+  useEffect(() => { if (token) load(page, statusFilters, showTest) }, [token, page, statusFilters, showTest, load])
 
   if (isPending) return (
     <div className="flex items-center justify-center py-24">
@@ -737,11 +930,119 @@ export default function AdminTournamentsPage() {
   )
   if (!isAdmin) return <Navigate to="/" replace />
 
+  async function handlePurgeCancelled() {
+    if (!confirm('Delete ALL cancelled tournaments permanently? This cannot be undone.')) return
+    setPurging(true); setActionError(null)
+    try {
+      const { deleted } = await tournamentApi.purgeCancelled(token)
+      alert(`Deleted ${deleted} cancelled tournament${deleted === 1 ? '' : 's'}.`)
+      load(page, statusFilters, showTest)
+    } catch (e) { setActionError(e.message || 'Purge failed.') }
+    finally { setPurging(false) }
+  }
+
+  async function handlePurgeTest() {
+    if (!confirm('Delete ALL test-flagged tournaments permanently? This removes every tournament with the TEST badge, regardless of status. This cannot be undone.')) return
+    setPurging(true); setActionError(null)
+    try {
+      const { deleted } = await tournamentApi.purgeTest(token)
+      alert(`Deleted ${deleted} test tournament${deleted === 1 ? '' : 's'}.`)
+      load(page, statusFilters, showTest)
+    } catch (e) { setActionError(e.message || 'Purge test failed.') }
+    finally { setPurging(false) }
+  }
+
+  async function handleCheckRecurring() {
+    setActionError(null)
+    try {
+      const summary = await tournamentApi.triggerRecurringCheck(token)
+      const msg = `Recurring sweep: ${summary.templatesChecked} template${summary.templatesChecked === 1 ? '' : 's'} checked, ${summary.occurrencesCreated} new occurrence${summary.occurrencesCreated === 1 ? '' : 's'} created${summary.errors ? ` (${summary.errors} error${summary.errors === 1 ? '' : 's'})` : ''}.`
+      alert(msg)
+      load(page, statusFilters, showTest)
+    } catch (e) { setActionError(e.message || 'Recurring check failed.') }
+  }
+
   async function performAction(action, tournament, label) {
     if (!confirm(`${label} "${tournament.name}"?`)) return
     setActionError(null)
-    try { await tournamentApi[action](tournament.id, token); load(page, statusFilter) }
+    try { await tournamentApi[action](tournament.id, token); load(page, statusFilters, showTest) }
     catch (e) { setActionError(e.message || `${label} failed.`) }
+  }
+
+  async function toggleTestFlag(tournament) {
+    const next = !tournament.isTest
+    const verb = next ? 'Mark as test' : 'Unmark as test'
+    if (!confirm(`${verb} "${tournament.name}"?${next ? '\n\nIt will be hidden from the public tournaments page.' : ''}`)) return
+    setActionError(null)
+    try { await tournamentApi.update(tournament.id, { isTest: next }, token); load(page, statusFilters, showTest) }
+    catch (e) { setActionError(e.message || `${verb} failed.`) }
+  }
+
+  function toggleSelected(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  function selectAllCurrent() {
+    setSelectedIds(prev => {
+      const allIds = tournaments.map(t => t.id)
+      const allSelected = allIds.every(id => prev.has(id))
+      return allSelected ? new Set() : new Set(allIds)
+    })
+  }
+
+  /**
+   * Apply `action` to every currently-selected tournament. `action` is one of:
+   *   'publish' | 'start' | 'cancel' | 'markTest' | 'unmarkTest'.
+   * Runs per-tournament in parallel; reports succeeded/skipped/failed counts.
+   * 'Skipped' = tournament is not in a valid state for the action (e.g. you
+   * chose Publish but the tournament is already IN_PROGRESS).
+   */
+  async function performBulk(action) {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    const label = {
+      publish: 'Publish', start: 'Start', cancel: 'Cancel',
+      markTest: 'Mark as test', unmarkTest: 'Unmark as test',
+    }[action] ?? action
+    if (!confirm(`${label} ${ids.length} tournament${ids.length === 1 ? '' : 's'}?`)) return
+
+    setBulkBusy(true); setActionError(null)
+    const selected = tournaments.filter(t => selectedIds.has(t.id))
+    let ok = 0, skipped = 0, failed = 0
+    const results = await Promise.all(selected.map(async (t) => {
+      try {
+        if (action === 'publish') {
+          if (t.status !== 'DRAFT') return 'skip'
+          await tournamentApi.publish(t.id, token)
+        } else if (action === 'start') {
+          if (t.status !== 'REGISTRATION_OPEN' && t.status !== 'REGISTRATION_CLOSED') return 'skip'
+          await tournamentApi.start(t.id, token)
+        } else if (action === 'cancel') {
+          if (t.status === 'COMPLETED' || t.status === 'CANCELLED') return 'skip'
+          await tournamentApi.cancel(t.id, token)
+        } else if (action === 'markTest') {
+          if (t.isTest) return 'skip'
+          await tournamentApi.update(t.id, { isTest: true }, token)
+        } else if (action === 'unmarkTest') {
+          if (!t.isTest) return 'skip'
+          await tournamentApi.update(t.id, { isTest: false }, token)
+        }
+        return 'ok'
+      } catch { return 'fail' }
+    }))
+    for (const r of results) {
+      if (r === 'ok') ok++; else if (r === 'skip') skipped++; else failed++
+    }
+    setBulkBusy(false)
+    setSelectedIds(new Set())
+    const parts = [`${ok} ${label.toLowerCase()}ed`]
+    if (skipped) parts.push(`${skipped} skipped (not eligible)`)
+    if (failed)  parts.push(`${failed} failed`)
+    alert(parts.join(' · '))
+    load(page, statusFilters, showTest)
   }
 
   return (
@@ -752,45 +1053,110 @@ export default function AdminTournamentsPage() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Status filter chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { label: 'All',         value: '' },
+          <MultiSelectDropdown
+            label="Status"
+            align="left"
+            values={statusFilters}
+            onChange={(next) => { setStatusFilters(next); setPage(1) }}
+            options={[
               { label: 'Draft',       value: 'DRAFT' },
               { label: 'Open',        value: 'REGISTRATION_OPEN' },
               { label: 'Reg Closed',  value: 'REGISTRATION_CLOSED' },
               { label: 'In Progress', value: 'IN_PROGRESS' },
               { label: 'Completed',   value: 'COMPLETED' },
               { label: 'Cancelled',   value: 'CANCELLED' },
-            ].map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => { setStatusFilter(opt.value); setPage(1) }}
-                className="px-3 py-1 rounded-full text-xs font-semibold border transition-colors"
-                style={{
-                  backgroundColor: statusFilter === opt.value ? 'var(--color-slate-700)' : 'var(--bg-surface)',
-                  color:           statusFilter === opt.value ? '#fff'                    : 'var(--text-secondary)',
-                  borderColor:     statusFilter === opt.value ? 'var(--color-slate-700)' : 'var(--border-default)',
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
+            ]}
+          />
+          <div className="flex items-center gap-3 shrink-0">
+            <label className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showTest}
+                onChange={e => { setShowTest(e.target.checked); setPage(1) }}
+                className="w-4 h-4 rounded accent-[var(--color-amber-600)]"
+              />
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Show test tournaments
+              </span>
+            </label>
+            <button onClick={handlePurgeCancelled} disabled={purging}
+              className="px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--color-red-50)] disabled:opacity-40"
+              style={{ borderColor: 'var(--color-red-300)', color: 'var(--color-red-600)' }}>
+              {purging ? 'Purging…' : 'Purge Cancelled'}
+            </button>
+            <button onClick={handlePurgeTest} disabled={purging}
+              className="px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--color-amber-50)] disabled:opacity-40"
+              style={{ borderColor: 'var(--color-amber-300)', color: 'var(--color-amber-700)' }}
+              title="Permanently delete every tournament flagged as test (any status).">
+              {purging ? 'Purging…' : 'Purge Test'}
+            </button>
+            <button onClick={handleCheckRecurring}
+              className="px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--color-slate-50)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              title="Fire the recurring-occurrence scheduler now instead of waiting for the next 60s tick.">
+              Check Recurring
+            </button>
+            <button onClick={() => setModal('create')}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))' }}>
+              + Create Tournament
+            </button>
           </div>
-          <button onClick={() => setModal('create')}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 shrink-0"
-            style={{ background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700))' }}>
-            + Create Tournament
-          </button>
         </div>
 
         {actionError && <ErrorMsg>{actionError}</ErrorMsg>}
         {loading && <Spinner />}
         {error && <ErrorMsg>{error}</ErrorMsg>}
 
+        {/* Bulk-action bar — visible whenever at least one row is selected. */}
+        {!loading && selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2 border"
+               style={{ backgroundColor: 'var(--color-blue-50)', borderColor: 'var(--color-blue-200)' }}>
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-blue-700)' }}>
+              {selectedIds.size} selected
+            </span>
+            <ActionMenu
+              align="left"
+              trigger={
+                <button
+                  disabled={bulkBusy}
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40"
+                  style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  {bulkBusy ? 'Working…' : 'Bulk actions ▾'}
+                </button>
+              }
+              items={[
+                { label: 'Publish',         onSelect: () => performBulk('publish') },
+                { label: 'Start',           onSelect: () => performBulk('start') },
+                { label: 'Cancel',          onSelect: () => performBulk('cancel'), tone: 'danger' },
+                { label: 'Mark as test',    onSelect: () => performBulk('markTest'),    tone: 'warn' },
+                { label: 'Unmark test',     onSelect: () => performBulk('unmarkTest'),  tone: 'warn' },
+              ]}
+            />
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="ml-auto text-xs px-2 py-1 rounded transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
+
         {!loading && (
           <ListTable fitViewport bottomPadding={160}>
             <thead>
               <tr>
+                <ListTh>
+                  <input
+                    type="checkbox"
+                    aria-label={tournaments.length > 0 && tournaments.every(t => selectedIds.has(t.id)) ? 'Deselect all' : 'Select all'}
+                    checked={tournaments.length > 0 && tournaments.every(t => selectedIds.has(t.id))}
+                    onChange={selectAllCurrent}
+                    className="w-4 h-4 rounded accent-[var(--color-blue-600)]"
+                  />
+                </ListTh>
                 <ListTh>Name</ListTh>
                 <ListTh className="hidden sm:table-cell">Status</ListTh>
                 <ListTh className="hidden md:table-cell">Format</ListTh>
@@ -811,9 +1177,34 @@ export default function AdminTournamentsPage() {
                 return (
                   <ListTr key={t.id} last={i === tournaments.length - 1}>
                     <ListTd>
-                      <Link to={`/tournaments/${t.id}`} className="font-medium text-sm hover:underline" style={{ color: 'var(--text-primary)' }}>
-                        {t.name}
-                      </Link>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${t.name}`}
+                        checked={selectedIds.has(t.id)}
+                        onChange={() => toggleSelected(t.id)}
+                        className="w-4 h-4 rounded accent-[var(--color-blue-600)]"
+                      />
+                    </ListTd>
+                    <ListTd>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          to={`/tournaments/${t.id}`}
+                          state={{ from: '/admin/tournaments' }}
+                          className="font-medium text-sm hover:underline"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {t.name}
+                        </Link>
+                        {t.isTest && (
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                            style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)', border: '1px solid var(--color-amber-300)' }}
+                            title="Test tournament — hidden from public list"
+                          >
+                            Test
+                          </span>
+                        )}
+                      </div>
                       {t.description && (
                         <p className="text-[10px] truncate max-w-[180px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.description}</p>
                       )}
@@ -839,33 +1230,27 @@ export default function AdminTournamentsPage() {
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t.startTime ? new Date(t.startTime).toLocaleString() : '—'}</span>
                     </ListTd>
                     <ListTd align="right">
-                      <div className="flex items-center gap-1 justify-end flex-wrap">
-                        {t.status !== 'DRAFT' && (
-                          <Link to={`/tournaments/${t.id}`}
-                            className="text-xs px-2 py-1 rounded border no-underline transition-colors hover:bg-[var(--bg-surface-hover)]"
-                            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>View</Link>
-                        )}
-                        {canEdit && (
-                          <button onClick={() => setModal({ tournament: t })}
-                            className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
-                            style={{ borderColor: 'var(--color-blue-300)', color: 'var(--color-blue-600)' }}>Edit</button>
-                        )}
-                        {canPublish && (
-                          <button onClick={() => performAction('publish', t, 'Publish')}
-                            className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-slate-50)]"
-                            style={{ borderColor: 'var(--color-slate-300)', color: 'var(--color-slate-600)' }}>Publish</button>
-                        )}
-                        {canStart && (
-                          <button onClick={() => performAction('start', t, 'Start')}
-                            className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-blue-50)]"
-                            style={{ borderColor: 'var(--color-blue-300)', color: 'var(--color-blue-600)' }}>Start</button>
-                        )}
-                        {canCancel && (
-                          <button onClick={() => performAction('cancel', t, 'Cancel')}
-                            className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)]"
-                            style={{ borderColor: 'var(--color-red-300)', color: 'var(--color-red-600)' }}>Cancel</button>
-                        )}
-                      </div>
+                      <ActionMenu
+                        align="right"
+                        trigger={
+                          <button
+                            className="text-sm px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                            aria-label="Tournament actions"
+                            title="Actions"
+                          >
+                            ⋯
+                          </button>
+                        }
+                        items={[
+                          t.status !== 'DRAFT' && { label: 'View',    href: `/tournaments/${t.id}`, state: { from: '/admin/tournaments' } },
+                          canEdit                && { label: 'Edit',    onSelect: () => setModal({ tournament: t }) },
+                          canPublish             && { label: 'Publish', onSelect: () => performAction('publish', t, 'Publish') },
+                          canStart               && { label: 'Start',   onSelect: () => performAction('start',   t, 'Start') },
+                          canCancel              && { label: 'Cancel',  onSelect: () => performAction('cancel',  t, 'Cancel'), tone: 'danger' },
+                          { label: t.isTest ? 'Unmark test' : 'Mark as test', onSelect: () => toggleTestFlag(t), tone: 'warn' },
+                        ]}
+                      />
                     </ListTd>
                   </ListTr>
                 )
@@ -912,7 +1297,7 @@ export default function AdminTournamentsPage() {
         <TournamentModal
           tournament={modal === 'create' ? null : modal.tournament}
           token={token}
-          onSaved={() => { setModal(null); load(page, statusFilter) }}
+          onSaved={() => { setModal(null); load(page, statusFilters, showTest) }}
           onClose={() => setModal(null)}
         />
       )}

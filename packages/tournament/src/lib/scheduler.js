@@ -20,7 +20,6 @@ const INTERVAL_MS = 60 * 1000 // 1 minute
 const sentWarnings = new Set()
 
 let lastDemotionReviewDate = null
-let lastOccurrenceCheckDate = null
 let lastRetentionCheckDate = null
 
 /**
@@ -52,14 +51,14 @@ export async function runSchedulerTick() {
     runDemotionReview().catch(err => logger.error({ err }, 'Demotion review failed'))
   }
 
-  // Daily recurring occurrence check
-  const todayDate = new Date().toISOString().slice(0, 10)
-  if (lastOccurrenceCheckDate !== todayDate) {
-    lastOccurrenceCheckDate = todayDate
-    checkRecurringOccurrences().catch(err =>
-      logger.error({ err }, 'Recurring occurrence check failed')
-    )
-  }
+  // Recurring occurrence check — runs every tick (1 minute). The function
+  // itself is a single findMany + dedup against existing rows, so it's cheap
+  // when there are no templates due. Running per-tick means DAILY recurrences
+  // spawn their next occurrence immediately on completion, instead of waiting
+  // up to 24 h for the next date boundary.
+  checkRecurringOccurrences().catch(err =>
+    logger.error({ err }, 'Recurring occurrence check failed')
+  )
 
   // Daily replay retention cleanup
   const retentionDate = new Date().toISOString().slice(0, 10)
@@ -294,7 +293,7 @@ async function checkFlashClose() {
 
 // ─── Recurring tournament occurrence generation ────────────────────────────────
 
-async function checkRecurringOccurrences() {
+export async function checkRecurringOccurrences() {
   try {
     // Find recurring template tournaments that have COMPLETED and need a new occurrence
     const templates = await db.tournament.findMany({
@@ -371,6 +370,27 @@ async function checkRecurringOccurrences() {
             })
           } catch {
             // May already be registered; skip
+          }
+        }
+
+        // Auto-enroll seed bots from the template into the new occurrence
+        const seedBots = await db.tournamentSeedBot.findMany({
+          where: { tournamentId: template.id },
+        })
+        for (const seed of seedBots) {
+          try {
+            await db.tournamentParticipant.upsert({
+              where: { tournamentId_userId: { tournamentId: occurrence.id, userId: seed.userId } },
+              create: { tournamentId: occurrence.id, userId: seed.userId, status: 'REGISTERED', registrationMode: 'SINGLE' },
+              update: { status: 'REGISTERED' },
+            })
+            await db.tournamentSeedBot.upsert({
+              where: { tournamentId_userId: { tournamentId: occurrence.id, userId: seed.userId } },
+              create: { tournamentId: occurrence.id, userId: seed.userId },
+              update: {},
+            })
+          } catch (err) {
+            logger.warn({ err, seedBotUserId: seed.userId }, 'Failed to enroll seed bot in recurring occurrence')
           }
         }
 

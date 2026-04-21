@@ -5,21 +5,26 @@ import { io } from 'socket.io-client'
 // using window.location.host. io(undefined) correctly defaults to the current origin.
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined
 
-// Polling-only on every environment.
+// WebSocket-only on every environment.
 //
-// In dev: Vite's proxy fires a rapid connect/disconnect cycle on the
-// HTTP→WebSocket upgrade and races with backend event handlers.
+// History: we previously used polling-only because the polling→websocket
+// *upgrade* negotiation was flaky through both Vite's dev proxy and the
+// landing express + http-proxy-middleware chain on Fly. That avoided the
+// upgrade race, but polling XHRs get aborted constantly by Safari when the
+// tab backgrounds or the network blips — and WebKit logs every aborted XHR
+// as a misleading "XMLHttpRequest cannot load … due to access control
+// checks" in the console. Each disconnect emits two such errors (original
+// poll + close-packet POST that also fails), cluttering the console on
+// every page.
 //
-// In prod: the same upgrade fails through the landing express + http-proxy-
-// middleware proxy chain on Fly. The failed upgrade kills the polling
-// session server-side, the next poll returns 400, socket.io reconnects,
-// tries to upgrade again, fails again — a 3–4s cascade that delays the
-// game from appearing.
-//
-// Polling-only sidesteps the upgrade entirely. Slightly higher per-event
-// latency (~50ms vs ~10ms) but a stable connection with no error cascade.
-// Revisit if the proxy WebSocket forwarding gets fixed (see Game_System_Audit).
-const TRANSPORTS = ['polling']
+// WebSocket-only sidesteps XHR entirely: one long-lived connection, no
+// aborted polling requests, no Safari log spam. Both proxy layers already
+// forward WebSocket correctly (Vite has `ws: true`; landing/server.js has
+// `ws: true` + `server.on('upgrade', backendProxy.upgrade)`). If the
+// handshake ever fails, socket.io emits `connect_error` and the app has
+// no real-time — very visible, easy to catch in QA. Revert to `polling` if
+// that happens.
+const TRANSPORTS = ['websocket']
 
 let _socket = null
 
@@ -28,8 +33,6 @@ export function getSocket() {
     _socket = io(SOCKET_URL, {
       autoConnect: false,
       transports: TRANSPORTS,
-      upgrade: false,           // never attempt polling → websocket upgrade
-      rememberUpgrade: false,
     })
     _socket.on('connect_error', () => {})
   }
@@ -47,26 +50,24 @@ export function disconnectSocket() {
   if (_socket?.connected) _socket.disconnect()
 }
 
-// Handle tab suspension gracefully.
+// Reconnect the socket whenever the window/tab becomes visible or regains focus
+// and the socket has dropped.
 //
-// Safari (and iOS) freeze JS and then kill network connections when a tab is
-// backgrounded. Any in-flight polling XHR is aborted, which Safari reports as
-// "XMLHttpRequest cannot load … due to access control checks" — a misleading
-// error that actually means "connection killed by the browser".
+// Do NOT proactively disconnect on hide. A prior version disconnected Safari on
+// `visibilitychange: hidden` to work around aborted polling XHRs — but we're on
+// WebSocket-only now, and a proactive disconnect triggers the server's room
+// disconnect timer, which misfires on brief macOS Space switches / app-switches
+// and was the root cause of "Room not found" timeouts after short away periods.
 //
-// Strategy: only disconnect on hide in Safari (where the XHR is forcibly killed).
-// In other browsers, leaving the socket connected avoids the 400 race condition
-// that occurs when disconnect() closes the server session mid in-flight polling GET.
-const isSafari = typeof navigator !== 'undefined' &&
-  /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-
-if (typeof document !== 'undefined') {
+// Also listen to `window.focus`: macOS Space switches DON'T fire visibilitychange
+// (the tab stays "visible" per spec, the window is just on another Space), so
+// focus is the only reliable signal that the user has returned.
+if (typeof window !== 'undefined') {
+  function reconnectIfDropped() {
+    if (_socket && !_socket.connected) _socket.connect()
+  }
   document.addEventListener('visibilitychange', () => {
-    if (!_socket) return
-    if (document.visibilityState === 'hidden') {
-      if (isSafari && _socket.connected) _socket.disconnect()
-    } else {
-      if (!_socket.connected) _socket.connect()
-    }
+    if (document.visibilityState === 'visible') reconnectIfDropped()
   })
+  window.addEventListener('focus', reconnectIfDropped)
 }

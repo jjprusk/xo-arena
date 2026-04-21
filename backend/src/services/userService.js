@@ -325,7 +325,7 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
  */
 const VALID_ML_ALGORITHMS = ['qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero']
 
-export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId } = {}) {
+export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId, gameId = 'xo' } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
   const trimmedName = name.trim()
 
@@ -405,7 +405,7 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
           config: { ...ML_DEFAULT_CONFIG },
           createdBy: ownerBaId ?? ownerId,
           maxEpisodes,
-          gameId: 'xo',
+          gameId,
         },
       })
       const bot = await tx.user.create({
@@ -426,7 +426,7 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
       // Set botId on the skill now that we have the bot's user ID
       await tx.botSkill.update({ where: { id: skill.id }, data: { botId: bot.id } })
       // Create initial GameElo record for the bot
-      await tx.gameElo.create({ data: { userId: bot.id, gameId: 'xo', rating: 1200 } })
+      await tx.gameElo.create({ data: { userId: bot.id, gameId, rating: 1200 } })
       return bot
     })
   }

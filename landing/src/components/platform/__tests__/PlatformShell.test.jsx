@@ -20,15 +20,10 @@ const xoMeta = {
 // ── selectDefaultMode ─────────────────────────────────────────────────────────
 
 describe('selectDefaultMode', () => {
-  it('seated player actively playing → focused', () => {
-    expect(selectDefaultMode({ isSpectator: false, phase: 'playing' })).toBe('focused')
-  })
-  it('spectator → chrome-present regardless of phase', () => {
-    expect(selectDefaultMode({ isSpectator: true,  phase: 'playing' })).toBe('chrome-present')
-    expect(selectDefaultMode({ isSpectator: true,  phase: 'finished' })).toBe('chrome-present')
-  })
-  it('seated but waiting/finished → chrome-present', () => {
-    expect(selectDefaultMode({ isSpectator: false, phase: 'waiting' })).toBe('chrome-present')
+  it('always returns chrome-present — focused mode is removed', () => {
+    expect(selectDefaultMode({ isSpectator: false, phase: 'playing'  })).toBe('chrome-present')
+    expect(selectDefaultMode({ isSpectator: true,  phase: 'playing'  })).toBe('chrome-present')
+    expect(selectDefaultMode({ isSpectator: false, phase: 'waiting'  })).toBe('chrome-present')
     expect(selectDefaultMode({ isSpectator: false, phase: 'finished' })).toBe('chrome-present')
   })
 })
@@ -46,7 +41,7 @@ describe('resolveThemeVars', () => {
       light:  { '--game-mark-x': '#000' },
     }
     expect(resolveThemeVars(theme, true)).toEqual({
-      '--game-mark-x': '#eee',  // dark override wins
+      '--game-mark-x': '#eee',
       '--game-mark-o': '#222',
     })
   })
@@ -59,45 +54,46 @@ describe('resolveThemeVars', () => {
   })
 })
 
-// ── Rendering ─────────────────────────────────────────────────────────────────
+// ── Sidebar toggle ────────────────────────────────────────────────────────────
 
-describe('PlatformShell — focused mode', () => {
-  it('renders the game in a focused frame with back affordance', () => {
+describe('PlatformShell — sidebar toggle', () => {
+  it('shows sidebar by default with ← Back link and toggle button', () => {
     wrap(
       <PlatformShell gameMeta={xoMeta} phase="playing" session={{ isSpectator: false }}>
         <div data-testid="game">BOARD</div>
       </PlatformShell>,
     )
-    const frame = screen.getByTestId('game').closest('[data-shell-mode]')
-    expect(frame).toHaveAttribute('data-shell-mode', 'focused')
-    expect(screen.getByRole('link', { name: /back/i })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: /table context/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /← back/i })).toBeInTheDocument()
   })
 
-  it('honors initialMode="focused" even when the session would default otherwise', () => {
+  it('honors initialMode="focused" → sidebar hidden initially', () => {
     wrap(
       <PlatformShell gameMeta={xoMeta} session={{ isSpectator: true }} initialMode="focused">
         <div data-testid="game">BOARD</div>
       </PlatformShell>,
     )
-    const frame = screen.getByTestId('game').closest('[data-shell-mode]')
-    expect(frame).toHaveAttribute('data-shell-mode', 'focused')
+    expect(screen.queryByRole('complementary', { name: /table context/i })).toBeNull()
   })
 
-  it('toggling ⤢ switches to chrome-present mode and reveals the sidebar', () => {
+  it('sidebar toggle button hides and re-shows the info panel', () => {
     wrap(
-      <PlatformShell gameMeta={xoMeta} phase="playing" session={{ isSpectator: false }}>
+      <PlatformShell gameMeta={xoMeta} session={{ isSpectator: true }}>
         <div data-testid="game">BOARD</div>
       </PlatformShell>,
     )
-    fireEvent.click(screen.getByRole('button', { name: /show table context/i }))
-    const frame = screen.getByTestId('game').closest('[data-shell-mode]')
-    expect(frame).toHaveAttribute('data-shell-mode', 'chrome-present')
+    expect(screen.getByRole('complementary', { name: /table context/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /hide info panel/i }))
+    expect(screen.queryByRole('complementary', { name: /table context/i })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /show info panel/i }))
     expect(screen.getByRole('complementary', { name: /table context/i })).toBeInTheDocument()
   })
 })
 
-describe('PlatformShell — chrome-present mode', () => {
-  it('renders the table context sidebar with game title + status + players', () => {
+// ── Sidebar content ───────────────────────────────────────────────────────────
+
+describe('PlatformShell — sidebar content', () => {
+  it('renders game title, status, players, and spectator count', () => {
     wrap(
       <PlatformShell
         gameMeta={xoMeta}

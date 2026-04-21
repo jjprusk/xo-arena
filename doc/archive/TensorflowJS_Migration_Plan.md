@@ -1,4 +1,8 @@
 <!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
+> **SUPERSEDED** — Architecture direction changed 2026-04-19. Neural model training moves to
+> server-side PyTorch; client inference uses ONNX Runtime Web. Tabular models (Q-learning,
+> SARSA) remain browser-trained. See `doc/ML_Training_Architecture.md`.
+
 # TensorFlow.js Migration Plan
 
 ## Overview

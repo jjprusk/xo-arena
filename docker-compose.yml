@@ -66,6 +66,9 @@ services:
       BACKEND_URL: http://backend:3000
       TOURNAMENT_URL: http://tournament:3001
       VITE_XO_URL: http://localhost:5173
+      # Web Push VAPID public key — the matching private key stays in
+      # backend/.env only. Safe to expose to the browser.
+      VITE_VAPID_PUBLIC_KEY: "BKJBje66cklVt-3V4Mzc21yv_6YEPgZ3c0xvpyD-kLouNIm1mqP70T0ta56Z7DtuVggkcBuKPTv8j5CvJh6HZrU"
     ports:
       - "5174:5174"
     volumes:

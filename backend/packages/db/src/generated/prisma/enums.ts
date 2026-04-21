@@ -237,3 +237,12 @@ export const ClassificationTier = {
 } as const
 
 export type ClassificationTier = (typeof ClassificationTier)[keyof typeof ClassificationTier]
+
+
+export const TableStatus = {
+  FORMING: 'FORMING',
+  ACTIVE: 'ACTIVE',
+  COMPLETED: 'COMPLETED'
+} as const
+
+export type TableStatus = (typeof TableStatus)[keyof typeof TableStatus]

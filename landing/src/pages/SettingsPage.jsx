@@ -5,6 +5,13 @@ import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 import { useNotifSoundStore, NOTIF_SOUND_TYPES } from '../store/notifSoundStore.js'
 import { changePassword } from '../lib/auth-client.js'
+import {
+  isPushSupported,
+  currentPermission,
+  subscribePush,
+  unsubscribePush,
+  hasActiveSubscription,
+} from '../lib/pushSubscribe.js'
 
 // ── Guide notification toggle groups ─────────────────────────────────────────
 // Each group maps to one or more event types on the backend.
@@ -66,6 +73,70 @@ export default function SettingsPage() {
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwSaving, setPwSaving] = useState(false)
   const [pwMsg, setPwMsg] = useState(null) // { ok: bool, text: string }
+
+  // Push notifications (Tier 3). Subscription status is per-browser; push
+  // event opt-ins are per-event-type and stored on NotificationPreference.
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushPermission, setPushPermission] = useState('default')
+  const [pushBusy, setPushBusy]             = useState(false)
+  const [pushMsg, setPushMsg]               = useState(null) // { ok, text }
+
+  useEffect(() => {
+    if (!user) return
+    setPushPermission(currentPermission())
+    hasActiveSubscription().then(setPushSubscribed).catch(() => setPushSubscribed(false))
+  }, [user?.id])
+
+  async function handleTogglePush(next) {
+    setPushBusy(true); setPushMsg(null)
+    try {
+      if (next) {
+        const res = await subscribePush()
+        if (res.ok) {
+          setPushSubscribed(true)
+          setPushPermission(currentPermission())
+        } else {
+          const reasonMsg = {
+            unsupported: 'Push notifications are not supported in this browser.',
+            denied:      'Notification permission was denied. Enable it in your browser settings.',
+            'no-vapid':  'Push is not configured on the server.',
+            'sw-failed': 'Service worker could not be registered.',
+            network:     'Could not reach the server. Try again.',
+          }[res.reason] ?? 'Could not enable push.'
+          setPushMsg({ ok: false, text: reasonMsg })
+          setPushPermission(currentPermission())
+        }
+      } else {
+        await unsubscribePush()
+        setPushSubscribed(false)
+      }
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  async function togglePushPref(eventType, value) {
+    const token = await getToken()
+    try {
+      await api.users.putNotifPref(eventType, { push: value }, token)
+      setNotifPrefs(prev => ({ ...prev, [eventType]: { ...(prev?.[eventType] ?? {}), push: value } }))
+    } catch {
+      // refetch on error
+      getToken().then(t => api.users.getNotifPrefs(t)).then(rows => {
+        const map = {}
+        for (const r of rows) map[r.eventType] = r
+        setNotifPrefs(map)
+      }).catch(() => {})
+    }
+  }
+
+  const PUSH_EVENT_TYPES = [
+    { key: 'match.ready',             label: 'Match ready',          desc: 'Your tournament match is about to start.' },
+    { key: 'tournament.starting_soon', label: 'Tournament reminders', desc: 'Before your tournaments begin.' },
+    { key: 'tournament.started',      label: 'Tournament started',   desc: 'A tournament you joined has started.' },
+    { key: 'tournament.cancelled',    label: 'Tournament cancelled', desc: 'A tournament you joined was cancelled.' },
+    { key: 'achievement.tier_upgrade', label: 'Tier upgrades',       desc: 'When your rank goes up.' },
+  ]
 
   useEffect(() => {
     if (!user) return
@@ -190,6 +261,87 @@ export default function SettingsPage() {
                   </div>
                   <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Clicking a sound type plays a preview.</p>
                 </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Push notifications — Tier 3. Subscription is per-browser; toggles for
+          specific event types are per-account and stored on the server. */}
+      {user && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            Push notifications
+          </h2>
+          <div
+            className="rounded-xl border p-5 space-y-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            {!isPushSupported() ? (
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                Push notifications are not supported in this browser.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="pr-3">
+                    <div className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                      Enable push on this device
+                    </div>
+                    <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      Get notified even when this tab isn't open.
+                      {pushPermission === 'denied' && (
+                        <> You'll need to allow notifications in your browser settings first.</>
+                      )}
+                    </div>
+                  </div>
+                  <Toggle
+                    on={pushSubscribed}
+                    disabled={pushBusy || pushPermission === 'denied'}
+                    onChange={handleTogglePush}
+                    label={pushSubscribed ? 'Disable push on this device' : 'Enable push on this device'}
+                  />
+                </div>
+
+                {pushMsg && (
+                  <div
+                    className="text-xs rounded-lg px-3 py-2"
+                    style={{
+                      backgroundColor: pushMsg.ok ? 'rgba(16,185,129,0.08)' : 'rgba(220,38,38,0.08)',
+                      color: pushMsg.ok ? 'var(--color-green-700)' : 'var(--color-red-700)',
+                    }}
+                  >
+                    {pushMsg.text}
+                  </div>
+                )}
+
+                {pushSubscribed && notifPrefs !== null && (
+                  <>
+                    <div className="h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                        What to send
+                      </div>
+                      {PUSH_EVENT_TYPES.map(({ key, label, desc }) => {
+                        const on = notifPrefs[key]?.push === true
+                        return (
+                          <div key={key} className="flex items-center justify-between">
+                            <div className="pr-3">
+                              <div className="text-sm" style={{ color: 'var(--text-primary)' }}>{label}</div>
+                              <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{desc}</div>
+                            </div>
+                            <Toggle
+                              on={on}
+                              onChange={(v) => togglePushPref(key, v)}
+                              label={`${on ? 'Disable' : 'Enable'} ${label} push`}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>

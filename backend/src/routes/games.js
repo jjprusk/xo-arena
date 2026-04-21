@@ -113,6 +113,31 @@ router.post('/', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/games?tournamentMatchId=X
+ * Returns the list of games played in a tournament match (best-of-N series).
+ * No auth required — tournament results are public.
+ */
+router.get('/', async (req, res, next) => {
+  try {
+    const { tournamentMatchId } = req.query
+    if (!tournamentMatchId) return res.status(400).json({ error: 'tournamentMatchId required' })
+    const games = await db.game.findMany({
+      where: { tournamentMatchId },
+      select: {
+        id: true, outcome: true, winnerId: true, totalMoves: true,
+        startedAt: true, endedAt: true,
+        player1: { select: { id: true, displayName: true } },
+        player2: { select: { id: true, displayName: true } },
+      },
+      orderBy: { startedAt: 'asc' },
+    })
+    res.json({ games })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/games/:id/replay
  * Returns a game record with its moveStream for replay.
  * Returns 404 if game not found, 410 if moveStream has been purged.

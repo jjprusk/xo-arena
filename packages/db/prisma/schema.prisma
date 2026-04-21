@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -8,48 +9,50 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  clerkId         String?          @unique
-  username        String           @unique
-  email           String           @unique
-  displayName     String
-  avatarUrl       String?
-  oauthProvider   String?
-  preferences     Json             @default("{}")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  banned          Boolean          @default(false)
-  skillLimit      Int?
-  betterAuthId    String?          @unique
-  botActive       Boolean          @default(true)
-  botAvailable    Boolean          @default(false)
-  botProvisional  Boolean          @default(false)
-  botCompetitive  Boolean          @default(false)
-  botInTournament Boolean          @default(false)
-  botLimit        Int?
-  botModelId      String?          @unique
-  botModelType    String?
-  botOwnerId      String?
-  isBot           Boolean          @default(false)
-  nameConfirmed   Boolean          @default(false)
-  lastActiveAt      DateTime?
-  botEloResetAt     DateTime?
-  botGamesPlayed    Int              @default(0)
-  creditsHpc        Int              @default(0)
-  creditsBpc        Int              @default(0)
-  creditsTc         Int              @default(0)
-  emailAchievements Boolean          @default(false)
-  gamesAsPlayer1        Game[]                  @relation("Player1Games")
-  gamesAsPlayer2        Game[]                  @relation("Player2Games")
-  gamesWon              Game[]                  @relation("WinnerGames")
-  eloHistory            UserEloHistory[]
-  userRoles             UserRole[]
-  notifications         UserNotification[]
-  notifPreferences      NotificationPreference[]
-  feedback              Feedback[]
+  id                     String                   @id @default(cuid())
+  clerkId                String?                  @unique
+  username               String                   @unique
+  email                  String                   @unique
+  displayName            String
+  avatarUrl              String?
+  oauthProvider          String?
+  preferences            Json                     @default("{}")
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  banned                 Boolean                  @default(false)
+  skillLimit             Int?
+  betterAuthId           String?                  @unique
+  botActive              Boolean                  @default(true)
+  botAvailable           Boolean                  @default(false)
+  botProvisional         Boolean                  @default(false)
+  botCompetitive         Boolean                  @default(false)
+  botInTournament        Boolean                  @default(false)
+  botLimit               Int?
+  botModelId             String?                  @unique
+  botModelType           String?
+  botOwnerId             String?
+  isBot                  Boolean                  @default(false)
+  botEloResetAt          DateTime?
+  botGamesPlayed         Int                      @default(0)
+  creditsBpc             Int                      @default(0)
+  creditsHpc             Int                      @default(0)
+  creditsTc              Int                      @default(0)
+  nameConfirmed          Boolean                  @default(false)
+  lastActiveAt           DateTime?
+  emailAchievements      Boolean                  @default(false)
+  feedback               Feedback[]
+  gameElo                GameElo[]
+  gamesAsPlayer1         Game[]                   @relation("Player1Games")
+  gamesAsPlayer2         Game[]                   @relation("Player2Games")
+  gamesWon               Game[]                   @relation("WinnerGames")
+  notifPreferences       NotificationPreference[]
+  classification         PlayerClassification?
   tournamentParticipants TournamentParticipant[]
-  classification PlayerClassification?
-  gameElo               GameElo[]
+  eloHistory             UserEloHistory[]
+  notifications          UserNotification[]
+  pushSubscriptions      PushSubscription[]
+  userRoles              UserRole[]
+  seedBotConfigs         TournamentSeedBot[]
 
   @@map("users")
 }
@@ -58,12 +61,11 @@ model Feedback {
   id             String           @id @default(cuid())
   appId          String           @default("xo-arena")
   userId         String?
-  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   category       FeedbackCategory @default(OTHER)
   status         FeedbackStatus   @default(OPEN)
   message        String
   pageUrl        String
-  screenshotData String?          @db.Text
+  screenshotData String?
   userAgent      String?
   resolutionNote String?
   resolvedAt     DateTime?
@@ -71,6 +73,7 @@ model Feedback {
   archivedAt     DateTime?
   createdAt      DateTime         @default(now())
   readAt         DateTime?
+  user           User?            @relation(fields: [userId], references: [id])
   replies        FeedbackReply[]
 
   @@index([appId])
@@ -84,10 +87,10 @@ model Feedback {
 model FeedbackReply {
   id         String   @id @default(cuid())
   feedbackId String
-  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
   adminId    String
   message    String
   createdAt  DateTime @default(now())
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
 
   @@index([feedbackId])
   @@map("feedback_replies")
@@ -127,9 +130,9 @@ model GameElo {
   userId      String   @map("user_id")
   gameId      String   @map("game_id")
   rating      Float    @default(1200)
-  gamesPlayed Int      @default(0)  @map("games_played")
+  gamesPlayed Int      @default(0) @map("games_played")
   createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt      @map("updated_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, gameId])
@@ -138,8 +141,7 @@ model GameElo {
 }
 
 model Game {
-  id                 String      @id @default(cuid())
-  appId              String      @default("xo-arena")
+  id                 String           @id @default(cuid())
   player1Id          String
   player2Id          String?
   winnerId           String?
@@ -150,19 +152,20 @@ model Game {
   totalMoves         Int
   durationMs         Int
   startedAt          DateTime
-  endedAt            DateTime    @default(now())
+  endedAt            DateTime         @default(now())
   roomName           String?
+  appId              String           @default("xo-arena")
   tournamentId       String?
   tournamentMatchId  String?
-  isTournament       Boolean     @default(false)
+  isTournament       Boolean          @default(false)
   moveStream         Json?
   aiErrors           AIError[]
   player1            User             @relation("Player1Games", fields: [player1Id], references: [id])
   player2            User?            @relation("Player2Games", fields: [player2Id], references: [id])
-  winner             User?            @relation("WinnerGames", fields: [winnerId], references: [id])
-  moves              Move[]
   tournament         Tournament?      @relation(fields: [tournamentId], references: [id])
   tournamentMatch    TournamentMatch? @relation(fields: [tournamentMatchId], references: [id])
+  winner             User?            @relation("WinnerGames", fields: [winnerId], references: [id])
+  moves              Move[]
 
   @@index([outcome])
   @@index([aiImplementationId])
@@ -206,10 +209,10 @@ model AIError {
 }
 
 model BotSkill {
-  id             String              @id @default(cuid())
+  id             String              @id(map: "ml_models_pkey") @default(cuid())
   name           String
   description    String?
-  algorithm      String              @default("qlearning")
+  algorithm      String
   weights        Json                @default("{}")
   config         Json
   status         BotSkillStatus      @default(IDLE)
@@ -227,7 +230,7 @@ model BotSkill {
   playerProfiles MLPlayerProfile[]
   sessions       TrainingSession[]
 
-  @@unique([botId, gameId])
+  @@unique([botId, gameId], where: raw("(bot_id IS NOT NULL)"))
   @@map("bot_skills")
 }
 
@@ -451,10 +454,10 @@ model UserNotification {
   type        String
   payload     Json
   createdAt   DateTime  @default(now())
-  expiresAt   DateTime?
   deliveredAt DateTime?
   emailedAt   DateTime?
   readAt      DateTime?
+  expiresAt   DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, deliveredAt])
@@ -468,17 +471,26 @@ model NotificationPreference {
   inApp     Boolean @default(true)
   email     Boolean @default(false)
   sms       Boolean @default(false)
+  push      Boolean @default(false)
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventType])
   @@map("notification_preferences")
 }
 
-enum ScheduledJobStatus {
-  PENDING
-  RUNNING
-  DONE
-  FAILED
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model ScheduledJob {
@@ -495,6 +507,243 @@ model ScheduledJob {
 
   @@index([status, runAt])
   @@map("scheduled_jobs")
+}
+
+model Tournament {
+  id                      String                  @id @default(cuid())
+  name                    String
+  description             String?
+  game                    String
+  mode                    TournamentMode
+  format                  TournamentFormat
+  bracketType             BracketType
+  status                  TournamentStatus        @default(DRAFT)
+  minParticipants         Int                     @default(2)
+  maxParticipants         Int?
+  bestOfN                 Int                     @default(3)
+  botMinGamesPlayed       Int?
+  allowNonCompetitiveBots Boolean                 @default(false)
+  allowSpectators         Boolean                 @default(true)
+  startTime               DateTime?
+  endTime                 DateTime?
+  registrationOpenAt      DateTime?
+  registrationCloseAt     DateTime?
+  noticePeriodMinutes     Int?
+  durationMinutes         Int?
+  isRecurring             Boolean                 @default(false)
+  autoOptOutAfterMissed   Int?
+  createdById             String
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  paceMs                  Int?                    @map("pace_ms")
+  recurrenceInterval      RecurrenceInterval?
+  recurrenceEndDate       DateTime?
+  // Admin switch that halts generation of new occurrences without cancelling
+  // the template. Running occurrences are unaffected. Flip back to false to
+  // resume the schedule — the next sweep picks up where the interval left off.
+  recurrencePaused        Boolean                 @default(false)
+  startMode               TournamentStartMode     @default(AUTO)
+  // True when created by an automated test suite; hidden from the public
+  // /tournaments page (filtered at the API layer) and exposed behind an
+  // admin toggle. Never set by end users.
+  isTest                  Boolean                 @default(false)
+  games                   Game[]
+  participants            TournamentParticipant[]
+  rounds                  TournamentRound[]
+  seedBots                TournamentSeedBot[]
+
+  @@index([status])
+  @@index([game])
+  @@index([createdById])
+  @@map("tournaments")
+}
+
+model TournamentParticipant {
+  id                String            @id @default(cuid())
+  tournamentId      String
+  userId            String
+  seedPosition      Int?
+  eloAtRegistration Float?
+  status            ParticipantStatus @default(REGISTERED)
+  resultNotifPref   ResultNotifPref   @default(AS_PLAYED)
+  finalPosition     Int?
+  /// Normalised rank: 0.0 = winner (best), 1.0 = last place (worst). Null until tournament ends.
+  finalPositionPct  Float?
+  registeredAt      DateTime          @default(now())
+  points            Int               @default(0)
+  registrationMode  RegistrationMode  @default(SINGLE)
+  tournament        Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
+  @@map("tournament_participants")
+}
+
+model TournamentRound {
+  id           String            @id @default(cuid())
+  tournamentId String
+  roundNumber  Int
+  status       RoundStatus       @default(PENDING)
+  createdAt    DateTime          @default(now())
+  matches      TournamentMatch[]
+  tournament   Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, roundNumber])
+  @@index([tournamentId])
+  @@map("tournament_rounds")
+}
+
+model TournamentMatch {
+  id             String          @id @default(cuid())
+  tournamentId   String
+  roundId        String
+  participant1Id String?
+  participant2Id String?
+  winnerId       String?
+  status         MatchStatus     @default(PENDING)
+  drawResolution String?
+  p1Wins         Int             @default(0)
+  p2Wins         Int             @default(0)
+  drawGames      Int             @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  games          Game[]
+  round          TournamentRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId])
+  @@index([roundId])
+  @@map("tournament_matches")
+}
+
+model PlayerClassification {
+  id                   String                  @id @default(cuid())
+  userId               String                  @unique
+  tier                 ClassificationTier      @default(RECRUIT)
+  merits               Int                     @default(0)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  demotionOptOutUsedAt DateTime?
+  history              ClassificationHistory[]
+  meritTx              MeritTransaction[]
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("player_classifications")
+}
+
+model MeritTransaction {
+  id               String               @id @default(cuid())
+  classificationId String
+  tournamentId     String?
+  delta            Int
+  reason           String
+  createdAt        DateTime             @default(now())
+  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+
+  @@index([classificationId])
+  @@index([tournamentId])
+  @@map("merit_transactions")
+}
+
+model ClassificationHistory {
+  id               String               @id @default(cuid())
+  classificationId String
+  fromTier         ClassificationTier?
+  toTier           ClassificationTier
+  reason           String
+  tournamentId     String?
+  createdAt        DateTime             @default(now())
+  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+
+  @@index([classificationId])
+  @@map("classification_history")
+}
+
+model MeritThreshold {
+  id      String @id @default(cuid())
+  bandMin Int
+  bandMax Int?
+  pos1    Int
+  pos2    Int
+  pos3    Int
+  pos4    Int
+
+  @@map("merit_thresholds")
+}
+
+model RecurringTournamentRegistration {
+  id          String    @id @default(cuid())
+  templateId  String
+  userId      String
+  missedCount Int       @default(0)
+  optedOutAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([templateId, userId])
+  @@index([templateId])
+  @@index([userId])
+  @@map("recurring_tournament_registrations")
+}
+
+model TournamentSeedBot {
+  id           String     @id @default(cuid())
+  tournamentId String
+  userId       String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@map("tournament_seed_bots")
+}
+
+model Table {
+  id                String      @id @default(cuid())
+  gameId            String
+  status            TableStatus @default(FORMING)
+  createdById       String
+  minPlayers        Int
+  maxPlayers        Int
+  isPrivate         Boolean     @default(false)
+  chatEnabled       Boolean     @default(false)
+  isTournament      Boolean     @default(false)
+  /// Array of seat objects: { userId: string|null, status: "occupied" | "empty" }.
+  /// Length always equals maxPlayers; empty seats have userId: null.
+  seats             Json
+  /// Full game state blob — replaces the in-memory Room's board/turn/scores.
+  /// Shape: { board, currentTurn, scores, round, winner, winLine, marks, botMark, moves }
+  /// Updated on every move; game-defined but platform reads status fields for
+  /// lifecycle decisions (e.g., marking Table COMPLETED on winner).
+  previewState      Json?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  /// Phase 3.4 — tournament context (null for free-play tables).
+  tournamentMatchId String?
+  tournamentId      String?
+  bestOfN           Int?
+  /// Phase 3.4 — bot context (null for PvP tables).
+  isHvb             Boolean     @default(false)
+  botUserId         String?
+  botSkillId        String?
+  slug              String?     @unique
+  displayName       String?
+
+  @@index([status])
+  @@index([gameId])
+  @@index([createdById])
+  @@index([isTournament])
+  @@index([tournamentMatchId])
+  @@index([botUserId])
+  @@map("tables")
+}
+
+enum ScheduledJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
 }
 
 enum Role {
@@ -570,8 +819,6 @@ enum EpisodeOutcome {
   LOSS
   DRAW
 }
-
-// ─── Tournament (Phase 1) ────────────────────────────────────────────────────
 
 enum TournamentMode {
   HVH
@@ -650,220 +897,8 @@ enum ClassificationTier {
   LEGEND
 }
 
-model Tournament {
-  id                        String             @id @default(cuid())
-  name                      String
-  description               String?
-  game                      String
-  mode                      TournamentMode
-  format                    TournamentFormat
-  bracketType               BracketType
-  status                    TournamentStatus   @default(DRAFT)
-  minParticipants           Int                @default(2)
-  maxParticipants           Int?
-  bestOfN                   Int                @default(3)
-  botMinGamesPlayed         Int?
-  allowNonCompetitiveBots   Boolean            @default(false)
-  paceMs                    Int?               @map("pace_ms")
-  allowSpectators           Boolean            @default(true)
-  startMode                 TournamentStartMode @default(AUTO)
-  startTime                 DateTime?
-  endTime                   DateTime?
-  registrationOpenAt        DateTime?
-  registrationCloseAt       DateTime?
-  noticePeriodMinutes       Int?
-  durationMinutes           Int?
-  isRecurring               Boolean            @default(false)
-  recurrenceInterval        RecurrenceInterval?
-  recurrenceEndDate         DateTime?
-  autoOptOutAfterMissed     Int?
-  createdById               String
-  createdAt                 DateTime           @default(now())
-  updatedAt                 DateTime           @updatedAt
-
-  participants              TournamentParticipant[]
-  rounds                    TournamentRound[]
-  games                     Game[]
-
-  @@index([status])
-  @@index([game])
-  @@index([createdById])
-  @@map("tournaments")
-}
-
-model TournamentParticipant {
-  id                String            @id @default(cuid())
-  tournamentId      String
-  userId            String
-  seedPosition      Int?
-  eloAtRegistration Float?
-  status            ParticipantStatus @default(REGISTERED)
-  resultNotifPref   ResultNotifPref   @default(AS_PLAYED)
-  finalPosition     Int?
-  /// Normalised rank: 0.0 = winner (best), 1.0 = last place (worst). Null until tournament ends.
-  finalPositionPct  Float?
-  points           Int               @default(0)
-  registrationMode RegistrationMode  @default(SINGLE)
-  registeredAt      DateTime          @default(now())
-
-  tournament        Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  user              User              @relation(fields: [userId], references: [id])
-
-  @@unique([tournamentId, userId])
-  @@index([tournamentId])
-  @@index([userId])
-  @@map("tournament_participants")
-}
-
-model TournamentRound {
-  id           String      @id @default(cuid())
-  tournamentId String
-  roundNumber  Int
-  status       RoundStatus @default(PENDING)
-  createdAt    DateTime    @default(now())
-
-  tournament   Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  matches      TournamentMatch[]
-
-  @@unique([tournamentId, roundNumber])
-  @@index([tournamentId])
-  @@map("tournament_rounds")
-}
-
-model TournamentMatch {
-  id             String      @id @default(cuid())
-  tournamentId   String
-  roundId        String
-  participant1Id String?
-  participant2Id String?
-  winnerId       String?
-  status         MatchStatus @default(PENDING)
-  drawResolution String?
-  p1Wins         Int         @default(0)
-  p2Wins         Int         @default(0)
-  drawGames      Int         @default(0)
-  completedAt    DateTime?
-  createdAt      DateTime    @default(now())
-
-  round          TournamentRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  games          Game[]
-
-  @@index([tournamentId])
-  @@index([roundId])
-  @@map("tournament_matches")
-}
-
-// ─── Tournament Phase 2: Player Classification ────────────────────────────────
-
-model PlayerClassification {
-  id                   String             @id @default(cuid())
-  userId               String             @unique
-  tier                 ClassificationTier @default(RECRUIT)
-  merits               Int                @default(0)
-  demotionOptOutUsedAt DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-
-  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  meritTx   MeritTransaction[]
-  history   ClassificationHistory[]
-
-  @@map("player_classifications")
-}
-
-model MeritTransaction {
-  id               String   @id @default(cuid())
-  classificationId String
-  tournamentId     String?
-  delta            Int
-  reason           String
-  createdAt        DateTime @default(now())
-
-  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
-
-  @@index([classificationId])
-  @@index([tournamentId])
-  @@map("merit_transactions")
-}
-
-model ClassificationHistory {
-  id               String              @id @default(cuid())
-  classificationId String
-  fromTier         ClassificationTier?
-  toTier           ClassificationTier
-  reason           String
-  tournamentId     String?
-  createdAt        DateTime            @default(now())
-
-  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
-
-  @@index([classificationId])
-  @@map("classification_history")
-}
-
-model MeritThreshold {
-  id      String @id @default(cuid())
-  bandMin Int
-  bandMax Int?
-  pos1    Int
-  pos2    Int
-  pos3    Int
-  pos4    Int
-
-  @@map("merit_thresholds")
-}
-
-// ─── Tournament Phase 4: Recurring ───────────────────────────────────────────
-
-model RecurringTournamentRegistration {
-  id           String    @id @default(cuid())
-  templateId   String
-  userId       String
-  missedCount  Int       @default(0)
-  optedOutAt   DateTime?
-  createdAt    DateTime  @default(now())
-
-  @@unique([templateId, userId])
-  @@index([templateId])
-  @@index([userId])
-  @@map("recurring_tournament_registrations")
-}
-
-// ─── Phase 3: Tables ──────────────────────────────────────────────────────────
-//
-// A Table is the new front-door concept replacing ad-hoc rooms. Players browse,
-// create, and join tables on the Tables page. Each table targets one game (xo,
-// connect4, etc.) and tracks who is seated, the live preview state, and whether
-// it was generated by the tournament service.
-
 enum TableStatus {
-  FORMING    // open seats, waiting for players
-  ACTIVE     // in progress
-  COMPLETED  // finished
-}
-
-model Table {
-  id             String      @id @default(cuid())
-  gameId         String                                    // matches GameMeta.id (e.g. "xo")
-  status         TableStatus @default(FORMING)
-  createdById    String                                    // BaUser.id (auth user that created the table)
-  minPlayers     Int
-  maxPlayers     Int
-  isPrivate      Boolean     @default(false)               // hidden from public list; reachable via direct URL
-  chatEnabled    Boolean     @default(false)               // reserved for Phase 3.x
-  isTournament   Boolean     @default(false)               // true when generated by the tournament service
-  /// Array of seat objects: { userId: string|null, status: "occupied" | "empty" }.
-  /// Length always equals maxPlayers; empty seats have userId: null.
-  seats          Json
-  /// Lightweight snapshot from sdk.getPreviewState(); refreshed on each move.
-  /// Game-defined shape — opaque to the platform.
-  previewState   Json?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  @@index([status])
-  @@index([gameId])
-  @@index([createdById])
-  @@index([isTournament])
-  @@map("tables")
+  FORMING
+  ACTIVE
+  COMPLETED
 }

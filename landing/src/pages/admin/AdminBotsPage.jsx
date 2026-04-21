@@ -254,6 +254,7 @@ export default function AdminBotsPage() {
               <ListTh>Name</ListTh>
               <ListTh className="hidden sm:table-cell">Owner</ListTh>
               <ListTh className="hidden md:table-cell">Algorithm</ListTh>
+              <ListTh className="hidden lg:table-cell">Skills</ListTh>
               <ListTh align="right">ELO</ListTh>
               <ListTh align="center">Status</ListTh>
               <ListTh align="center" className="hidden lg:table-cell">Available</ListTh>
@@ -305,6 +306,23 @@ export default function AdminBotsPage() {
                     >
                       {bot.botModelType}
                     </span>
+                  </ListTd>
+
+                  <ListTd className="hidden lg:table-cell">
+                    <div className="flex flex-wrap gap-1">
+                      {(bot.skills ?? []).length === 0 ? (
+                        <span className="text-[10px] italic" style={{ color: 'var(--text-muted)' }}>none</span>
+                      ) : (bot.skills ?? []).map(s => (
+                        <span
+                          key={s.gameId}
+                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                          title={`${s.gameId}: ${s.algorithm} — ${s.status}`}
+                          style={{ backgroundColor: 'var(--color-teal-50)', color: 'var(--color-teal-700)' }}
+                        >
+                          {s.gameId.toUpperCase()}
+                        </span>
+                      ))}
+                    </div>
                   </ListTd>
 
                   <ListTd align="right">

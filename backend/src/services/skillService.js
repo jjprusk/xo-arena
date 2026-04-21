@@ -73,8 +73,9 @@ const trainingQueue = []
 
 // ─── Model CRUD ─────────────────────────────────────────────────────────────
 
-export async function listModels() {
+export async function listModels({ gameId } = {}) {
   const models = await db.botSkill.findMany({
+    where: gameId ? { gameId } : undefined,
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { sessions: true } } },
   })
@@ -115,7 +116,7 @@ export async function setSystemConfig(key, value) {
   })
 }
 
-export async function createModel({ name, description, algorithm = 'qlearning', config = {}, createdBy = null }) {
+export async function createModel({ name, description, algorithm = 'qlearning', config = {}, createdBy = null, gameId = 'xo' }) {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config }
 
   // For DQN: resolve and validate the neural network shape, then bake layerSizes in.
@@ -145,7 +146,7 @@ export async function createModel({ name, description, algorithm = 'qlearning', 
 
   const maxEpisodes = await getSystemConfig('ml.maxEpisodesPerModel', 100_000)
   return db.botSkill.create({
-    data: { name, description: description || null, algorithm, weights: {}, config: mergedConfig, createdBy, maxEpisodes },
+    data: { name, description: description || null, algorithm, weights: {}, config: mergedConfig, createdBy, maxEpisodes, gameId },
   })
 }
 
@@ -314,6 +315,21 @@ export async function getWeights(modelId) {
 
 /** @deprecated Use getWeights — kept for backward-compat during migration */
 export const getQTable = getWeights
+
+/**
+ * Find a bot's trained skill for a specific game.
+ * Uses the (botId, gameId) unique index on BotSkill.
+ *
+ * @param {string} botUserId - User.id (internal PK, not betterAuthId)
+ * @param {string} gameId    - e.g. 'xo', 'connect4'
+ * @returns {Promise<{ id: string, algorithm: string } | null>}
+ */
+export async function resolveSkillForGame(botUserId, gameId) {
+  return db.botSkill.findFirst({
+    where: { botId: botUserId, gameId },
+    select: { id: true, algorithm: true },
+  })
+}
 
 export async function getMoveForModel(modelId, board) {
   if (!engineCache.has(modelId)) {

@@ -9,10 +9,9 @@
  * Logic is split out into pure helpers so the presence math can be tested
  * without spinning up socket.io.
  *
- * TODO Phase 3.4: when Tables become THE primitive, this map merges with
- * the (also in-memory) seated-player tracking that currently lives in the
- * roomManager. The split between "seated" and "watching" stays — only the
- * single source of truth changes.
+ * Phase 3.4 complete: Tables ARE the primitive. Seated players live in
+ * db.table.seats; this presence map tracks spectators/watchers (socket-based,
+ * not DB-persisted). The split between "seated" and "watching" remains.
  */
 
 // tableId → Map<socketId, { userId: string|null, displayName: string|null }>

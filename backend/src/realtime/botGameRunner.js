@@ -10,6 +10,7 @@
 import { mountainPool, MountainNamePool } from './mountainNames.js'
 import { getWinner, isBoardFull, getEmptyCells, WIN_LINES } from '@xo-arena/ai'
 import registry from '../ai/registry.js'
+import { getMoveForModel } from '../services/skillService.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
@@ -50,7 +51,7 @@ function parseBotModelId(botModelId) {
     return { impl: 'minimax', difficulty: diff }
   }
 
-  if (botModelId.startsWith('testbot:')) {
+  if (botModelId.startsWith('testbot:') || botModelId.startsWith('seed:')) {
     const diff = botModelId.split(':')[2] || 'novice'
     return { impl: 'minimax', difficulty: diff }
   }
@@ -63,9 +64,8 @@ function parseBotModelId(botModelId) {
     return { impl, difficulty: diff }
   }
 
-  // ML model ID or unknown — fall back to minimax master
-  logger.warn({ botModelId }, 'Unknown botModelId format — falling back to minimax/master')
-  return { impl: 'minimax', difficulty: 'master' }
+  // Raw ML skill ID (UUID) — use ML implementation with this skill
+  return { impl: 'ml', difficulty: 'intermediate' }
 }
 
 class BotGameRunner {
@@ -92,7 +92,7 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1 }) {
+  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1 }) {
     const name = mountainPool.acquire()
     if (!name) throw new Error('No mountain names available for bot game')
 
@@ -114,6 +114,7 @@ class BotGameRunner {
       createdAt: now,
       lastActivityAt: now,
       moveDelayMs,
+      gameId,
       tournamentId,
       tournamentMatchId,
       bestOfN: bestOfN ?? 1,
@@ -164,6 +165,9 @@ class BotGameRunner {
 
     // Series loop
     while (true) {
+      game.moves = []
+      const gameStartedAt = new Date(game.createdAt)
+
       // Emit game:start for each game in the series
       this._io?.to(slug).emit('game:start', {
         board: game.board,
@@ -186,7 +190,7 @@ class BotGameRunner {
         let cellIndex
         try {
           const aiImpl = registry.get(impl)
-          cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn)
+          cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn, bot.botModelId)
         } catch (err) {
           logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
           game.winner = game.currentTurn === 'X' ? 'O' : 'X'
@@ -235,6 +239,23 @@ class BotGameRunner {
         })
       }
 
+      // Save a DB record for this individual game in the series
+      const gameWinnerId = game.winner === 'X' ? game.bot1.id : game.winner === 'O' ? game.bot2.id : null
+      const gameOutcome = game.winner === 'X' ? 'PLAYER1_WIN' : game.winner === 'O' ? 'PLAYER2_WIN' : 'DRAW'
+      await createGame({
+        player1Id: game.bot1.id,
+        player2Id: game.bot2.id,
+        winnerId: gameWinnerId,
+        mode: 'BVB',
+        outcome: gameOutcome,
+        totalMoves: game.board.filter(Boolean).length,
+        durationMs: game.lastActivityAt - game.createdAt,
+        startedAt: gameStartedAt,
+        tournamentId: game.tournamentId ?? null,
+        tournamentMatchId: game.tournamentMatchId ?? null,
+        moveStream: game.moves.length ? game.moves : null,
+      }).catch(err => logger.warn({ err, slug }, 'Failed to write per-game bot record'))
+
       // Update series counters after this game
       if (game.winner === 'X') game.seriesBot1Wins++
       else if (game.winner === 'O') game.seriesBot2Wins++
@@ -260,7 +281,6 @@ class BotGameRunner {
       game.winLine = null
       game.createdAt = Date.now()
       game.lastActivityAt = Date.now()
-      game.moves = []
     }
 
     // Record the finished series
@@ -273,9 +293,6 @@ class BotGameRunner {
   async _recordGame(slug) {
     const game = this._games.get(slug)
     if (!game) return
-
-    const totalMoves = game.board.filter(Boolean).length
-    const durationMs = game.lastActivityAt - game.createdAt
 
     const isTournamentGame = !!(game.tournamentMatchId)
 
@@ -298,26 +315,10 @@ class BotGameRunner {
       )
     }
 
-    // Outcome from bot1 (X) perspective for the last game (used for single-game ELO)
+    // Outcome from bot1 (X) perspective for the last game (used for ELO)
     let outcome = 'DRAW'
     if (game.winner === 'X') outcome = 'PLAYER1_WIN'
     else if (game.winner === 'O') outcome = 'PLAYER2_WIN'
-
-    // Bug #11: separate DB record write from tournament completion so a DB error
-    // can't silently prevent bracket advancement.
-    await createGame({
-      player1Id: game.bot1.id,
-      player2Id: game.bot2.id,
-      winnerId: seriesWinnerId,
-      mode: 'BVB',
-      outcome: seriesWinnerId === game.bot1.id ? 'PLAYER1_WIN' : seriesWinnerId === game.bot2.id ? 'PLAYER2_WIN' : 'DRAW',
-      totalMoves,
-      durationMs,
-      startedAt: new Date(game.createdAt),
-      tournamentId: game.tournamentId ?? null,
-      tournamentMatchId: game.tournamentMatchId ?? null,
-      moveStream: game.moves?.length ? game.moves : null,
-    }).catch(err => logger.warn({ err, slug }, 'Failed to write bot game record — will still attempt tournament completion'))
 
     if (!isTournamentGame) {
       await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})
@@ -388,6 +389,15 @@ class BotGameRunner {
 
   getGame(slug) {
     return this._games.get(slug) || null
+  }
+
+  getSlugForMatch(tournamentMatchId) {
+    for (const game of this._games.values()) {
+      if (game.tournamentMatchId === tournamentMatchId && game.status === 'playing') {
+        return game.slug
+      }
+    }
+    return null
   }
 
   /** List active/playing bot games for the room list. */

@@ -10,9 +10,17 @@ export const NOTIF_SOUND_TYPES = [
 ]
 
 // ── Web Audio synthesis ───────────────────────────────────────────────────────
+// Chrome's autoplay policy rejects AudioContext creation before a user gesture
+// and logs a warning per attempt. SSE replay on page load can deliver several
+// queued notifications before the user has clicked anything, so we defer the
+// AudioContext until the first user gesture. `play()` silently no-ops until
+// then — the missed notification sounds are not worth a console full of
+// "AudioContext was not allowed to start" warnings.
 let _audioCtx = null
+let _gestureHappened = false
 
 function ctx() {
+  if (!_gestureHappened) return null
   if (!_audioCtx) {
     _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
   }
@@ -20,10 +28,15 @@ function ctx() {
   return _audioCtx
 }
 
-// Pre-warm AudioContext on every pointer interaction (capture phase) to avoid
-// async-resume lag when the notification sound fires.
+// First user gesture unlocks audio. Capture phase so we beat component
+// handlers. Once fired, the context is eagerly created so the next play()
+// doesn't pay the construction cost.
 if (typeof window !== 'undefined') {
   document.addEventListener('pointerdown', () => {
+    _gestureHappened = true
+    if (!_audioCtx) {
+      try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)() } catch {}
+    }
     if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
   }, { capture: true, passive: true })
 }
@@ -45,17 +58,17 @@ function tone(ac, freq, startTime, duration, gain = 0.18, type = 'sine') {
 
 const SOUNDS = {
   ding() {
-    const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
+    const ac = ctx(); if (!ac) return; const t = ac.currentTime + LOOKAHEAD
     tone(ac, 880, t,        0.35, 0.20, 'sine')
     tone(ac, 1760, t + 0.01, 0.20, 0.06, 'sine')
   },
   chime() {
-    const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
+    const ac = ctx(); if (!ac) return; const t = ac.currentTime + LOOKAHEAD
     tone(ac, 660, t,        0.25, 0.18, 'sine')
     tone(ac, 990, t + 0.15, 0.35, 0.18, 'sine')
   },
   blip() {
-    const ac = ctx(); const t = ac.currentTime + LOOKAHEAD
+    const ac = ctx(); if (!ac) return; const t = ac.currentTime + LOOKAHEAD
     tone(ac, 440, t,       0.06, 0.20, 'square')
     tone(ac, 660, t + 0.07, 0.06, 0.15, 'square')
   },

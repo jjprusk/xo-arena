@@ -95,6 +95,16 @@ test('Phase 1 — Deploy Staging workflow completes on GitHub', async ({ request
 // If Phase 1 was skipped (no token), we poll longer as a fallback.
 
 test('Phase 2 — backend and landing serve the expected version', async ({ request }) => {
+  // Local dev servers don't track the committed package.json version on every
+  // change, so this "did the deploy land?" check can't succeed against
+  // localhost. It's only meaningful when pointed at the staging/prod hosts.
+  const isLocal = /localhost|127\.0\.0\.1/.test(BACKEND_URL) || /localhost|127\.0\.0\.1/.test(LANDING_URL)
+  if (isLocal) {
+    console.log('  ℹ Local URLs detected — skipping deploy-version gate (Phase 2)')
+    test.skip()
+    return
+  }
+
   const fallbackMode = !GITHUB_TOKEN
   const pollMinutes  = fallbackMode ? 12 : 3
   test.setTimeout((pollMinutes + 1) * 60 * 1000)

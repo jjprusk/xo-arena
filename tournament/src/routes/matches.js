@@ -3,6 +3,7 @@ import { Router } from 'express'
 import db from '../lib/db.js'
 import { publish } from '../lib/redis.js'
 import { requireTournamentAdminOrInternal } from '../middleware/auth.js'
+import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import logger from '../logger.js'
 
 const router = Router()
@@ -156,6 +157,11 @@ async function advanceBracketIfReady(match) {
         data: { status: 'COMPLETED', endTime: new Date() },
       })
 
+      // Intentionally do NOT cleanup seeded bots on completion — match rows
+      // reference participant IDs, so deleting the participants would leave
+      // the historical bracket showing "TBD" for every seeded-bot slot.
+      // Cancellation still runs cleanup (tournament never happened).
+
       const winnerPart = await db.tournamentParticipant.findUnique({
         where: { id: winners[0] },
         include: { user: { select: { id: true } } },
@@ -257,6 +263,7 @@ async function advanceBracketIfReady(match) {
               tournamentId: tournament.id,
               matchId: newMatch.id,
               bestOfN: tournament.bestOfN,
+              gameId: tournament.game,
               bot1: { id: p1?.user.id, displayName: p1?.user.displayName, botModelId: p1?.user.botModelId },
               bot2: { id: p2?.user.id, displayName: p2?.user.displayName, botModelId: p2?.user.botModelId },
             }])
@@ -317,6 +324,9 @@ async function advanceBracketIfReady(match) {
         where: { id: tournament.id },
         data: { status: 'COMPLETED', endTime: new Date() },
       })
+
+      // See matches.js:160 — cleanup skipped on completion to preserve
+      // historical bracket names.
 
       pendingPublishes.push(['tournament:completed', {
         tournamentId: tournament.id,

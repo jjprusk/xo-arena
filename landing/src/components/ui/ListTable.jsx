@@ -30,7 +30,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search…', classNam
   )
 }
 
-export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, topOffset = 0, className = '', columns }) {
+export function ListTable({ children, maxHeight, fitViewport = false, fill = false, bottomPadding = 24, topOffset = 0, className = '', columns }) {
   const outerRef = useRef(null)
   const [dynamicMax, setDynamicMax] = useState(null)
 
@@ -60,6 +60,37 @@ export function ListTable({ children, maxHeight, fitViewport = false, bottomPadd
 
   const effective = fitViewport ? dynamicMax : maxHeight
   const outerStyle = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }
+
+  // `fill` mode: the ListTable stretches to 100% of its parent (which must be
+  // a bounded flex child — e.g. `flex-1 min-h-0` inside a `flex-col` viewport
+  // container). The thead stays pinned at the top and only the tbody region
+  // scrolls. Unlike `fitViewport` this does not measure from window.innerHeight,
+  // so it cannot drift as the outer page scrolls.
+  if (fill) {
+    const childArray = React.Children.toArray(children)
+    const thead = childArray.find(c => c.type === 'thead')
+    const bodyChildren = childArray.filter(c => c.type !== 'thead')
+    const colgroup = columns?.length ? (
+      <colgroup>{columns.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+    ) : null
+
+    return (
+      <div ref={outerRef} className={`rounded-xl border overflow-hidden flex flex-col h-full min-h-0 ${className}`} style={outerStyle}>
+        {thead && (
+          <div className="overflow-x-auto shrink-0">
+            <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              {colgroup}{thead}
+            </table>
+          </div>
+        )}
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+          <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+            {colgroup}{bodyChildren}
+          </table>
+        </div>
+      </div>
+    )
+  }
 
   if (effective) {
     const childArray = React.Children.toArray(children)
@@ -129,31 +160,86 @@ export function ListTd({ children, align = 'left', className = '', style: extraS
   )
 }
 
-export function ListPagination({ page, totalPages, total, limit, onPageChange, noun = 'results' }) {
+/**
+ * Compute the visible page buttons as a sparse sequence with ellipses.
+ * Strategy: always show first, last, and a window around the current page.
+ * Example: current=7, total=20 → [1, '…', 5, 6, 7, 8, 9, '…', 20]
+ */
+function paginationRange(page, totalPages, siblings = 1) {
+  const first = 1
+  const last  = totalPages
+  const start = Math.max(first + 1, page - siblings)
+  const end   = Math.min(last - 1,  page + siblings)
+
+  const pages = [first]
+  if (start > first + 1) pages.push('…')
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < last - 1) pages.push('…')
+  if (last > first) pages.push(last)
+  return pages
+}
+
+export function ListPagination({ page, totalPages, total, limit, onPageChange, noun = 'results', showPageNumbers = true }) {
   if (totalPages <= 1 && total <= limit) return null
-  const from = total === 0 ? 0 : (page - 1) * limit + 1
-  const to   = Math.min(page * limit, total)
+  const from  = total === 0 ? 0 : (page - 1) * limit + 1
+  const to    = Math.min(page * limit, total)
+  const pages = showPageNumbers ? paginationRange(page, totalPages) : null
+
+  const btnBase = 'min-w-[2.25rem] px-2 py-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-35'
+  const btnStyle = { borderColor: 'var(--border-default)', color: 'var(--text-primary)' }
+  const activeStyle = { borderColor: 'var(--color-primary)', color: 'white', backgroundColor: 'var(--color-primary)' }
+
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+    <div className="flex items-center justify-center gap-4 flex-wrap">
+      <span className="text-xs tabular-nums" style={{ color: 'var(--text-secondary)' }}>
         {total === 0 ? `No ${noun}` : `${from}–${to} of ${total} ${noun}`}
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap">
+        <button
+          disabled={page <= 1}
+          onClick={() => onPageChange(1)}
+          className={`${btnBase} hover:bg-[var(--bg-surface-hover)]`}
+          style={btnStyle}
+          aria-label="First page"
+          title="First page"
+        >«</button>
         <button
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
-          className="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-35 transition-colors hover:bg-[var(--bg-surface-hover)]"
-          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-        >← Prev</button>
-        <span className="px-3 py-1.5 text-xs tabular-nums rounded-lg border" style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface)' }}>
-          {page} / {totalPages}
-        </span>
+          className={`${btnBase} hover:bg-[var(--bg-surface-hover)]`}
+          style={btnStyle}
+          aria-label="Previous page"
+          title="Previous page"
+        >‹</button>
+        {showPageNumbers && pages.map((p, i) => (
+          typeof p === 'number' ? (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className={`${btnBase} tabular-nums ${p === page ? '' : 'hover:bg-[var(--bg-surface-hover)]'}`}
+              style={p === page ? activeStyle : btnStyle}
+              aria-current={p === page ? 'page' : undefined}
+            >{p}</button>
+          ) : (
+            <span key={`ellipsis-${i}`} className="px-1 text-sm" style={{ color: 'var(--text-muted)' }}>…</span>
+          )
+        ))}
         <button
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
-          className="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-35 transition-colors hover:bg-[var(--bg-surface-hover)]"
-          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-        >Next →</button>
+          className={`${btnBase} hover:bg-[var(--bg-surface-hover)]`}
+          style={btnStyle}
+          aria-label="Next page"
+          title="Next page"
+        >›</button>
+        <button
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(totalPages)}
+          className={`${btnBase} hover:bg-[var(--bg-surface-hover)]`}
+          style={btnStyle}
+          aria-label="Last page"
+          title="Last page"
+        >»</button>
       </div>
     </div>
   )

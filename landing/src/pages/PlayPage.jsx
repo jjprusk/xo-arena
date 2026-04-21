@@ -28,7 +28,8 @@ function Spinner() {
 
 // Inner component — only mounted once botConfig is resolved (or not needed).
 // Keeps all hook calls stable regardless of async bot fetch.
-function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig }) {
+// Exported so TableDetailPage can render a table-routed game without duplicating this logic.
+export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0 }) {
   const navigate = useNavigate()
 
   // Load game meta asynchronously — see comment at top of file. While null we
@@ -43,7 +44,9 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     ? { id: authSession.user.id, displayName: authSession.user.name ?? authSession.user.email }
     : null
 
-  const { session, sdk, phase, abandoned, kicked, seriesResult } = useGameSDK({
+  const [gameState, setGameState] = useState({ currentTurn: null, winner: null, isDraw: false })
+
+  const { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft } = useGameSDK({
     gameId:           'xo',
     joinSlug,
     tournamentMatchId,
@@ -53,21 +56,39 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     botSkillId: botConfig?.botSkillId ?? null,
   })
 
+  // Subscribe to move events to drive seat-pod states in the shell
+  useEffect(() => {
+    return sdk.onMove(({ state }) => {
+      setGameState({
+        currentTurn: state.currentTurn ?? null,
+        winner:      state.winner      ?? null,
+        isDraw:      state.status === 'finished' && !state.winner,
+      })
+    })
+  }, [sdk])
+
+  const tablesHref = tournamentId ? `/tournaments/${tournamentId}` : '/tables'
+
   // Register leave-table callback so sdk.leaveTable() navigates away
   useEffect(() => {
     sdk._onGameEnd(({ leave } = {}) => {
-      if (leave) navigate(tournamentId ? `/tournaments/${tournamentId}` : '/', { replace: true })
+      if (leave) navigate(tablesHref, { replace: true })
     })
   }, [sdk]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abandoned → navigate away after brief notice
   useEffect(() => {
     if (!abandoned) return
-    const id = setTimeout(() => {
-      navigate(tournamentId ? `/tournaments/${tournamentId}` : '/', { replace: true })
-    }, 3000)
+    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
     return () => clearTimeout(id)
   }, [abandoned]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Opponent left post-game → navigate after brief notice
+  useEffect(() => {
+    if (!opponentLeft) return
+    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
+    return () => clearTimeout(id)
+  }, [opponentLeft]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kicked (spectator inactivity) → go home
   useEffect(() => {
@@ -93,13 +114,28 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     )
   }
 
-  // Room abandoned
+  // Opponent left after game ended
+  if (opponentLeft) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16">
+        <div className="text-4xl">👋</div>
+        <p className="text-lg font-semibold text-center" style={{ color: 'var(--text-primary)' }}>
+          Opponent has left the table
+        </p>
+        <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
+          Returning to Tables…
+        </p>
+      </div>
+    )
+  }
+
+  // Table abandoned (inactivity)
   if (abandoned) {
     return (
       <div className="flex flex-col items-center gap-4 py-16">
         <div className="text-4xl">💤</div>
         <p className="text-lg font-semibold text-center" style={{ color: 'var(--text-primary)' }}>
-          Room ended due to inactivity
+          Table closed due to inactivity
         </p>
         <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
           No result recorded. Returning…
@@ -108,45 +144,28 @@ function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botC
     )
   }
 
-  // Waiting for opponent (PvP only — bot games go straight to playing)
-  if (phase === 'connecting' || phase === 'waiting') {
-    return (
-      <div className="flex flex-col items-center gap-4 py-12">
-        <Spinner />
-        <p style={{ color: 'var(--text-secondary)' }}>
-          {tournamentMatchId ? 'Waiting for opponent…' : phase === 'waiting' ? 'Waiting for opponent to join…' : 'Connecting…'}
-        </p>
-        {phase === 'waiting' && session?.tableId && (
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Room: {session.settings?.displayName}
-            </p>
-            <p className="text-xs font-mono px-3 py-1 rounded-lg select-all"
-               style={{ background: 'var(--bg-surface-hover)', color: 'var(--text-secondary)' }}>
-              {window.location.origin}/play?join={session.tableId}
-            </p>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Share this link with your opponent
-            </p>
-          </div>
-        )}
-      </div>
-    )
-  }
+  // Still connecting (no session yet) — raw spinner
+  if (phase === 'connecting') return <Spinner />
 
-  // Active or finished game — route through the platform shell so the same
-  // chrome renders on /play and (Phase 3.4) /tables/:id.
-  if ((phase === 'playing' || phase === 'finished') && session) {
-    perfMark('PlayPage:board-renderable')
-    perfDumpSummary('/play?action=vs-community-bot')
+  // Waiting, playing, or finished — all route through the platform shell
+  if ((phase === 'waiting' || phase === 'playing' || phase === 'finished') && session) {
+    if (phase === 'playing') {
+      perfMark('PlayPage:board-renderable')
+      perfDumpSummary('/play?action=vs-community-bot')
+    }
     return (
       <PlatformShell
         gameMeta={xoMeta}
         session={session}
         phase={phase}
+        gameState={gameState}
+        spectatorCount={spectatingCount}
+        tournamentId={tournamentId}
         backHref={tournamentId ? `/tournaments/${tournamentId}` : '/'}
       >
-        <XOGame session={session} sdk={sdk} />
+        {(phase === 'playing' || phase === 'finished') && (
+          <XOGame session={session} sdk={sdk} />
+        )}
       </PlatformShell>
     )
   }
@@ -163,6 +182,14 @@ export default function PlayPage() {
   const tournamentMatchId = searchParams.get('tournamentMatch')
   const tournamentId      = searchParams.get('tournamentId')
   const action            = searchParams.get('action')
+  const botUserId         = searchParams.get('botUserId')
+  const botSkillId        = searchParams.get('botSkillId')
+
+  // Key that changes when auth identity changes — forces GameView to fully
+  // unmount and remount (new useGameSDK, new socket mapping, new game).
+  // Without this, a guest signing in mid-game keeps the old GameView mounted
+  // with stale guest:socketId marks that don't match the new betterAuthId.
+  const gameKey = authSession?.user?.id ?? 'guest'
 
   const [botConfig, setBotConfig] = useState(null)   // { botUserId, botSkillId }
   const [botError, setBotError]   = useState(false)
@@ -182,8 +209,8 @@ export default function PlayPage() {
       .catch(() => setBotError(true))
   }, [action, joinSlug])
 
-  // No join slug and no recognised action → home
-  if (!joinSlug && !action) return <Navigate to="/" replace />
+  // No join slug, no recognised action, and no direct bot params → home
+  if (!joinSlug && !action && !botUserId) return <Navigate to="/" replace />
 
   // Bot fetch failed → back to home
   if (botError) return <Navigate to="/" replace />
@@ -191,13 +218,21 @@ export default function PlayPage() {
   // Waiting for community bot to be resolved
   if (action === 'vs-community-bot' && !joinSlug && !botConfig) return <Spinner />
 
+  // Resolve final botConfig: community-bot fetch result or direct URL params
+  const resolvedBotConfig = action === 'vs-community-bot'
+    ? botConfig
+    : botUserId
+      ? { botUserId, botSkillId: botSkillId ?? null }
+      : null
+
   return (
     <GameView
+      key={gameKey}
       joinSlug={joinSlug}
       tournamentMatchId={tournamentMatchId}
       tournamentId={tournamentId}
       authSession={authSession}
-      botConfig={action === 'vs-community-bot' ? botConfig : null}
+      botConfig={resolvedBotConfig}
     />
   )
 }

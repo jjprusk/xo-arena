@@ -250,3 +250,42 @@ No single renderer fits all game types:
 **Complexity:** Phase 1 is medium (~3–4 days — the adapter extraction plus a working Connect 4). Each subsequent phase builds on it. The real-time phase is large and largely independent.
 
 ---
+
+## Tier 2/3 transport — medium-priority instrumentation
+
+The first three items (SSE client count, presence-store size, XREAD-loop heartbeat) were added to `resourceCounters.js` alongside the Phase E push work. The following remain as nice-to-haves — wire them in once real traffic lands or when push starts behaving oddly:
+
+- **Push subscriptions count** — snapshot `db.pushSubscription.count()` to see how many device endpoints we're pushing to. Also useful for sizing UI in the admin health dashboard.
+- **Push send metrics** — expose counters from `pushService`: `pushSent`, `pushFailed` (transient, non-404/410), `pushPurged` (dead endpoints). Surfaces success-rate and catches a VAPID misconfiguration quickly.
+- **Redis Stream length** — `XLEN events:tier2:stream`. Bounded by MAXLEN=5000 so it'll always cap there, but tracking the value confirms trimming is working and gives a rough "events per minute" signal when cross-referenced with snapshot timestamps.
+
+Low priority, mentioned for completeness:
+
+- **`/api/v1/presence/heartbeat` QPS** — normal load is `(online users) / 15s`. A sudden 10× spike indicates a client-side retry-loop bug.
+- **Dispatch → push fan-out counter** — how often `notificationBus.dispatch` actually lands a push vs skips because SSE was online. Useful for tuning which event types should have `push: true` in the REGISTRY.
+
+**Effort:** each item is ~5–10 LOC in `resourceCounters.js` plus a small `export function` in the owning module (`pushService.js`, `tournament/src/lib/redis.js` for XLEN, etc.).
+
+---
+
+## Recurring tournaments — template vs occurrence semantic refactor
+
+Today a recurring tournament is modelled as a single `Tournament` row with `isRecurring: true` that *also runs as the first occurrence*. When that row transitions to COMPLETED, the sweep creates child rows with `isRecurring: false` (the "occurrences"). The chain continues because `_nextOccurrenceStart` keeps advancing from the template's startTime and the dedup check keeps spawns unique.
+
+This works and ships, but is awkward:
+
+- The template is both a configuration row *and* a historical record of the first occurrence's results. You can't edit the template without risking weird side-effects on the past run.
+- Admins conflate "cancel this occurrence" with "stop the whole series." The `recurrencePaused` flag added in this sweep addresses the second part but doesn't resolve the semantic mix.
+- Querying "what recurring series exist?" means filtering tournaments by `isRecurring: true`, which excludes paused templates *and* all historical occurrences.
+
+**Cleaner model (refactor deferred):**
+
+- Add a `TournamentTemplate` table that holds the recurrence config (interval, end date, paused, seed bots, human subscriptions) but never itself runs.
+- Every tournament row becomes a pure occurrence with `templateId?: string`.
+- Admin create-recurring UI creates the template first, then the sweep spawns the first occurrence on `startTime`.
+- Human subscriptions + seed bots attach to the template, not the first occurrence.
+- `GET /api/tournaments` filters stay on `Tournament`; `GET /api/templates` becomes the admin view.
+
+**Effort:** ~4–6 hours. Schema migration + data backfill (split existing templates into their config rows + preserved-as-occurrence rows) + rewriting the sweep + updating 3-4 UI surfaces. No functional gain for users in isolation — only worth doing when the current model actively causes a bug or a planned feature requires separating config from history.
+
+---

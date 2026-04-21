@@ -21,6 +21,7 @@ vi.mock('../../lib/db.js', () => ({
       findUnique: vi.fn(),
       update:     vi.fn(),
       delete:     vi.fn(),
+      count:      vi.fn().mockResolvedValue(0),
     },
     // withSeatDisplay() hydrates occupied seats with User.displayName/avatarUrl.
     // buildSeatChangePayload() looks up the actor's displayName.
@@ -37,10 +38,17 @@ vi.mock('../../lib/notificationBus.js', () => ({
   dispatch: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('../../realtime/botGameRunner.js', () => ({
+  botGameRunner: {
+    getSlugForMatch: vi.fn().mockReturnValue(null),
+  },
+}))
+
 const tablesRouter = (await import('../tables.js')).default
 const db = (await import('../../lib/db.js')).default
 const { optionalAuth } = await import('../../middleware/auth.js')
 const { dispatch } = await import('../../lib/notificationBus.js')
+const { botGameRunner } = await import('../../realtime/botGameRunner.js')
 
 function makeApp() {
   const app = express()
@@ -213,7 +221,11 @@ describe('GET /api/v1/tables', () => {
     const app = makeApp()
     await request(app).get('/api/v1/tables?status=ACTIVE&gameId=connect4&limit=5')
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { isPrivate: false, status: 'ACTIVE', gameId: 'connect4' },
+      where: { AND: [
+        { isPrivate: false },
+        { status: 'ACTIVE' },
+        { gameId: 'connect4' },
+      ] },
       take: 5,
     }))
   })
@@ -223,6 +235,59 @@ describe('GET /api/v1/tables', () => {
     const app = makeApp()
     await request(app).get('/api/v1/tables?limit=9999')
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 200 }))
+  })
+
+  it('accepts multiple statuses as a comma-separated list', async () => {
+    db.table.findMany.mockResolvedValue([])
+    const app = makeApp()
+    await request(app).get('/api/v1/tables?status=FORMING,ACTIVE')
+    expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [
+        { isPrivate: false },
+        { status: { in: ['FORMING', 'ACTIVE'] } },
+      ] },
+    }))
+  })
+
+  it('?since=ISO filters by createdAt >= the given date', async () => {
+    db.table.findMany.mockResolvedValue([])
+    const app = makeApp()
+    const since = '2026-04-10T00:00:00Z'
+    await request(app).get(`/api/v1/tables?since=${encodeURIComponent(since)}`)
+    expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [
+        { isPrivate: false },
+        { createdAt: { gte: new Date(since) } },
+      ] },
+    }))
+  })
+
+  it('?search=… filters to tables where a seated user matches displayName', async () => {
+    db.user.findMany.mockResolvedValueOnce([{ betterAuthId: 'ba_alice' }])
+    db.table.findMany.mockResolvedValue([])
+    const app = makeApp()
+    await request(app).get('/api/v1/tables?search=alice')
+    expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where:  { displayName: { contains: 'alice', mode: 'insensitive' } },
+      select: { betterAuthId: true },
+    }))
+    expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [
+        { isPrivate: false },
+        { OR: [
+          { seats: { array_contains: [{ userId: 'ba_alice', status: 'occupied' }] } },
+        ] },
+      ] },
+    }))
+  })
+
+  it('?search=… short-circuits to empty when no user matches', async () => {
+    db.user.findMany.mockResolvedValueOnce([])
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables?search=ghost')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ tables: [], total: 0, page: 1, limit: 20 })
+    expect(db.table.findMany).not.toHaveBeenCalled()
   })
 
   it('enriches occupied seats with displayName/avatarUrl from User', async () => {
@@ -551,5 +616,47 @@ describe('DELETE /api/v1/tables/:id', () => {
     const app = makeApp()
     const res = await request(app).delete('/api/v1/tables/nope')
     expect(res.status).toBe(404)
+  })
+})
+
+// ── GET /api/v1/tables/active-match — live spectator lookup ───────────────────
+
+describe('GET /api/v1/tables/active-match', () => {
+  it('returns 400 when tournamentMatchId is missing', async () => {
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match')
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/tournamentMatchId/)
+  })
+
+  it('returns slug from DB when an ACTIVE table is found', async () => {
+    db.table.findFirst = vi.fn().mockResolvedValue({ slug: 'mt-everest' })
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match?tournamentMatchId=match_1')
+    expect(res.status).toBe(200)
+    expect(res.body.slug).toBe('mt-everest')
+    expect(db.table.findFirst).toHaveBeenCalledWith({
+      where: { tournamentMatchId: 'match_1', status: 'ACTIVE' },
+      select: { slug: true },
+    })
+  })
+
+  it('falls back to botGameRunner when no DB table found', async () => {
+    db.table.findFirst = vi.fn().mockResolvedValue(null)
+    botGameRunner.getSlugForMatch.mockReturnValue('mt-fuji')
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match?tournamentMatchId=match_2')
+    expect(res.status).toBe(200)
+    expect(res.body.slug).toBe('mt-fuji')
+    expect(botGameRunner.getSlugForMatch).toHaveBeenCalledWith('match_2')
+  })
+
+  it('returns null slug when neither DB nor bot runner has a match', async () => {
+    db.table.findFirst = vi.fn().mockResolvedValue(null)
+    botGameRunner.getSlugForMatch.mockReturnValue(null)
+    const app = makeApp()
+    const res = await request(app).get('/api/v1/tables/active-match?tournamentMatchId=match_3')
+    expect(res.status).toBe(200)
+    expect(res.body.slug).toBeNull()
   })
 })

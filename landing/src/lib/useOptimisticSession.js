@@ -38,8 +38,9 @@ async function fetchSession() {
 }
 
 export function useOptimisticSession() {
-  const [data, setData]           = useState(() => readCache())
-  const [isPending, setIsPending] = useState(true)
+  const cached                    = readCache()
+  const [data, setData]           = useState(cached)
+  const [isPending, setIsPending] = useState(cached === null)
   const timerRef                  = useRef(null)
 
   useEffect(() => {

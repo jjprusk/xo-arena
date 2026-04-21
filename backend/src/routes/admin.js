@@ -18,11 +18,33 @@ import {
   createReply,
 } from '../lib/feedbackHelpers.js'
 import { replyTemplate } from '../lib/emailTemplates.js'
+import { dispatch, emitToRoom } from '../lib/notificationBus.js'
+import { sweep as gcSweep } from '../services/tableGcService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 
 const router = Router()
+
+// ─── GC trigger (manual QA / on-demand sweep) ────────────────────────────────
+// Placed before requireAuth so it can accept either a valid admin JWT or the
+// QA_SECRET env var (read by qa-scripts/*.sh — no browser token needed).
+
+router.post('/gc/run', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) {
+      // Fall through to normal admin auth — still works with a real JWT too
+      return next('route')
+    }
+    const result = await gcSweep(null)
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.use(requireAuth, requireAdmin)
 
 // ─── Resource health ─────────────────────────────────────────────────────────
@@ -385,7 +407,7 @@ router.get('/games', async (req, res, next) => {
     const limit = Math.min(100, parseInt(req.query.limit) || 25)
     const skip = (page - 1) * limit
 
-    const where = {}
+    const where = { totalMoves: { gt: 0 } }
     if (req.query.mode) where.mode = req.query.mode.toUpperCase()
     if (req.query.outcome) where.outcome = req.query.outcome.toUpperCase()
     if (req.query.player) {
@@ -798,11 +820,26 @@ router.get('/bots', async (req, res, next) => {
       : []
     const ownerMap = Object.fromEntries(owners.map(o => [o.id, o]))
 
+    // Enrich with per-game skills
+    const botIds = bots.map(b => b.id)
+    const allSkills = botIds.length
+      ? await db.botSkill.findMany({
+          where: { botId: { in: botIds } },
+          select: { botId: true, gameId: true, algorithm: true, status: true },
+        })
+      : []
+    const skillsByBot = {}
+    for (const s of allSkills) {
+      if (!skillsByBot[s.botId]) skillsByBot[s.botId] = []
+      skillsByBot[s.botId].push({ gameId: s.gameId, algorithm: s.algorithm, status: s.status })
+    }
+
     const enriched = bots.map(b => ({
       ...b,
       eloRating: b.gameElo?.[0]?.rating ?? 1200,
       gameElo: undefined,
       owner: b.botOwnerId ? (ownerMap[b.botOwnerId] ?? null) : null,
+      skills: skillsByBot[b.id] ?? [],
     }))
 
     res.json({ bots: enriched, total, page, limit })
@@ -1211,6 +1248,39 @@ router.post('/feedback/:id/reply', async (req, res, next) => {
     res.status(201).json({ reply: result.reply, replies: result.replies })
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
+    next(err)
+  }
+})
+
+/**
+ * DELETE /api/v1/admin/tables/:id
+ * Force-stop any table (mark COMPLETED + notify connected players).
+ */
+router.delete('/tables/:id', async (req, res, next) => {
+  try {
+    const table = await db.table.findUnique({ where: { id: req.params.id } })
+    if (!table) return res.status(404).json({ error: 'Table not found' })
+
+    await db.table.update({
+      where: { id: req.params.id },
+      data:  { status: 'COMPLETED' },
+    })
+
+    // End the game immediately for connected players so GameComponent transitions
+    // to the finished state before the table.deleted navigation arrives.
+    const scores = table.previewState?.scores ?? { X: 0, O: 0 }
+    emitToRoom(`table:${table.id}`, 'game:forfeit', { winner: null, scores })
+
+    // Bounce connected players/spectators back to the tables list.
+    dispatch({
+      type:    'table.deleted',
+      targets: { broadcast: true },
+      payload: { tableId: req.params.id, slug: table.slug },
+    })
+
+    res.json({ ok: true })
+  } catch (err) {
+    logger.error({ err }, 'Admin force-stop table failed')
     next(err)
   }
 })

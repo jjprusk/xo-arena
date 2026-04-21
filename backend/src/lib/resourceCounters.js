@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * Resource counters — obtain/release tracking for sockets, rooms, and Redis connections.
+ * Resource counters — obtain/release tracking for sockets, tables, and Redis connections.
  *
  * All four layers use the same pattern: increment on obtain, decrement on release.
  * A counter that only increments is a leak. A counter that goes negative is a double-release bug.
@@ -8,7 +8,7 @@
  * Layers:
  *   1. Socket connections  — via socketHandler (connection / disconnect)
  *   2. Event listeners     — via trackedOn helper (socket.on / socket.off + disconnect)
- *   3. Rooms               — via roomManager.roomCount (polled at snapshot time)
+ *   3. Active tables       — via db.table.count (polled at snapshot time)
  *   4. Redis connections   — via activityService and socketHandler Redis adapter
  *
  * The snapshot buffer (last 20 readings, one per minute) drives the leak detector.
@@ -21,6 +21,8 @@ import { dispatch, getDispatchCounters } from './notificationBus.js'
 import { getDispatcherHeartbeat } from './scheduledJobs.js'
 import { getPendingPvpMatchCount } from './tournamentBridge.js'
 import { getTotalWatchers as getTableWatcherTotal } from '../realtime/tablePresence.js'
+import { totalClients as sseTotalClients, getLastXreadAt as sseLastXreadAt, isLoopRunning as sseLoopRunning } from './sseBroker.js'
+import { getOnlineCount as presenceOnlineCount } from './presenceStore.js'
 
 // ── Counters ──────────────────────────────────────────────────────────────────
 
@@ -79,34 +81,30 @@ const SNAPSHOT_INTERVAL_MS = 60_000
 // Low counts rising from near-zero are normal startup/idle behaviour.
 const LEAK_MIN = {
   sockets:          10,   // fewer than 10 open sockets is idle noise
-  rooms:             5,   // a handful of rooms is normal
+  tablesActive:      5,   // a handful of active tables is normal
   redisConnections:  5,   // adapter creates a few connections on startup
   memoryMb:        150,   // heap below 150 MB rising slightly is fine
+  sseClients:       20,   // ~2 per signed-in tab; alert only above real-traffic levels
 }
 
 // Minimum total growth across the window before alerting.
 // Filters out slow natural drift where each tick rises by just 1.
 const LEAK_MIN_GROWTH = {
   sockets:          3,
-  rooms:            2,
+  tablesActive:     2,
   redisConnections: 3,
   memoryMb:        20,   // MB
+  sseClients:       5,
 }
 
 const _snapshots = []          // circular, newest last
-const _alerts = {}             // { sockets: bool, rooms: bool, redisConnections: bool, memoryMb: bool }
-let _roomCountFn = null        // injected by startSnapshotInterval to avoid circular import
+const _alerts = {}             // { sockets: bool, tablesActive: bool, redisConnections: bool, memoryMb: bool }
 
 export function getSnapshots() { return [..._snapshots] }
 export function getLatestSnapshot() { return _snapshots.at(-1) ?? null }
 export function getAlerts() { return { ..._alerts } }
 
-/**
- * Start the periodic snapshot interval.
- * @param {() => number} getRoomCount  — function that returns current room count
- */
-export function startSnapshotInterval(getRoomCount) {
-  _roomCountFn = getRoomCount
+export function startSnapshotInterval() {
   // Take one immediately so the health endpoint always returns non-null data
   takeSnapshot()
   const id = setInterval(() => takeSnapshot(), SNAPSHOT_INTERVAL_MS)
@@ -168,11 +166,15 @@ async function takeSnapshot() {
   const snap = {
     ts: Date.now(),
     sockets: _socketCount,
-    rooms: _roomCountFn ? _roomCountFn() : 0,
     redisConnections: _redisConnectionCount,
     memoryMb:      Math.round(mem.heapUsed  / 1024 / 1024),
     heapTotalMb:   Math.round(mem.heapTotal / 1024 / 1024),
     rssMb:         Math.round(mem.rss       / 1024 / 1024),
+    // Tier 2 / Tier 3 transport health
+    sseClients:     sseTotalClients(),
+    sseLastXreadAt: sseLastXreadAt(),
+    sseLoopRunning: sseLoopRunning(),
+    presenceOnline: presenceOnlineCount(),
     ...busSnap,
     ...tableSnap,
   }
@@ -192,7 +194,7 @@ function checkForLeaks() {
 
   const window = _snapshots.slice(-LEAK_WINDOW)
 
-  for (const key of ['sockets', 'rooms', 'redisConnections', 'memoryMb']) {
+  for (const key of ['sockets', 'tablesActive', 'redisConnections', 'memoryMb', 'sseClients']) {
     const latest = window.at(-1)[key]
     const first  = window[0][key]
     const rising = window.every((s, i) => i === 0 || s[key] > window[i - 1][key])
@@ -255,6 +257,26 @@ function checkForLeaks() {
     _alerts['dispatcherHeartbeat'] = false
     logger.info('Resource alert cleared: dispatcher heartbeat is healthy')
     notifyAdminsCleared('dispatcherHeartbeat').catch(() => {})
+  }
+
+  // SSE broker XREAD liveness — the loop does BLOCK 30s, so _lastXreadAt
+  // should tick at least every ~30s while the loop is running. >90s stale
+  // means the loop has died silently. Only alert when clients are connected
+  // (the loop is lazy: no clients means `ensureLoop` may not have booted yet).
+  const lastXread = sseLastXreadAt()
+  const sseActiveClients = sseTotalClients()
+  const sseStale = sseLoopRunning()
+    && sseActiveClients > 0
+    && (!lastXread || (Date.now() - lastXread) > 90_000)
+  if (sseStale && !_alerts['sseBroker']) {
+    _alerts['sseBroker'] = true
+    logger.warn({ lastXread, sseActiveClients }, 'Resource alert: SSE broker XREAD loop stale (>90s) — live clients may stop receiving events')
+    notifyAdmins('sseBroker').catch(() => {})
+  }
+  if (!sseStale && _alerts['sseBroker']) {
+    _alerts['sseBroker'] = false
+    logger.info('Resource alert cleared: SSE broker XREAD loop is healthy')
+    notifyAdminsCleared('sseBroker').catch(() => {})
   }
 }
 

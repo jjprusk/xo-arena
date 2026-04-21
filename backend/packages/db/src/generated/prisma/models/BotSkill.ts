@@ -397,7 +397,7 @@ export type BotSkillCreateInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -420,7 +420,7 @@ export type BotSkillUncheckedCreateInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -489,7 +489,7 @@ export type BotSkillCreateManyInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -687,7 +687,7 @@ export type BotSkillCreateWithoutPlayerProfilesInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -709,7 +709,7 @@ export type BotSkillUncheckedCreateWithoutPlayerProfilesInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -791,7 +791,7 @@ export type BotSkillCreateWithoutSessionsInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -813,7 +813,7 @@ export type BotSkillUncheckedCreateWithoutSessionsInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -895,7 +895,7 @@ export type BotSkillCreateWithoutCheckpointsInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -917,7 +917,7 @@ export type BotSkillUncheckedCreateWithoutCheckpointsInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -999,7 +999,7 @@ export type BotSkillCreateWithoutBenchmarksInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -1021,7 +1021,7 @@ export type BotSkillUncheckedCreateWithoutBenchmarksInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -1103,7 +1103,7 @@ export type BotSkillCreateWithoutEloHistoryInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus
@@ -1125,7 +1125,7 @@ export type BotSkillUncheckedCreateWithoutEloHistoryInput = {
   id?: string
   name: string
   description?: string | null
-  algorithm?: string
+  algorithm: string
   weights?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   config: Prisma.JsonNullValueInput | runtime.InputJsonValue
   status?: $Enums.BotSkillStatus

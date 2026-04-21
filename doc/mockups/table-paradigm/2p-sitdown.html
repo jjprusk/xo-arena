@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2p Sit-down Table — AI Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="table-paradigm.css">
+</head>
+<body>
+  <nav class="app-nav">
+    <a href="index.html" class="app-nav__brand" style="text-decoration:none;color:inherit">
+      AI<span>·</span>Arena
+    </a>
+    <ul class="app-nav__links">
+      <li><a href="index.html">← Mockup index</a></li>
+      <li><a href="head-to-head.html">Head-to-head</a></li>
+      <li><a href="8p-oval.html">Poker</a></li>
+      <li><a href="tables-list.html">Tables list</a></li>
+    </ul>
+  </nav>
+
+  <!-- Game switcher — XO vs Connect 4 -->
+  <div class="game-switcher" role="tablist" aria-label="Game type">
+    <button type="button" role="tab" data-game="xo" class="active">XO</button>
+    <button type="button" role="tab" data-game="c4">Connect 4</button>
+  </div>
+
+  <!-- State switcher — Forming / Playing / Completed / Tournament -->
+  <div class="state-switcher" role="tablist" aria-label="Table state">
+    <button type="button" role="tab" data-state="forming">Forming</button>
+    <button type="button" role="tab" data-state="playing" class="active">Playing</button>
+    <button type="button" role="tab" data-state="completed">Completed</button>
+    <button type="button" role="tab" data-state="tournament">Tournament</button>
+  </div>
+
+  <main class="shell">
+    <div class="shell__grid">
+      <!-- GAME COLUMN ─────────────────────────────────────────────────── -->
+      <section class="game-column">
+        <button type="button" class="mode-toggle" title="Focus mode (hide chrome)">⤡</button>
+
+        <article class="table-container table-2p" id="table">
+          <!-- Seat: opponent (top) -->
+          <div class="seat seat--top" id="seatTop">
+            <div class="seat__avatar seat__avatar--bot" aria-label="Bot">B</div>
+            <div class="seat__name">Rusty</div>
+            <div class="seat__meta"><span class="seat__bot-tag">BOT</span> · 1420</div>
+          </div>
+
+          <!-- Surface -->
+          <div class="table-surface" id="surface">
+            <div class="table-center" id="center">
+
+              <!-- ── XO: Playing board ──────────────────────────────── -->
+              <div class="xo-board" id="xoBoardPlaying">
+                <div class="xo-cell x">X</div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell o">O</div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell x">X</div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell o">O</div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell"></div>
+              </div>
+
+              <!-- ── XO: Completed board ───────────────────────────── -->
+              <div class="xo-board" id="xoBoardCompleted" hidden>
+                <div class="xo-cell x win">X</div>
+                <div class="xo-cell o">O</div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell o">O</div>
+                <div class="xo-cell x win">X</div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell"></div>
+                <div class="xo-cell x win">X</div>
+              </div>
+
+              <!-- ── Connect 4: Playing board (mid-game) ───────────── -->
+              <!--
+                Row 0 (top): all empty
+                Row 1:       all empty
+                Row 2:       all empty
+                Row 3:       ·  ·  ·  R  ·  ·  ·
+                Row 4:       ·  ·  R  Y  Y  ·  ·
+                Row 5 (bot): R  R  Y  R  Y  ·  ·
+                Red = you (bottom), Yellow = Rusty bot
+              -->
+              <div class="c4-board" id="c4BoardPlaying" hidden>
+                <!-- Row 0 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 1 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 2 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 3 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token red"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 4 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token red"></div><div class="c4-token yellow"></div><div class="c4-token yellow"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 5 (bottom) -->
+                <div class="c4-token red"></div><div class="c4-token red"></div><div class="c4-token yellow"></div><div class="c4-token red"></div><div class="c4-token yellow"></div><div class="c4-token"></div><div class="c4-token"></div>
+              </div>
+
+              <!-- ── Connect 4: Completed board (red wins, 4 in row) ─ -->
+              <!--
+                Row 0–2: all empty
+                Row 3:   ·  ·  Y  ·  ·  ·  ·
+                Row 4:   ·  R  Y  Y  ·  ·  ·
+                Row 5:   R* R* R* R* Y  Y  ·    (* = win)
+              -->
+              <div class="c4-board" id="c4BoardCompleted" hidden>
+                <!-- Row 0 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 1 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 2 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 3 -->
+                <div class="c4-token"></div><div class="c4-token"></div><div class="c4-token yellow"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 4 -->
+                <div class="c4-token"></div><div class="c4-token red"></div><div class="c4-token yellow"></div><div class="c4-token yellow"></div><div class="c4-token"></div><div class="c4-token"></div><div class="c4-token"></div>
+                <!-- Row 5 (bottom) — red wins cols 0–3 -->
+                <div class="c4-token red win"></div><div class="c4-token red win"></div><div class="c4-token red win"></div><div class="c4-token red win"></div><div class="c4-token yellow"></div><div class="c4-token yellow"></div><div class="c4-token"></div>
+              </div>
+
+              <!-- ── Shared: Forming panel ──────────────────────────── -->
+              <div class="forming-panel" id="stateFormingPanel" hidden>
+                <div class="forming-panel__title">Waiting for opponent</div>
+                <div class="forming-panel__hint">Share the link below — your seat is saved.</div>
+                <div class="forming-panel__share">xo-arena.app/play?join=mt-everest</div>
+                <div class="forming-dots"><span></span><span></span><span></span></div>
+              </div>
+
+            </div><!-- /#center -->
+
+            <div class="outcome-banner outcome-banner--win" id="outcome" hidden>
+              You win!
+            </div>
+          </div><!-- /.table-surface -->
+
+          <!-- Seat: you (bottom) -->
+          <div class="seat seat--bottom seat--turn" id="seatBottom">
+            <div class="seat__avatar" aria-label="You">J</div>
+            <div class="seat__name">You</div>
+            <div class="seat__meta">1750</div>
+          </div>
+        </article>
+      </section>
+
+      <!-- SIDEBAR ─────────────────────────────────────────────────────── -->
+      <aside class="sidebar" aria-label="Table context">
+        <div>
+          <h3>Game</h3>
+          <p class="game-title" id="sidebarGameTitle">XO (Tic-Tac-Toe)</p>
+          <div class="status-row" style="margin-top: 0.5rem;">
+            <span class="status-chip active" id="statusChip">In play</span>
+            <span id="spectatorText">3 spectating</span>
+          </div>
+        </div>
+
+        <!-- Tournament context card -->
+        <div class="tournament-card" id="tournamentCard" hidden>
+          <div class="tournament-card__title">🏆 Spring Cup</div>
+          <div class="tournament-card__meta">Round 2 of 4 · Best of 3</div>
+          <div class="tournament-card__series">You 1 – 0 Opponent</div>
+          <div class="tournament-card__footer">
+            <span style="font-size:0.75rem;color:var(--text-muted)">Winner → Round 3</span>
+            <a href="#" title="View bracket">View bracket →</a>
+          </div>
+        </div>
+
+        <div>
+          <h3>Seated</h3>
+          <ul class="seated-list">
+            <li>
+              <span class="seat__avatar" style="width:28px;height:28px;font-size:0.75rem;">J</span>
+              <span>You</span>
+              <span style="margin-left:auto;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">1750</span>
+            </li>
+            <li>
+              <span class="seat__avatar seat__avatar--bot" style="width:28px;height:28px;font-size:0.75rem;">B</span>
+              <span>Rusty</span>
+              <span class="seat__bot-tag" style="margin-left:auto">BOT</span>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 id="sidebarMoreHeading">More XO</h3>
+          <div style="display:flex;flex-direction:column;gap:0.375rem">
+            <a href="#" class="btn btn-secondary btn-sm" style="justify-content:flex-start" id="gymLink">⚡ Gym — train a bot</a>
+            <a href="#" class="btn btn-secondary btn-sm" style="justify-content:flex-start" id="puzzlesLink">◈ Puzzles</a>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn btn-secondary btn-sm">Leave table</button>
+        </div>
+
+        <div class="spectator-badge spectator-badge--sidebar" id="spectatorBadge" title="3 spectating">
+          <span>👁</span><span id="spectatorText2">3 spectating</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <aside class="mockup-meta" role="status">
+    <span>2p Sit-down — XO · Connect 4 · Chess</span>
+    <kbd>resize browser</kbd>
+    <button class="theme-toggle" aria-label="Toggle theme" onclick="
+      const root = document.documentElement;
+      const isDark = root.getAttribute('data-theme') === 'dark';
+      root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      this.textContent = isDark ? '☾' : '☀';
+    ">☾</button>
+  </aside>
+
+  <script>
+    let currentGame  = 'xo'
+    let currentState = 'playing'
+
+    const gameConfigs = {
+      xo: {
+        title:        'XO (Tic-Tac-Toe)',
+        moreHeading:  'More XO',
+        gymText:      '⚡ Gym — train a bot',
+        puzzlesText:  '◈ Puzzles',
+      },
+      c4: {
+        title:        'Connect 4',
+        moreHeading:  'More Connect 4',
+        gymText:      '⚡ Gym — train a bot',
+        puzzlesText:  '◈ Strategy guide',
+      },
+    }
+
+    const ALL_BOARDS = ['xoBoardPlaying','xoBoardCompleted','c4BoardPlaying','c4BoardCompleted','stateFormingPanel']
+
+    function hideAllBoards() {
+      ALL_BOARDS.forEach(id => { const el = document.getElementById(id); if (el) el.hidden = true })
+    }
+
+    const states = {
+      forming: () => {
+        currentState = 'forming'
+        setChip('forming', 'Forming')
+        setSpectatorText('3 watching')
+        hideAllBoards()
+        show('stateFormingPanel')
+        hide('outcome')
+        document.getElementById('seatBottom').classList.remove('seat--turn','seat--winner','seat--loser')
+        document.getElementById('seatTop').classList.remove('seat--turn','seat--winner','seat--loser')
+        document.getElementById('seatTop').innerHTML = emptySeatHTML()
+        document.getElementById('tournamentCard').hidden = true
+      },
+
+      playing: () => {
+        currentState = 'playing'
+        setChip('active', 'In play')
+        setSpectatorText('3 spectating')
+        hideAllBoards()
+        if (currentGame === 'xo') show('xoBoardPlaying')
+        else                       show('c4BoardPlaying')
+        hide('outcome')
+        document.getElementById('seatBottom').classList.add('seat--turn')
+        document.getElementById('seatBottom').classList.remove('seat--winner','seat--loser')
+        document.getElementById('seatTop').classList.remove('seat--turn','seat--winner','seat--loser')
+        document.getElementById('seatTop').innerHTML = botSeatHTML()
+        document.getElementById('tournamentCard').hidden = true
+        const surface = document.getElementById('table')
+        surface.classList.remove('table-starting')
+        void surface.offsetWidth
+        surface.classList.add('table-starting')
+      },
+
+      completed: () => {
+        currentState = 'completed'
+        setChip('completed', 'Completed')
+        setSpectatorText('3 spectating')
+        hideAllBoards()
+        if (currentGame === 'xo') show('xoBoardCompleted')
+        else                       show('c4BoardCompleted')
+        show('outcome')
+        document.getElementById('outcome').className = 'outcome-banner outcome-banner--win'
+        document.getElementById('outcome').textContent = 'You win!'
+        document.getElementById('seatBottom').classList.remove('seat--turn','seat--loser')
+        document.getElementById('seatBottom').classList.add('seat--winner')
+        document.getElementById('seatTop').classList.remove('seat--turn','seat--winner')
+        document.getElementById('seatTop').classList.add('seat--loser')
+        document.getElementById('seatTop').innerHTML = botSeatHTML()
+        document.getElementById('tournamentCard').hidden = true
+      },
+
+      tournament: () => {
+        states.playing()
+        document.getElementById('seatTop').innerHTML = humanOpponentHTML()
+        document.getElementById('tournamentCard').hidden = false
+      },
+    }
+
+    function applySidebarForGame(game) {
+      const cfg = gameConfigs[game]
+      document.getElementById('sidebarGameTitle').textContent = cfg.title
+      document.getElementById('sidebarMoreHeading').textContent = cfg.moreHeading
+      document.getElementById('gymLink').textContent = cfg.gymText
+      document.getElementById('puzzlesLink').textContent = cfg.puzzlesText
+    }
+
+    function setChip(cls, text) {
+      const chip = document.getElementById('statusChip')
+      chip.className = 'status-chip ' + cls
+      chip.textContent = text
+    }
+    function setSpectatorText(text) {
+      document.getElementById('spectatorText').textContent = text
+      document.getElementById('spectatorText2').textContent = text
+    }
+    function show(id) { const el = document.getElementById(id); if (el) el.hidden = false }
+    function hide(id) { const el = document.getElementById(id); if (el) el.hidden = true }
+
+    function emptySeatHTML() {
+      return `
+        <div class="seat__avatar seat__avatar--empty" aria-label="Empty seat">?</div>
+        <div class="seat__name" style="color:var(--text-muted);font-style:italic">Waiting…</div>
+        <div class="seat__meta">&nbsp;</div>
+      `
+    }
+    function botSeatHTML() {
+      return `
+        <div class="seat__avatar seat__avatar--bot" aria-label="Bot">B</div>
+        <div class="seat__name">Rusty</div>
+        <div class="seat__meta"><span class="seat__bot-tag">BOT</span> · 1420</div>
+      `
+    }
+    function humanOpponentHTML() {
+      return `
+        <div class="seat__avatar" aria-label="Opponent" style="background:linear-gradient(135deg,#b36bff,#6d28d9)">M</div>
+        <div class="seat__name">mclovin</div>
+        <div class="seat__meta">1680</div>
+      `
+    }
+
+    // Wire game switcher
+    document.querySelectorAll('.game-switcher button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.game-switcher button').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        currentGame = btn.dataset.game
+        applySidebarForGame(currentGame)
+        states[currentState]?.()
+      })
+    })
+
+    // Wire state switcher
+    document.querySelectorAll('.state-switcher button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.state-switcher button').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        states[btn.dataset.state]?.()
+      })
+    })
+
+    // Boot into playing state
+    states.playing()
+  </script>
+</body>
+</html>

@@ -106,7 +106,7 @@ export default function GuideOrb() {
             zIndex: 10,
           }}
         >
-          {badgeCount > 9 ? '9+' : badgeCount}
+          {badgeCount > 99 ? '99+' : badgeCount}
         </span>
       )}
     </div>

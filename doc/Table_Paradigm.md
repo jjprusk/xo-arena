@@ -391,13 +391,41 @@ No Prisma migrations required — all changes are frontend + shell + `meta` fiel
 
 ---
 
-## 7. Open discussion log
+## 7. Visual mockups
 
-Populated during design conversations; entries promote to decisions in §3–§6 once settled. Currently empty — all conversation points were integrated into the relevant sections as they came up.
+Responsive HTML mockups for each table archetype live under [`doc/mockups/table-paradigm/`](./mockups/table-paradigm/). Each is self-contained, uses the same design tokens as `landing/src/index.css`, and needs no build step — open the file and resize the browser to audit the mobile / tablet / laptop breakpoints.
+
+| Mockup | What it shows | States |
+|---|---|---|
+| [`index.html`](./mockups/table-paradigm/index.html) | Navigation hub with a preview card per archetype and a summary of the guiding principles. | — |
+| [`2p-sitdown.html`](./mockups/table-paradigm/2p-sitdown.html) | 2-player sit-down table (XO / Connect4 / Chess). Rectangle surface, seats on opposite edges, relative POV. | FORMING · PLAYING · COMPLETED · Tournament sidebar |
+| [`head-to-head.html`](./mockups/table-paradigm/head-to-head.html) | Pong court. Horizontal in landscape, flips to vertical in portrait via media query. Player pods sit outside the court at each end. | FORMING · PLAYING · COMPLETED |
+| [`8p-oval.html`](./mockups/table-paradigm/8p-oval.html) | Poker (8-player template). Oval surface, seat-index badges, dealer role badge, per-seat chip stack + bet indicator, folded/disconnected states, community cards + pot in the shared center. | FORMING · PLAYING · Showdown |
+| [`tables-list.html`](./mockups/table-paradigm/tables-list.html) | `/tables` list refresh. Cards on mobile/tablet, density table at ≥820px. Seat-strip dots, status chips, type tags for Pickup/Tournament/Private. | — |
+
+**Design decisions locked in during mockup authoring** (not already in the decisions above):
+
+- **Rendered surface**: CSS-only radial-bevel with inset + outer shadow. No image assets, no per-game authoring — the shell provides the surface, games render into the center rect.
+- **Active-turn indicator**: amber ring + soft pulse (`guide-pulse` analogue). Same token for "your turn to move" across every game, same animation for a disconnected player's seat (red-tinted).
+- **Winner emphasis**: amber ring + small 👑 after the name. Loser's seat fades to `opacity: 0.55` + desaturated. Outcome banner is a pill on the bottom rim, never over the seats.
+- **Spectator badge**: a pill with a live-dot at the top-right of the rim. Never overlaps the play surface. Clicks open a popover of avatars (visual stub in the mockup; server-side already emits `userIds` via `table:presence`).
+- **Dark mode**: parallel token set. Surface swaps to a deeper slate-900 → #0E1A2B gradient; felt hues stay consistent.
+- **FORMING → PLAYING transition**: 0.8s center-only fade + scale. Seats never move. Respects `prefers-reduced-motion`.
+- **Head-to-head portrait flip**: at `aspect-ratio ≤ 3/4` + narrow viewport, the court swaps orientation and player pods relocate to the top/bottom ends. Single CSS media query; no JS.
+
+**Performance posture of the mockups:**
+
+- No images or custom fonts beyond Inter (same as the live site). Google Fonts preconnected.
+- Pure CSS for every visual effect (gradients, glows, animations). No canvas, no heavy libraries.
+- Tiny vanilla JS per page (≤40 lines) only for the state-switcher tab and the theme toggle. No framework. Content is static HTML that parses in one tick.
+- Single stylesheet load per page; `tokens.css` + `table-paradigm.css` total ~34KB uncompressed (gzips well under 8KB).
+- Container queries + media queries do all responsive layout — zero runtime cost.
+
+These same CSS primitives map directly to the React `PlatformShell` rewrite in Phase 3.5: `.table-surface`, `.seat`, `.spectator-badge`, `.table-center`, `.outcome-banner`, and the oval seat position map become classes the React components render into.
 
 ---
 
-## 7. Open discussion log
+## 8. Open discussion log
 
 Running notes from our conversation — raw material we can promote into decisions above.
 

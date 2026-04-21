@@ -52,9 +52,10 @@ async function assertModelOwner(req, res, modelId) {
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
-router.get('/models', async (_req, res, next) => {
+router.get('/models', async (req, res, next) => {
   try {
-    const models = await svc.listModels()
+    const { gameId } = req.query
+    const models = await svc.listModels({ gameId: gameId || undefined })
     res.json({ models })
   } catch (err) { next(err) }
 })
@@ -76,10 +77,10 @@ router.get('/network-config', async (_req, res, next) => {
 
 router.post('/models', requireAuth, async (req, res, next) => {
   try {
-    const { name, description, algorithm, config } = req.body
+    const { name, description, algorithm, config, gameId } = req.body
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' })
     if (!await checkModelLimit(req, res)) return
-    const model = await svc.createModel({ name: name.trim(), description, algorithm, config, createdBy: req.auth.userId })
+    const model = await svc.createModel({ name: name.trim(), description, algorithm, config, gameId: gameId ?? 'xo', createdBy: req.auth.userId })
     res.status(201).json({ model })
   } catch (err) { next(err) }
 })

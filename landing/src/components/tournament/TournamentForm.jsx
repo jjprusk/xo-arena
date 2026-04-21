@@ -1,5 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState } from 'react'
+import { GAMES } from '../../lib/gameRegistry.js'
 
 const FIELD_STYLE = {
   backgroundColor: 'var(--bg-base)',
@@ -65,7 +66,8 @@ const DEFAULT_FORM = {
   startTime: '', registrationOpenAt: '', registrationCloseAt: '', allowSpectators: true,
   botMinGamesPlayed: '', allowNonCompetitiveBots: false, paceMs: '',
   noticePeriodMinutes: '', durationMinutes: '',
-  isRecurring: false, recurrenceInterval: 'WEEKLY', recurrenceEndDate: '', autoOptOutAfterMissed: '',
+  isRecurring: false, recurrenceInterval: 'WEEKLY', recurrenceEndDate: '', autoOptOutAfterMissed: '', recurrencePaused: false,
+  isTest: false,
 }
 
 export default function TournamentForm({ initialValues, onSubmit, onCancel, submitLabel = 'Create Tournament' }) {
@@ -89,8 +91,10 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       durationMinutes: initialValues.durationMinutes != null ? String(initialValues.durationMinutes) : '',
       isRecurring: initialValues.isRecurring ?? false,
       recurrenceInterval: initialValues.recurrenceInterval ?? 'WEEKLY',
+      recurrencePaused: initialValues.recurrencePaused ?? false,
       recurrenceEndDate: initialValues.recurrenceEndDate ? initialValues.recurrenceEndDate.slice(0, 10) : '',
       autoOptOutAfterMissed: initialValues.autoOptOutAfterMissed != null ? String(initialValues.autoOptOutAfterMissed) : '',
+      isTest: initialValues.isTest ?? false,
     }
   })
   const [errors, setErrors] = useState({})
@@ -153,7 +157,9 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
         payload.recurrenceInterval    = form.recurrenceInterval
         payload.recurrenceEndDate     = form.recurrenceEndDate || null
         payload.autoOptOutAfterMissed = form.autoOptOutAfterMissed !== '' ? parseInt(form.autoOptOutAfterMissed, 10) : null
+        payload.recurrencePaused      = !!form.recurrencePaused
       }
+      payload.isTest = !!form.isTest
       await onSubmit(payload)
     } catch (err) {
       setApiErr(err.message || 'Submit failed. Please try again.')
@@ -178,7 +184,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Game" required>
           <select value={form.game} onChange={e => set('game', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            <option value="xo">XO (Tic-Tac-Toe)</option>
+            {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
           </select>
         </Field>
         <Field label="Mode" required>
@@ -255,7 +261,6 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
                 <option value="DAILY">Daily</option>
                 <option value="WEEKLY">Weekly</option>
                 <option value="MONTHLY">Monthly</option>
-                <option value="CUSTOM">Custom</option>
               </select>
             </Field>
             <Field label="Recurrence End Date" hint="Optional — leave blank to recur indefinitely">
@@ -267,6 +272,16 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
             <input type="number" min="0" value={form.autoOptOutAfterMissed}
               onChange={e => set('autoOptOutAfterMissed', e.target.value)} placeholder="0" className={INPUT_CLASS} style={FIELD_STYLE} />
           </Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={form.recurrencePaused} onChange={e => set('recurrencePaused', e.target.checked)}
+              className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Pause recurrence
+              <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                — stop generating new occurrences without cancelling the template. Resume by unchecking.
+              </span>
+            </span>
+          </label>
         </div>
       )}
 
@@ -356,6 +371,17 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
         <input type="checkbox" checked={form.allowSpectators} onChange={e => set('allowSpectators', e.target.checked)}
           className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Allow spectators</span>
+      </label>
+
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" checked={form.isTest} onChange={e => set('isTest', e.target.checked)}
+          className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Mark as test tournament
+          <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+            — hidden from the public tournaments page; only visible to admins with the "Show test" toggle.
+          </span>
+        </span>
       </label>
 
       {apiErr && <p className="text-sm" style={{ color: 'var(--color-red-600)' }}>{apiErr}</p>}
