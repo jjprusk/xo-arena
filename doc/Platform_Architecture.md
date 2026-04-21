@@ -503,10 +503,14 @@ All migrations gated behind `VITE_TIER2_SSE` feature flag. The new path runs *al
 
 ### Phase D — Retire socket Tier 2 channels
 
-1. Flip the feature flag for all users. Monitor for 1-2 weeks.
-2. Remove Tier 2 event handlers from `socketHandler.js`. The WebSocket server now handles only gameplay events.
-3. Remove `useTournamentSocket` — replaced entirely by `useEventStream` SSE hook.
-4. Shrink backend socket code; document the remaining surface area.
+**Client-side cleanup (done):**
+1. `VITE_TIER2_SSE` flag removed — SSE is always-on when a user is signed in.
+2. `useTournamentSocket` deleted; `TournamentsPage` and `TournamentDetailPage` drive off `useEventStream` only.
+3. Flag-gated socket fallbacks removed from `AppLayout` (`guide:notification`, `guide:onlineUsers`). The socket now carries only `guide:journeyStep` and `user:subscribe` for per-user targeting still used by pages that haven't migrated yet.
+
+**Remaining (follow-up):**
+4. Migrate `TablesPage` and `TableDetailPage` `socket.on('guide:notification')` listeners to `useEventStream` (they're table list state-nudges, not Guide-panel notifications). Once done, the dual-write in `notificationBus.js` (`_io.emit('guide:notification', ...)` alongside `appendToStream`) can be removed.
+5. After the dual-write is gone: shrink `socketHandler.js` Tier 2 subscription/broadcast code; document the remaining WebSocket surface area (gameplay rooms only).
 
 ### Phase E — Web Push (Tier 3)
 

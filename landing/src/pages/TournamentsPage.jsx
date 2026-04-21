@@ -4,8 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
-import { useEventStream, isTier2SseEnabled } from '../lib/useEventStream.js'
+import { useEventStream } from '../lib/useEventStream.js'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -291,8 +290,6 @@ export default function TournamentsPage() {
     searchParams.get('action') === 'register' ? searchParams.get('tournamentId') : null
   )
 
-  const { lastEvent } = useTournamentSocket()
-
   useEffect(() => {
     if (!session?.user?.id) { setToken(null); setDbUserId(null); return }
     getToken().then(async t => {
@@ -342,14 +339,9 @@ export default function TournamentsPage() {
       .catch(() => setAutoRegisterId(null))
   }, [autoRegisterId, token, loading, tournaments]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (lastEvent) load(statusFilter)
-  }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Tier 2 SSE — any tournament:* event refetches the list ─────────────────
   useEventStream({
     channels: ['tournament:'],
-    enabled: isTier2SseEnabled(),
     onEvent: () => load(statusFilter),
   })
 

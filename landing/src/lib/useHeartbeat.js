@@ -14,13 +14,12 @@
  * (which would briefly drop the user from the online list).
  */
 import { useEffect } from 'react'
-import { isTier2SseEnabled } from './useEventStream.js'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 
 export function useHeartbeat({ enabled = true } = {}) {
   useEffect(() => {
-    if (!isTier2SseEnabled() || !enabled) return
+    if (!enabled) return
     if (typeof document === 'undefined') return
 
     let timer = null

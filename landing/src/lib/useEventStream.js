@@ -7,17 +7,10 @@
  * seen event id in sessionStorage so reconnects (page reloads, temporary
  * network drops) replay missed events via Last-Event-ID.
  *
- * Design notes:
- *   - EventSource handles auto-reconnect + Last-Event-ID natively. We just
- *     need to persist the id between page loads (sessionStorage) since a
- *     fresh EventSource starts with no id.
- *   - Pause on document.hidden is not strictly needed — EventSource is cheap —
- *     but we close the connection on long-hidden tabs anyway so the backend
- *     doesn't keep idle broker slots.
- *   - Feature-flag gated via VITE_TIER2_SSE. When off, the hook returns a
- *     no-op and the parent component's existing socket path stays live.
- *   - Channel filter is a comma-joined prefix list sent as a query param
- *     (matches the server's startsWith filter).
+ * EventSource handles auto-reconnect + Last-Event-ID natively — we just
+ * persist the id between page loads since a fresh EventSource starts with
+ * no id. Channel filter is a comma-joined prefix list sent as a query param
+ * (matches the server's startsWith filter).
  *
  * Usage:
  *   useEventStream({
@@ -29,7 +22,6 @@
 import { useEffect, useRef } from 'react'
 
 const STORAGE_KEY = 'aiarena_tier2_last_event_id'
-const FLAG        = !!import.meta.env.VITE_TIER2_SSE
 
 function loadLastId() {
   try { return sessionStorage.getItem(STORAGE_KEY) || null } catch { return null }
@@ -38,20 +30,13 @@ function saveLastId(id) {
   try { sessionStorage.setItem(STORAGE_KEY, id) } catch {}
 }
 
-export function isTier2SseEnabled() { return FLAG }
-
 export function useEventStream({ channels = [], onEvent, enabled = true } = {}) {
   // Keep latest onEvent in a ref so re-renders don't cycle the connection.
   const handlerRef = useRef(onEvent)
   useEffect(() => { handlerRef.current = onEvent }, [onEvent])
 
   useEffect(() => {
-    if (!FLAG || !enabled) {
-      // Diagnostic — always logs so we can tell from the browser console
-      // whether the flag reached the client.
-      console.info('[useEventStream] skipping — FLAG=' + FLAG + ' enabled=' + enabled)
-      return
-    }
+    if (!enabled) return
     if (typeof EventSource === 'undefined') {
       console.warn('[useEventStream] EventSource not available in this browser')
       return

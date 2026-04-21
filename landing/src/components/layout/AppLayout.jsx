@@ -13,7 +13,7 @@ import GuidePanel from '../guide/GuidePanel.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
-import { useEventStream, isTier2SseEnabled } from '../../lib/useEventStream.js'
+import { useEventStream } from '../../lib/useEventStream.js'
 import { useHeartbeat } from '../../lib/useHeartbeat.js'
 import { JOURNEY_DEFAULT_SLOTS } from '../guide/slotActions.js'
 import { AppNav } from '@xo-arena/nav'
@@ -122,9 +122,6 @@ export default function AppLayout() {
   const isAdmin = location.pathname.startsWith('/admin')
   const [showSignIn, setShowSignIn] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  // Tracks the DB userId confirmed by the server after user:subscribe.
-  // Used to detect when the server dropped us from the online list.
-  const myPresenceIdRef = useRef(null)
 
   // Mirror of session?.user?.id (the betterAuthId) so the long-lived
   // guide:notification listener — registered once on mount — can filter
@@ -256,72 +253,39 @@ export default function AppLayout() {
       useGuideStore.getState().open()
     }
 
-    // Server confirms our presence DB userId — store it so we can detect self-removal.
-    function onSubscribed({ userId }) {
-      myPresenceIdRef.current = userId
-    }
-
-    function onOnlineUsers({ users }) {
-      useGuideStore.getState().setOnlineUsers(users)
-      // If the server no longer has us in the broadcast, re-subscribe immediately.
-      // This self-heals any silent presence drop without requiring a page refresh.
-      const myId = myPresenceIdRef.current
-      if (myId && socket.connected && !users.some(u => u.userId === myId)) {
-        getToken().then(token => {
-          if (token) socket.emit('user:subscribe', { authToken: token })
-        }).catch(() => {})
-      }
-    }
-
     socket.on('connect',            onConnect)
-    socket.on('guide:subscribed',   onSubscribed)
-    // When Tier 2 SSE is enabled, notifications arrive via SSE instead —
-    // skip the socket handler to avoid double-delivery.
-    if (!isTier2SseEnabled()) {
-      socket.on('guide:notification', onGuideNotification)
-    }
     socket.on('guide:journeyStep',  onJourneyStep)
-    // Online users: under the SSE flag, presence is driven by heartbeats +
-    // /presence/online fetches (see useHeartbeat + the useEventStream hook
-    // below). Skip the socket broadcast in that mode to avoid thrashing
-    // setOnlineUsers from two competing sources.
-    if (!isTier2SseEnabled()) {
-      socket.on('guide:onlineUsers',  onOnlineUsers)
-    }
 
-    // If already connected when this effect runs, subscribe immediately
+    // If already connected when this effect runs, subscribe immediately.
+    // user:subscribe still matters: backend uses the per-user socket room for
+    // targeted emissions consumed by pages that haven't migrated to SSE yet
+    // (TablesPage, TableDetailPage).
     if (socket.connected) onConnect()
 
-    // Presence keepalive — fallback re-subscribe in case no broadcast arrives
-    // for an extended period (e.g. no other users connecting or disconnecting).
     const keepalive = setInterval(async () => {
       if (!socket.connected) return
       const token = await getToken()
       if (token) socket.emit('user:subscribe', { authToken: token })
     }, 3 * 60_000)
 
-    // Expose the handler so the SSE hook below can call it with the same logic.
+    // Expose the notification handler so the SSE hook below reuses the same
+    // filtering, sound, and panel-open logic as the original socket path did.
     guideNotifHandlerRef.current = onGuideNotification
 
     return () => {
       clearInterval(keepalive)
       socket.off('connect',            onConnect)
-      socket.off('guide:subscribed',   onSubscribed)
-      socket.off('guide:notification', onGuideNotification)
       socket.off('guide:journeyStep',  onJourneyStep)
-      socket.off('guide:onlineUsers',  onOnlineUsers)
       guideNotifHandlerRef.current = null
     }
   }, [])
 
   // ── Tier 2 SSE subscription for guide notifications + presence ─────────────
-  // Uses the same notification handler function as the socket path, so sound,
-  // filtering, and panel-open logic behave identically. Presence membership
-  // changes trigger a REST refetch — state always derives from /presence/online
-  // rather than from socket payloads.
+  // Presence membership changes trigger a REST refetch — state always derives
+  // from /presence/online rather than from socket payloads.
   useEventStream({
     channels: ['guide:', 'presence:'],
-    enabled: isTier2SseEnabled() && !!user?.id,
+    enabled: !!user?.id,
     onEvent: (channel, payload) => {
       if (channel === 'guide:notification') {
         const handler = guideNotifHandlerRef.current
@@ -338,11 +302,10 @@ export default function AppLayout() {
   useHeartbeat({ enabled: !!user?.id })
 
   // ── Initial + periodic /presence/online reconcile ──────────────────────────
-  // Runs when signed in under the SSE flag. Refetched on presence:changed
-  // hints (above) and on tab-become-visible. Backstop poll at 60s catches
-  // membership changes on the rare path where an SSE hint is missed.
+  // Refetched on presence:changed hints (above) and on tab-become-visible.
+  // 60s backstop poll catches membership changes on the rare path where a hint
+  // is missed.
   useEffect(() => {
-    if (!isTier2SseEnabled()) return
     if (!user?.id) return
     let cancelled = false
     async function refresh() {

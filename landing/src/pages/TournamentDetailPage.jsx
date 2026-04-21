@@ -5,8 +5,7 @@ import { tournamentApi } from '../lib/tournamentApi.js'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import { useTournamentSocket } from '../hooks/useTournamentSocket.js'
-import { useEventStream, isTier2SseEnabled } from '../lib/useEventStream.js'
+import { useEventStream } from '../lib/useEventStream.js'
 import { connectSocket } from '../lib/socket.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
@@ -1713,8 +1712,6 @@ export default function TournamentDetailPage() {
   // doesn't immediately re-show it. Cleared when the match changes (next round).
   const dismissedOverlayMatchRef = useRef(null)
 
-  const { lastEvent } = useTournamentSocket()
-
   const isAdmin          = session?.user?.role === 'admin'
   const userId           = session?.user?.id ?? null
   const userBetterAuthId = session?.user?.id ?? null
@@ -1771,21 +1768,11 @@ export default function TournamentDetailPage() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    if (!lastEvent || lastEvent.data?.tournamentId !== id) return
-    if (lastEvent.channel === 'tournament:match:ready') {
-      setActiveMatchEvent(lastEvent.data)
-    }
-    load()
-  }, [lastEvent]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Tier 2 SSE subscription (feature-flagged via VITE_TIER2_SSE) ────────────
+  // ── Tier 2 SSE subscription ────────────────────────────────────────────────
   // Any tournament:* SSE event for this tournament triggers a REST refetch.
-  // This is the authoritative source of "something changed on this tournament" —
-  // replaces the socket-payload-to-state derivation above when the flag is on.
+  // This is the authoritative "something changed on this tournament" signal.
   useEventStream({
     channels: ['tournament:'],
-    enabled: isTier2SseEnabled(),
     onEvent: (channel, payload) => {
       if (payload?.tournamentId !== id) return
       if (channel === 'tournament:match:ready') setActiveMatchEvent(payload)
@@ -1794,11 +1781,9 @@ export default function TournamentDetailPage() {
   })
 
   // ── Backstop polling while the page is visible and the tournament is active ──
-  // Catches any events that slipped past both socket and SSE — e.g. during a
-  // backend restart that occurs between the event firing and any client being
-  // connected. Paused on document.hidden so background tabs don't thrash.
+  // Catches events that slipped past SSE — e.g. during a backend restart
+  // between event fire and any client being connected. Paused on hidden tabs.
   useEffect(() => {
-    if (!isTier2SseEnabled()) return
     if (!tournament) return
     // Poll only while the tournament is in an actively-changing state.
     const activeStatuses = ['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS']
