@@ -15,11 +15,11 @@
 import { expect } from '@playwright/test'
 
 /**
- * Play through a PvAI game on `page` until it ends (win, AI win, or draw).
- * Returns the end-state text found ('You win', 'AI wins', or 'Draw').
+ * Play through a PvAI game on `page` until it ends.
+ * Returns the end-state text found ('You win', 'Opponent wins', or 'Draw').
  */
 export async function playPvAIToEnd(page) {
-  const endTexts = ['You win', 'AI wins', 'Draw']
+  const endTexts = ['You win', 'Opponent wins', 'Draw']
 
   for (let i = 0; i < 9; i++) {
     // Check if already over
@@ -46,19 +46,34 @@ export async function playPvAIToEnd(page) {
 }
 
 /**
- * Navigate to /play and wait for the auto-created room invite URL to appear.
- * Returns the invite URL string.
+ * Create a Table as the signed-in host and return an invite URL the guest
+ * can use to land directly on the game board.
  *
- * Requires: backend running at localhost:3000 (via docker compose or directly).
- * If "Creating room…" persists and this times out, the backend socket is unavailable.
+ * Replaces the deprecated `getInviteUrl(page)` which relied on `/play`
+ * auto-creating a room with a visible readonly invite input. That
+ * auto-room flow was removed in Phase 3.4 — Tables are now the only
+ * game-session primitive and they require an authenticated creator.
+ *
+ * Returns `{ slug, inviteUrl }` where `inviteUrl` is of the form
+ * `/play?join=<slug>` — the same shape the old invite input emitted.
+ *
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} token              Bearer JWT for the host
+ * @param {string} [backendUrl]       Defaults to localhost backend
  */
-export async function getInviteUrl(page) {
-  await page.goto('/play')
-  // The "Invite a Friend" card shows a readonly input once the auto-room is ready.
-  // Wait for the element to appear first (clearer timeout message than .not.toHaveValue).
-  const input = page.locator('input[readonly]').first()
-  await input.waitFor({ state: 'visible', timeout: 15_000 })
-  return input.inputValue()
+export async function createGuestTable(request, token, backendUrl = 'http://localhost:3000') {
+  const res = await request.post(`${backendUrl}/api/v1/tables`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: {
+      gameId: 'xo',
+      minPlayers: 2,
+      maxPlayers: 2,
+      isPrivate: false,
+    },
+  })
+  if (!res.ok()) throw new Error(`Create table failed: ${res.status()} ${await res.text()}`)
+  const { table } = await res.json()
+  return { slug: table.slug, tableId: table.id, inviteUrl: `/play?join=${table.slug}` }
 }
 
 /**
@@ -134,6 +149,41 @@ export function tournamentApi(base) {
       if (!res.ok()) throw new Error(`tournaments.addSeededBot ${res.status()}: ${await res.text()}`)
       return await res.json()
     },
+
+    // True recurring seed bots (vs addSeededBot which creates one-off
+    // testbots). Body: { bots: [{ name, skillLevel: 'rusty'|'copper'|
+    // 'sterling'|'magnus' }] }. Also writes a TournamentSeedBot config row,
+    // which is what causes the bot to propagate to future recurring
+    // occurrences.
+    async addSeedBots({ request, token }, id, bots) {
+      const res = await request.post(url(`/api/tournaments/${id}/seed-bots`), { headers: hdr(token), data: { bots } })
+      if (!res.ok()) throw new Error(`tournaments.addSeedBots ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+    async listSeedBots({ request, token }, id) {
+      const res = await request.get(url(`/api/tournaments/${id}/seed-bots`), { headers: hdr(token) })
+      if (!res.ok()) throw new Error(`tournaments.listSeedBots ${res.status()}: ${await res.text()}`)
+      return (await res.json()).seedBots
+    },
+    async removeSeedBot({ request, token }, id, botUserId) {
+      const res = await request.delete(url(`/api/tournaments/${id}/seed-bots/${botUserId}`), { headers: hdr(token) })
+      if (!res.ok()) throw new Error(`tournaments.removeSeedBot ${res.status()}: ${await res.text()}`)
+      return res.status()
+    },
+    async triggerRecurringCheck({ request, token }) {
+      const res = await request.post(url('/api/tournaments/admin/scheduler/check-recurring'), { headers: hdr(token), data: {} })
+      if (!res.ok()) throw new Error(`tournaments.triggerRecurringCheck ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+    async forceComplete({ request, token }, id) {
+      // Admin/QA shortcut: flip a tournament to COMPLETED without playing
+      // out the bracket. The regular PATCH intentionally excludes `status`,
+      // so this dedicated endpoint exists in the service for tests that need
+      // to trigger completion-dependent flows (e.g. recurring-sweep spawns).
+      const res = await request.post(url(`/api/tournaments/${id}/admin/force-complete`), { headers: hdr(token), data: {} })
+      if (!res.ok()) throw new Error(`tournaments.forceComplete ${res.status()}: ${await res.text()}`)
+      return (await res.json()).tournament
+    },
     async register({ request, token }, id, body = {}) {
       const res = await request.post(url(`/api/tournaments/${id}/register`), { headers: hdr(token), data: body })
       if (!res.ok()) throw new Error(`tournaments.register ${res.status()}: ${await res.text()}`)
@@ -183,23 +233,22 @@ export async function pollUntil(predicate, { timeoutMs = 30_000, intervalMs = 50
   throw new Error(`pollUntil timed out waiting for ${label}`)
 }
 
-// Map legacy difficulty names to current select values
-const DIFFICULTY_MAP = { easy: 'novice', medium: 'intermediate', hard: 'advanced', novice: 'novice', intermediate: 'intermediate', advanced: 'advanced', master: 'master' }
-
 /**
- * Start a PvAI game from /play. Expands the AI panel, selects difficulty and mark,
- * then clicks the start button.
+ * Start a PvAI game against the community bot.
+ *
+ * The old mode-selection UI (difficulty/mark picker accordion) was removed in
+ * Phase 3.4 — /play is now URL-driven. The `difficulty` and `mark` arguments
+ * are kept for back-compat with existing specs but are ignored; the server
+ * picks the community bot and the mark.
+ *
+ * Also pre-dismisses the first-visit guest welcome modal that otherwise
+ * overlays the board and blocks clicks in a fresh Playwright context.
  */
-export async function startPvAIGame(page, { difficulty = 'novice', mark = 'X' } = {}) {
-  await page.goto('/play')
-  // Expand the "Play vs AI" accordion
-  await page.locator('button').filter({ hasText: 'Play vs AI' }).first().click()
-  // Wait for the difficulty select to appear (Minimax tab is default)
-  const difficultySelect = page.locator('select').filter({ has: page.locator('option[value="novice"]') })
-  await difficultySelect.waitFor({ state: 'visible' })
-  await difficultySelect.selectOption(DIFFICULTY_MAP[difficulty] ?? difficulty)
-  // Select mark (X / O / alternate)
-  await page.getByRole('button', { name: mark, exact: true }).click()
-  // Click the "Play vs AI" start button inside the expanded panel
-  await page.locator('button').filter({ hasText: /^Play vs AI$/ }).click()
+export async function startPvAIGame(page, _opts = {}) {
+  await page.addInitScript(() => {
+    try { window.localStorage?.setItem('aiarena_guest_welcome_seen', '1') } catch {}
+  })
+  await page.goto('/play?action=vs-community-bot')
+  // The board is the authoritative signal that the game started.
+  await page.locator('[aria-label="Tic-tac-toe board"]').waitFor({ state: 'visible', timeout: 15_000 })
 }

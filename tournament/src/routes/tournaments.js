@@ -4,15 +4,19 @@ import db from '../lib/db.js'
 import { publish } from '../lib/redis.js'
 import { optionalAuth, requireAuth, requireTournamentAdmin, isTournamentAdmin } from '../middleware/auth.js'
 import { cleanupSeededBots } from '../lib/tournamentSweep.js'
+import { checkRecurringOccurrences } from '../lib/recurringScheduler.js'
 
 const router = Router()
 
 // GET /api/tournaments
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
-    const { status, game } = req.query
+    const { status, game, includeTest } = req.query
 
     const isAdmin = req.auth?.userId ? await isTournamentAdmin(req.auth.userId) : false
+    // Test tournaments (e2e-created) are hidden from everyone by default.
+    // Admins can opt in with ?includeTest=true to see them in the admin UI.
+    const showTest = isAdmin && (includeTest === 'true' || includeTest === '1')
 
     const where = {}
     if (status) where.status = status
@@ -22,6 +26,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
         ? { equals: where.status, not: 'DRAFT' }
         : { not: 'DRAFT' }
     }
+    if (!showTest) where.isTest = false
 
     const tournaments = await db.tournament.findMany({
       where,
@@ -38,6 +43,8 @@ router.get('/', optionalAuth, async (req, res, next) => {
         maxParticipants: true,
         bestOfN: true,
         allowSpectators: true,
+        isTest: true,
+        recurrencePaused: true,
         startTime: true,
         endTime: true,
         registrationOpenAt: true,
@@ -111,7 +118,7 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
       allowNonCompetitiveBots, paceMs, allowSpectators,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed, startMode,
+      recurrenceEndDate, autoOptOutAfterMissed, startMode, isTest, recurrencePaused,
     } = req.body
 
     if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
@@ -156,6 +163,8 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
         ...(recurrenceInterval !== undefined && { recurrenceInterval }),
         ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
         ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
+        ...(isTest !== undefined && { isTest: !!isTest }),
+        ...(recurrencePaused !== undefined && { recurrencePaused: !!recurrencePaused }),
       },
     })
 
@@ -174,7 +183,7 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       allowNonCompetitiveBots, paceMs, allowSpectators,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
       noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed, startMode,
+      recurrenceEndDate, autoOptOutAfterMissed, startMode, isTest, recurrencePaused,
     } = req.body
 
     if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
@@ -214,6 +223,8 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       ...(recurrenceInterval !== undefined && { recurrenceInterval }),
       ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
       ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
+      ...(isTest !== undefined && { isTest: !!isTest }),
+      ...(recurrencePaused !== undefined && { recurrencePaused: !!recurrencePaused }),
     }
 
     const tournament = await db.tournament.update({
@@ -881,6 +892,68 @@ router.delete('/admin/purge-cancelled', requireTournamentAdmin, async (req, res,
 
     const result = await db.tournament.deleteMany({ where: { status: 'CANCELLED' } })
     res.json({ deleted: result.count })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// DELETE /api/tournaments/admin/purge-test
+// Hard-deletes all tournaments flagged as test (admin only). Seeded bots
+// created for those tournaments are cascaded the same way purge-cancelled
+// handles them.
+router.delete('/admin/purge-test', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const testTournaments = await db.tournament.findMany({
+      where: { isTest: true },
+      select: { id: true },
+    })
+    const tournamentIds = testTournaments.map(t => t.id)
+
+    if (tournamentIds.length > 0) {
+      const seededParticipants = await db.tournamentParticipant.findMany({
+        where: { tournamentId: { in: tournamentIds } },
+        include: { user: { select: { id: true, username: true } } },
+      })
+      const seededIds = seededParticipants
+        .filter(p => p.user?.username?.startsWith('seeded-'))
+        .map(p => p.user.id)
+      if (seededIds.length > 0) {
+        await db.user.deleteMany({ where: { id: { in: seededIds } } })
+      }
+    }
+
+    const result = await db.tournament.deleteMany({ where: { isTest: true } })
+    res.json({ deleted: result.count })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/:id/admin/force-complete
+// Admin/QA shortcut: mark a tournament COMPLETED without playing out its
+// bracket. Useful for testing the recurring sweep and for cleaning up
+// stuck tournaments. Not exposed in normal UI.
+router.post('/:id/admin/force-complete', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const tournament = await db.tournament.findUnique({ where: { id: req.params.id } })
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' })
+    const updated = await db.tournament.update({
+      where: { id: req.params.id },
+      data:  { status: 'COMPLETED', endTime: new Date() },
+    })
+    res.json({ tournament: updated })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/admin/scheduler/check-recurring
+// Manually fires the recurring-occurrence check. Useful in QA (no 60s wait)
+// and as an admin "kick" if the scheduler appears stuck.
+router.post('/admin/scheduler/check-recurring', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const summary = await checkRecurringOccurrences()
+    res.json(summary)
   } catch (e) {
     next(e)
   }

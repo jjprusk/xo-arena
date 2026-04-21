@@ -48,7 +48,13 @@ async function requireSessionCookie(req, res, next) {
 
 const router = Router()
 
-const SSE_MAX_CONNECTIONS_PER_USER = 2
+// Per-user SSE cap. Each page opens 2 streams (guide+presence in AppLayout,
+// tournament: on Tournaments/TournamentDetail), and a refresh briefly
+// overlaps the old tab's connections with the new before close events
+// settle. We need ≥ 4 to survive a reload flap without 429'ing the new tab,
+// and enough room on top for two genuinely-open tabs. Effective ceiling is
+// still bounded by the browser's own per-origin connection cap (~6).
+const SSE_MAX_CONNECTIONS_PER_USER = 8
 const SSE_HEARTBEAT_MS             = 30_000
 
 // GET /api/v1/events/replay?since=<streamId>&limit=<n>

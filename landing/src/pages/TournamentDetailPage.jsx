@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
@@ -1890,7 +1890,14 @@ export default function TournamentDetailPage() {
     return () => clearInterval(timer)
   }, [tournament?.status, load])
 
-  const backTo = isAdmin ? '/admin/tournaments' : '/tournaments'
+  // "Back to Tournaments" routes to wherever the user came from, captured in
+  // the navigation state when the link was clicked. Admins who browse via
+  // /admin/tournaments end up back there; everyone else (and direct-link /
+  // refreshed navigations where state was lost) defaults to the public list.
+  const location = useLocation()
+  const backTo = location.state?.from === '/admin/tournaments'
+    ? '/admin/tournaments'
+    : '/tournaments'
 
   if (loading) return <div className="max-w-4xl mx-auto px-4 py-8"><Spinner /></div>
   if (error) return (

@@ -32,10 +32,15 @@ const STREAM_KEY = 'events:tier2:stream'
 // Map<res, { userId: string|null, channels: string[], lastSentId: string|null }>
 const _clients = new Map()
 
-// Dedicated Redis connection — XREAD BLOCK 0 holds it, so it must not be shared
+// Dedicated Redis connection — XREAD BLOCK holds it, so it must not be shared
 // with any other call site (reusing a connection would starve unrelated commands).
 let _redis         = null
 let _loopRunning   = false
+// Liveness: updated on every XREAD return (entries or timeout). Used by
+// resourceCounters to detect a silently-dead loop. BLOCK is 30s so this
+// ticks at least that often even with zero activity.
+let _lastXreadAt   = null
+const XREAD_BLOCK_MS = 30_000
 
 function ensureLoop() {
   if (_loopRunning) return
@@ -55,7 +60,8 @@ function ensureLoop() {
   ;(async () => {
     while (_loopRunning) {
       try {
-        const rows = await _redis.xread('BLOCK', 0, 'STREAMS', STREAM_KEY, lastId)
+        const rows = await _redis.xread('BLOCK', XREAD_BLOCK_MS, 'STREAMS', STREAM_KEY, lastId)
+        _lastXreadAt = Date.now()
         if (!rows) continue
         // rows = [[ streamKey, [[id, fields], ...] ]]
         const entries = rows[0][1]
@@ -126,10 +132,21 @@ export function clientCountForUser(userId) {
 
 export function totalClients() { return _clients.size }
 
+/**
+ * Timestamp of the most recent XREAD return (entry or 30s timeout), or null
+ * if the loop hasn't started yet. resourceCounters alerts if this is stale
+ * while clients are connected — indicates the broker loop has died silently.
+ */
+export function getLastXreadAt() { return _lastXreadAt }
+
+/** True once ensureLoop() has booted the XREAD loop. */
+export function isLoopRunning() { return _loopRunning }
+
 // Test hook — stops the XREAD loop and drops all clients. Not used in prod.
 export function _resetForTests() {
   _loopRunning = false
   _clients.clear()
+  _lastXreadAt = null
   try { _redis?.disconnect() } catch {}
   _redis = null
 }

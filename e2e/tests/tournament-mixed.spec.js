@@ -76,6 +76,7 @@ test.describe('MIXED tournament — API end-to-end', () => {
         maxParticipants: 8,
         startMode:    'MANUAL',
         allowSpectators: true,
+        isTest:       true,
       })
       expect(draft.status).toBe('DRAFT')
       const tid = draft.id

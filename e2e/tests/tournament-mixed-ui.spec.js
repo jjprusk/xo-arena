@@ -48,6 +48,7 @@ test.describe('MIXED tournament — UI smoke', () => {
       game: 'xo', mode: 'MIXED', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
       bestOfN: 1, minParticipants: 2, maxParticipants: 4,
       startMode: 'MANUAL', allowSpectators: true,
+      isTest: true,
     })
     const tid = tournament.id
 

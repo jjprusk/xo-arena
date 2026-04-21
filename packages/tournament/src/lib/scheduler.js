@@ -20,7 +20,6 @@ const INTERVAL_MS = 60 * 1000 // 1 minute
 const sentWarnings = new Set()
 
 let lastDemotionReviewDate = null
-let lastOccurrenceCheckDate = null
 let lastRetentionCheckDate = null
 
 /**
@@ -52,14 +51,14 @@ export async function runSchedulerTick() {
     runDemotionReview().catch(err => logger.error({ err }, 'Demotion review failed'))
   }
 
-  // Daily recurring occurrence check
-  const todayDate = new Date().toISOString().slice(0, 10)
-  if (lastOccurrenceCheckDate !== todayDate) {
-    lastOccurrenceCheckDate = todayDate
-    checkRecurringOccurrences().catch(err =>
-      logger.error({ err }, 'Recurring occurrence check failed')
-    )
-  }
+  // Recurring occurrence check — runs every tick (1 minute). The function
+  // itself is a single findMany + dedup against existing rows, so it's cheap
+  // when there are no templates due. Running per-tick means DAILY recurrences
+  // spawn their next occurrence immediately on completion, instead of waiting
+  // up to 24 h for the next date boundary.
+  checkRecurringOccurrences().catch(err =>
+    logger.error({ err }, 'Recurring occurrence check failed')
+  )
 
   // Daily replay retention cleanup
   const retentionDate = new Date().toISOString().slice(0, 10)

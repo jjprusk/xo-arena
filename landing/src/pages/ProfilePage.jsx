@@ -68,6 +68,7 @@ export default function ProfilePage() {
   const [openSections, setOpenSections] = useState(() => ({
     profile: false, stats: true, credits: true, merits: true,
     bots: searchParams.get('action') === 'create-bot' || searchParams.get('section') === 'bots',
+    recurring: searchParams.get('section') === 'recurring',
     danger: false,
   }))
   const toggle = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
@@ -719,6 +720,12 @@ export default function ProfilePage() {
         onToggle={() => toggle('merits')}
       />
 
+      {/* Recurring Tournaments — standing subscriptions */}
+      <RecurringSubscriptionsSection
+        open={openSections.recurring}
+        onToggle={() => toggle('recurring')}
+      />
+
       {/* My Bots */}
       <AccordionSection
         title="My Bots"
@@ -1109,6 +1116,126 @@ function StatCard({ label, value, color }) {
       </div>
       <div className="text-xs mt-1 font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</div>
     </div>
+  )
+}
+
+/**
+ * Lists the signed-in user's standing recurring-tournament subscriptions and
+ * lets them withdraw. Data comes from `GET /api/recurring/my` via
+ * `tournamentApi.listMyRecurring`. Renders inside its own AccordionSection so
+ * users who never subscribe see an empty collapsed row rather than a wall of
+ * "none found" text.
+ */
+function RecurringSubscriptionsSection({ open, onToggle }) {
+  const [subs, setSubs]       = useState(null)   // null = loading
+  const [error, setError]     = useState(null)
+  const [busyId, setBusyId]   = useState(null)
+
+  const load = async () => {
+    const token = await getToken().catch(() => null)
+    if (!token) { setSubs([]); return }
+    try {
+      const { subscriptions } = await tournamentApi.listMyRecurring(token)
+      setSubs(subscriptions ?? [])
+      setError(null)
+    } catch (e) {
+      setError(e.message || 'Failed to load subscriptions.')
+      setSubs([])
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function withdraw(templateId) {
+    if (!confirm('Unsubscribe from this recurring tournament?')) return
+    setBusyId(templateId)
+    try {
+      const token = await getToken()
+      await tournamentApi.recurringWithdraw(templateId, token)
+      await load()
+    } catch (e) {
+      setError(e.message || 'Withdraw failed.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const summary = subs === null
+    ? null
+    : subs.length === 0
+      ? 'Not subscribed to any'
+      : `${subs.length} subscription${subs.length === 1 ? '' : 's'}`
+
+  return (
+    <AccordionSection title="Recurring Tournament Subscriptions" summary={summary} open={open} onToggle={onToggle}>
+      {error && <p className="text-sm mb-2" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
+      {subs === null && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>}
+      {subs && subs.length === 0 && (
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          You're not subscribed to any recurring tournaments. Open a recurring tournament's page and register to have every future occurrence auto-enroll you.
+        </p>
+      )}
+      {subs && subs.length > 0 && (
+        <ListTable>
+          <thead>
+            <tr>
+              <ListTh>Tournament</ListTh>
+              <ListTh>Game · Mode</ListTh>
+              <ListTh>Interval</ListTh>
+              <ListTh align="right"><span className="sr-only">Action</span></ListTh>
+            </tr>
+          </thead>
+          <tbody>
+            {subs.map((s, i) => {
+              const t = s.template ?? {}
+              const intervalLabel = t.recurrenceInterval
+                ? t.recurrenceInterval.toLowerCase().replace(/^\w/, c => c.toUpperCase())
+                : '—'
+              return (
+                <ListTr key={s.id} last={i === subs.length - 1}>
+                  <ListTd>
+                    <Link
+                      to={`/tournaments/${t.id}`}
+                      className="text-sm font-medium hover:underline"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {t.name ?? '(deleted)'}
+                    </Link>
+                    {t.recurrencePaused && (
+                      <span
+                        className="ml-2 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)', border: '1px solid var(--color-amber-300)' }}
+                        title="New occurrences are currently paused by an admin"
+                      >
+                        Paused
+                      </span>
+                    )}
+                  </ListTd>
+                  <ListTd>
+                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {(t.game ?? '').toUpperCase()} · {t.mode ?? ''}
+                    </span>
+                  </ListTd>
+                  <ListTd>
+                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{intervalLabel}</span>
+                  </ListTd>
+                  <ListTd align="right">
+                    <button
+                      onClick={() => withdraw(t.id)}
+                      disabled={busyId === t.id}
+                      className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--color-red-50)] disabled:opacity-40"
+                      style={{ borderColor: 'var(--color-red-300)', color: 'var(--color-red-600)' }}
+                    >
+                      {busyId === t.id ? 'Withdrawing…' : 'Withdraw'}
+                    </button>
+                  </ListTd>
+                </ListTr>
+              )
+            })}
+          </tbody>
+        </ListTable>
+      )}
+    </AccordionSection>
   )
 }
 

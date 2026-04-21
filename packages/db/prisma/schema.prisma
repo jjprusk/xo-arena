@@ -538,7 +538,15 @@ model Tournament {
   paceMs                  Int?                    @map("pace_ms")
   recurrenceInterval      RecurrenceInterval?
   recurrenceEndDate       DateTime?
+  // Admin switch that halts generation of new occurrences without cancelling
+  // the template. Running occurrences are unaffected. Flip back to false to
+  // resume the schedule — the next sweep picks up where the interval left off.
+  recurrencePaused        Boolean                 @default(false)
   startMode               TournamentStartMode     @default(AUTO)
+  // True when created by an automated test suite; hidden from the public
+  // /tournaments page (filtered at the API layer) and exposed behind an
+  // admin toggle. Never set by end users.
+  isTest                  Boolean                 @default(false)
   games                   Game[]
   participants            TournamentParticipant[]
   rounds                  TournamentRound[]

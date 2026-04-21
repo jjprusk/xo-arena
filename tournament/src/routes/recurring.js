@@ -5,6 +5,35 @@ import { requireAuth, requireTournamentAdmin } from '../middleware/auth.js'
 
 const router = Router()
 
+// GET /api/recurring/my
+// Returns every standing (non-opted-out) recurring registration for the
+// authenticated user, with enough template info to render a "My subscriptions"
+// list: template name, status, recurrence details, and when the user opted in.
+router.get('/my', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.auth.dbUserId
+    const registrations = await db.recurringTournamentRegistration.findMany({
+      where: { userId, optedOutAt: null },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (registrations.length === 0) return res.json({ subscriptions: [] })
+
+    const templates = await db.tournament.findMany({
+      where: { id: { in: registrations.map(r => r.templateId) } },
+      select: {
+        id: true, name: true, description: true, game: true, mode: true,
+        recurrenceInterval: true, recurrenceEndDate: true, recurrencePaused: true,
+        startTime: true, bestOfN: true, maxParticipants: true, status: true,
+      },
+    })
+    const byId = Object.fromEntries(templates.map(t => [t.id, t]))
+    const subscriptions = registrations
+      .map(r => byId[r.templateId] ? { ...r, template: byId[r.templateId] } : null)
+      .filter(Boolean)
+    res.json({ subscriptions })
+  } catch (e) { next(e) }
+})
+
 // POST /api/recurring/:templateId/register
 router.post('/:templateId/register', requireAuth, async (req, res, next) => {
   try {

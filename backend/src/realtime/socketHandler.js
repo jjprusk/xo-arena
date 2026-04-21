@@ -1092,7 +1092,11 @@ export async function attachSocketIO(httpServer) {
       if (newStatus === 'COMPLETED') {
         clearAllIdleTimersForTable(tableId)
         recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
-        deleteIfGuestTable(updated)
+        // Guest tables (createdById === 'anonymous') used to be deleted here,
+        // but that broke Rematch: the next game:rematch would fail with
+        // "Room not found" and the client would navigate away to /tables.
+        // Keep the row until the socket disconnects (handled in the disconnect
+        // branch below) or the 24h tableGcService sweep picks it up.
       } else {
         // Track activity for the mover
         if (myUserId) recordActivity(myUserId)
@@ -1536,9 +1540,14 @@ export async function attachSocketIO(httpServer) {
       }
 
       if (table.status === 'COMPLETED') {
-        // Game already over — clean up
+        // Game already over — clean up the socket mapping and, if this is a
+        // guest table (createdById === 'anonymous'), delete the row now that
+        // the only player who could rematch it has left. The game-completion
+        // path intentionally does NOT delete the row so in-session Rematch
+        // still works.
         clearIdleTimer(socket.id)
         unregisterSocket(socket.id)
+        deleteIfGuestTable(table)
         return
       }
 
@@ -1699,7 +1708,10 @@ async function dispatchBotMove(table, io) {
 
   if (newStatus === 'COMPLETED') {
     recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record HvB game'))
-    deleteIfGuestTable(updated)
+    // Do NOT deleteIfGuestTable here — the guest-table row must persist so
+    // the player can Rematch. The disconnect handler cleans it up when the
+    // socket closes; the 24h tableGcService sweep is the backstop. (Matches
+    // the fix applied in the main game:moved completion branch.)
   }
 }
 

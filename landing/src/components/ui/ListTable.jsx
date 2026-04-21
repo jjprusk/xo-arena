@@ -30,7 +30,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search…', classNam
   )
 }
 
-export function ListTable({ children, maxHeight, fitViewport = false, bottomPadding = 24, topOffset = 0, className = '', columns }) {
+export function ListTable({ children, maxHeight, fitViewport = false, fill = false, bottomPadding = 24, topOffset = 0, className = '', columns }) {
   const outerRef = useRef(null)
   const [dynamicMax, setDynamicMax] = useState(null)
 
@@ -60,6 +60,37 @@ export function ListTable({ children, maxHeight, fitViewport = false, bottomPadd
 
   const effective = fitViewport ? dynamicMax : maxHeight
   const outerStyle = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }
+
+  // `fill` mode: the ListTable stretches to 100% of its parent (which must be
+  // a bounded flex child — e.g. `flex-1 min-h-0` inside a `flex-col` viewport
+  // container). The thead stays pinned at the top and only the tbody region
+  // scrolls. Unlike `fitViewport` this does not measure from window.innerHeight,
+  // so it cannot drift as the outer page scrolls.
+  if (fill) {
+    const childArray = React.Children.toArray(children)
+    const thead = childArray.find(c => c.type === 'thead')
+    const bodyChildren = childArray.filter(c => c.type !== 'thead')
+    const colgroup = columns?.length ? (
+      <colgroup>{columns.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+    ) : null
+
+    return (
+      <div ref={outerRef} className={`rounded-xl border overflow-hidden flex flex-col h-full min-h-0 ${className}`} style={outerStyle}>
+        {thead && (
+          <div className="overflow-x-auto shrink-0">
+            <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              {colgroup}{thead}
+            </table>
+          </div>
+        )}
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+          <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+            {colgroup}{bodyChildren}
+          </table>
+        </div>
+      </div>
+    )
+  }
 
   if (effective) {
     const childArray = React.Children.toArray(children)

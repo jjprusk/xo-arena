@@ -21,6 +21,8 @@ import { dispatch, getDispatchCounters } from './notificationBus.js'
 import { getDispatcherHeartbeat } from './scheduledJobs.js'
 import { getPendingPvpMatchCount } from './tournamentBridge.js'
 import { getTotalWatchers as getTableWatcherTotal } from '../realtime/tablePresence.js'
+import { totalClients as sseTotalClients, getLastXreadAt as sseLastXreadAt, isLoopRunning as sseLoopRunning } from './sseBroker.js'
+import { getOnlineCount as presenceOnlineCount } from './presenceStore.js'
 
 // ── Counters ──────────────────────────────────────────────────────────────────
 
@@ -82,6 +84,7 @@ const LEAK_MIN = {
   tablesActive:      5,   // a handful of active tables is normal
   redisConnections:  5,   // adapter creates a few connections on startup
   memoryMb:        150,   // heap below 150 MB rising slightly is fine
+  sseClients:       20,   // ~2 per signed-in tab; alert only above real-traffic levels
 }
 
 // Minimum total growth across the window before alerting.
@@ -91,6 +94,7 @@ const LEAK_MIN_GROWTH = {
   tablesActive:     2,
   redisConnections: 3,
   memoryMb:        20,   // MB
+  sseClients:       5,
 }
 
 const _snapshots = []          // circular, newest last
@@ -166,6 +170,11 @@ async function takeSnapshot() {
     memoryMb:      Math.round(mem.heapUsed  / 1024 / 1024),
     heapTotalMb:   Math.round(mem.heapTotal / 1024 / 1024),
     rssMb:         Math.round(mem.rss       / 1024 / 1024),
+    // Tier 2 / Tier 3 transport health
+    sseClients:     sseTotalClients(),
+    sseLastXreadAt: sseLastXreadAt(),
+    sseLoopRunning: sseLoopRunning(),
+    presenceOnline: presenceOnlineCount(),
     ...busSnap,
     ...tableSnap,
   }
@@ -185,7 +194,7 @@ function checkForLeaks() {
 
   const window = _snapshots.slice(-LEAK_WINDOW)
 
-  for (const key of ['sockets', 'tablesActive', 'redisConnections', 'memoryMb']) {
+  for (const key of ['sockets', 'tablesActive', 'redisConnections', 'memoryMb', 'sseClients']) {
     const latest = window.at(-1)[key]
     const first  = window[0][key]
     const rising = window.every((s, i) => i === 0 || s[key] > window[i - 1][key])
@@ -248,6 +257,26 @@ function checkForLeaks() {
     _alerts['dispatcherHeartbeat'] = false
     logger.info('Resource alert cleared: dispatcher heartbeat is healthy')
     notifyAdminsCleared('dispatcherHeartbeat').catch(() => {})
+  }
+
+  // SSE broker XREAD liveness — the loop does BLOCK 30s, so _lastXreadAt
+  // should tick at least every ~30s while the loop is running. >90s stale
+  // means the loop has died silently. Only alert when clients are connected
+  // (the loop is lazy: no clients means `ensureLoop` may not have booted yet).
+  const lastXread = sseLastXreadAt()
+  const sseActiveClients = sseTotalClients()
+  const sseStale = sseLoopRunning()
+    && sseActiveClients > 0
+    && (!lastXread || (Date.now() - lastXread) > 90_000)
+  if (sseStale && !_alerts['sseBroker']) {
+    _alerts['sseBroker'] = true
+    logger.warn({ lastXread, sseActiveClients }, 'Resource alert: SSE broker XREAD loop stale (>90s) — live clients may stop receiving events')
+    notifyAdmins('sseBroker').catch(() => {})
+  }
+  if (!sseStale && _alerts['sseBroker']) {
+    _alerts['sseBroker'] = false
+    logger.info('Resource alert cleared: SSE broker XREAD loop is healthy')
+    notifyAdminsCleared('sseBroker').catch(() => {})
   }
 }
 

@@ -27,8 +27,9 @@ async function request(method, path, body, token) {
 export const tournamentApi = {
   list: (params = {}, token) => {
     const p = new URLSearchParams()
-    if (params.status) p.set('status', params.status)
-    if (params.game)   p.set('game', params.game)
+    if (params.status)         p.set('status', params.status)
+    if (params.game)           p.set('game', params.game)
+    if (params.includeTest)    p.set('includeTest', 'true')
     const qs = p.toString()
     return request('GET', `/api/tournaments${qs ? `?${qs}` : ''}`, undefined, token)
   },
@@ -72,11 +73,14 @@ export const tournamentApi = {
   recurringRegister:            (templateId, token) => request('POST',   `/api/recurring/${templateId}/register`, {}, token),
   recurringWithdraw:            (templateId, token) => request('DELETE', `/api/recurring/${templateId}/register`, undefined, token),
   listRecurringRegistrations:   (templateId, token) => request('GET',    `/api/recurring/${templateId}/registrations`, undefined, token),
+  listMyRecurring:              (token)             => request('GET',    '/api/recurring/my', undefined, token),
+  triggerRecurringCheck:        (token)             => request('POST',   '/api/tournaments/admin/scheduler/check-recurring', {}, token),
 
   fillTestPlayers: (id, token) => request('POST', `/api/tournaments/${id}/fill-test-players`, {}, token),
   fillQaBots:      (id, data, token) => request('POST', `/api/tournaments/${id}/fill-qa-bots`, data, token),
   addSeededBot:    (id, data, token) => request('POST', `/api/tournaments/${id}/add-seeded-bot`, data, token),
   purgeCancelled:  (token) => request('DELETE', '/api/tournaments/admin/purge-cancelled', undefined, token),
+  purgeTest:       (token) => request('DELETE', '/api/tournaments/admin/purge-test',      undefined, token),
 
   getBotMatchConfig:    (token)       => request('GET',   '/api/bot-matches/config', undefined, token),
   updateBotMatchConfig: (data, token) => request('PATCH', '/api/bot-matches/config', data, token),

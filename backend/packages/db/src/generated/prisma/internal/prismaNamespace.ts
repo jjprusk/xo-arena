@@ -3915,7 +3915,9 @@ export const TournamentScalarFieldEnum = {
   paceMs: 'paceMs',
   recurrenceInterval: 'recurrenceInterval',
   recurrenceEndDate: 'recurrenceEndDate',
-  startMode: 'startMode'
+  recurrencePaused: 'recurrencePaused',
+  startMode: 'startMode',
+  isTest: 'isTest'
 } as const
 
 export type TournamentScalarFieldEnum = (typeof TournamentScalarFieldEnum)[keyof typeof TournamentScalarFieldEnum]

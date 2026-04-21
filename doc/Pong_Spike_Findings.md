@@ -61,3 +61,23 @@ The spike prototype (`packages/game-pong/`, `backend/src/realtime/pongRunner.js`
 - **Bot paddle AI:** `makeMove()` on a real-time game needs a different signature — likely a continuous direction signal rather than a discrete cell index.
 - **Replay storage:** Sampled snapshots at 100ms intervals should be sufficient for Pong replay. Confirm storage cost at scale before committing.
 - **Tab throttling:** Validate interpolation behaviour when a tab is backgrounded mid-game.
+
+---
+
+## Tournament series format — support "First to N" alongside "Best of N"
+
+When Pong's tournament flow lands, take the opportunity to generalise the series-format field. Today the schema has a single `bestOfN` integer interpreted as "Best of N" everywhere, and for XO (a solved game with frequent draws) we needed a pragmatic `gamesPlayed >= bestOfN` cap plus an X-wins tiebreaker to prevent infinite-draw stalls.
+
+**Why it matters:** Best-of-N and First-to-N collapse only for draw-free games. For games where draws happen (XO, Checkers, Chess, Connect 4) only First-to-N is semantically coherent; for draw-free games (Pong, race-to-N-points) either works. The current "Best of 1" XO tournaments are misleading — a single XO game between optimal players is a draw, so the match has no natural winner.
+
+**Proposed design (do as part of Pong tournament wiring):**
+
+- Add `Tournament.seriesFormat: 'BEST_OF' | 'FIRST_TO'` enum, default `BEST_OF` for back-compat.
+- Keep the existing `bestOfN` int as the count (rename to `seriesCount` in a follow-up if desired).
+- Add a per-Game default in the game registry metadata: XO → `FIRST_TO`, Pong → `BEST_OF`. Admin can override per tournament.
+- Match-completion branches on the enum:
+  - `BEST_OF`: majority wins, cap at N games (current behaviour).
+  - `FIRST_TO`: play until someone reaches N wins; draws don't count. Safety cap (e.g. 10 games) records a drawn match if neither side reaches N.
+- UI flips the label ("First to 2 wins" vs "Best of 3"). Bracket cells should hide the `1 – 0` score when `seriesFormat=BEST_OF && bestOfN=1` — it reads like a running count.
+
+**Effort:** ~50 lines across schema migration, tournament-creation form, game registry metadata, and match-completion check. Files touched: `packages/db/prisma/schema.prisma`, `landing/src/pages/admin/AdminTournamentsPage.jsx`, `backend/src/lib/tournamentBridge.js`, `backend/src/realtime/socketHandler.js::recordPvpGame` (the `seriesDone` calculation).

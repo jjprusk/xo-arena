@@ -1,10 +1,11 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { useEffect, useState, useCallback } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useEventStream } from '../lib/useEventStream.js'
+import { ListTable, ListTh, ListTr, ListTd, ListPagination, SearchBar } from '../components/ui/ListTable.jsx'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -63,6 +64,79 @@ function FilterBar({ value, onChange }) {
   )
 }
 
+// ── Date filter ───────────────────────────────────────────────────────────────
+// Values are keys used by tournamentMatchesSince() — 'all' means no filter.
+
+const DATE_OPTIONS = [
+  { label: 'Today',      value: 'today'     },
+  { label: 'Yesterday',  value: 'yesterday' },
+  { label: 'Past week',  value: 'week'      },
+  { label: 'Past month', value: 'month'     },
+  { label: 'This year',  value: 'year'      },
+  { label: 'All',        value: 'all'       },
+]
+
+/** Resolve a date-range key into `{ since, until }` (both ISO strings | null). */
+function resolveDateRange(key) {
+  const now = new Date()
+  if (key === 'today') {
+    const since = new Date(now); since.setHours(0, 0, 0, 0)
+    return { since: since.toISOString(), until: null }
+  }
+  if (key === 'yesterday') {
+    const since = new Date(now); since.setDate(since.getDate() - 1); since.setHours(0, 0, 0, 0)
+    const until = new Date(since); until.setDate(until.getDate() + 1)
+    return { since: since.toISOString(), until: until.toISOString() }
+  }
+  if (key === 'week') {
+    const since = new Date(now); since.setDate(since.getDate() - 7)
+    return { since: since.toISOString(), until: null }
+  }
+  if (key === 'month') {
+    const since = new Date(now); since.setDate(since.getDate() - 30)
+    return { since: since.toISOString(), until: null }
+  }
+  if (key === 'year') {
+    const since = new Date(now.getFullYear(), 0, 1)
+    return { since: since.toISOString(), until: null }
+  }
+  return { since: null, until: null }  // 'all'
+}
+
+/**
+ * Pill-shaped select so the date picker sits on the same row as the status
+ * pills and the search box instead of wrapping. The chevron mirrors what
+ * TablesPage uses for its date dropdown for cross-page consistency.
+ */
+function DateFilter({ value, onChange }) {
+  return (
+    <div className="relative inline-flex">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        aria-label="Date range"
+        className="appearance-none pl-3.5 pr-8 py-1.5 rounded-full border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-colors"
+        style={{
+          background:  'var(--bg-surface)',
+          borderColor: 'var(--border-default)',
+          color:       'var(--text-primary)',
+        }}
+      >
+        {DATE_OPTIONS.map(opt => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+      <svg
+        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
+        width="10" height="10" viewBox="0 0 10 10" fill="none"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  )
+}
+
 // ── Registration button ───────────────────────────────────────────────────────
 
 const NOTIF_PREF_OPTIONS = [
@@ -70,31 +144,72 @@ const NOTIF_PREF_OPTIONS = [
   { value: 'END_OF_TOURNAMENT', label: 'When tournament ends' },
 ]
 
+/**
+ * Inline "Register" button that opens a modal for the picker flow. The
+ * previous design crammed the radio-group picker into the narrow action cell
+ * of the ListTable row, which became unusable on narrow windows (content
+ * overflowed and the Confirm button was clipped). A modal gets its own
+ * space regardless of viewport width and matches the pattern used elsewhere
+ * (admin Create Tournament, sign-in).
+ */
 function RegisterButton({ tournament, token, dbUserId, onSuccess }) {
-  const [step, setStep]           = useState('idle')   // idle | who | options | busy
-  const [bots, setBots]           = useState([])
-  const [participantId, setParticipantId] = useState('self')  // 'self' or bot db userId
-  const [notifPref, setNotifPref] = useState('AS_PLAYED')
-  const [err, setErr]             = useState(null)
-
-  const needsBotPicker = tournament.mode === 'BOT_VS_BOT' || tournament.mode === 'MIXED'
-
-  async function openPicker(e) {
+  const [open, setOpen] = useState(false)
+  async function openModal(e) {
     e.preventDefault(); e.stopPropagation()
-    if (needsBotPicker && bots.length === 0) {
-      const fetched = await fetchMyBots(token, dbUserId).catch(() => [])
-      setBots(fetched)
-      // For BOT_VS_BOT default to first bot if available, otherwise leave as 'self'
-      if (fetched.length > 0 && tournament.mode === 'BOT_VS_BOT') {
-        setParticipantId(fetched[0].id)
-      }
-    }
-    setStep('options')
+    setOpen(true)
   }
+  return (
+    <>
+      <button
+        onClick={openModal}
+        className="btn-primary text-xs px-4 py-2 rounded-lg font-semibold text-white transition-all hover:brightness-110"
+      >
+        Register
+      </button>
+      {open && (
+        <RegisterModal
+          tournament={tournament}
+          token={token}
+          dbUserId={dbUserId}
+          onClose={() => setOpen(false)}
+          onSuccess={() => { setOpen(false); onSuccess() }}
+        />
+      )}
+    </>
+  )
+}
 
-  async function handleConfirm(e) {
-    e.preventDefault(); e.stopPropagation()
-    setStep('busy'); setErr(null)
+function RegisterModal({ tournament, token, dbUserId, onClose, onSuccess }) {
+  const needsBotPicker = tournament.mode === 'BOT_VS_BOT' || tournament.mode === 'MIXED'
+  const [bots, setBots]                   = useState([])
+  const [loadingBots, setLoadingBots]     = useState(needsBotPicker)
+  const [participantId, setParticipantId] = useState('self')
+  const [notifPref, setNotifPref]         = useState('AS_PLAYED')
+  const [busy, setBusy]                   = useState(false)
+  const [err, setErr]                     = useState(null)
+
+  useEffect(() => {
+    if (!needsBotPicker) return
+    fetchMyBots(token, dbUserId)
+      .then(fetched => {
+        setBots(fetched)
+        if (fetched.length > 0 && tournament.mode === 'BOT_VS_BOT') {
+          setParticipantId(fetched[0].id)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingBots(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Escape closes.
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && !busy) onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [busy, onClose])
+
+  async function handleConfirm() {
+    setBusy(true); setErr(null)
     try {
       const body = { resultNotifPref: notifPref }
       if (participantId !== 'self') body.participantUserId = participantId
@@ -102,149 +217,172 @@ function RegisterButton({ tournament, token, dbUserId, onSuccess }) {
       onSuccess()
     } catch (error) {
       setErr(error.message || 'Failed')
-      setStep('options')
+      setBusy(false)
     }
   }
 
-  if (step === 'idle') {
-    return (
-      <button
-        onClick={openPicker}
-        className="btn-primary text-xs px-4 py-2 rounded-lg font-semibold text-white transition-all hover:brightness-110"
-      >
-        Register
-      </button>
-    )
-  }
+  const confirmDisabled = busy
+    || (tournament.mode === 'BOT_VS_BOT' && participantId === 'self' && bots.length > 0)
 
   return (
     <div
-      className="space-y-2 p-2 rounded-lg border"
-      style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)' }}
-      onClick={e => e.preventDefault()}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={() => { if (!busy) onClose() }}
     >
-      {/* Who to register */}
-      {needsBotPicker && (
-        <>
-          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-            Register as:
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Register for ${tournament.name}`}
+        className="w-full max-w-md rounded-xl border p-5 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div>
+          <h2 className="text-base font-bold leading-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+            Register for {tournament.name}
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            {tournament.game?.toUpperCase()} · {tournament.mode} · Best of {tournament.bestOfN}
           </p>
-          <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
-            {tournament.mode === 'MIXED' && (
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name={`who-${tournament.id}`} value="self"
-                  checked={participantId === 'self'} onChange={() => setParticipantId('self')}
-                  className="accent-[var(--color-primary)]" />
-                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Myself (human)</span>
-              </label>
+        </div>
+
+        {needsBotPicker && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              Register as
+            </p>
+            {loadingBots ? (
+              <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>Loading your bots…</p>
+            ) : (
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto rounded-lg border p-2"
+                   style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+                {tournament.mode === 'MIXED' && (
+                  <label className="flex items-center gap-2 cursor-pointer py-0.5">
+                    <input type="radio" name={`who-${tournament.id}`} value="self"
+                      checked={participantId === 'self'} onChange={() => setParticipantId('self')}
+                      className="accent-[var(--color-primary)]" />
+                    <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Myself (human)</span>
+                  </label>
+                )}
+                {bots.length === 0 && (
+                  <p className="text-sm italic py-1" style={{ color: 'var(--text-muted)' }}>
+                    {tournament.mode === 'BOT_VS_BOT' ? 'You have no active bots.' : 'No active bots.'}
+                  </p>
+                )}
+                {bots.map(bot => (
+                  <label key={bot.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                    <input type="radio" name={`who-${tournament.id}`} value={bot.id}
+                      checked={participantId === bot.id} onChange={() => setParticipantId(bot.id)}
+                      className="accent-[var(--color-primary)]" />
+                    <span className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>{bot.displayName}</span>
+                  </label>
+                ))}
+              </div>
             )}
-            {bots.length === 0 && (
-              <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
-                {tournament.mode === 'BOT_VS_BOT' ? 'You have no active bots.' : 'No active bots.'}
-              </p>
-            )}
-            {bots.map(bot => (
-              <label key={bot.id} className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name={`who-${tournament.id}`} value={bot.id}
-                  checked={participantId === bot.id} onChange={() => setParticipantId(bot.id)}
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Notify me
+          </p>
+          <div className="flex flex-col gap-1 rounded-lg border p-2"
+               style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}>
+            {NOTIF_PREF_OPTIONS.map(opt => (
+              <label key={opt.value} className="flex items-center gap-2 cursor-pointer py-0.5">
+                <input type="radio" name={`notif-${tournament.id}`} value={opt.value}
+                  checked={notifPref === opt.value} onChange={() => setNotifPref(opt.value)}
                   className="accent-[var(--color-primary)]" />
-                <span className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>{bot.displayName}</span>
+                <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{opt.label}</span>
               </label>
             ))}
           </div>
-          <hr style={{ borderColor: 'var(--border-default)' }} />
-        </>
-      )}
+        </div>
 
-      {/* Notification preference */}
-      <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-        Notify me:
-      </p>
-      <div className="flex flex-col gap-1">
-        {NOTIF_PREF_OPTIONS.map(opt => (
-          <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer">
-            <input type="radio" name={`notif-${tournament.id}`} value={opt.value}
-              checked={notifPref === opt.value} onChange={() => setNotifPref(opt.value)}
-              className="accent-[var(--color-primary)]" />
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{opt.label}</span>
-          </label>
-        ))}
-      </div>
+        {err && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
 
-      <div className="flex gap-1.5">
-        <button onClick={handleConfirm} disabled={step === 'busy' || (tournament.mode === 'BOT_VS_BOT' && participantId === 'self' && bots.length > 0)}
-          className="btn-primary text-xs px-3 py-1.5 rounded-lg font-semibold text-white flex-1 disabled:opacity-50">
-          {step === 'busy' ? 'Joining…' : 'Confirm'}
-        </button>
-        <button onClick={e => { e.preventDefault(); setStep('idle'); setErr(null) }} disabled={step === 'busy'}
-          className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
-          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
-          Cancel
-        </button>
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={handleConfirm}
+            disabled={confirmDisabled}
+            className="btn-primary text-sm px-4 py-2 rounded-lg font-semibold text-white flex-1 disabled:opacity-50"
+          >
+            {busy ? 'Registering…' : 'Confirm'}
+          </button>
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="text-sm px-4 py-2 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+          >
+            Cancel
+          </button>
+        </div>
       </div>
-      {err && <p className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
     </div>
   )
 }
 
 // ── Tournament card ───────────────────────────────────────────────────────────
 
-function TournamentCard({ tournament, token, dbUserId, onRegistered }) {
+function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
+  const navigate = useNavigate()
   const participantCount = tournament.participants?.length ?? tournament._count?.participants ?? 0
-  const max  = tournament.maxParticipants
+  const max = tournament.maxParticipants
   const isOpen = tournament.status === 'REGISTRATION_OPEN'
     && (!tournament.registrationCloseAt || new Date(tournament.registrationCloseAt) > new Date())
 
+  const meta = [
+    tournament.game?.toUpperCase(),
+    tournament.mode,
+    tournament.bracketType?.replace('_', ' '),
+    tournament.bestOfN ? `Best of ${tournament.bestOfN}` : null,
+  ].filter(Boolean).join(' · ')
+
+  const startText = tournament.startTime
+    ? new Date(tournament.startTime).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : '—'
+
   return (
-    <Link
-      to={`/tournaments/${tournament.id}`}
-      className="block rounded-xl border transition-colors hover:bg-[var(--bg-surface-hover)] no-underline"
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
-    >
-      <div className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h2
-              className="text-sm font-bold leading-tight truncate"
-              style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
-            >
-              {tournament.name}
-            </h2>
-            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
-              {tournament.game?.toUpperCase()} · {tournament.mode} · {tournament.bracketType?.replace('_', ' ')}
-            </p>
+    <ListTr last={last} onClick={() => navigate(`/tournaments/${tournament.id}`)}>
+      <ListTd>
+        <div className="min-w-0">
+          <div
+            className="text-sm font-bold leading-tight truncate"
+            style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
+          >
+            {tournament.name}
           </div>
-          <StatusBadge status={tournament.status} />
-        </div>
-
-        {tournament.description && (
-          <p className="text-xs line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
-            {tournament.description}
-          </p>
-        )}
-
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-          <span>{participantCount}{max ? `/${max}` : ''} players</span>
-          {tournament.bestOfN && <span>Best of {tournament.bestOfN}</span>}
-          {tournament.startTime && (
-            <span>Starts {new Date(tournament.startTime).toLocaleString()}</span>
+          <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+            {meta}
+          </div>
+          {tournament.description && (
+            <div className="text-xs mt-1 line-clamp-1" style={{ color: 'var(--text-secondary)' }}>
+              {tournament.description}
+            </div>
           )}
         </div>
-
-        {tournament.registrationOpenAt && (
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Reg: {new Date(tournament.registrationOpenAt).toLocaleString()}
-            {tournament.registrationCloseAt && (
-              <> – {new Date(tournament.registrationCloseAt).toLocaleString()}</>
-            )}
-          </p>
-        )}
-
-        {isOpen && token && (
-          <div onClick={e => e.preventDefault()}>
+      </ListTd>
+      <ListTd>
+        <div className="text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+          {startText}
+        </div>
+      </ListTd>
+      <ListTd align="center">
+        <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+          {participantCount}{max ? `/${max}` : ''}
+        </span>
+      </ListTd>
+      <ListTd align="center">
+        <StatusBadge status={tournament.status} />
+      </ListTd>
+      <ListTd align="right">
+        {isOpen && token ? (
+          <div onClick={e => e.stopPropagation()}>
             {tournament.isRegisteredByViewer ? (
               <span
-                className="inline-block text-xs px-4 py-2 rounded-lg font-semibold"
+                className="inline-block text-xs px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap"
                 style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
               >
                 ✓ Registered
@@ -253,9 +391,9 @@ function TournamentCard({ tournament, token, dbUserId, onRegistered }) {
               <RegisterButton tournament={tournament} token={token} dbUserId={dbUserId} onSuccess={onRegistered} />
             )}
           </div>
-        )}
-      </div>
-    </Link>
+        ) : null}
+      </ListTd>
+    </ListTr>
   )
 }
 
@@ -279,16 +417,45 @@ function LoadingSpinner() {
 
 export default function TournamentsPage() {
   const { data: session } = useOptimisticSession()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tournaments, setTournaments] = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
-  const [statusFilter, setStatusFilter] = useState('')
   const [token, setToken]             = useState(null)
   const [dbUserId, setDbUserId]       = useState(null)
   const [autoRegisterId, setAutoRegisterId] = useState(
     searchParams.get('action') === 'register' ? searchParams.get('tournamentId') : null
   )
+
+  // Filter/search/paginate state — all persisted in the URL so the browser's
+  // Back button restores position after clicking into a tournament.
+  const statusFilter = searchParams.get('status') ?? ''
+  const dateRange    = searchParams.get('date')   ?? 'week'   // default: past week
+  const searchTerm   = searchParams.get('q')      ?? ''
+  const page         = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
+  const PAGE_SIZE    = 12
+
+  // Debounced search input mirror — typed characters land in the URL after 250ms.
+  const [searchInput, setSearchInput] = useState(searchTerm)
+  useEffect(() => {
+    const t = setTimeout(() => updateParams({ q: searchInput.trim() || null, page: null }), 250)
+    return () => clearTimeout(t)
+  }, [searchInput]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function updateParams(updates) {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      for (const [k, v] of Object.entries(updates)) {
+        if (v === null || v === undefined || v === '') next.delete(k)
+        else next.set(k, String(v))
+      }
+      return next
+    }, { replace: true })
+  }
+
+  const setStatusFilter = v => updateParams({ status: v || null, page: null })
+  const setDateRange    = v => updateParams({ date:   v === 'week' ? null : v, page: null })
+  const setPage         = n => updateParams({ page:   n === 1 ? null : n })
 
   useEffect(() => {
     if (!session?.user?.id) { setToken(null); setDbUserId(null); return }
@@ -312,13 +479,11 @@ export default function TournamentsPage() {
     }).catch(() => {})
   }, [session?.user?.id])
 
-  const load = useCallback(async (filter) => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const params = {}
-      if (filter) params.status = filter
-      const data = await tournamentApi.list(params, token)
+      const data = await tournamentApi.list({}, token)
       const list = Array.isArray(data) ? data : (data.tournaments ?? [])
       setTournaments(list.filter(t => t.status !== 'DRAFT' && t.status !== 'CANCELLED'))
     } catch {
@@ -328,27 +493,63 @@ export default function TournamentsPage() {
     }
   }, [token])
 
-  useEffect(() => { load(statusFilter) }, [statusFilter, load])
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
     if (!autoRegisterId || !token || loading || tournaments.length === 0) return
     const target = tournaments.find(t => t.id === autoRegisterId && t.status === 'REGISTRATION_OPEN')
     if (!target) return
     tournamentApi.register(autoRegisterId, token)
-      .then(() => { setAutoRegisterId(null); load(statusFilter) })
+      .then(() => { setAutoRegisterId(null); load() })
       .catch(() => setAutoRegisterId(null))
   }, [autoRegisterId, token, loading, tournaments]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tier 2 SSE — any tournament:* event refetches the list ─────────────────
   useEventStream({
     channels: ['tournament:'],
-    onEvent: () => load(statusFilter),
+    onEvent: () => load(),
   })
 
+  // ── Client-side filter + search + paginate ─────────────────────────────────
+  // The list endpoint doesn't support q/since/limit/page yet; running these in
+  // the browser is fine at current scale. Promote server-side when we start
+  // counting tournaments in the hundreds.
+  const filtered = useMemo(() => {
+    const { since, until } = resolveDateRange(dateRange)
+    const q = searchTerm.trim().toLowerCase()
+    return tournaments.filter(t => {
+      if (statusFilter && t.status !== statusFilter) return false
+      if (q && !(t.name?.toLowerCase().includes(q))) return false
+      if (since || until) {
+        const ref = t.startTime ?? t.createdAt
+        if (!ref) return false
+        const refMs = new Date(ref).getTime()
+        if (since && refMs < new Date(since).getTime()) return false
+        if (until && refMs >= new Date(until).getTime()) return false
+      }
+      return true
+    })
+  }, [tournaments, statusFilter, dateRange, searchTerm])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const pageSlice  = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  )
+
+  // Absolute-positioned within `main` (AppLayout.jsx:480 — `flex-1 relative`).
+  // Main has a bounded flex share of the viewport, and our intrinsic size is 0
+  // (because we're absolutely positioned), so main never grows to push the
+  // document past the viewport — the outer browser scrollbar stays away and
+  // only the ListTable body scrolls.
+  const hasResults = !loading && filtered.length > 0
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
-      <div className="pb-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+    <div className="absolute inset-0 flex justify-center overflow-hidden">
+     <div className="max-w-5xl w-full h-full px-4 py-5 flex flex-col gap-4 overflow-hidden">
+      <div className="shrink-0 pb-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
           Tournaments
         </h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
@@ -356,37 +557,79 @@ export default function TournamentsPage() {
         </p>
       </div>
 
-      <FilterBar value={statusFilter} onChange={setStatusFilter} />
+      {/* Controls row — status pills + date dropdown on one line, search fills
+          the rest. On very narrow viewports the row wraps; search stays full
+          width beneath the pills. */}
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
+        <FilterBar value={statusFilter} onChange={setStatusFilter} />
+        <DateFilter value={dateRange} onChange={setDateRange} />
+        <div className="ml-auto w-full sm:w-64">
+          <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Search tournaments…" />
+        </div>
+      </div>
 
       {error && (
-        <p className="text-sm text-center py-4" style={{ color: 'var(--color-red-600)' }}>{error}</p>
+        <p className="shrink-0 text-sm text-center py-2" style={{ color: 'var(--color-red-600)' }}>{error}</p>
       )}
 
-      {loading && <LoadingSpinner />}
-
-      {!loading && tournaments.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tournaments.map(t => (
-            <TournamentCard
-              key={t.id}
-              tournament={t}
-              token={token}
-              dbUserId={dbUserId}
-              onRegistered={() => load(statusFilter)}
-            />
-          ))}
+      {loading && (
+        <div className="flex-1 flex items-center justify-center">
+          <LoadingSpinner />
         </div>
       )}
 
-      {!loading && tournaments.length === 0 && !error && (
-        <div className="text-center py-16 space-y-2">
+      {hasResults && (
+        <>
+          <div className="flex-1 min-h-0">
+            <ListTable fill columns={['42%', '20%', '10%', '14%', '14%']}>
+              <thead>
+                <tr>
+                  <ListTh>Tournament</ListTh>
+                  <ListTh>Starts</ListTh>
+                  <ListTh align="center">Players</ListTh>
+                  <ListTh align="center">Status</ListTh>
+                  <ListTh align="right"><span className="sr-only">Action</span></ListTh>
+                </tr>
+              </thead>
+              <tbody>
+                {pageSlice.map((t, i) => (
+                  <TournamentRow
+                    key={t.id}
+                    tournament={t}
+                    token={token}
+                    dbUserId={dbUserId}
+                    onRegistered={() => load()}
+                    last={i === pageSlice.length - 1}
+                  />
+                ))}
+              </tbody>
+            </ListTable>
+          </div>
+          <div className="shrink-0">
+            <ListPagination
+              page={safePage}
+              totalPages={totalPages}
+              total={filtered.length}
+              limit={PAGE_SIZE}
+              onPageChange={setPage}
+              noun="tournaments"
+            />
+          </div>
+        </>
+      )}
+
+      {!loading && filtered.length === 0 && !error && (
+        <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
           <p className="text-3xl">⊕</p>
-          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>No tournaments found</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>No tournaments match</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {statusFilter ? 'Try a different filter.' : 'Check back soon for upcoming events.'}
+            {tournaments.length === 0
+              ? 'Check back soon for upcoming events.'
+              : 'Try a different filter, date range, or search term.'}
           </p>
         </div>
       )}
+     </div>
     </div>
   )
 }

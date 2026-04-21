@@ -90,7 +90,7 @@ function NotificationCard({ notif, onDismiss }) {
 }
 
 export default function NotificationStack() {
-  const { notifications, dismissNotification } = useGuideStore()
+  const { notifications, dismissNotification, clearNotifications } = useGuideStore()
   const [index, setIndex]     = useState(0)
   const [animDir, setAnimDir] = useState(null) // 'left' | 'right' | null
   const touchStartX           = useRef(null)
@@ -253,6 +253,23 @@ export default function NotificationStack() {
             }}
           >
             ›
+          </button>
+        </div>
+      )}
+
+      {/* Clear all — shown whenever there's more than one notification so
+          the user can wipe a stale backlog without clicking ✕ on each card. */}
+      {total > 1 && (
+        <div className="flex justify-center mt-1.5">
+          <button
+            onClick={() => {
+              setIndex(0)
+              clearNotifications()
+            }}
+            className="text-[11px] font-medium px-2 py-0.5 rounded transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Clear all
           </button>
         </div>
       )}
