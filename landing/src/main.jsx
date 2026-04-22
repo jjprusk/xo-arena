@@ -13,6 +13,7 @@ if (!isBrowserSupported()) {
   createRoot(document.getElementById('root')).render(<BrowserUnsupported />)
 } else {
   // Dynamic import so the heavy chunk (index.css, App, socket, sound store)
-  // doesn't even get fetched on unsupported browsers.
-  await import('./main.supported.jsx')
+  // doesn't even get fetched on unsupported browsers. No top-level await —
+  // Vite's safari14 target rejects it, and we have nothing to do after.
+  import('./main.supported.jsx')
 }
