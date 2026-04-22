@@ -1,8 +1,8 @@
 <!-- Copyright (c) 2026 Joe Pruskowski. All rights reserved. -->
 # Phase 3.4 / 3.5 QA Checklist
 
-**Version:** v1.3.0-alpha-1.13 (pending)
-**Date updated:** 2026-04-19
+**Version:** v1.3.0-alpha-1.13
+**Date updated:** 2026-04-21
 
 ## Phase 3.4 scope (sections 1–10)
 Tables are the single source of truth for all game sessions. The in-memory `roomManager` and `rooms.js` HTTP routes have been deleted. All game state lives in `Table.previewState`. **Status: implementation complete, manual QA pass done (items marked ✓).**
@@ -168,7 +168,7 @@ Create a SINGLE_ELIM tournament with 3 participants (2 bots + 1 human, or 3 bots
 
 - [x] One participant receives an automatic **bye** (COMPLETED match with no opponent, winner = bye recipient)
 - [x] Bracket advances correctly: bye recipient goes to round 2 alongside the winner of the real match
-n
+
 ### 8f. Auto-cancellation (optional)
 
 Create a tournament with `minParticipants: 4`, register only 1 user, set `registrationCloseAt` to a time 1–2 minutes in the future, wait.
@@ -279,7 +279,7 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 
 ## 11. Phase 3.5 Additions
 
-> **Implementation status:** All items below are code-complete as of 2026-04-19. None have been manually QA tested yet. Automated Playwright coverage noted inline where applicable.
+> **Implementation status:** Code-complete as of 2026-04-19. As of 2026-04-21 the full Playwright suite (`npm run test:e2e`) passes 36/36 against a fresh local stack (2 skipped are the deploy-gate tests that only run against staging). Automated coverage is noted inline below. Items that remain unchecked are manual-only by nature (live board thumbnails, Redis payload inspection, backend log checks, DB queries, tooltip hover).
 
 ### 11a. Mobile sidebar auto-hide
 
@@ -287,10 +287,10 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 
 Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
-- [ ] Start an HvB game on a mobile viewport → sidebar is hidden automatically when the game transitions to `playing`
-- [ ] Toggle button is visible at the top of the board area → tap it → sidebar slides in
-- [ ] Tap toggle again → sidebar hides again; board fills the full width
-- [ ] On a desktop viewport (≥ 768 px) the sidebar does **not** auto-hide when the game starts
+- [x] Start an HvB game on a mobile viewport → sidebar is hidden automatically when the game transitions to `playing`
+- [x] Toggle button is visible at the top of the board area → tap it → sidebar slides in
+- [x] Tap toggle again → sidebar hides again; board fills the full width
+- [x] On a desktop viewport (≥ 768 px) the sidebar does **not** auto-hide when the game starts
 
 ### 11b. Active table preview thumbnail
 
@@ -311,7 +311,7 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 - [ ] Open the **Create Tournament** form (admin or user)
 - [ ] **Game** dropdown is present and populated from `gameRegistry.js` (currently shows XO only)
-- [ ] Create a tournament with game = XO → `game` field stored correctly in DB (`SELECT game FROM tournaments WHERE id = '<id>'`)
+- [x] Create a tournament with game = XO → `game` field stored correctly in DB (covered transitively by `tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`, and `tournament-seed-bots.spec.js` — all create + fetch round-trip tournaments with `game: 'xo'`)
 - [ ] No hardcoded `'xo'` strings remain in the tournament form component
 
 ### 11d. Bot creation — Game field
@@ -320,8 +320,8 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 **URL:** `http://localhost:5174/profile` (signed in, non-bot user)
 
-- [ ] Open the **My Bots** section → click **+ Create Bot**
-- [ ] **Game** dropdown is present, showing all registered games (currently XO only)
+- [x] Open the **My Bots** section → click **+ Create Bot**
+- [x] **Game** dropdown is present, showing all registered games (currently XO only)
 - [ ] Default selection is XO
 - [ ] Create a bot with Game = XO → `BotSkill` row created with `game_id = 'xo'`
   - Verify: `SELECT game_id FROM bot_skills WHERE bot_id = (SELECT id FROM users WHERE display_name = '<botname>')`
@@ -343,8 +343,8 @@ These verify that the HvB path resolves skill server-side rather than trusting a
 
 **URL:** `http://localhost:5174/admin/bots`
 
-- [ ] Bot list table has a **Skills** column (visible at ≥ 1024 px viewport)
-- [ ] Each bot row shows a teal `XO` badge for any bot that has an XO skill
+- [x] Bot list table has a **Skills** column (visible at ≥ 1024 px viewport)
+- [x] Each bot row shows a teal `XO` badge for any bot that has an XO skill
 - [ ] Bots with no `BotSkill` rows show `none` in the Skills column
 - [ ] Hovering a badge shows a tooltip with `gameId: algorithm — status` (e.g., `xo: ml — TRAINED`)
 
@@ -362,21 +362,25 @@ Requires a `BOT_VS_BOT` tournament. Run after section 8b passes.
 
 ## Sign-off
 
+"Automated e2e" means the area has passing Playwright specs in `e2e/tests/`;
+runs against a local stack via `npm run test:e2e` and again against staging
+via the `/stage` smoke subset. "Manual" rows require a human runthrough.
+
 | Area | Tested by | Date | Pass/Fail | Notes |
 |------|-----------|------|-----------|-------|
-| HvB core path | | | | |
-| PvP | | | | |
-| Tables page | | | | |
-| Seat display names | | | | |
-| Notifications | | | | |
-| Idle handling | | | | |
-| Table GC | | | | |
-| Tournament | | | | |
-| Tournament Seed Bots | | | | |
-| Mobile sidebar auto-hide | | | | |
-| Active table preview | | | | |
-| Multi-game infrastructure | | | | |
-| Bot creation game field | | | | |
-| Admin skills column | | | | |
-| Tournament gameId propagation | | | | |
-| Regressions | | | | |
+| HvB core path | automated e2e (`pvai.spec.js`) + manual | 2026-04-21 | Pass | 4/4 specs |
+| PvP | automated e2e (`pvp.spec.js`) | 2026-04-21 | Pass | 3/3 specs, incl. spectator |
+| Tables page | automated e2e (`phase35.spec.js` tables-page tests) | 2026-04-21 | Pass | Manual watcher + cross-tab sync still useful |
+| Seat display names | manual | | | |
+| Notifications | manual | | | Guide drawer content, teal Table badge |
+| Idle handling | manual | | | Depends on 3-min waits |
+| Table GC | scripted (`doc/qa-scripts/table-gc.sh`) | 2026-04-21 | Pass | 5 tests / 10 assertions |
+| Tournament | automated e2e (`tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`) | 2026-04-21 | Pass | MIXED lifecycle + UI smoke |
+| Tournament Seed Bots | automated e2e (`tournament-seed-bots.spec.js`) + vitest (`packages/tournament/src/__tests__/seedBots.test.js`) | 2026-04-21 | Pass | 9a/b/c/d/e/f automated |
+| Mobile sidebar auto-hide | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass | Mobile + desktop variants |
+| Active table preview | manual | | | Live board state; not automatable without match orchestration |
+| Multi-game infrastructure | automated e2e (skills API in `phase35.spec.js` + game-field round-trip via tournament specs) | 2026-04-21 | Pass (partial) | Form-UI dropdown check still manual |
+| Bot creation game field | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass (partial) | Default selection + DB verification manual |
+| Admin skills column | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass (partial) | None-state + tooltip hover manual |
+| Tournament gameId propagation | manual | | | Requires Redis event inspection |
+| Regressions | automated e2e (full suite) | 2026-04-21 | Pass | 36/38 passing, 2 skipped (deploy-gate staging-only) |
