@@ -25,7 +25,15 @@ function ctx() {
   if (!_audioCtx) {
     _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
   }
-  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {})
+  // resume() is async — on iOS Safari the context can spend a brief moment
+  // in 'suspended' after the unlock gesture. Schedule onto the suspended
+  // context anyway (oscillator start() calls queue and fire when state
+  // transitions to running).
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume().catch(() => {})
+    _lastPlay.result = 'suspended:scheduled'
+    return _audioCtx
+  }
   if (_audioCtx.state !== 'running') { _lastPlay.result = `not-running:${_audioCtx.state}`; return null }
   _lastPlay.result = 'ok'
   return _audioCtx
