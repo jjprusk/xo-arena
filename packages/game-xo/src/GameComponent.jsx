@@ -267,9 +267,24 @@ export default function GameComponent({ session, sdk }) {
           })}
         </div>
 
-        {/* Reaction menu — floating, players only */}
-        {isPlayer && (status === 'playing' || status === 'finished') && sdk.sendReaction && (
-          <div className="absolute -top-2 -right-1 z-10 flex flex-col items-end gap-1">
+        {/* Incoming reaction — brief bounce over the board */}
+        {incomingReaction && (
+          <div
+            key={incomingReaction.id}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none select-none text-5xl animate-bounce"
+            style={{ lineHeight: 1 }}
+          >
+            {incomingReaction.emoji}
+          </div>
+        )}
+      </div>
+
+      {/* Reaction menu — small right-aligned pill BELOW the board. Lives
+          outside the board's relative wrapper so it never overlaps a cell
+          on desktop the way the old -top-2 -right-1 positioning did. */}
+      {isPlayer && (status === 'playing' || status === 'finished') && sdk.sendReaction && (
+        <div className="w-full flex justify-end">
+          <div className="relative">
             <button
               onClick={() => setShowReactions(v => !v)}
               aria-label="Reactions"
@@ -279,7 +294,10 @@ export default function GameComponent({ session, sdk }) {
               😊
             </button>
             {showReactions && (
-              <div className="flex gap-1 flex-wrap justify-end max-w-[12rem] p-1 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+              <div
+                className="absolute right-0 top-full mt-1 flex gap-1 flex-wrap justify-end max-w-[12rem] p-1 rounded-lg border z-10"
+                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+              >
                 {REACTIONS.map(emoji => (
                   <button
                     key={emoji}
@@ -292,19 +310,8 @@ export default function GameComponent({ session, sdk }) {
               </div>
             )}
           </div>
-        )}
-
-        {/* Incoming reaction — brief bounce over the board */}
-        {incomingReaction && (
-          <div
-            key={incomingReaction.id}
-            className="absolute inset-0 flex items-center justify-center pointer-events-none select-none text-5xl animate-bounce"
-            style={{ lineHeight: 1 }}
-          >
-            {incomingReaction.emoji}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Spectator badge */}
       {session?.isSpectator && (

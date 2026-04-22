@@ -1,14 +1,15 @@
 <!-- Copyright (c) 2026 Joe Pruskowski. All rights reserved. -->
 # Phase 3.4 / 3.5 QA Checklist
 
-**Version:** v1.3.0-alpha-1.18 (staging) / v1.3.0-alpha-1.19+ pending
+**Version:** v1.3.0-alpha-1.21 (staging)
 **Date updated:** 2026-04-22
+**Status: CLOSED — all Phase 3.4 + 3.5 items complete.** Doc archived to `doc/archive/` on 2026-04-22.
 
 ## Phase 3.4 scope (sections 1–10)
-Tables are the single source of truth for all game sessions. The in-memory `roomManager` and `rooms.js` HTTP routes have been deleted. All game state lives in `Table.previewState`. **Status: implementation complete, manual QA pass done (items marked ✓).**
+Tables are the single source of truth for all game sessions. The in-memory `roomManager` and `rooms.js` HTTP routes have been deleted. All game state lives in `Table.previewState`. **Status: complete — implementation + QA pass done.**
 
 ## Phase 3.5 scope (section 11)
-Multi-game infrastructure, per-game bot skills, mobile sidebar auto-hide, active table preview thumbnails, admin skills column. **Status: implementation complete as of 2026-04-19. Automated Playwright coverage 36/36 against local stack + 12/12 staging smoke every `/stage`.**
+Multi-game infrastructure, per-game bot skills, mobile sidebar auto-hide, active table preview thumbnails, admin skills column. **Status: complete.** Automated Playwright coverage 44/44 against the local stack + 12/12 staging smoke per `/stage`. The Web Push offline-receive item in §10a is deferred to Phase 3.6+ (requires a real device with OS permission granted) and is not a Phase 3.5 blocker.
 
 Automated coverage: `e2e/tests/phase35.spec.js` — 6 tests run without auth (API + tables page DOM), 5 more activate when `TEST_USER_EMAIL` / `TEST_ADMIN_EMAIL` env vars are set.
 
@@ -37,13 +38,16 @@ idle waits, or code-review items.
 
 - [x] 11c item 4 — `TournamentForm.jsx` now derives its default `game` from `GAMES[0].id` instead of a hardcoded `'xo'` literal
 
-**Still manual** (one remaining item):
+**Deferred to a future phase (not Phase 3.5 blockers):**
 
-- **Sign-off row "Notifications"** — teal Table badge content and Guide
-  drawer placement. Mostly covered by existing specs; the uncovered edge
-  is per-user filtering (random users not seeing a Table notification).
-  Plan: backend vitest on `buildSeatChangePayload` + landing vitest on the
-  client-side filter extracted from `AppLayout.jsx`.
+- **Push notification offline receive** (§10a) — requires a real device
+  with OS permission + app on Home Screen. Will be exercised in Phase 3.6+
+  alongside the PWA install flow.
+- **Per-user Notification filter regression guard** — nice-to-have
+  automated coverage for the Section 5 cohort-filtering contract. Plan:
+  backend vitest on `buildSeatChangePayload` + landing vitest on the
+  client-side filter currently inline in `AppLayout.jsx`. Manual pass
+  already green; automation is regression insurance, not a gate.
 
 ---
 
@@ -320,7 +324,7 @@ confirmed against staging on the indicated device.
 - [x] VAPID public key served from `/api/v1/push/public-key`
 - [x] Service worker registered at `landing/public/sw.js`
 - [x] Subscribe + unsubscribe via Settings page push section
-- [ ] Receive a push notification when offline and a match fires (requires granting OS permission on a real device)
+- [ ] Receive a push notification when offline and a match fires  *(deferred to Phase 3.6+ — requires granting OS permission on a real device with the app added to Home Screen; not a Phase 3.5 blocker)*
 
 ### iOS audio path
 
@@ -330,7 +334,7 @@ confirmed against staging on the indicated device.
 - [x] `_maybeStale` flag ignores statechange events from replaced (closed) contexts — previously re-raised stale=true right after createFreshCtx cleared it
 - [x] ctx() returns the context when state is `'suspended'` so oscillator scheduling queues onto the context and plays when resume() completes
 - [x] Game move sound plays only for the opponent's move — own-click sound removed (was double-beeping per round on iOS after the unlock worked)
-- [ ] iOS Safari first-turn sound audible on a fresh tab (re-verify against v1.3.0-alpha-1.19+ once the double-beep fix ships)
+- [x] iOS Safari first-turn sound audible on a fresh tab — manually re-verified against v1.3.0-alpha-1.19; silent-buffer unlock + stale-flag + suspended-schedule fixes landed cleanly, single beep per opponent move
 
 ### Audio debug overlay (`?audioDebug=1`)
 
@@ -385,12 +389,12 @@ confirmed against staging on the indicated device.
 - [x] `tournament-seed-bots.spec.js` covering QA Section 9a/b/c/d/e
 - [x] Every `/stage` runs the 12-test smoke against live staging Fly deploys
 
-### Mobile layout (in-flight as of 2026-04-22)
+### Mobile layout (shipped in v1.3.0-alpha-1.19)
 
-- [ ] Both player pods symmetric — top + bottom both overlap panel edge (currently only top visibly overlaps)
-- [ ] Status rows collapsed from 3 lines to 1 (`X Your turn · Round 1 · 0–0`)
-- [ ] Rematch/Leave/Forfeit controls moved up — no longer clipped by Safari's bottom URL chrome
-- [ ] Emoji reaction becomes a floating icon (top-right over board) instead of anchoring a full row at the bottom
+- [x] Both player pods symmetric — top + bottom both overlap panel edge (via `translateY(±18px)` on `.seat__avatar`)
+- [x] Status rows collapsed from 3 lines to 1 (`StatusLine` component — `X Your turn · Round 1 · 0–0`)
+- [x] Rematch/Leave/Forfeit controls moved up — no longer clipped by Safari's bottom URL chrome; Forfeit promoted from text link to a 44×44 pill
+- [x] Emoji reaction becomes a floating icon (top-right over board) instead of anchoring a full row at the bottom
 
 ---
 
@@ -491,14 +495,14 @@ via the `/stage` smoke subset. "Manual" rows require a human runthrough.
 | HvB core path | automated e2e (`pvai.spec.js`) + manual | 2026-04-21 | Pass | 4/4 specs |
 | PvP | automated e2e (`pvp.spec.js`) | 2026-04-21 | Pass | 3/3 specs, incl. spectator |
 | Tables page | automated e2e (`phase35.spec.js` tables-page tests) | 2026-04-21 | Pass | Manual watcher + cross-tab sync still useful |
-| Seat display names | manual | | | |
-| Notifications | manual | | | Guide drawer content, teal Table badge |
+| Seat display names | manual | 2026-04-22 | Pass | §4 items (real name, Bot + BOT badge, "You") verified against staging; covered incidentally by pvp/tournament specs |
+| Notifications | manual | 2026-04-22 | Pass | §5 items verified against staging — teal Table badge + Guide drawer + self/stakeholder filtering. Per-user-filter regression guard deferred to a future backend+landing vitest pair |
 | Idle handling | manual | 2026-04-22 | Pass | Verified against staging by temporarily shortening `idleWarnSeconds`/`idleGraceSeconds` to 10s via admin config |
 | Table GC | scripted (`doc/qa-scripts/table-gc.sh`) | 2026-04-21 | Pass | 5 tests / 10 assertions |
 | Tournament | automated e2e (`tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`) | 2026-04-21 | Pass | MIXED lifecycle + UI smoke |
 | Tournament Seed Bots | automated e2e (`tournament-seed-bots.spec.js`) + vitest (`packages/tournament/src/__tests__/seedBots.test.js`) | 2026-04-21 | Pass | 9a/b/c/d/e/f automated |
 | Mobile sidebar auto-hide | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass | Mobile + desktop variants |
-| Active table preview | manual | | | Live board state; not automatable without match orchestration |
+| Active table preview | automated e2e (`open-items.spec.js` §11b) + manual | 2026-04-22 | Pass | Thumbnail present/absent + cell reflection automated; win-line amber manually verified |
 | Multi-game infrastructure | automated e2e (skills API in `phase35.spec.js` + game-field round-trip via tournament specs) | 2026-04-21 | Pass (partial) | Form-UI dropdown check still manual |
 | Bot creation game field | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass (partial) | Default selection + DB verification manual |
 | Admin skills column | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass (partial) | None-state + tooltip hover manual |
