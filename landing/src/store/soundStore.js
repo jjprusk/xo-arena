@@ -37,7 +37,13 @@ let _maybeStale  = false
 function attachStateChangeWatcher(ac) {
   // Safari transitions to `interrupted` without firing focus/blur events
   // during some audio route changes. Mark stale so the next gesture recreates.
+  // IMPORTANT: ignore events from contexts we've already replaced — when
+  // createFreshCtx() closes the previous context, its `statechange` fires
+  // asynchronously with `state === 'closed'` and would otherwise set
+  // _maybeStale=true right after we just cleared it, trapping the next play()
+  // in the stale-bail path forever.
   ac.addEventListener?.('statechange', () => {
+    if (ac !== _audioCtx) return
     if (ac.state !== 'running') _maybeStale = true
   })
 }
@@ -100,10 +106,19 @@ function ctx() {
   }
   if (_maybeStale) { _lastPlay.result = 'stale'; return null }
   if (!_audioCtx || _audioCtx.state === 'closed') { _lastPlay.result = 'no-ctx'; return null }
-  if (_audioCtx.state !== 'running') {
-    // Kick resume() for Chrome's `suspended` path, but don't schedule onto it
-    // right now — Safari's `interrupted` state silently no-ops resume().
+  if (_audioCtx.state === 'suspended') {
+    // resume() is async. On iOS Safari the context often spends a brief
+    // moment in 'suspended' right after createFreshCtx + silent-buffer unlock,
+    // and an in-flight play() call would race ahead. Kick resume and return
+    // the context anyway — oscillator schedule calls queue onto a suspended
+    // context and fire when it transitions to running, so the sound still
+    // plays (just a few ms late). For 'interrupted' (Safari route-change),
+    // resume() silently no-ops, so we still bail.
     _audioCtx.resume().catch(() => {})
+    _lastPlay.result = 'suspended:scheduled'
+    return _audioCtx
+  }
+  if (_audioCtx.state !== 'running') {
     _lastPlay.result = `not-running:${_audioCtx.state}`
     return null
   }

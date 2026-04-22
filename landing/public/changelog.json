@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.3.0-alpha-1.18",
+    "date": "2026-04-22",
+    "description": "iOS audio: fix stale flag and schedule on suspended"
+  },
+  {
     "version": "1.3.0-alpha-1.17",
     "date": "2026-04-22",
     "description": "Audio debug overlay for iOS sound diagnostics"
