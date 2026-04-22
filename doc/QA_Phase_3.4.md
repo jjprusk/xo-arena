@@ -31,13 +31,15 @@ idle waits, or code-review items.
 - [x] Section 9b — recurring human subscription carried to the next occurrence
 - [x] Section 9d — removed seed bot absent from the next occurrence
 
-**Still manual** (~10 min of hands-on work for a full pre-promotion QA pass):
+**Fixed in place** (not automated; one-time code cleanup):
+
+- [x] 11c item 4 — `TournamentForm.jsx` now derives its default `game` from `GAMES[0].id` instead of a hardcoded `'xo'` literal
+
+**Still manual** (~8 min of hands-on work for a full pre-promotion QA pass):
 
 - **11b item 4** — win-line amber highlight on a game that finished but whose
   table hasn't transitioned to COMPLETED. Narrow window via the idle timer;
   not worth racing the GC in a spec.
-- **11c item 4** — "no hardcoded `'xo'` strings" in the tournament form. Static
-  check; better as an ESLint rule than an e2e.
 - **11d item 5** — "second game added to `gameRegistry.js` appears in dropdown
   without code changes." Speculative until a second game actually exists.
 - **11e (all 3)** — server-side skill resolution. Better as backend vitest
@@ -435,7 +437,7 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 - [x] Open the **Create Tournament** form (admin or user) — automated in `open-items.spec.js` §11c
 - [x] **Game** dropdown is present and populated from `gameRegistry.js` (currently shows XO only) — automated (defaults to `xo`)
 - [x] Create a tournament with game = XO → `game` field stored correctly in DB (covered transitively by `tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`, and `tournament-seed-bots.spec.js` — all create + fetch round-trip tournaments with `game: 'xo'`)
-- [ ] No hardcoded `'xo'` strings remain in the tournament form component  *(manual — better as ESLint rule; not an e2e)*
+- [x] No hardcoded `'xo'` strings remain in the tournament form component — `TournamentForm.jsx` now reads `GAMES[0].id` via `DEFAULT_GAME_ID` instead of a literal `'xo'`
 
 ### 11d. Bot creation — Game field
 
