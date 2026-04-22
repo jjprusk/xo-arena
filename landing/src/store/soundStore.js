@@ -53,6 +53,24 @@ function createFreshCtx() {
   return _audioCtx
 }
 
+// iOS Safari unlock: a fresh AudioContext can start in 'suspended' state even
+// when created inside a user gesture, and resume() called later (from a
+// socket-driven play()) silently no-ops. The reliable unlock is to call
+// resume() synchronously inside the gesture AND immediately schedule a
+// zero-duration silent buffer. Once unlocked, the context stays running until
+// the next app-switch / lock.
+function unlockIOSAudio(ac) {
+  if (!ac) return
+  try { ac.resume() } catch (_) {}
+  try {
+    const buffer = ac.createBuffer(1, 1, 22050)
+    const source = ac.createBufferSource()
+    source.buffer = buffer
+    source.connect(ac.destination)
+    source.start(0)
+  } catch (_) {}
+}
+
 // Touch-primary devices (iPhone, iPad, Android) have no multi-window
 // concept, and `document.hasFocus()` on iOS Safari often returns false even
 // when the page is active — silencing all playback. Fall back to
@@ -101,6 +119,11 @@ if (typeof window !== 'undefined') {
     if (!_audioCtx || _audioCtx.state !== 'running' || _maybeStale) {
       createFreshCtx()
     }
+    // Synchronously inside the gesture: kick resume() and schedule a silent
+    // buffer. No-op on desktop (context is already running); critical on iOS
+    // Safari where a fresh context is often 'suspended' and later resume()
+    // calls from outside a gesture don't do anything.
+    unlockIOSAudio(_audioCtx)
   }, { capture: true, passive: true })
 
   // On departure, close the AudioContext — not just mark stale. Tones are
