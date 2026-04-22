@@ -39,9 +39,6 @@ idle waits, or code-review items.
 
 **Still manual** (~2 min of hands-on work for a full pre-promotion QA pass):
 
-- **11b item 4** — win-line amber highlight on a game that finished but whose
-  table hasn't transitioned to COMPLETED. Narrow window via the idle timer;
-  not worth racing the GC in a spec.
 - **Sign-off row "Idle handling"** — 3+ min wall-clock waits. Would work
   with a test-only config hook that shortens the thresholds.
 - **Sign-off row "Notifications"** — teal Table badge content and Guide
@@ -422,7 +419,7 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 - [x] A table in **Forming** status shows the game label only (no thumbnail) — automated in `open-items.spec.js` §11b
 - [x] A table in **Active** status shows a 3×3 mini board thumbnail alongside the game label — automated
 - [x] The thumbnail reflects the current board state (X/O marks visible at the correct cells) — automated
-- [ ] Win line cells are highlighted in amber when a game ends before the table completes  *(manual — narrow window between game-end and idle-GC completion)*
+- [x] Win line cells are highlighted in amber when a game ends before the table completes — manually verified 2026-04-22 against staging v1.3.0-alpha-1.19
 - [x] Thumbnail does **not** appear for Completed tables — automated (skips cleanly when no COMPLETED rows exist)
 
 ### 11c. Multi-game infrastructure — Tournament form
