@@ -1,16 +1,34 @@
 <!-- Copyright (c) 2026 Joe Pruskowski. All rights reserved. -->
 # Phase 3.4 / 3.5 QA Checklist
 
-**Version:** v1.3.0-alpha-1.13
-**Date updated:** 2026-04-21
+**Version:** v1.3.0-alpha-1.18 (staging) / v1.3.0-alpha-1.19+ pending
+**Date updated:** 2026-04-22
 
 ## Phase 3.4 scope (sections 1–10)
 Tables are the single source of truth for all game sessions. The in-memory `roomManager` and `rooms.js` HTTP routes have been deleted. All game state lives in `Table.previewState`. **Status: implementation complete, manual QA pass done (items marked ✓).**
 
 ## Phase 3.5 scope (section 11)
-Multi-game infrastructure, per-game bot skills, mobile sidebar auto-hide, active table preview thumbnails, admin skills column. **Status: implementation complete as of 2026-04-19, manual QA not yet run.**
+Multi-game infrastructure, per-game bot skills, mobile sidebar auto-hide, active table preview thumbnails, admin skills column. **Status: implementation complete as of 2026-04-19. Automated Playwright coverage 36/36 against local stack + 12/12 staging smoke every `/stage`.**
 
 Automated coverage: `e2e/tests/phase35.spec.js` — 6 tests run without auth (API + tables page DOM), 5 more activate when `TEST_USER_EMAIL` / `TEST_ADMIN_EMAIL` env vars are set.
+
+---
+
+## 📋 Open Items (not yet covered by automation)
+
+Everything else in this document is either ✓ done or has an automated spec. The following items remain **manual-only** — they either require a live running game, backend log inspection, or a DB query that isn't worth round-tripping through a Playwright spec. Run these before a production promotion.
+
+- **11b — Active table preview thumbnails** (all 5 items): needs two real browsers mid-game; the 3×3 mini-board on `/tables` can only be eyeballed against live state.
+- **11c — Tournament form `Game` dropdown UI** (items 1, 2, 4): open the admin tournament-create form, confirm the dropdown is populated from `gameRegistry`, and grep the component for any stray hardcoded `'xo'` strings.
+- **11d — Bot creation game-field defaults + DB** (items 3, 4, 5): verify default selection is XO, the `BotSkill` row appears in the DB after save, and that adding a second entry to `gameRegistry.js` picks up in the dropdown without touching the form component.
+- **11e — Server-side skill resolution** (all 3): play an HvB match, tail backend logs for the absence of `resolveSkillForGame returned null`, and manually POST `room:create:hvb` with a fake `botSkillId` to confirm the server ignores it.
+- **11f — Admin skills column edge cases** (items 3, 4): bots with no `BotSkill` rows show `none`, and hovering a badge shows the algorithm/status tooltip.
+- **11g — Tournament `gameId` propagation** (all 3): start a BOT_VS_BOT tournament, inspect Redis event payloads for `gameId: 'xo'` at both initial and advancement events, plus after a `recoverPendingBotMatches` run.
+- **Section 9b last item** — recurring human participants carried over: needs a real standing-human subscription, not covered by `tournament-seed-bots.spec.js`.
+- **Section 9d last item** — removed seed bot is NOT included in subsequent occurrences: exercisable via the admin "Check Recurring" button but not yet in the 9b spec.
+- **Seat display names / Notifications / Idle handling / Active table preview / Tournament gameId** rows in the Sign-off table: manual runthroughs (idle handling genuinely takes 3+ minutes of wall-clock waits per test).
+
+Everything above roughly totals ~25 min of hands-on work for a full pre-promotion QA pass.
 
 ---
 
@@ -274,6 +292,90 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 - [x] Run `npx vitest run src/__tests__/seedBots.test.js` from `packages/tournament/` — all 3 tests pass
 
 ---
+
+---
+
+## 10a. Post-v1.13 additions (2026-04-21 → 2026-04-22)
+
+Items landed after the original Phase 3.4 QA pass. Marked ✓ where the user has
+confirmed against staging on the indicated device.
+
+### Web Push (Tier 3 transport) — opt-in notifications
+
+- [x] VAPID public key served from `/api/v1/push/public-key`
+- [x] Service worker registered at `landing/public/sw.js`
+- [x] Subscribe + unsubscribe via Settings page push section
+- [ ] Receive a push notification when offline and a match fires (requires granting OS permission on a real device)
+
+### iOS audio path
+
+- [x] Silent-buffer AudioContext unlock inside pointerdown gesture (soundStore)
+- [x] Silent-buffer unlock mirrored into notifSoundStore (notification pings)
+- [x] `document.hasFocus()` gate bypassed on touch devices — iOS Safari often reports false even for active pages
+- [x] `_maybeStale` flag ignores statechange events from replaced (closed) contexts — previously re-raised stale=true right after createFreshCtx cleared it
+- [x] ctx() returns the context when state is `'suspended'` so oscillator scheduling queues onto the context and plays when resume() completes
+- [x] Game move sound plays only for the opponent's move — own-click sound removed (was double-beeping per round on iOS after the unlock worked)
+- [ ] iOS Safari first-turn sound audible on a fresh tab (re-verify against v1.3.0-alpha-1.19+ once the double-beep fix ships)
+
+### Audio debug overlay (`?audioDebug=1`)
+
+- [x] Activate via URL query param; persists in sessionStorage across SPA nav
+- [x] Shows live AudioContext state, `_maybeStale`, master gain, volume, pack, last-play key+result+age
+- [x] Mirror block for notifSoundStore (gestureHappened, state, last-play)
+- [x] ENV block: touchDevice, hasFocus, visibilityState
+- [x] "Test move" and "Test notif" buttons fire the respective `play()` calls in isolation from any socket event
+
+### Guide / Journey
+
+- [x] `POST_JOURNEY_SLOTS` default tiles install on hydrate for accounts whose journey is dismissed but stored slots are empty (legacy accounts)
+- [x] `99+` badge cap (was showing `9+` but count was accurate under the hood)
+- [x] "Clear all" button in the notification stack when > 1 notification present
+
+### Admin tournaments polish
+
+- [x] Test-tournament `isTest` flag — hidden from users, visible to admins
+- [x] Admin per-row action menu (View/Edit/Publish/Start/Cancel/Mark test) replacing the per-row button cluster
+- [x] Admin multi-select status filter (was a row of pills)
+- [x] Bulk-actions bar with row checkboxes + Purge Cancelled + Purge Test buttons
+- [x] Admin "Check Recurring" trigger endpoint + button
+
+### Tournaments page (user side)
+
+- [x] Converted to ListTable with fill mode (bound scroll; no outer scrollbar)
+- [x] Date-filter dropdown + search box + pagination
+- [x] Registration modal (narrow-window usable; previously inline, barely tappable)
+
+### Recurring tournaments
+
+- [x] `recurrencePaused` toggle to skip a template without cancelling
+- [x] Dropped CUSTOM interval (was half-implemented, always set)
+- [x] Scheduler ported into the live `tournament/` service (previously only in the orphaned `packages/tournament/` module — never ran in prod)
+- [x] Admin scheduler-trigger endpoint + button to force a recurring sweep
+- [x] Daily cap removed
+- [x] Inherits `isTest` flag from template to new occurrences
+- [x] User recurring-subscriptions section on Profile
+
+### Backend / transport
+
+- [x] `SSE_MAX_CONNECTIONS_PER_USER` raised 2 → 8 (tab refreshes no longer 429)
+- [x] sseBroker XREAD liveness signal + `resourceCounters` alert (stale XREAD > 90s while clients connected)
+- [x] Phase D: retired socket Tier 2 channels in favor of SSE
+- [x] Retry on mountain-pool slug collision in `POST /api/v1/tables` (pool is in-memory; restart leaves old slugs in DB)
+- [x] PvP table-flow fix: socketHandler seats creator at seat 0, defers ACTIVE until both seats occupied, initializes `previewState` via `makePreviewState`, broadcasts `room:spectatorJoined` so sidebar watcher count updates
+
+### E2E
+
+- [x] Full local suite 36/38 passing (2 skipped = staging deploy-gate tests that fire during `/stage` smoke)
+- [x] Rewritten `pvp.spec.js` for two authed users + Tables API (old spec used deleted auto-room paradigm)
+- [x] `tournament-seed-bots.spec.js` covering QA Section 9a/b/c/d/e
+- [x] Every `/stage` runs the 12-test smoke against live staging Fly deploys
+
+### Mobile layout (in-flight as of 2026-04-22)
+
+- [ ] Both player pods symmetric — top + bottom both overlap panel edge (currently only top visibly overlaps)
+- [ ] Status rows collapsed from 3 lines to 1 (`X Your turn · Round 1 · 0–0`)
+- [ ] Rematch/Leave/Forfeit controls moved up — no longer clipped by Safari's bottom URL chrome
+- [ ] Emoji reaction becomes a floating icon (top-right over board) instead of anchoring a full row at the bottom
 
 ---
 
