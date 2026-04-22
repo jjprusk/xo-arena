@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
+import { POST_JOURNEY_SLOTS } from '../components/guide/slotActions.js'
 
 export const useGuideStore = create((set, get) => ({
   panelOpen: false,
@@ -110,11 +111,24 @@ export const useGuideStore = create((set, get) => ({
       const token = await getToken()
       if (!token) return
       const data = await api.guide.getPreferences(token)
+      const journeyProgress = data.journeyProgress ?? { completedSteps: [], dismissedAt: null }
+      let slots = data.guideSlots ?? []
+
+      // Back-fill the default slot set for accounts whose journey is already
+      // dismissed but whose stored slots are empty — either a pre-defaults
+      // account or slots were cleared. Without this the Guide panel shows
+      // nothing but "+ Add" tiles, which looks broken. Persist so the user
+      // keeps the defaults across sessions.
+      if (journeyProgress.dismissedAt && slots.length === 0) {
+        slots = POST_JOURNEY_SLOTS
+        api.guide.patchPreferences({ guideSlots: slots }, token).catch(() => {})
+      }
+
       set({
-        slots:           data.guideSlots        ?? [],
-        journeyProgress: data.journeyProgress   ?? { completedSteps: [], dismissedAt: null },
-        uiHints:         data.uiHints           ?? {},
-        hydrated:        true,
+        slots,
+        journeyProgress,
+        uiHints:  data.uiHints ?? {},
+        hydrated: true,
       })
     } catch { /* non-fatal */ }
   },
