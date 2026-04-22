@@ -14,5 +14,5 @@ if (!isBrowserSupported()) {
 } else {
   // Dynamic import so the heavy chunk (index.css, App, socket, sound store)
   // doesn't even get fetched on unsupported browsers.
-  await import('./main.supported.js')
+  await import('./main.supported.jsx')
 }

@@ -37,13 +37,13 @@ idle waits, or code-review items.
 
 - [x] 11c item 4 — `TournamentForm.jsx` now derives its default `game` from `GAMES[0].id` instead of a hardcoded `'xo'` literal
 
-**Still manual** (~2 min of hands-on work for a full pre-promotion QA pass):
+**Still manual** (one remaining item):
 
-- **Sign-off row "Idle handling"** — 3+ min wall-clock waits. Would work
-  with a test-only config hook that shortens the thresholds.
 - **Sign-off row "Notifications"** — teal Table badge content and Guide
   drawer placement. Mostly covered by existing specs; the uncovered edge
   is per-user filtering (random users not seeing a Table notification).
+  Plan: backend vitest on `buildSeatChangePayload` + landing vitest on the
+  client-side filter extracted from `AppLayout.jsx`.
 
 ---
 
@@ -493,7 +493,7 @@ via the `/stage` smoke subset. "Manual" rows require a human runthrough.
 | Tables page | automated e2e (`phase35.spec.js` tables-page tests) | 2026-04-21 | Pass | Manual watcher + cross-tab sync still useful |
 | Seat display names | manual | | | |
 | Notifications | manual | | | Guide drawer content, teal Table badge |
-| Idle handling | manual | | | Depends on 3-min waits |
+| Idle handling | manual | 2026-04-22 | Pass | Verified against staging by temporarily shortening `idleWarnSeconds`/`idleGraceSeconds` to 10s via admin config |
 | Table GC | scripted (`doc/qa-scripts/table-gc.sh`) | 2026-04-21 | Pass | 5 tests / 10 assertions |
 | Tournament | automated e2e (`tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`) | 2026-04-21 | Pass | MIXED lifecycle + UI smoke |
 | Tournament Seed Bots | automated e2e (`tournament-seed-bots.spec.js`) + vitest (`packages/tournament/src/__tests__/seedBots.test.js`) | 2026-04-21 | Pass | 9a/b/c/d/e/f automated |
