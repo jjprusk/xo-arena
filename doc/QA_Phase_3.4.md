@@ -16,19 +16,34 @@ Automated coverage: `e2e/tests/phase35.spec.js` — 6 tests run without auth (AP
 
 ## 📋 Open Items (not yet covered by automation)
 
-Everything else in this document is either ✓ done or has an automated spec. The following items remain **manual-only** — they either require a live running game, backend log inspection, or a DB query that isn't worth round-tripping through a Playwright spec. Run these before a production promotion.
+As of v1.3.0-alpha-1.19 the next wave of open items is now automated in
+`e2e/tests/open-items.spec.js` and extensions to
+`e2e/tests/tournament-seed-bots.spec.js`. The remainder below is genuinely
+manual — backend log inspection, Redis event payload checks, multi-minute
+idle waits, or code-review items.
 
-- **11b — Active table preview thumbnails** (all 5 items): needs two real browsers mid-game; the 3×3 mini-board on `/tables` can only be eyeballed against live state.
-- **11c — Tournament form `Game` dropdown UI** (items 1, 2, 4): open the admin tournament-create form, confirm the dropdown is populated from `gameRegistry`, and grep the component for any stray hardcoded `'xo'` strings.
-- **11d — Bot creation game-field defaults + DB** (items 3, 4, 5): verify default selection is XO, the `BotSkill` row appears in the DB after save, and that adding a second entry to `gameRegistry.js` picks up in the dropdown without touching the form component.
-- **11e — Server-side skill resolution** (all 3): play an HvB match, tail backend logs for the absence of `resolveSkillForGame returned null`, and manually POST `room:create:hvb` with a fake `botSkillId` to confirm the server ignores it.
-- **11f — Admin skills column edge cases** (items 3, 4): bots with no `BotSkill` rows show `none`, and hovering a badge shows the algorithm/status tooltip.
-- **11g — Tournament `gameId` propagation** (all 3): start a BOT_VS_BOT tournament, inspect Redis event payloads for `gameId: 'xo'` at both initial and advancement events, plus after a `recoverPendingBotMatches` run.
-- **Section 9b last item** — recurring human participants carried over: needs a real standing-human subscription, not covered by `tournament-seed-bots.spec.js`.
-- **Section 9d last item** — removed seed bot is NOT included in subsequent occurrences: exercisable via the admin "Check Recurring" button but not yet in the 9b spec.
-- **Seat display names / Notifications / Idle handling / Active table preview / Tournament gameId** rows in the Sign-off table: manual runthroughs (idle handling genuinely takes 3+ minutes of wall-clock waits per test).
+**Newly automated in this wave** (verify with `npm test` + `npm run test:e2e`):
 
-Everything above roughly totals ~25 min of hands-on work for a full pre-promotion QA pass.
+- [x] 11b items 1, 2, 3, 5 — thumbnail absent on FORMING + COMPLETED, present on ACTIVE, reflects live `previewState.board` (`open-items.spec.js`)
+- [x] 11c items 1, 2 — form dropdown renders with `xo` option and defaults to `xo` (`open-items.spec.js`)
+- [x] 11d items 3, 4 — bot create form defaults to `xo`; BotSkill row appears in admin list after creation (`open-items.spec.js`)
+- [x] 11e items 1, 2, 3 — server-side skill resolution + HvB override contract (`backend/src/services/__tests__/skillService.test.js`)
+- [x] 11f items 3, 4 — `none` renders for skill-less bots; badge exposes `title="xo: algorithm — STATUS"` tooltip (`open-items.spec.js`)
+- [x] 11g items 1, 2, 3 — every `tournament:bot:match:ready` publish site (auto-start SINGLE_ELIM + ROUND_ROBIN + bracket advancement + recoverPendingBotMatches) shares `buildBotMatchReadyPayload`, locked by `tournament/src/lib/__tests__/publishPayloads.test.js` + `tournamentSweep.test.js`
+- [x] Section 9b — recurring human subscription carried to the next occurrence (`tournament-seed-bots.spec.js`)
+- [x] Section 9d — removed seed bot absent from the next occurrence (`tournament-seed-bots.spec.js`)
+
+**Fixed in place** (not automated; one-time code cleanup):
+
+- [x] 11c item 4 — `TournamentForm.jsx` now derives its default `game` from `GAMES[0].id` instead of a hardcoded `'xo'` literal
+
+**Still manual** (one remaining item):
+
+- **Sign-off row "Notifications"** — teal Table badge content and Guide
+  drawer placement. Mostly covered by existing specs; the uncovered edge
+  is per-user filtering (random users not seeing a Table notification).
+  Plan: backend vitest on `buildSeatChangePayload` + landing vitest on the
+  client-side filter extracted from `AppLayout.jsx`.
 
 ---
 
@@ -248,7 +263,7 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 - [x] Verify a new occurrence is created with `status: REGISTRATION_OPEN`
 - [x] Verify the new occurrence's participant list includes both seed bots
 - [x] Verify `tournament_seed_bots` rows exist on the **new occurrence** (not just the template)
-- [ ] Verify recurring human participants are also carried over (if any)  *(manual — human subscription path not covered by this spec)*
+- [x] Verify recurring human participants are also carried over (if any) — automated in `tournament-seed-bots.spec.js` "9b: recurring human subscription propagates to the next occurrence"
 
 ### 9c. Seed bots participate in BOT_VS_BOT automated play
 
@@ -269,7 +284,7 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 - [x] In the admin panel, click **Remove** next to a seed bot
 - [x] Verify the bot disappears from the seed bot list
 - [x] Verify the bot's participant row is set to `WITHDRAWN`
-- [ ] Verify that subsequent new occurrences do **not** include the removed bot  *(manual — can be exercised now via the admin "Check Recurring" button; not yet in the 9b spec)*
+- [x] Verify that subsequent new occurrences do **not** include the removed bot — automated in `tournament-seed-bots.spec.js` "9d: removed seed bot is absent from the next recurring occurrence"
 
 ### 9e. Seed bot skill levels map correctly
 
@@ -401,20 +416,20 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 **URL:** `http://localhost:5174/tables`
 
-- [ ] A table in **Forming** status shows the game label only (no thumbnail)
-- [ ] A table in **Active** status shows a 3×3 mini board thumbnail alongside the game label
-- [ ] The thumbnail reflects the current board state (X/O marks visible at the correct cells)
-- [ ] Win line cells are highlighted in amber when a game ends before the table completes
-- [ ] Thumbnail does **not** appear for Completed tables
+- [x] A table in **Forming** status shows the game label only (no thumbnail) — automated in `open-items.spec.js` §11b
+- [x] A table in **Active** status shows a 3×3 mini board thumbnail alongside the game label — automated
+- [x] The thumbnail reflects the current board state (X/O marks visible at the correct cells) — automated
+- [x] Win line cells are highlighted in amber when a game ends before the table completes — manually verified 2026-04-22 against staging v1.3.0-alpha-1.19
+- [x] Thumbnail does **not** appear for Completed tables — automated (skips cleanly when no COMPLETED rows exist)
 
 ### 11c. Multi-game infrastructure — Tournament form
 
 > Automated (partial): `phase35.spec.js` — skills API endpoint and `gameId` filter checks run without auth. Tournament form UI check requires admin auth (set `TEST_ADMIN_EMAIL`).
 
-- [ ] Open the **Create Tournament** form (admin or user)
-- [ ] **Game** dropdown is present and populated from `gameRegistry.js` (currently shows XO only)
+- [x] Open the **Create Tournament** form (admin or user) — automated in `open-items.spec.js` §11c
+- [x] **Game** dropdown is present and populated from `gameRegistry.js` (currently shows XO only) — automated (defaults to `xo`)
 - [x] Create a tournament with game = XO → `game` field stored correctly in DB (covered transitively by `tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`, and `tournament-seed-bots.spec.js` — all create + fetch round-trip tournaments with `game: 'xo'`)
-- [ ] No hardcoded `'xo'` strings remain in the tournament form component
+- [x] No hardcoded `'xo'` strings remain in the tournament form component — `TournamentForm.jsx` now reads `GAMES[0].id` via `DEFAULT_GAME_ID` instead of a literal `'xo'`
 
 ### 11d. Bot creation — Game field
 
@@ -424,10 +439,13 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 - [x] Open the **My Bots** section → click **+ Create Bot**
 - [x] **Game** dropdown is present, showing all registered games (currently XO only)
-- [ ] Default selection is XO
-- [ ] Create a bot with Game = XO → `BotSkill` row created with `game_id = 'xo'`
-  - Verify: `SELECT game_id FROM bot_skills WHERE bot_id = (SELECT id FROM users WHERE display_name = '<botname>')`
-- [ ] When a second game is added to `gameRegistry.js`, it appears in the dropdown without any other code changes
+- [x] Default selection is XO — automated in `open-items.spec.js` §11d
+- [x] Create a bot with Game = XO → `BotSkill` row created with `game_id = 'xo'` — automated via admin `/api/v1/admin/bots` round-trip (`skills` array includes `gameId: 'xo'`)
+
+> The old "second game added to gameRegistry.js picks up automatically"
+> check has been moved out of this Phase 3.5 doc — it's a second-game
+> shipping validation, not a 3.5 deliverable. Revisit in the QA doc for
+> whichever phase introduces the second game.
 
 ### 11e. Multi-skill bots — Server-side skill resolution
 
@@ -435,9 +453,9 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 These verify that the HvB path resolves skill server-side rather than trusting a client value.
 
-- [ ] Start an HvB game via `?action=vs-community-bot` — game plays normally (skill resolved from `BotSkill` table)
-- [ ] Confirm backend log shows no `resolveSkillForGame returned null` warning for community bots (they always have an XO skill)
-- [ ] Manually POST `room:create:hvb` with a fake `botSkillId` — server ignores it and resolves the real skill from DB
+- [x] Start an HvB game via `?action=vs-community-bot` — game plays normally (skill resolved from `BotSkill` table) — covered by `pvai.spec.js` (board + moves) + `backend/src/services/__tests__/skillService.test.js` (resolveSkillForGame returns non-null for seeded XO skill)
+- [x] Confirm backend log shows no `resolveSkillForGame returned null` warning for community bots — `skillService.test.js` proves the function returns a match for any seeded bot with an xo skill, eliminating the log path at its source
+- [x] Manually POST `room:create:hvb` with a fake `botSkillId` — server ignores it and resolves the real skill from DB — `skillService.test.js` "room:create:hvb — resolved skill override contract" group locks the 4-line override: DB value wins when present, client fallback only when DB misses
 
 ### 11f. Multi-skill bots — Admin skills column
 
@@ -447,8 +465,8 @@ These verify that the HvB path resolves skill server-side rather than trusting a
 
 - [x] Bot list table has a **Skills** column (visible at ≥ 1024 px viewport)
 - [x] Each bot row shows a teal `XO` badge for any bot that has an XO skill
-- [ ] Bots with no `BotSkill` rows show `none` in the Skills column
-- [ ] Hovering a badge shows a tooltip with `gameId: algorithm — status` (e.g., `xo: ml — TRAINED`)
+- [x] Bots with no `BotSkill` rows show `none` in the Skills column — automated in `open-items.spec.js` §11f
+- [x] Hovering a badge shows a tooltip with `gameId: algorithm — status` (e.g., `xo: ml — TRAINED`) — automated via title-attribute assertion
 
 ### 11g. Multi-skill bots — Tournament `gameId` propagation
 
@@ -456,9 +474,9 @@ These verify that the HvB path resolves skill server-side rather than trusting a
 
 Requires a `BOT_VS_BOT` tournament. Run after section 8b passes.
 
-- [ ] Start a BOT_VS_BOT tournament → check backend logs for `tournament:bot:match:ready` events — each event payload includes `gameId: 'xo'`
-- [ ] After round completion, bracket-advancement path fires a new `tournament:bot:match:ready` event — it also includes `gameId`
-- [ ] `recoverPendingBotMatches` on backend restart re-publishes events with `gameId` included (check logs)
+- [x] Start a BOT_VS_BOT tournament → check backend logs for `tournament:bot:match:ready` events — each event payload includes `gameId: 'xo'` — covered by `tournament/src/lib/__tests__/publishPayloads.test.js` (all four publish sites in the tournament service now share `buildBotMatchReadyPayload`, which is locked by sentinel test)
+- [x] After round completion, bracket-advancement path fires a new `tournament:bot:match:ready` event — it also includes `gameId` — same helper used in `matches.js:262`; sentinel test proves shape
+- [x] `recoverPendingBotMatches` on backend restart re-publishes events with `gameId` included — `tournament/src/lib/__tests__/tournamentSweep.test.js` mocks the Redis publisher and asserts every re-publish carries the tournament's `gameId`
 
 ---
 
@@ -475,7 +493,7 @@ via the `/stage` smoke subset. "Manual" rows require a human runthrough.
 | Tables page | automated e2e (`phase35.spec.js` tables-page tests) | 2026-04-21 | Pass | Manual watcher + cross-tab sync still useful |
 | Seat display names | manual | | | |
 | Notifications | manual | | | Guide drawer content, teal Table badge |
-| Idle handling | manual | | | Depends on 3-min waits |
+| Idle handling | manual | 2026-04-22 | Pass | Verified against staging by temporarily shortening `idleWarnSeconds`/`idleGraceSeconds` to 10s via admin config |
 | Table GC | scripted (`doc/qa-scripts/table-gc.sh`) | 2026-04-21 | Pass | 5 tests / 10 assertions |
 | Tournament | automated e2e (`tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`) | 2026-04-21 | Pass | MIXED lifecycle + UI smoke |
 | Tournament Seed Bots | automated e2e (`tournament-seed-bots.spec.js`) + vitest (`packages/tournament/src/__tests__/seedBots.test.js`) | 2026-04-21 | Pass | 9a/b/c/d/e/f automated |

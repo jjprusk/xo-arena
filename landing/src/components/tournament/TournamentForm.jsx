@@ -59,8 +59,12 @@ function toLocalDatetimeValue(val) {
   } catch { return '' }
 }
 
+// Default game = first registered game in gameRegistry. Dodges a hardcoded
+// 'xo' literal so adding a new game doesn't require touching this file.
+const DEFAULT_GAME_ID = GAMES[0]?.id
+
 const DEFAULT_FORM = {
-  name: '', description: '', game: 'xo', mode: 'HVH', format: 'PLANNED',
+  name: '', description: '', game: DEFAULT_GAME_ID, mode: 'HVH', format: 'PLANNED',
   bracketType: 'SINGLE_ELIM', bestOfN: 3, minParticipants: 2, maxParticipants: '',
   startMode: 'AUTO',
   startTime: '', registrationOpenAt: '', registrationCloseAt: '', allowSpectators: true,
@@ -75,7 +79,7 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
     if (!initialValues) return DEFAULT_FORM
     return {
       name: initialValues.name ?? '', description: initialValues.description ?? '',
-      game: initialValues.game ?? 'xo', mode: initialValues.mode ?? 'HVH',
+      game: initialValues.game ?? DEFAULT_GAME_ID, mode: initialValues.mode ?? 'HVH',
       format: initialValues.format ?? 'PLANNED', bracketType: initialValues.bracketType ?? 'SINGLE_ELIM',
       bestOfN: initialValues.bestOfN ?? 3, minParticipants: initialValues.minParticipants ?? 2,
       maxParticipants: initialValues.maxParticipants ?? '',

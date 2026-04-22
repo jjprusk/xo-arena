@@ -2,6 +2,7 @@
 import { Router } from 'express'
 import db from '../lib/db.js'
 import { publish } from '../lib/redis.js'
+import { buildBotMatchReadyPayload } from '../lib/publishPayloads.js'
 import { requireTournamentAdminOrInternal } from '../middleware/auth.js'
 import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import logger from '../logger.js'
@@ -259,14 +260,10 @@ async function advanceBracketIfReady(match) {
               bestOfN: tournament.bestOfN,
             }])
           } else {
-            pendingPublishes.push(['tournament:bot:match:ready', {
-              tournamentId: tournament.id,
-              matchId: newMatch.id,
-              bestOfN: tournament.bestOfN,
-              gameId: tournament.game,
-              bot1: { id: p1?.user.id, displayName: p1?.user.displayName, botModelId: p1?.user.botModelId },
-              bot2: { id: p2?.user.id, displayName: p2?.user.displayName, botModelId: p2?.user.botModelId },
-            }])
+            pendingPublishes.push([
+              'tournament:bot:match:ready',
+              buildBotMatchReadyPayload(tournament, newMatch, p1.user, p2.user),
+            ])
           }
         }
       }

@@ -16,6 +16,7 @@
 
 import db from './db.js'
 import { publish } from './redis.js'
+import { buildBotMatchReadyPayload } from './publishPayloads.js'
 import logger from '../logger.js'
 
 const SWEEP_INTERVAL_MS = 60_000
@@ -33,8 +34,9 @@ const BOT_MATCH_STALE_MS = 2 * 60_000
 /**
  * On startup, re-publish tournament:bot:match:ready for any PENDING bot matches
  * in IN_PROGRESS tournaments. This recovers from events lost during a backend restart.
+ * Exported for unit tests (QA_Phase_3.4 §11g item 3).
  */
-async function recoverPendingBotMatches(onlyStale = false) {
+export async function recoverPendingBotMatches(onlyStale = false) {
   const matchFilter = onlyStale
     ? { status: 'PENDING', createdAt: { lte: new Date(Date.now() - BOT_MATCH_STALE_MS) } }
     : { status: 'PENDING' }
@@ -69,14 +71,10 @@ async function recoverPendingBotMatches(onlyStale = false) {
         if (!p1?.user || !p2?.user) continue
         if (!p1.user.isBot || !p2.user.isBot) continue  // only recover bot vs bot matches
 
-        await publish('tournament:bot:match:ready', {
-          tournamentId: t.id,
-          matchId: match.id,
-          bestOfN: t.bestOfN,
-          gameId: t.game,
-          bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
-          bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
-        }).catch(() => {})
+        await publish(
+          'tournament:bot:match:ready',
+          buildBotMatchReadyPayload(t, match, p1.user, p2.user),
+        ).catch(() => {})
         recovered++
       }
     }
@@ -264,14 +262,10 @@ async function autoStartTournament(tournament) {
           })
 
           if (p1.user.isBot && p2.user.isBot) {
-            await publish('tournament:bot:match:ready', {
-              tournamentId: tournament.id,
-              matchId: match.id,
-              bestOfN: tournament.bestOfN,
-              gameId: tournament.game,
-              bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
-              bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
-            })
+            await publish(
+              'tournament:bot:match:ready',
+              buildBotMatchReadyPayload(tournament, match, p1.user, p2.user),
+            )
           } else {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,
@@ -304,14 +298,10 @@ async function autoStartTournament(tournament) {
           })
 
           if (p1.user.isBot && p2.user.isBot) {
-            await publish('tournament:bot:match:ready', {
-              tournamentId: tournament.id,
-              matchId: match.id,
-              bestOfN: tournament.bestOfN,
-              gameId: tournament.game,
-              bot1: { id: p1.user.id, displayName: p1.user.displayName, botModelId: p1.user.botModelId },
-              bot2: { id: p2.user.id, displayName: p2.user.displayName, botModelId: p2.user.botModelId },
-            })
+            await publish(
+              'tournament:bot:match:ready',
+              buildBotMatchReadyPayload(tournament, match, p1.user, p2.user),
+            )
           } else {
             await publish('tournament:match:ready', {
               tournamentId: tournament.id,

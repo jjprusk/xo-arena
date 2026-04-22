@@ -318,4 +318,157 @@ test.describe('Tournament seed bots — QA Section 9', () => {
       await adminCtx.dispose()
     }
   })
+
+  // ── 9b-extension: a recurring standing HUMAN subscription carries to the new
+  // occurrence alongside seed bots. Previously the QA doc flagged this as
+  // "manual — human subscription path not covered by this spec". It is now.
+  test('9b: recurring human subscription propagates to the next occurrence', async () => {
+    test.skip(!haveAdmin, 'Need TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD')
+    test.skip(!haveUser,  'Need TEST_USER_EMAIL  + TEST_USER_PASSWORD')
+
+    const adminCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    const userCtx  = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    try {
+      const adminPageLike = { context: () => ({ request: adminCtx }) }
+      const userPageLike  = { context: () => ({ request: userCtx  }) }
+
+      await signIn(adminPageLike, process.env.TEST_ADMIN_EMAIL, process.env.TEST_ADMIN_PASSWORD, LANDING_URL)
+      await signIn(userPageLike,  process.env.TEST_USER_EMAIL,  process.env.TEST_USER_PASSWORD,  LANDING_URL)
+
+      const adminToken = await fetchAuthToken(adminCtx, LANDING_URL)
+      const userToken  = await fetchAuthToken(userCtx,  LANDING_URL)
+      const api = tournamentApi(LANDING_URL)
+
+      const uniq = `seed-human-${Date.now()}`
+      const pastStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const template = await api.create({ request: adminCtx, token: adminToken }, {
+        name: `E2E Seed Human ${uniq}`, description: `9b-human (${uniq})`,
+        game: 'xo', mode: 'MIXED', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
+        bestOfN: 1, minParticipants: 2, maxParticipants: 4,
+        startMode: 'MANUAL', startTime: pastStart,
+        isRecurring: true, recurrenceInterval: 'DAILY',
+        isTest: true,
+      })
+
+      try {
+        await api.publish({ request: adminCtx, token: adminToken }, template.id)
+
+        // Seed-bot so the occurrence has ≥ 2 participants after the human
+        // subscribes; otherwise the sweep skips it for under-min.
+        await api.addSeedBots({ request: adminCtx, token: adminToken }, template.id, [
+          { name: `SeedA-${uniq}`, skillLevel: 'rusty' },
+        ])
+
+        // Regular user subscribes as a recurring standing participant.
+        await api.subscribeRecurring({ request: userCtx, token: userToken }, template.id)
+
+        // Admin force-completes, then fires the sweep.
+        await api.forceComplete({ request: adminCtx, token: adminToken }, template.id)
+        const summary = await api.triggerRecurringCheck({ request: adminCtx, token: adminToken })
+        expect(summary.occurrencesCreated).toBeGreaterThanOrEqual(1)
+
+        // Find the new occurrence (same name, different id, isTest true).
+        const listRes = await adminCtx.get('/api/tournaments?includeTest=true', {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        })
+        expect(listRes.ok()).toBe(true)
+        const { tournaments } = await listRes.json()
+        const occurrence = tournaments.find(t => t.name === template.name && t.id !== template.id)
+        expect(occurrence, 'new occurrence spawned').toBeDefined()
+
+        // The subscribed user appears as a participant on the new occurrence.
+        // Decode the user's Better Auth JWT to get their betterAuthId (the
+        // `sub` claim — matches what the tournament participants expose as
+        // `user.betterAuthId`). Avoids an extra session round-trip.
+        const payload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64url').toString('utf8'))
+        const userBaId = payload.sub
+        expect(userBaId, 'decoded betterAuthId from JWT').toBeTruthy()
+
+        const occDetail = await api.get({ request: adminCtx, token: adminToken }, occurrence.id)
+        const participantBetterAuthIds = (occDetail.participants ?? [])
+          .map(p => p.user?.betterAuthId)
+          .filter(Boolean)
+        expect(participantBetterAuthIds).toContain(userBaId)
+
+        // Clean up.
+        await api.unsubscribeRecurring({ request: userCtx, token: userToken }, template.id).catch(() => {})
+        await api.cancel({ request: adminCtx, token: adminToken }, occurrence.id).catch(() => {})
+      } finally {
+        await api.cancel({ request: adminCtx, token: adminToken }, template.id).catch(() => {})
+      }
+    } finally {
+      await adminCtx.dispose()
+      await userCtx.dispose()
+    }
+  })
+
+  // ── 9d-extension: a bot removed from a recurring template must NOT appear
+  // in the next spawned occurrence. Previously the QA doc flagged this as
+  // "manual — can be exercised via the admin 'Check Recurring' button; not
+  // yet in the 9b spec". It is now.
+  test('9d: removed seed bot is absent from the next recurring occurrence', async () => {
+    test.skip(!haveAdmin, 'Need TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD')
+
+    const adminCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    try {
+      const adminPageLike = { context: () => ({ request: adminCtx }) }
+      await signIn(adminPageLike, process.env.TEST_ADMIN_EMAIL, process.env.TEST_ADMIN_PASSWORD, LANDING_URL)
+      const token = await fetchAuthToken(adminCtx, LANDING_URL)
+      const api = tournamentApi(LANDING_URL)
+
+      const uniq = `seed-absent-${Date.now()}`
+      const pastStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const template = await api.create({ request: adminCtx, token }, {
+        name: `E2E Seed Absent ${uniq}`, description: `9d-absent (${uniq})`,
+        game: 'xo', mode: 'BOT_VS_BOT', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
+        bestOfN: 1, minParticipants: 2, maxParticipants: 4,
+        startMode: 'MANUAL', startTime: pastStart,
+        isRecurring: true, recurrenceInterval: 'DAILY',
+        isTest: true,
+      })
+
+      try {
+        await api.publish({ request: adminCtx, token }, template.id)
+        const { added } = await api.addSeedBots({ request: adminCtx, token }, template.id, [
+          { name: `Keep-${uniq}`,   skillLevel: 'rusty'  },
+          { name: `Remove-${uniq}`, skillLevel: 'copper' },
+        ])
+        const victim = added.find(b => b.displayName.startsWith('Remove-'))
+        expect(victim).toBeDefined()
+
+        // Remove the bot from the template BEFORE spawning a new occurrence.
+        const removeStatus = await api.removeSeedBot({ request: adminCtx, token }, template.id, victim.userId)
+        expect(removeStatus).toBe(204)
+
+        // Force-complete + sweep.
+        await api.forceComplete({ request: adminCtx, token }, template.id)
+        const summary = await api.triggerRecurringCheck({ request: adminCtx, token })
+        expect(summary.occurrencesCreated).toBeGreaterThanOrEqual(1)
+
+        // Find the new occurrence.
+        const listRes = await adminCtx.get('/api/tournaments?includeTest=true', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        expect(listRes.ok()).toBe(true)
+        const { tournaments } = await listRes.json()
+        const occurrence = tournaments.find(t => t.name === template.name && t.id !== template.id)
+        expect(occurrence, 'new occurrence spawned').toBeDefined()
+
+        // Removed bot is NOT a participant on the new occurrence.
+        const occDetail = await api.get({ request: adminCtx, token }, occurrence.id)
+        const occParticipantUserIds = (occDetail.participants ?? []).map(p => p.userId)
+        expect(occParticipantUserIds).not.toContain(victim.userId)
+
+        // Removed bot config row is NOT propagated to the new occurrence.
+        const newOccSeedBots = await api.listSeedBots({ request: adminCtx, token }, occurrence.id)
+        expect(newOccSeedBots.map(b => b.userId)).not.toContain(victim.userId)
+
+        await api.cancel({ request: adminCtx, token }, occurrence.id).catch(() => {})
+      } finally {
+        await api.cancel({ request: adminCtx, token }, template.id).catch(() => {})
+      }
+    } finally {
+      await adminCtx.dispose()
+    }
+  })
 })

@@ -1,33 +1,18 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
-import { configurePvp } from '@xo-arena/xo'
-import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js'
-import { getToken } from './lib/getToken.js'
-import { useSoundStore } from './store/soundStore.js'
-import { perfMark } from './lib/perfLog.js'
+import { isBrowserSupported } from './lib/checkBrowserSupport.js'
+import BrowserUnsupported from './components/BrowserUnsupported.jsx'
 
-perfMark('main:module-evaluated')
-
-// Pre-fetch token in parallel with React rendering when session cache shows a signed-in user.
-// Eliminates the sequential /api/token → /api/<page-data> waterfall on hard reload.
-const _sc = (() => { try { return JSON.parse(localStorage.getItem('aiarena_session_cache')) } catch { return null } })()
-if (_sc?.user) getToken().catch(() => {})
-
-// Wire socket, token, and sound into the shared PvP store
-configurePvp({
-  connectSocket,
-  disconnectSocket,
-  getSocket,
-  getToken,
-  playSound: (key) => useSoundStore.getState().play(key),
-})
-
-perfMark('main:before-render')
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-)
+// Gate BEFORE importing index.css / App / anything that touches Tailwind v4.
+// On Safari 14 / Chrome <111 / Firefox <113 the app's stylesheet fails to
+// parse (color-mix, @theme, @layer), which previously produced an unstyled
+// HTML flash. Short-circuiting here means an old browser sees ONE screen:
+// a branded upgrade prompt with no external CSS dependencies.
+if (!isBrowserSupported()) {
+  createRoot(document.getElementById('root')).render(<BrowserUnsupported />)
+} else {
+  // Dynamic import so the heavy chunk (index.css, App, socket, sound store)
+  // doesn't even get fetched on unsupported browsers.
+  await import('./main.supported.jsx')
+}
