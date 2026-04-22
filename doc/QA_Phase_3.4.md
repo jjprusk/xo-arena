@@ -279,7 +279,7 @@ Seed bots are admin-configured bot accounts that are automatically registered as
 
 ## 11. Phase 3.5 Additions
 
-> **Implementation status:** All items below are code-complete as of 2026-04-19. None have been manually QA tested yet. Automated Playwright coverage noted inline where applicable.
+> **Implementation status:** Code-complete as of 2026-04-19. As of 2026-04-21 the full Playwright suite (`npm run test:e2e`) passes 36/36 against a fresh local stack (2 skipped are the deploy-gate tests that only run against staging). Automated coverage is noted inline below. Items that remain unchecked are manual-only by nature (live board thumbnails, Redis payload inspection, backend log checks, DB queries, tooltip hover).
 
 ### 11a. Mobile sidebar auto-hide
 
@@ -311,7 +311,7 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 - [ ] Open the **Create Tournament** form (admin or user)
 - [ ] **Game** dropdown is present and populated from `gameRegistry.js` (currently shows XO only)
-- [ ] Create a tournament with game = XO → `game` field stored correctly in DB (`SELECT game FROM tournaments WHERE id = '<id>'`)
+- [x] Create a tournament with game = XO → `game` field stored correctly in DB (covered transitively by `tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`, and `tournament-seed-bots.spec.js` — all create + fetch round-trip tournaments with `game: 'xo'`)
 - [ ] No hardcoded `'xo'` strings remain in the tournament form component
 
 ### 11d. Bot creation — Game field
@@ -362,21 +362,25 @@ Requires a `BOT_VS_BOT` tournament. Run after section 8b passes.
 
 ## Sign-off
 
+"Automated e2e" means the area has passing Playwright specs in `e2e/tests/`;
+runs against a local stack via `npm run test:e2e` and again against staging
+via the `/stage` smoke subset. "Manual" rows require a human runthrough.
+
 | Area | Tested by | Date | Pass/Fail | Notes |
 |------|-----------|------|-----------|-------|
-| HvB core path | | | | |
-| PvP | | | | |
-| Tables page | | | | |
-| Seat display names | | | | |
-| Notifications | | | | |
-| Idle handling | | | | |
-| Table GC | | | | |
-| Tournament | | | | |
-| Tournament Seed Bots | | | | |
-| Mobile sidebar auto-hide | | | | |
-| Active table preview | | | | |
-| Multi-game infrastructure | | | | |
-| Bot creation game field | | | | |
-| Admin skills column | | | | |
-| Tournament gameId propagation | | | | |
-| Regressions | | | | |
+| HvB core path | automated e2e (`pvai.spec.js`) + manual | 2026-04-21 | Pass | 4/4 specs |
+| PvP | automated e2e (`pvp.spec.js`) | 2026-04-21 | Pass | 3/3 specs, incl. spectator |
+| Tables page | automated e2e (`phase35.spec.js` tables-page tests) | 2026-04-21 | Pass | Manual watcher + cross-tab sync still useful |
+| Seat display names | manual | | | |
+| Notifications | manual | | | Guide drawer content, teal Table badge |
+| Idle handling | manual | | | Depends on 3-min waits |
+| Table GC | scripted (`doc/qa-scripts/table-gc.sh`) | 2026-04-21 | Pass | 5 tests / 10 assertions |
+| Tournament | automated e2e (`tournament-mixed.spec.js`, `tournament-mixed-ui.spec.js`) | 2026-04-21 | Pass | MIXED lifecycle + UI smoke |
+| Tournament Seed Bots | automated e2e (`tournament-seed-bots.spec.js`) + vitest (`packages/tournament/src/__tests__/seedBots.test.js`) | 2026-04-21 | Pass | 9a/b/c/d/e/f automated |
+| Mobile sidebar auto-hide | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass | Mobile + desktop variants |
+| Active table preview | manual | | | Live board state; not automatable without match orchestration |
+| Multi-game infrastructure | automated e2e (skills API in `phase35.spec.js` + game-field round-trip via tournament specs) | 2026-04-21 | Pass (partial) | Form-UI dropdown check still manual |
+| Bot creation game field | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass (partial) | Default selection + DB verification manual |
+| Admin skills column | automated e2e (`phase35.spec.js`) | 2026-04-21 | Pass (partial) | None-state + tooltip hover manual |
+| Tournament gameId propagation | manual | | | Requires Redis event inspection |
+| Regressions | automated e2e (full suite) | 2026-04-21 | Pass | 36/38 passing, 2 skipped (deploy-gate staging-only) |
