@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.3.0-alpha-1.19",
+    "date": "2026-04-22",
+    "description": "Mobile UI enhancements"
+  },
+  {
     "version": "1.3.0-alpha-1.18",
     "date": "2026-04-22",
     "description": "iOS audio: fix stale flag and schedule on suspended"
