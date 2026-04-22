@@ -35,13 +35,11 @@ idle waits, or code-review items.
 
 - [x] 11c item 4 — `TournamentForm.jsx` now derives its default `game` from `GAMES[0].id` instead of a hardcoded `'xo'` literal
 
-**Still manual** (~8 min of hands-on work for a full pre-promotion QA pass):
+**Still manual** (~6 min of hands-on work for a full pre-promotion QA pass):
 
 - **11b item 4** — win-line amber highlight on a game that finished but whose
   table hasn't transitioned to COMPLETED. Narrow window via the idle timer;
   not worth racing the GC in a spec.
-- **11d item 5** — "second game added to `gameRegistry.js` appears in dropdown
-  without code changes." Speculative until a second game actually exists.
 - **11e (all 3)** — server-side skill resolution. Better as backend vitest
   (`resolveSkillForGame` pure-function tests + a socketHandler test that
   ignores a client-supplied `botSkillId`) than e2e.
@@ -449,7 +447,11 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 - [x] **Game** dropdown is present, showing all registered games (currently XO only)
 - [x] Default selection is XO — automated in `open-items.spec.js` §11d
 - [x] Create a bot with Game = XO → `BotSkill` row created with `game_id = 'xo'` — automated via admin `/api/v1/admin/bots` round-trip (`skills` array includes `gameId: 'xo'`)
-- [ ] When a second game is added to `gameRegistry.js`, it appears in the dropdown without any other code changes  *(manual — speculative until a second game exists)*
+
+> The old "second game added to gameRegistry.js picks up automatically"
+> check has been moved out of this Phase 3.5 doc — it's a second-game
+> shipping validation, not a 3.5 deliverable. Revisit in the QA doc for
+> whichever phase introduces the second game.
 
 ### 11e. Multi-skill bots — Server-side skill resolution
 
