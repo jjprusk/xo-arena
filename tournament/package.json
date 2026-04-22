@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon --watch src --ignore src/generated --watch ../packages/db/prisma/schema.prisma --ext js,prisma --exec 'npx prisma generate --schema=../packages/db/prisma/schema.prisma && node --experimental-transform-types src/index.js'",
     "start": "npx prisma migrate deploy --schema=../packages/db/prisma/schema.prisma && node --experimental-transform-types src/index.js",
+    "test": "vitest run",
     "db:migrate": "prisma migrate dev --schema=../packages/db/prisma/schema.prisma",
     "db:deploy": "prisma migrate deploy --schema=../packages/db/prisma/schema.prisma",
     "db:generate": "prisma generate --schema=../packages/db/prisma/schema.prisma"
@@ -23,6 +24,7 @@
     "prisma": "^7.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "nodemon": "^3.1.9",
+    "vitest": "^3.2.4"
   }
 }

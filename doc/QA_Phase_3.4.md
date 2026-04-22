@@ -22,29 +22,26 @@ As of v1.3.0-alpha-1.19 the next wave of open items is now automated in
 manual — backend log inspection, Redis event payload checks, multi-minute
 idle waits, or code-review items.
 
-**Newly automated in this wave** (verify with `npm run test:e2e`):
+**Newly automated in this wave** (verify with `npm test` + `npm run test:e2e`):
 
-- [x] 11b items 1, 2, 3, 5 — thumbnail absent on FORMING + COMPLETED, present on ACTIVE, reflects live `previewState.board`
-- [x] 11c items 1, 2 — form dropdown renders with `xo` option and defaults to `xo`
-- [x] 11d items 3, 4 — bot create form defaults to `xo`; BotSkill row appears in admin list after creation
-- [x] 11f items 3, 4 — `none` renders for skill-less bots; badge exposes `title="xo: algorithm — STATUS"` tooltip
-- [x] Section 9b — recurring human subscription carried to the next occurrence
-- [x] Section 9d — removed seed bot absent from the next occurrence
+- [x] 11b items 1, 2, 3, 5 — thumbnail absent on FORMING + COMPLETED, present on ACTIVE, reflects live `previewState.board` (`open-items.spec.js`)
+- [x] 11c items 1, 2 — form dropdown renders with `xo` option and defaults to `xo` (`open-items.spec.js`)
+- [x] 11d items 3, 4 — bot create form defaults to `xo`; BotSkill row appears in admin list after creation (`open-items.spec.js`)
+- [x] 11e items 1, 2, 3 — server-side skill resolution + HvB override contract (`backend/src/services/__tests__/skillService.test.js`)
+- [x] 11f items 3, 4 — `none` renders for skill-less bots; badge exposes `title="xo: algorithm — STATUS"` tooltip (`open-items.spec.js`)
+- [x] 11g items 1, 2, 3 — every `tournament:bot:match:ready` publish site (auto-start SINGLE_ELIM + ROUND_ROBIN + bracket advancement + recoverPendingBotMatches) shares `buildBotMatchReadyPayload`, locked by `tournament/src/lib/__tests__/publishPayloads.test.js` + `tournamentSweep.test.js`
+- [x] Section 9b — recurring human subscription carried to the next occurrence (`tournament-seed-bots.spec.js`)
+- [x] Section 9d — removed seed bot absent from the next occurrence (`tournament-seed-bots.spec.js`)
 
 **Fixed in place** (not automated; one-time code cleanup):
 
 - [x] 11c item 4 — `TournamentForm.jsx` now derives its default `game` from `GAMES[0].id` instead of a hardcoded `'xo'` literal
 
-**Still manual** (~6 min of hands-on work for a full pre-promotion QA pass):
+**Still manual** (~2 min of hands-on work for a full pre-promotion QA pass):
 
 - **11b item 4** — win-line amber highlight on a game that finished but whose
   table hasn't transitioned to COMPLETED. Narrow window via the idle timer;
   not worth racing the GC in a spec.
-- **11e (all 3)** — server-side skill resolution. Better as backend vitest
-  (`resolveSkillForGame` pure-function tests + a socketHandler test that
-  ignores a client-supplied `botSkillId`) than e2e.
-- **11g (all 3)** — Tournament `gameId` propagation in Redis events. Better
-  as a backend vitest with a mocked pub/sub spy.
 - **Sign-off row "Idle handling"** — 3+ min wall-clock waits. Would work
   with a test-only config hook that shortens the thresholds.
 - **Sign-off row "Notifications"** — teal Table badge content and Guide
@@ -459,9 +456,9 @@ Requires a mobile viewport (≤ 767 px) or browser devtools mobile emulation.
 
 These verify that the HvB path resolves skill server-side rather than trusting a client value.
 
-- [ ] Start an HvB game via `?action=vs-community-bot` — game plays normally (skill resolved from `BotSkill` table)
-- [ ] Confirm backend log shows no `resolveSkillForGame returned null` warning for community bots (they always have an XO skill)
-- [ ] Manually POST `room:create:hvb` with a fake `botSkillId` — server ignores it and resolves the real skill from DB
+- [x] Start an HvB game via `?action=vs-community-bot` — game plays normally (skill resolved from `BotSkill` table) — covered by `pvai.spec.js` (board + moves) + `backend/src/services/__tests__/skillService.test.js` (resolveSkillForGame returns non-null for seeded XO skill)
+- [x] Confirm backend log shows no `resolveSkillForGame returned null` warning for community bots — `skillService.test.js` proves the function returns a match for any seeded bot with an xo skill, eliminating the log path at its source
+- [x] Manually POST `room:create:hvb` with a fake `botSkillId` — server ignores it and resolves the real skill from DB — `skillService.test.js` "room:create:hvb — resolved skill override contract" group locks the 4-line override: DB value wins when present, client fallback only when DB misses
 
 ### 11f. Multi-skill bots — Admin skills column
 
@@ -480,9 +477,9 @@ These verify that the HvB path resolves skill server-side rather than trusting a
 
 Requires a `BOT_VS_BOT` tournament. Run after section 8b passes.
 
-- [ ] Start a BOT_VS_BOT tournament → check backend logs for `tournament:bot:match:ready` events — each event payload includes `gameId: 'xo'`
-- [ ] After round completion, bracket-advancement path fires a new `tournament:bot:match:ready` event — it also includes `gameId`
-- [ ] `recoverPendingBotMatches` on backend restart re-publishes events with `gameId` included (check logs)
+- [x] Start a BOT_VS_BOT tournament → check backend logs for `tournament:bot:match:ready` events — each event payload includes `gameId: 'xo'` — covered by `tournament/src/lib/__tests__/publishPayloads.test.js` (all four publish sites in the tournament service now share `buildBotMatchReadyPayload`, which is locked by sentinel test)
+- [x] After round completion, bracket-advancement path fires a new `tournament:bot:match:ready` event — it also includes `gameId` — same helper used in `matches.js:262`; sentinel test proves shape
+- [x] `recoverPendingBotMatches` on backend restart re-publishes events with `gameId` included — `tournament/src/lib/__tests__/tournamentSweep.test.js` mocks the Redis publisher and asserts every re-publish carries the tournament's `gameId`
 
 ---
 

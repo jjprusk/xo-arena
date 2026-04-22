@@ -15,10 +15,11 @@
   "scripts": {
     "dev:all": "concurrently \"npm run dev --workspace=landing\" \"npm run dev --workspace=backend\"",
     "dev:tournament": "npm run dev --workspace=tournament",
-    "test": "npm run test --workspace=landing --workspace=backend --workspace=@xo-arena/tournament",
+    "test": "npm run test --workspace=landing --workspace=backend --workspace=@xo-arena/tournament --workspace=@xo-arena/tournament-svc",
     "test:landing": "npm run test --workspace=landing",
     "test:backend": "npm run test --workspace=backend",
     "test:tournament": "npm run test --workspace=@xo-arena/tournament",
+    "test:tournament-svc": "npm run test --workspace=@xo-arena/tournament-svc",
     "test:e2e": "npm run test --workspace=e2e",
     "qa": "node e2e/qa.mjs",
     "prepare": "husky"
