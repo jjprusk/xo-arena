@@ -315,7 +315,11 @@ body {
   position: relative;
   width: 100%;
   max-width: 520px;
-  padding: 5.5rem 1rem 5rem;
+  /* Seats now straddle the panel edges (avatar half-above / half-below) so the
+     container only needs ~half an avatar of breathing room, plus room for the
+     name below the avatar. Much tighter on mobile; identical visual on desktop
+     because the seat avatars shrink into the panel either way. */
+  padding: 2.75rem 1rem 2.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -495,17 +499,27 @@ body {
   50%       { opacity: 1; }
 }
 
-/* 2-player sit-down seat positions */
+/* 2-player sit-down seat positions. Symmetric overlap — both avatars visually
+   cross into the panel so the player cluster reads as sitting AT the table,
+   not floating above/below it. The translateY on the avatar is the visual
+   crossover; the seat container itself stays in the container's padding area
+   so the name/bot-tag labels sit safely outside the panel. */
 .seat--top {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  flex-direction: column-reverse;
+  flex-direction: column-reverse;  /* meta + name on top, avatar at seat bottom */
 }
 .seat--bottom {
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
+}
+.seat--top .seat__avatar {
+  transform: translateY(18px);   /* dip into panel's top rim */
+}
+.seat--bottom .seat__avatar {
+  transform: translateY(-18px);  /* dip into panel's bottom rim */
 }
 
 /* 2-player sit-down archetype */

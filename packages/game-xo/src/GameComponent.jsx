@@ -136,10 +136,9 @@ export default function GameComponent({ session, sdk }) {
         // Win/draw sound always plays regardless of who made the finishing move
         sdk.playSound?.(event.state.winner ? 'win' : 'draw')
       } else if (!isOwnEcho) {
-        // Only play the move sound for the opponent's moves — the player's
-        // own click is silent (visual feedback from the X/O appearing is
-        // sufficient). This avoids the double-beep feel when the bot
-        // responds almost instantly.
+        // Only play the move sound for the opponent's moves. Own-move is
+        // silent: the visual feedback from the X/O appearing in the cell is
+        // the player's confirmation. Any click-time sound is a double-beep.
         sdk.playSound?.('move')
       }
 
@@ -168,8 +167,12 @@ export default function GameComponent({ session, sdk }) {
 
   function handleCellClick(index) {
     if (!isMyTurn || board[index] !== null) return
-    sdk.playSound?.('move')
-    pendingMoveRef.current = index   // mark for echo detection so server echo doesn't double-beep
+    // No click-time sound — own moves are silent. The X/O appearing in the
+    // cell is visual confirmation; adding a beep on top of the opponent's
+    // reply sound would double-beep every round. pendingMoveRef still
+    // records the pending index so handleMoveEvent's isOwnEcho check can
+    // distinguish the server echo from a genuine opponent move.
+    pendingMoveRef.current = index
     sdk.submitMove(index)
   }
 
@@ -196,51 +199,24 @@ export default function GameComponent({ session, sdk }) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full">
+    <div className="flex flex-col items-center gap-3 w-full">
 
-      {/* Players strip */}
-      <PlayerStrip session={session} myMark={myMark} />
-
-      {/* Score strip */}
-      <div className="w-full flex items-center justify-between px-2">
-        <ScorePill mark="X" score={scores.X} highlight={myMark === 'X'} />
-        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          Round {round}
-        </span>
-        <ScorePill mark="O" score={scores.O} highlight={myMark === 'O'} />
-      </div>
-
-      {/* Turn / result indicator */}
-      <div className="flex items-center gap-2 h-8">
-        {status === 'playing' && (
-          <>
-            <span className="font-bold" style={{ color: MARK_COLOR[currentTurn] }}>
-              {currentTurn}
-            </span>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {session?.isSpectator
-                ? `${currentTurn}'s turn`
-                : isMyTurn ? 'Your turn' : "Opponent's turn"}
-            </span>
-          </>
-        )}
-        {status === 'finished' && winner && (
-          <span className="font-bold" style={{
-            color: session?.isSpectator
-              ? MARK_COLOR[winner]
-              : winner === myMark ? 'var(--color-teal-600)' : 'var(--color-red-600)',
-          }}>
-            {session?.isSpectator
-              ? `${winner} wins!`
-              : winner === myMark ? 'You win! 🎉' : 'Opponent wins!'}
-          </span>
-        )}
-        {status === 'finished' && !winner && (
-          <span className="font-bold" style={{ color: 'var(--color-amber-600)' }}>
-            Draw!
-          </span>
-        )}
-      </div>
+      {/* Compact status line: replaces the old three-row (PlayerStrip / score /
+          turn) stack. Each row ate ~30-40px vertically; on iPhone this pushed
+          the Rematch/Leave/Forfeit controls below the fold. The seat pods
+          already surface opponent identity, so the only info owed here is
+          turn/result + round + score. */}
+      <StatusLine
+        status={status}
+        winner={winner}
+        isSpectator={session?.isSpectator}
+        isMyTurn={isMyTurn}
+        myMark={myMark}
+        currentTurn={currentTurn}
+        round={round}
+        scoreX={scores.X}
+        scoreO={scores.O}
+      />
 
       {/* Error banner — shown when the server rejects a move */}
       {error && (
@@ -250,80 +226,85 @@ export default function GameComponent({ session, sdk }) {
         </p>
       )}
 
-      {/* Board */}
-      <div className="grid grid-cols-3 gap-2 w-full" aria-label="Tic-tac-toe board">
-        {board.map((cell, i) => {
-          const isWin      = winLine?.includes(i)
-          const isPlayable = isMyTurn && cell === null && status === 'playing'
-          const isNew      = lastCell === i
+      {/* Board, with a floating emoji-reaction button overlaid in the top-right
+          corner. Previously the reaction button anchored a full row below the
+          board, pushing controls further down. Floating keeps it accessible
+          without stealing vertical space. */}
+      <div className="relative w-full">
+        <div className="grid grid-cols-3 gap-2 w-full" aria-label="Tic-tac-toe board">
+          {board.map((cell, i) => {
+            const isWin      = winLine?.includes(i)
+            const isPlayable = isMyTurn && cell === null && status === 'playing'
+            const isNew      = lastCell === i
 
-          return (
+            return (
+              <button
+                key={i}
+                onClick={() => handleCellClick(i)}
+                aria-label={`Cell ${i + 1}${cell ? `, ${cell}` : ''}`}
+                disabled={!isPlayable}
+                className={[
+                  'aspect-square flex items-center justify-center rounded-xl text-4xl font-bold',
+                  'border-2 transition-all select-none',
+                  isWin
+                    ? 'bg-[var(--game-cell-win-bg)] border-[var(--game-cell-win-border)]'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-default)]',
+                  isNew      ? 'scale-[1.08]' : '',
+                  isPlayable
+                    ? 'hover:bg-[var(--bg-surface-hover)] hover:scale-[1.04] active:scale-[0.97] cursor-pointer'
+                    : 'cursor-default',
+                ].join(' ')}
+                style={{
+                  minHeight:  'clamp(72px, 24vw, 88px)',
+                  fontFamily: 'var(--font-display)',
+                  color:      cell ? MARK_COLOR[cell] : 'transparent',
+                  boxShadow:  isWin ? 'var(--shadow-cell-win)' : 'var(--shadow-cell)',
+                }}
+              >
+                {cell || '·'}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Reaction menu — floating, players only */}
+        {isPlayer && (status === 'playing' || status === 'finished') && sdk.sendReaction && (
+          <div className="absolute -top-2 -right-1 z-10 flex flex-col items-end gap-1">
             <button
-              key={i}
-              onClick={() => handleCellClick(i)}
-              aria-label={`Cell ${i + 1}${cell ? `, ${cell}` : ''}`}
-              disabled={!isPlayable}
-              className={[
-                'aspect-square flex items-center justify-center rounded-xl text-4xl font-bold',
-                'border-2 transition-all select-none',
-                isWin
-                  ? 'bg-[var(--game-cell-win-bg)] border-[var(--game-cell-win-border)]'
-                  : 'bg-[var(--bg-surface)] border-[var(--border-default)]',
-                isNew      ? 'scale-[1.08]' : '',
-                isPlayable
-                  ? 'hover:bg-[var(--bg-surface-hover)] hover:scale-[1.04] active:scale-[0.97] cursor-pointer'
-                  : 'cursor-default',
-              ].join(' ')}
-              style={{
-                minHeight:  'clamp(72px, 24vw, 88px)',
-                fontFamily: 'var(--font-display)',
-                color:      cell ? MARK_COLOR[cell] : 'transparent',
-                boxShadow:  isWin ? 'var(--shadow-cell-win)' : 'var(--shadow-cell)',
-              }}
+              onClick={() => setShowReactions(v => !v)}
+              aria-label="Reactions"
+              className="text-lg w-9 h-9 rounded-full border transition-colors hover:bg-[var(--bg-surface-hover)] active:scale-95 flex items-center justify-center"
+              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
             >
-              {cell || '·'}
+              😊
             </button>
-          )
-        })}
-      </div>
+            {showReactions && (
+              <div className="flex gap-1 flex-wrap justify-end max-w-[12rem] p-1 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+                {REACTIONS.map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleReaction(emoji)}
+                    className="text-lg w-8 h-8 rounded-md transition-colors hover:bg-[var(--bg-surface-hover)] active:scale-95 flex items-center justify-center"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-      {/* Incoming reaction — displays briefly above the board */}
-      {incomingReaction && (
-        <div
-          key={incomingReaction.id}
-          className="text-5xl animate-bounce pointer-events-none select-none"
-          style={{ lineHeight: 1 }}
-        >
-          {incomingReaction.emoji}
-        </div>
-      )}
-
-      {/* Reaction bar — players only */}
-      {isPlayer && (status === 'playing' || status === 'finished') && sdk.sendReaction && (
-        <div className="w-full">
-          <button
-            onClick={() => setShowReactions(v => !v)}
-            className="text-xl p-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)] hover:scale-110 active:scale-95"
-            style={{ borderColor: 'var(--border-default)' }}
+        {/* Incoming reaction — brief bounce over the board */}
+        {incomingReaction && (
+          <div
+            key={incomingReaction.id}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none select-none text-5xl animate-bounce"
+            style={{ lineHeight: 1 }}
           >
-            😊
-          </button>
-          {showReactions && (
-            <div className="flex gap-2 mt-2 flex-wrap">
-              {REACTIONS.map(emoji => (
-                <button
-                  key={emoji}
-                  onClick={() => handleReaction(emoji)}
-                  className="text-xl p-1.5 rounded-lg border transition-colors hover:bg-[var(--bg-surface-hover)] hover:scale-110 active:scale-95"
-                  style={{ borderColor: 'var(--border-default)' }}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+            {incomingReaction.emoji}
+          </div>
+        )}
+      </div>
 
       {/* Spectator badge */}
       {session?.isSpectator && (
@@ -335,7 +316,9 @@ export default function GameComponent({ session, sdk }) {
         </span>
       )}
 
-      {/* Game-end actions — players only */}
+      {/* Game-end actions — players only. Sits immediately under the board
+          (no floating emoji row in between anymore) so it's in-viewport on a
+          cold iPhone load. */}
       {status === 'finished' && isPlayer && (
         <div className="flex gap-3 w-full">
           {sdk.rematch && (
@@ -356,12 +339,15 @@ export default function GameComponent({ session, sdk }) {
         </div>
       )}
 
-      {/* Forfeit button — shown during play */}
+      {/* Forfeit — promoted from a text link to a real pill button so mobile
+          tap targets hit the 44×44 minimum. Still subtle (outline, muted
+          colors) so it doesn't compete with the primary Rematch/Leave row
+          when the game ends. */}
       {status === 'playing' && isPlayer && sdk.forfeit && (
         <button
           onClick={() => setShowForfeit(true)}
-          className="text-sm transition-colors hover:text-[var(--color-red-600)]"
-          style={{ color: 'var(--text-muted)' }}
+          className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--bg-surface-hover)] hover:text-[var(--color-red-600)] active:scale-[0.98]"
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
         >
           Forfeit
         </button>
@@ -428,42 +414,56 @@ export default function GameComponent({ session, sdk }) {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 /**
- * Shows the opponent's display name above the board.
- * Hidden when the session has no players (e.g. replay with missing data).
+ * Compact one-line status bar.
+ * Renders: "[currentTurn mark] [turn/result label] · Round N · X-O"
+ * Replaces the former three-stack of PlayerStrip / ScorePill-row / turn label
+ * that ate ~100px of vertical space on mobile.
  */
-function PlayerStrip({ session, myMark }) {
-  if (!session) return null
-  const opponent = session.players?.find(p => p.id !== session.currentUserId)
-  if (!opponent) return null
-
-  return (
-    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-      <span style={{ color: 'var(--text-muted)' }}>vs</span>
-      <span className="font-medium">{opponent.displayName}</span>
-      {opponent.isBot && (
-        <span className="badge badge-bot text-xs">BOT</span>
-      )}
-    </div>
-  )
-}
-
-/**
- * Displays a player's mark and current score.
- * The active player's pill is rendered at a larger size.
- */
-function ScorePill({ mark, score, highlight }) {
-  return (
-    <div className={`flex items-center gap-2 ${highlight ? 'font-bold' : ''}`}>
-      <span style={{
-        fontFamily: 'var(--font-display)',
-        color:      MARK_COLOR[mark],
-        fontSize:   highlight ? '1.25rem' : '1rem',
+function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn, round, scoreX, scoreO }) {
+  // Left segment: turn indicator OR result label.
+  let turnNode
+  if (status === 'playing') {
+    turnNode = (
+      <span className="flex items-center gap-1.5">
+        <span className="font-bold" style={{ color: MARK_COLOR[currentTurn] }}>
+          {currentTurn}
+        </span>
+        <span style={{ color: 'var(--text-secondary)' }}>
+          {isSpectator
+            ? `${currentTurn}'s turn`
+            : isMyTurn ? 'Your turn' : "Opponent's turn"}
+        </span>
+      </span>
+    )
+  } else if (status === 'finished' && winner) {
+    turnNode = (
+      <span className="font-bold" style={{
+        color: isSpectator
+          ? MARK_COLOR[winner]
+          : winner === myMark ? 'var(--color-teal-600)' : 'var(--color-red-600)',
       }}>
-        {mark}
+        {isSpectator
+          ? `${winner} wins!`
+          : winner === myMark ? 'You win! 🎉' : 'Opponent wins!'}
       </span>
-      <span className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-        {score}
-      </span>
+    )
+  } else if (status === 'finished') {
+    turnNode = <span className="font-bold" style={{ color: 'var(--color-amber-600)' }}>Draw!</span>
+  } else {
+    turnNode = null
+  }
+
+  return (
+    <div className="w-full flex items-center justify-between gap-2 px-1 text-sm">
+      <div className="flex-1 min-w-0 truncate">{turnNode}</div>
+      <div className="flex items-center gap-3 shrink-0" style={{ color: 'var(--text-muted)' }}>
+        <span>Round {round}</span>
+        <span className="flex items-center gap-2 font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <span style={{ color: MARK_COLOR.X, fontFamily: 'var(--font-display)' }}>{scoreX}</span>
+          <span style={{ color: 'var(--text-muted)' }}>–</span>
+          <span style={{ color: MARK_COLOR.O, fontFamily: 'var(--font-display)' }}>{scoreO}</span>
+        </span>
+      </div>
     </div>
   )
 }
