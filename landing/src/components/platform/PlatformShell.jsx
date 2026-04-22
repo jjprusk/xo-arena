@@ -304,6 +304,11 @@ function TableSurface({ phase, session, gameState, spectatorCount, children }) {
 function SeatPod({ player, position, state, isYou }) {
   const initials = (player.displayName ?? '?')[0].toUpperCase()
   const stateClass = state === 'idle' ? '' : `seat--${state}`
+  // Render the meta row ALWAYS — with an invisible spacer for non-bots — so
+  // both pods have identical vertical structure. Without this, a Bot pod is
+  // taller than a You pod by one row, and the top/bottom avatar translate
+  // math goes asymmetric (top straddles the rim, bottom ends up mostly
+  // inside). The extra row costs a few invisible pixels on the human side.
   return (
     <div className={['seat', `seat--${position}`, stateClass].filter(Boolean).join(' ')}>
       <div className={`seat__avatar${player.isBot ? ' seat__avatar--bot' : ''}`}>
@@ -312,11 +317,11 @@ function SeatPod({ player, position, state, isYou }) {
       <div className="seat__name">
         {isYou ? 'You' : (player.displayName ?? '—')}
       </div>
-      {player.isBot && (
-        <div className="seat__meta">
-          <span className="seat__bot-tag">BOT</span>
-        </div>
-      )}
+      <div className="seat__meta" aria-hidden={player.isBot ? undefined : 'true'}>
+        {player.isBot
+          ? <span className="seat__bot-tag">BOT</span>
+          : <span className="seat__bot-tag" style={{ visibility: 'hidden' }}>BOT</span>}
+      </div>
     </div>
   )
 }

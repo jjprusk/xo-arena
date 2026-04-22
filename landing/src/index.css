@@ -519,6 +519,11 @@ body {
   left: 50%;
   transform: translateX(-50%);
 }
+/* Symmetric straddle: equal magnitude, opposite sign. Each avatar's center
+   lands on the panel's rim, half inside the panel and half outside. Works
+   because SeatPod always renders the 3-row structure (avatar + name + meta)
+   — a spacer fills the meta slot for non-bots so top and bottom pods have
+   identical natural heights. */
 .seat--top .seat__avatar {
   transform: translateY(18px);   /* dip into panel's top rim */
 }
