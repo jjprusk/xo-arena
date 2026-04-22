@@ -18,13 +18,16 @@ export const NOTIF_SOUND_TYPES = [
 // "AudioContext was not allowed to start" warnings.
 let _audioCtx = null
 let _gestureHappened = false
+let _lastPlay = { type: null, at: 0, result: 'none' }
 
 function ctx() {
-  if (!_gestureHappened) return null
+  if (!_gestureHappened) { _lastPlay.result = 'no-gesture'; return null }
   if (!_audioCtx) {
     _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
   }
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {})
+  if (_audioCtx.state !== 'running') { _lastPlay.result = `not-running:${_audioCtx.state}`; return null }
+  _lastPlay.result = 'ok'
   return _audioCtx
 }
 
@@ -37,8 +40,30 @@ if (typeof window !== 'undefined') {
     if (!_audioCtx) {
       try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)() } catch {}
     }
-    if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {})
+    // iOS Safari: resume() inside the gesture + prime with a silent buffer.
+    // Without this, a fresh context can stay 'suspended' and later resume()
+    // calls (from socket-driven play) silently no-op. Same pattern as
+    // soundStore.unlockIOSAudio.
+    try { _audioCtx?.resume() } catch {}
+    if (_audioCtx) {
+      try {
+        const buf = _audioCtx.createBuffer(1, 1, 22050)
+        const src = _audioCtx.createBufferSource()
+        src.buffer = buf
+        src.connect(_audioCtx.destination)
+        src.start(0)
+      } catch {}
+    }
   }, { capture: true, passive: true })
+}
+
+export function _getNotifAudioDebugState() {
+  return {
+    hasCtx:     !!_audioCtx,
+    state:      _audioCtx?.state ?? 'none',
+    gestureHappened: _gestureHappened,
+    lastPlay:   { ..._lastPlay },
+  }
 }
 
 const LOOKAHEAD = 0.05
@@ -86,7 +111,9 @@ export const useNotifSoundStore = create(
 
       play() {
         const { enabled, type } = get()
-        if (!enabled) return
+        _lastPlay.type = type
+        _lastPlay.at   = Date.now()
+        if (!enabled) { _lastPlay.result = 'disabled'; return }
         try {
           SOUNDS[type]?.()
         } catch { /* non-fatal — audio may be unavailable */ }
