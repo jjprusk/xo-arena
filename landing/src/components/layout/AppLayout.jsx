@@ -10,6 +10,7 @@ import SignInModal from '../ui/SignInModal.jsx'
 import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
+import AudioDebugOverlay from '../debug/AudioDebugOverlay.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
@@ -497,6 +498,20 @@ export default function AppLayout() {
         onSignIn={openSignInFromWelcome}
       />
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
+
+      {/* Audio debug overlay — activated with ?audioDebug=1 (persisted in
+          sessionStorage so it survives router-driven URL rewrites). Strip by
+          closing the tab or passing ?audioDebug=0. Ships in every build but
+          is invisible unless explicitly enabled. */}
+      {(() => {
+        if (typeof window === 'undefined') return null
+        const params = new URLSearchParams(window.location.search)
+        const flag = params.get('audioDebug')
+        if (flag === '1') sessionStorage.setItem('xo-audio-debug', '1')
+        if (flag === '0') sessionStorage.removeItem('xo-audio-debug')
+        const on = sessionStorage.getItem('xo-audio-debug') === '1'
+        return on ? <AudioDebugOverlay /> : null
+      })()}
 
       {/* Close user dropdown on outside click */}
       {userMenuOpen && (

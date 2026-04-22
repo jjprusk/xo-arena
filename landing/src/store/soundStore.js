@@ -93,19 +93,21 @@ function ctx() {
   // so use visibilityState there instead.
   if (typeof document !== 'undefined') {
     if (_isTouchDevice) {
-      if (document.visibilityState === 'hidden') return null
+      if (document.visibilityState === 'hidden') { _lastPlay.result = 'hidden'; return null }
     } else if (!document.hasFocus()) {
-      return null
+      _lastPlay.result = 'no-focus'; return null
     }
   }
-  if (_maybeStale) return null
-  if (!_audioCtx || _audioCtx.state === 'closed') return null
+  if (_maybeStale) { _lastPlay.result = 'stale'; return null }
+  if (!_audioCtx || _audioCtx.state === 'closed') { _lastPlay.result = 'no-ctx'; return null }
   if (_audioCtx.state !== 'running') {
     // Kick resume() for Chrome's `suspended` path, but don't schedule onto it
     // right now — Safari's `interrupted` state silently no-ops resume().
     _audioCtx.resume().catch(() => {})
+    _lastPlay.result = `not-running:${_audioCtx.state}`
     return null
   }
+  _lastPlay.result = 'ok'
   return _audioCtx
 }
 
@@ -152,6 +154,28 @@ if (typeof window !== 'undefined') {
 
   // `pagehide` fires on bfcache eviction and tab close — close to release.
   window.addEventListener('pagehide', suspendAndClose)
+}
+
+// ── Debug telemetry (audio debug overlay reads these) ────────────────────────
+// `_lastPlay` records the result of the last ctx() call so the overlay can
+// show WHY a sound didn't play (`no-focus`, `stale`, `no-ctx`, `suspended`,
+// or `ok`). Cheap (single object write) so we leave it on in all builds.
+let _lastPlay = { key: null, at: 0, result: 'none' }
+
+export function _getAudioDebugState() {
+  return {
+    hasCtx:       !!_audioCtx,
+    state:        _audioCtx?.state ?? 'none',
+    maybeStale:   _maybeStale,
+    masterGain:   _masterGain?.gain?.value ?? null,
+    synthVolume:  _synthVolume,
+    isTouchDevice: _isTouchDevice,
+    hasFocus:     typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+      ? document.hasFocus()
+      : null,
+    visibilityState: typeof document !== 'undefined' ? document.visibilityState : null,
+    lastPlay:     { ..._lastPlay },
+  }
 }
 
 const LOOKAHEAD = 0.05
@@ -214,8 +238,10 @@ export const useSoundStore = create(
       },
 
       play(key) {
+        _lastPlay.key = key
+        _lastPlay.at  = Date.now()
         const { muted, soundPack } = get()
-        if (muted) return
+        if (muted) { _lastPlay.result = 'muted'; return }
         // Debug trace — enable via `window.__debugSound = true` in DevTools console
         if (typeof window !== 'undefined' && window.__debugSound) {
           // eslint-disable-next-line no-console
