@@ -189,6 +189,24 @@ export function tournamentApi(base) {
       if (!res.ok()) throw new Error(`tournaments.register ${res.status()}: ${await res.text()}`)
       return await res.json()
     },
+
+    // Subscribe the authenticated user as a recurring standing participant on
+    // the given template. Unlike register(), this creates a
+    // RecurringTournamentRegistration row so the sweep auto-enrolls the user
+    // in every new occurrence spawned from this template.
+    async subscribeRecurring({ request, token }, templateId) {
+      const res = await request.post(url(`/api/recurring/${templateId}/register`), { headers: hdr(token), data: {} })
+      if (!res.ok()) throw new Error(`recurring.register ${res.status()}: ${await res.text()}`)
+      return (await res.json()).registration
+    },
+    async unsubscribeRecurring({ request, token }, templateId) {
+      const res = await request.delete(url(`/api/recurring/${templateId}/register`), { headers: hdr(token) })
+      // 404 is acceptable for cleanup paths (already unsubscribed).
+      if (!res.ok() && res.status() !== 404) {
+        throw new Error(`recurring.unregister ${res.status()}: ${await res.text()}`)
+      }
+      return res.status()
+    },
     async cancel({ request, token }, id) {
       const res = await request.post(url(`/api/tournaments/${id}/cancel`), { headers: hdr(token), data: {} })
       if (!res.ok()) throw new Error(`tournaments.cancel ${res.status()}: ${await res.text()}`)

@@ -14,6 +14,7 @@ export default function BoardPreview({ previewState, size = 40 }) {
 
   return (
     <div
+      data-testid="board-preview"
       style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -32,6 +33,9 @@ export default function BoardPreview({ previewState, size = 40 }) {
         return (
           <div
             key={i}
+            data-cell={i}
+            data-mark={mark ?? ''}
+            data-win={isWin ? '1' : '0'}
             style={{
               background: isWin ? 'var(--color-amber-100)' : 'var(--bg-surface)',
               display: 'flex',
