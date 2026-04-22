@@ -315,11 +315,11 @@ body {
   position: relative;
   width: 100%;
   max-width: 520px;
-  /* Seats now straddle the panel edges (avatar half-above / half-below) so the
-     container only needs ~half an avatar of breathing room, plus room for the
-     name below the avatar. Much tighter on mobile; identical visual on desktop
-     because the seat avatars shrink into the panel either way. */
-  padding: 2.75rem 1rem 2.5rem;
+  /* Symmetric top/bottom padding = seat height − avatar radius (92 − 26 = 66px ≈
+     4.125rem). With this padding, the natural flex position puts each avatar's
+     CENTER exactly on the pod's top/bottom edge (half-above, half-below), and
+     the name + meta rows sit just outside the pod. No translateY needed. */
+  padding: 4.125rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -421,9 +421,8 @@ body {
   font-size: 1.125rem;
   box-shadow: 0 2px 6px -1px rgba(25, 43, 73, 0.3);
   border: 3px solid var(--bg-surface);
-  /* Decorative — the seat pod has no click handler, and with translateY(±18px)
-     its hitbox extends into the panel, which would swallow Forfeit / cell
-     clicks near the panel rim. */
+  /* Decorative — the avatar straddles the panel rim (half inside the pod),
+     so its hitbox would swallow Forfeit / cell clicks near the rim. */
   pointer-events: none;
 }
 .seat__avatar--bot {
@@ -519,17 +518,10 @@ body {
   left: 50%;
   transform: translateX(-50%);
 }
-/* Symmetric straddle: equal magnitude, opposite sign. Each avatar's center
-   lands on the panel's rim, half inside the panel and half outside. Works
-   because SeatPod always renders the 3-row structure (avatar + name + meta)
-   — a spacer fills the meta slot for non-bots so top and bottom pods have
-   identical natural heights. */
-.seat--top .seat__avatar {
-  transform: translateY(18px);   /* dip into panel's top rim */
-}
-.seat--bottom .seat__avatar {
-  transform: translateY(-18px);  /* dip into panel's bottom rim */
-}
+/* No transform needed — .table-container's padding (= seat height − avatar
+   radius) puts the avatar's center exactly on the pod rim by natural flex
+   flow. Both pods have identical 3-row structure (avatar + name + meta, with
+   an invisible BOT spacer for humans) so top and bottom are truly symmetric. */
 
 /* 2-player sit-down archetype */
 .table-container.table-2p {
