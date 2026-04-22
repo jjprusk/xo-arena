@@ -53,6 +53,13 @@ function createFreshCtx() {
   return _audioCtx
 }
 
+// Touch-primary devices (iPhone, iPad, Android) have no multi-window
+// concept, and `document.hasFocus()` on iOS Safari often returns false even
+// when the page is active — silencing all playback. Fall back to
+// `visibilityState` there, which fires reliably on app-switch / lock.
+const _isTouchDevice = typeof window !== 'undefined'
+  && (('ontouchstart' in window) || (navigator?.maxTouchPoints ?? 0) > 0)
+
 // Return the context ONLY if it's safe to schedule tones on it right now.
 // Return null for non-gesture callers when the context is stale, missing, or
 // not `running`. Null callers bail silently — no queued beeps. The next user
@@ -61,11 +68,18 @@ function ctx() {
   // Guard against playing while on another macOS Space / another app.
   // `blur` does NOT fire reliably on Space switches (the window stays the
   // frontmost in its Space per AppKit), so `_maybeStale` may still be false
-  // even when the user can't hear anything. `document.hasFocus()` is the
-  // authoritative "am I the active window right now" check — it returns
-  // false on all forms of backgrounding (Space switch, Cmd+Tab, minimize,
-  // occlusion) regardless of which DOM events fired.
-  if (typeof document !== 'undefined' && !document.hasFocus()) return null
+  // even when the user can't hear anything. On desktop, `document.hasFocus()`
+  // is the authoritative "am I the active window right now" check. On touch
+  // devices there's no Space / secondary-window concept, and iOS Safari
+  // frequently reports `hasFocus() === false` even when the page is active,
+  // so use visibilityState there instead.
+  if (typeof document !== 'undefined') {
+    if (_isTouchDevice) {
+      if (document.visibilityState === 'hidden') return null
+    } else if (!document.hasFocus()) {
+      return null
+    }
+  }
   if (_maybeStale) return null
   if (!_audioCtx || _audioCtx.state === 'closed') return null
   if (_audioCtx.state !== 'running') {

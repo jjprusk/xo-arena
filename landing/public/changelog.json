@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.3.0-alpha-1.15",
+    "date": "2026-04-22",
+    "description": "Fix mobile sound, default guide tiles"
+  },
+  {
     "version": "1.3.0-alpha-1.14",
     "date": "2026-04-22",
     "description": "QA Phase 3.4 Updates"
