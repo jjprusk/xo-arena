@@ -9,15 +9,15 @@
 
 | Phase | Status | Notes |
 |---|---|---|
-| 1 — Foundation (SDK + botInterface + XO refactor) | ✅ 69/75 | Tail items in 1.4 / 1.5 / 1.7 are optional polish. |
-| 2 — Platform Consolidation (rebrand + nav) | ✅ 44/44 | Complete. |
-| 3 — Frontend Retirement, Tables Page, Platform Shell | 🟡 58/67 | 3.0–3.5 complete. 3.6 (multi-seat sit-down) + 3.7 (rendered-table polish) intentionally deferred until Poker lands. |
-| 3.7a — Pre-prod cleanups | ✅ 25/28 | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .2 frontend follow-up (deferred to 3.8 redesign), .5 cosmetic built-in-bot polish. |
-| 3.8 — Multi-Skill Bots | ⏸ 0/24 | Next up. Must ship before Phase 4 so Connect4 can add skills to existing bot identities instead of spawning duplicate bot rows. |
-| 4 — Connect4 | ⏸ 0/20 | Blocked on 3.8. |
-| 5 — Poker | ⏸ 0/19 | Blocked on 3.6 + 3.8 + 4. |
-| 6 — Pong | ⏸ 0/18 | Blocked on 5's real-time spike review. |
-| 7 — External Developer Onboarding | ⏸ 0/15 | Long-tail; no code dependencies. |
+| 1 - Foundation (SDK + botInterface + XO refactor) | **done** (69/75) | Tail items in 1.4 / 1.5 / 1.7 are optional polish. |
+| 2 - Platform Consolidation (rebrand + nav) | **done** (44/44) | Complete. |
+| 3 - Frontend Retirement, Tables Page, Platform Shell | in progress (58/67) | 3.0-3.5 complete. 3.6 (multi-seat sit-down) + 3.7 (rendered-table polish) intentionally deferred until Poker lands. |
+| 3.7a - Pre-prod cleanups | **done** (25/28) | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .2 frontend follow-up (deferred to 3.8 redesign), .5 cosmetic built-in-bot polish. |
+| 3.8 - Multi-Skill Bots | not started (0/24) | Next up. Must ship before Phase 4 so Connect4 can add skills to existing bot identities instead of spawning duplicate bot rows. |
+| 4 - Connect4 | not started (0/20) | Blocked on 3.8. |
+| 5 - Poker | not started (0/19) | Blocked on 3.6 + 3.8 + 4. |
+| 6 - Pong | not started (0/18) | Blocked on 5's real-time spike review. |
+| 7 - External Developer Onboarding | not started (0/15) | Long-tail; no code dependencies. |
 
 ---
 
