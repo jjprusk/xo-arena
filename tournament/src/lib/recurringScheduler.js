@@ -100,10 +100,16 @@ export async function checkRecurringOccurrences() {
         })
         summary.occurrencesCreated++
 
-        // Standing human subscriptions.
+        // Standing human subscriptions. Collect the human userIds so the
+        // backend bridge can send a per-subscriber "you're entered in today's
+        // occurrence" notification — RecurringTournamentRegistration.userId
+        // already points at humans (bots don't subscribe themselves), but
+        // filter defensively in case an admin ever seeds a bot subscription.
         const standing = await db.recurringTournamentRegistration.findMany({
           where: { templateId: template.id, optedOutAt: null },
+          include: { user: { select: { id: true, isBot: true } } },
         })
+        const autoEnrolledUserIds = []
         for (const reg of standing) {
           await db.tournamentParticipant.create({
             data: {
@@ -114,6 +120,7 @@ export async function checkRecurringOccurrences() {
               registrationMode: 'RECURRING',
             },
           }).catch(() => { /* already registered — ignore */ })
+          if (reg.user && !reg.user.isBot) autoEnrolledUserIds.push(reg.userId)
         }
 
         // Seed bots defined on the template.
@@ -134,9 +141,12 @@ export async function checkRecurringOccurrences() {
         }
 
         await publish('tournament:recurring:occurrence', {
-          templateId: template.id,
-          occurrenceId: occurrence.id,
-          startTime: nextStart.toISOString(),
+          templateId:           template.id,
+          tournamentId:         occurrence.id,       // consistent name with other tournament:* events
+          occurrenceId:         occurrence.id,       // legacy alias — retained for existing consumers
+          name:                 template.name,
+          startTime:            nextStart.toISOString(),
+          autoEnrolledUserIds,                       // humans only; bridge targets them
         }).catch(() => {})
 
         logger.info({ templateId: template.id, occurrenceId: occurrence.id, nextStart }, 'Recurring occurrence created')

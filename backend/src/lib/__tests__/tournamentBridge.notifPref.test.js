@@ -377,3 +377,61 @@ describe('tournament:completed — END_OF_TOURNAMENT flush', () => {
     }))
   })
 })
+
+// ─── Recurring occurrence opened — notify auto-enrolled subscribers ──────────
+// Channel `tournament:recurring:occurrence` used to be published with no
+// listener (dead telemetry). The bridge now dispatches a cohort notification
+// to the humans auto-enrolled via their standing RecurringTournamentRegistration.
+// Seed bots and non-subscribers get nothing; no broadcast to all users.
+
+describe('tournamentBridge — tournament:recurring:occurrence', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('dispatches tournament.recurring_occurrence_opened to auto-enrolled subscribers (cohort)', async () => {
+    const io = { to: vi.fn().mockReturnValue({ emit: vi.fn() }), emit: vi.fn() }
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      templateId:          'tpl_daily',
+      tournamentId:        'tour_mon',
+      occurrenceId:        'tour_mon',
+      name:                'Daily 3-Player',
+      startTime:           '2026-04-23T19:00:00.000Z',
+      autoEnrolledUserIds: ['usr_alice', 'usr_bob'],
+    })
+
+    expect(mockDispatch).toHaveBeenCalledTimes(1)
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type:    'tournament.recurring_occurrence_opened',
+      targets: { cohort: ['usr_alice', 'usr_bob'] },
+      payload: {
+        tournamentId: 'tour_mon',
+        name:         'Daily 3-Player',
+        startTime:    '2026-04-23T19:00:00.000Z',
+      },
+    })
+    // Must NOT broadcast — this event is deliberately per-subscriber only.
+    expect(io.emit).not.toHaveBeenCalled()
+    expect(io.to).not.toHaveBeenCalled()
+  })
+
+  it('no-ops when the template has no human subscribers (seed-bot-only)', async () => {
+    const io = { to: vi.fn(), emit: vi.fn() }
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      templateId:          'tpl_bot_only',
+      tournamentId:        'tour_empty',
+      name:                'Bot Showcase',
+      startTime:           '2026-04-23T19:00:00.000Z',
+      autoEnrolledUserIds: [],
+    })
+    expect(mockDispatch).not.toHaveBeenCalled()
+  })
+
+  it('tolerates a missing autoEnrolledUserIds field (older payload shape)', async () => {
+    const io = { to: vi.fn(), emit: vi.fn() }
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      templateId:   'tpl_legacy',
+      tournamentId: 'tour_legacy',
+      startTime:    '2026-04-23T19:00:00.000Z',
+    })
+    expect(mockDispatch).not.toHaveBeenCalled()
+  })
+})

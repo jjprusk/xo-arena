@@ -26,8 +26,8 @@ const NOTIF_GROUPS = [
   {
     key:    'my_tournament_updates',
     label:  'My tournament reminders',
-    desc:   'Remind me before my tournaments start and notify me when they begin.',
-    types:  ['tournament.registration_closing', 'tournament.starting_soon', 'tournament.started'],
+    desc:   'Remind me before my tournaments start and notify me when they begin. Includes auto-enrolment alerts for recurring tournaments you subscribe to.',
+    types:  ['tournament.recurring_occurrence_opened', 'tournament.registration_closing', 'tournament.starting_soon', 'tournament.started'],
   },
   {
     key:    'my_tournament_results',

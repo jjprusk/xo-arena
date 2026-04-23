@@ -54,6 +54,7 @@ export function getPendingPvpMatchCount() { return _pendingPvpMatches.size }
 const CHANNELS = [
   'tournament:published',
   'tournament:flash:announced',
+  'tournament:recurring:occurrence',
   'tournament:started',
   'tournament:registration_closed',
   'tournament:participant:joined',
@@ -152,6 +153,24 @@ export async function handleEvent(io, channel, data) {
       const { tournamentId, name, noticePeriodMinutes } = data
       await dispatch({ type: 'tournament.flash_announced', targets: { broadcast: true }, payload: { tournamentId, name, noticePeriodMinutes } })
       logger.info({ tournamentId }, 'Flash tournament announced to all connected clients')
+      break
+    }
+    case 'tournament:recurring:occurrence': {
+      // A recurring template just spawned its next occurrence. Notify only the
+      // subscribers auto-enrolled in it — NOT a broadcast (would spam everyone
+      // with "Daily 3-Player registration open" every single day). Non-subscribers
+      // discover the occurrence by browsing /tournaments. Seed bots are skipped
+      // by recurringScheduler.js before publishing — autoEnrolledUserIds here is
+      // already filtered to domain User.ids for humans.
+      const { tournamentId, name, startTime, autoEnrolledUserIds = [] } = data
+      if (autoEnrolledUserIds.length > 0) {
+        await dispatch({
+          type: 'tournament.recurring_occurrence_opened',
+          targets: { cohort: autoEnrolledUserIds },
+          payload: { tournamentId, name, startTime },
+        })
+        logger.info({ tournamentId, subscribers: autoEnrolledUserIds.length }, 'Recurring occurrence opened — notified auto-enrolled subscribers')
+      }
       break
     }
     case 'tournament:match:ready': {

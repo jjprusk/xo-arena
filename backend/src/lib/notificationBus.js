@@ -21,13 +21,14 @@ export function getDispatchCounters() { return { ..._dispatchCounters } }
 // persist: 'ephemeral' | 'persistent'
 // ttlMs: optional default TTL in ms from creation; null = never expires
 const REGISTRY = {
-  'tournament.published':            { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h
-  'tournament.flash_announced':      { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
-  'tournament.registration_closing': { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  2 * 60 * 60 * 1000 },  // 2h
-  'tournament.starting_soon':        { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
-  'tournament.started':              { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs: 24 * 60 * 60 * 1000 },  // 24h
-  'tournament.cancelled':            { mode: 'cohort',    persist: 'persistent', email: true,  push: true, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
-  'tournament.completed':            { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'tournament.published':             { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h
+  'tournament.flash_announced':       { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
+  'tournament.recurring_occurrence_opened': { mode: 'cohort', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h — auto-enrolled subscribers only
+  'tournament.registration_closing':  { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  2 * 60 * 60 * 1000 },  // 2h
+  'tournament.starting_soon':         { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
+  'tournament.started':               { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs: 24 * 60 * 60 * 1000 },  // 24h
+  'tournament.cancelled':             { mode: 'cohort',    persist: 'persistent', email: true,  push: true, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'tournament.completed':             { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
   'match.ready':                     { mode: 'personal',  persist: 'persistent', email: true,  push: true, ttlMs:  6 * 60 * 60 * 1000, systemCritical: true },  // 6h
   'match.result':                    { mode: 'personal',  persist: 'persistent', email: false, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
   'achievement.tier_upgrade':        { mode: 'personal',  persist: 'persistent', email: false, push: true, ttlMs: null },
@@ -51,9 +52,10 @@ const REGISTRY = {
 
 // ── Default preferences (used when no NotificationPreference row exists) ──────
 const PREF_DEFAULTS = {
-  'tournament.published':            { inApp: true,  email: false, push: false },
-  'tournament.flash_announced':      { inApp: true,  email: false, push: false },
-  'tournament.registration_closing': { inApp: true,  email: false, push: false },
+  'tournament.published':             { inApp: true,  email: false, push: false },
+  'tournament.flash_announced':       { inApp: true,  email: false, push: false },
+  'tournament.recurring_occurrence_opened': { inApp: true, email: false, push: false },
+  'tournament.registration_closing':  { inApp: true,  email: false, push: false },
   'tournament.starting_soon':        { inApp: true,  email: false, push: false },
   'tournament.started':              { inApp: true,  email: false, push: false },
   'tournament.cancelled':            { inApp: true,  email: true,  push: false },
