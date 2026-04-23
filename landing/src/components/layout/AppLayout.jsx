@@ -10,6 +10,7 @@ import SignInModal from '../ui/SignInModal.jsx'
 import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
+import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import AudioDebugOverlay from '../debug/AudioDebugOverlay.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
@@ -529,6 +530,11 @@ export default function AppLayout() {
       </footer>
 
       <GuidePanel isAdmin={user?.role === 'admin'} />
+
+      {/* Floating 💬 feedback button + modal. Ported back from the retired
+          frontend/ app after Phase 3.0; the Admin inbox was already in landing,
+          but the user-facing launcher had been lost in the move. */}
+      <FeedbackButton appId="ai-arena" apiBase="/api/v1" hideWhenPlaying />
 
       <GuestWelcomeModal
         isOpen={guestWelcomeOpen}
