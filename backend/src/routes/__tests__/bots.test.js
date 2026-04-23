@@ -318,6 +318,54 @@ describe('POST /api/v1/bots', () => {
     expect(res.status).toBe(400)
     expect(res.body.code).toBe('INVALID_ALGORITHM')
   })
+
+  // Phase 3.7a.2: hybrid displayName uniqueness. Prisma P2002 from either
+  // partial unique index must translate to BOT_NAME_TAKEN (409). Other
+  // unique-constraint collisions (e.g. email) fall through to the generic
+  // error handler and are not mis-reported as name collisions.
+  it('createBot hits the partial unique index → 409 BOT_NAME_TAKEN (per-owner)', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    getTierLimit.mockResolvedValue(5)
+    mockDb.user.count.mockResolvedValue(0)
+    const err = new Error('Unique violation')
+    err.code = 'P2002'
+    err.meta = { target: 'users_bot_displayname_by_owner_key' }
+    createBot.mockRejectedValue(err)
+
+    const res = await request(app).post('/api/v1/bots').send({ name: 'Rusty' })
+
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('BOT_NAME_TAKEN')
+  })
+
+  it('createBot hits the unowned-bot unique index → 409 BOT_NAME_TAKEN (built-in collision)', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    getTierLimit.mockResolvedValue(5)
+    mockDb.user.count.mockResolvedValue(0)
+    const err = new Error('Unique violation')
+    err.code = 'P2002'
+    err.meta = { target: 'users_bot_displayname_unowned_key' }
+    createBot.mockRejectedValue(err)
+
+    const res = await request(app).post('/api/v1/bots').send({ name: 'Rusty' })
+
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('BOT_NAME_TAKEN')
+  })
+
+  it('P2002 on a NON-name column (e.g. email) falls through to the generic handler — not mis-reported as BOT_NAME_TAKEN', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    getTierLimit.mockResolvedValue(5)
+    mockDb.user.count.mockResolvedValue(0)
+    const err = new Error('Unique violation')
+    err.code = 'P2002'
+    err.meta = { target: ['email'] }
+    createBot.mockRejectedValue(err)
+
+    const res = await request(app).post('/api/v1/bots').send({ name: 'Bot' })
+
+    expect(res.body.code).not.toBe('BOT_NAME_TAKEN')
+  })
 })
 
 // ─── PATCH /:id ──────────────────────────────────────────────────────────────

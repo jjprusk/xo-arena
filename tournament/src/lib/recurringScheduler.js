@@ -2,35 +2,40 @@
 /**
  * Recurring tournament occurrence generator.
  *
- * Ported from `packages/tournament/src/lib/scheduler.js` into the live
- * tournament service because the package-workspace scheduler was never
- * imported by `tournament/src/index.js` and therefore never ran in
- * production. Keep this file in sync with the package version if the two
- * tournament codepaths are ever reconciled.
+ * Phase 3.7a rewrite: reads from `tournament_templates` (pure config)
+ * instead of `tournaments where isRecurring=true`. Each spawned
+ * occurrence is a normal `Tournament` row with `templateId` pointing at
+ * its parent template. Subscribers attach to the template; seed bots
+ * attach to the template.
  *
  * Responsibilities:
- *   - For every `isRecurring: true` template that has finished an
- *     occurrence, compute the next occurrence's start time from the
- *     interval and create a fresh tournament row with cloned settings.
+ *   - For every un-paused `TournamentTemplate` whose next occurrence is
+ *     due (or overdue), create a fresh Tournament row with cloned
+ *     settings and templateId back-ref.
  *   - Auto-enroll standing human subscribers (RecurringTournamentRegistration
  *     with optedOutAt == null) into the new occurrence.
- *   - Auto-enroll the template's seed bots into the new occurrence.
+ *   - Auto-enroll the template's seed bots (TournamentTemplateSeedBot)
+ *     into the new occurrence.
  *   - Publish `tournament:recurring:occurrence` for observers.
- *   - Skip templates whose `recurrenceEndDate` has passed or which are
- *     `recurrencePaused`.
+ *   - Skip templates whose `recurrenceEndDate` has passed.
  *
- * Called both on a 60-second interval (see index.js) and from the admin
- * endpoint `POST /api/tournaments/admin/scheduler/check-recurring`.
+ * Called on a 60-second interval from index.js + the admin endpoint
+ * `POST /api/tournaments/admin/scheduler/check-recurring`.
  */
 import db from './db.js'
 import { publish } from './redis.js'
 import logger from '../logger.js'
 
-/** Compute the next recurrence start time strictly after `now`. */
+/**
+ * Compute the next recurrence start time strictly after `now`.
+ * Works for both TournamentTemplate (recurrenceStart) and the legacy
+ * Tournament shape (startTime) — the caller passes whichever object.
+ */
 function nextOccurrenceStart(template) {
-  if (!template.startTime || !template.recurrenceInterval) return null
+  const start = template.recurrenceStart ?? template.startTime
+  if (!start || !template.recurrenceInterval) return null
   const now = new Date()
-  let next = new Date(template.startTime)
+  let next = new Date(start)
   // Advance until strictly in the future. One step per iteration — DAILY
   // never overshoots, MONTHLY handles day-of-month roll-over via Date.setMonth.
   while (next <= now) {
@@ -52,13 +57,8 @@ function nextOccurrenceStart(template) {
 export async function checkRecurringOccurrences() {
   const summary = { templatesChecked: 0, occurrencesCreated: 0, errors: 0 }
   try {
-    const templates = await db.tournament.findMany({
-      where: {
-        isRecurring: true,
-        status: 'COMPLETED',
-        recurrenceInterval: { not: null },
-        recurrencePaused: false,
-      },
+    const templates = await db.tournamentTemplate.findMany({
+      where: { paused: false },
     })
     summary.templatesChecked = templates.length
 
@@ -72,8 +72,10 @@ export async function checkRecurringOccurrences() {
         if (template.recurrenceEndDate && nextStart > template.recurrenceEndDate) continue
 
         // Dedup: another pass may have already created this occurrence.
+        // Templates + their first occurrences share an id (Phase 3.7a
+        // migration), so a templateId+startTime pair is the unique key.
         const existing = await db.tournament.findFirst({
-          where: { name: template.name, startTime: nextStart, isRecurring: false },
+          where: { templateId: template.id, startTime: nextStart },
         })
         if (existing) continue
 
@@ -94,17 +96,14 @@ export async function checkRecurringOccurrences() {
             startTime: nextStart,
             registrationOpenAt: now,
             isRecurring: false,                         // occurrences never themselves recur
+            templateId: template.id,                     // back-ref to template
             createdById: template.createdById,
             isTest: template.isTest ?? false,
           },
         })
         summary.occurrencesCreated++
 
-        // Standing human subscriptions. Collect the human userIds so the
-        // backend bridge can send a per-subscriber "you're entered in today's
-        // occurrence" notification — RecurringTournamentRegistration.userId
-        // already points at humans (bots don't subscribe themselves), but
-        // filter defensively in case an admin ever seeds a bot subscription.
+        // Standing human subscriptions attached to the template.
         const standing = await db.recurringTournamentRegistration.findMany({
           where: { templateId: template.id, optedOutAt: null },
           include: { user: { select: { id: true, isBot: true } } },
@@ -123,9 +122,9 @@ export async function checkRecurringOccurrences() {
           if (reg.user && !reg.user.isBot) autoEnrolledUserIds.push(reg.userId)
         }
 
-        // Seed bots defined on the template.
-        const seedBots = await db.tournamentSeedBot.findMany({
-          where: { tournamentId: template.id },
+        // Seed bots attached to the template.
+        const seedBots = await db.tournamentTemplateSeedBot.findMany({
+          where: { templateId: template.id },
         })
         for (const seed of seedBots) {
           await db.tournamentParticipant.upsert({
@@ -133,6 +132,9 @@ export async function checkRecurringOccurrences() {
             create: { tournamentId: occurrence.id, userId: seed.userId, status: 'REGISTERED', registrationMode: 'SINGLE' },
             update: { status: 'REGISTERED' },
           }).catch(() => {})
+          // Also stamp a per-occurrence TournamentSeedBot row so downstream
+          // code that reads seed-bot membership from the occurrence (rather
+          // than the template) still works during the cutover.
           await db.tournamentSeedBot.upsert({
             where: { tournamentId_userId: { tournamentId: occurrence.id, userId: seed.userId } },
             create: { tournamentId: occurrence.id, userId: seed.userId },

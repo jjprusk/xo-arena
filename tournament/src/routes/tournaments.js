@@ -168,6 +168,55 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
       },
     })
 
+    // Phase 3.7a cutover: when an admin creates a recurring tournament via
+    // the (now legacy) single-row flow, dual-write the recurrence config
+    // into tournament_templates too. Scheduler reads templates, so without
+    // this the new recurring tournament never spawns occurrences. Uses the
+    // same id on both rows so recurring_tournament_registrations.templateId
+    // works against either (matches the migration's backfill pattern).
+    if (isRecurring && recurrenceInterval && startTime) {
+      try {
+        await db.tournamentTemplate.create({
+          data: {
+            id: tournament.id,
+            name:               tournament.name,
+            description:        tournament.description,
+            game:               tournament.game,
+            mode:               tournament.mode,
+            format:             tournament.format,
+            bracketType:        tournament.bracketType,
+            minParticipants:    tournament.minParticipants,
+            maxParticipants:    tournament.maxParticipants,
+            bestOfN:            tournament.bestOfN,
+            botMinGamesPlayed:  tournament.botMinGamesPlayed,
+            allowNonCompetitiveBots: tournament.allowNonCompetitiveBots,
+            allowSpectators:    tournament.allowSpectators,
+            noticePeriodMinutes: tournament.noticePeriodMinutes,
+            durationMinutes:    tournament.durationMinutes,
+            paceMs:             tournament.paceMs,
+            startMode:          tournament.startMode,
+            recurrenceInterval: tournament.recurrenceInterval,
+            recurrenceStart:    tournament.startTime,
+            recurrenceEndDate:  tournament.recurrenceEndDate,
+            paused:             tournament.recurrencePaused,
+            autoOptOutAfterMissed: tournament.autoOptOutAfterMissed,
+            createdById:        tournament.createdById,
+            isTest:             tournament.isTest,
+          },
+        })
+        // Point the tournament at its template so the scheduler treats the
+        // first run as a real occurrence and doesn't re-spawn it.
+        await db.tournament.update({
+          where: { id: tournament.id },
+          data:  { templateId: tournament.id },
+        })
+      } catch (err) {
+        // Non-fatal: the Tournament row is already created. Log and move on —
+        // admin can re-edit to fix the template later.
+        req.log?.warn?.({ err, tournamentId: tournament.id }, 'dual-write TournamentTemplate failed')
+      }
+    }
+
     res.status(201).json({ tournament })
   } catch (e) {
     next(e)

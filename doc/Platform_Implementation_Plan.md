@@ -360,13 +360,15 @@ Full design in `doc/Tournament_Template_Refactor_Scope.md`.
 - [ ] Tests — tournamentSweep cases still pass; add template CRUD + scheduler spawn-from-template vitest; e2e smoke for "admin creates template → scheduler spawns first occurrence" if feasible against localhost.
 - [ ] Regenerate `doc/Platform_Architecture.md` if the tournament data-model section is stale (check before commit).
 
-### 3.7a.2 Bot displayName uniqueness
+### 3.7a.2 Bot displayName uniqueness — (c) hybrid — done
 
-- [ ] **Decision:** bot `displayName` is currently free-text with no uniqueness. Two users can both have a bot named "Rusty", and built-in Rusty shares the name. Pick one:
-  - **(a)** Enforce global uniqueness on `User.displayName` WHERE `isBot: true` (partial index) — cleanest, allows clean rankings
-  - **(b)** Leave as-is and disambiguate in UI by appending owner handle when needed
-- [ ] If **(a)**: Prisma migration adding `CREATE UNIQUE INDEX ... ON User(lower(displayName)) WHERE isBot = true`. Update `POST /bots` to return 409 on collision, bot-create form to check availability.
-- [ ] If **(b)**: one-line change to leaderboards/pickers that render `Rusty (joe)` when ambiguous.
+- [x] **Decision (2026-04-23):** neither pure global uniqueness nor free-text — hybrid. Two partial unique indexes on `users`, both case-insensitive:
+  - `UNIQUE (LOWER("displayName")) WHERE "isBot"=true AND "botOwnerId" IS NULL` — protects built-in / reserved names (Rusty/Copper/Sterling/Magnus). No user can create an orphan bot that collides with a built-in.
+  - `UNIQUE ("botOwnerId", LOWER("displayName")) WHERE "isBot"=true AND "botOwnerId" IS NOT NULL` — one owner can't have two bots with the same name. Cross-owner collisions stay allowed (your Rusty vs my Rusty).
+- [x] Migration `20260423010000_bot_displayname_hybrid_unique` applied to local DB. Cleanup step deleted 344 orphan test bots (E2E / stress-test leftovers); built-in roster untouched.
+- [x] `POST /api/v1/bots` returns 409 `BOT_NAME_TAKEN` on collision (either partial unique). Other P2002 collisions (email, etc.) fall through to the generic handler.
+- [x] 3 new vitest cases cover per-owner collision, built-in collision, and the non-name P2002 fall-through.
+- [ ] **Frontend follow-up (do during Phase 3.8 Profile redesign):** bot-create form checks availability inline (debounced GET) before submit; mixed-owner lists (leaderboard, bot picker, tournament bracket) render "Rusty · @joe" / "Rusty · built-in" when multiple bots share a name in the visible set.
 
 ### 3.7a.3 Profile URL structure
 
