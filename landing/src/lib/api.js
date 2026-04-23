@@ -220,11 +220,12 @@ export const api = {
     getLogLimit:   (token)       => api.get('/admin/logs/limit', token),
     setLogLimit:   (body, token) => api.patch('/admin/logs/limit', body, token),
 
-    listBots: (token, search, page, limit) => {
+    listBots: (token, search, page, limit, opts = {}) => {
       const p = new URLSearchParams()
-      if (search) p.set('search', search)
-      if (page)   p.set('page', page)
-      if (limit)  p.set('limit', limit)
+      if (search)         p.set('search', search)
+      if (page)           p.set('page', page)
+      if (limit)          p.set('limit', limit)
+      if (opts.systemOnly) p.set('systemOnly', '1')
       const qs = p.toString()
       return api.get(`/admin/bots${qs ? `?${qs}` : ''}`, token)
     },

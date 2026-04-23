@@ -106,11 +106,12 @@ export function ActionMenu({ trigger, items, align = 'right' }) {
  * the visual used in AdminTournamentsPage: bordered square with a
  * three-dot glyph.
  */
-export function ActionMenuTrigger({ 'aria-label': ariaLabel = 'Actions' } = {}) {
+export function ActionMenuTrigger({ 'aria-label': ariaLabel = 'Actions', ...rest } = {}) {
   return (
     <button
       type="button"
       aria-label={ariaLabel}
+      {...rest}
       className="inline-flex items-center justify-center w-8 h-8 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
       style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
     >

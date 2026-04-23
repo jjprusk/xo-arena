@@ -141,7 +141,7 @@ export default function AdminTemplatesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-2 h-[calc(100vh-94px)] flex flex-col">
+    <div className="max-w-6xl mx-auto px-6 py-2">
       <div className="flex items-baseline justify-between gap-4 mb-2 shrink-0">
         <div className="flex items-baseline gap-3">
           <h1 className="text-base font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
@@ -180,8 +180,7 @@ export default function AdminTemplatesPage() {
           </p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0">
-        <ListTable fill>
+        <ListTable fitViewport bottomPadding={80}>
           <thead>
             <tr>
               <ListTh>Name</ListTh>
@@ -198,13 +197,15 @@ export default function AdminTemplatesPage() {
             {templates.map((t, i) => (
               <ListTr key={t.id} last={i === templates.length - 1}>
                 <ListTd>
-                  <div className="flex items-center gap-2">
-                    <Link to={`/admin/templates/${t.id}`} className="font-medium no-underline hover:underline"
+                  <div className="flex items-center gap-2 max-w-[18rem]">
+                    <Link to={`/admin/templates/${t.id}`}
+                      title={t.name}
+                      className="font-medium no-underline hover:underline truncate"
                       style={{ color: 'var(--text-primary)' }}>
                       {t.name}
                     </Link>
                     {t.isTest && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0"
                         style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-muted)' }}>
                         TEST
                       </span>
@@ -237,7 +238,6 @@ export default function AdminTemplatesPage() {
             ))}
           </tbody>
         </ListTable>
-        </div>
       )}
 
       {confirmDelete && (

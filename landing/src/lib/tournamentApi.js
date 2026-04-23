@@ -83,8 +83,11 @@ export const tournamentApi = {
   deleteTemplate:   (id, token)           => request('DELETE', `/api/tournaments/admin/templates/${id}`, undefined, token),
   pauseTemplate:    (id, token)           => request('POST',   `/api/tournaments/admin/templates/${id}/pause`, {}, token),
   unpauseTemplate:  (id, token)           => request('POST',   `/api/tournaments/admin/templates/${id}/unpause`, {}, token),
-  addTemplateSeed:    (id, userId, token) => request('POST',   `/api/tournaments/admin/templates/${id}/seed-bots`, { userId }, token),
-  removeTemplateSeed: (id, userId, token) => request('DELETE', `/api/tournaments/admin/templates/${id}/seed-bots/${userId}`, undefined, token),
+  // Two modes:
+  //   (A) addTemplateSeed(id, { userId }, token)                         — seed an existing system bot
+  //   (B) addTemplateSeed(id, { personaBotId, displayName }, token)      — clone persona + seed
+  addTemplateSeed:    (id, payload, token) => request('POST',   `/api/tournaments/admin/templates/${id}/seed-bots`, payload, token),
+  removeTemplateSeed: (id, userId, token)  => request('DELETE', `/api/tournaments/admin/templates/${id}/seed-bots/${userId}`, undefined, token),
 
   fillTestPlayers: (id, token) => request('POST', `/api/tournaments/${id}/fill-test-players`, {}, token),
   fillQaBots:      (id, data, token) => request('POST', `/api/tournaments/${id}/fill-qa-bots`, data, token),

@@ -5,6 +5,7 @@ import { publish } from '../lib/redis.js'
 import { optionalAuth, requireAuth, requireTournamentAdmin, isTournamentAdmin } from '../middleware/auth.js'
 import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import { checkRecurringOccurrences } from '../lib/recurringScheduler.js'
+import { cloneAndSeedPersona, seedExistingSystemBot } from '../lib/seedBotService.js'
 
 const router = Router()
 
@@ -1258,23 +1259,18 @@ router.delete('/admin/templates/:id', requireTournamentAdmin, async (req, res, n
 })
 
 // POST /api/tournaments/admin/templates/:id/seed-bots
-// Adds a seed bot to the template. Body: { userId }. Idempotent — second
-// call for the same (templateId, userId) returns the existing row.
+// Two modes:
+//   (A) { userId }                           — seed an existing system bot
+//   (B) { personaBotId, displayName }        — clone persona → new system bot,
+//                                              then seed it on this template
+// Idempotent for mode (A): a second call for (template, userId) is a no-op.
 router.post('/admin/templates/:id/seed-bots', requireTournamentAdmin, async (req, res, next) => {
   try {
-    const { userId } = req.body
-    if (!userId) return res.status(400).json({ error: 'userId required' })
-
-    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, isBot: true } })
-    if (!user) return res.status(404).json({ error: 'User not found' })
-    if (!user.isBot) return res.status(400).json({ error: 'Only bots can be seeded (isBot: true)' })
-
-    const seed = await db.tournamentTemplateSeedBot.upsert({
-      where:  { templateId_userId: { templateId: req.params.id, userId } },
-      create: { templateId: req.params.id, userId },
-      update: {},
-    })
-    res.status(201).json({ seed })
+    const { userId, personaBotId, displayName } = req.body ?? {}
+    const result = personaBotId
+      ? await cloneAndSeedPersona({ templateId: req.params.id, personaBotId, displayName })
+      : await seedExistingSystemBot({ templateId: req.params.id, userId })
+    res.status(result.status).json(result.body)
   } catch (e) {
     next(e)
   }

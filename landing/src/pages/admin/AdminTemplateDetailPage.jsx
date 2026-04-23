@@ -17,6 +17,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { getToken } from '../../lib/getToken.js'
 import { tournamentApi } from '../../lib/tournamentApi.js'
+import { api } from '../../lib/api.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../../components/ui/ListTable.jsx'
 
@@ -186,20 +187,61 @@ function EditForm({ template, onCancel, onSave, busy }) {
 }
 
 function SeedBotsPanel({ template, token, onChange }) {
-  const [userIdToAdd, setUserIdToAdd] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr]   = useState(null)
+  const [systemBots, setSystemBots]   = useState([])
+  const [loadingBots, setLoadingBots] = useState(false)
+  const [existingId, setExistingId]   = useState('')
+  const [personaId, setPersonaId]     = useState('')
+  const [cloneName, setCloneName]     = useState('')
+  const [busy, setBusy]               = useState(false)
+  const [err, setErr]                 = useState(null)
+  const seededIds = new Set((template.seedBots ?? []).map(sb => sb.userId))
 
-  async function add(e) {
-    e.preventDefault()
-    if (!userIdToAdd.trim()) return
+  // Load all system bots (personas + existing clones). Refetched whenever
+  // template.seedBots changes so a freshly-cloned bot becomes selectable
+  // in other templates without a page reload.
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    setLoadingBots(true)
+    api.admin.listBots(token, '', 1, 200, { systemOnly: true })
+      .then(res => { if (!cancelled) setSystemBots(res.bots ?? []) })
+      .catch(() => { if (!cancelled) setSystemBots([]) })
+      .finally(() => { if (!cancelled) setLoadingBots(false) })
+    return () => { cancelled = true }
+  }, [token, template.seedBots])
+
+  // Personas = the 4 built-ins. Their botModelId starts with "builtin:"
+  // and does NOT include ":clone:" (clones get a suffixed model id).
+  const personas = systemBots.filter(b => {
+    const mid = b.botModelId ?? ''
+    return mid.startsWith('builtin:') && !mid.includes(':clone:')
+  })
+  const existingAvailable = systemBots.filter(b => !seededIds.has(b.id))
+
+  async function addExisting() {
+    if (!existingId) return
     setBusy(true); setErr(null)
     try {
-      await tournamentApi.addTemplateSeed(template.id, userIdToAdd.trim(), token)
-      setUserIdToAdd('')
+      await tournamentApi.addTemplateSeed(template.id, { userId: existingId }, token)
+      setExistingId('')
       onChange()
     } catch (e) {
       setErr(e.message || 'Failed to add seed bot.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function clonePersona() {
+    if (!personaId || !cloneName.trim()) return
+    setBusy(true); setErr(null)
+    try {
+      await tournamentApi.addTemplateSeed(template.id, { personaBotId: personaId, displayName: cloneName.trim() }, token)
+      setPersonaId('')
+      setCloneName('')
+      onChange()
+    } catch (e) {
+      setErr(e.message || 'Failed to clone persona.')
     } finally {
       setBusy(false)
     }
@@ -218,29 +260,85 @@ function SeedBotsPanel({ template, token, onChange }) {
   }
 
   return (
-    <div id="seed-bots" className="space-y-3">
+    <div id="seed-bots" className="space-y-4">
       {err && (
         <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>
       )}
-      <form onSubmit={add} className="flex items-center gap-2">
-        <Input value={userIdToAdd} onChange={setUserIdToAdd} placeholder="Bot user ID (cuid)…" />
-        <button type="submit" disabled={busy || !userIdToAdd.trim()}
-          className="text-sm px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50 whitespace-nowrap"
-          style={{ backgroundColor: 'var(--color-blue-600)' }}>
-          Add seed bot
-        </button>
-      </form>
       <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-        Seed bots pre-register on every occurrence spawned by this template.
+        Seed bots pre-register on every occurrence of this template. They must be system bots (no user owner), so users can't delete them. Pick an existing system bot, or clone one of the four personas with a new name (useful for stacking, e.g. three "Rusty"-level bots on an easy template).
       </p>
+
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Use existing system bot
+        </p>
+        <div className="flex items-center gap-2">
+          <select
+            value={existingId}
+            onChange={e => setExistingId(e.target.value)}
+            disabled={busy || loadingBots || existingAvailable.length === 0}
+            className="flex-1 text-sm rounded-lg border px-3 py-1.5 outline-none disabled:opacity-50"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          >
+            <option value="">
+              {loadingBots
+                ? 'Loading…'
+                : existingAvailable.length === 0
+                  ? 'All system bots are already seeded'
+                  : 'Select a system bot…'}
+            </option>
+            {existingAvailable.map(b => (
+              <option key={b.id} value={b.id}>
+                {b.displayName} · ELO {b.eloRating ?? 1200}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={addExisting} disabled={busy || !existingId}
+            className="text-sm px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50 whitespace-nowrap"
+            style={{ backgroundColor: 'var(--color-blue-600)' }}>
+            Add
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Clone a persona
+        </p>
+        <div className="flex items-center gap-2">
+          <select
+            value={personaId}
+            onChange={e => setPersonaId(e.target.value)}
+            disabled={busy || loadingBots || personas.length === 0}
+            className="w-40 text-sm rounded-lg border px-3 py-1.5 outline-none disabled:opacity-50"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+          >
+            <option value="">Persona…</option>
+            {personas.map(p => (
+              <option key={p.id} value={p.id}>{p.displayName}</option>
+            ))}
+          </select>
+          <div className="flex-1">
+            <Input
+              value={cloneName}
+              onChange={setCloneName}
+              placeholder="New bot name (e.g. Rusty 2)"
+              disabled={busy}
+            />
+          </div>
+          <button type="button" onClick={clonePersona} disabled={busy || !personaId || !cloneName.trim()}
+            className="text-sm px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50 whitespace-nowrap"
+            style={{ backgroundColor: 'var(--color-blue-600)' }}>
+            Clone + add
+          </button>
+        </div>
+      </div>
 
       {template.seedBots?.length > 0 ? (
         <ListTable>
           <thead>
             <tr>
               <ListTh>Display name</ListTh>
-              <ListTh>Username</ListTh>
-              <ListTh>User ID</ListTh>
               <ListTh align="right">Action</ListTh>
             </tr>
           </thead>
@@ -248,8 +346,6 @@ function SeedBotsPanel({ template, token, onChange }) {
             {template.seedBots.map((sb, i) => (
               <ListTr key={sb.id} last={i === template.seedBots.length - 1}>
                 <ListTd><span className="text-sm" style={{ color: 'var(--text-primary)' }}>{sb.user?.displayName ?? '—'}</span></ListTd>
-                <ListTd><span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{sb.user?.username ?? '—'}</span></ListTd>
-                <ListTd><span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{sb.userId}</span></ListTd>
                 <ListTd align="right">
                   <button onClick={() => remove(sb.userId)} disabled={busy}
                     className="text-xs font-semibold px-2.5 py-1 rounded border"

@@ -233,6 +233,72 @@ export function tournamentApi(base) {
       if (!res.ok()) throw new Error(`tournament-matches.complete ${res.status()}: ${await res.text()}`)
       return await res.json()
     },
+
+    // ─── Template-based admin endpoints (Phase 3.7a) ──────────────────────
+    // These are distinct from the per-tournament seed-bots helpers above:
+    // `TournamentTemplate` is the config-only row the scheduler reads when
+    // spawning the next recurring occurrence. Adding a seed to a template
+    // pre-registers a bot on every occurrence spawned from it.
+
+    async listTemplates({ request, token }) {
+      const res = await request.get(url('/api/tournaments/admin/templates'), { headers: hdr(token) })
+      if (!res.ok()) throw new Error(`templates.list ${res.status()}: ${await res.text()}`)
+      return (await res.json()).templates
+    },
+    async getTemplate({ request, token }, id) {
+      const res = await request.get(url(`/api/tournaments/admin/templates/${id}`), { headers: hdr(token) })
+      if (!res.ok()) throw new Error(`templates.get ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+    async deleteTemplate({ request, token }, id) {
+      const res = await request.delete(url(`/api/tournaments/admin/templates/${id}`), { headers: hdr(token) })
+      if (!res.ok() && res.status() !== 404) throw new Error(`templates.delete ${res.status()}: ${await res.text()}`)
+      return res.status()
+    },
+    // Two payload shapes:
+    //   { userId }                           — seed an existing system bot
+    //   { personaBotId, displayName }        — clone persona + seed
+    async addTemplateSeed({ request, token }, templateId, payload) {
+      const res = await request.post(url(`/api/tournaments/admin/templates/${templateId}/seed-bots`), {
+        headers: hdr(token), data: payload,
+      })
+      return { status: res.status(), body: res.ok() ? await res.json() : await res.text() }
+    },
+    async removeTemplateSeed({ request, token }, templateId, userId) {
+      const res = await request.delete(url(`/api/tournaments/admin/templates/${templateId}/seed-bots/${userId}`), {
+        headers: hdr(token),
+      })
+      return res.status()
+    },
+  }
+}
+
+/**
+ * Backend admin API — needed for system-bot listing + delete guard. The
+ * tournament service only knows about tournaments/templates; the User table
+ * lives on the backend.
+ */
+export function backendAdminApi(base) {
+  const url = (path) => `${base}${path}`
+  const hdr = (token) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
+  return {
+    async listBots({ request, token }, { systemOnly = false, search = '' } = {}) {
+      const qs = new URLSearchParams()
+      if (systemOnly) qs.set('systemOnly', '1')
+      if (search)     qs.set('search', search)
+      const suffix = qs.toString() ? `?${qs}` : ''
+      const res = await request.get(url(`/api/v1/admin/bots${suffix}`), { headers: hdr(token) })
+      if (!res.ok()) throw new Error(`admin.listBots ${res.status()}: ${await res.text()}`)
+      return await res.json()
+    },
+    async deleteBot({ request, token }, botId) {
+      const res = await request.delete(url(`/api/v1/admin/bots/${botId}`), { headers: hdr(token) })
+      // Return { status, body } so callers can assert on both 204 (ok) and 400 (built-in guard).
+      const bodyText = await res.text()
+      let body = null
+      try { body = bodyText ? JSON.parse(bodyText) : null } catch { body = bodyText }
+      return { status: res.status(), body }
+    },
   }
 }
 

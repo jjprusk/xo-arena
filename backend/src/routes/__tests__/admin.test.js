@@ -637,7 +637,7 @@ describe('PATCH /api/v1/admin/bots/:id', () => {
 
 describe('DELETE /api/v1/admin/bots/:id', () => {
   it('deletes bot and its games', async () => {
-    db.user.findUnique.mockResolvedValue({ id: 'bot_1', isBot: true, botModelId: null })
+    db.user.findUnique.mockResolvedValue({ id: 'bot_1', isBot: true, botModelId: null, username: 'bot-clone-x' })
     db.$transaction.mockImplementation(async (fn) => fn({ game: db.game, user: db.user }))
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
@@ -653,6 +653,46 @@ describe('DELETE /api/v1/admin/bots/:id', () => {
     const res = await request(app).delete('/api/v1/admin/bots/usr_1')
 
     expect(res.status).toBe(404)
+  })
+
+  it.each(['bot-rusty', 'bot-copper', 'bot-sterling', 'bot-magnus'])(
+    'refuses to delete built-in persona %s',
+    async (username) => {
+      db.user.findUnique.mockResolvedValue({ id: 'bot_builtin', isBot: true, botModelId: 'builtin:minimax:novice', username })
+
+      const res = await request(app).delete('/api/v1/admin/bots/bot_builtin')
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toMatch(/built-in/i)
+      expect(db.$transaction).not.toHaveBeenCalled()
+    },
+  )
+})
+
+// ─── GET /admin/bots?systemOnly ───────────────────────────────────────────────
+
+describe('GET /api/v1/admin/bots?systemOnly=1', () => {
+  it('passes botOwnerId: null into the where clause', async () => {
+    db.user.findMany.mockResolvedValueOnce([])   // bots query
+    db.user.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/admin/bots?systemOnly=1')
+
+    expect(res.status).toBe(200)
+    const firstCall = db.user.findMany.mock.calls[0][0]
+    expect(firstCall.where).toMatchObject({ isBot: true, botOwnerId: null })
+  })
+
+  it('omits botOwnerId filter when systemOnly is absent', async () => {
+    db.user.findMany.mockResolvedValueOnce([])
+    db.user.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+
+    await request(app).get('/api/v1/admin/bots')
+
+    const firstCall = db.user.findMany.mock.calls[0][0]
+    expect(firstCall.where).not.toHaveProperty('botOwnerId')
   })
 })
 
