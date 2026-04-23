@@ -345,20 +345,20 @@
 >
 > **Why now:** Every item here scales in cost with data volume, or involves user-visible URL/auth behavior that breaks links after launch. Post-launch each one is 5–10× harder.
 
-### 3.7a.1 Recurring tournaments — template vs occurrence split
+### 3.7a.1 Recurring tournaments — template vs occurrence split — done
 
-Full design in `doc/Tournament_Template_Refactor_Scope.md`.
+Full design in `doc/Tournament_Template_Refactor_Scope.md`. Shipped in three stages on 2026-04-23 (commits `91a22a7` readers, `f3aa667` endpoint split, `a4b40f8` column drop).
 
-- [ ] Add `TournamentTemplate` Prisma model (config fields + recurrence + `paused`); every Tournament becomes a pure occurrence with nullable `templateId` FK.
-- [ ] Prisma migration drops `Tournament.isRecurring`, `recurrenceInterval`, `recurrenceStart`, `recurrenceEndDate`, `recurrenceRule`, `recurrencePaused`. Adds `templateId String?` + FK to `TournamentTemplate.id`. Data-migration step splits existing recurring rows into (new template, preserved-first-occurrence-if-ran) pairs.
-- [ ] Point `RecurringTournamentRegistration.templateId` FK at `TournamentTemplate.id` (same field name, new target).
-- [ ] New `TournamentTemplateSeedBot` table keyed `(templateId, userId)`. Migration moves existing `TournamentSeedBot` rows attached to template-Tournaments over; per-occurrence overrides on `TournamentSeedBot` remain supported for one-shot tournaments.
-- [ ] `tournament/src/lib/recurringScheduler.js`: read templates via `db.tournamentTemplate.findMany(...)` instead of `Tournament where isRecurring`. Set `templateId` on spawned occurrences.
-- [ ] `tournament/src/lib/tournamentSweep.js`: unchanged cancel / auto-drop logic still applies per-occurrence; no new semantics.
-- [ ] `tournament/src/routes/tournaments.js`: split into `POST /api/templates` (recurrence config) vs `POST /api/tournaments` (one-shot); existing one-shot path unaffected.
-- [ ] Admin UI — two tabs: **Tournaments** (occurrences, today's flat list) and **Templates** (recurring series, paused state, subscriber count). Public `TournamentsPage.jsx` unchanged — only lists occurrences.
-- [ ] Tests — tournamentSweep cases still pass; add template CRUD + scheduler spawn-from-template vitest; e2e smoke for "admin creates template → scheduler spawns first occurrence" if feasible against localhost.
-- [ ] Regenerate `doc/Platform_Architecture.md` if the tournament data-model section is stale (check before commit).
+- [x] Add `TournamentTemplate` Prisma model (config fields + recurrence + `paused`); every Tournament becomes a pure occurrence with nullable `templateId` FK.
+- [x] Prisma migration drops `Tournament.isRecurring`, `recurrenceInterval`, `recurrenceEndDate`, `recurrencePaused`, `autoOptOutAfterMissed`. Adds `templateId String?` + FK to `TournamentTemplate.id`. (`recurrenceStart` / `recurrenceRule` were never on Tournament — the old schema used `startTime` as the anchor.)
+- [x] Point `RecurringTournamentRegistration.templateId` FK at `TournamentTemplate.id` (same field name, new target).
+- [x] New `TournamentTemplateSeedBot` table keyed `(templateId, userId)`. Per-occurrence `TournamentSeedBot` rows remain for one-shot overrides; scheduler enrolls template seeds into every spawned occurrence.
+- [x] `tournament/src/lib/recurringScheduler.js`: reads templates via `db.tournamentTemplate.findMany(...)`. Sets `templateId` on spawned occurrences; no longer writes `isRecurring`.
+- [x] `tournament/src/lib/tournamentSweep.js`: unchanged cancel / auto-drop logic still applies per-occurrence; no new semantics.
+- [x] `tournament/src/routes/tournaments.js`: `POST /api/tournaments/admin/templates` for recurrence config; `POST /api/tournaments` for one-shots (rejects `isRecurring:true` with 400).
+- [x] Admin UI — two tabs: **Tournaments** (occurrences, today's flat list) and **Templates** (recurring series, paused state, subscriber count). Public `TournamentsPage.jsx` unchanged — only lists occurrences.
+- [x] Tests — tournamentSweep + recurringScheduler + seedBotService vitest green; e2e `tournament-template-create` (happy path + validation + AUTO anchor fallback), `tournament-template-clone` (clone + reuse + built-in delete guard), `tournament-seed-bots` (§9a–e) all pass against local.
+- [x] `doc/Platform_Architecture.md` — tournament data-model section checked; stays at platform-architecture level, no stale Prisma specifics to regenerate.
 
 ### 3.7a.2 Bot displayName uniqueness — (c) hybrid — done
 
@@ -370,16 +370,18 @@ Full design in `doc/Tournament_Template_Refactor_Scope.md`.
 - [x] 3 new vitest cases cover per-owner collision, built-in collision, and the non-name P2002 fall-through.
 - [ ] **Frontend follow-up (do during Phase 3.8 Profile redesign):** bot-create form checks availability inline (debounced GET) before submit; mixed-owner lists (leaderboard, bot picker, tournament bracket) render "Rusty · @joe" / "Rusty · built-in" when multiple bots share a name in the visible set.
 
-### 3.7a.3 Profile URL structure
+### 3.7a.3 Profile URL structure — done
 
-- [ ] **Finding:** no shareable profile URL exists today — `/profile` renders the logged-in user's own profile. No collision risk from launch.
-- [ ] **Decision:** when a public profile page is introduced (Phase 7 or earlier if needed), use `/users/:username` as the canonical URL. Record the decision here so it isn't re-litigated.
-- [ ] Reserve the route in the router now so a future `PublicProfilePage` drops in without URL migration.
+- [x] **Finding:** no shareable profile URL exists today — `/profile` renders the logged-in user's own profile. No collision risk from launch.
+- [x] **Decision:** when a public profile page is introduced (Phase 7 or earlier if needed), use `/users/:username` as the canonical URL. Record the decision here so it isn't re-litigated.
+- [x] Route reserved at `landing/src/App.jsx:58` → `landing/src/pages/PublicProfilePage.jsx` stub. Future real `PublicProfilePage` replaces the stub without URL migration; existing `/users/...` links stay valid.
 
-### 3.7a.4 OAuth prod redirect URLs
+### 3.7a.4 OAuth prod redirect URLs — noted
 
-- [ ] Cross-reference `doc/Prod_Bringup_Runbook.md` §4: when prod deploys for the first time, either (a) add `https://aiarena.callidity.com/api/auth/callback/*` to the existing staging Google + Apple OAuth apps, or (b) register prod-specific apps. Runbook already captures both paths.
-- [ ] No code change in this phase — pure provider-side config. Entry here exists so it's not forgotten in the Phase 4+ rush.
+Deferred to prod-bringup day. No code change in this phase.
+
+- [x] Cross-reference `doc/Prod_Bringup_Runbook.md` §4: when prod deploys for the first time, either (a) add `https://aiarena.callidity.com/api/auth/callback/*` to the existing staging Google + Apple OAuth apps, or (b) register prod-specific apps. Runbook already captures both paths.
+- [x] No code change in this phase — pure provider-side config. Entry here exists so it's not forgotten in the Phase 4+ rush.
 
 ### 3.7a.5 Seeded built-in bot polish
 
