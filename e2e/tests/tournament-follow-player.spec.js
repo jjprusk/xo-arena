@@ -60,11 +60,11 @@ test.describe('Follow-player spectate — 5-step verification', () => {
       ])
       await api.start({ request: adminCtx, token }, t.id)
 
-      // Wait for the bracket to exist (round 1 matches created). BOT_VS_BOT
-      // matches on local can transition PENDING → COMPLETED in <500ms
-      // without passing through a visible IN_PROGRESS window, so we don't
-      // gate on IN_PROGRESS — the follow modal handles all three modes
-      // (Live / Waiting / Ended) and we verify whichever applies.
+      // Wait for the bracket to exist. We don't gate on match.status
+      // IN_PROGRESS because bestOfN=1 matches go PENDING → COMPLETED
+      // with no IN_PROGRESS stop (status is only set mid-series in
+      // socketHandler.js); the follow modal handles whatever mode
+      // applies at observation time.
       let currentDetail = null
       for (let i = 0; i < 60; i++) {
         currentDetail = await api.get({ request: adminCtx, token }, t.id)
@@ -75,7 +75,6 @@ test.describe('Follow-player spectate — 5-step verification', () => {
       expect(currentDetail).toBeTruthy()
       expect((currentDetail.rounds ?? []).length).toBeGreaterThan(0)
 
-      // Pick any non-BYE participant from the bracket — we'll follow them.
       const anyMatch = currentDetail.rounds
         .flatMap(r => r.matches ?? [])
         .find(m => m.participant1Id && m.participant2Id)
@@ -103,16 +102,12 @@ test.describe('Follow-player spectate — 5-step verification', () => {
       // This exercises the same handleFollow path.
       await page.goto(`${LANDING_URL}/tournaments/${t.id}?follow=${liveUserId}`)
 
-      // Modal should open in some mode — Live (if their match is
-      // IN_PROGRESS), Waiting (if PENDING), or Ended (if eliminated /
-      // tournament over). The "Following: <name>" header is always
-      // present in follow mode.
+      // Modal should open in one of the three modes — Live (IN_PROGRESS
+      // match and table live), Waiting (PENDING next match), or Ended
+      // (eliminated / tournament over). The "Following: <name>" header
+      // is always present in follow mode.
       await expect(page.getByText(`Following: ${liveDisplayName}`, { exact: false })).toBeVisible({ timeout: 10_000 })
-
-      // Exactly one of the three mode badges should be visible. Use a
-      // strict-match regex to avoid picking up status text elsewhere.
-      const modeBadge = page.locator('text=/^(Live|Waiting|Ended)$/').first()
-      await expect(modeBadge).toBeVisible({ timeout: 5_000 })
+      await expect(page.locator('text=/^(Live|Waiting|Ended)$/').first()).toBeVisible({ timeout: 5_000 })
 
       // Share button is present in follow mode.
       await expect(page.getByRole('button', { name: /Share/ })).toBeVisible()

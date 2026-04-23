@@ -213,11 +213,27 @@ export async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:bot:match:ready': {
-      // Start a bot vs bot game for this tournament match
+      // Start a bot vs bot game for this tournament match.
+      // Honor the tournament's configured `paceMs` (admin sets this on
+      // the template — scheduler mirrors it onto each spawned
+      // occurrence). Without this lookup the admin-visible pacing
+      // field was a no-op and every bot match ran at the runner's
+      // built-in 1500ms default.
       const { tournamentId, matchId, gameId = 'xo', bot1, bot2, bestOfN } = data
+      let moveDelayMs
       try {
-        await botGameRunner.startGame({ bot1, bot2, gameId, tournamentId, tournamentMatchId: matchId, bestOfN: bestOfN ?? 1 })
-        logger.info({ tournamentId, matchId, bot1: bot1.displayName, bot2: bot2.displayName }, 'Bot tournament match started')
+        const t = await db.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { paceMs: true },
+        })
+        // Ignore 0 / negative / missing — let the runner's default kick in.
+        if (t?.paceMs && t.paceMs > 0) moveDelayMs = t.paceMs
+      } catch (err) {
+        logger.warn({ err, tournamentId }, 'Failed to read tournament.paceMs; using bot runner default')
+      }
+      try {
+        await botGameRunner.startGame({ bot1, bot2, gameId, tournamentId, tournamentMatchId: matchId, bestOfN: bestOfN ?? 1, moveDelayMs })
+        logger.info({ tournamentId, matchId, bot1: bot1.displayName, bot2: bot2.displayName, moveDelayMs }, 'Bot tournament match started')
       } catch (err) {
         logger.warn({ err, tournamentId, matchId }, 'Failed to start bot tournament match')
       }
