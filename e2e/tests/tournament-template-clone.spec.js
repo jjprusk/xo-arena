@@ -42,22 +42,21 @@ test.describe('Template seed-bot clone flow — Phase 3.7a', () => {
       const api     = tournamentApi(LANDING_URL)
       const backend = backendAdminApi(BACKEND_URL)
 
-      // ── Setup: create two recurring tournaments (auto-creates two
-      // TournamentTemplate rows with matching ids).
+      // ── Setup: create two TournamentTemplate rows via the stage-2
+      // template-first endpoint.
       const uniq = `clone-${Date.now()}`
-      // Dual-write into tournament_templates requires isRecurring + recurrenceInterval + startTime.
       const futureStart = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
       const baseBody = {
         game: 'xo', mode: 'BOT_VS_BOT', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
         bestOfN: 1, minParticipants: 2, maxParticipants: 4,
-        startMode: 'MANUAL', startTime: futureStart,
-        isRecurring: true, recurrenceInterval: 'WEEKLY',
+        startMode: 'MANUAL',
+        recurrenceInterval: 'WEEKLY', recurrenceStart: futureStart,
         isTest: true,
       }
-      const tournA = await api.create({ request: adminCtx, token }, {
+      const tournA = await api.createTemplate({ request: adminCtx, token }, {
         ...baseBody, name: `E2E Clone A ${uniq}`, description: `clone test A (${uniq})`,
       })
-      const tournB = await api.create({ request: adminCtx, token }, {
+      const tournB = await api.createTemplate({ request: adminCtx, token }, {
         ...baseBody, name: `E2E Clone B ${uniq}`, description: `clone test B (${uniq})`,
       })
 

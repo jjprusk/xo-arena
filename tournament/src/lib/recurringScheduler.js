@@ -142,7 +142,6 @@ export async function checkRecurringOccurrences() {
             startTime: nextStart,
             registrationOpenAt:  occurrenceRegOpen  ?? now,
             registrationCloseAt: occurrenceRegClose,    // null → sweep/route fall back to startTime
-            isRecurring: false,                         // occurrences never themselves recur
             templateId: template.id,                     // back-ref to template
             createdById: template.createdById,
             isTest: template.isTest ?? false,

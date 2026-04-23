@@ -111,7 +111,9 @@ describe('checkRecurringOccurrences (Phase 3.7a)', () => {
     // Verify the Tournament create carried templateId + cloned config.
     const createArg = mockDb.tournament.create.mock.calls[0][0].data
     expect(createArg.templateId).toBe('tpl_daily')
-    expect(createArg.isRecurring).toBe(false)           // occurrences never recur themselves
+    // Stage 3: isRecurring column dropped from Tournament. Occurrences are
+    // identified as non-recurring by having templateId set but no separate
+    // flag.
     expect(createArg.status).toBe('REGISTRATION_OPEN')
     expect(createArg.name).toBe('Daily 3-Player')
     // Next-start should be 2026-05-01T19:00 (today at 19:00Z — first future slot after NOW=12:00Z).

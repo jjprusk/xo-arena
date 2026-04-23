@@ -127,9 +127,17 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
       minParticipants, maxParticipants, bestOfN, botMinGamesPlayed,
       allowNonCompetitiveBots, paceMs, allowSpectators,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
-      noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed, startMode, isTest, recurrencePaused,
+      noticePeriodMinutes, durationMinutes, isRecurring,
+      startMode, isTest,
     } = req.body
+
+    // Phase 3.7a stage 3: recurrence is owned by TournamentTemplate. Callers
+    // must use POST /api/tournaments/admin/templates for recurring creates.
+    if (isRecurring) {
+      return res.status(400).json({
+        error: 'Recurring tournaments are created via POST /api/tournaments/admin/templates. Drop isRecurring from the POST /api/tournaments payload.',
+      })
+    }
 
     if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
       return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
@@ -169,74 +177,9 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
         ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
         ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
         ...(durationMinutes !== undefined && { durationMinutes }),
-        ...(isRecurring !== undefined && { isRecurring }),
-        ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
-        ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
         ...(isTest !== undefined && { isTest: !!isTest }),
-        ...(recurrencePaused !== undefined && { recurrencePaused: !!recurrencePaused }),
       },
     })
-
-    // Phase 3.7a cutover: when an admin creates a recurring tournament via
-    // the (now legacy) single-row flow, dual-write the recurrence config
-    // into tournament_templates too. Scheduler reads templates, so without
-    // this the new recurring tournament never spawns occurrences. Uses the
-    // same id on both rows so recurring_tournament_registrations.templateId
-    // works against either (matches the migration's backfill pattern).
-    //
-    // Anchor for the scheduler = startTime when set (SCHEDULED/MANUAL
-    // modes), otherwise fall back to registrationCloseAt / registrationOpenAt
-    // so AUTO-mode recurring tournaments (which don't require startTime)
-    // still get a template row.
-    const recurrenceAnchor = tournament.startTime
-      ?? tournament.registrationCloseAt
-      ?? tournament.registrationOpenAt
-      ?? null
-    if (isRecurring && recurrenceInterval && recurrenceAnchor) {
-      try {
-        await db.tournamentTemplate.create({
-          data: {
-            id: tournament.id,
-            name:               tournament.name,
-            description:        tournament.description,
-            game:               tournament.game,
-            mode:               tournament.mode,
-            format:             tournament.format,
-            bracketType:        tournament.bracketType,
-            minParticipants:    tournament.minParticipants,
-            maxParticipants:    tournament.maxParticipants,
-            bestOfN:            tournament.bestOfN,
-            botMinGamesPlayed:  tournament.botMinGamesPlayed,
-            allowNonCompetitiveBots: tournament.allowNonCompetitiveBots,
-            allowSpectators:    tournament.allowSpectators,
-            noticePeriodMinutes: tournament.noticePeriodMinutes,
-            durationMinutes:    tournament.durationMinutes,
-            paceMs:             tournament.paceMs,
-            startMode:          tournament.startMode,
-            recurrenceInterval,
-            recurrenceStart:    recurrenceAnchor,
-            recurrenceEndDate:  toDate(recurrenceEndDate),
-            registrationOpenAt: tournament.registrationOpenAt,
-            registrationCloseAt: tournament.registrationCloseAt,
-            paused:             !!recurrencePaused,
-            autoOptOutAfterMissed,
-            createdById:        tournament.createdById,
-            isTest:             tournament.isTest,
-          },
-        })
-        // Point the tournament at its template so the scheduler treats the
-        // first run as a real occurrence and doesn't re-spawn it.
-        await db.tournament.update({
-          where: { id: tournament.id },
-          data:  { templateId: tournament.id },
-        })
-      } catch (err) {
-        // Non-fatal: the Tournament row is already created. Log and move on —
-        // admin can re-edit to fix the template later.
-        req.log?.warn?.({ err, tournamentId: tournament.id }, 'dual-write TournamentTemplate failed')
-      }
-    }
 
     res.status(201).json({ tournament })
   } catch (e) {
@@ -252,8 +195,8 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       minParticipants, maxParticipants, bestOfN, botMinGamesPlayed,
       allowNonCompetitiveBots, paceMs, allowSpectators,
       startTime, endTime, registrationOpenAt, registrationCloseAt,
-      noticePeriodMinutes, durationMinutes, isRecurring, recurrenceInterval,
-      recurrenceEndDate, autoOptOutAfterMissed, startMode, isTest, recurrencePaused,
+      noticePeriodMinutes, durationMinutes,
+      startMode, isTest,
     } = req.body
 
     if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
@@ -267,7 +210,10 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'registrationCloseAt must be before startTime' })
     }
 
-    // status is intentionally excluded — use dedicated endpoints
+    // status is intentionally excluded — use dedicated endpoints.
+    // Recurrence fields (interval / end / paused / auto-opt-out) live on
+    // TournamentTemplate and are edited via PATCH /admin/templates/:id —
+    // not mirrored here.
     const data = {
       ...(startMode !== undefined && { startMode }),
       ...(name !== undefined && { name }),
@@ -289,59 +235,13 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
       ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
       ...(durationMinutes !== undefined && { durationMinutes }),
-      ...(isRecurring !== undefined && { isRecurring }),
-      ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-      ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
-      ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
       ...(isTest !== undefined && { isTest: !!isTest }),
-      ...(recurrencePaused !== undefined && { recurrencePaused: !!recurrencePaused }),
     }
 
     const tournament = await db.tournament.update({
       where: { id: req.params.id },
       data,
     })
-
-    // Phase 3.7a cutover: if this tournament is backed by a TournamentTemplate
-    // (has templateId) AND the edit touched any recurrence config, mirror the
-    // change to the template so the scheduler sees it. Kept minimal — only
-    // fields that exist on both models are forwarded. Non-fatal.
-    if (tournament.templateId) {
-      const tmplData = {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(game !== undefined && { game }),
-        ...(mode !== undefined && { mode }),
-        ...(format !== undefined && { format }),
-        ...(bracketType !== undefined && { bracketType }),
-        ...(minParticipants !== undefined && { minParticipants }),
-        ...(maxParticipants !== undefined && { maxParticipants }),
-        ...(bestOfN !== undefined && { bestOfN }),
-        ...(botMinGamesPlayed !== undefined && { botMinGamesPlayed }),
-        ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
-        ...(paceMs !== undefined && { paceMs }),
-        ...(allowSpectators !== undefined && { allowSpectators }),
-        ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
-        ...(durationMinutes !== undefined && { durationMinutes }),
-        ...(startMode !== undefined && { startMode }),
-        ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-        ...(startTime !== undefined && { recurrenceStart: toDate(startTime) }),
-        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
-        ...(registrationOpenAt  !== undefined && { registrationOpenAt:  toDate(registrationOpenAt) }),
-        ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
-        ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
-        ...(recurrencePaused !== undefined && { paused: !!recurrencePaused }),
-        ...(isTest !== undefined && { isTest: !!isTest }),
-      }
-      if (Object.keys(tmplData).length > 0) {
-        await db.tournamentTemplate.update({
-          where: { id: tournament.templateId },
-          data:  tmplData,
-        }).catch(err => {
-          req.log?.warn?.({ err, templateId: tournament.templateId }, 'dual-write TournamentTemplate PATCH failed')
-        })
-      }
-    }
 
     res.json({ tournament })
   } catch (e) {
@@ -1174,8 +1074,8 @@ router.get('/admin/templates', requireTournamentAdmin, async (req, res, next) =>
 // shows a "first tournament" alongside the template, and seed-bot /
 // publish endpoints keyed on tournamentId still work.
 // Callers: landing Create-Tournament form when `isRecurring` is checked.
-// POST /api/tournaments with isRecurring:true remains a backward-compat
-// shim until stage 3 drops the deprecated Tournament.recurrence* columns.
+// POST /api/tournaments rejects isRecurring:true — recurring creates must
+// go through this endpoint (stage 3).
 router.post('/admin/templates', requireTournamentAdmin, async (req, res, next) => {
   try {
     const {
@@ -1266,11 +1166,6 @@ router.post('/admin/templates', requireTournamentAdmin, async (req, res, next) =
         registrationOpenAt: template.registrationOpenAt,
         registrationCloseAt: template.registrationCloseAt,
         isTest: template.isTest,
-        isRecurring: true,
-        recurrenceInterval: template.recurrenceInterval,
-        recurrenceEndDate: template.recurrenceEndDate,
-        recurrencePaused: template.paused,
-        autoOptOutAfterMissed: template.autoOptOutAfterMissed,
       },
     }).catch(err => {
       req.log?.warn?.({ err, templateId: template.id }, 'sibling Tournament row create failed (template still ok)')
@@ -1289,12 +1184,6 @@ router.post('/admin/templates/:id/pause', requireTournamentAdmin, async (req, re
       where: { id: req.params.id },
       data:  { paused: true },
     })
-    // Dual-write: keep the first-occurrence Tournament row in sync so the
-    // admin's legacy view shows the pause state too.
-    await db.tournament.updateMany({
-      where: { id: req.params.id },
-      data:  { recurrencePaused: true },
-    }).catch(() => {})
     res.json({ template })
   } catch (e) {
     next(e)
@@ -1308,10 +1197,6 @@ router.post('/admin/templates/:id/unpause', requireTournamentAdmin, async (req, 
       where: { id: req.params.id },
       data:  { paused: false },
     })
-    await db.tournament.updateMany({
-      where: { id: req.params.id },
-      data:  { recurrencePaused: false },
-    }).catch(() => {})
     res.json({ template })
   } catch (e) {
     next(e)
@@ -1402,8 +1287,10 @@ router.patch('/admin/templates/:id', requireTournamentAdmin, async (req, res, ne
     })
 
     // Mirror the relevant fields back onto the Tournament row with the same
-    // id (the first-occurrence row). Dual-write — keeps legacy admin view
-    // consistent during the cutover. Non-fatal.
+    // id (the first-occurrence row). Stage 3: recurrence fields (interval /
+    // end / paused / auto-opt-out) live only on the template now, so the
+    // mirror is limited to display metadata + registration window + the
+    // startTime → recurrenceStart mapping. Non-fatal.
     await db.tournament.updateMany({
       where: { id: req.params.id },
       data: {
@@ -1412,13 +1299,9 @@ router.patch('/admin/templates/:id', requireTournamentAdmin, async (req, res, ne
         ...(minParticipants !== undefined && { minParticipants }),
         ...(maxParticipants !== undefined && { maxParticipants }),
         ...(bestOfN !== undefined && { bestOfN }),
-        ...(recurrenceInterval !== undefined && { recurrenceInterval }),
         ...(recurrenceStart !== undefined && { startTime: toDate(recurrenceStart) }),
-        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
         ...(registrationOpenAt  !== undefined && { registrationOpenAt:  toDate(registrationOpenAt) }),
         ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
-        ...(paused !== undefined && { recurrencePaused: !!paused }),
-        ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
         ...(isTest !== undefined && { isTest: !!isTest }),
       },
     }).catch(() => {})

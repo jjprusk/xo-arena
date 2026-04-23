@@ -531,23 +531,16 @@ model Tournament {
   registrationCloseAt     DateTime?
   noticePeriodMinutes     Int?
   durationMinutes         Int?
-  // Phase 3.7a — recurrence config moves to TournamentTemplate. These fields
-  // remain on the Tournament row for one migration step; after data-backfill
-  // we'll drop them. templateId set on occurrences spawned from a template.
-  isRecurring             Boolean                 @default(false)
-  autoOptOutAfterMissed   Int?
+  // Phase 3.7a — recurrence config lives exclusively on TournamentTemplate.
+  // An occurrence's link back to its template is `templateId`; all other
+  // recurrence fields (interval / end / paused / auto-opt-out) dropped in
+  // the 20260423150000_drop_tournament_recurrence_columns migration.
   templateId              String?
   template                TournamentTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
   createdById             String
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
   paceMs                  Int?                    @map("pace_ms")
-  recurrenceInterval      RecurrenceInterval?
-  recurrenceEndDate       DateTime?
-  // Admin switch that halts generation of new occurrences without cancelling
-  // the template. Running occurrences are unaffected. Flip back to false to
-  // resume the schedule — the next sweep picks up where the interval left off.
-  recurrencePaused        Boolean                 @default(false)
   startMode               TournamentStartMode     @default(AUTO)
   // True when created by an automated test suite; hidden from the public
   // /tournaments page (filtered at the API layer) and exposed behind an

@@ -48,6 +48,8 @@ test.describe('Tournament seed bots — QA Section 9', () => {
       const api = tournamentApi(LANDING_URL)
 
       const uniq = `seed-${Date.now()}`
+      // Stage 3: this test exercises per-tournament seed-bot CRUD only —
+      // it doesn't need recurrence semantics, so it's a one-shot create.
       const tournament = await api.create({ request: adminCtx, token }, {
         name:         `E2E Seed ${uniq}`,
         description:  `Seed-bots e2e (${uniq})`,
@@ -59,8 +61,6 @@ test.describe('Tournament seed bots — QA Section 9', () => {
         minParticipants: 2,
         maxParticipants: 8,
         startMode:    'MANUAL',
-        isRecurring:  true,
-        recurrenceInterval: 'WEEKLY',
         isTest:       true,
       })
 
@@ -117,11 +117,13 @@ test.describe('Tournament seed bots — QA Section 9', () => {
       const api = tournamentApi(LANDING_URL)
 
       const uniq = `seed-remove-${Date.now()}`
+      // Stage 3: remove-seed-bot path is exercised on a one-shot tournament
+      // (no recurrence semantics needed for this assertion).
       const tournament = await api.create({ request: adminCtx, token }, {
         name: `E2E Seed Remove ${uniq}`, description: `9d (${uniq})`,
         game: 'xo', mode: 'BOT_VS_BOT', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
         bestOfN: 1, minParticipants: 2, maxParticipants: 4,
-        startMode: 'MANUAL', isRecurring: true, recurrenceInterval: 'WEEKLY',
+        startMode: 'MANUAL',
         isTest: true,
       })
 
@@ -173,16 +175,16 @@ test.describe('Tournament seed bots — QA Section 9', () => {
       const api = tournamentApi(LANDING_URL)
 
       const uniq = `seed-propagate-${Date.now()}`
-      // startTime in the past so `_nextOccurrenceStart` immediately returns
-      // a future one (we want the sweep to spawn — not be skipped for lack
-      // of a next start time).
+      // recurrenceStart in the past so `_nextOccurrenceStart` immediately
+      // returns a future one (we want the sweep to spawn — not be skipped
+      // for lack of a next start time).
       const pastStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const template = await api.create({ request: adminCtx, token }, {
+      const template = await api.createTemplate({ request: adminCtx, token }, {
         name: `E2E Seed Propagate ${uniq}`, description: `9b (${uniq})`,
         game: 'xo', mode: 'BOT_VS_BOT', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
         bestOfN: 1, minParticipants: 2, maxParticipants: 4,
-        startMode: 'MANUAL', startTime: pastStart,
-        isRecurring: true, recurrenceInterval: 'DAILY',
+        startMode: 'MANUAL',
+        recurrenceInterval: 'DAILY', recurrenceStart: pastStart,
         isTest: true,
       })
 
@@ -341,12 +343,12 @@ test.describe('Tournament seed bots — QA Section 9', () => {
 
       const uniq = `seed-human-${Date.now()}`
       const pastStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const template = await api.create({ request: adminCtx, token: adminToken }, {
+      const template = await api.createTemplate({ request: adminCtx, token: adminToken }, {
         name: `E2E Seed Human ${uniq}`, description: `9b-human (${uniq})`,
         game: 'xo', mode: 'MIXED', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
         bestOfN: 1, minParticipants: 2, maxParticipants: 4,
-        startMode: 'MANUAL', startTime: pastStart,
-        isRecurring: true, recurrenceInterval: 'DAILY',
+        startMode: 'MANUAL',
+        recurrenceInterval: 'DAILY', recurrenceStart: pastStart,
         isTest: true,
       })
 
@@ -418,12 +420,12 @@ test.describe('Tournament seed bots — QA Section 9', () => {
 
       const uniq = `seed-absent-${Date.now()}`
       const pastStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const template = await api.create({ request: adminCtx, token }, {
+      const template = await api.createTemplate({ request: adminCtx, token }, {
         name: `E2E Seed Absent ${uniq}`, description: `9d-absent (${uniq})`,
         game: 'xo', mode: 'BOT_VS_BOT', format: 'PLANNED', bracketType: 'SINGLE_ELIM',
         bestOfN: 1, minParticipants: 2, maxParticipants: 4,
-        startMode: 'MANUAL', startTime: pastStart,
-        isRecurring: true, recurrenceInterval: 'DAILY',
+        startMode: 'MANUAL',
+        recurrenceInterval: 'DAILY', recurrenceStart: pastStart,
         isTest: true,
       })
 
