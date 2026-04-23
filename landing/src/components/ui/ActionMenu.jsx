@@ -19,7 +19,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 
 export function ActionMenu({ trigger, items, align = 'right' }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]           = useState(false)
+  const [placement, setPlacement] = useState('down')   // 'down' | 'up'
   const rootRef = useRef(null)
 
   useEffect(() => {
@@ -35,6 +36,21 @@ export function ActionMenu({ trigger, items, align = 'right' }) {
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
+
+  // Flip-up heuristic: if the trigger's remaining space below it is less
+  // than what we'd need to render a ~6-item menu, render above instead.
+  // Re-runs every time the menu opens so resizing / scrolling between
+  // opens picks the right placement.
+  useEffect(() => {
+    if (!open || !rootRef.current) return
+    const rect = rootRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+    // ~32px per item + 8px padding. Cap the estimate so a tiny menu with
+    // plenty of space below doesn't unnecessarily flip.
+    const estHeight  = Math.min(260, Math.max(80, items.filter(Boolean).length * 34 + 16))
+    setPlacement(spaceBelow < estHeight && spaceAbove > spaceBelow ? 'up' : 'down')
+  }, [open, items])
 
   const visible = items.filter(Boolean)
   const toneColor = {
@@ -58,7 +74,7 @@ export function ActionMenu({ trigger, items, align = 'right' }) {
       {open && visible.length > 0 && (
         <div
           role="menu"
-          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 min-w-[11rem] rounded-lg border py-1 z-30 shadow-lg`}
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} ${placement === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'} min-w-[11rem] rounded-lg border py-1 z-30 shadow-lg`}
           style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
         >
           {visible.map((item, idx) => {

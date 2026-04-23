@@ -594,6 +594,12 @@ model TournamentTemplate {
   /// to spawn the next Tournament row.
   recurrenceStart         DateTime
   recurrenceEndDate       DateTime?
+  /// Registration window for the NEXT occurrence. Both advance by the
+  /// recurrence interval each time the scheduler spawns an occurrence, so
+  /// they always describe the upcoming occurrence. Null fields fall back
+  /// to defaults at spawn time (open = now, close = startTime).
+  registrationOpenAt      DateTime?
+  registrationCloseAt     DateTime?
   /// Halts generation of new occurrences without cancelling the template.
   /// Running occurrences (already spawned) are unaffected.
   paused                  Boolean                           @default(false)

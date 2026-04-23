@@ -3,7 +3,10 @@
  * Tournament sweep job — runs every 60 seconds.
  *
  * Phase 1 — close registration:
- *   For every REGISTRATION_OPEN tournament whose registrationCloseAt is in the past:
+ *   For every REGISTRATION_OPEN tournament whose effective close time is in
+ *   the past. The effective close is `registrationCloseAt` when set,
+ *   otherwise `startTime` — "null close means close when the tournament
+ *   starts" (admin UX expectation).
  *   - participants < minParticipants → auto-cancel immediately
  *   - participants >= minParticipants → transition to REGISTRATION_CLOSED
  *
@@ -85,7 +88,8 @@ export async function recoverPendingBotMatches(onlyStale = false) {
   }
 }
 
-async function sweep() {
+// Exported for unit tests. Production code goes through `startTournamentSweep`.
+export async function sweep() {
   const now = new Date()
 
   // Phase 1: close registration for tournaments past their registrationCloseAt
@@ -94,7 +98,11 @@ async function sweep() {
     const toClose = await db.tournament.findMany({
       where: {
         status: 'REGISTRATION_OPEN',
-        registrationCloseAt: { not: null, lte: now },
+        OR: [
+          { registrationCloseAt: { not: null, lte: now } },
+          // Null close == "close at startTime"
+          { registrationCloseAt: null, startTime: { not: null, lte: now } },
+        ],
       },
       include: {
         participants: {

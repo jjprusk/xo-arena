@@ -21,6 +21,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockDb = {
   user: { findUnique: vi.fn(), create: vi.fn() },
   tournamentTemplateSeedBot: { create: vi.fn(), upsert: vi.fn() },
+  // `backfillOpenOccurrences` inside the service reads the tournament list
+  // and upserts participant / per-occurrence seed-bot rows. In unit tests we
+  // want no side-effects, so return an empty list and stub the upserts.
+  tournament:            { findMany: vi.fn().mockResolvedValue([]) },
+  tournamentParticipant: { upsert:   vi.fn().mockResolvedValue({}) },
+  tournamentSeedBot:     { upsert:   vi.fn().mockResolvedValue({}) },
 }
 vi.mock('../db.js', () => ({ default: mockDb }))
 

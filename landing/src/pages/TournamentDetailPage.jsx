@@ -1961,7 +1961,17 @@ export default function TournamentDetailPage() {
         </div>
       </div>
 
-      {isAdmin && token && <AdminControls tournament={t} token={token} onRefresh={load} />}
+      {/*
+        Admin controls are intentionally scoped to the admin entry point:
+        we only render them when the viewer arrived from /admin/tournaments
+        (captured in navigation state). Opening the public /tournaments/:id
+        link directly — even as an admin — gives the regular participant
+        view, matching user expectations. Admin can always navigate via the
+        admin list to get controls back.
+      */}
+      {isAdmin && token && location.state?.from === '/admin/tournaments' && (
+        <AdminControls tournament={t} token={token} onRefresh={load} />
+      )}
 
       {myPendingHvhMatch && <HvhMatchReadyCard matchData={myPendingHvhMatch} token={token} />}
       {myPendingMixedMatch && (

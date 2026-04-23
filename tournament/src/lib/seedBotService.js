@@ -15,6 +15,59 @@ function randomSuffix() {
 }
 
 /**
+ * Enroll a seeded bot into every current pre-game occurrence of the template.
+ * Without this, seed bots added *after* an occurrence spawned would only
+ * start appearing in future occurrences — surprising behavior. Covers DRAFT
+ * and REGISTRATION_OPEN (and CLOSED, which is still pre-game) so this works
+ * whether the sibling tournament was published before or after the seed add.
+ * Each step is best-effort; conflicts and misses are swallowed so the
+ * primary seed add still succeeds.
+ */
+async function backfillOpenOccurrences(templateId, userId) {
+  const openOccurrences = await db.tournament.findMany({
+    where:  { templateId, status: { in: ['DRAFT', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED'] } },
+    select: { id: true },
+  })
+  for (const occ of openOccurrences) {
+    await db.tournamentParticipant.upsert({
+      where:  { tournamentId_userId: { tournamentId: occ.id, userId } },
+      create: { tournamentId: occ.id, userId, status: 'REGISTERED', registrationMode: 'SINGLE' },
+      update: { status: 'REGISTERED' },
+    }).catch(() => {})
+    await db.tournamentSeedBot.upsert({
+      where:  { tournamentId_userId: { tournamentId: occ.id, userId } },
+      create: { tournamentId: occ.id, userId },
+      update: {},
+    }).catch(() => {})
+  }
+}
+
+/**
+ * Enroll every template seed bot into a single tournament (typically the
+ * sibling row at publish time, or a freshly-spawned occurrence). Inverse
+ * direction of backfillOpenOccurrences — one tournament, all seeds.
+ */
+export async function syncTemplateSeedsToTournament(tournamentId, templateId) {
+  if (!templateId) return
+  const seeds = await db.tournamentTemplateSeedBot.findMany({
+    where:  { templateId },
+    select: { userId: true },
+  })
+  for (const { userId } of seeds) {
+    await db.tournamentParticipant.upsert({
+      where:  { tournamentId_userId: { tournamentId, userId } },
+      create: { tournamentId, userId, status: 'REGISTERED', registrationMode: 'SINGLE' },
+      update: { status: 'REGISTERED' },
+    }).catch(() => {})
+    await db.tournamentSeedBot.upsert({
+      where:  { tournamentId_userId: { tournamentId, userId } },
+      create: { tournamentId, userId },
+      update: {},
+    }).catch(() => {})
+  }
+}
+
+/**
  * Mode B: create a new system-bot user cloned from a built-in persona
  * and seed it on the template.
  */
@@ -62,6 +115,7 @@ export async function cloneAndSeedPersona({ templateId, personaBotId, displayNam
     const seed = await db.tournamentTemplateSeedBot.create({
       data: { templateId, userId: clone.id },
     })
+    await backfillOpenOccurrences(templateId, clone.id)
     return { status: 201, body: { seed, user: clone } }
   } catch (e) {
     if (e?.code === 'P2002') {
@@ -98,5 +152,6 @@ export async function seedExistingSystemBot({ templateId, userId }) {
     create: { templateId, userId },
     update: {},
   })
+  await backfillOpenOccurrences(templateId, userId)
   return { status: 201, body: { seed } }
 }

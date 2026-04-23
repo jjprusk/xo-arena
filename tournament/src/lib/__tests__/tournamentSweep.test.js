@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../db.js', () => ({
   default: {
-    tournament: { findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    tournament: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn(), findUnique: vi.fn() },
     tournamentParticipant: { findUnique: vi.fn() },
   },
 }))
@@ -32,7 +32,7 @@ vi.mock('../../logger.js', () => ({
   },
 }))
 
-const { recoverPendingBotMatches, autoCancel, allParticipantsAreBots } = await import('../tournamentSweep.js')
+const { recoverPendingBotMatches, sweep, autoCancel, allParticipantsAreBots } = await import('../tournamentSweep.js')
 const db      = (await import('../db.js')).default
 const { publish } = await import('../redis.js')
 
@@ -155,6 +155,32 @@ describe('recoverPendingBotMatches', () => {
     await recoverPendingBotMatches()
 
     expect(publish.mock.calls[0][1].gameId).toBe('connect4')
+  })
+})
+
+// ─── Phase 1 close — null-close fallback to startTime ────────────────────────
+
+describe('sweep — Phase 1 close', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Defaults so Phase 2 and recovery paths don't throw when we don't care
+    db.tournament.findMany.mockResolvedValue([])
+    db.tournament.updateMany.mockResolvedValue({ count: 0 })
+    db.tournament.findUnique.mockResolvedValue(null)
+  })
+
+  it('selects REGISTRATION_OPEN tournaments with null close AND past startTime alongside ones with an explicit close', async () => {
+    await sweep()
+
+    const phaseOneCall = db.tournament.findMany.mock.calls.find(
+      ([args]) => args.where?.status === 'REGISTRATION_OPEN',
+    )
+    expect(phaseOneCall, 'Phase 1 close query was issued').toBeDefined()
+    const where = phaseOneCall[0].where
+    expect(where.OR).toEqual([
+      expect.objectContaining({ registrationCloseAt: expect.objectContaining({ not: null }) }),
+      expect.objectContaining({ registrationCloseAt: null, startTime: expect.objectContaining({ not: null }) }),
+    ])
   })
 })
 

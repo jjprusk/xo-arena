@@ -31,22 +31,54 @@ import logger from '../logger.js'
  * Works for both TournamentTemplate (recurrenceStart) and the legacy
  * Tournament shape (startTime) — the caller passes whichever object.
  */
+function advanceOne(date, interval) {
+  const d = new Date(date)
+  switch (interval) {
+    case 'DAILY':   return new Date(d.getTime() + 24 * 60 * 60 * 1000)
+    case 'WEEKLY':  return new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000)
+    case 'MONTHLY': return new Date(d.setMonth(d.getMonth() + 1))
+    default:        return null
+  }
+}
+
 function nextOccurrenceStart(template) {
   const start = template.recurrenceStart ?? template.startTime
   if (!start || !template.recurrenceInterval) return null
   const now = new Date()
   let next = new Date(start)
-  // Advance until strictly in the future. One step per iteration — DAILY
-  // never overshoots, MONTHLY handles day-of-month roll-over via Date.setMonth.
   while (next <= now) {
-    switch (template.recurrenceInterval) {
-      case 'DAILY':   next = new Date(next.getTime() + 24 * 60 * 60 * 1000); break
-      case 'WEEKLY':  next = new Date(next.getTime() + 7 * 24 * 60 * 60 * 1000); break
-      case 'MONTHLY': next = new Date(next.setMonth(next.getMonth() + 1)); break
-      default: return null  // unsupported interval (CUSTOM removed from the form)
-    }
+    const advanced = advanceOne(next, template.recurrenceInterval)
+    if (!advanced) return null
+    next = advanced
   }
   return next
+}
+
+// Count how many interval-steps were taken to advance `start` to `end`.
+// Used to shift the template's registration-window datetimes by the
+// same count, so the window stays anchored to the occurrence start.
+function stepsBetween(start, end, interval) {
+  if (!start || !end) return 0
+  let n = 0
+  let cursor = new Date(start)
+  while (cursor < end && n < 10_000) {
+    const advanced = advanceOne(cursor, interval)
+    if (!advanced) break
+    cursor = advanced
+    n++
+  }
+  return n
+}
+
+function advanceBy(date, interval, steps) {
+  if (!date || steps <= 0) return date ? new Date(date) : null
+  let cursor = new Date(date)
+  for (let i = 0; i < steps; i++) {
+    const advanced = advanceOne(cursor, interval)
+    if (!advanced) return null
+    cursor = advanced
+  }
+  return cursor
 }
 
 /**
@@ -79,6 +111,20 @@ export async function checkRecurringOccurrences() {
         })
         if (existing) continue
 
+        // Registration window: shift the template's stored open/close
+        // forward by the same number of interval-steps we advanced
+        // recurrenceStart. Null stays null (fallback handled downstream:
+        // open = now, close = startTime).
+        const steps = stepsBetween(template.recurrenceStart, nextStart, template.recurrenceInterval)
+        const occurrenceRegOpen  = advanceBy(template.registrationOpenAt,  template.recurrenceInterval, steps)
+        const occurrenceRegClose = advanceBy(template.registrationCloseAt, template.recurrenceInterval, steps)
+
+        // Gate: don't materialise the occurrence until its registration
+        // window actually opens. Without this, a template with
+        // `registrationOpenAt` hours in the future would still spawn now
+        // and show up in the tournaments list prematurely.
+        if (occurrenceRegOpen && now < occurrenceRegOpen) continue
+
         const occurrence = await db.tournament.create({
           data: {
             name: template.name,
@@ -94,7 +140,8 @@ export async function checkRecurringOccurrences() {
             botMinGamesPlayed: template.botMinGamesPlayed,
             allowNonCompetitiveBots: template.allowNonCompetitiveBots,
             startTime: nextStart,
-            registrationOpenAt: now,
+            registrationOpenAt:  occurrenceRegOpen  ?? now,
+            registrationCloseAt: occurrenceRegClose,    // null → sweep/route fall back to startTime
             isRecurring: false,                         // occurrences never themselves recur
             templateId: template.id,                     // back-ref to template
             createdById: template.createdById,

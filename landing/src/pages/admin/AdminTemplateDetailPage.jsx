@@ -87,6 +87,8 @@ function EditForm({ template, onCancel, onSave, busy }) {
     recurrenceInterval:  template.recurrenceInterval,
     recurrenceStart:     toLocalInput(template.recurrenceStart),
     recurrenceEndDate:   template.recurrenceEndDate ? toLocalInput(template.recurrenceEndDate) : '',
+    registrationOpenAt:  template.registrationOpenAt  ? toLocalInput(template.registrationOpenAt)  : '',
+    registrationCloseAt: template.registrationCloseAt ? toLocalInput(template.registrationCloseAt) : '',
     minParticipants:     template.minParticipants,
     maxParticipants:     template.maxParticipants ?? '',
     bestOfN:             template.bestOfN,
@@ -103,7 +105,9 @@ function EditForm({ template, onCancel, onSave, busy }) {
       description:         form.description || null,
       recurrenceInterval:  form.recurrenceInterval,
       recurrenceStart:     new Date(form.recurrenceStart).toISOString(),
-      recurrenceEndDate:   form.recurrenceEndDate ? new Date(form.recurrenceEndDate).toISOString() : null,
+      recurrenceEndDate:   form.recurrenceEndDate   ? new Date(form.recurrenceEndDate).toISOString()   : null,
+      registrationOpenAt:  form.registrationOpenAt  ? new Date(form.registrationOpenAt).toISOString()  : null,
+      registrationCloseAt: form.registrationCloseAt ? new Date(form.registrationCloseAt).toISOString() : null,
       minParticipants:     Number(form.minParticipants),
       maxParticipants:     form.maxParticipants === '' ? null : Number(form.maxParticipants),
       bestOfN:             Number(form.bestOfN),
@@ -136,6 +140,20 @@ function EditForm({ template, onCancel, onSave, busy }) {
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>End date (optional)</p>
           <Input type="datetime-local" value={form.recurrenceEndDate} onChange={v => set('recurrenceEndDate', v)} />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Registration opens (optional)</p>
+          <Input type="datetime-local" value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
+          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            Blank → opens when scheduler spawns the occurrence.
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Registration closes (optional)</p>
+          <Input type="datetime-local" value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
+          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            Blank → closes at Next start.
+          </p>
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Min participants</p>
@@ -501,6 +519,8 @@ export default function AdminTemplateDetailPage() {
                 <Field label="Interval">{template.recurrenceInterval}</Field>
                 <Field label="Next start">{template.recurrenceStart ? new Date(template.recurrenceStart).toLocaleString() : '—'}</Field>
                 <Field label="End date">{template.recurrenceEndDate ? new Date(template.recurrenceEndDate).toLocaleString() : 'Never'}</Field>
+                <Field label="Registration opens">{template.registrationOpenAt  ? new Date(template.registrationOpenAt).toLocaleString()  : 'At spawn'}</Field>
+                <Field label="Registration closes">{template.registrationCloseAt ? new Date(template.registrationCloseAt).toLocaleString() : 'At start'}</Field>
                 <Field label="Participants">
                   {template.minParticipants} – {template.maxParticipants ?? '∞'} · Best of {template.bestOfN}
                 </Field>

@@ -5,7 +5,17 @@ import { publish } from '../lib/redis.js'
 import { optionalAuth, requireAuth, requireTournamentAdmin, isTournamentAdmin } from '../middleware/auth.js'
 import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import { checkRecurringOccurrences } from '../lib/recurringScheduler.js'
-import { cloneAndSeedPersona, seedExistingSystemBot } from '../lib/seedBotService.js'
+import { cloneAndSeedPersona, seedExistingSystemBot, syncTemplateSeedsToTournament } from '../lib/seedBotService.js'
+
+// Coerce a client-supplied date-ish value to a Prisma-safe value.
+// Crucially, empty string / null must map to `null`, NOT `new Date(null)`
+// which is the Unix epoch (a footgun when the client sends `null` to clear
+// an optional date field).
+function toDate(v) {
+  if (v === null || v === undefined || v === '') return null
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d
+}
 
 const router = Router()
 
@@ -51,6 +61,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
         registrationOpenAt: true,
         registrationCloseAt: true,
         isRecurring: true,
+        templateId: true,
         createdAt: true,
         _count: { select: { participants: true } },
       },
@@ -132,7 +143,7 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
     if (startMode === 'SCHEDULED' && !startTime) {
       return res.status(400).json({ error: 'SCHEDULED mode requires a startTime' })
     }
-    if (registrationCloseAt && startTime && new Date(registrationCloseAt) > new Date(startTime)) {
+    if (registrationCloseAt && startTime && toDate(registrationCloseAt) > toDate(startTime)) {
       return res.status(400).json({ error: 'registrationCloseAt must be before startTime' })
     }
 
@@ -154,15 +165,15 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
         ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
         ...(paceMs !== undefined && { paceMs }),
         ...(allowSpectators !== undefined && { allowSpectators }),
-        ...(startTime !== undefined && { startTime: new Date(startTime) }),
-        ...(endTime !== undefined && { endTime: new Date(endTime) }),
-        ...(registrationOpenAt !== undefined && { registrationOpenAt: new Date(registrationOpenAt) }),
-        ...(registrationCloseAt !== undefined && { registrationCloseAt: new Date(registrationCloseAt) }),
+        ...(startTime !== undefined && { startTime: toDate(startTime) }),
+        ...(endTime !== undefined && { endTime: toDate(endTime) }),
+        ...(registrationOpenAt !== undefined && { registrationOpenAt: toDate(registrationOpenAt) }),
+        ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
         ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
         ...(durationMinutes !== undefined && { durationMinutes }),
         ...(isRecurring !== undefined && { isRecurring }),
         ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
         ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
         ...(isTest !== undefined && { isTest: !!isTest }),
         ...(recurrencePaused !== undefined && { recurrencePaused: !!recurrencePaused }),
@@ -175,7 +186,16 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
     // this the new recurring tournament never spawns occurrences. Uses the
     // same id on both rows so recurring_tournament_registrations.templateId
     // works against either (matches the migration's backfill pattern).
-    if (isRecurring && recurrenceInterval && startTime) {
+    //
+    // Anchor for the scheduler = startTime when set (SCHEDULED/MANUAL
+    // modes), otherwise fall back to registrationCloseAt / registrationOpenAt
+    // so AUTO-mode recurring tournaments (which don't require startTime)
+    // still get a template row.
+    const recurrenceAnchor = tournament.startTime
+      ?? tournament.registrationCloseAt
+      ?? tournament.registrationOpenAt
+      ?? null
+    if (isRecurring && recurrenceInterval && recurrenceAnchor) {
       try {
         await db.tournamentTemplate.create({
           data: {
@@ -197,8 +217,10 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
             paceMs:             tournament.paceMs,
             startMode:          tournament.startMode,
             recurrenceInterval: tournament.recurrenceInterval,
-            recurrenceStart:    tournament.startTime,
+            recurrenceStart:    recurrenceAnchor,
             recurrenceEndDate:  tournament.recurrenceEndDate,
+            registrationOpenAt: tournament.registrationOpenAt,
+            registrationCloseAt: tournament.registrationCloseAt,
             paused:             tournament.recurrencePaused,
             autoOptOutAfterMissed: tournament.autoOptOutAfterMissed,
             createdById:        tournament.createdById,
@@ -243,7 +265,7 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
     if (startMode !== undefined && !VALID_START_MODES.includes(startMode)) {
       return res.status(400).json({ error: 'startMode must be AUTO, SCHEDULED, or MANUAL' })
     }
-    if (registrationCloseAt && startTime && new Date(registrationCloseAt) > new Date(startTime)) {
+    if (registrationCloseAt && startTime && toDate(registrationCloseAt) > toDate(startTime)) {
       return res.status(400).json({ error: 'registrationCloseAt must be before startTime' })
     }
 
@@ -263,15 +285,15 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
       ...(paceMs !== undefined && { paceMs }),
       ...(allowSpectators !== undefined && { allowSpectators }),
-      ...(startTime !== undefined && { startTime: new Date(startTime) }),
-      ...(endTime !== undefined && { endTime: new Date(endTime) }),
-      ...(registrationOpenAt !== undefined && { registrationOpenAt: new Date(registrationOpenAt) }),
-      ...(registrationCloseAt !== undefined && { registrationCloseAt: new Date(registrationCloseAt) }),
+      ...(startTime !== undefined && { startTime: toDate(startTime) }),
+      ...(endTime !== undefined && { endTime: toDate(endTime) }),
+      ...(registrationOpenAt !== undefined && { registrationOpenAt: toDate(registrationOpenAt) }),
+      ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
       ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
       ...(durationMinutes !== undefined && { durationMinutes }),
       ...(isRecurring !== undefined && { isRecurring }),
       ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-      ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+      ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
       ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
       ...(isTest !== undefined && { isTest: !!isTest }),
       ...(recurrencePaused !== undefined && { recurrencePaused: !!recurrencePaused }),
@@ -305,8 +327,10 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
         ...(durationMinutes !== undefined && { durationMinutes }),
         ...(startMode !== undefined && { startMode }),
         ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-        ...(startTime !== undefined && { recurrenceStart: new Date(startTime) }),
-        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+        ...(startTime !== undefined && { recurrenceStart: toDate(startTime) }),
+        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
+        ...(registrationOpenAt  !== undefined && { registrationOpenAt:  toDate(registrationOpenAt) }),
+        ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
         ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
         ...(recurrencePaused !== undefined && { paused: !!recurrencePaused }),
         ...(isTest !== undefined && { isTest: !!isTest }),
@@ -337,6 +361,12 @@ router.post('/:id/publish', requireTournamentAdmin, async (req, res, next) => {
         registrationOpenAt: new Date(),
       },
     })
+
+    // Enroll template seed bots onto this tournament. If seed bots were
+    // added to the template while the sibling was still DRAFT, the per-seed
+    // backfill may have missed them (or this is a scheduler-spawned
+    // occurrence that needs its seeds hydrated at publish time).
+    await syncTemplateSeedsToTournament(tournament.id, tournament.templateId)
 
     if (tournament.format === 'FLASH') {
       await publish('tournament:flash:announced', {
@@ -747,7 +777,18 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Tournament registration is not open' })
     }
 
-    if (tournament.registrationCloseAt && new Date(tournament.registrationCloseAt) <= new Date()) {
+    // Pre-open gate: status can flip to REGISTRATION_OPEN (e.g., after an
+    // admin publish, or if the scheduler spawns with status=REGISTRATION_OPEN
+    // before `registrationOpenAt`), but we still refuse registrations until
+    // the open time arrives.
+    if (tournament.registrationOpenAt && new Date(tournament.registrationOpenAt) > new Date()) {
+      return res.status(400).json({ error: 'Tournament registration is not yet open' })
+    }
+
+    // Effective close = explicit `registrationCloseAt`, otherwise `startTime`.
+    // Null close means registration closes when the tournament starts.
+    const effectiveClose = tournament.registrationCloseAt ?? tournament.startTime
+    if (effectiveClose && new Date(effectiveClose) <= new Date()) {
       return res.status(400).json({ error: 'Tournament registration has closed' })
     }
 
@@ -1182,6 +1223,7 @@ router.patch('/admin/templates/:id', requireTournamentAdmin, async (req, res, ne
       allowNonCompetitiveBots, allowSpectators, paceMs, startMode,
       noticePeriodMinutes, durationMinutes,
       recurrenceInterval, recurrenceStart, recurrenceEndDate,
+      registrationOpenAt, registrationCloseAt,
       paused, autoOptOutAfterMissed, isTest,
     } = req.body
 
@@ -1207,8 +1249,10 @@ router.patch('/admin/templates/:id', requireTournamentAdmin, async (req, res, ne
       ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
       ...(durationMinutes !== undefined && { durationMinutes }),
       ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-      ...(recurrenceStart !== undefined && { recurrenceStart: new Date(recurrenceStart) }),
-      ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+      ...(recurrenceStart !== undefined && { recurrenceStart: toDate(recurrenceStart) }),
+      ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
+      ...(registrationOpenAt  !== undefined && { registrationOpenAt:  toDate(registrationOpenAt) }),
+      ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
       ...(paused !== undefined && { paused: !!paused }),
       ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
       ...(isTest !== undefined && { isTest: !!isTest }),
@@ -1230,13 +1274,40 @@ router.patch('/admin/templates/:id', requireTournamentAdmin, async (req, res, ne
         ...(maxParticipants !== undefined && { maxParticipants }),
         ...(bestOfN !== undefined && { bestOfN }),
         ...(recurrenceInterval !== undefined && { recurrenceInterval }),
-        ...(recurrenceStart !== undefined && { startTime: new Date(recurrenceStart) }),
-        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+        ...(recurrenceStart !== undefined && { startTime: toDate(recurrenceStart) }),
+        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: toDate(recurrenceEndDate) }),
+        ...(registrationOpenAt  !== undefined && { registrationOpenAt:  toDate(registrationOpenAt) }),
+        ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
         ...(paused !== undefined && { recurrencePaused: !!paused }),
         ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
         ...(isTest !== undefined && { isTest: !!isTest }),
       },
     }).catch(() => {})
+
+    // Also push display metadata (name / description / isTest / participant
+    // bounds / bestOfN) onto scheduler-spawned occurrences that are still
+    // upcoming or open. Otherwise a template rename leaves already-spawned
+    // occurrences displaying the old name in the public / admin list.
+    // Completed/cancelled/in-progress occurrences are frozen — their
+    // historical name is part of the record.
+    const occurrenceMetadata = {
+      ...(name !== undefined && { name }),
+      ...(description !== undefined && { description }),
+      ...(minParticipants !== undefined && { minParticipants }),
+      ...(maxParticipants !== undefined && { maxParticipants }),
+      ...(bestOfN !== undefined && { bestOfN }),
+      ...(isTest !== undefined && { isTest: !!isTest }),
+    }
+    if (Object.keys(occurrenceMetadata).length > 0) {
+      await db.tournament.updateMany({
+        where: {
+          templateId: req.params.id,
+          id:     { not: req.params.id },                        // skip the sibling row (already done above)
+          status: { in: ['DRAFT', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED'] },
+        },
+        data: occurrenceMetadata,
+      }).catch(() => {})
+    }
 
     res.json({ template })
   } catch (e) {
@@ -1251,6 +1322,15 @@ router.patch('/admin/templates/:id', requireTournamentAdmin, async (req, res, ne
 router.delete('/admin/templates/:id', requireTournamentAdmin, async (req, res, next) => {
   try {
     await db.tournamentTemplate.delete({ where: { id: req.params.id } })
+    // Phase 3.7a dual-write cleanup: unlink any tournaments pointing at the
+    // deleted template (sibling row + scheduler-spawned occurrences). Keeps
+    // the tournaments intact — games/participants may be attached — but
+    // routes them through the regular admin-tournament UI instead of a
+    // template-detail page that 404s.
+    await db.tournament.updateMany({
+      where: { OR: [{ id: req.params.id }, { templateId: req.params.id }] },
+      data:  { templateId: null },
+    }).catch(() => {})
     res.json({ ok: true })
   } catch (e) {
     if (e?.code === 'P2025') return res.status(404).json({ error: 'Template not found' })

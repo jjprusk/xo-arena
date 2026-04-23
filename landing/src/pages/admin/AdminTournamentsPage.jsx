@@ -1093,11 +1093,20 @@ export default function AdminTournamentsPage() {
                 const participantCount = t.participants?.length ?? t._count?.participants ?? 0
                 const canEdit    = t.status === 'DRAFT'
                 const canPublish = t.status === 'DRAFT'
-                const canStart   = t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED'
+                // "Start" is only meaningful for one-off tournaments. For recurring
+                // templates the scheduler spawns and starts each occurrence on its
+                // own cadence — a manual Start on the template row would break that.
+                const canStart   = !t.isRecurring && (t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED')
                 const canCancel  = t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+                // "Live" = open for registration, registration closed but pre-start, or in progress.
+                const isLive = t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED' || t.status === 'IN_PROGRESS'
 
                 return (
-                  <ListTr key={t.id} last={i === tournaments.length - 1}>
+                  <ListTr
+                    key={t.id}
+                    last={i === tournaments.length - 1}
+                    style={isLive ? { backgroundColor: 'var(--color-teal-50)' } : undefined}
+                  >
                     <ListTd>
                       <input
                         type="checkbox"
@@ -1109,8 +1118,41 @@ export default function AdminTournamentsPage() {
                     </ListTd>
                     <ListTd>
                       <div className="flex items-center gap-2 flex-wrap">
+                        {(t.isRecurring || t.templateId) && (
+                          <svg
+                            className="shrink-0"
+                            width="14" height="14" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" strokeWidth="2.25"
+                            strokeLinecap="round" strokeLinejoin="round"
+                            style={{ color: 'var(--color-blue-600)' }}
+                            role="img"
+                            aria-label="Recurring tournament"
+                          >
+                            <title>Recurring template — scheduler spawns each occurrence automatically</title>
+                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                            <path d="M21 3v5h-5" />
+                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                            <path d="M3 21v-5h5" />
+                          </svg>
+                        )}
+                        {/*
+                          Recurring tournaments are driven by a TournamentTemplate;
+                          the detail page is the template editor. For template-sibling
+                          rows (`isRecurring` + no `templateId` — the legacy flag) the
+                          template shares the tournament's id. For scheduler-spawned
+                          occurrences (`templateId` points at the parent template) we
+                          navigate to the parent template's detail page, since editing
+                          the occurrence directly bypasses the template's config.
+                          One-off tournaments still open the regular detail page.
+                        */}
                         <Link
-                          to={`/tournaments/${t.id}`}
+                          to={
+                            t.templateId
+                              ? `/admin/templates/${t.templateId}`
+                              : t.isRecurring
+                                ? `/admin/templates/${t.id}`
+                                : `/tournaments/${t.id}`
+                          }
                           state={{ from: '/admin/tournaments' }}
                           className="font-medium text-sm hover:underline"
                           style={{ color: 'var(--text-primary)' }}

@@ -141,7 +141,7 @@ export default function AdminTemplatesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-2">
+    <div className="max-w-6xl mx-auto px-6 py-2 h-[calc(100vh-180px)] flex flex-col">
       <div className="flex items-baseline justify-between gap-4 mb-2 shrink-0">
         <div className="flex items-baseline gap-3">
           <h1 className="text-base font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
@@ -180,7 +180,8 @@ export default function AdminTemplatesPage() {
           </p>
         </div>
       ) : (
-        <ListTable fitViewport bottomPadding={80}>
+        <div className="flex-1 min-h-0">
+        <ListTable fill>
           <thead>
             <tr>
               <ListTh>Name</ListTh>
@@ -238,6 +239,7 @@ export default function AdminTemplatesPage() {
             ))}
           </tbody>
         </ListTable>
+        </div>
       )}
 
       {confirmDelete && (
