@@ -15,6 +15,7 @@ import { getToken } from '../../lib/getToken.js'
 import { tournamentApi } from '../../lib/tournamentApi.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../../components/ui/ListTable.jsx'
+import { ActionMenu, ActionMenuTrigger } from '../../components/ui/ActionMenu.jsx'
 
 function Spinner() {
   return <div className="w-6 h-6 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
@@ -36,19 +37,6 @@ function formatDateTime(d) {
   if (!d) return '—'
   try { return new Date(d).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) }
   catch { return String(d) }
-}
-
-function RowButton({ children, onClick, disabled, tone = 'default', to }) {
-  const colors = {
-    default: { bg: 'var(--bg-base)',        color: 'var(--text-primary)', border: 'var(--border-default)' },
-    primary: { bg: 'var(--bg-base)',        color: 'var(--color-blue-600)', border: 'var(--border-default)' },
-    danger:  { bg: 'var(--color-red-50)',   color: 'var(--color-red-700)',   border: 'var(--color-red-200)' },
-  }
-  const c = colors[tone] ?? colors.default
-  const cls = 'text-xs font-semibold px-2.5 py-1 rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap hover:brightness-95'
-  const style = { backgroundColor: c.bg, color: c.color, borderColor: c.border }
-  if (to) return <Link to={to} className={cls} style={style}>{children}</Link>
-  return <button onClick={onClick} disabled={disabled} className={cls} style={style}>{children}</button>
 }
 
 function DeleteConfirm({ template, onCancel, onConfirm, busy }) {
@@ -234,15 +222,16 @@ export default function AdminTemplatesPage() {
                 </ListTd>
                 <ListTd><StatusBadge paused={t.paused} /></ListTd>
                 <ListTd align="right">
-                  <div className="flex items-center gap-1.5 justify-end flex-wrap">
-                    <RowButton onClick={() => togglePause(t)} disabled={busyId === t.id}>
-                      {busyId === t.id ? '…' : t.paused ? 'Unpause' : 'Pause'}
-                    </RowButton>
-                    <RowButton to={`/admin/templates/${t.id}?edit=1`} tone="primary">Edit</RowButton>
-                    <RowButton to={`/admin/templates/${t.id}`}>View</RowButton>
-                    <RowButton to={`/admin/templates/${t.id}#seed-bots`}>Seeds</RowButton>
-                    <RowButton onClick={() => setConfirmDelete(t)} disabled={busyId === t.id} tone="danger">Delete</RowButton>
-                  </div>
+                  <ActionMenu
+                    trigger={<ActionMenuTrigger aria-label={`Actions for ${t.name}`} />}
+                    items={[
+                      { label: t.paused ? 'Unpause' : 'Pause', onSelect: () => togglePause(t), disabled: busyId === t.id },
+                      { label: 'View',        href: `/admin/templates/${t.id}` },
+                      { label: 'Edit',        href: `/admin/templates/${t.id}?edit=1` },
+                      { label: 'Manage seed bots', href: `/admin/templates/${t.id}#seed-bots` },
+                      { label: 'Delete',      onSelect: () => setConfirmDelete(t), tone: 'danger', disabled: busyId === t.id },
+                    ]}
+                  />
                 </ListTd>
               </ListTr>
             ))}
