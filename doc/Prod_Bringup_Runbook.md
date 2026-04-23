@@ -31,8 +31,17 @@ fly postgres attach --app xo-tournament-prod xo-db-prod
 ```sh
 fly secrets set -a xo-backend-prod \
   BETTER_AUTH_URL="https://xo-backend-prod.fly.dev" \
-  JWT_SECRET="$(openssl rand -hex 32)"
+  JWT_SECRET="$(openssl rand -hex 32)" \
+  FRONTEND_URL="https://xo-landing-prod.fly.dev,https://aiarena.callidity.com"
 ```
+
+> **Lesson from staging 2026-04-23:** `FRONTEND_URL` is the CORS allowlist
+> (comma-separated). It must include **every** origin the site may be
+> served from — the Fly default URL *and* every custom/aliased domain.
+> Missing an origin manifests as
+> `CORS: origin <origin> not allowed` on any authed call. Mirror staging's
+> shape exactly. When adding a new alias later, update this secret on
+> both `xo-backend-*` and `xo-tournament-*` simultaneously.
 
 ### `xo-landing-prod` (no secrets at all)
 
@@ -42,14 +51,21 @@ fly secrets set -a xo-landing-prod \
   TOURNAMENT_URL="https://xo-tournament-prod.fly.dev"
 ```
 
-### `xo-tournament-prod` (missing three)
+### `xo-tournament-prod` (missing four)
 
 ```sh
 fly secrets set -a xo-tournament-prod \
-  FRONTEND_URL="https://aiarena.callidity.com" \
+  FRONTEND_URL="https://xo-landing-prod.fly.dev,https://aiarena.callidity.com" \
   NODE_ENV="production" \
   REDIS_URL="$(fly redis status xo-redis-prod --json | jq -r '.PrivateURL')"
 ```
+
+> CORS allowlist on the tournament service must match backend's **exactly**
+> — recurring-template creation, seed-bot add, and other tournament-admin
+> calls hit this service, not backend. Staging was initially set up with
+> only the Fly URL on tournament but all three on backend, which produced
+> a silent mismatch that only surfaced when a human admin loaded the site
+> from the custom domain and tried to create a recurring tournament.
 
 ## Step 3 — Overwrite `REDIS_URL` on backend-prod
 
@@ -105,6 +121,30 @@ git push origin main
 This triggers `.github/workflows/deploy-prod.yml`, which builds and deploys backend + landing + tournament to their prod Fly apps in parallel.
 
 ## Step 7 — Smoke prod
+
+### 7a. CORS preflight spot-check
+
+Before running the full smoke suite, verify CORS is wired correctly for
+both `xo-backend-prod` and `xo-tournament-prod` against every origin in
+`FRONTEND_URL`. Pure curl — no auth needed:
+
+```sh
+for origin in \
+  "https://aiarena.callidity.com" \
+  "https://xo-landing-prod.fly.dev"; do
+  for svc in "xo-backend-prod" "xo-tournament-prod"; do
+    echo "--- $origin → $svc ---"
+    curl -s -o /dev/null -w "%{http_code}\n" \
+      -X OPTIONS "https://$svc.fly.dev/api/version" \
+      -H "Origin: $origin" \
+      -H "Access-Control-Request-Method: GET"
+  done
+done
+```
+
+All eight should return `204`. A `500` or a CORS-error body (`origin ... not allowed`) means the `FRONTEND_URL` allowlist on that service is missing that origin — fix before continuing.
+
+### 7b. Playwright smoke
 
 ```sh
 cd e2e
