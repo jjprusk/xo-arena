@@ -512,7 +512,7 @@ function MatchReplayModal({ matchId, matchLabel, onClose }) {
 
 // ── Live spectator modal ──────────────────────────────────────────────────────
 
-function SpectatorGame({ slug }) {
+function SpectatorGame({ slug, onGameEnd }) {
   const themeStyle = resolveThemeVars(xoMeta.theme, document.documentElement.classList.contains('dark'))
   const { session, sdk } = useGameSDK({
     gameId: 'xo',
@@ -520,6 +520,18 @@ function SpectatorGame({ slug }) {
     spectate: true,
     currentUser: null,
   })
+  // Fire onGameEnd once per phase:finished transition. useGameSDK sets
+  // phase to 'finished' on game:moved(status='finished') and on forfeit.
+  // Phase 2 follow-player auto-advance uses this as the trigger to refetch
+  // the tournament and decide if the whole match (multi-game bestOfN) is
+  // done or just the current game.
+  const prevPhaseRef = useRef(null)
+  useEffect(() => {
+    const prev = prevPhaseRef.current
+    const curr = session?.phase
+    if (prev !== 'finished' && curr === 'finished') onGameEnd?.()
+    prevPhaseRef.current = curr
+  }, [session?.phase, onGameEnd])
   return (
     <div className="flex flex-col items-center gap-3 w-full" style={themeStyle}>
       <Suspense fallback={<Spinner />}>
@@ -529,12 +541,15 @@ function SpectatorGame({ slug }) {
   )
 }
 
-function MatchSpectateModal({ matchId, matchLabel, followedName, onClose }) {
+function MatchSpectateModal({ matchId, matchLabel, followedName, mode = 'live', statusMessage, onClose, onGameEnd }) {
   const [slug, setSlug]       = useState(null)
-  const [fetching, setFetching] = useState(true)
+  const [fetching, setFetching] = useState(mode === 'live')
   const [fetchError, setFetchError] = useState(null)
 
   useEffect(() => {
+    // Non-live modes (waiting / ended) don't have an active table to join.
+    if (mode !== 'live' || !matchId) { setSlug(null); setFetching(false); return }
+    setFetching(true); setFetchError(null); setSlug(null)
     let cancelled = false
     api.tables.getActiveByMatchId(matchId)
       .then(data => {
@@ -548,7 +563,7 @@ function MatchSpectateModal({ matchId, matchLabel, followedName, onClose }) {
         if (!cancelled) { setFetchError('Could not find live game.'); setFetching(false) }
       })
     return () => { cancelled = true }
-  }, [matchId])
+  }, [matchId, mode])
 
   useEffect(() => {
     const handler = e => { if (e.key === 'Escape') onClose() }
@@ -569,12 +584,28 @@ function MatchSpectateModal({ matchId, matchLabel, followedName, onClose }) {
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span
-              className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full animate-pulse shrink-0"
-              style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
-            >
-              Live
-            </span>
+            {mode === 'live' ? (
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full animate-pulse shrink-0"
+                style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
+              >
+                Live
+              </span>
+            ) : mode === 'waiting' ? (
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0"
+                style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}
+              >
+                Waiting
+              </span>
+            ) : (
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0"
+                style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-muted)' }}
+              >
+                Ended
+              </span>
+            )}
             <div className="min-w-0">
               {followedName ? (
                 <>
@@ -593,9 +624,20 @@ function MatchSpectateModal({ matchId, matchLabel, followedName, onClose }) {
             ✕ Close
           </button>
         </div>
-        {fetching && <Spinner />}
-        {fetchError && <ErrorMsg>{fetchError}</ErrorMsg>}
-        {slug && <SpectatorGame key={slug} slug={slug} />}
+        {mode === 'live' && fetching && <Spinner />}
+        {mode === 'live' && fetchError && <ErrorMsg>{fetchError}</ErrorMsg>}
+        {mode === 'live' && slug && <SpectatorGame key={slug} slug={slug} onGameEnd={onGameEnd} />}
+        {mode !== 'live' && (
+          <div
+            className="text-center py-8 px-4 rounded-lg"
+            style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-secondary)' }}
+          >
+            <div className="text-2xl mb-2">{mode === 'ended' ? '🏁' : '⏳'}</div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              {statusMessage ?? (mode === 'ended' ? 'Match run is over.' : 'Waiting for the next match…')}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1812,34 +1854,56 @@ export default function TournamentDetailPage() {
     setSearchParams(next, { replace: true })
   }, [autoWatchRequested, tournament, watchMatch, searchParams, setSearchParams])
 
-  // ?follow=<userId> — scan the bracket for that user's current in-progress
-  // match and open the spectate modal. Unlike ?watch=1 the param stays in
-  // the URL so refresh/back keeps following. Phase 1: resolves once on
-  // load; doesn't auto-advance when the match ends. Phase 2 will listen
-  // for match-end and re-resolve.
+  // ?follow=<userId> — scan the bracket for that user's current match and
+  // open the spectate modal in the right mode (live / waiting / ended).
+  // Unlike ?watch=1 the param stays in the URL so refresh/back keeps
+  // following. Phase 2 (handleGameEnd above) handles transitions once the
+  // modal is open; this effect only runs on initial follow-click / load.
   useEffect(() => {
     if (!followUserId || !tournament || watchMatch) return
-    // Find a participant row for this user so we have display name + participantId
     const participant = (tournament.participants ?? []).find(p => p.userId === followUserId)
     if (!participant) return
     const displayName = participant.user?.displayName ?? 'Player'
-    // Scan rounds for a match they're in, preferring IN_PROGRESS, falling
-    // back to any match (pending round, just-completed) — keep the modal
-    // open even between matches so the user knows the follow is active.
     const byId = Object.fromEntries(
       (tournament.participants ?? []).map(p => [p.id, p?.user?.displayName ?? 'Unknown'])
     )
-    let live = null
+    const labelOf = (m) => `${byId[m.participant1Id] ?? '?'} vs ${byId[m.participant2Id] ?? '?'}`
+
+    let live = null, pending = null
     for (const round of tournament.rounds ?? []) {
-      live = (round.matches ?? []).find(m =>
-        m.status === 'IN_PROGRESS' &&
-        (m.participant1Id === participant.id || m.participant2Id === participant.id)
-      )
+      for (const m of round.matches ?? []) {
+        const inThisMatch = m.participant1Id === participant.id || m.participant2Id === participant.id
+        if (!inThisMatch) continue
+        if (m.status === 'IN_PROGRESS') { live = m; break }
+        if (m.status === 'PENDING' && !pending) pending = m
+      }
       if (live) break
     }
-    if (!live) return  // no live match right now — leave modal closed; user can reopen once round starts
-    const label = `${byId[live.participant1Id] ?? '?'} vs ${byId[live.participant2Id] ?? '?'}`
-    setWatchMatch({ id: live.id, label, followedName: displayName })
+    if (live) {
+      setWatchMatch({ id: live.id, label: labelOf(live), followedName: displayName, mode: 'live' })
+      return
+    }
+    if (pending) {
+      const opponentId = pending.participant1Id === participant.id ? pending.participant2Id : pending.participant1Id
+      const opponentName = opponentId ? (byId[opponentId] ?? 'TBD') : 'TBD'
+      setWatchMatch({
+        id: null,
+        label: `Next: vs ${opponentName}`,
+        followedName: displayName,
+        mode: 'waiting',
+        statusMessage: `Waiting for ${displayName}'s next match — vs ${opponentName}.`,
+      })
+      return
+    }
+    // No live or pending match — eliminated / champion / tournament not started yet.
+    if (participant.finalPosition) {
+      const msg = participant.finalPosition === 1
+        ? `${displayName} won the tournament! 🏆`
+        : `${displayName} finished #${participant.finalPosition}.`
+      setWatchMatch({ id: null, label: displayName, followedName: displayName, mode: 'ended', statusMessage: msg })
+    }
+    // Otherwise: leave modal closed (tournament in DRAFT/REG_OPEN). User
+    // sees the participant row; can click Follow again later.
   }, [followUserId, tournament, watchMatch])
 
   // Called when the user clicks 👁 Follow in the participants table.
@@ -1850,6 +1914,85 @@ export default function TournamentDetailPage() {
     next.set('follow', userId)
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
+
+  // Phase 2 — follow-mode auto-advance. Fires each time a game within the
+  // watched match ends (phase: 'finished'). Refetch the tournament; if the
+  // watched match itself is now COMPLETED, re-resolve onto the followed
+  // user's next match, a 'waiting' state, or an 'ended' state.
+  const handleGameEnd = useCallback(async () => {
+    const currentWatch = watchMatch
+    if (!currentWatch || !currentWatch.followedName || !followUserId) return
+    let fresh
+    try {
+      const effectiveToken = token === undefined ? null : token
+      const data = await tournamentApi.get(id, effectiveToken)
+      fresh = data.tournament ?? data
+    } catch {
+      return  // fetch failed; leave modal as-is, user can retry/close
+    }
+    setTournament(fresh)
+    tournamentRef.current = fresh
+
+    // Within a bestOfN, multiple game-ends fire before the match itself
+    // transitions to COMPLETED. Stay on the same match until then.
+    let watchedStatus = null
+    for (const round of fresh.rounds ?? []) {
+      const m = (round.matches ?? []).find(mm => mm.id === currentWatch.id)
+      if (m) { watchedStatus = m.status; break }
+    }
+    if (watchedStatus !== 'COMPLETED' && watchedStatus !== 'CANCELLED') return
+
+    // Watched match is done — re-resolve for the followed player.
+    const followed = (fresh.participants ?? []).find(p => p.userId === followUserId)
+    if (!followed) {
+      setWatchMatch({ ...currentWatch, id: null, mode: 'ended', statusMessage: 'Player no longer in tournament.' })
+      return
+    }
+    const byId = Object.fromEntries(
+      (fresh.participants ?? []).map(p => [p.id, p?.user?.displayName ?? '?'])
+    )
+    const labelOf = (m) => `${byId[m.participant1Id] ?? '?'} vs ${byId[m.participant2Id] ?? '?'}`
+
+    let live = null, pending = null
+    for (const round of fresh.rounds ?? []) {
+      for (const m of round.matches ?? []) {
+        const inThisMatch = m.participant1Id === followed.id || m.participant2Id === followed.id
+        if (!inThisMatch) continue
+        if (m.status === 'IN_PROGRESS') { live = m; break }
+        if (m.status === 'PENDING' && !pending) pending = m
+      }
+      if (live) break
+    }
+
+    if (live) {
+      setWatchMatch({ id: live.id, label: labelOf(live), followedName: currentWatch.followedName, mode: 'live' })
+      return
+    }
+    if (pending) {
+      const opponentId = pending.participant1Id === followed.id ? pending.participant2Id : pending.participant1Id
+      const opponentName = opponentId ? (byId[opponentId] ?? 'TBD') : 'TBD'
+      setWatchMatch({
+        id: null,
+        label: `Next: vs ${opponentName}`,
+        followedName: currentWatch.followedName,
+        mode: 'waiting',
+        statusMessage: `Waiting for ${currentWatch.followedName}'s next match — vs ${opponentName}.`,
+      })
+      return
+    }
+    // No more matches — eliminated or champion.
+    let msg
+    if (followed.finalPosition === 1) msg = `${currentWatch.followedName} won the tournament! 🏆`
+    else if (followed.finalPosition)  msg = `${currentWatch.followedName} finished #${followed.finalPosition}.`
+    else                               msg = `${currentWatch.followedName}'s matches are done.`
+    setWatchMatch({
+      id: null,
+      label: currentWatch.followedName,
+      followedName: currentWatch.followedName,
+      mode: 'ended',
+      statusMessage: msg,
+    })
+  }, [watchMatch, followUserId, id, token])
 
   const load = useCallback(async () => {
     // If a session user is known but the token hasn't resolved yet, skip the pre-fetch.
@@ -2140,6 +2283,9 @@ export default function TournamentDetailPage() {
           matchId={watchMatch.id}
           matchLabel={watchMatch.label}
           followedName={watchMatch.followedName}
+          mode={watchMatch.mode ?? 'live'}
+          statusMessage={watchMatch.statusMessage}
+          onGameEnd={handleGameEnd}
           onClose={() => {
             setWatchMatch(null)
             // If this modal was opened via ?follow=<userId>, strip the
