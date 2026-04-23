@@ -23,6 +23,8 @@ import { getPendingPvpMatchCount } from './tournamentBridge.js'
 import { getTotalWatchers as getTableWatcherTotal } from '../realtime/tablePresence.js'
 import { totalClients as sseTotalClients, getLastXreadAt as sseLastXreadAt, isLoopRunning as sseLoopRunning } from './sseBroker.js'
 import { getOnlineCount as presenceOnlineCount } from './presenceStore.js'
+import { getStreamLength as getTier2StreamLength } from './eventStream.js'
+import { getPushCounters } from './pushService.js'
 
 // ── Counters ──────────────────────────────────────────────────────────────────
 
@@ -158,11 +160,13 @@ async function takeTablesSnapshot() {
 }
 
 async function takeSnapshot() {
-  const [busSnap, tableSnap] = await Promise.all([
+  const [busSnap, tableSnap, tier2StreamLen] = await Promise.all([
     takeBusSnapshot().catch(() => ({})),
     takeTablesSnapshot().catch(() => ({})),
+    getTier2StreamLength().catch(() => -1),
   ])
   const mem = process.memoryUsage()
+  const pc  = getPushCounters()
   const snap = {
     ts: Date.now(),
     sockets: _socketCount,
@@ -171,10 +175,15 @@ async function takeSnapshot() {
     heapTotalMb:   Math.round(mem.heapTotal / 1024 / 1024),
     rssMb:         Math.round(mem.rss       / 1024 / 1024),
     // Tier 2 / Tier 3 transport health
-    sseClients:     sseTotalClients(),
-    sseLastXreadAt: sseLastXreadAt(),
-    sseLoopRunning: sseLoopRunning(),
-    presenceOnline: presenceOnlineCount(),
+    sseClients:      sseTotalClients(),
+    sseLastXreadAt:  sseLastXreadAt(),
+    sseLoopRunning:  sseLoopRunning(),
+    presenceOnline:  presenceOnlineCount(),
+    tier2StreamLen,                      // Redis XLEN events:tier2:stream; -1 if Redis down
+    pushAttempts:    pc.attempts,        // monotonic — rate via (snap[n]-snap[n-1])/interval
+    pushSent:        pc.sent,
+    pushPurged:      pc.purged,
+    pushFailed:      pc.failed,
     ...busSnap,
     ...tableSnap,
   }

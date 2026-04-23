@@ -339,9 +339,66 @@
 
 ---
 
+## Phase 3.8 — Multi-Skill Bots
+
+> **Goal:** A bot is an identity (alter ego). Skills are what the bot knows how to play. One `User` row carrying `isBot: true` can hold multiple `BotSkill` rows (one per game). Users pick the bot; the game context chooses the skill.
+>
+> **Why this ships before Phase 4:** Connect4 is the forcing function — without this in place, "Rusty" would become a separate second bot for Connect4 instead of a second skill on the same bot. The schema already anticipates this (`BotSkill` is keyed `(botId, gameId)` unique from Phase 1.7); only the flows and UI need to catch up.
+>
+> **Decisions locked 2026-04-23:**
+> - Name: *Multi-Skill Bots*.
+> - Bot create is two-step: create the bot (name + avatar + competitive flag), then *Add a skill* separately. No implicit first-skill bundling.
+> - Pickers are identity-scoped: user picks *Rusty* in Play or tournament registration; the game context determines which of Rusty's skills runs. No "Rusty (XO)" / "Rusty (C4)" duplicate entries.
+> - `User.botModelId` stays as a nullable "primary/last-trained skill" pointer for UI convenience. Source of truth for skills is `BotSkill.findMany({ where: { botId } })`.
+
+### 3.8.1 Schema + seed
+
+- [ ] Confirm `BotSkill (botId, gameId)` unique + `BotSkill.botId` relation to `User` hold up for multi-skill. No new migration expected.
+- [ ] Update the Prisma seed to give each built-in bot (Rusty/Copper/Sterling/Magnus) exactly one XO `BotSkill` — behaviour-preserving, but structured so a Connect4 skill can be appended in Phase 4 by adding one row per bot.
+- [ ] Keep `User.botModelId` as a nullable pointer to the bot's *primary* (last-trained-or-selected) skill. Compute it at creation time, update it when the user trains or switches active skill.
+
+### 3.8.2 Backend — bots + skills API
+
+- [ ] `POST /api/v1/bots` — accepts `{ name, avatarUrl, competitive }` only. No algorithm/game at this step. Creates a skill-less bot. `botModelId` starts null.
+- [ ] `POST /api/v1/bots/:botId/skills` — body `{ gameId, algorithm, modelType }`. Creates a BotSkill, sets `botModelId = newSkill.id` if it's the bot's first. Idempotent on `(botId, gameId)` — second call returns existing skill.
+- [ ] `GET /api/v1/bots/:botId` — includes `skills: BotSkill[]` with per-skill ELO joined from `GameElo (userId=botId, gameId=skill.gameId)`.
+- [ ] `DELETE /api/v1/bots/:botId/skills/:skillId` — removes one skill. If the deleted skill was `botModelId`, repoint to any remaining skill or null.
+- [ ] Tournament registration: validate that the picked bot has a `BotSkill` for the tournament's `gameId`; return a clear 400 if not.
+- [ ] `GET /api/v1/bots?gameId=X` — list helper for community bot pickers, filters to bots that have a skill for `X`.
+
+### 3.8.3 Frontend — Profile / bot creation
+
+- [ ] Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
+- [ ] Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)`.
+- [ ] "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`.
+
+### 3.8.4 Frontend — Gym
+
+- [ ] Left sidebar shows bots; selecting a bot reveals its skills as a second-level picker (tabs or sub-list). Selecting a skill opens the existing Gym tabs scoped to that `(botId, gameId)`.
+- [ ] "Add skill for this bot" affordance inside Gym for convenience — shares the Profile modal.
+- [ ] When a training session completes, update `User.botModelId` to point at the just-trained skill so Profile "last-trained" stays current.
+
+### 3.8.5 Frontend — Play + tournaments
+
+- [ ] Community bot picker lists bots (Rusty, Copper, Sterling, Magnus + user's public bots) filtered server-side by `gameId`. No "Bot X for Game Y" duplicates.
+- [ ] Starting a game with a community bot resolves the skill server-side from `(botId, gameId)` at match start — picker payload carries only `botId`.
+- [ ] Tournament registration picks a bot; backend resolves `(botId, tournamentGameId)` and rejects registration if the bot has no skill for that game.
+- [ ] Rankings page: already per-game via `GameElo`, but show the *bot identity* (not skill) as the leaderboard row, with the current game as implicit context.
+
+### 3.8.6 QA + tests
+
+- [ ] Vitest: `POST /bots` creates skill-less bot; `POST /bots/:id/skills` creates + repoints `botModelId`; duplicate skill returns 400; deleting the primary skill repoints.
+- [ ] Vitest: tournament registration rejects bot lacking the tournament's skill.
+- [ ] Playwright smoke.journey: add a case where a user creates a bot, adds an XO skill, enters XO match vs community bot — proves the two-step flow end-to-end.
+- [ ] Manual: Rusty with an XO skill still plays a PvB match identically to v1.28.
+
+---
+
 ## Phase 4 — Connect4
 
 > **Goal:** Second game ships. Proves SDK + botInterface are reusable. Confirms npm workflow.
+>
+> **Prerequisite:** Phase 3.8 (Multi-Skill Bots) shipped. Connect4 adds one `BotSkill` per built-in bot for `gameId: 'connect4'` — the identity layer is already in place.
 
 ### 4.1 Connect4 game package
 

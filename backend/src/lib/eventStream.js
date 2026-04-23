@@ -61,6 +61,26 @@ export async function appendToStream(channel, payload, { userId = null } = {}) {
 }
 
 /**
+ * Returns the current entry count in the events:tier2:stream. Used by the
+ * resource-health snapshot to track producer-vs-consumer divergence:
+ * MAXLEN ~5000 caps the upper bound so a sustained near-cap reading means
+ * XADD is outpacing XREAD. Returns -1 when Redis is unavailable.
+ *
+ * The `_rest` parameter keeps this wrapper's signature stable if we later
+ * decide to expose other tier-2 stream stats here too.
+ */
+export async function getStreamLength() {
+  const redis = getRedis()
+  if (!redis) return -1
+  try {
+    return await redis.xlen(STREAM_KEY)
+  } catch (err) {
+    logger.warn({ err }, 'Redis XLEN (events stream) failed')
+    return -1
+  }
+}
+
+/**
  * Read entries from the stream after a given id.
  * Used by GET /api/v1/events/replay.
  *

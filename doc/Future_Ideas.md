@@ -3,20 +3,29 @@
 
 Deferred features and improvements that are worth revisiting but not currently prioritized.
 
+## Status snapshot (last reviewed 2026-04-23)
+
+| Item | Status |
+|---|---|
+| Real-Time Presence / Inactivity Detection | ✅ Mostly done (presence store + heartbeat live; away/active refinement open) |
+| Multi-Game Bots | ⏳ Open (schema ready; UI/flow still XO-only) |
+| Real-Time Games Against Bots (Pong) | ⏳ Open (Phase 6) |
+| Persist Game State Through Deploys | ❌ Obsolete (replaced by DB-backed `Table` rows in Phase 3.4) |
+| Backend Logs in Admin Log Viewer | ⏳ Open |
+| Guide Help Subsystem (Chat Interface) | ⏳ Open |
+| Guide as Navigation (Command Palette) | ⏳ Open |
+| Configurable Guide | ❌ Obsolete (iframe guide retired; premise gone) |
+| Multi-Game Architecture | ✅ Largely done as the Game SDK (Phases 1.1–1.4) — remaining games are their own phases |
+| Tier 2/3 instrumentation | 🟡 Partly done (3 counters live; rest in `doc/Observability_Plan.md`) |
+| Recurring tournaments refactor | ⏳ Open (template vs occurrence still conflated) |
+
 ---
 
-## Real-Time Presence / Inactivity Detection
+## Real-Time Presence / Inactivity Detection — ✅ MOSTLY DONE
 
-**What:** Make the admin "online" indicator reflect actual user presence rather than just session validity. When a user's screensaver activates (tab becomes hidden), they should transition to "away" or "offline" within ~90 seconds.
+**Status:** The core heartbeat-based presence was built during the Phase E tier-2 comms work. `backend/src/lib/presenceStore.js` tracks `onlineAt` with TTL; `landing/src/lib/useHeartbeat.js` is the client hook; `GET /api/v1/presence/online` + the `presence:changed` SSE channel expose the state.
 
-**Why deferred:** Currently online status is based on BetterAuth session existence, which doesn't change when the user goes idle. No client-side inactivity tracking exists.
-
-**What it would take:**
-- **Frontend:** emit a socket heartbeat every ~60s; pause it via `visibilitychange` when the tab is hidden (`document.visibilityState === 'hidden'`). On hide, emit `user:away`; on show, emit `user:active`.
-- **Backend:** track `onlineAt` per connected socket with a short TTL (~90s). If no heartbeat arrives within the TTL, consider the user offline. This is separate from session validity.
-- The `activityService` already tracks `lastActiveAt` via Redis — this could be extended or reused for the presence signal.
-
-**Complexity:** Medium (~1 day). Accurate presence requires careful handling of tab switching, multiple tabs, and mobile backgrounding.
+**What's still open (small refinement, not blocking):** the hide/show behaviour uses default visibility — when a tab backgrounds, the heartbeat stops and the server evicts the user after the TTL. There's no explicit `user:away` transition and no distinction between "tab hidden" (may come back in seconds) and "tab closed" (likely gone for the day). Good enough for the admin "online" indicator in its current form.
 
 ---
 
@@ -53,19 +62,11 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ---
 
-## Persist Game State Through Deploys (Redis-backed Rooms)
+## Persist Game State Through Deploys (Redis-backed Rooms) — ❌ OBSOLETE
 
-**What:** Store active room and game state in Redis so that a Railway deploy (or any container restart) does not drop in-progress games. Currently all room state lives in the `roomManager`'s in-memory map — a restart silently kills any active session.
+**Status:** Superseded by Phase 3.4 — `roomManager` was retired. Active games are now `Table` rows in Postgres (`previewState Json` + `seats Json`), so game state survives deploys by design. Socket reconnection after a brief drop re-joins the table room via the `TableDetailPage` flow. The scenario this item was guarding against no longer exists.
 
-**Why deferred:** Traffic is low enough that deploys rarely hit active games. A graceful SIGTERM drain window partially mitigates this for short deployments.
-
-**What it would take:**
-- **Redis room store:** serialize `roomManager` room state (board, turn, player sockets, timestamps) to a Redis hash on every state change. On startup, rehydrate in-memory state from Redis.
-- **Socket reconnection:** when a client reconnects after a brief drop, look up their room by session/user ID and re-join them to the recovered room rather than showing an error.
-- **Expiry:** set a TTL on room keys (e.g. 1 hour) so abandoned rooms don't accumulate.
-- **Bot games:** bot game runner state would need the same treatment, or bot games could simply be restarted on reconnect (acceptable since they're not PvP).
-
-**Complexity:** Medium (~1–2 days). Redis is already used for the activity/presence service, so the infrastructure is in place. The main work is wiring the roomManager writes/reads through Redis and handling the reconnect flow on the frontend.
+**Residual concern worth tracking separately:** when a socket drops mid-game, `useGameSDK` needs to rebind the move stream — today there's a short window where a move could be emitted to a disconnected socket. This is a socket-reconnect concern, not a state-persistence one, and is better filed as a gameplay-robustness task if it ever surfaces.
 
 ---
 
@@ -126,7 +127,11 @@ The nav works fine but requires knowing where things live. There's no way to rea
 
 ---
 
-## Configurable Guide
+## Configurable Guide — ❌ OBSOLETE (premise gone)
+
+**Status:** This item was written against the old iframe-based `public/getting-started.html` + 9-balloon SVG layout. That page no longer exists — it was retired during the Phase 2 nav restructure and the Phase 3.3 Guide panel rebuild. The Guide is now a React drawer (`landing/src/components/guide/GuidePanel.jsx`) with a journey card, slots grid, and notifications feed. Any future "configurable guide" work would be a fresh design against the new shell, not a continuation of this item. Leaving the original text below for archaeology:
+
+---
 
 **What:** Let users personalize the Getting Started guide through a "Configure Guide" panel in Settings. Three layers of configuration, in increasing complexity:
 
@@ -183,7 +188,18 @@ The postMessage approach is the right starting point — it extends the existing
 
 ---
 
-## Multi-Game Architecture
+## Multi-Game Architecture — ✅ LARGELY DONE (as the Game SDK)
+
+**Status:** The Game Adapter pattern proposed here was implemented as the `GameSDK` contract in Platform Phases 1.1–1.4. `packages/sdk` defines `GameMeta`, `GameSDK`, and `botInterface`; `@callidity/game-xo` is the reference implementation; `PlatformShell` loads any `GameMeta`-conforming package via `React.lazy`. `roomManager` was retired in Phase 3.4 — `Table` rows + `previewState` + SDK adapters replaced it.
+
+**What's left (tracked in `doc/Platform_Implementation_Plan.md`):**
+- **Phase 4** — Connect4 (2p sit-down, validates the abstraction with a second game)
+- **Phase 5** — Poker (adds hidden-info via `getPlayerState`, variable player counts)
+- **Phase 6** — Pong (adds `tableArchetype: 'head-to-head'` + real-time loop)
+
+The original analysis below remains a useful reference for the per-game rendering strategy (React vs Framer Motion vs Phaser), but the high-level adapter/registry work is done. Leaving below:
+
+---
 
 **What:** Evolve the platform to support additional game types — Connect 4, Checkers, card games, and real-time games like Pong — without rewriting the infrastructure that already works.
 
@@ -251,9 +267,11 @@ No single renderer fits all game types:
 
 ---
 
-## Tier 2/3 transport — medium-priority instrumentation
+## Tier 2/3 transport — instrumentation (partly done)
 
-The first three items (SSE client count, presence-store size, XREAD-loop heartbeat) were added to `resourceCounters.js` alongside the Phase E push work. The following remain as nice-to-haves — wire them in once real traffic lands or when push starts behaving oddly:
+The first three items (SSE client count, presence-store size, XREAD-loop heartbeat) are wired in `resourceCounters.js`. The remaining items below are tracked more fully in **`doc/Observability_Plan.md`** (SSE broker peak/age, Redis stream XLEN + consumer lag, Web Push delivery metrics). Treat this entry as the short form; work from the Observability Plan when picking up an observability sprint.
+
+Open nice-to-haves — wire them in once real traffic lands or when push starts behaving oddly:
 
 - **Push subscriptions count** — snapshot `db.pushSubscription.count()` to see how many device endpoints we're pushing to. Also useful for sizing UI in the admin health dashboard.
 - **Push send metrics** — expose counters from `pushService`: `pushSent`, `pushFailed` (transient, non-404/410), `pushPurged` (dead endpoints). Surfaces success-rate and catches a VAPID misconfiguration quickly.
