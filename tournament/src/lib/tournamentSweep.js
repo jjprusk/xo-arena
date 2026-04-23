@@ -24,6 +24,14 @@ import logger from '../logger.js'
 
 const SWEEP_INTERVAL_MS = 60_000
 
+// Phase 3.7a.6 — retention for the sweep-drop audit log. 90 days keeps the
+// "last month" admin rolling window working comfortably without the audit
+// table growing unboundedly. Checked once per sweep tick, but gated on
+// last-prune so we only hit the DB once a day.
+const AUTO_DROP_RETENTION_MS = 90 * 24 * 60 * 60 * 1000
+const AUTO_DROP_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
+let _lastAutoDropPruneAt = 0
+
 export function startTournamentSweep() {
   logger.info('Tournament sweep job started (60s interval)')
   recoverPendingBotMatches().catch(err => logger.warn({ err }, 'Tournament sweep — startup recovery failed'))
@@ -91,6 +99,19 @@ export async function recoverPendingBotMatches(onlyStale = false) {
 // Exported for unit tests. Production code goes through `startTournamentSweep`.
 export async function sweep() {
   const now = new Date()
+
+  // Daily prune of the auto-drop audit log (3.7a.6). Runs out-of-band from the
+  // phase logic; failures are non-fatal.
+  if (now.getTime() - _lastAutoDropPruneAt > AUTO_DROP_PRUNE_INTERVAL_MS) {
+    _lastAutoDropPruneAt = now.getTime()
+    db.tournamentAutoDrop.deleteMany({
+      where: { droppedAt: { lt: new Date(now.getTime() - AUTO_DROP_RETENTION_MS) } },
+    }).then(r => {
+      if (r.count > 0) logger.info({ pruned: r.count }, 'Tournament sweep — pruned tournament_auto_drops older than 90d')
+    }).catch(err => {
+      logger.warn({ err: err.message }, 'Tournament sweep — auto-drop prune failed')
+    })
+  }
 
   // Phase 1: close registration for tournaments past their registrationCloseAt
   // If participant count < minParticipants at close time, cancel immediately.
@@ -225,6 +246,25 @@ export function allParticipantsAreBots(participants) {
  */
 export async function autoCancel(tournament, count) {
   if (allParticipantsAreBots(tournament.participants)) {
+    // Phase 3.7a.6: write an append-only audit row BEFORE the delete so the
+    // admin "tournaments auto-dropped per period" widget has something to
+    // count. Non-fatal — if the insert fails the delete still proceeds and
+    // we lose one entry (log + carry on rather than leaking a cancelled row).
+    try {
+      await db.tournamentAutoDrop.create({
+        data: {
+          originalTournamentId: tournament.id,
+          templateId:           tournament.templateId ?? null,
+          name:                 tournament.name,
+          game:                 tournament.game,
+          minParticipants:      tournament.minParticipants,
+          participantCount:     count,
+        },
+      })
+    } catch (err) {
+      logger.warn({ tournamentId: tournament.id, err: err.message }, 'Tournament sweep — auto-drop audit insert failed (continuing with delete)')
+    }
+
     try {
       await db.tournament.delete({ where: { id: tournament.id } })
       logger.info(

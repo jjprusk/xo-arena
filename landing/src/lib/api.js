@@ -241,6 +241,11 @@ export const api = {
     setSessionConfig: (body, token) => api.patch('/admin/session-config', body, token),
     getReplayConfig: (token) => api.get('/admin/replay-config', token),
     setReplayConfig: (body, token) => api.patch('/admin/replay-config', body, token),
+
+    // Phase 3.7a.6 — sweep-drop health signal (bot-only tournaments the
+    // sweep hard-deleted for being unfilled). period ∈ { day | week | month }.
+    tournamentsAutoDropped: (token, period = 'week') =>
+      api.get(`/admin/tournaments/auto-dropped?period=${encodeURIComponent(period)}`, token),
   },
   games: {
     getReplay:    (id, token)      => api.get(`/games/${id}/replay`, token),

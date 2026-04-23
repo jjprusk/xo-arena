@@ -767,6 +767,45 @@ router.patch('/logs/limit', async (req, res, next) => {
   }
 })
 
+// ─── Tournament auto-drop audit ──────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/tournaments/auto-dropped?period=day|week|month
+ *
+ * Phase 3.7a.6 health signal: how often did the tournament sweep
+ * hard-delete unfilled bot-only tournaments in the given window? Returns
+ * `{ count, items }` where items are the raw audit rows (newest first,
+ * capped at 20) so the admin widget can render a mini-list for
+ * pattern-spotting (same seed-bot mix dropping repeatedly → tune min
+ * participants).
+ */
+const AUTO_DROP_WINDOWS = {
+  day:   24 * 60 * 60 * 1000,
+  week:   7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+}
+router.get('/tournaments/auto-dropped', async (req, res, next) => {
+  try {
+    const period = (req.query.period ?? 'week').toString()
+    const windowMs = AUTO_DROP_WINDOWS[period]
+    if (!windowMs) {
+      return res.status(400).json({ error: 'period must be one of day, week, month' })
+    }
+    const since = new Date(Date.now() - windowMs)
+    const [count, items] = await Promise.all([
+      db.tournamentAutoDrop.count({ where: { droppedAt: { gte: since } } }),
+      db.tournamentAutoDrop.findMany({
+        where:   { droppedAt: { gte: since } },
+        orderBy: { droppedAt: 'desc' },
+        take:    20,
+      }),
+    ])
+    res.json({ period, since, count, items })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── Bot management ───────────────────────────────────────────────────────────
 
 /**

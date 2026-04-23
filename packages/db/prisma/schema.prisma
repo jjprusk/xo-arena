@@ -756,6 +756,26 @@ model TournamentSeedBot {
   @@map("tournament_seed_bots")
 }
 
+/// Phase 3.7a.6 — append-only audit log of tournaments the sweep hard-
+/// deleted for being unfilled + bot-only. The delete removes the source
+/// Tournament row, so a post-hoc COUNT is impossible; this row is written
+/// immediately before the delete so admins can still see "how often is
+/// this happening" as a health signal for scheduling / seed-bot tuning.
+/// No FKs — the referenced Tournament (and possibly Template) may be gone.
+model TournamentAutoDrop {
+  id                   String   @id @default(cuid())
+  originalTournamentId String?
+  templateId           String?
+  name                 String
+  game                 String
+  minParticipants      Int
+  participantCount     Int
+  droppedAt            DateTime @default(now())
+
+  @@index([droppedAt])
+  @@map("tournament_auto_drops")
+}
+
 /// Phase 3.7a — seed bots attached to a recurring-tournament *template*.
 /// Every spawned occurrence inherits these; the `TournamentSeedBot` table
 /// above stays for per-occurrence overrides on one-shot tournaments.

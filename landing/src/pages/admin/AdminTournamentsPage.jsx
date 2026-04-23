@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { tournamentApi } from '../../lib/tournamentApi.js'
+import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { ListTable, ListTh, ListTd, ListTr } from '../../components/ui/ListTable.jsx'
@@ -741,6 +742,88 @@ function StatusBadge({ status }) {
   )
 }
 
+// ── Auto-drop health widget (Phase 3.7a.6) ───────────────────────────────────
+// Surfaces how often the sweep hard-deletes unfilled bot-only tournaments.
+// Audit row is written by tournamentSweep.autoCancel → backend just reads.
+
+function AutoDropWidget({ token }) {
+  const [period, setPeriod] = useState('week')
+  const [data,   setData]   = useState(null)    // { count, items }
+  const [err,    setErr]    = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    setLoading(true)
+    setErr(null)
+    api.admin.tournamentsAutoDropped(token, period)
+      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(e => { if (!cancelled) { setErr(e.message ?? String(e)); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [token, period])
+
+  const periods = [
+    { value: 'day',   label: 'Day'   },
+    { value: 'week',  label: 'Week'  },
+    { value: 'month', label: 'Month' },
+  ]
+
+  return (
+    <div
+      className="rounded-xl border p-4 flex flex-col gap-3"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+    >
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Tournaments auto-dropped
+          </p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold tabular-nums" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+              {loading ? '—' : (data?.count ?? 0)}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              in the last {period}
+            </span>
+          </div>
+        </div>
+        <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+          {periods.map(p => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => setPeriod(p.value)}
+              className="px-3 py-1.5 text-xs font-semibold transition-colors"
+              style={{
+                backgroundColor: period === p.value ? 'var(--color-slate-100)' : 'transparent',
+                color:           period === p.value ? 'var(--text-primary)'   : 'var(--text-muted)',
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {err && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
+
+      {!loading && data?.items?.length > 0 && (
+        <ul className="text-xs space-y-1" style={{ color: 'var(--text-secondary)' }}>
+          {data.items.slice(0, 10).map(it => (
+            <li key={it.id} className="flex items-center justify-between gap-3">
+              <span className="truncate">{it.name}</span>
+              <span className="shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                {it.participantCount}/{it.minParticipants} · {new Date(it.droppedAt).toLocaleString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // ── Create / Edit modal ───────────────────────────────────────────────────────
 
 function TournamentModal({ tournament, token, onSaved, onClose }) {
@@ -983,6 +1066,8 @@ export default function AdminTournamentsPage() {
           Recurring Templates →
         </Link>
       </div>
+
+      <AutoDropWidget token={token} />
 
       {/* Tournament list */}
       <div className="space-y-4">

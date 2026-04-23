@@ -57,9 +57,13 @@ vi.mock('../../lib/db.js', () => {
     findUnique: vi.fn(),
     upsert:     vi.fn(),
   }
+  const tournamentAutoDrop = {
+    count:    vi.fn(),
+    findMany: vi.fn(),
+  }
   return {
     default: {
-      user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig,
+      user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig, tournamentAutoDrop,
       $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount })),
     },
   }
@@ -541,6 +545,49 @@ describe('DELETE /api/v1/admin/games/:id', () => {
     const res = await request(app).delete('/api/v1/admin/games/nonexistent')
 
     expect(res.status).toBe(404)
+  })
+})
+
+// ─── GET /admin/tournaments/auto-dropped ─────────────────────────────────────
+
+describe('GET /api/v1/admin/tournaments/auto-dropped', () => {
+  beforeEach(() => {
+    db.tournamentAutoDrop.count.mockReset()
+    db.tournamentAutoDrop.findMany.mockReset()
+  })
+
+  it('returns count + items for the default period (week)', async () => {
+    db.tournamentAutoDrop.count.mockResolvedValue(3)
+    db.tournamentAutoDrop.findMany.mockResolvedValue([
+      { id: 'd1', name: 'Daily 3-Player', game: 'xo', minParticipants: 3, participantCount: 2, droppedAt: new Date() },
+    ])
+
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped')
+
+    expect(res.status).toBe(200)
+    expect(res.body.period).toBe('week')
+    expect(res.body.count).toBe(3)
+    expect(res.body.items).toHaveLength(1)
+    expect(new Date(res.body.since).getTime()).toBeLessThan(Date.now())
+  })
+
+  it('filters by the requested period — day', async () => {
+    db.tournamentAutoDrop.count.mockResolvedValue(1)
+    db.tournamentAutoDrop.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped?period=day')
+
+    expect(res.status).toBe(200)
+    expect(res.body.period).toBe('day')
+    const expectedSince = Date.now() - 24 * 60 * 60 * 1000
+    // Window is computed on the server; allow a second of slop for test runtime.
+    expect(Math.abs(new Date(res.body.since).getTime() - expectedSince)).toBeLessThan(2000)
+  })
+
+  it('rejects unknown periods with 400', async () => {
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped?period=year')
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/day.*week.*month/i)
   })
 })
 
