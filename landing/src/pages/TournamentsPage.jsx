@@ -1,5 +1,24 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
+
+// ── Viewport ──────────────────────────────────────────────────────────────────
+// Sub-640px phones drop the "Starts" column and use a compact Register
+// button so the tournament card fits without horizontal scroll. Handled
+// via matchMedia so the layout reflows on orientation change without a
+// route reload.
+function useIsMobile(query = '(max-width: 639px)') {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia(query)
+    const handler = e => setMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [query])
+  return mobile
+}
 import { createPortal } from 'react-dom'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
@@ -155,7 +174,7 @@ const NOTIF_PREF_OPTIONS = [
  * space regardless of viewport width and matches the pattern used elsewhere
  * (admin Create Tournament, sign-in).
  */
-function RegisterButton({ tournament, token, dbUserId, onSuccess }) {
+function RegisterButton({ tournament, token, dbUserId, onSuccess, compact = false }) {
   const [open, setOpen] = useState(false)
   async function openModal(e) {
     e.preventDefault(); e.stopPropagation()
@@ -165,7 +184,7 @@ function RegisterButton({ tournament, token, dbUserId, onSuccess }) {
     <>
       <button
         onClick={openModal}
-        className="btn-primary text-xs px-4 py-2 rounded-lg font-semibold text-white transition-all hover:brightness-110"
+        className={`btn-primary rounded-lg font-semibold text-white transition-all hover:brightness-110 ${compact ? 'text-[11px] px-2 py-1' : 'text-xs px-4 py-2'}`}
       >
         Register
       </button>
@@ -389,7 +408,7 @@ function JourneyTutorialModal({ onClose }) {
 
 // ── Tournament card ───────────────────────────────────────────────────────────
 
-function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
+function TournamentRow({ tournament, token, dbUserId, onRegistered, last, isMobile = false }) {
   const navigate = useNavigate()
   const participantCount = tournament.participants?.length ?? tournament._count?.participants ?? 0
   const max = tournament.maxParticipants
@@ -444,11 +463,13 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
           )}
         </div>
       </ListTd>
-      <ListTd>
-        <div className="text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-          {startText}
-        </div>
-      </ListTd>
+      {!isMobile && (
+        <ListTd>
+          <div className="text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+            {startText}
+          </div>
+        </ListTd>
+      )}
       <ListTd align="center">
         <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
           {participantCount}{max ? `/${max}` : ''}
@@ -459,28 +480,26 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
       </ListTd>
       <ListTd align="right">
         {tournament.status === 'IN_PROGRESS' ? (
-          // Jump straight to the live bracket's first in-progress match —
-          // the detail page auto-opens the spectate modal when ?watch=1.
           <Link
             to={`/tournaments/${tournament.id}?watch=1`}
             onClick={e => e.stopPropagation()}
-            className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap border transition-colors hover:bg-[var(--color-primary-50)]"
+            className={`inline-flex items-center gap-1 rounded-lg font-semibold whitespace-nowrap border transition-colors hover:bg-[var(--color-primary-50)] ${isMobile ? 'text-[11px] px-2 py-1' : 'text-xs px-3 py-1.5'}`}
             style={{ color: 'var(--color-primary)', borderColor: 'var(--border-default)' }}
             title="Watch a live match"
           >
-            👁 Watch
+            👁 {isMobile ? '' : 'Watch'}
           </Link>
         ) : isOpen && token ? (
           <div onClick={e => e.stopPropagation()}>
             {tournament.isRegisteredByViewer ? (
               <span
-                className="inline-block text-xs px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap"
+                className={`inline-block rounded-lg font-semibold whitespace-nowrap ${isMobile ? 'text-[11px] px-2 py-1' : 'text-xs px-3 py-1.5'}`}
                 style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
               >
-                ✓ Registered
+                {isMobile ? '✓' : '✓ Registered'}
               </span>
             ) : (
-              <RegisterButton tournament={tournament} token={token} dbUserId={dbUserId} onSuccess={onRegistered} />
+              <RegisterButton tournament={tournament} token={token} dbUserId={dbUserId} onSuccess={onRegistered} compact={isMobile} />
             )}
           </div>
         ) : null}
@@ -509,6 +528,7 @@ function LoadingSpinner() {
 
 export default function TournamentsPage() {
   const { data: session } = useOptimisticSession()
+  const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
   const [tournaments, setTournaments] = useState([])
   const [loading, setLoading]         = useState(true)
@@ -712,11 +732,11 @@ export default function TournamentsPage() {
       {hasResults && (
         <>
           <div className="flex-1 min-h-0">
-            <ListTable fill columns={['42%', '20%', '10%', '14%', '14%']}>
+            <ListTable fill columns={isMobile ? ['46%', '14%', '18%', '22%'] : ['42%', '20%', '10%', '14%', '14%']}>
               <thead>
                 <tr>
                   <ListTh>Tournament</ListTh>
-                  <ListTh>Starts</ListTh>
+                  {!isMobile && <ListTh>Starts</ListTh>}
                   <ListTh align="center">Players</ListTh>
                   <ListTh align="center">Status</ListTh>
                   <ListTh align="right"><span className="sr-only">Action</span></ListTh>
@@ -729,6 +749,7 @@ export default function TournamentsPage() {
                     tournament={t}
                     token={token}
                     dbUserId={dbUserId}
+                    isMobile={isMobile}
                     onRegistered={() => load()}
                     last={i === pageSlice.length - 1}
                   />
