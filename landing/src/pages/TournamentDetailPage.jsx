@@ -42,6 +42,10 @@ const PARTICIPANT_STATUS_STYLES = {
   ACTIVE:      { bg: 'var(--color-slate-100)', text: 'var(--color-slate-700)', label: 'Active' },
   ELIMINATED:  { bg: 'var(--color-gray-100)',  text: 'var(--text-muted)',      label: 'Eliminated' },
   WITHDRAWN:   { bg: 'var(--color-red-50)',    text: 'var(--color-red-500)',   label: 'Withdrawn' },
+  // Virtual status — computed from finalPosition === 1 in ParticipantTable,
+  // since the backend never transitions the winner out of REGISTERED on
+  // tournament completion.
+  WINNER:      { bg: 'var(--color-amber-100)', text: 'var(--color-amber-700)', label: 'Winner' },
 }
 
 function StatusBadge({ status, styles = STATUS_STYLES }) {
@@ -1672,7 +1676,10 @@ function ParticipantTable({ participants }) {
               {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
             </ListTd>
             <ListTd>
-              <StatusBadge status={p.status} styles={PARTICIPANT_STATUS_STYLES} />
+              <StatusBadge
+                status={p.finalPosition === 1 ? 'WINNER' : p.status}
+                styles={PARTICIPANT_STATUS_STYLES}
+              />
             </ListTd>
           </ListTr>
         ))}
