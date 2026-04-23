@@ -257,12 +257,17 @@ router.post('/:id/publish', requireTournamentAdmin, async (req, res, next) => {
       })
     }
 
-    // Notify all connected users that a new tournament is open
+    // Notify all connected users that a new tournament is open. Include the
+    // tournament's timing fields so the backend bridge can set a dynamic
+    // expiresAt on each per-user notification row — the "registration open"
+    // message is noise once registration closes (or the tournament starts).
     await publish('tournament:published', {
       tournamentId: tournament.id,
       name: tournament.name,
       format: tournament.format,
       mode: tournament.mode,
+      startTime:           tournament.startTime?.toISOString()           ?? null,
+      registrationCloseAt: tournament.registrationCloseAt?.toISOString() ?? null,
     })
 
     res.json({ tournament })

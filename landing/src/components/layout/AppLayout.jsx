@@ -41,6 +41,8 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
       return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} — registration open`, body: 'New tournament announced', href: '/tournaments', expiresAt: exp }
     case 'tournament.flash_announced':
       return { id, uiType: 'flash',       type: 'flash',       title: `${tname} — registration open`, body: 'Flash tournament announced', href: '/tournaments', expiresAt: exp }
+    case 'tournament.recurring_occurrence_opened':
+      return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} — you're entered`, body: 'Today\'s occurrence is open — you were auto-enrolled', href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'tournament.registration_closing':
       return { id, uiType: 'tournament',  type: 'tournament',  title: `${tname} — registration closing`, body: 'Last chance to register', href: tid ? `/tournaments/${tid}` : '/tournaments', expiresAt: exp }
     case 'tournament.starting_soon':

@@ -21,13 +21,14 @@ export function getDispatchCounters() { return { ..._dispatchCounters } }
 // persist: 'ephemeral' | 'persistent'
 // ttlMs: optional default TTL in ms from creation; null = never expires
 const REGISTRY = {
-  'tournament.published':            { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h
-  'tournament.flash_announced':      { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
-  'tournament.registration_closing': { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  2 * 60 * 60 * 1000 },  // 2h
-  'tournament.starting_soon':        { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
-  'tournament.started':              { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs: 24 * 60 * 60 * 1000 },  // 24h
-  'tournament.cancelled':            { mode: 'cohort',    persist: 'persistent', email: true,  push: true, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
-  'tournament.completed':            { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'tournament.published':             { mode: 'broadcast', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h
+  'tournament.flash_announced':       { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
+  'tournament.recurring_occurrence_opened': { mode: 'cohort', persist: 'persistent', email: false, ttlMs: 24 * 60 * 60 * 1000 }, // 24h — auto-enrolled subscribers only
+  'tournament.registration_closing':  { mode: 'cohort',    persist: 'persistent', email: false, ttlMs:  2 * 60 * 60 * 1000 },  // 2h
+  'tournament.starting_soon':         { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs:  3 * 60 * 60 * 1000 },  // 3h
+  'tournament.started':               { mode: 'cohort',    persist: 'persistent', email: false, push: true, ttlMs: 24 * 60 * 60 * 1000 },  // 24h
+  'tournament.cancelled':             { mode: 'cohort',    persist: 'persistent', email: true,  push: true, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
+  'tournament.completed':             { mode: 'cohort',    persist: 'persistent', email: true,  ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
   'match.ready':                     { mode: 'personal',  persist: 'persistent', email: true,  push: true, ttlMs:  6 * 60 * 60 * 1000, systemCritical: true },  // 6h
   'match.result':                    { mode: 'personal',  persist: 'persistent', email: false, ttlMs:  7 * 24 * 60 * 60 * 1000 },  // 7d
   'achievement.tier_upgrade':        { mode: 'personal',  persist: 'persistent', email: false, push: true, ttlMs: null },
@@ -51,9 +52,10 @@ const REGISTRY = {
 
 // ── Default preferences (used when no NotificationPreference row exists) ──────
 const PREF_DEFAULTS = {
-  'tournament.published':            { inApp: true,  email: false, push: false },
-  'tournament.flash_announced':      { inApp: true,  email: false, push: false },
-  'tournament.registration_closing': { inApp: true,  email: false, push: false },
+  'tournament.published':             { inApp: true,  email: false, push: false },
+  'tournament.flash_announced':       { inApp: true,  email: false, push: false },
+  'tournament.recurring_occurrence_opened': { inApp: true, email: false, push: false },
+  'tournament.registration_closing':  { inApp: true,  email: false, push: false },
   'tournament.starting_soon':        { inApp: true,  email: false, push: false },
   'tournament.started':              { inApp: true,  email: false, push: false },
   'tournament.cancelled':            { inApp: true,  email: true,  push: false },
@@ -209,3 +211,39 @@ function buildDedupFilter(type, payload) {
 }
 
 export function getRegistryKeys() { return Object.keys(REGISTRY) }
+
+/**
+ * Hard-delete UserNotification rows where expiresAt < now. Called from the
+ * periodic pruner (startExpiredNotificationPruner) + by any test that wants
+ * to force a sweep. Rows with expiresAt === null never expire — admin
+ * announcements, system alerts, and anything else explicitly registered
+ * without a TTL keep accumulating until a user marks them delivered.
+ *
+ * Returns the number of rows deleted (0 if none).
+ */
+export async function pruneExpiredNotifications(now = new Date()) {
+  try {
+    const { count } = await db.userNotification.deleteMany({
+      where: { expiresAt: { lt: now } },
+    })
+    if (count > 0) logger.info({ pruned: count }, 'pruneExpiredNotifications: removed expired rows')
+    return count
+  } catch (err) {
+    logger.warn({ err }, 'pruneExpiredNotifications failed (non-fatal)')
+    return 0
+  }
+}
+
+/**
+ * Start a periodic expired-notification pruner. Default interval is 15 min —
+ * light DB work, harmless if it overlaps with a user read (the read filter
+ * already excludes expired rows). Returns a handle with stop() for tests and
+ * graceful shutdown.
+ */
+export function startExpiredNotificationPruner({ intervalMs = 15 * 60_000 } = {}) {
+  const handle = setInterval(() => { pruneExpiredNotifications().catch(() => {}) }, intervalMs)
+  if (handle.unref) handle.unref()
+  return {
+    stop() { clearInterval(handle) },
+  }
+}

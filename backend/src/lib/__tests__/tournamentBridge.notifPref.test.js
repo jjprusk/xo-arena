@@ -377,3 +377,106 @@ describe('tournament:completed — END_OF_TOURNAMENT flush', () => {
     }))
   })
 })
+
+// ─── Recurring occurrence opened — notify auto-enrolled subscribers ──────────
+// Channel `tournament:recurring:occurrence` used to be published with no
+// listener (dead telemetry). The bridge now dispatches a cohort notification
+// to the humans auto-enrolled via their standing RecurringTournamentRegistration.
+// Seed bots and non-subscribers get nothing; no broadcast to all users.
+
+describe('tournamentBridge — tournament:recurring:occurrence', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('dispatches tournament.recurring_occurrence_opened to auto-enrolled subscribers (cohort)', async () => {
+    const io = { to: vi.fn().mockReturnValue({ emit: vi.fn() }), emit: vi.fn() }
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      templateId:          'tpl_daily',
+      tournamentId:        'tour_mon',
+      occurrenceId:        'tour_mon',
+      name:                'Daily 3-Player',
+      startTime:           '2026-04-23T19:00:00.000Z',
+      autoEnrolledUserIds: ['usr_alice', 'usr_bob'],
+    })
+
+    expect(mockDispatch).toHaveBeenCalledTimes(1)
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type:    'tournament.recurring_occurrence_opened',
+      targets: { cohort: ['usr_alice', 'usr_bob'] },
+      payload: {
+        tournamentId: 'tour_mon',
+        name:         'Daily 3-Player',
+        startTime:    '2026-04-23T19:00:00.000Z',
+      },
+    }))
+    // Must NOT broadcast — this event is deliberately per-subscriber only.
+    expect(io.emit).not.toHaveBeenCalled()
+    expect(io.to).not.toHaveBeenCalled()
+  })
+
+  it('no-ops when the template has no human subscribers (seed-bot-only)', async () => {
+    const io = { to: vi.fn(), emit: vi.fn() }
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      templateId:          'tpl_bot_only',
+      tournamentId:        'tour_empty',
+      name:                'Bot Showcase',
+      startTime:           '2026-04-23T19:00:00.000Z',
+      autoEnrolledUserIds: [],
+    })
+    expect(mockDispatch).not.toHaveBeenCalled()
+  })
+
+  it('tolerates a missing autoEnrolledUserIds field (older payload shape)', async () => {
+    const io = { to: vi.fn(), emit: vi.fn() }
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      templateId:   'tpl_legacy',
+      tournamentId: 'tour_legacy',
+      startTime:    '2026-04-23T19:00:00.000Z',
+    })
+    expect(mockDispatch).not.toHaveBeenCalled()
+  })
+
+  it('passes dynamic expiresAt = startTime so the "you\'re entered" notification auto-clears at tournament start', async () => {
+    const io = { to: vi.fn().mockReturnValue({ emit: vi.fn() }), emit: vi.fn() }
+    const futureStart = new Date(Date.now() + 6 * 60 * 60_000).toISOString() // 6h out
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      tournamentId:        'tour_x',
+      name:                'Evening 3',
+      startTime:           futureStart,
+      autoEnrolledUserIds: ['usr_alice'],
+    })
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type:      'tournament.recurring_occurrence_opened',
+      expiresAt: futureStart,
+    }))
+  })
+})
+
+// ─── pickNotificationCutoff helper ────────────────────────────────────────────
+
+const { pickNotificationCutoff } = await import('../tournamentBridge.js')
+
+describe('pickNotificationCutoff', () => {
+  it('returns the earliest future candidate as an ISO string', () => {
+    const inOneHour  = new Date(Date.now() + 60 * 60_000).toISOString()
+    const inTwoHours = new Date(Date.now() + 2 * 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff(inTwoHours, inOneHour)).toBe(inOneHour)
+  })
+  it('ignores candidates in the past', () => {
+    const past   = new Date(Date.now() - 60 * 60_000).toISOString()
+    const future = new Date(Date.now() + 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff(past, future)).toBe(future)
+  })
+  it('returns null when all candidates are null/undefined/past', () => {
+    const past = new Date(Date.now() - 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff(null, undefined, past)).toBeNull()
+    expect(pickNotificationCutoff()).toBeNull()
+  })
+  it('accepts Date objects as well as ISO strings', () => {
+    const d = new Date(Date.now() + 30 * 60_000)
+    expect(pickNotificationCutoff(d)).toBe(d.toISOString())
+  })
+  it('ignores unparseable strings', () => {
+    const good = new Date(Date.now() + 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff('not-a-date', good)).toBe(good)
+  })
+})

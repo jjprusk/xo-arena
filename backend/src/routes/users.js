@@ -232,8 +232,19 @@ router.get('/me/notifications', requireAuth, async (req, res, next) => {
       select: { id: true },
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
+    // Filter out anything that has already expired — per REGISTRY ttlMs and/or
+    // an explicit expiresAt override (e.g. tournament.published expires at
+    // registrationCloseAt). "expiresAt IS NULL" covers notifications that
+    // never expire (admin announcements, system alerts).
     const notifications = await db.userNotification.findMany({
-      where: { userId: user.id, deliveredAt: null },
+      where: {
+        userId:     user.id,
+        deliveredAt: null,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
+      },
       orderBy: { createdAt: 'asc' },
     })
     res.json({ notifications })
