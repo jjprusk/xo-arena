@@ -181,7 +181,7 @@ export default function AdminTemplatesPage() {
           </p>
         </div>
       ) : (
-        <ListTable>
+        <ListTable fitViewport bottomPadding={48}>
           <thead>
             <tr>
               <ListTh>Name</ListTh>
