@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
@@ -1703,6 +1703,7 @@ function Section({ title, children }) {
 
 export default function TournamentDetailPage() {
   const { id } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: session } = useOptimisticSession()
   const [tournament, setTournament] = useState(null)
   const [loading, setLoading]       = useState(true)
@@ -1712,6 +1713,10 @@ export default function TournamentDetailPage() {
   const [activeMatchEvent, setActiveMatchEvent] = useState(null)
   const [replayMatch, setReplayMatch]           = useState(null) // { id, label }
   const [watchMatch, setWatchMatch]             = useState(null) // { id, label }
+  // ?watch=1 from the list-level 👁 shortcut: auto-open the spectate modal
+  // on the first IN_PROGRESS match as soon as the bracket loads. Stripped
+  // from the URL after consumption so a page refresh doesn't re-trigger.
+  const autoWatchRequested = searchParams.get('watch') === '1'
   // Tracks whether we have successfully loaded tournament data at least once.
   // Used to skip the loading spinner on silent re-fetches (e.g. after auth resolves).
   const tournamentRef = useRef(null)
@@ -1746,6 +1751,30 @@ export default function TournamentDetailPage() {
 
   // Reset cached data when navigating to a different tournament.
   useEffect(() => { tournamentRef.current = null }, [id])
+
+  // ?watch=1 — open the spectate modal on the first IN_PROGRESS match once
+  // the bracket has loaded. Strip the param afterward so a refresh doesn't
+  // re-trigger, and so the modal's own Close behavior wins.
+  useEffect(() => {
+    if (!autoWatchRequested || !tournament || watchMatch) return
+    const byId = Object.fromEntries(
+      (tournament.participants ?? []).map(p => [p.id, p?.user?.displayName ?? 'Unknown'])
+    )
+    let chosen = null
+    for (const round of tournament.rounds ?? []) {
+      chosen = (round.matches ?? []).find(m => m.status === 'IN_PROGRESS' && m.participant1Id && m.participant2Id)
+      if (chosen) break
+    }
+    if (chosen) {
+      const label = `${byId[chosen.participant1Id] ?? '?'} vs ${byId[chosen.participant2Id] ?? '?'}`
+      setWatchMatch({ id: chosen.id, label })
+    }
+    // Consume the param either way — if no live match was found, don't
+    // keep re-scanning on every state change.
+    const next = new URLSearchParams(searchParams)
+    next.delete('watch')
+    setSearchParams(next, { replace: true })
+  }, [autoWatchRequested, tournament, watchMatch, searchParams, setSearchParams])
 
   const load = useCallback(async () => {
     // If a session user is known but the token hasn't resolved yet, skip the pre-fetch.

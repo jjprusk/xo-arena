@@ -1298,6 +1298,9 @@ export default function AdminTournamentsPage() {
                         }
                         items={[
                           t.status !== 'DRAFT' && { label: 'View',    href: `/tournaments/${t.id}`, state: { from: '/admin/tournaments' } },
+                          // ?watch=1 makes the detail page auto-open the
+                          // spectate modal on the first IN_PROGRESS match.
+                          t.status === 'IN_PROGRESS' && { label: '👁 Watch live', href: `/tournaments/${t.id}?watch=1`, state: { from: '/admin/tournaments' } },
                           canEdit                && { label: 'Edit',    onSelect: () => setModal({ tournament: t }) },
                           canPublish             && { label: 'Publish', onSelect: () => performAction('publish', t, 'Publish') },
                           canStart               && { label: 'Start',   onSelect: () => performAction('start',   t, 'Start') },
