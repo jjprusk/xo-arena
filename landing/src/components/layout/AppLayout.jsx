@@ -419,7 +419,6 @@ export default function AppLayout() {
       <AppNav
         appId="landing"
         appUrls={APP_URLS}
-        subnav={null}
         rightSlot={
           <div className="flex items-center gap-2">
             {user && <GuideOrb />}

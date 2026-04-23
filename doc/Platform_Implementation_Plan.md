@@ -416,8 +416,9 @@ Full design in `doc/Tournament_Template_Refactor_Scope.md`.
 ### 3.8.3 Frontend — Profile / bot creation
 
 - [ ] Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
-- [ ] Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)`.
+- [ ] Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
 - [ ] "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`.
+- [ ] **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button in addition to the skill pills. Also add a "Gym ⚡" link in the My Bots section header. Closes the navigation gap identified in Phase 3.7a audit — today returning users with dismissed journey and no "AI Training" slot can't reach `/gym` from Profile. Deferred to 3.8 (not 3.7a) because the bot card is redesigned here; doing it twice would be waste.
 
 ### 3.8.4 Frontend — Gym
 
