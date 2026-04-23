@@ -26,6 +26,7 @@ import LogViewerPage from './pages/admin/LogViewerPage.jsx'
 import RankingsPage from './pages/RankingsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
+import PublicProfilePage from './pages/PublicProfilePage.jsx'
 import SupportPage from './pages/SupportPage.jsx'
 import GymPage from './pages/GymPage.jsx'
 import GymGuidePage from './pages/GymGuidePage.jsx'
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/rankings" element={<RankingsPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/bots/:id" element={<BotProfilePage />} />
+          <Route path="/users/:username" element={<PublicProfilePage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route path="/gym" element={<GymPage />} />
           <Route path="/gym/guide" element={<GymGuidePage />} />

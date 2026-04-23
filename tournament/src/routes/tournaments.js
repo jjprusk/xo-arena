@@ -281,6 +281,45 @@ router.patch('/:id', requireTournamentAdmin, async (req, res, next) => {
       data,
     })
 
+    // Phase 3.7a cutover: if this tournament is backed by a TournamentTemplate
+    // (has templateId) AND the edit touched any recurrence config, mirror the
+    // change to the template so the scheduler sees it. Kept minimal — only
+    // fields that exist on both models are forwarded. Non-fatal.
+    if (tournament.templateId) {
+      const tmplData = {
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(game !== undefined && { game }),
+        ...(mode !== undefined && { mode }),
+        ...(format !== undefined && { format }),
+        ...(bracketType !== undefined && { bracketType }),
+        ...(minParticipants !== undefined && { minParticipants }),
+        ...(maxParticipants !== undefined && { maxParticipants }),
+        ...(bestOfN !== undefined && { bestOfN }),
+        ...(botMinGamesPlayed !== undefined && { botMinGamesPlayed }),
+        ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
+        ...(paceMs !== undefined && { paceMs }),
+        ...(allowSpectators !== undefined && { allowSpectators }),
+        ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
+        ...(durationMinutes !== undefined && { durationMinutes }),
+        ...(startMode !== undefined && { startMode }),
+        ...(recurrenceInterval !== undefined && { recurrenceInterval }),
+        ...(startTime !== undefined && { recurrenceStart: new Date(startTime) }),
+        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+        ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
+        ...(recurrencePaused !== undefined && { paused: !!recurrencePaused }),
+        ...(isTest !== undefined && { isTest: !!isTest }),
+      }
+      if (Object.keys(tmplData).length > 0) {
+        await db.tournamentTemplate.update({
+          where: { id: tournament.templateId },
+          data:  tmplData,
+        }).catch(err => {
+          req.log?.warn?.({ err, templateId: tournament.templateId }, 'dual-write TournamentTemplate PATCH failed')
+        })
+      }
+    }
+
     res.json({ tournament })
   } catch (e) {
     next(e)
