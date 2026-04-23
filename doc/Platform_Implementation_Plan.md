@@ -339,6 +339,53 @@
 
 ---
 
+## Phase 3.7a — Pre-prod cleanups
+
+> **Goal:** A narrow window of housekeeping items that are trivial while `xo-*-prod` apps sit `pending` with an empty `xo-db-prod`, and progressively more expensive once the system has real users. Ships before Phase 3.8 so the foundation under Multi-Skill Bots and Connect4 is clean.
+>
+> **Why now:** Every item here scales in cost with data volume, or involves user-visible URL/auth behavior that breaks links after launch. Post-launch each one is 5–10× harder.
+
+### 3.7a.1 Recurring tournaments — template vs occurrence split
+
+Full design in `doc/Tournament_Template_Refactor_Scope.md`.
+
+- [ ] Add `TournamentTemplate` Prisma model (config fields + recurrence + `paused`); every Tournament becomes a pure occurrence with nullable `templateId` FK.
+- [ ] Prisma migration drops `Tournament.isRecurring`, `recurrenceInterval`, `recurrenceStart`, `recurrenceEndDate`, `recurrenceRule`, `recurrencePaused`. Adds `templateId String?` + FK to `TournamentTemplate.id`. Data-migration step splits existing recurring rows into (new template, preserved-first-occurrence-if-ran) pairs.
+- [ ] Point `RecurringTournamentRegistration.templateId` FK at `TournamentTemplate.id` (same field name, new target).
+- [ ] New `TournamentTemplateSeedBot` table keyed `(templateId, userId)`. Migration moves existing `TournamentSeedBot` rows attached to template-Tournaments over; per-occurrence overrides on `TournamentSeedBot` remain supported for one-shot tournaments.
+- [ ] `tournament/src/lib/recurringScheduler.js`: read templates via `db.tournamentTemplate.findMany(...)` instead of `Tournament where isRecurring`. Set `templateId` on spawned occurrences.
+- [ ] `tournament/src/lib/tournamentSweep.js`: unchanged cancel / auto-drop logic still applies per-occurrence; no new semantics.
+- [ ] `tournament/src/routes/tournaments.js`: split into `POST /api/templates` (recurrence config) vs `POST /api/tournaments` (one-shot); existing one-shot path unaffected.
+- [ ] Admin UI — two tabs: **Tournaments** (occurrences, today's flat list) and **Templates** (recurring series, paused state, subscriber count). Public `TournamentsPage.jsx` unchanged — only lists occurrences.
+- [ ] Tests — tournamentSweep cases still pass; add template CRUD + scheduler spawn-from-template vitest; e2e smoke for "admin creates template → scheduler spawns first occurrence" if feasible against localhost.
+- [ ] Regenerate `doc/Platform_Architecture.md` if the tournament data-model section is stale (check before commit).
+
+### 3.7a.2 Bot displayName uniqueness
+
+- [ ] **Decision:** bot `displayName` is currently free-text with no uniqueness. Two users can both have a bot named "Rusty", and built-in Rusty shares the name. Pick one:
+  - **(a)** Enforce global uniqueness on `User.displayName` WHERE `isBot: true` (partial index) — cleanest, allows clean rankings
+  - **(b)** Leave as-is and disambiguate in UI by appending owner handle when needed
+- [ ] If **(a)**: Prisma migration adding `CREATE UNIQUE INDEX ... ON User(lower(displayName)) WHERE isBot = true`. Update `POST /bots` to return 409 on collision, bot-create form to check availability.
+- [ ] If **(b)**: one-line change to leaderboards/pickers that render `Rusty (joe)` when ambiguous.
+
+### 3.7a.3 Profile URL structure
+
+- [ ] **Finding:** no shareable profile URL exists today — `/profile` renders the logged-in user's own profile. No collision risk from launch.
+- [ ] **Decision:** when a public profile page is introduced (Phase 7 or earlier if needed), use `/users/:username` as the canonical URL. Record the decision here so it isn't re-litigated.
+- [ ] Reserve the route in the router now so a future `PublicProfilePage` drops in without URL migration.
+
+### 3.7a.4 OAuth prod redirect URLs
+
+- [ ] Cross-reference `doc/Prod_Bringup_Runbook.md` §4: when prod deploys for the first time, either (a) add `https://aiarena.callidity.com/api/auth/callback/*` to the existing staging Google + Apple OAuth apps, or (b) register prod-specific apps. Runbook already captures both paths.
+- [ ] No code change in this phase — pure provider-side config. Entry here exists so it's not forgotten in the Phase 4+ rush.
+
+### 3.7a.5 Seeded built-in bot polish
+
+- [ ] Built-in bots (Rusty/Copper/Sterling/Magnus) currently seed with default avatars and generic bios. Before prod launch: finalize per-bot avatar URLs, one-line bios, and starting ELO offsets (if we want Rusty < Copper < Sterling < Magnus as a recognizable skill ladder).
+- [ ] Low value / cosmetic — do only if a product pass surfaces something specific.
+
+---
+
 ## Phase 3.8 — Multi-Skill Bots
 
 > **Goal:** A bot is an identity (alter ego). Skills are what the bot knows how to play. One `User` row carrying `isBot: true` can hold multiple `BotSkill` rows (one per game). Users pick the bot; the game context chooses the skill.

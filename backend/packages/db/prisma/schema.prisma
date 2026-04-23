@@ -53,6 +53,7 @@ model User {
   pushSubscriptions      PushSubscription[]
   userRoles              UserRole[]
   seedBotConfigs         TournamentSeedBot[]
+  templateSeedBotConfigs TournamentTemplateSeedBot[]
 
   @@map("users")
 }
@@ -530,8 +531,13 @@ model Tournament {
   registrationCloseAt     DateTime?
   noticePeriodMinutes     Int?
   durationMinutes         Int?
+  // Phase 3.7a — recurrence config moves to TournamentTemplate. These fields
+  // remain on the Tournament row for one migration step; after data-backfill
+  // we'll drop them. templateId set on occurrences spawned from a template.
   isRecurring             Boolean                 @default(false)
   autoOptOutAfterMissed   Int?
+  templateId              String?
+  template                TournamentTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
   createdById             String
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
@@ -555,7 +561,56 @@ model Tournament {
   @@index([status])
   @@index([game])
   @@index([createdById])
+  @@index([templateId])
   @@map("tournaments")
+}
+
+/// Phase 3.7a — holds recurrence *configuration* only. Never itself runs.
+/// Each recurring series is one TournamentTemplate + N spawned Tournament
+/// occurrences (each with `templateId` pointing back here). Subscribers
+/// attach to the template; seed bots attach to the template; running state
+/// (bracket, matches, results) lives exclusively on the occurrences.
+model TournamentTemplate {
+  id                      String                            @id @default(cuid())
+  name                    String
+  description             String?
+  game                    String
+  mode                    TournamentMode
+  format                  TournamentFormat
+  bracketType             BracketType
+  minParticipants         Int                               @default(2)
+  maxParticipants         Int?
+  bestOfN                 Int                               @default(3)
+  botMinGamesPlayed       Int?
+  allowNonCompetitiveBots Boolean                           @default(false)
+  allowSpectators         Boolean                           @default(true)
+  noticePeriodMinutes     Int?
+  durationMinutes         Int?
+  paceMs                  Int?                              @map("pace_ms")
+  startMode               TournamentStartMode               @default(AUTO)
+  // Recurrence config
+  recurrenceInterval      RecurrenceInterval
+  /// First (or next) occurrence start — scheduler reads this to decide when
+  /// to spawn the next Tournament row.
+  recurrenceStart         DateTime
+  recurrenceEndDate       DateTime?
+  /// Halts generation of new occurrences without cancelling the template.
+  /// Running occurrences (already spawned) are unaffected.
+  paused                  Boolean                           @default(false)
+  autoOptOutAfterMissed   Int?
+  createdById             String
+  createdAt               DateTime                          @default(now())
+  updatedAt               DateTime                          @updatedAt
+  /// True when created by an automated test suite.
+  isTest                  Boolean                           @default(false)
+  tournaments             Tournament[]
+  seedBots                TournamentTemplateSeedBot[]
+  subscriptions           RecurringTournamentRegistration[]
+
+  @@index([game])
+  @@index([createdById])
+  @@index([paused, recurrenceStart])
+  @@map("tournament_templates")
 }
 
 model TournamentParticipant {
@@ -673,12 +728,15 @@ model MeritThreshold {
 }
 
 model RecurringTournamentRegistration {
-  id          String    @id @default(cuid())
+  id          String              @id @default(cuid())
   templateId  String
   userId      String
-  missedCount Int       @default(0)
+  missedCount Int                 @default(0)
   optedOutAt  DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime            @default(now())
+  /// Phase 3.7a: FK now targets TournamentTemplate (was Tournament with
+  /// isRecurring:true). Cascade so deleting a template cleans up subs.
+  template    TournamentTemplate? @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, userId])
   @@index([templateId])
@@ -697,6 +755,22 @@ model TournamentSeedBot {
   @@unique([tournamentId, userId])
   @@index([tournamentId])
   @@map("tournament_seed_bots")
+}
+
+/// Phase 3.7a — seed bots attached to a recurring-tournament *template*.
+/// Every spawned occurrence inherits these; the `TournamentSeedBot` table
+/// above stays for per-occurrence overrides on one-shot tournaments.
+model TournamentTemplateSeedBot {
+  id         String             @id @default(cuid())
+  templateId String
+  userId     String
+  template   TournamentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id])
+  createdAt  DateTime           @default(now())
+
+  @@unique([templateId, userId])
+  @@index([templateId])
+  @@map("tournament_template_seed_bots")
 }
 
 model Table {
