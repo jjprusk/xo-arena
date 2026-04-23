@@ -212,6 +212,21 @@ describe('GET /api/v1/users/me/notifications', () => {
     const res = await request(app).get('/api/v1/users/me/notifications')
     expect(res.status).toBe(404)
   })
+
+  it('filters out expired notifications (expiresAt < now)', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    db.userNotification.findMany.mockResolvedValue([])
+    await request(app).get('/api/v1/users/me/notifications')
+
+    const call = db.userNotification.findMany.mock.calls[0][0]
+    expect(call.where.userId).toBe('usr_1')
+    expect(call.where.deliveredAt).toBeNull()
+    // Either expiresAt IS NULL (no TTL) or expiresAt > now (still valid)
+    expect(call.where.OR).toEqual([
+      { expiresAt: null },
+      { expiresAt: { gt: expect.any(Date) } },
+    ])
+  })
 })
 
 describe('POST /api/v1/users/me/notifications/deliver', () => {

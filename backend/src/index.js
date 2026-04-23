@@ -37,7 +37,7 @@ import { startActivityFlushJob } from './services/activityService.js'
 import { startReplayPurgeJob } from './services/replayPurgeService.js'
 import { startIdleSessionPurgeJob } from './services/idleSessionPurgeService.js'
 import { startTournamentBridge } from './lib/tournamentBridge.js'
-import { initBus } from './lib/notificationBus.js'
+import { initBus, startExpiredNotificationPruner } from './lib/notificationBus.js'
 import { startDispatcher, setIO as schedulerSetIO } from './lib/scheduledJobs.js'
 import { start as startTableGc } from './services/tableGcService.js'
 
@@ -114,6 +114,7 @@ startActivityFlushJob()
 startReplayPurgeJob()
 startIdleSessionPurgeJob()
 startDispatcher()
+startExpiredNotificationPruner()
 
 attachSocketIO(server).then((io) => {
   app.set('io', io)

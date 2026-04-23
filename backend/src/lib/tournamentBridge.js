@@ -105,9 +105,18 @@ export function startTournamentBridge(io) {
 export async function handleEvent(io, channel, data) {
   switch (channel) {
     case 'tournament:published': {
-      const { tournamentId, name, format, mode } = data
-      await dispatch({ type: 'tournament.published', targets: { broadcast: true }, payload: { tournamentId, name, format, mode } })
-      logger.info({ tournamentId }, 'Tournament published — notified all connected clients')
+      const { tournamentId, name, format, mode, startTime, registrationCloseAt } = data
+      // Dynamic TTL: "registration open" stops being useful the moment
+      // registration closes (or the tournament starts, whichever is first).
+      // Fall back to the registry's default ttlMs when neither is known.
+      const expiresAt = pickNotificationCutoff(registrationCloseAt, startTime)
+      await dispatch({
+        type: 'tournament.published',
+        targets: { broadcast: true },
+        payload: { tournamentId, name, format, mode },
+        expiresAt,
+      })
+      logger.info({ tournamentId, expiresAt }, 'Tournament published — notified all connected clients')
       break
     }
     case 'tournament:started': {
@@ -164,12 +173,17 @@ export async function handleEvent(io, channel, data) {
       // already filtered to domain User.ids for humans.
       const { tournamentId, name, startTime, autoEnrolledUserIds = [] } = data
       if (autoEnrolledUserIds.length > 0) {
+        // Dynamic TTL: "you're entered" is useful up until the tournament
+        // starts, then it's noise. Fall back to registry default if startTime
+        // isn't in the payload (older publishers).
+        const expiresAt = pickNotificationCutoff(startTime)
         await dispatch({
           type: 'tournament.recurring_occurrence_opened',
           targets: { cohort: autoEnrolledUserIds },
           payload: { tournamentId, name, startTime },
+          expiresAt,
         })
-        logger.info({ tournamentId, subscribers: autoEnrolledUserIds.length }, 'Recurring occurrence opened — notified auto-enrolled subscribers')
+        logger.info({ tournamentId, subscribers: autoEnrolledUserIds.length, expiresAt }, 'Recurring occurrence opened — notified auto-enrolled subscribers')
       }
       break
     }
@@ -334,4 +348,23 @@ export async function handleEvent(io, channel, data) {
       break
     }
   }
+}
+
+/**
+ * Pick the earliest usable cutoff for a time-sensitive notification. Accepts
+ * ISO date strings (or Date). Returns an ISO string for dispatch()'s
+ * expiresAt override, or null when no valid cutoff is supplied (dispatch
+ * then falls back to REGISTRY.ttlMs).
+ */
+export function pickNotificationCutoff(...candidates) {
+  const now = Date.now()
+  let earliest = null
+  for (const c of candidates) {
+    if (c == null) continue
+    const d = c instanceof Date ? c : new Date(c)
+    if (Number.isNaN(d.getTime())) continue
+    if (d.getTime() <= now) continue
+    if (earliest === null || d < earliest) earliest = d
+  }
+  return earliest ? earliest.toISOString() : null
 }

@@ -399,7 +399,7 @@ describe('tournamentBridge — tournament:recurring:occurrence', () => {
     })
 
     expect(mockDispatch).toHaveBeenCalledTimes(1)
-    expect(mockDispatch).toHaveBeenCalledWith({
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
       type:    'tournament.recurring_occurrence_opened',
       targets: { cohort: ['usr_alice', 'usr_bob'] },
       payload: {
@@ -407,7 +407,7 @@ describe('tournamentBridge — tournament:recurring:occurrence', () => {
         name:         'Daily 3-Player',
         startTime:    '2026-04-23T19:00:00.000Z',
       },
-    })
+    }))
     // Must NOT broadcast — this event is deliberately per-subscriber only.
     expect(io.emit).not.toHaveBeenCalled()
     expect(io.to).not.toHaveBeenCalled()
@@ -433,5 +433,50 @@ describe('tournamentBridge — tournament:recurring:occurrence', () => {
       startTime:    '2026-04-23T19:00:00.000Z',
     })
     expect(mockDispatch).not.toHaveBeenCalled()
+  })
+
+  it('passes dynamic expiresAt = startTime so the "you\'re entered" notification auto-clears at tournament start', async () => {
+    const io = { to: vi.fn().mockReturnValue({ emit: vi.fn() }), emit: vi.fn() }
+    const futureStart = new Date(Date.now() + 6 * 60 * 60_000).toISOString() // 6h out
+    await handleEvent(io, 'tournament:recurring:occurrence', {
+      tournamentId:        'tour_x',
+      name:                'Evening 3',
+      startTime:           futureStart,
+      autoEnrolledUserIds: ['usr_alice'],
+    })
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type:      'tournament.recurring_occurrence_opened',
+      expiresAt: futureStart,
+    }))
+  })
+})
+
+// ─── pickNotificationCutoff helper ────────────────────────────────────────────
+
+const { pickNotificationCutoff } = await import('../tournamentBridge.js')
+
+describe('pickNotificationCutoff', () => {
+  it('returns the earliest future candidate as an ISO string', () => {
+    const inOneHour  = new Date(Date.now() + 60 * 60_000).toISOString()
+    const inTwoHours = new Date(Date.now() + 2 * 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff(inTwoHours, inOneHour)).toBe(inOneHour)
+  })
+  it('ignores candidates in the past', () => {
+    const past   = new Date(Date.now() - 60 * 60_000).toISOString()
+    const future = new Date(Date.now() + 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff(past, future)).toBe(future)
+  })
+  it('returns null when all candidates are null/undefined/past', () => {
+    const past = new Date(Date.now() - 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff(null, undefined, past)).toBeNull()
+    expect(pickNotificationCutoff()).toBeNull()
+  })
+  it('accepts Date objects as well as ISO strings', () => {
+    const d = new Date(Date.now() + 30 * 60_000)
+    expect(pickNotificationCutoff(d)).toBe(d.toISOString())
+  })
+  it('ignores unparseable strings', () => {
+    const good = new Date(Date.now() + 60 * 60_000).toISOString()
+    expect(pickNotificationCutoff('not-a-date', good)).toBe(good)
   })
 })

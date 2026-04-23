@@ -211,3 +211,39 @@ function buildDedupFilter(type, payload) {
 }
 
 export function getRegistryKeys() { return Object.keys(REGISTRY) }
+
+/**
+ * Hard-delete UserNotification rows where expiresAt < now. Called from the
+ * periodic pruner (startExpiredNotificationPruner) + by any test that wants
+ * to force a sweep. Rows with expiresAt === null never expire — admin
+ * announcements, system alerts, and anything else explicitly registered
+ * without a TTL keep accumulating until a user marks them delivered.
+ *
+ * Returns the number of rows deleted (0 if none).
+ */
+export async function pruneExpiredNotifications(now = new Date()) {
+  try {
+    const { count } = await db.userNotification.deleteMany({
+      where: { expiresAt: { lt: now } },
+    })
+    if (count > 0) logger.info({ pruned: count }, 'pruneExpiredNotifications: removed expired rows')
+    return count
+  } catch (err) {
+    logger.warn({ err }, 'pruneExpiredNotifications failed (non-fatal)')
+    return 0
+  }
+}
+
+/**
+ * Start a periodic expired-notification pruner. Default interval is 15 min —
+ * light DB work, harmless if it overlaps with a user read (the read filter
+ * already excludes expired rows). Returns a handle with stop() for tests and
+ * graceful shutdown.
+ */
+export function startExpiredNotificationPruner({ intervalMs = 15 * 60_000 } = {}) {
+  const handle = setInterval(() => { pruneExpiredNotifications().catch(() => {}) }, intervalMs)
+  if (handle.unref) handle.unref()
+  return {
+    stop() { clearInterval(handle) },
+  }
+}
