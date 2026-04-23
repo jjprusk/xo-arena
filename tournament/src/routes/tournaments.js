@@ -55,12 +55,10 @@ router.get('/', optionalAuth, async (req, res, next) => {
         bestOfN: true,
         allowSpectators: true,
         isTest: true,
-        recurrencePaused: true,
         startTime: true,
         endTime: true,
         registrationOpenAt: true,
         registrationCloseAt: true,
-        isRecurring: true,
         templateId: true,
         createdAt: true,
         _count: { select: { participants: true } },
@@ -216,13 +214,13 @@ router.post('/', requireTournamentAdmin, async (req, res, next) => {
             durationMinutes:    tournament.durationMinutes,
             paceMs:             tournament.paceMs,
             startMode:          tournament.startMode,
-            recurrenceInterval: tournament.recurrenceInterval,
+            recurrenceInterval,
             recurrenceStart:    recurrenceAnchor,
-            recurrenceEndDate:  tournament.recurrenceEndDate,
+            recurrenceEndDate:  toDate(recurrenceEndDate),
             registrationOpenAt: tournament.registrationOpenAt,
             registrationCloseAt: tournament.registrationCloseAt,
-            paused:             tournament.recurrencePaused,
-            autoOptOutAfterMissed: tournament.autoOptOutAfterMissed,
+            paused:             !!recurrencePaused,
+            autoOptOutAfterMissed,
             createdById:        tournament.createdById,
             isTest:             tournament.isTest,
           },
@@ -818,9 +816,9 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
     const currentElo = gameEloRow?.rating ?? null
 
     let registrationMode = 'SINGLE'
-    if (tournament.isRecurring) {
+    if (tournament.templateId) {
       const recurringReg = await db.recurringTournamentRegistration.findUnique({
-        where: { templateId_userId: { templateId: tournamentId, userId } },
+        where: { templateId_userId: { templateId: tournament.templateId, userId } },
       })
       if (recurringReg && !recurringReg.optedOutAt) {
         registrationMode = 'RECURRING'

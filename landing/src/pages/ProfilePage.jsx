@@ -1201,7 +1201,7 @@ function RecurringSubscriptionsSection({ open, onToggle }) {
                     >
                       {t.name ?? '(deleted)'}
                     </Link>
-                    {t.recurrencePaused && (
+                    {t.paused && (
                       <span
                         className="ml-2 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
                         style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)', border: '1px solid var(--color-amber-300)' }}

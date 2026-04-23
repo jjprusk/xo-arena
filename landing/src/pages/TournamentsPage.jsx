@@ -415,7 +415,7 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
             className="text-sm font-bold leading-tight truncate flex items-center gap-1.5"
             style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
           >
-            {(tournament.isRecurring || tournament.templateId) && (
+            {tournament.templateId && (
               <svg
                 className="shrink-0"
                 width="13" height="13" viewBox="0 0 24 24"

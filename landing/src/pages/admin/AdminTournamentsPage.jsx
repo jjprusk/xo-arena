@@ -1096,7 +1096,7 @@ export default function AdminTournamentsPage() {
                 // "Start" is only meaningful for one-off tournaments. For recurring
                 // templates the scheduler spawns and starts each occurrence on its
                 // own cadence — a manual Start on the template row would break that.
-                const canStart   = !t.isRecurring && (t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED')
+                const canStart   = !t.templateId && (t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED')
                 const canCancel  = t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
                 // "Live" = open for registration, registration closed but pre-start, or in progress.
                 const isLive = t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED' || t.status === 'IN_PROGRESS'
@@ -1118,7 +1118,7 @@ export default function AdminTournamentsPage() {
                     </ListTd>
                     <ListTd>
                       <div className="flex items-center gap-2 flex-wrap">
-                        {(t.isRecurring || t.templateId) && (
+                        {t.templateId && (
                           <svg
                             className="shrink-0"
                             width="14" height="14" viewBox="0 0 24 24"
@@ -1137,22 +1137,14 @@ export default function AdminTournamentsPage() {
                         )}
                         {/*
                           Recurring tournaments are driven by a TournamentTemplate;
-                          the detail page is the template editor. For template-sibling
-                          rows (`isRecurring` + no `templateId` — the legacy flag) the
-                          template shares the tournament's id. For scheduler-spawned
-                          occurrences (`templateId` points at the parent template) we
-                          navigate to the parent template's detail page, since editing
-                          the occurrence directly bypasses the template's config.
+                          the detail page is the template editor. Both the sibling
+                          row (id == templateId) and scheduler-spawned occurrences
+                          (templateId points at the parent) navigate to the template
+                          detail page so admins edit the template, not the occurrence.
                           One-off tournaments still open the regular detail page.
                         */}
                         <Link
-                          to={
-                            t.templateId
-                              ? `/admin/templates/${t.templateId}`
-                              : t.isRecurring
-                                ? `/admin/templates/${t.id}`
-                                : `/tournaments/${t.id}`
-                          }
+                          to={t.templateId ? `/admin/templates/${t.templateId}` : `/tournaments/${t.id}`}
                           state={{ from: '/admin/tournaments' }}
                           className="font-medium text-sm hover:underline"
                           style={{ color: 'var(--text-primary)' }}
