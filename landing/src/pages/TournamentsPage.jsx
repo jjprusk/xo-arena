@@ -412,8 +412,16 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last, isMobi
   const navigate = useNavigate()
   const participantCount = tournament.participants?.length ?? tournament._count?.participants ?? 0
   const max = tournament.maxParticipants
-  const isOpen = tournament.status === 'REGISTRATION_OPEN'
-    && (!tournament.registrationCloseAt || new Date(tournament.registrationCloseAt) > new Date())
+  // Registration is actually open only when registrationOpenAt is in the
+  // past (or unset). Backend gates the POST /register endpoint on this,
+  // but the UI was previously showing the Register button anyway —
+  // misleading for templates whose first occurrence spawns with
+  // status=REGISTRATION_OPEN but registrationOpenAt set to a future time.
+  const now = Date.now()
+  const regOpened = !tournament.registrationOpenAt || new Date(tournament.registrationOpenAt).getTime() <= now
+  const regStillOpen = !tournament.registrationCloseAt || new Date(tournament.registrationCloseAt).getTime() > now
+  const isOpen = tournament.status === 'REGISTRATION_OPEN' && regOpened && regStillOpen
+  const isUpcoming = tournament.status === 'REGISTRATION_OPEN' && !regOpened
 
   const meta = [
     tournament.game?.toUpperCase(),
@@ -476,7 +484,13 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last, isMobi
         </span>
       </ListTd>
       <ListTd align="center">
-        <StatusBadge status={tournament.status} />
+        {/* "Upcoming" is rendered in place of "Open" when the tournament
+            is REGISTRATION_OPEN server-side but registrationOpenAt is in
+            the future. Prevents the row from implying you can register
+            now. */}
+        {isUpcoming
+          ? <span className="badge badge-draft" title={`Registration opens ${new Date(tournament.registrationOpenAt).toLocaleString()}`}>Upcoming</span>
+          : <StatusBadge status={tournament.status} />}
       </ListTd>
       <ListTd align="right">
         {tournament.status === 'IN_PROGRESS' ? (
@@ -489,6 +503,16 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last, isMobi
           >
             👁 {isMobile ? '' : 'Watch'}
           </Link>
+        ) : isUpcoming ? (
+          <span
+            className={`inline-block rounded-lg font-medium whitespace-nowrap ${isMobile ? 'text-[10px] px-2 py-1' : 'text-xs px-3 py-1.5'}`}
+            style={{ backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+            title={`Registration opens ${new Date(tournament.registrationOpenAt).toLocaleString()}`}
+          >
+            {isMobile
+              ? `Opens ${new Date(tournament.registrationOpenAt).toLocaleString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+              : `Opens ${new Date(tournament.registrationOpenAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
+          </span>
         ) : isOpen && token ? (
           <div onClick={e => e.stopPropagation()}>
             {tournament.isRegisteredByViewer ? (
