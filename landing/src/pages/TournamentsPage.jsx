@@ -1,10 +1,13 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
+import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useEventStream } from '../lib/useEventStream.js'
+import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd, ListPagination, SearchBar } from '../components/ui/ListTable.jsx'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
@@ -324,6 +327,66 @@ function RegisterModal({ tournament, token, dbUserId, onClose, onSuccess }) {
   )
 }
 
+// ── Journey step 7 tutorial ──────────────────────────────────────────────────
+//
+// First-visit modal that explains how tournaments work. On dismiss, marks
+// journey step 7 complete — the terminal step, which also fires +50 TC via
+// journeyService.completeStep. Shown at most once per user (server-side state).
+function JourneyTutorialModal({ onClose }) {
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // Render into body so we escape any parent stacking context (the Guide
+  // panel sits at z-50 on another branch of the tree and can otherwise
+  // overlap this modal's backdrop/click targets).
+  return createPortal((
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 60 }}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="How tournaments work"
+        className="w-full max-w-md rounded-xl border p-5 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div>
+          <h2 className="text-base font-bold leading-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+            How to enter a tournament
+          </h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            You're looking at the Arena's tournament hub. Here's the short version:
+          </p>
+        </div>
+        <ol className="text-sm space-y-2 pl-5 list-decimal" style={{ color: 'var(--text-secondary)' }}>
+          <li>Browse the list below — statuses tell you which tournaments are open for registration.</li>
+          <li>Click a <strong style={{ color: 'var(--text-primary)' }}>Registration open</strong> tournament to see the format, prize (if any), and field.</li>
+          <li>Hit <strong style={{ color: 'var(--text-primary)' }}>Register</strong>. You can enter yourself (human) or one of your bots.</li>
+          <li>When the bracket starts, you'll get a notification. Matches begin automatically.</li>
+        </ol>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          No rush — closing this counts as your final onboarding step. You'll earn +50 Tournament Credits.
+        </p>
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-semibold"
+            style={{ backgroundColor: 'var(--color-amber-500)', color: 'white' }}
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  ), document.body)
+}
+
 // ── Tournament card ───────────────────────────────────────────────────────────
 
 function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
@@ -423,9 +486,41 @@ export default function TournamentsPage() {
   const [error, setError]             = useState(null)
   const [token, setToken]             = useState(null)
   const [dbUserId, setDbUserId]       = useState(null)
+  const [showTutorial, setShowTutorial] = useState(false)
   const [autoRegisterId, setAutoRegisterId] = useState(
     searchParams.get('action') === 'register' ? searchParams.get('tournamentId') : null
   )
+
+  // Journey step 7 — "Learn about tournaments" — is a client-side trigger.
+  // Show the tutorial modal on arrival if the user is signed in, hasn't
+  // dismissed the journey, and hasn't completed step 7 yet. Idempotent: once
+  // step 7 is marked, future visits won't re-show the modal.
+  //
+  // Also close the Guide panel while the tutorial is up — the two overlap
+  // visually and the Guide's backdrop (z-40) blocks clicks on the modal.
+  useEffect(() => {
+    if (!session?.user?.id) return
+    const { journeyProgress } = useGuideStore.getState()
+    const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+    if (dismissedAt) return
+    if (completedSteps.includes(7)) return
+    useGuideStore.getState().close()
+    setShowTutorial(true)
+  }, [session?.user?.id])
+
+  function closeTutorial() {
+    setShowTutorial(false)
+    getToken().then(t => {
+      if (!t) return
+      api.guide.triggerStep(7, t).then(() => {
+        const store = useGuideStore.getState()
+        const current = store.journeyProgress?.completedSteps ?? []
+        if (!current.includes(7)) {
+          store.applyJourneyStep({ completedSteps: [...current, 7] })
+        }
+      }).catch(() => {})
+    }).catch(() => {})
+  }
 
   // Filter/search/paginate state — all persisted in the URL so the browser's
   // Back button restores position after clicking into a tournament.
@@ -630,6 +725,7 @@ export default function TournamentsPage() {
         </div>
       )}
      </div>
+      {showTutorial && <JourneyTutorialModal onClose={closeTutorial} />}
     </div>
   )
 }

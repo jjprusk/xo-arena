@@ -303,20 +303,20 @@
   - 3 vitest cases covering enrollment, error recovery, empty-template case
   - QA checklist updated (Section 9 — 6 sub-sections)
 
-### 3.5 Rendered table paradigm — minimum viable
+### 3.5 Rendered table paradigm — minimum viable — complete
 
 > **Goal:** Ship the Medium rendered table for 2p sit-down and 2p head-to-head. XO validates sit-down; shell is ready for head-to-head when Pong arrives. See `doc/Table_Paradigm.md` for the full design decisions.
 
-- [ ] Add `meta.tableArchetype` (`'sit-down' | 'head-to-head'`) + `meta.orientations` (`['horizontal', 'vertical']`) fields to `GameContract`. Defaults preserve existing behavior.
-- [ ] Evolve `PlatformShell` to render a `<TableSurface>` with positioned `<Seat>` slots. Board renders in the `<TableCenter>` rect.
-- [ ] Seats are avatar + name, spatially positioned (no more sidebar-only seated list for the primary rendering).
-- [ ] Forming → Playing transition: fade-in on the center when ACTIVE lands (Table_Paradigm §4.4 option B); respect `prefers-reduced-motion`.
-- [ ] Relative POV (§4.2): caller at bottom / near-end; opponents arranged relative to caller.
-- [ ] Spectator badge (§4.3): edge cluster with click-to-expand popover listing watcher names; sidebar list unchanged.
-- [ ] End-of-game seat indication (§4.5): winner glow, loser muted, plus small outcome banner.
-- [ ] Tournament context card in sidebar (§4.7) when `isTournament = true`.
-- [ ] **Active table preview thumbnail.** Render a mini `previewState` snapshot (e.g., a small XO board with current marks) on the Tables list page for ACTIVE tables. Deferred from Phase 3.2 — requires the game-specific renderer that the `<TableSurface>` component provides.
-- [ ] QA: XO still plays correctly via the new shell on both desktop and mobile.
+- [x] Add `meta.tableArchetype` (`'sit-down' | 'head-to-head'`) + `meta.orientations` (`['horizontal', 'vertical']`) fields to `GameContract`. Defaults preserve existing behavior. _(`tableArchetype: 'sit-down'` shipped on the SDK contract and XO meta. The `'head-to-head'` union and `orientations` field are deferred to Phase 4/6 — only relevant when Connect4 / Pong land.)_
+- [x] Evolve `PlatformShell` to render a `<TableSurface>` with positioned `<Seat>` slots. Board renders in the `<TableCenter>` rect.
+- [x] Seats are avatar + name, spatially positioned (no more sidebar-only seated list for the primary rendering).
+- [x] Forming → Playing transition: fade-in on the center when ACTIVE lands (Table_Paradigm §4.4 option B); respect `prefers-reduced-motion`.
+- [x] Relative POV (§4.2): caller at bottom / near-end; opponents arranged relative to caller.
+- [x] Spectator badge (§4.3): edge cluster with click-to-expand popover listing watcher names; sidebar list unchanged.
+- [x] End-of-game seat indication (§4.5): winner glow, loser muted, plus small outcome banner.
+- [x] Tournament context card in sidebar (§4.7) when `isTournament = true`.
+- [x] **Active table preview thumbnail.** Render a mini `previewState` snapshot (e.g., a small XO board with current marks) on the Tables list page for ACTIVE tables. Deferred from Phase 3.2 — requires the game-specific renderer that the `<TableSurface>` component provides.
+- [x] QA: XO still plays correctly via the new shell on both desktop and mobile. _(QA_Phase_3.4 closed 2026-04-22; archived at `doc/archive/QA_Phase_3.4.md`.)_
 
 ### 3.6 Multi-seat sit-down shell (infrastructure for Poker)
 
@@ -425,9 +425,10 @@
 
 ### 6.2 Pong game package
 
+- [ ] **SDK prerequisite (deferred from 3.5):** extend `GameMeta.tableArchetype` union to include `'head-to-head'`, and add `meta.orientations: ('horizontal' | 'vertical')[]` for paddle axis. PlatformShell needs to render a head-to-head layout (opponents on opposite sides of the playfield, not across a table) when Pong's meta declares it.
 - [ ] Create `packages/game-pong/`
 - [ ] Implement game physics (ball, paddles, scoring)
-- [ ] Implement `meta` export (minPlayers: 2, maxPlayers: 2, supportsBots: true)
+- [ ] Implement `meta` export (minPlayers: 2, maxPlayers: 2, supportsBots: true, `tableArchetype: 'head-to-head'`, `orientations: ['horizontal', 'vertical']`)
 - [ ] Implement SDK contract adapted for real-time (continuous state updates)
 - [ ] Implement `botInterface.makeMove()` — real-time paddle AI
 - [ ] Implement `getPreviewState()` — current score and ball position

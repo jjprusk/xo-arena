@@ -7,7 +7,7 @@ import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import QValueHeatmap from '../ml/QValueHeatmap.jsx'
 import {
-  Card, SectionLabel, Btn, Spinner, MiniStat, ChartPanel, tooltipStyle, playerLabel,
+  Card, SectionLabel, Btn, Spinner, MiniStat, ChartPanel, tooltipStyle, playerLabel, normalizeAlgorithm,
 } from './gymShared.jsx'
 
 const EMPTY_BOARD = Array(9).fill(null)
@@ -669,7 +669,8 @@ export default function ExplainabilityTab({ model, domainUserId, currentUserName
   const [obLoading, setObLoading]   = useState(false)
   const [activeSection, setSection] = useState('position')
 
-  const isNeuralNet = model.algorithm === 'DQN' || model.algorithm === 'ALPHA_ZERO'
+  const normalizedAlgo = normalizeAlgorithm(model.algorithm)
+  const isNeuralNet = normalizedAlgo === 'DQN' || normalizedAlgo === 'ALPHA_ZERO'
 
   // Fetch Q-values whenever board changes
   useEffect(() => {

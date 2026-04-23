@@ -7,19 +7,26 @@
  *    1        Welcome (auto-complete on first hydration)
  *    2        Read the FAQ (client-side trigger on /faq visit)
  *    3        Play your first game
- *    4        Explore AI Training Guide (client-side trigger)
+ *    4        Explore AI Training Guide (client-side trigger on /gym/guide visit)
  *    5        Create your first bot
  *    6        Train your bot (first training run > 0 episodes)
- *    7        Enter a tournament (first registration)
- *    8        Play in a tournament match
+ *    7        Learn about tournaments (client-side trigger on /tournaments visit)
  *
- * On step 8 completion: +50 TC awarded; guide:notification emitted.
+ * On step 7 completion: +50 TC awarded; guide:notification emitted; this is the
+ * terminal step — UI shows the "Onboarding Complete!" banner here.
+ *
+ * History: step 7 used to fire server-side on tournament:match:ready (bracket
+ * seeded) and an 8th step fired on tournament:match:result (first match
+ * finished). That required a user to register AND be paired AND have a match
+ * resolve before the journey "completed" in the UI — too much friction for a
+ * learning milestone. Step 7 is now a popup on /tournaments explaining how to
+ * enter, and step 8 is retired. See guideStore.completeJourney on the client.
  */
 
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
-const TOTAL_STEPS = 8
+const TOTAL_STEPS = 7
 const JOURNEY_COMPLETE_TC = 50
 
 let _io = null
@@ -57,7 +64,7 @@ export async function getJourneyProgress(userId) {
 /**
  * Idempotently marks a step complete.
  * Emits `guide:journeyStep` to the user's socket room.
- * On step 7: awards TC, emits `guide:notification`.
+ * On step 7 (the terminal step): awards TC, emits `guide:notification`.
  *
  * Returns true if this call completed the step (false if already done).
  */
@@ -85,8 +92,8 @@ export async function completeStep(userId, stepIndex, io) {
 
     logger.info({ userId, stepIndex, completedSteps }, 'Journey step completed')
 
-    // Step 8 completion reward
-    if (stepIndex === 8) {
+    // Terminal-step reward
+    if (stepIndex === TOTAL_STEPS) {
       await _handleJourneyComplete(userId, ioRef)
     }
 
@@ -108,7 +115,7 @@ export async function restartJourney(userId) {
   logger.info({ userId }, 'Journey restarted')
 }
 
-// ── Internal: step-7 completion reward ─────────────────────────────────────
+// ── Internal: terminal-step completion reward ─────────────────────────────
 
 async function _handleJourneyComplete(userId, ioRef) {
   try {
