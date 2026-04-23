@@ -77,6 +77,7 @@ export const tournamentApi = {
   triggerRecurringCheck:        (token)             => request('POST',   '/api/tournaments/admin/scheduler/check-recurring', {}, token),
 
   // Phase 3.7a — recurring-tournament templates (admin)
+  createTemplate:   (data, token)         => request('POST',   '/api/tournaments/admin/templates', data, token),
   listTemplates:    (token)               => request('GET',    '/api/tournaments/admin/templates', undefined, token),
   getTemplate:      (id, token)           => request('GET',    `/api/tournaments/admin/templates/${id}`, undefined, token),
   updateTemplate:   (id, data, token)     => request('PATCH',  `/api/tournaments/admin/templates/${id}`, data, token),

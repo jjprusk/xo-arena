@@ -175,6 +175,14 @@ export function tournamentApi(base) {
       if (!res.ok()) throw new Error(`tournaments.triggerRecurringCheck ${res.status()}: ${await res.text()}`)
       return await res.json()
     },
+    // Phase 3.7a stage 2: template-first create. Writes TournamentTemplate
+    // (+ sibling Tournament row) instead of POST /api/tournaments with
+    // isRecurring:true.
+    async createTemplate({ request, token }, body) {
+      const res = await request.post(url('/api/tournaments/admin/templates'), { headers: hdr(token), data: body })
+      if (!res.ok()) throw new Error(`tournaments.createTemplate ${res.status()}: ${await res.text()}`)
+      return (await res.json()).template
+    },
     async forceComplete({ request, token }, id) {
       // Admin/QA shortcut: flip a tournament to COMPLETED without playing
       // out the bracket. The regular PATCH intentionally excludes `status`,
@@ -286,6 +294,11 @@ export function backendAdminApi(base) {
       const qs = new URLSearchParams()
       if (systemOnly) qs.set('systemOnly', '1')
       if (search)     qs.set('search', search)
+      // Ask for the max page size — tests assume the built-in roster is
+      // always present, but the default 25 gets exceeded after a few runs
+      // of the seed-bot specs leave clones behind. The admin endpoint caps
+      // at 100 per page.
+      qs.set('limit', '100')
       const suffix = qs.toString() ? `?${qs}` : ''
       const res = await request.get(url(`/api/v1/admin/bots${suffix}`), { headers: hdr(token) })
       if (!res.ok()) throw new Error(`admin.listBots ${res.status()}: ${await res.text()}`)

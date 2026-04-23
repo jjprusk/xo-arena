@@ -20,6 +20,10 @@ const mockDb = {
   tournamentTemplateSeedBot:       { findMany: vi.fn() },
   tournamentParticipant:           { create: vi.fn(), upsert: vi.fn() },
   tournamentSeedBot:               { upsert: vi.fn() },
+  // Scheduler fetches user.isBot separately (RecurringTournamentRegistration
+  // has no `user` relation in the Prisma schema, so include: { user }
+  // would throw).
+  user:                            { findMany: vi.fn() },
 }
 vi.mock('../db.js', () => ({ default: mockDb }))
 
@@ -74,6 +78,7 @@ describe('checkRecurringOccurrences (Phase 3.7a)', () => {
     // Default: no subscribers, no seed bots.
     mockDb.recurringTournamentRegistration.findMany.mockResolvedValue([])
     mockDb.tournamentTemplateSeedBot.findMany.mockResolvedValue([])
+    mockDb.user.findMany.mockResolvedValue([])
     // These receive .catch() chains inside the scheduler, so they must
     // return promises (not undefined). Default to resolved no-ops.
     mockDb.tournamentParticipant.create.mockResolvedValue({})
@@ -175,8 +180,12 @@ describe('checkRecurringOccurrences (Phase 3.7a)', () => {
     mockDb.tournament.findFirst.mockResolvedValue(null)
     mockDb.tournament.create.mockResolvedValue({ id: 'occ_1' })
     mockDb.recurringTournamentRegistration.findMany.mockResolvedValue([
-      { userId: 'usr_alice', user: { id: 'usr_alice', isBot: false } },
-      { userId: 'bot_sneaky', user: { id: 'bot_sneaky', isBot: true  } },  // must be filtered out
+      { userId: 'usr_alice' },
+      { userId: 'bot_sneaky' },
+    ])
+    mockDb.user.findMany.mockResolvedValue([
+      { id: 'usr_alice',  isBot: false },
+      { id: 'bot_sneaky', isBot: true  },   // must be filtered out of autoEnrolledUserIds
     ])
 
     await checkRecurringOccurrences()

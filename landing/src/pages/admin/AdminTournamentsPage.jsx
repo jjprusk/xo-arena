@@ -747,8 +747,21 @@ function TournamentModal({ tournament, token, onSaved, onClose }) {
   const isEdit = !!tournament
 
   async function handleSubmit(data) {
-    if (isEdit) await tournamentApi.update(tournament.id, data, token)
-    else        await tournamentApi.create(data, token)
+    if (isEdit) {
+      await tournamentApi.update(tournament.id, data, token)
+    } else if (data.isRecurring) {
+      // Phase 3.7a stage 2: recurring create goes through the template-first
+      // endpoint. Map form fields onto the TournamentTemplate payload shape
+      // (startTime → recurrenceStart, recurrencePaused → paused).
+      const { isRecurring: _ir, startTime, recurrencePaused, ...rest } = data
+      await tournamentApi.createTemplate({
+        ...rest,
+        recurrenceStart: startTime ?? null,
+        ...(recurrencePaused !== undefined && { paused: !!recurrencePaused }),
+      }, token)
+    } else {
+      await tournamentApi.create(data, token)
+    }
     onSaved()
   }
 

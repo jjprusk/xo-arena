@@ -1166,6 +1166,122 @@ router.get('/admin/templates', requireTournamentAdmin, async (req, res, next) =>
   }
 })
 
+// POST /api/tournaments/admin/templates
+// Phase 3.7a stage 2: template-first create. Writes TournamentTemplate
+// directly (canonical home for recurrence config) and materialises a
+// sibling Tournament row with the same id to preserve first-occurrence
+// display semantics during the cutover — existing admin list UI still
+// shows a "first tournament" alongside the template, and seed-bot /
+// publish endpoints keyed on tournamentId still work.
+// Callers: landing Create-Tournament form when `isRecurring` is checked.
+// POST /api/tournaments with isRecurring:true remains a backward-compat
+// shim until stage 3 drops the deprecated Tournament.recurrence* columns.
+router.post('/admin/templates', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const {
+      name, description, game, mode, format, bracketType,
+      minParticipants, maxParticipants, bestOfN, botMinGamesPlayed,
+      allowNonCompetitiveBots, allowSpectators, paceMs, startMode,
+      noticePeriodMinutes, durationMinutes,
+      recurrenceInterval, recurrenceStart, recurrenceEndDate,
+      registrationOpenAt, registrationCloseAt,
+      paused, autoOptOutAfterMissed, isTest,
+    } = req.body
+
+    if (!name?.trim())        return res.status(400).json({ error: 'name is required' })
+    if (!game)                return res.status(400).json({ error: 'game is required' })
+    if (!mode)                return res.status(400).json({ error: 'mode is required' })
+    if (!format)              return res.status(400).json({ error: 'format is required' })
+    if (!bracketType)         return res.status(400).json({ error: 'bracketType is required' })
+    if (!recurrenceInterval)  return res.status(400).json({ error: 'recurrenceInterval is required for a template' })
+
+    // Scheduler anchor: recurrenceStart is required on TournamentTemplate.
+    // Fall back to registrationCloseAt / registrationOpenAt when the admin
+    // created the template in AUTO mode without an explicit start (UX
+    // mirrors the old POST /tournaments dual-write).
+    const anchor = toDate(recurrenceStart) ?? toDate(registrationCloseAt) ?? toDate(registrationOpenAt)
+    if (!anchor) {
+      return res.status(400).json({ error: 'recurrenceStart (or registrationCloseAt / registrationOpenAt) is required' })
+    }
+
+    if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
+      return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
+    }
+
+    const templateData = {
+      name: name.trim(),
+      description, game, mode, format, bracketType,
+      recurrenceInterval,
+      recurrenceStart: anchor,
+      createdById: req.auth.userId,
+      ...(minParticipants !== undefined && { minParticipants }),
+      ...(maxParticipants !== undefined && { maxParticipants }),
+      ...(bestOfN !== undefined && { bestOfN }),
+      ...(botMinGamesPlayed !== undefined && { botMinGamesPlayed }),
+      ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
+      ...(allowSpectators !== undefined && { allowSpectators }),
+      ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
+      ...(durationMinutes !== undefined && { durationMinutes }),
+      ...(paceMs !== undefined && { paceMs }),
+      ...(startMode !== undefined && { startMode }),
+      ...(recurrenceEndDate !== undefined  && { recurrenceEndDate:  toDate(recurrenceEndDate) }),
+      ...(registrationOpenAt !== undefined  && { registrationOpenAt:  toDate(registrationOpenAt) }),
+      ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
+      ...(paused !== undefined && { paused: !!paused }),
+      ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
+      ...(isTest !== undefined && { isTest: !!isTest }),
+    }
+
+    const template = await db.tournamentTemplate.create({ data: templateData })
+
+    // Sibling first-occurrence Tournament row — same id so existing admin
+    // list / publish / seed-bot endpoints continue to work during the
+    // cutover. Status DRAFT until admin publishes explicitly. The deprecated
+    // Tournament.recurrence* columns are still written for backward compat
+    // with readers that haven't been migrated; stage 3 removes them.
+    const siblingTournamentStartTime = toDate(recurrenceStart) ?? anchor
+    await db.tournament.create({
+      data: {
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        game: template.game,
+        mode: template.mode,
+        format: template.format,
+        bracketType: template.bracketType,
+        status: 'DRAFT',
+        createdById: req.auth.userId,
+        templateId: template.id,
+        minParticipants: template.minParticipants,
+        maxParticipants: template.maxParticipants,
+        bestOfN: template.bestOfN,
+        botMinGamesPlayed: template.botMinGamesPlayed,
+        allowNonCompetitiveBots: template.allowNonCompetitiveBots,
+        allowSpectators: template.allowSpectators,
+        noticePeriodMinutes: template.noticePeriodMinutes,
+        durationMinutes: template.durationMinutes,
+        paceMs: template.paceMs,
+        startMode: template.startMode,
+        startTime: siblingTournamentStartTime,
+        registrationOpenAt: template.registrationOpenAt,
+        registrationCloseAt: template.registrationCloseAt,
+        isTest: template.isTest,
+        isRecurring: true,
+        recurrenceInterval: template.recurrenceInterval,
+        recurrenceEndDate: template.recurrenceEndDate,
+        recurrencePaused: template.paused,
+        autoOptOutAfterMissed: template.autoOptOutAfterMissed,
+      },
+    }).catch(err => {
+      req.log?.warn?.({ err, templateId: template.id }, 'sibling Tournament row create failed (template still ok)')
+    })
+
+    res.status(201).json({ template })
+  } catch (e) {
+    next(e)
+  }
+})
+
 // POST /api/tournaments/admin/templates/:id/pause
 router.post('/admin/templates/:id/pause', requireTournamentAdmin, async (req, res, next) => {
   try {

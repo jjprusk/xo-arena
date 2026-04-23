@@ -75,6 +75,7 @@ const MENU = [
   I('Replay tests',                                    () => pw('replay')),
   I('Tournament seed bots (QA §9)',                    () => pw('tournament-seed-bots'),       'TEST_ADMIN_EMAIL'),
   I('Template clone flow (Phase 3.7a)',                () => pw('tournament-template-clone'),  'TEST_ADMIN_EMAIL'),
+  I('Template create endpoint (Phase 3.7a s2)',        () => pw('tournament-template-create'), 'TEST_ADMIN_EMAIL'),
   I('All Playwright (chromium)',                        () => pw(null)),
   D(),
   S('Long-running'),
