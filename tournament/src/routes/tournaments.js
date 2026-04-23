@@ -1357,9 +1357,27 @@ router.post('/admin/templates/:id/seed-bots', requireTournamentAdmin, async (req
 // DELETE /api/tournaments/admin/templates/:id/seed-bots/:userId
 router.delete('/admin/templates/:id/seed-bots/:userId', requireTournamentAdmin, async (req, res, next) => {
   try {
+    const { id: templateId, userId } = req.params
     await db.tournamentTemplateSeedBot.delete({
-      where: { templateId_userId: { templateId: req.params.id, userId: req.params.userId } },
+      where: { templateId_userId: { templateId, userId } },
     })
+    // Inverse of backfillOpenOccurrences: when seed-add enrolls the bot on
+    // every pre-game occurrence, removal must withdraw it from the same set
+    // so the underlying User row remains deletable (FK to participants is
+    // RESTRICT). Frozen occurrences (IN_PROGRESS / COMPLETED / CANCELLED)
+    // retain their participant row — that's historical record.
+    const openOccurrences = await db.tournament.findMany({
+      where:  { templateId, status: { in: ['DRAFT', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED'] } },
+      select: { id: true },
+    })
+    for (const occ of openOccurrences) {
+      await db.tournamentSeedBot.deleteMany({
+        where: { tournamentId: occ.id, userId },
+      }).catch(() => {})
+      await db.tournamentParticipant.deleteMany({
+        where: { tournamentId: occ.id, userId },
+      }).catch(() => {})
+    }
     res.json({ ok: true })
   } catch (e) {
     if (e?.code === 'P2025') return res.status(404).json({ error: 'Seed bot not found on this template' })
