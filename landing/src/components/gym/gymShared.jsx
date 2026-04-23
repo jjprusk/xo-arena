@@ -17,6 +17,30 @@ export const ALGORITHMS = [
   { value: 'DQN',             label: 'DQN',             desc: 'Deep Q-Network (neural net)' },
   { value: 'ALPHA_ZERO',      label: 'AlphaZero',       desc: 'MCTS + policy/value nets' },
 ]
+
+// Backend persists algorithms as lowercase-no-separator ('qlearning',
+// 'montecarlo', 'policygradient', 'alphazero'); the frontend (this file,
+// trainingService, engines) compares against SCREAMING_SNAKE_CASE ('Q_LEARNING',
+// 'MONTE_CARLO', etc.). Without this normalization, ALGORITHMS.find returns
+// undefined (blank labels in the gym form), the DQN/AlphaZero config panels
+// never render, and buildEngine() falls through to QLearning for MonteCarlo /
+// PolicyGradient / AlphaZero bots. Accepts legacy short forms (PG, MC, AZ).
+const _ALGO_CANONICAL = {
+  qlearning:      'Q_LEARNING',
+  sarsa:          'SARSA',
+  montecarlo:     'MONTE_CARLO',
+  mc:             'MONTE_CARLO',
+  policygradient: 'POLICY_GRADIENT',
+  pg:             'POLICY_GRADIENT',
+  dqn:            'DQN',
+  alphazero:      'ALPHA_ZERO',
+  az:             'ALPHA_ZERO',
+}
+export function normalizeAlgorithm(raw) {
+  if (!raw) return 'Q_LEARNING'
+  const key = String(raw).toLowerCase().replace(/[-_\s]/g, '')
+  return _ALGO_CANONICAL[key] ?? 'Q_LEARNING'
+}
 export const STATUS_COLOR = { IDLE: 'teal', TRAINING: 'blue' }
 export const SESSION_COLOR = { COMPLETED: 'teal', RUNNING: 'blue', FAILED: 'red', CANCELLED: 'amber', PENDING: 'gray', QUEUED: 'yellow' }
 export const SESSION_BADGE = { COMPLETED: 'badge-bot', RUNNING: 'badge-live', FAILED: 'badge-cancelled', CANCELLED: 'badge-closed', PENDING: 'badge-draft', QUEUED: 'badge-draft' }

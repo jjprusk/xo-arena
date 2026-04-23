@@ -81,8 +81,13 @@ router.patch('/preferences', requireAuth, async (req, res, next) => {
 
 /**
  * POST /api/v1/guide/journey/step
- * Client-side trigger for steps that can't be detected server-side (currently step 3).
+ * Client-side trigger for steps that can't be detected server-side.
  * Body: { step: number }
+ *
+ * Step 2 — visit /faq
+ * Step 4 — visit /gym/guide
+ * Step 7 — dismiss the "how to enter a tournament" popup on /tournaments
+ *          (terminal step — completeStep fires the +50 TC reward)
  */
 router.post('/journey/step', requireAuth, async (req, res, next) => {
   try {
@@ -93,7 +98,7 @@ router.post('/journey/step', requireAuth, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
 
     const { step } = req.body
-    const CLIENT_TRIGGERABLE = [2, 4]   // only client-side steps
+    const CLIENT_TRIGGERABLE = [2, 4, 7]
     if (!CLIENT_TRIGGERABLE.includes(step)) {
       return res.status(400).json({ error: 'Step cannot be triggered client-side' })
     }

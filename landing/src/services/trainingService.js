@@ -17,11 +17,12 @@ import {
   minimaxMove,
   getWinner, isBoardFull, opponent,
 } from '../vendor/ai/index.js'
+import { normalizeAlgorithm } from '../components/gym/gymShared.jsx'
 
 // ─── Engine builder ──────────────────────────────────────────────────────────
 
 export function buildEngine(model, sessionConfig = {}) {
-  const algorithm = (sessionConfig.algorithm || model.algorithm || 'Q_LEARNING').toUpperCase()
+  const algorithm = normalizeAlgorithm(sessionConfig.algorithm || model.algorithm)
   let engineConfig = { ...model.config, ...sessionConfig, totalEpisodes: sessionConfig.iterations || 1000 }
   let qtable = model.qtable || {}
 
@@ -272,7 +273,7 @@ function _runPGEpisode(engine, mlMark, opponentFn) {
 }
 
 function _runEpisodeForAlgorithm(engine, mlMark, opponentFn, algorithm) {
-  const alg = (algorithm || 'Q_LEARNING').toUpperCase()
+  const alg = normalizeAlgorithm(algorithm)
   if (alg === 'SARSA')                             return _runSarsaEpisode(engine, mlMark, opponentFn)
   if (alg === 'MONTE_CARLO' || alg === 'MC')       return _runMCEpisode(engine, mlMark, opponentFn)
   if (alg === 'POLICY_GRADIENT' || alg === 'PG')   return _runPGEpisode(engine, mlMark, opponentFn)
@@ -299,7 +300,7 @@ const PROGRESS_BATCH = 50  // minimum episodes between progress events
  */
 export async function runTrainingSession({ model, session, onProgress, onCurriculumAdvance, cancelRef }) {
   const { mode, iterations, config = {} } = session
-  const algorithm = config.algorithm || model.algorithm || 'Q_LEARNING'
+  const algorithm = normalizeAlgorithm(config.algorithm || model.algorithm)
 
   const engine = buildEngine(model, { ...config, iterations })
 

@@ -159,6 +159,15 @@ export default function AppLayout() {
     useGuideStore.getState().close()
   }, [location.pathname])
 
+  // Re-hydrate the guide store on non-/play navigation. Recovers from socket
+  // events we may have missed during gameplay (e.g. brief disconnect, subscribe
+  // race, backend restart). Cheap GET; runs once per non-/play route change.
+  useEffect(() => {
+    if (!session?.user?.id) return
+    if (location.pathname.startsWith('/play')) return
+    useGuideStore.getState().hydrate()
+  }, [location.pathname, session?.user?.id])
+
   // No socket pre-warm: empirically, an idle pre-warmed polling socket goes
   // stale (server expires the SID), and the 400 + reconnect cycle on first
   // event is 5-10× slower than a fresh on-demand handshake (~1100ms vs ~100ms).

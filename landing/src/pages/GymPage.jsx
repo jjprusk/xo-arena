@@ -13,7 +13,7 @@ import { Skeleton } from '../components/ui/Skeleton.jsx'
 import {
   MODES, DIFFICULTIES, ALGORITHMS, STATUS_COLOR, SESSION_COLOR,
   playerLabel, Card, SectionLabel, MiniStat, ChartPanel,
-  StatusBadge, Btn, Spinner, tooltipStyle, downloadJSON,
+  StatusBadge, Btn, Spinner, tooltipStyle, downloadJSON, normalizeAlgorithm,
 } from '../components/gym/gymShared.jsx'
 
 // Module-level ML model cache — keyed by modelId, survives component unmount/navigation
@@ -318,7 +318,7 @@ export default function GymPage() {
                     </div>
                     {selectedBot.bio && <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selectedBot.bio}</p>}
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <span>{selectedModel.algorithm?.toUpperCase()}</span>
+                      <span>{ALGORITHMS.find(a => a.value === normalizeAlgorithm(selectedModel.algorithm))?.label ?? '—'}</span>
                       <span>{selectedModel.totalEpisodes.toLocaleString()} / {selectedModel.maxEpisodes > 0 ? selectedModel.maxEpisodes.toLocaleString() : '∞'} episodes</span>
                       <span>ELO {Math.round(selectedBot.eloRating || 1200)}</span>
                       <span title={isModelCached(selectedModel.id) ? 'Q-table loaded in browser — moves run locally' : 'Not yet cached'} style={{ color: isModelCached(selectedModel.id) ? 'var(--color-teal-600)' : 'var(--text-muted)' }}>

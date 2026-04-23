@@ -66,10 +66,12 @@ export const useGuideStore = create((set, get) => ({
     }).catch(() => {})
   },
 
-  // Marks step 8 complete, sets dismissedAt, and saves slots — all in one PATCH to avoid race.
+  // Marks the terminal step (7) complete, sets dismissedAt, and saves slots —
+  // all in one PATCH to avoid race. Idempotent: if step 7 was already marked
+  // via the /tournaments popup trigger, Set dedupes.
   async completeJourney(postJourneySlots) {
     const { journeyProgress } = get()
-    const completedSteps = [...new Set([...(journeyProgress?.completedSteps ?? []), 8])]
+    const completedSteps = [...new Set([...(journeyProgress?.completedSteps ?? []), 7])]
     const dismissedAt    = new Date().toISOString()
     set({ journeyProgress: { completedSteps, dismissedAt }, slots: postJourneySlots })
     try {

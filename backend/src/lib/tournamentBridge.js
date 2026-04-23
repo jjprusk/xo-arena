@@ -8,7 +8,6 @@ import Redis from 'ioredis'
 import db from './db.js'
 import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
-import { completeStep } from '../services/journeyService.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
@@ -177,7 +176,6 @@ export async function handleEvent(io, channel, data) {
         const dbUser = await db.user.findUnique({ where: { betterAuthId }, select: { id: true } })
         const dbUserId = dbUser?.id ?? betterAuthId
         await dispatch({ type: 'match.ready', targets: { userId: dbUserId }, payload: { tournamentId, matchId } })
-        completeStep(dbUserId, 7, io).catch(() => {})
       }
       break
     }
@@ -217,7 +215,6 @@ export async function handleEvent(io, channel, data) {
               data: { userId, type: 'match.result', payload: { tournamentId, matchId } },
             }).catch(() => {})
           }
-          completeStep(userId, 8, io).catch(() => {})
         }
       } catch (err) {
         logger.error({ err, matchId }, 'Failed to record match result notification')

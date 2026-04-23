@@ -11,7 +11,7 @@ import { getSocket } from '../../lib/socket.js'
 import { runTrainingSession } from '../../services/trainingService.js'
 import { useGymStore } from '../../store/gymStore.js'
 import {
-  MODES, DIFFICULTIES, ALGORITHMS,
+  MODES, DIFFICULTIES, ALGORITHMS, normalizeAlgorithm,
   Card, SectionLabel, Btn, StatusBadge, Spinner, MiniStat, ChartPanel, tooltipStyle,
 } from './gymShared.jsx'
 
@@ -24,7 +24,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   const [iterations, setIterations]         = useState(1000)
   const [difficulty, setDifficulty]         = useState('intermediate')
   const [mlMark, setMlMark]                 = useState('alternating')
-  const algorithm = model.algorithm || 'Q_LEARNING'
+  const algorithm = normalizeAlgorithm(model.algorithm)
   const [curriculum, setCurriculum]         = useState(false)
   const [earlyStopEnabled, setEarlyStop]    = useState(false)
   const [patience, setPatience]             = useState(200)
