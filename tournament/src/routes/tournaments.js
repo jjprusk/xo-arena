@@ -967,6 +967,18 @@ router.post('/:id/seed-bots', requireTournamentAdmin, async (req, res, next) => 
         update: {},
       })
 
+      // Phase 3.7a propagation: if this tournament is tied to a template,
+      // mirror the seed onto TournamentTemplateSeedBot so scheduler-spawned
+      // occurrences inherit the seed. Without this, legacy `addSeedBots`
+      // callers only populated the current occurrence.
+      if (tournament.templateId) {
+        await db.tournamentTemplateSeedBot.upsert({
+          where:  { templateId_userId: { templateId: tournament.templateId, userId: user.id } },
+          create: { templateId: tournament.templateId, userId: user.id },
+          update: {},
+        }).catch(() => {})
+      }
+
       added.push({ userId: user.id, displayName: user.displayName, botModelId, skillLevel: skill })
     }
 
@@ -994,6 +1006,19 @@ router.delete('/:id/seed-bots/:botUserId', requireTournamentAdmin, async (req, r
       where: { tournamentId, userId: botUserId, status: 'REGISTERED' },
       data: { status: 'WITHDRAWN' },
     })
+
+    // Phase 3.7a propagation (mirror of POST): if this tournament is tied
+    // to a template, also drop the template-seed row so future spawned
+    // occurrences don't re-include the bot.
+    const tournament = await db.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { templateId: true },
+    })
+    if (tournament?.templateId) {
+      await db.tournamentTemplateSeedBot.deleteMany({
+        where: { templateId: tournament.templateId, userId: botUserId },
+      }).catch(() => {})
+    }
 
     res.status(204).send()
   } catch (e) { next(e) }

@@ -151,10 +151,21 @@ export async function checkRecurringOccurrences() {
         summary.occurrencesCreated++
 
         // Standing human subscriptions attached to the template.
+        // NB: RecurringTournamentRegistration has no `user` relation in the
+        // Prisma schema — fetch the isBot flags with a second query and map
+        // them in. Previously this used `include: { user: ... }` and threw
+        // on every spawn, silently skipping enrollment for every standing
+        // subscriber (humans and seed bots both).
         const standing = await db.recurringTournamentRegistration.findMany({
           where: { templateId: template.id, optedOutAt: null },
-          include: { user: { select: { id: true, isBot: true } } },
         })
+        const users = standing.length
+          ? await db.user.findMany({
+              where:  { id: { in: standing.map(r => r.userId) } },
+              select: { id: true, isBot: true },
+            })
+          : []
+        const isBotByUserId = Object.fromEntries(users.map(u => [u.id, u.isBot]))
         const autoEnrolledUserIds = []
         for (const reg of standing) {
           await db.tournamentParticipant.create({
@@ -166,7 +177,7 @@ export async function checkRecurringOccurrences() {
               registrationMode: 'RECURRING',
             },
           }).catch(() => { /* already registered — ignore */ })
-          if (reg.user && !reg.user.isBot) autoEnrolledUserIds.push(reg.userId)
+          if (isBotByUserId[reg.userId] === false) autoEnrolledUserIds.push(reg.userId)
         }
 
         // Seed bots attached to the template.
