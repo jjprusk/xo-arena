@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.3.0-alpha-1.27",
+    "date": "2026-04-23",
+    "description": "Notify recurring-tournament subscribers on each occurrence"
+  },
+  {
     "version": "1.3.0-alpha-1.26",
     "date": "2026-04-23",
     "description": "Quietly drop unfilled bot-only tournaments"
