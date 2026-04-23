@@ -1047,7 +1047,16 @@ export default function AdminTournamentsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-      <AdminHeader title="Tournaments" subtitle={`${total} total`} />
+      <div className="flex items-start justify-between gap-4">
+        <AdminHeader title="Tournaments" subtitle={`${total} total`} />
+        <Link
+          to="/admin/templates"
+          className="text-sm font-semibold underline underline-offset-2 mt-2 shrink-0"
+          style={{ color: 'var(--color-blue-600)' }}
+        >
+          Recurring Templates →
+        </Link>
+      </div>
 
       {/* Tournament list */}
       <div className="space-y-4">

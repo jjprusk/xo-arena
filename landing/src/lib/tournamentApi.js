@@ -76,6 +76,11 @@ export const tournamentApi = {
   listMyRecurring:              (token)             => request('GET',    '/api/recurring/my', undefined, token),
   triggerRecurringCheck:        (token)             => request('POST',   '/api/tournaments/admin/scheduler/check-recurring', {}, token),
 
+  // Phase 3.7a — recurring-tournament templates (admin)
+  listTemplates:   (token)                => request('GET',  '/api/tournaments/admin/templates', undefined, token),
+  pauseTemplate:   (id, token)            => request('POST', `/api/tournaments/admin/templates/${id}/pause`, {}, token),
+  unpauseTemplate: (id, token)            => request('POST', `/api/tournaments/admin/templates/${id}/unpause`, {}, token),
+
   fillTestPlayers: (id, token) => request('POST', `/api/tournaments/${id}/fill-test-players`, {}, token),
   fillQaBots:      (id, data, token) => request('POST', `/api/tournaments/${id}/fill-qa-bots`, data, token),
   addSeededBot:    (id, data, token) => request('POST', `/api/tournaments/${id}/add-seeded-bot`, data, token),

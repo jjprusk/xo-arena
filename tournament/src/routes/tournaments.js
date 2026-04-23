@@ -1052,4 +1052,89 @@ router.post('/admin/scheduler/check-recurring', requireTournamentAdmin, async (r
   }
 })
 
+// GET /api/tournaments/admin/templates
+// Phase 3.7a admin view: list all recurring-tournament templates with
+// subscriber count + last-occurrence info so the admin Tournaments page
+// can render its new "Templates" tab. Occurrences are still listed via
+// the existing GET / (the public list — admins can toggle isTest via
+// that path).
+router.get('/admin/templates', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const templates = await db.tournamentTemplate.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { subscriptions: true, seedBots: true, tournaments: true } },
+      },
+    })
+    // Attach the most-recent occurrence per template for a quick status peek.
+    const results = await Promise.all(templates.map(async (t) => {
+      const lastOccurrence = await db.tournament.findFirst({
+        where:   { templateId: t.id },
+        orderBy: { startTime: 'desc' },
+        select:  { id: true, startTime: true, status: true },
+      })
+      return {
+        id:                      t.id,
+        name:                    t.name,
+        game:                    t.game,
+        mode:                    t.mode,
+        format:                  t.format,
+        bracketType:             t.bracketType,
+        minParticipants:         t.minParticipants,
+        maxParticipants:         t.maxParticipants,
+        recurrenceInterval:      t.recurrenceInterval,
+        recurrenceStart:         t.recurrenceStart,
+        recurrenceEndDate:       t.recurrenceEndDate,
+        paused:                  t.paused,
+        isTest:                  t.isTest,
+        createdById:             t.createdById,
+        createdAt:               t.createdAt,
+        subscriberCount:         t._count.subscriptions,
+        seedBotCount:            t._count.seedBots,
+        occurrenceCount:         t._count.tournaments,
+        lastOccurrence,
+      }
+    }))
+    res.json({ templates: results })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/admin/templates/:id/pause
+router.post('/admin/templates/:id/pause', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const template = await db.tournamentTemplate.update({
+      where: { id: req.params.id },
+      data:  { paused: true },
+    })
+    // Dual-write: keep the first-occurrence Tournament row in sync so the
+    // admin's legacy view shows the pause state too.
+    await db.tournament.updateMany({
+      where: { id: req.params.id },
+      data:  { recurrencePaused: true },
+    }).catch(() => {})
+    res.json({ template })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/admin/templates/:id/unpause
+router.post('/admin/templates/:id/unpause', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const template = await db.tournamentTemplate.update({
+      where: { id: req.params.id },
+      data:  { paused: false },
+    })
+    await db.tournament.updateMany({
+      where: { id: req.params.id },
+      data:  { recurrencePaused: false },
+    }).catch(() => {})
+    res.json({ template })
+  } catch (e) {
+    next(e)
+  }
+})
+
 export default router
