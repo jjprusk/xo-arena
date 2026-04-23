@@ -458,7 +458,19 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
         <StatusBadge status={tournament.status} />
       </ListTd>
       <ListTd align="right">
-        {isOpen && token ? (
+        {tournament.status === 'IN_PROGRESS' ? (
+          // Jump straight to the live bracket's first in-progress match —
+          // the detail page auto-opens the spectate modal when ?watch=1.
+          <Link
+            to={`/tournaments/${tournament.id}?watch=1`}
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap border transition-colors hover:bg-[var(--color-primary-50)]"
+            style={{ color: 'var(--color-primary)', borderColor: 'var(--border-default)' }}
+            title="Watch a live match"
+          >
+            👁 Watch
+          </Link>
+        ) : isOpen && token ? (
           <div onClick={e => e.stopPropagation()}>
             {tournament.isRegisteredByViewer ? (
               <span

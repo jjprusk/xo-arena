@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
@@ -529,7 +529,7 @@ function SpectatorGame({ slug }) {
   )
 }
 
-function MatchSpectateModal({ matchId, matchLabel, onClose }) {
+function MatchSpectateModal({ matchId, matchLabel, followedName, onClose }) {
   const [slug, setSlug]       = useState(null)
   const [fetching, setFetching] = useState(true)
   const [fetchError, setFetchError] = useState(null)
@@ -568,14 +568,25 @@ function MatchSpectateModal({ matchId, matchLabel, onClose }) {
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <span
-              className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full animate-pulse"
+              className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full animate-pulse shrink-0"
               style={{ backgroundColor: 'var(--color-blue-50)', color: 'var(--color-blue-700)' }}
             >
               Live
             </span>
-            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{matchLabel}</span>
+            <div className="min-w-0">
+              {followedName ? (
+                <>
+                  <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                    Following: {followedName}
+                  </div>
+                  <div className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{matchLabel}</div>
+                </>
+              ) : (
+                <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{matchLabel}</span>
+              )}
+            </div>
           </div>
           <button onClick={onClose} className="shrink-0 px-2 py-1 rounded text-xs"
             style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}>
@@ -1631,7 +1642,7 @@ function FinalStandings({ tournament }) {
 
 // ── Participants table ────────────────────────────────────────────────────────
 
-function ParticipantTable({ participants }) {
+function ParticipantTable({ participants, tournamentStatus, onFollow }) {
   if (!participants || participants.length === 0) {
     return <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No participants yet.</p>
   }
@@ -1676,10 +1687,32 @@ function ParticipantTable({ participants }) {
               {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
             </ListTd>
             <ListTd>
-              <StatusBadge
-                status={p.finalPosition === 1 ? 'WINNER' : p.status}
-                styles={PARTICIPANT_STATUS_STYLES}
-              />
+              <div className="flex items-center justify-between gap-2">
+                <StatusBadge
+                  status={p.finalPosition === 1 ? 'WINNER' : p.status}
+                  styles={PARTICIPANT_STATUS_STYLES}
+                />
+                {/* Follow shortcut — only meaningful while the tournament is
+                    running and the participant hasn't dropped out. Clicking
+                    opens the spectate modal on their current in-progress
+                    match; URL gets ?follow=<userId> so the view is
+                    shareable and refresh-safe. */}
+                {onFollow
+                  && tournamentStatus === 'IN_PROGRESS'
+                  && p.status !== 'WITHDRAWN'
+                  && p.status !== 'ELIMINATED'
+                  && p.userId && (
+                  <button
+                    type="button"
+                    onClick={() => onFollow(p.userId, p.user?.displayName ?? 'Player')}
+                    className="text-[10px] font-medium px-1.5 py-0.5 rounded hover:underline"
+                    style={{ color: 'var(--color-primary)' }}
+                    title={`Follow ${p.user?.displayName ?? 'this player'} through their matches`}
+                  >
+                    👁 Follow
+                  </button>
+                )}
+              </div>
             </ListTd>
           </ListTr>
         ))}
@@ -1703,6 +1736,7 @@ function Section({ title, children }) {
 
 export default function TournamentDetailPage() {
   const { id } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: session } = useOptimisticSession()
   const [tournament, setTournament] = useState(null)
   const [loading, setLoading]       = useState(true)
@@ -1711,7 +1745,14 @@ export default function TournamentDetailPage() {
   const [dbUserId, setDbUserId]     = useState(null)
   const [activeMatchEvent, setActiveMatchEvent] = useState(null)
   const [replayMatch, setReplayMatch]           = useState(null) // { id, label }
-  const [watchMatch, setWatchMatch]             = useState(null) // { id, label }
+  const [watchMatch, setWatchMatch]             = useState(null) // { id, label, followedName? }
+  // ?watch=1 from the list-level 👁 shortcut: auto-open the spectate modal
+  // on the first IN_PROGRESS match as soon as the bracket loads. Stripped
+  // from the URL after consumption so a page refresh doesn't re-trigger.
+  const autoWatchRequested = searchParams.get('watch') === '1'
+  // ?follow=<userId> — stays in the URL until the modal closes, so the
+  // view is shareable and survives refresh.
+  const followUserId = searchParams.get('follow')
   // Tracks whether we have successfully loaded tournament data at least once.
   // Used to skip the loading spinner on silent re-fetches (e.g. after auth resolves).
   const tournamentRef = useRef(null)
@@ -1746,6 +1787,69 @@ export default function TournamentDetailPage() {
 
   // Reset cached data when navigating to a different tournament.
   useEffect(() => { tournamentRef.current = null }, [id])
+
+  // ?watch=1 — open the spectate modal on the first IN_PROGRESS match once
+  // the bracket has loaded. Strip the param afterward so a refresh doesn't
+  // re-trigger, and so the modal's own Close behavior wins.
+  useEffect(() => {
+    if (!autoWatchRequested || !tournament || watchMatch) return
+    const byId = Object.fromEntries(
+      (tournament.participants ?? []).map(p => [p.id, p?.user?.displayName ?? 'Unknown'])
+    )
+    let chosen = null
+    for (const round of tournament.rounds ?? []) {
+      chosen = (round.matches ?? []).find(m => m.status === 'IN_PROGRESS' && m.participant1Id && m.participant2Id)
+      if (chosen) break
+    }
+    if (chosen) {
+      const label = `${byId[chosen.participant1Id] ?? '?'} vs ${byId[chosen.participant2Id] ?? '?'}`
+      setWatchMatch({ id: chosen.id, label })
+    }
+    // Consume the param either way — if no live match was found, don't
+    // keep re-scanning on every state change.
+    const next = new URLSearchParams(searchParams)
+    next.delete('watch')
+    setSearchParams(next, { replace: true })
+  }, [autoWatchRequested, tournament, watchMatch, searchParams, setSearchParams])
+
+  // ?follow=<userId> — scan the bracket for that user's current in-progress
+  // match and open the spectate modal. Unlike ?watch=1 the param stays in
+  // the URL so refresh/back keeps following. Phase 1: resolves once on
+  // load; doesn't auto-advance when the match ends. Phase 2 will listen
+  // for match-end and re-resolve.
+  useEffect(() => {
+    if (!followUserId || !tournament || watchMatch) return
+    // Find a participant row for this user so we have display name + participantId
+    const participant = (tournament.participants ?? []).find(p => p.userId === followUserId)
+    if (!participant) return
+    const displayName = participant.user?.displayName ?? 'Player'
+    // Scan rounds for a match they're in, preferring IN_PROGRESS, falling
+    // back to any match (pending round, just-completed) — keep the modal
+    // open even between matches so the user knows the follow is active.
+    const byId = Object.fromEntries(
+      (tournament.participants ?? []).map(p => [p.id, p?.user?.displayName ?? 'Unknown'])
+    )
+    let live = null
+    for (const round of tournament.rounds ?? []) {
+      live = (round.matches ?? []).find(m =>
+        m.status === 'IN_PROGRESS' &&
+        (m.participant1Id === participant.id || m.participant2Id === participant.id)
+      )
+      if (live) break
+    }
+    if (!live) return  // no live match right now — leave modal closed; user can reopen once round starts
+    const label = `${byId[live.participant1Id] ?? '?'} vs ${byId[live.participant2Id] ?? '?'}`
+    setWatchMatch({ id: live.id, label, followedName: displayName })
+  }, [followUserId, tournament, watchMatch])
+
+  // Called when the user clicks 👁 Follow in the participants table.
+  // Writes the URL param (shareable, refresh-safe) — the effect above
+  // picks up the change and opens the modal on their current match.
+  const handleFollow = useCallback((userId /* , displayName */) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('follow', userId)
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const load = useCallback(async () => {
     // If a session user is known but the token hasn't resolved yet, skip the pre-fetch.
@@ -2017,7 +2121,11 @@ export default function TournamentDetailPage() {
       )}
 
       <Section title={`Participants (${(t.participants ?? []).length})`}>
-        <ParticipantTable participants={t.participants ?? []} />
+        <ParticipantTable
+          participants={t.participants ?? []}
+          tournamentStatus={t.status}
+          onFollow={handleFollow}
+        />
       </Section>
 
       {replayMatch && (
@@ -2031,7 +2139,18 @@ export default function TournamentDetailPage() {
         <MatchSpectateModal
           matchId={watchMatch.id}
           matchLabel={watchMatch.label}
-          onClose={() => setWatchMatch(null)}
+          followedName={watchMatch.followedName}
+          onClose={() => {
+            setWatchMatch(null)
+            // If this modal was opened via ?follow=<userId>, strip the
+            // param so refresh / back doesn't re-open the same follow
+            // against what may by then be a stale match.
+            if (searchParams.has('follow')) {
+              const next = new URLSearchParams(searchParams)
+              next.delete('follow')
+              setSearchParams(next, { replace: true })
+            }
+          }}
         />
       )}
     </div>
