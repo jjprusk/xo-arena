@@ -220,11 +220,12 @@ export const api = {
     getLogLimit:   (token)       => api.get('/admin/logs/limit', token),
     setLogLimit:   (body, token) => api.patch('/admin/logs/limit', body, token),
 
-    listBots: (token, search, page, limit) => {
+    listBots: (token, search, page, limit, opts = {}) => {
       const p = new URLSearchParams()
-      if (search) p.set('search', search)
-      if (page)   p.set('page', page)
-      if (limit)  p.set('limit', limit)
+      if (search)         p.set('search', search)
+      if (page)           p.set('page', page)
+      if (limit)          p.set('limit', limit)
+      if (opts.systemOnly) p.set('systemOnly', '1')
       const qs = p.toString()
       return api.get(`/admin/bots${qs ? `?${qs}` : ''}`, token)
     },
@@ -240,6 +241,11 @@ export const api = {
     setSessionConfig: (body, token) => api.patch('/admin/session-config', body, token),
     getReplayConfig: (token) => api.get('/admin/replay-config', token),
     setReplayConfig: (body, token) => api.patch('/admin/replay-config', body, token),
+
+    // Phase 3.7a.6 — sweep-drop health signal (bot-only tournaments the
+    // sweep hard-deleted for being unfilled). period ∈ { day | week | month }.
+    tournamentsAutoDropped: (token, period = 'week') =>
+      api.get(`/admin/tournaments/auto-dropped?period=${encodeURIComponent(period)}`, token),
   },
   games: {
     getReplay:    (id, token)      => api.get(`/games/${id}/replay`, token),

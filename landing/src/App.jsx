@@ -15,6 +15,8 @@ import FAQPage from './pages/FAQPage.jsx'
 import AboutPage from './pages/AboutPage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminTournamentsPage from './pages/admin/AdminTournamentsPage.jsx'
+import AdminTemplatesPage from './pages/admin/AdminTemplatesPage.jsx'
+import AdminTemplateDetailPage from './pages/admin/AdminTemplateDetailPage.jsx'
 import AdminUsersPage from './pages/admin/AdminUsersPage.jsx'
 import AdminUserProfilePage from './pages/admin/AdminUserProfilePage.jsx'
 import AdminGamesPage from './pages/admin/AdminGamesPage.jsx'
@@ -26,6 +28,7 @@ import LogViewerPage from './pages/admin/LogViewerPage.jsx'
 import RankingsPage from './pages/RankingsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
+import PublicProfilePage from './pages/PublicProfilePage.jsx'
 import SupportPage from './pages/SupportPage.jsx'
 import GymPage from './pages/GymPage.jsx'
 import GymGuidePage from './pages/GymGuidePage.jsx'
@@ -52,6 +55,7 @@ export default function App() {
           <Route path="/rankings" element={<RankingsPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/bots/:id" element={<BotProfilePage />} />
+          <Route path="/users/:username" element={<PublicProfilePage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route path="/gym" element={<GymPage />} />
           <Route path="/gym/guide" element={<GymGuidePage />} />
@@ -62,6 +66,8 @@ export default function App() {
           {/* Admin routes — all guarded by AdminRoute */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/admin/tournaments" element={<AdminRoute><AdminTournamentsPage /></AdminRoute>} />
+          <Route path="/admin/templates"       element={<AdminRoute><AdminTemplatesPage      /></AdminRoute>} />
+          <Route path="/admin/templates/:id"   element={<AdminRoute><AdminTemplateDetailPage /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
           <Route path="/admin/users/:id" element={<AdminRoute><AdminUserProfilePage /></AdminRoute>} />
           <Route path="/admin/games" element={<AdminRoute><AdminGamesPage /></AdminRoute>} />

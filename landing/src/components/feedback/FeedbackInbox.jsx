@@ -242,7 +242,23 @@ function ExpandedRow({ item, apiBase, onUpdate, onDelete }) {
   }
 
   async function handleArchive() {
-    await patchItem({ archived: true })
+    // Archive is a dedicated endpoint that toggles archivedAt server-side
+    // (the generic PATCH handler silently ignores an `archived` field).
+    setSaving(true)
+    try {
+      const token = await getToken()
+      const headers = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`${BASE}${apiBase}/${item.id}/archive`, {
+        method: 'PATCH',
+        headers,
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { archivedAt } = await res.json()
+      onUpdate({ ...item, archivedAt, archived: !!archivedAt })
+    } catch { /* non-fatal */ } finally {
+      setSaving(false)
+    }
   }
 
   async function handleDelete() {
@@ -472,6 +488,18 @@ export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback', apps
   useEffect(() => { load() }, [load])
 
   function handleUpdate(updated) {
+    // If the update changes the item's archived state to something that no
+    // longer matches the active tab (inbox vs archive), drop it from view —
+    // the server will include it in the other tab's next load. Otherwise
+    // merge the patch fields in place.
+    const nowArchived = updated.archived ?? !!updated.archivedAt
+    const currentTabArchived = archived
+    if (typeof updated.archivedAt !== 'undefined' && nowArchived !== currentTabArchived) {
+      setItems(prev => prev.filter(i => i.id !== updated.id))
+      setTotal(t => Math.max(0, t - 1))
+      if (expanded === updated.id) setExpanded(null)
+      return
+    }
     setItems(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i))
   }
 
@@ -505,11 +533,22 @@ export default function FeedbackInbox({ apiBase = '/api/v1/admin/feedback', apps
       const token = await getToken()
       const headers = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
-      await fetch(`${BASE}${apiBase}/bulk`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ids: [...selected], action }),
-      })
+      const ids = [...selected]
+      if (action === 'archive') {
+        // Dedicated bulk endpoint on the backend.
+        await fetch(`${BASE}${apiBase}/archive-many`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ ids }),
+        })
+      } else if (action === 'markRead') {
+        // No bulk mark-read endpoint — iterate. Cheap (few-dozen items max).
+        await Promise.all(ids.map(id =>
+          fetch(`${BASE}${apiBase}/${id}/read`, { method: 'PATCH', headers })
+        ))
+      } else {
+        throw new Error(`unknown bulk action: ${action}`)
+      }
       await load()
     } catch { /* non-fatal */ } finally {
       setBulkLoading(false)

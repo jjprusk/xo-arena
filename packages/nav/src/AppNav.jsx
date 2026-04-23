@@ -1,7 +1,7 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect } from 'react'
 import { NavLink, Link, useLocation } from 'react-router-dom'
-import { PRIMARY_NAV, XO_SUBNAV, resolveItem } from './navItems.js'
+import { PRIMARY_NAV, resolveItem } from './navItems.js'
 
 /**
  * Shared primary navigation bar for the AI Arena platform.
@@ -9,14 +9,13 @@ import { PRIMARY_NAV, XO_SUBNAV, resolveItem } from './navItems.js'
  * Props:
  *   appId           'landing' | 'xo'  — which site is rendering this nav
  *   appUrls         { landing, xo }   — base URLs for cross-site links
- *   subnav          null | 'xo'       — show the XO game subnav below the header
  *   desktopNavKeys  string[] | null   — if provided, only these keys appear in the desktop
  *                                       primary nav (all keys still appear in the hamburger)
  *   rightSlot       ReactNode         — right-side controls (user button, sign-in)
  *   extrasSlot      ReactNode         — extra controls before rightSlot (mute, theme toggles)
  *   isStaging       bool              — amber header background for staging
  */
-export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSlot, extrasSlot, isStaging }) {
+export default function AppNav({ appId, appUrls, desktopNavKeys, rightSlot, extrasSlot, isStaging }) {
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -25,20 +24,13 @@ export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSl
     setMenuOpen(false)
   }, [location.pathname])
 
-  const subnavItems = subnav === 'xo' ? XO_SUBNAV : null
-
   // Desktop primary nav: optionally filtered by desktopNavKeys
   const desktopPrimaryNav = desktopNavKeys
     ? PRIMARY_NAV.filter(item => desktopNavKeys.includes(item.key))
     : PRIMARY_NAV
 
-  // Mobile drawer always shows everything:
-  //   XO subnav section (if present) → then full primary nav
-  const drawerSections = []
-  if (subnavItems) {
-    drawerSections.push({ title: 'XO', items: subnavItems.map(i => ({ ...i, app: 'xo' })) })
-  }
-  drawerSections.push({ title: 'AI Arena', items: PRIMARY_NAV })
+  // Mobile drawer shows the full primary nav (plus an optional label section).
+  const drawerSections = [{ title: 'AI Arena', items: PRIMARY_NAV }]
 
   function DesktopNavItem({ item }) {
     const { href, internal } = resolveItem(item, appId, appUrls)
@@ -112,35 +104,6 @@ export default function AppNav({ appId, appUrls, subnav, desktopNavKeys, rightSl
           {rightSlot}
         </div>
       </header>
-
-      {/* ── XO game subnav (desktop) ──────────────── */}
-      {subnavItems && (
-        <nav
-          className="hidden md:flex items-center gap-1 px-4 overflow-x-auto"
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            borderBottom: '1px solid var(--border-default)',
-            minHeight: '38px',
-          }}
-        >
-          {subnavItems.map(({ key, label, to }) => (
-            <NavLink
-              key={key}
-              to={to}
-              className={({ isActive }) =>
-                `px-3 py-2 text-xs font-medium whitespace-nowrap no-underline border-b-2 transition-colors ${
-                  isActive
-                    ? 'border-[var(--color-blue-500)]'
-                    : 'border-transparent hover:border-[var(--border-default)]'
-                }`
-              }
-              style={({ isActive }) => ({ color: isActive ? 'var(--color-blue-600)' : 'var(--text-secondary)' })}
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-      )}
 
       {/* ── Mobile drawer ─────────────────────────── */}
       {menuOpen && (

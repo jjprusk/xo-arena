@@ -8,7 +8,7 @@ Deferred features and improvements that are worth revisiting but not currently p
 | Item | Status |
 |---|---|
 | Real-Time Presence / Inactivity Detection | ✅ Mostly done (presence store + heartbeat live; away/active refinement open) |
-| Multi-Game Bots | ⏳ Open (schema ready; UI/flow still XO-only) |
+| Multi-Game Bots (now Phase 3.8) | 🚧 In-plan (scheduled as Phase 3.8 of the Implementation Plan) |
 | Real-Time Games Against Bots (Pong) | ⏳ Open (Phase 6) |
 | Persist Game State Through Deploys | ❌ Obsolete (replaced by DB-backed `Table` rows in Phase 3.4) |
 | Backend Logs in Admin Log Viewer | ⏳ Open |
@@ -17,7 +17,32 @@ Deferred features and improvements that are worth revisiting but not currently p
 | Configurable Guide | ❌ Obsolete (iframe guide retired; premise gone) |
 | Multi-Game Architecture | ✅ Largely done as the Game SDK (Phases 1.1–1.4) — remaining games are their own phases |
 | Tier 2/3 instrumentation | 🟡 Partly done (3 counters live; rest in `doc/Observability_Plan.md`) |
-| Recurring tournaments refactor | ⏳ Open (template vs occurrence still conflated) |
+| Recurring tournaments refactor (now Phase 3.7a) | 🚧 In-plan (scheduled as Phase 3.7a of the Implementation Plan, pre-prod window) |
+
+## Migration-sensitivity audit (2026-04-23)
+
+Which of the items above actually benefit from shipping *before* prod has real users? Only schema/data-migration costs scale with user volume; UX features cost the same at 0 users or 10,000.
+
+| Item | Migration-sensitive? | Verdict |
+|---|---|---|
+| Real-Time Presence | Done (✅) | — |
+| Multi-Game Bots (Phase 3.8) | No — schema already anticipates it (`BotSkill (botId, gameId)` unique from Phase 1.7) | Do via 3.8 on the normal track |
+| Pong (Phase 6) | No — new subsystems, no data migration | Ship when scheduled |
+| Persist Game State | Obsolete (❌) | — |
+| Backend Logs → DB | No — just starts writing more rows | Ship anytime |
+| Guide Chat | No — UX feature | Ship anytime |
+| Command Palette | No — UX feature | Ship anytime |
+| Configurable Guide | Obsolete (❌) | — |
+| Multi-Game Architecture | Done via SDK (✅) | — |
+| Tier 2/3 instrumentation | No — counters, not schema | Ship anytime |
+| **Recurring tournaments refactor** | **Yes — template vs occurrence split** | **Phase 3.7a (now)** |
+
+Also folded into Phase 3.7a for the same "easier empty than later" reason (not in the original Future_Ideas list):
+
+- Bot `displayName` uniqueness policy
+- Public profile URL structure (reserve `/users/:username`)
+- OAuth prod redirect URLs at providers
+- Seeded built-in bot polish (avatars, bios, ELO ladder)
 
 ---
 

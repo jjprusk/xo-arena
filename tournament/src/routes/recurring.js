@@ -18,12 +18,12 @@ router.get('/my', requireAuth, async (req, res, next) => {
     })
     if (registrations.length === 0) return res.json({ subscriptions: [] })
 
-    const templates = await db.tournament.findMany({
+    const templates = await db.tournamentTemplate.findMany({
       where: { id: { in: registrations.map(r => r.templateId) } },
       select: {
         id: true, name: true, description: true, game: true, mode: true,
-        recurrenceInterval: true, recurrenceEndDate: true, recurrencePaused: true,
-        startTime: true, bestOfN: true, maxParticipants: true, status: true,
+        recurrenceInterval: true, recurrenceEndDate: true, paused: true,
+        recurrenceStart: true, bestOfN: true, maxParticipants: true,
       },
     })
     const byId = Object.fromEntries(templates.map(t => [t.id, t]))

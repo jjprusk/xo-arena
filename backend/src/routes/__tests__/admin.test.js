@@ -57,9 +57,13 @@ vi.mock('../../lib/db.js', () => {
     findUnique: vi.fn(),
     upsert:     vi.fn(),
   }
+  const tournamentAutoDrop = {
+    count:    vi.fn(),
+    findMany: vi.fn(),
+  }
   return {
     default: {
-      user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig,
+      user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig, tournamentAutoDrop,
       $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount })),
     },
   }
@@ -544,6 +548,49 @@ describe('DELETE /api/v1/admin/games/:id', () => {
   })
 })
 
+// ─── GET /admin/tournaments/auto-dropped ─────────────────────────────────────
+
+describe('GET /api/v1/admin/tournaments/auto-dropped', () => {
+  beforeEach(() => {
+    db.tournamentAutoDrop.count.mockReset()
+    db.tournamentAutoDrop.findMany.mockReset()
+  })
+
+  it('returns count + items for the default period (week)', async () => {
+    db.tournamentAutoDrop.count.mockResolvedValue(3)
+    db.tournamentAutoDrop.findMany.mockResolvedValue([
+      { id: 'd1', name: 'Daily 3-Player', game: 'xo', minParticipants: 3, participantCount: 2, droppedAt: new Date() },
+    ])
+
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped')
+
+    expect(res.status).toBe(200)
+    expect(res.body.period).toBe('week')
+    expect(res.body.count).toBe(3)
+    expect(res.body.items).toHaveLength(1)
+    expect(new Date(res.body.since).getTime()).toBeLessThan(Date.now())
+  })
+
+  it('filters by the requested period — day', async () => {
+    db.tournamentAutoDrop.count.mockResolvedValue(1)
+    db.tournamentAutoDrop.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped?period=day')
+
+    expect(res.status).toBe(200)
+    expect(res.body.period).toBe('day')
+    const expectedSince = Date.now() - 24 * 60 * 60 * 1000
+    // Window is computed on the server; allow a second of slop for test runtime.
+    expect(Math.abs(new Date(res.body.since).getTime() - expectedSince)).toBeLessThan(2000)
+  })
+
+  it('rejects unknown periods with 400', async () => {
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped?period=year')
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/day.*week.*month/i)
+  })
+})
+
 // ─── GET /admin/bots ──────────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/bots', () => {
@@ -637,7 +684,7 @@ describe('PATCH /api/v1/admin/bots/:id', () => {
 
 describe('DELETE /api/v1/admin/bots/:id', () => {
   it('deletes bot and its games', async () => {
-    db.user.findUnique.mockResolvedValue({ id: 'bot_1', isBot: true, botModelId: null })
+    db.user.findUnique.mockResolvedValue({ id: 'bot_1', isBot: true, botModelId: null, username: 'bot-clone-x' })
     db.$transaction.mockImplementation(async (fn) => fn({ game: db.game, user: db.user }))
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
@@ -653,6 +700,46 @@ describe('DELETE /api/v1/admin/bots/:id', () => {
     const res = await request(app).delete('/api/v1/admin/bots/usr_1')
 
     expect(res.status).toBe(404)
+  })
+
+  it.each(['bot-rusty', 'bot-copper', 'bot-sterling', 'bot-magnus'])(
+    'refuses to delete built-in persona %s',
+    async (username) => {
+      db.user.findUnique.mockResolvedValue({ id: 'bot_builtin', isBot: true, botModelId: 'builtin:minimax:novice', username })
+
+      const res = await request(app).delete('/api/v1/admin/bots/bot_builtin')
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toMatch(/built-in/i)
+      expect(db.$transaction).not.toHaveBeenCalled()
+    },
+  )
+})
+
+// ─── GET /admin/bots?systemOnly ───────────────────────────────────────────────
+
+describe('GET /api/v1/admin/bots?systemOnly=1', () => {
+  it('passes botOwnerId: null into the where clause', async () => {
+    db.user.findMany.mockResolvedValueOnce([])   // bots query
+    db.user.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/admin/bots?systemOnly=1')
+
+    expect(res.status).toBe(200)
+    const firstCall = db.user.findMany.mock.calls[0][0]
+    expect(firstCall.where).toMatchObject({ isBot: true, botOwnerId: null })
+  })
+
+  it('omits botOwnerId filter when systemOnly is absent', async () => {
+    db.user.findMany.mockResolvedValueOnce([])
+    db.user.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+
+    await request(app).get('/api/v1/admin/bots')
+
+    const firstCall = db.user.findMany.mock.calls[0][0]
+    expect(firstCall.where).not.toHaveProperty('botOwnerId')
   })
 })
 

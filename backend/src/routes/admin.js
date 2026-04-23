@@ -767,6 +767,45 @@ router.patch('/logs/limit', async (req, res, next) => {
   }
 })
 
+// ─── Tournament auto-drop audit ──────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/tournaments/auto-dropped?period=day|week|month
+ *
+ * Phase 3.7a.6 health signal: how often did the tournament sweep
+ * hard-delete unfilled bot-only tournaments in the given window? Returns
+ * `{ count, items }` where items are the raw audit rows (newest first,
+ * capped at 20) so the admin widget can render a mini-list for
+ * pattern-spotting (same seed-bot mix dropping repeatedly → tune min
+ * participants).
+ */
+const AUTO_DROP_WINDOWS = {
+  day:   24 * 60 * 60 * 1000,
+  week:   7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+}
+router.get('/tournaments/auto-dropped', async (req, res, next) => {
+  try {
+    const period = (req.query.period ?? 'week').toString()
+    const windowMs = AUTO_DROP_WINDOWS[period]
+    if (!windowMs) {
+      return res.status(400).json({ error: 'period must be one of day, week, month' })
+    }
+    const since = new Date(Date.now() - windowMs)
+    const [count, items] = await Promise.all([
+      db.tournamentAutoDrop.count({ where: { droppedAt: { gte: since } } }),
+      db.tournamentAutoDrop.findMany({
+        where:   { droppedAt: { gte: since } },
+        orderBy: { droppedAt: 'desc' },
+        take:    20,
+      }),
+    ])
+    res.json({ period, since, count, items })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── Bot management ───────────────────────────────────────────────────────────
 
 /**
@@ -779,9 +818,11 @@ router.get('/bots', async (req, res, next) => {
     const page  = Math.max(1, parseInt(req.query.page) || 1)
     const limit = Math.min(100, parseInt(req.query.limit) || 25)
     const skip  = (page - 1) * limit
+    const systemOnly = req.query.systemOnly === '1' || req.query.systemOnly === 'true'
 
     const where = {
       isBot: true,
+      ...(systemOnly ? { botOwnerId: null } : {}),
       ...(search ? { displayName: { contains: search, mode: 'insensitive' } } : {}),
     }
 
@@ -892,13 +933,21 @@ router.patch('/bots/:id', async (req, res, next) => {
  * DELETE /api/v1/admin/bots/:id
  * Hard delete any bot.
  */
+// Usernames of the four built-in personas — cannot be deleted via admin API.
+const BUILTIN_BOT_USERNAMES = new Set(['bot-rusty', 'bot-copper', 'bot-sterling', 'bot-magnus'])
+
 router.delete('/bots/:id', async (req, res, next) => {
   try {
     const bot = await db.user.findUnique({
       where: { id: req.params.id },
-      select: { id: true, isBot: true, botModelId: true },
+      select: { id: true, isBot: true, botModelId: true, username: true },
     })
     if (!bot || !bot.isBot) return res.status(404).json({ error: 'Bot not found' })
+    if (BUILTIN_BOT_USERNAMES.has(bot.username)) {
+      return res.status(400).json({
+        error: 'Built-in system bots (Rusty, Copper, Sterling, Magnus) cannot be deleted — they are the cloning source for all seeded tournament bots.',
+      })
+    }
 
     await db.$transaction(async (tx) => {
       await tx.game.deleteMany({ where: { player1Id: bot.id } })

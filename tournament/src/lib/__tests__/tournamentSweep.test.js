@@ -15,8 +15,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../db.js', () => ({
   default: {
-    tournament: { findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    tournament: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn(), findUnique: vi.fn() },
     tournamentParticipant: { findUnique: vi.fn() },
+    tournamentAutoDrop:    { create: vi.fn().mockResolvedValue({}), deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
   },
 }))
 
@@ -32,7 +33,7 @@ vi.mock('../../logger.js', () => ({
   },
 }))
 
-const { recoverPendingBotMatches, autoCancel, allParticipantsAreBots } = await import('../tournamentSweep.js')
+const { recoverPendingBotMatches, sweep, autoCancel, allParticipantsAreBots } = await import('../tournamentSweep.js')
 const db      = (await import('../db.js')).default
 const { publish } = await import('../redis.js')
 
@@ -158,6 +159,32 @@ describe('recoverPendingBotMatches', () => {
   })
 })
 
+// ─── Phase 1 close — null-close fallback to startTime ────────────────────────
+
+describe('sweep — Phase 1 close', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Defaults so Phase 2 and recovery paths don't throw when we don't care
+    db.tournament.findMany.mockResolvedValue([])
+    db.tournament.updateMany.mockResolvedValue({ count: 0 })
+    db.tournament.findUnique.mockResolvedValue(null)
+  })
+
+  it('selects REGISTRATION_OPEN tournaments with null close AND past startTime alongside ones with an explicit close', async () => {
+    await sweep()
+
+    const phaseOneCall = db.tournament.findMany.mock.calls.find(
+      ([args]) => args.where?.status === 'REGISTRATION_OPEN',
+    )
+    expect(phaseOneCall, 'Phase 1 close query was issued').toBeDefined()
+    const where = phaseOneCall[0].where
+    expect(where.OR).toEqual([
+      expect.objectContaining({ registrationCloseAt: expect.objectContaining({ not: null }) }),
+      expect.objectContaining({ registrationCloseAt: null, startTime: expect.objectContaining({ not: null }) }),
+    ])
+  })
+})
+
 // ─── autoCancel: drop-vs-cancel decision ─────────────────────────────────────
 // Unfilled recurring occurrences with only seed bots should silently disappear
 // (no row, no Redis event, no notification). Tournaments where a real human
@@ -197,6 +224,8 @@ describe('autoCancel', () => {
     const tournament = {
       id: 't_unfilled',
       name: 'Daily 3-Player',
+      game: 'xo',
+      templateId: 'tpl_daily',
       minParticipants: 3,
       participants: [
         { userId: 'bot_rusty',  user: bot1 },
@@ -209,15 +238,34 @@ describe('autoCancel', () => {
     expect(db.tournament.delete).toHaveBeenCalledWith({ where: { id: 't_unfilled' } })
     expect(db.tournament.update).not.toHaveBeenCalled()
     expect(publish).not.toHaveBeenCalled()
+
+    // Phase 3.7a.6: audit row written before delete.
+    expect(db.tournamentAutoDrop.create).toHaveBeenCalledWith({
+      data: {
+        originalTournamentId: 't_unfilled',
+        templateId:           'tpl_daily',
+        name:                 'Daily 3-Player',
+        game:                 'xo',
+        minParticipants:      3,
+        participantCount:     2,
+      },
+    })
   })
 
   it('also DELETES when the tournament has zero participants', async () => {
     const tournament = {
-      id: 't_empty', name: 'Empty', minParticipants: 2, participants: [],
+      id: 't_empty', name: 'Empty', game: 'xo', minParticipants: 2, participants: [],
     }
     await autoCancel(tournament, 0)
     expect(db.tournament.delete).toHaveBeenCalledWith({ where: { id: 't_empty' } })
     expect(publish).not.toHaveBeenCalled()
+    // 3.7a.6 audit row still written for zero-participant drops.
+    expect(db.tournamentAutoDrop.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        originalTournamentId: 't_empty',
+        participantCount:     0,
+      }),
+    })
   })
 
   it('CANCELS (not deletes) when a human is registered — publishes tournament:cancelled so the human gets notified', async () => {
@@ -245,5 +293,8 @@ describe('autoCancel', () => {
       name: 'Daily 3-Player',
       participantUserIds: ['bot_rusty', 'usr_alice'],
     })
+    // Human-present cancels stay in the CANCELLED history where they belong;
+    // the auto-drop audit is bot-only.
+    expect(db.tournamentAutoDrop.create).not.toHaveBeenCalled()
   })
 })

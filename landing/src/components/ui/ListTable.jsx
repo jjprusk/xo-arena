@@ -139,12 +139,15 @@ export function ListTh({ children, align = 'left', className = '', style: extraS
   )
 }
 
-export function ListTr({ children, dimmed = false, last = false, onClick, className = '' }) {
+export function ListTr({ children, dimmed = false, last = false, onClick, className = '', style: extraStyle }) {
+  // Inline backgroundColor passed via `style` wins over the class-based
+  // `bg-[var(--bg-surface)]` below, so callers can tint rows (e.g. live
+  // tournaments) without fighting Tailwind specificity.
   return (
     <tr
       onClick={onClick}
       className={`transition-colors bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] ${onClick ? 'cursor-pointer' : ''} ${className}`}
-      style={{ opacity: dimmed ? 0.55 : 1, borderBottom: last ? 'none' : '1px solid var(--border-default)' }}
+      style={{ opacity: dimmed ? 0.55 : 1, borderBottom: last ? 'none' : '1px solid var(--border-default)', ...extraStyle }}
     >
       {children}
     </tr>

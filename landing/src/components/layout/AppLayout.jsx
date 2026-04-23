@@ -10,6 +10,7 @@ import SignInModal from '../ui/SignInModal.jsx'
 import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
+import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import AudioDebugOverlay from '../debug/AudioDebugOverlay.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
@@ -155,18 +156,46 @@ export default function AppLayout() {
 
   useJourneyAutoOpen(user?.id ?? null)
 
-  // Close user dropdown and guide panel whenever the user navigates
+  // Track the previous pathname so we can detect /play → non-/play transitions
+  // (i.e. "just finished playing"). Updated at the top of the navigation effect
+  // below so downstream effects in the same tick still see the previous value.
+  const prevPathRef = useRef(location.pathname)
+
+  // Close user dropdown and guide panel whenever the user navigates — unless
+  // the user just left /play. After a game, the journey card almost always
+  // has something fresh to show (step 3 advance, badge), so keep the Guide
+  // visible. The re-hydrate effect below picks an open/stay-closed decision
+  // based on journey state.
   useEffect(() => {
     setUserMenuOpen(false)
-    useGuideStore.getState().close()
+    const prevPath = prevPathRef.current
+    if (!prevPath.startsWith('/play')) {
+      useGuideStore.getState().close()
+    }
   }, [location.pathname])
 
   // Re-hydrate the guide store on non-/play navigation. Recovers from socket
   // events we may have missed during gameplay (e.g. brief disconnect, subscribe
   // race, backend restart). Cheap GET; runs once per non-/play route change.
+  //
+  // When transitioning FROM /play, also reopen the Guide synchronously if the
+  // journey is still active — step 3 ("Play your first game") likely just
+  // advanced, and the user should see the progress land.
   useEffect(() => {
     if (!session?.user?.id) return
-    if (location.pathname.startsWith('/play')) return
+    const prevPath = prevPathRef.current
+    const currPath = location.pathname
+    prevPathRef.current = currPath
+    if (currPath.startsWith('/play')) return
+
+    if (prevPath.startsWith('/play')) {
+      const { journeyProgress } = useGuideStore.getState()
+      const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+      if (!dismissedAt && completedSteps.length < JOURNEY_DEFAULT_SLOTS.length) {
+        useGuideStore.getState().open()
+      }
+    }
+
     useGuideStore.getState().hydrate()
   }, [location.pathname, session?.user?.id])
 
@@ -391,7 +420,6 @@ export default function AppLayout() {
       <AppNav
         appId="landing"
         appUrls={APP_URLS}
-        subnav={null}
         rightSlot={
           <div className="flex items-center gap-2">
             {user && <GuideOrb />}
@@ -502,6 +530,11 @@ export default function AppLayout() {
       </footer>
 
       <GuidePanel isAdmin={user?.role === 'admin'} />
+
+      {/* Floating 💬 feedback button + modal. Ported back from the retired
+          frontend/ app after Phase 3.0; the Admin inbox was already in landing,
+          but the user-facing launcher had been lost in the move. */}
+      <FeedbackButton appId="ai-arena" apiBase="/api/v1" hideWhenPlaying />
 
       <GuestWelcomeModal
         isOpen={guestWelcomeOpen}

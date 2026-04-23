@@ -10,20 +10,10 @@
 export const PRIMARY_NAV = [
   { key: 'tables',      label: 'Tables',      app: 'landing', to: '/tables'      },
   { key: 'tournaments', label: 'Tournaments', app: 'landing', to: '/tournaments' },
+  { key: 'gym',         label: 'Gym',         app: 'landing', to: '/gym'         },
   { key: 'rankings',    label: 'Rankings',    app: 'landing', to: '/rankings'    },
   { key: 'profile',     label: 'Profile',     app: 'landing', to: '/profile'     },
   { key: 'about',       label: 'About',       app: 'landing', to: '/about'       },
-]
-
-/**
- * Sub-navigation items for the XO game site.
- * All are internal to the XO app (no app field needed — always NavLink when shown).
- */
-export const XO_SUBNAV = [
-  { key: 'play',    label: 'Play',    to: '/play',    icon: '⊞' },
-  { key: 'gym',     label: 'Gym',     to: '/gym',     icon: '⚡' },
-  { key: 'puzzles', label: 'Puzzles', to: '/puzzles', icon: '◈' },
-  { key: 'stats',   label: 'Stats',   to: '/stats',   icon: '◎' },
 ]
 
 /**

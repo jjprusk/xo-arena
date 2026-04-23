@@ -5,6 +5,20 @@
 
 > Phases are sequential; items within a phase can run in parallel unless noted.
 
+## Status at a glance (2026-04-23)
+
+| Phase | Status | Notes |
+|---|---|---|
+| 1 - Foundation (SDK + botInterface + XO refactor) | **done** (69/75) | Tail items in 1.4 / 1.5 / 1.7 are optional polish. |
+| 2 - Platform Consolidation (rebrand + nav) | **done** (44/44) | Complete. |
+| 3 - Frontend Retirement, Tables Page, Platform Shell | in progress (58/67) | 3.0-3.5 complete. 3.6 (multi-seat sit-down) + 3.7 (rendered-table polish) intentionally deferred until Poker lands. |
+| 3.7a - Pre-prod cleanups | **done** (25/28) | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .2 frontend follow-up (deferred to 3.8 redesign), .5 cosmetic built-in-bot polish. |
+| 3.8 - Multi-Skill Bots | not started (0/24) | Next up. Must ship before Phase 4 so Connect4 can add skills to existing bot identities instead of spawning duplicate bot rows. |
+| 4 - Connect4 | not started (0/20) | Blocked on 3.8. |
+| 5 - Poker | not started (0/19) | Blocked on 3.6 + 3.8 + 4. |
+| 6 - Pong | not started (0/18) | Blocked on 5's real-time spike review. |
+| 7 - External Developer Onboarding | not started (0/15) | Long-tail; no code dependencies. |
+
 ---
 
 ## Phase 1 — Foundation: SDK + botInterface + XO Refactor
@@ -339,6 +353,68 @@
 
 ---
 
+## Phase 3.7a — Pre-prod cleanups
+
+> **Goal:** A narrow window of housekeeping items that are trivial while `xo-*-prod` apps sit `pending` with an empty `xo-db-prod`, and progressively more expensive once the system has real users. Ships before Phase 3.8 so the foundation under Multi-Skill Bots and Connect4 is clean.
+>
+> **Why now:** Every item here scales in cost with data volume, or involves user-visible URL/auth behavior that breaks links after launch. Post-launch each one is 5–10× harder.
+
+### 3.7a.1 Recurring tournaments — template vs occurrence split — done
+
+Full design in `doc/Tournament_Template_Refactor_Scope.md`. Shipped in three stages on 2026-04-23 (commits `91a22a7` readers, `f3aa667` endpoint split, `a4b40f8` column drop).
+
+- [x] Add `TournamentTemplate` Prisma model (config fields + recurrence + `paused`); every Tournament becomes a pure occurrence with nullable `templateId` FK.
+- [x] Prisma migration drops `Tournament.isRecurring`, `recurrenceInterval`, `recurrenceEndDate`, `recurrencePaused`, `autoOptOutAfterMissed`. Adds `templateId String?` + FK to `TournamentTemplate.id`. (`recurrenceStart` / `recurrenceRule` were never on Tournament — the old schema used `startTime` as the anchor.)
+- [x] Point `RecurringTournamentRegistration.templateId` FK at `TournamentTemplate.id` (same field name, new target).
+- [x] New `TournamentTemplateSeedBot` table keyed `(templateId, userId)`. Per-occurrence `TournamentSeedBot` rows remain for one-shot overrides; scheduler enrolls template seeds into every spawned occurrence.
+- [x] `tournament/src/lib/recurringScheduler.js`: reads templates via `db.tournamentTemplate.findMany(...)`. Sets `templateId` on spawned occurrences; no longer writes `isRecurring`.
+- [x] `tournament/src/lib/tournamentSweep.js`: unchanged cancel / auto-drop logic still applies per-occurrence; no new semantics.
+- [x] `tournament/src/routes/tournaments.js`: `POST /api/tournaments/admin/templates` for recurrence config; `POST /api/tournaments` for one-shots (rejects `isRecurring:true` with 400).
+- [x] Admin UI — two tabs: **Tournaments** (occurrences, today's flat list) and **Templates** (recurring series, paused state, subscriber count). Public `TournamentsPage.jsx` unchanged — only lists occurrences.
+- [x] Tests — tournamentSweep + recurringScheduler + seedBotService vitest green; e2e `tournament-template-create` (happy path + validation + AUTO anchor fallback), `tournament-template-clone` (clone + reuse + built-in delete guard), `tournament-seed-bots` (§9a–e) all pass against local.
+- [x] `doc/Platform_Architecture.md` — tournament data-model section checked; stays at platform-architecture level, no stale Prisma specifics to regenerate.
+
+### 3.7a.2 Bot displayName uniqueness — (c) hybrid — done
+
+- [x] **Decision (2026-04-23):** neither pure global uniqueness nor free-text — hybrid. Two partial unique indexes on `users`, both case-insensitive:
+  - `UNIQUE (LOWER("displayName")) WHERE "isBot"=true AND "botOwnerId" IS NULL` — protects built-in / reserved names (Rusty/Copper/Sterling/Magnus). No user can create an orphan bot that collides with a built-in.
+  - `UNIQUE ("botOwnerId", LOWER("displayName")) WHERE "isBot"=true AND "botOwnerId" IS NOT NULL` — one owner can't have two bots with the same name. Cross-owner collisions stay allowed (your Rusty vs my Rusty).
+- [x] Migration `20260423010000_bot_displayname_hybrid_unique` applied to local DB. Cleanup step deleted 344 orphan test bots (E2E / stress-test leftovers); built-in roster untouched.
+- [x] `POST /api/v1/bots` returns 409 `BOT_NAME_TAKEN` on collision (either partial unique). Other P2002 collisions (email, etc.) fall through to the generic handler.
+- [x] 3 new vitest cases cover per-owner collision, built-in collision, and the non-name P2002 fall-through.
+- [ ] **Frontend follow-up (do during Phase 3.8 Profile redesign):** bot-create form checks availability inline (debounced GET) before submit; mixed-owner lists (leaderboard, bot picker, tournament bracket) render "Rusty · @joe" / "Rusty · built-in" when multiple bots share a name in the visible set.
+
+### 3.7a.3 Profile URL structure — done
+
+- [x] **Finding:** no shareable profile URL exists today — `/profile` renders the logged-in user's own profile. No collision risk from launch.
+- [x] **Decision:** when a public profile page is introduced (Phase 7 or earlier if needed), use `/users/:username` as the canonical URL. Record the decision here so it isn't re-litigated.
+- [x] Route reserved at `landing/src/App.jsx:58` → `landing/src/pages/PublicProfilePage.jsx` stub. Future real `PublicProfilePage` replaces the stub without URL migration; existing `/users/...` links stay valid.
+
+### 3.7a.4 OAuth prod redirect URLs — noted
+
+Deferred to prod-bringup day. No code change in this phase.
+
+- [x] Cross-reference `doc/Prod_Bringup_Runbook.md` §4: when prod deploys for the first time, either (a) add `https://aiarena.callidity.com/api/auth/callback/*` to the existing staging Google + Apple OAuth apps, or (b) register prod-specific apps. Runbook already captures both paths.
+- [x] No code change in this phase — pure provider-side config. Entry here exists so it's not forgotten in the Phase 4+ rush.
+
+### 3.7a.5 Seeded built-in bot polish
+
+- [ ] Built-in bots (Rusty/Copper/Sterling/Magnus) currently seed with default avatars and generic bios. Before prod launch: finalize per-bot avatar URLs, one-line bios, and starting ELO offsets (if we want Rusty < Copper < Sterling < Magnus as a recognizable skill ladder).
+- [ ] Low value / cosmetic — do only if a product pass surfaces something specific.
+
+### 3.7a.6 Admin metric — tournaments auto-dropped per period — done
+
+> **Context:** Phase 3.5 added silent deletion of unfilled bot-only tournaments (`tournamentSweep.autoCancel` → hard DELETE when all participants are bots). That hides clutter from the public tournaments list, but admins should still have visibility into "how often is this happening" — it's a health signal for scheduling / seed-bot tuning. The DELETE removes the tournament row itself, so a post-hoc COUNT is impossible; we need an audit row written *before* the delete.
+
+- [x] **Schema:** `TournamentAutoDrop` — `{ id, originalTournamentId?, templateId?, name, game, minParticipants, participantCount, droppedAt }`. Append-only. Index on `droppedAt`. Migration `20260423160000_tournament_auto_drops`.
+- [x] **Sweep hook:** `tournamentSweep.js:autoCancel()` bot-only branch writes the audit row before `db.tournament.delete(...)`. Non-fatal on insert failure — delete still proceeds.
+- [x] **API:** `GET /api/v1/admin/tournaments/auto-dropped?period=day|week|month` in `backend/src/routes/admin.js`. Returns `{ period, since, count, items }` (items capped at 20, newest first). Unknown periods → 400.
+- [x] **Admin UI:** `AutoDropWidget` on `/admin/tournaments` — headline count + Day/Week/Month toggle + last 10 items with `participantCount/minParticipants · timestamp`.
+- [x] **Tests:** vitest — `autoCancel` bot-only writes audit (sibling + zero-participant cases); human-present cancel does NOT; endpoint covers default period, day override, and 400 on unknown period.
+- [x] **Retention:** 90-day prune inside the tournament sweep tick, gated by a once-per-day timer so it only runs the `deleteMany` once per 24h.
+
+---
+
 ## Phase 3.8 — Multi-Skill Bots
 
 > **Goal:** A bot is an identity (alter ego). Skills are what the bot knows how to play. One `User` row carrying `isBot: true` can hold multiple `BotSkill` rows (one per game). Users pick the bot; the game context chooses the skill.
@@ -369,8 +445,9 @@
 ### 3.8.3 Frontend — Profile / bot creation
 
 - [ ] Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
-- [ ] Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)`.
+- [ ] Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
 - [ ] "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`.
+- [ ] **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button in addition to the skill pills. Also add a "Gym ⚡" link in the My Bots section header. Closes the navigation gap identified in Phase 3.7a audit — today returning users with dismissed journey and no "AI Training" slot can't reach `/gym` from Profile. Deferred to 3.8 (not 3.7a) because the bot card is redesigned here; doing it twice would be waste.
 
 ### 3.8.4 Frontend — Gym
 

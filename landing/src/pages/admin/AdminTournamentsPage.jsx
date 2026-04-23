@@ -2,9 +2,11 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { tournamentApi } from '../../lib/tournamentApi.js'
+import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { ListTable, ListTh, ListTd, ListTr } from '../../components/ui/ListTable.jsx'
+import { ActionMenu } from '../../components/ui/ActionMenu.jsx'
 import TournamentForm from '../../components/tournament/TournamentForm.jsx'
 
 const LIMIT = 4
@@ -128,96 +130,8 @@ function MultiSelectDropdown({ label, options, values, onChange, align = 'left' 
   )
 }
 
-/**
- * Single-select dropdown menu. `trigger` is the visible button; `items` is
- * an array of { label, onSelect, disabled?, tone? ('default'|'danger'|'warn'),
- * href? } — if `href` is set the item renders as a <Link>.
- *
- * Used both for per-row actions ("⋯" trigger) and top-of-list bulk actions.
- * Closes on outside click, Escape, and after selecting an item.
- */
-function ActionMenu({ trigger, items, align = 'right' }) {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handle(e) {
-      if (!rootRef.current?.contains(e.target)) setOpen(false)
-    }
-    function onKey(e) { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', handle)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', handle)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const visible = items.filter(Boolean)
-  const toneColor = {
-    default: 'var(--text-primary)',
-    danger:  'var(--color-red-600)',
-    warn:    'var(--color-amber-700)',
-  }
-
-  return (
-    <div ref={rootRef} className="relative inline-block">
-      {React.cloneElement(trigger, {
-        onClick: (e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          setOpen(o => !o)
-          trigger.props.onClick?.(e)
-        },
-        'aria-haspopup': 'menu',
-        'aria-expanded': open,
-      })}
-      {open && visible.length > 0 && (
-        <div
-          role="menu"
-          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 min-w-[11rem] rounded-lg border py-1 z-30 shadow-lg`}
-          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
-        >
-          {visible.map((item, idx) => {
-            const color = toneColor[item.tone ?? 'default']
-            const disabled = !!item.disabled
-            const base = 'w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2'
-            if (item.href && !disabled) {
-              return (
-                <Link
-                  key={idx}
-                  to={item.href}
-                  state={item.state}
-                  role="menuitem"
-                  className={base + ' no-underline'}
-                  style={{ color }}
-                  onClick={() => setOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              )
-            }
-            return (
-              <button
-                key={idx}
-                role="menuitem"
-                type="button"
-                disabled={disabled}
-                onClick={() => { setOpen(false); item.onSelect?.() }}
-                className={base}
-                style={{ color }}
-                title={item.hint}
-              >
-                {item.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
+// ActionMenu extracted to components/ui/ActionMenu.jsx so AdminTemplatesPage
+// and future admin surfaces can share one implementation.
 
 // ── Bot Match Config ──────────────────────────────────────────────────────────
 
@@ -828,14 +742,109 @@ function StatusBadge({ status }) {
   )
 }
 
+// ── Auto-drop health widget (Phase 3.7a.6) ───────────────────────────────────
+// Surfaces how often the sweep hard-deletes unfilled bot-only tournaments.
+// Audit row is written by tournamentSweep.autoCancel → backend just reads.
+
+function AutoDropWidget({ token }) {
+  const [period, setPeriod] = useState('week')
+  const [data,   setData]   = useState(null)    // { count, items }
+  const [err,    setErr]    = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    setLoading(true)
+    setErr(null)
+    api.admin.tournamentsAutoDropped(token, period)
+      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(e => { if (!cancelled) { setErr(e.message ?? String(e)); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [token, period])
+
+  const periods = [
+    { value: 'day',   label: 'Day'   },
+    { value: 'week',  label: 'Week'  },
+    { value: 'month', label: 'Month' },
+  ]
+
+  return (
+    <div
+      className="rounded-xl border p-4 flex flex-col gap-3"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+    >
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Tournaments auto-dropped
+          </p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold tabular-nums" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+              {loading ? '—' : (data?.count ?? 0)}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              in the last {period}
+            </span>
+          </div>
+        </div>
+        <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+          {periods.map(p => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => setPeriod(p.value)}
+              className="px-3 py-1.5 text-xs font-semibold transition-colors"
+              style={{
+                backgroundColor: period === p.value ? 'var(--color-slate-100)' : 'transparent',
+                color:           period === p.value ? 'var(--text-primary)'   : 'var(--text-muted)',
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {err && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>}
+
+      {!loading && data?.items?.length > 0 && (
+        <ul className="text-xs space-y-1" style={{ color: 'var(--text-secondary)' }}>
+          {data.items.slice(0, 10).map(it => (
+            <li key={it.id} className="flex items-center justify-between gap-3">
+              <span className="truncate">{it.name}</span>
+              <span className="shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                {it.participantCount}/{it.minParticipants} · {new Date(it.droppedAt).toLocaleString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // ── Create / Edit modal ───────────────────────────────────────────────────────
 
 function TournamentModal({ tournament, token, onSaved, onClose }) {
   const isEdit = !!tournament
 
   async function handleSubmit(data) {
-    if (isEdit) await tournamentApi.update(tournament.id, data, token)
-    else        await tournamentApi.create(data, token)
+    if (isEdit) {
+      await tournamentApi.update(tournament.id, data, token)
+    } else if (data.isRecurring) {
+      // Phase 3.7a stage 2: recurring create goes through the template-first
+      // endpoint. Map form fields onto the TournamentTemplate payload shape
+      // (startTime → recurrenceStart, recurrencePaused → paused).
+      const { isRecurring: _ir, startTime, recurrencePaused, ...rest } = data
+      await tournamentApi.createTemplate({
+        ...rest,
+        recurrenceStart: startTime ?? null,
+        ...(recurrencePaused !== undefined && { paused: !!recurrencePaused }),
+      }, token)
+    } else {
+      await tournamentApi.create(data, token)
+    }
     onSaved()
   }
 
@@ -1047,7 +1056,18 @@ export default function AdminTournamentsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-      <AdminHeader title="Tournaments" subtitle={`${total} total`} />
+      <div className="flex items-start justify-between gap-4">
+        <AdminHeader title="Tournaments" subtitle={`${total} total`} />
+        <Link
+          to="/admin/templates"
+          className="text-sm font-semibold underline underline-offset-2 mt-2 shrink-0"
+          style={{ color: 'var(--color-blue-600)' }}
+        >
+          Recurring Templates →
+        </Link>
+      </div>
+
+      <AutoDropWidget token={token} />
 
       {/* Tournament list */}
       <div className="space-y-4">
@@ -1171,11 +1191,20 @@ export default function AdminTournamentsPage() {
                 const participantCount = t.participants?.length ?? t._count?.participants ?? 0
                 const canEdit    = t.status === 'DRAFT'
                 const canPublish = t.status === 'DRAFT'
-                const canStart   = t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED'
+                // "Start" is only meaningful for one-off tournaments. For recurring
+                // templates the scheduler spawns and starts each occurrence on its
+                // own cadence — a manual Start on the template row would break that.
+                const canStart   = !t.templateId && (t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED')
                 const canCancel  = t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+                // "Live" = open for registration, registration closed but pre-start, or in progress.
+                const isLive = t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED' || t.status === 'IN_PROGRESS'
 
                 return (
-                  <ListTr key={t.id} last={i === tournaments.length - 1}>
+                  <ListTr
+                    key={t.id}
+                    last={i === tournaments.length - 1}
+                    style={isLive ? { backgroundColor: 'var(--color-teal-50)' } : undefined}
+                  >
                     <ListTd>
                       <input
                         type="checkbox"
@@ -1187,8 +1216,33 @@ export default function AdminTournamentsPage() {
                     </ListTd>
                     <ListTd>
                       <div className="flex items-center gap-2 flex-wrap">
+                        {t.templateId && (
+                          <svg
+                            className="shrink-0"
+                            width="14" height="14" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" strokeWidth="2.25"
+                            strokeLinecap="round" strokeLinejoin="round"
+                            style={{ color: 'var(--color-blue-600)' }}
+                            role="img"
+                            aria-label="Recurring tournament"
+                          >
+                            <title>Recurring template — scheduler spawns each occurrence automatically</title>
+                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                            <path d="M21 3v5h-5" />
+                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                            <path d="M3 21v-5h5" />
+                          </svg>
+                        )}
+                        {/*
+                          Recurring tournaments are driven by a TournamentTemplate;
+                          the detail page is the template editor. Both the sibling
+                          row (id == templateId) and scheduler-spawned occurrences
+                          (templateId points at the parent) navigate to the template
+                          detail page so admins edit the template, not the occurrence.
+                          One-off tournaments still open the regular detail page.
+                        */}
                         <Link
-                          to={`/tournaments/${t.id}`}
+                          to={t.templateId ? `/admin/templates/${t.templateId}` : `/tournaments/${t.id}`}
                           state={{ from: '/admin/tournaments' }}
                           className="font-medium text-sm hover:underline"
                           style={{ color: 'var(--text-primary)' }}

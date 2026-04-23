@@ -99,12 +99,15 @@ test.describe('Journey — step advancement', () => {
       await recordHvaGame(ctx.request, LANDING_URL, token)
 
       // Simulate the real flow: user was on /play when the game finished,
-      // then navigates back. The non-/play useEffect re-hydrates the Guide.
+      // then navigates back. The Guide must auto-reopen on /play → non-/play
+      // transitions (AppLayout pathname effect) — no orb-click needed. The
+      // assertion has a tight timeout so a regression that closes-and-stays-
+      // closed fails loudly instead of being masked by the ensureGuideOpen
+      // fallback.
       await page.goto('/play')
       await page.goto('/')
-      await ensureGuideOpen(page)
-
-      await expect(page.getByText('Next:')).toBeVisible({ timeout: 10_000 })
+      await expect(page.getByText('Next:', { exact: false }).first())
+        .toBeVisible({ timeout: 3_000 })
       await expect(page.getByText('Explore AI Training')).toBeVisible()
 
       // Step 3 should be crossed off in the step list, not the current target.

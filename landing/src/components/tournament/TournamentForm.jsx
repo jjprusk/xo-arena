@@ -41,10 +41,12 @@ function DateTimePicker({ value, onChange }) {
     if (datePart) onChange(`${datePart}T${t || '00:00'}`)
   }
   return (
-    <div className="flex gap-2">
-      <input type="date" value={datePart} onChange={handleDate} className={INPUT_CLASS} style={FIELD_STYLE} />
+    <div className="flex flex-wrap gap-2">
+      <input type="date" value={datePart} onChange={handleDate}
+        className="flex-1 min-w-[9rem] px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors"
+        style={FIELD_STYLE} />
       <input type="time" value={timePart} onChange={handleTime}
-        className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors w-32 shrink-0"
+        className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors w-36 shrink-0"
         style={FIELD_STYLE} />
     </div>
   )
@@ -315,13 +317,16 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
       </Field>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {form.startMode !== 'AUTO' && (
-        <Field label="Start Time" hint={form.startMode === 'SCHEDULED' ? 'Required — tournament starts at this time' : 'Optional'} as="div">
+        <Field label="Start Time" hint={
+          form.startMode === 'SCHEDULED' ? 'Required — tournament starts at this time'
+          : form.startMode === 'AUTO'    ? 'Optional — anchor time for each occurrence (e.g. 3pm daily)'
+          :                                'Optional'
+        } as="div">
           {form.startTime ? (
             <div className="flex flex-col gap-1">
               <DateTimePicker value={form.startTime} onChange={v => set('startTime', v)} />
               <button type="button" onClick={() => set('startTime', '')}
-                className="text-[10px] text-left hover:opacity-70 w-fit" style={{ color: 'var(--text-muted)' }}>Clear</button>
+                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
             </div>
           ) : (
             <button type="button" onClick={() => set('startTime', toLocalDatetimeValue(new Date()))}
@@ -332,13 +337,12 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
           )}
           {errors.startTime && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.startTime}</span>}
         </Field>
-        )}
         <Field label="Registration Opens At" hint="Optional" as="div">
           {form.registrationOpenAt ? (
             <div className="flex flex-col gap-1">
               <DateTimePicker value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
               <button type="button" onClick={() => set('registrationOpenAt', '')}
-                className="text-[10px] text-left hover:opacity-70 w-fit" style={{ color: 'var(--text-muted)' }}>Clear</button>
+                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
             </div>
           ) : (
             <button type="button" onClick={() => set('registrationOpenAt', toLocalDatetimeValue(new Date()))}
@@ -348,12 +352,12 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
             </button>
           )}
         </Field>
-        <Field label="Registration Closes At" hint="Optional" as="div">
+        <Field label="Registration Closes At" hint="Optional — defaults to start time" as="div">
           {form.registrationCloseAt ? (
             <div className="flex flex-col gap-1">
               <DateTimePicker value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
               <button type="button" onClick={() => set('registrationCloseAt', '')}
-                className="text-[10px] text-left hover:opacity-70 w-fit" style={{ color: 'var(--text-muted)' }}>Clear</button>
+                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
             </div>
           ) : (
             <button type="button" onClick={() => {

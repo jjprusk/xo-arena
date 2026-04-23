@@ -412,9 +412,26 @@ function TournamentRow({ tournament, token, dbUserId, onRegistered, last }) {
       <ListTd>
         <div className="min-w-0">
           <div
-            className="text-sm font-bold leading-tight truncate"
+            className="text-sm font-bold leading-tight truncate flex items-center gap-1.5"
             style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
           >
+            {tournament.templateId && (
+              <svg
+                className="shrink-0"
+                width="13" height="13" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth="2.25"
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{ color: 'var(--color-blue-600)' }}
+                role="img"
+                aria-label="Recurring tournament"
+              >
+                <title>Recurring tournament — runs on a repeating schedule</title>
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            )}
             {tournament.name}
           </div>
           <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
@@ -496,17 +513,24 @@ export default function TournamentsPage() {
   // dismissed the journey, and hasn't completed step 7 yet. Idempotent: once
   // step 7 is marked, future visits won't re-show the modal.
   //
+  // We MUST gate on `hydrated` — the store defaults to `completedSteps: []`
+  // before the server preferences load, which would otherwise re-trigger
+  // the tutorial on every refresh even for users who already finished the
+  // journey.
+  //
   // Also close the Guide panel while the tutorial is up — the two overlap
   // visually and the Guide's backdrop (z-40) blocks clicks on the modal.
+  const hydrated = useGuideStore(s => s.hydrated)
   useEffect(() => {
     if (!session?.user?.id) return
+    if (!hydrated) return
     const { journeyProgress } = useGuideStore.getState()
     const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
     if (dismissedAt) return
     if (completedSteps.includes(7)) return
     useGuideStore.getState().close()
     setShowTutorial(true)
-  }, [session?.user?.id])
+  }, [session?.user?.id, hydrated])
 
   function closeTutorial() {
     setShowTutorial(false)

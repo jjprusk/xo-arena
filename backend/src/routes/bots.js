@@ -107,6 +107,21 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (err.code === 'PROFANITY') return res.status(400).json({ error: err.message, code: err.code })
     if (err.code === 'INVALID_NAME') return res.status(400).json({ error: err.message, code: err.code })
     if (err.code === 'INVALID_ALGORITHM') return res.status(400).json({ error: err.message, code: err.code })
+    // Phase 3.7a.2: two partial unique indexes on users enforce hybrid bot
+    // displayName uniqueness (per-owner + reserved built-in names). Prisma
+    // reports both via code P2002; meta.target carries the index name.
+    if (err.code === 'P2002') {
+      const target = err.meta?.target
+      const asStr  = Array.isArray(target) ? target.join(',') : String(target ?? '')
+      if (asStr.includes('displayname') || asStr.includes('displayName')) {
+        return res.status(409).json({
+          error:  'A bot with that name already exists — pick a different name.',
+          code:   'BOT_NAME_TAKEN',
+        })
+      }
+      // Other unique-constraint collisions (username, email, etc.) fall
+      // through to the generic error handler below.
+    }
     next(err)
   }
 })
