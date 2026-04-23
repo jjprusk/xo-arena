@@ -197,7 +197,7 @@ function PlayerLink({ userId, children, className, style }) {
 
 // ── Bracket visualization ─────────────────────────────────────────────────────
 
-function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate }) {
+function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate, onFollow }) {
   if (!rounds || rounds.length === 0) {
     return (
       <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -244,6 +244,7 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
                     totalRounds={totalRounds}
                     onWatch={onMatchClick}
                     onSpectate={onMatchSpectate}
+                    onFollow={onFollow}
                   />
                 ))}
               </div>
@@ -255,7 +256,7 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
   )
 }
 
-function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch, onSpectate }) {
+function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch, onSpectate, onFollow }) {
   const p1Name   = match.participant1Id ? (nameOf[match.participant1Id] ?? 'TBD') : 'BYE'
   const p2Name   = match.participant2Id ? (nameOf[match.participant2Id] ?? 'TBD') : 'BYE'
   const p1UserId = match.participant1Id ? (userIdOf?.[match.participant1Id] ?? null) : null
@@ -292,11 +293,24 @@ function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIn
           >
             {p1Name}
           </PlayerLink>
-          {(isCompleted || isInProgress) && match.participant1Id && (
-            <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--text-secondary)' }}>
-              {match.p1Wins ?? 0}
-            </span>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {onFollow && p1UserId && !isCompleted && !isBye && (
+              <button
+                type="button"
+                onClick={() => onFollow(p1UserId, p1Name)}
+                className="text-[10px] opacity-60 hover:opacity-100 transition-opacity"
+                style={{ color: 'var(--color-primary)' }}
+                title={`Follow ${p1Name}`}
+              >
+                👁
+              </button>
+            )}
+            {(isCompleted || isInProgress) && match.participant1Id && (
+              <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                {match.p1Wins ?? 0}
+              </span>
+            )}
+          </div>
         </div>
         <div
           className="flex items-center justify-between px-2 py-1.5 gap-2"
@@ -312,11 +326,24 @@ function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIn
           >
             {p2Name}
           </PlayerLink>
-          {(isCompleted || isInProgress) && match.participant2Id && (
-            <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--text-secondary)' }}>
-              {match.p2Wins ?? 0}
-            </span>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {onFollow && p2UserId && !isCompleted && !isBye && (
+              <button
+                type="button"
+                onClick={() => onFollow(p2UserId, p2Name)}
+                className="text-[10px] opacity-60 hover:opacity-100 transition-opacity"
+                style={{ color: 'var(--color-primary)' }}
+                title={`Follow ${p2Name}`}
+              >
+                👁
+              </button>
+            )}
+            {(isCompleted || isInProgress) && match.participant2Id && (
+              <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                {match.p2Wins ?? 0}
+              </span>
+            )}
+          </div>
         </div>
         {isCompleted && drawGames > 0 && (
           <div
@@ -545,6 +572,7 @@ function MatchSpectateModal({ matchId, matchLabel, followedName, mode = 'live', 
   const [slug, setSlug]       = useState(null)
   const [fetching, setFetching] = useState(mode === 'live')
   const [fetchError, setFetchError] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     // Non-live modes (waiting / ended) don't have an active table to join.
@@ -619,10 +647,28 @@ function MatchSpectateModal({ matchId, matchLabel, followedName, mode = 'live', 
               )}
             </div>
           </div>
-          <button onClick={onClose} className="shrink-0 px-2 py-1 rounded text-xs"
-            style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}>
-            ✕ Close
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {followedName && (
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 1500)
+                  } catch { /* clipboard unavailable (insecure context / perms) */ }
+                }}
+                className="px-2 py-1 rounded text-xs transition-colors"
+                style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}
+                title="Copy the follow URL — share it to let someone else watch the same player"
+              >
+                {copied ? '✓ Copied' : '📋 Share'}
+              </button>
+            )}
+            <button onClick={onClose} className="px-2 py-1 rounded text-xs"
+              style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface-hover)' }}>
+              ✕ Close
+            </button>
+          </div>
         </div>
         {mode === 'live' && fetching && <Spinner />}
         {mode === 'live' && fetchError && <ErrorMsg>{fetchError}</ErrorMsg>}
@@ -1915,10 +1961,11 @@ export default function TournamentDetailPage() {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
 
-  // Phase 2 — follow-mode auto-advance. Fires each time a game within the
-  // watched match ends (phase: 'finished'). Refetch the tournament; if the
-  // watched match itself is now COMPLETED, re-resolve onto the followed
-  // user's next match, a 'waiting' state, or an 'ended' state.
+  // Phase 2 — follow-mode auto-advance. Fires on two paths:
+  //   - onGameEnd from the spectate SDK (phase: 'finished') in 'live' mode
+  //   - 10s polling timer (effect below) while in 'waiting' mode
+  // Refetch the tournament; if the watched match is still IN_PROGRESS
+  // (another game in a bestOfN starting), stay put. Otherwise re-resolve.
   const handleGameEnd = useCallback(async () => {
     const currentWatch = watchMatch
     if (!currentWatch || !currentWatch.followedName || !followUserId) return
@@ -1933,14 +1980,18 @@ export default function TournamentDetailPage() {
     setTournament(fresh)
     tournamentRef.current = fresh
 
-    // Within a bestOfN, multiple game-ends fire before the match itself
-    // transitions to COMPLETED. Stay on the same match until then.
-    let watchedStatus = null
-    for (const round of fresh.rounds ?? []) {
-      const m = (round.matches ?? []).find(mm => mm.id === currentWatch.id)
-      if (m) { watchedStatus = m.status; break }
+    // In 'live' mode, gate on the watched match actually being done.
+    // Within a bestOfN, multiple game-ends fire before match.status
+    // transitions to COMPLETED. In 'waiting' / 'ended' modes there's no
+    // watched match — skip the gate and always re-resolve.
+    if (currentWatch.id) {
+      let watchedStatus = null
+      for (const round of fresh.rounds ?? []) {
+        const m = (round.matches ?? []).find(mm => mm.id === currentWatch.id)
+        if (m) { watchedStatus = m.status; break }
+      }
+      if (watchedStatus !== 'COMPLETED' && watchedStatus !== 'CANCELLED') return
     }
-    if (watchedStatus !== 'COMPLETED' && watchedStatus !== 'CANCELLED') return
 
     // Watched match is done — re-resolve for the followed player.
     const followed = (fresh.participants ?? []).find(p => p.userId === followUserId)
@@ -1993,6 +2044,16 @@ export default function TournamentDetailPage() {
       statusMessage: msg,
     })
   }, [watchMatch, followUserId, id, token])
+
+  // Phase 2b — while the follow modal is in 'waiting' mode, poll every
+  // 10s. Waiting means the user's next match hasn't started yet, so there's
+  // no game socket to fire an end signal. Without this, Waiting is a
+  // dead-end.
+  useEffect(() => {
+    if (watchMatch?.mode !== 'waiting') return
+    const timerId = setInterval(() => { handleGameEnd() }, 10_000)
+    return () => clearInterval(timerId)
+  }, [watchMatch?.mode, handleGameEnd])
 
   const load = useCallback(async () => {
     // If a session user is known but the token hasn't resolved yet, skip the pre-fetch.
@@ -2258,7 +2319,8 @@ export default function TournamentDetailPage() {
           >
             <TournamentBracket rounds={t.rounds ?? []} participants={t.participants ?? []}
               onMatchClick={(id, label) => setReplayMatch({ id, label })}
-              onMatchSpectate={(id, label) => setWatchMatch({ id, label })} />
+              onMatchSpectate={(id, label) => setWatchMatch({ id, label, mode: 'live' })}
+              onFollow={handleFollow} />
           </div>
         </Section>
       )}
