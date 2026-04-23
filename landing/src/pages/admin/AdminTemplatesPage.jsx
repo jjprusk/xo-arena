@@ -141,11 +141,10 @@ export default function AdminTemplatesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-4 h-[calc(100vh-56px)] flex flex-col">
-      <div className="flex items-baseline justify-between gap-4 mb-3 shrink-0">
+    <div className="max-w-6xl mx-auto px-6 py-2 h-[calc(100vh-94px)] flex flex-col">
+      <div className="flex items-baseline justify-between gap-4 mb-2 shrink-0">
         <div className="flex items-baseline gap-3">
-          <span className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Admin</span>
-          <h1 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+          <h1 className="text-base font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
             Recurring Templates
           </h1>
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -153,7 +152,7 @@ export default function AdminTemplatesPage() {
           </span>
         </div>
         <Link to="/admin/tournaments"
-          className="text-sm font-semibold underline underline-offset-2 shrink-0"
+          className="text-xs font-semibold underline underline-offset-2 shrink-0"
           style={{ color: 'var(--color-blue-600)' }}>
           ← Tournaments
         </Link>
