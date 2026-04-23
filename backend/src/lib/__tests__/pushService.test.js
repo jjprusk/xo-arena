@@ -24,7 +24,7 @@ vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-const { sendToUser, buildPushPayload, getPublicVapidKey, _resetForTests } =
+const { sendToUser, buildPushPayload, getPublicVapidKey, getPushCounters, _resetForTests } =
   await import('../pushService.js')
 
 beforeEach(() => {
@@ -152,5 +152,57 @@ describe('getPublicVapidKey', () => {
   it('returns null when env is unset', () => {
     delete process.env.VAPID_PUBLIC_KEY
     expect(getPublicVapidKey()).toBeNull()
+  })
+})
+
+// ─── getPushCounters — delivery metrics for observability ───────────────────
+
+describe('getPushCounters', () => {
+  it('increments `sent` on a 2xx delivery, `attempts` once per endpoint', async () => {
+    mockDb.pushSubscription.findMany.mockResolvedValue([
+      { id: 'sub_ok', endpoint: 'https://fcm.google/x', p256dh: 'p', auth: 'a' },
+    ])
+    mockSend.mockResolvedValueOnce({})
+
+    const before = getPushCounters()
+    await sendToUser('u1', { title: 'hi' })
+    const after = getPushCounters()
+
+    expect(after.attempts).toBe(before.attempts + 1)
+    expect(after.sent).toBe(before.sent + 1)
+    expect(after.purged).toBe(before.purged)
+    expect(after.failed).toBe(before.failed)
+  })
+
+  it('increments `purged` on 410 Gone, leaves `failed` unchanged', async () => {
+    mockDb.pushSubscription.findMany.mockResolvedValue([
+      { id: 'sub_dead', endpoint: 'https://apple.gone/x', p256dh: 'p', auth: 'a' },
+    ])
+    mockSend.mockRejectedValueOnce(Object.assign(new Error('gone'), { statusCode: 410 }))
+
+    const before = getPushCounters()
+    await sendToUser('u1', { title: 'hi' })
+    const after = getPushCounters()
+
+    expect(after.attempts).toBe(before.attempts + 1)
+    expect(after.purged).toBe(before.purged + 1)
+    expect(after.failed).toBe(before.failed)
+    expect(after.sent).toBe(before.sent)
+  })
+
+  it('increments `failed` on transient errors (5xx / network), leaves the sub in place', async () => {
+    mockDb.pushSubscription.findMany.mockResolvedValue([
+      { id: 'sub_flaky', endpoint: 'https://mozilla.push/x', p256dh: 'p', auth: 'a' },
+    ])
+    mockSend.mockRejectedValueOnce(Object.assign(new Error('500'), { statusCode: 502 }))
+
+    const before = getPushCounters()
+    await sendToUser('u1', { title: 'hi' })
+    const after = getPushCounters()
+
+    expect(after.attempts).toBe(before.attempts + 1)
+    expect(after.failed).toBe(before.failed + 1)
+    expect(after.purged).toBe(before.purged)
+    expect(after.sent).toBe(before.sent)
   })
 })

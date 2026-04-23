@@ -36,6 +36,19 @@ function ensureConfigured() {
  * Send `payload` to every registered subscription of `userId`.
  * Returns { sent, removed } counts; never throws.
  */
+// ── Delivery counters (observability) ────────────────────────────────────────
+// Monotonic counters that resourceCounters snapshots every minute. Segmented
+// by outcome so an operator can see success rate, dead-endpoint rate, and
+// transient-failure rate at a glance without digging through logs. Reset only
+// by process restart — the snapshot buffer handles rate-of-change.
+const _pushCounters = {
+  attempts: 0,   // every endpoint we tried to send to
+  sent:     0,   // 2xx
+  purged:   0,   // 404 / 410 — endpoint gone, row deleted
+  failed:   0,   // anything else (5xx, network error, VAPID misconfig)
+}
+export function getPushCounters() { return { ..._pushCounters } }
+
 export async function sendToUser(userId, payload) {
   if (!ensureConfigured()) return { sent: 0, removed: 0 }
   if (!userId || !payload) return { sent: 0, removed: 0 }
@@ -53,18 +66,22 @@ export async function sendToUser(userId, payload) {
   let sent = 0
   const deadIds = []
   await Promise.all(subs.map(async (s) => {
+    _pushCounters.attempts++
     try {
       await webPush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
         body,
       )
       sent++
+      _pushCounters.sent++
     } catch (err) {
       // 404 / 410 from push service = endpoint gone (unsubscribed or expired).
       const status = err?.statusCode
       if (status === 404 || status === 410) {
         deadIds.push(s.id)
+        _pushCounters.purged++
       } else {
+        _pushCounters.failed++
         logger.warn({ err, userId, endpoint: s.endpoint.slice(0, 60) }, 'pushService: send failed')
       }
     }
@@ -147,4 +164,8 @@ export function buildPushPayload(type, payload = {}) {
 /** Test hook: reset configured flag so tests can swap env between cases. */
 export function _resetForTests() {
   _configured = false
+  _pushCounters.attempts = 0
+  _pushCounters.sent     = 0
+  _pushCounters.purged   = 0
+  _pushCounters.failed   = 0
 }
