@@ -386,6 +386,17 @@ Full design in `doc/Tournament_Template_Refactor_Scope.md`.
 - [ ] Built-in bots (Rusty/Copper/Sterling/Magnus) currently seed with default avatars and generic bios. Before prod launch: finalize per-bot avatar URLs, one-line bios, and starting ELO offsets (if we want Rusty < Copper < Sterling < Magnus as a recognizable skill ladder).
 - [ ] Low value / cosmetic — do only if a product pass surfaces something specific.
 
+### 3.7a.6 Admin metric — tournaments auto-dropped per period
+
+> **Context:** Phase 3.5 added silent deletion of unfilled bot-only tournaments (`tournamentSweep.autoCancel` → hard DELETE when all participants are bots). That hides clutter from the public tournaments list, but admins should still have visibility into "how often is this happening" — it's a health signal for scheduling / seed-bot tuning. The DELETE removes the tournament row itself, so a post-hoc COUNT is impossible; we need an audit row written *before* the delete.
+
+- [ ] **Schema:** new `TournamentAutoDrop` table — `{ id, originalTournamentId?, templateId?, name, game, droppedAt, minParticipants, participantCount }`. Append-only. One row per auto-drop event. Cheap index on `droppedAt` for period queries.
+- [ ] **Sweep hook:** update `tournamentSweep.js:autoCancel()` bot-only branch — `INSERT INTO tournament_auto_drops` before the `db.tournament.delete(...)`. Keep the delete path otherwise unchanged. Non-fatal if the insert fails (logged, not retried).
+- [ ] **API:** `GET /api/v1/admin/tournaments/auto-dropped?period=day|week|month` — returns `{ count, items: [{ name, droppedAt, participantCount }, …] }`. Period computed from `droppedAt >= now - windowMs`. Admin-role gate.
+- [ ] **Admin UI:** widget on the tournament admin page (or the health dashboard) — headline "Tournaments auto-dropped: N" with a period toggle (Day / Week / Month). Show the last 5–10 items as a mini-list underneath for pattern-spotting (e.g. "same seed-bot mix dropped 3 times this week → tune min participants").
+- [ ] **Tests:** vitest — a bot-only drop writes one audit row; a human-present cancel does NOT (stays in the CANCELLED history where it belongs); the `/auto-dropped?period=` endpoint filters correctly at window boundaries.
+- [ ] **Retention:** don't retain indefinitely — add a 90-day prune to `scheduledJobs.js` (or piggyback on replay retention sweep) so the audit table stays small. Admin dashboard is a rolling window, not a permanent log.
+
 ---
 
 ## Phase 3.8 — Multi-Skill Bots
