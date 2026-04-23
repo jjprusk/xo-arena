@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../db.js', () => ({
   default: {
-    tournament: { findMany: vi.fn() },
+    tournament: { findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
     tournamentParticipant: { findUnique: vi.fn() },
   },
 }))
@@ -32,7 +32,7 @@ vi.mock('../../logger.js', () => ({
   },
 }))
 
-const { recoverPendingBotMatches } = await import('../tournamentSweep.js')
+const { recoverPendingBotMatches, autoCancel, allParticipantsAreBots } = await import('../tournamentSweep.js')
 const db      = (await import('../db.js')).default
 const { publish } = await import('../redis.js')
 
@@ -155,5 +155,95 @@ describe('recoverPendingBotMatches', () => {
     await recoverPendingBotMatches()
 
     expect(publish.mock.calls[0][1].gameId).toBe('connect4')
+  })
+})
+
+// ─── autoCancel: drop-vs-cancel decision ─────────────────────────────────────
+// Unfilled recurring occurrences with only seed bots should silently disappear
+// (no row, no Redis event, no notification). Tournaments where a real human
+// registered should keep the existing CANCELLED + notify behavior.
+
+describe('allParticipantsAreBots', () => {
+  it('returns true for an all-bot participant list', () => {
+    expect(allParticipantsAreBots([
+      { user: { isBot: true } },
+      { user: { isBot: true } },
+    ])).toBe(true)
+  })
+  it('returns true for an empty list (vacuous)', () => {
+    expect(allParticipantsAreBots([])).toBe(true)
+    expect(allParticipantsAreBots(undefined)).toBe(true)
+  })
+  it('returns false as soon as one human is present', () => {
+    expect(allParticipantsAreBots([
+      { user: { isBot: true } },
+      { user: { isBot: false } },
+    ])).toBe(false)
+  })
+  it('treats missing user data as non-bot (safer)', () => {
+    expect(allParticipantsAreBots([
+      { user: { isBot: true } },
+      { userId: 'u_x' },   // no user object
+    ])).toBe(false)
+  })
+})
+
+describe('autoCancel', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('DELETES (not cancels) when only seed bots are registered — no tournament:cancelled event', async () => {
+    const bot1 = botUser('bot_rusty',  'Rusty',  'seed:rusty:novice')
+    const bot2 = botUser('bot_copper', 'Copper', 'seed:copper:novice')
+    const tournament = {
+      id: 't_unfilled',
+      name: 'Daily 3-Player',
+      minParticipants: 3,
+      participants: [
+        { userId: 'bot_rusty',  user: bot1 },
+        { userId: 'bot_copper', user: bot2 },
+      ],
+    }
+
+    await autoCancel(tournament, 2)
+
+    expect(db.tournament.delete).toHaveBeenCalledWith({ where: { id: 't_unfilled' } })
+    expect(db.tournament.update).not.toHaveBeenCalled()
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('also DELETES when the tournament has zero participants', async () => {
+    const tournament = {
+      id: 't_empty', name: 'Empty', minParticipants: 2, participants: [],
+    }
+    await autoCancel(tournament, 0)
+    expect(db.tournament.delete).toHaveBeenCalledWith({ where: { id: 't_empty' } })
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('CANCELS (not deletes) when a human is registered — publishes tournament:cancelled so the human gets notified', async () => {
+    const bot   = botUser('bot_rusty', 'Rusty', 'seed:rusty:novice')
+    const alice = humanUser('usr_alice', 'Alice')
+    const tournament = {
+      id: 't_under',
+      name: 'Daily 3-Player',
+      minParticipants: 3,
+      participants: [
+        { userId: 'bot_rusty',  user: bot },
+        { userId: 'usr_alice',  user: alice },
+      ],
+    }
+
+    await autoCancel(tournament, 2)
+
+    expect(db.tournament.delete).not.toHaveBeenCalled()
+    expect(db.tournament.update).toHaveBeenCalledWith({
+      where: { id: 't_under' },
+      data: { status: 'CANCELLED' },
+    })
+    expect(publish).toHaveBeenCalledWith('tournament:cancelled', {
+      tournamentId: 't_under',
+      name: 'Daily 3-Player',
+      participantUserIds: ['bot_rusty', 'usr_alice'],
+    })
   })
 })

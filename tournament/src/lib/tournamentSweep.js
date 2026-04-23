@@ -192,7 +192,43 @@ async function sweep() {
 
 // ─── Auto-cancel ──────────────────────────────────────────────────────────────
 
-async function autoCancel(tournament, count) {
+/**
+ * Returns true when every registered participant is a bot (or the list is
+ * empty). Used to decide between silent deletion and a user-facing cancel.
+ */
+export function allParticipantsAreBots(participants) {
+  return (participants ?? []).every(p => p?.user?.isBot === true)
+}
+
+/**
+ * Past start time, under min participants — two branches:
+ *
+ *   Bot-only (including empty) → delete the row silently. `Tournament` has
+ *   onDelete:Cascade on both `TournamentParticipant.tournamentId` and
+ *   `TournamentSeedBot.tournamentId`, so the delete propagates cleanly.
+ *   No `tournament:cancelled` event is published — nobody human to notify,
+ *   and we'd otherwise force every connected client to refetch the list
+ *   for an invisible occurrence. Prevents recurring-occurrence corpses
+ *   from accumulating in the DB.
+ *
+ *   Has a human participant → current behavior: flip status to CANCELLED,
+ *   publish `tournament:cancelled` so the humans who registered see the
+ *   notification, keep the row for history.
+ */
+export async function autoCancel(tournament, count) {
+  if (allParticipantsAreBots(tournament.participants)) {
+    try {
+      await db.tournament.delete({ where: { id: tournament.id } })
+      logger.info(
+        { tournamentId: tournament.id, name: tournament.name, participants: count, min: tournament.minParticipants },
+        'Tournament sweep — auto-deleted (unfilled, bot-only)'
+      )
+    } catch (err) {
+      logger.warn({ tournamentId: tournament.id, err: err.message }, 'Tournament sweep — auto-delete failed')
+    }
+    return
+  }
+
   try {
     await db.tournament.update({
       where: { id: tournament.id },
