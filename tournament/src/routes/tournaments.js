@@ -1137,4 +1137,160 @@ router.post('/admin/templates/:id/unpause', requireTournamentAdmin, async (req, 
   }
 })
 
+// GET /api/tournaments/admin/templates/:id
+// Single template detail with counts + recent occurrences. Drives the
+// admin drill-in page.
+router.get('/admin/templates/:id', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const template = await db.tournamentTemplate.findUnique({
+      where:  { id: req.params.id },
+      include: {
+        _count:  { select: { subscriptions: true, seedBots: true, tournaments: true } },
+        seedBots: {
+          include: { user: { select: { id: true, username: true, displayName: true, isBot: true, botOwnerId: true } } },
+        },
+      },
+    })
+    if (!template) return res.status(404).json({ error: 'Template not found' })
+
+    const occurrences = await db.tournament.findMany({
+      where:  { templateId: template.id },
+      orderBy: { startTime: 'desc' },
+      take: 50,
+      select: {
+        id: true, status: true, startTime: true, endTime: true,
+        _count: { select: { participants: true } },
+      },
+    })
+
+    res.json({ template, occurrences })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// PATCH /api/tournaments/admin/templates/:id
+// Template-specific edit — only fields that live on the template row.
+// Updates the Tournament row with the matching id too (first occurrence
+// carries the config today), so the legacy admin view stays in sync.
+router.patch('/admin/templates/:id', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const {
+      name, description, game, mode, format, bracketType,
+      minParticipants, maxParticipants, bestOfN, botMinGamesPlayed,
+      allowNonCompetitiveBots, allowSpectators, paceMs, startMode,
+      noticePeriodMinutes, durationMinutes,
+      recurrenceInterval, recurrenceStart, recurrenceEndDate,
+      paused, autoOptOutAfterMissed, isTest,
+    } = req.body
+
+    if (bestOfN !== undefined && (bestOfN < 1 || bestOfN % 2 === 0)) {
+      return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
+    }
+
+    const templateData = {
+      ...(name !== undefined && { name }),
+      ...(description !== undefined && { description }),
+      ...(game !== undefined && { game }),
+      ...(mode !== undefined && { mode }),
+      ...(format !== undefined && { format }),
+      ...(bracketType !== undefined && { bracketType }),
+      ...(minParticipants !== undefined && { minParticipants }),
+      ...(maxParticipants !== undefined && { maxParticipants }),
+      ...(bestOfN !== undefined && { bestOfN }),
+      ...(botMinGamesPlayed !== undefined && { botMinGamesPlayed }),
+      ...(allowNonCompetitiveBots !== undefined && { allowNonCompetitiveBots }),
+      ...(allowSpectators !== undefined && { allowSpectators }),
+      ...(paceMs !== undefined && { paceMs }),
+      ...(startMode !== undefined && { startMode }),
+      ...(noticePeriodMinutes !== undefined && { noticePeriodMinutes }),
+      ...(durationMinutes !== undefined && { durationMinutes }),
+      ...(recurrenceInterval !== undefined && { recurrenceInterval }),
+      ...(recurrenceStart !== undefined && { recurrenceStart: new Date(recurrenceStart) }),
+      ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+      ...(paused !== undefined && { paused: !!paused }),
+      ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
+      ...(isTest !== undefined && { isTest: !!isTest }),
+    }
+    const template = await db.tournamentTemplate.update({
+      where: { id: req.params.id },
+      data:  templateData,
+    })
+
+    // Mirror the relevant fields back onto the Tournament row with the same
+    // id (the first-occurrence row). Dual-write — keeps legacy admin view
+    // consistent during the cutover. Non-fatal.
+    await db.tournament.updateMany({
+      where: { id: req.params.id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(minParticipants !== undefined && { minParticipants }),
+        ...(maxParticipants !== undefined && { maxParticipants }),
+        ...(bestOfN !== undefined && { bestOfN }),
+        ...(recurrenceInterval !== undefined && { recurrenceInterval }),
+        ...(recurrenceStart !== undefined && { startTime: new Date(recurrenceStart) }),
+        ...(recurrenceEndDate !== undefined && { recurrenceEndDate: new Date(recurrenceEndDate) }),
+        ...(paused !== undefined && { recurrencePaused: !!paused }),
+        ...(autoOptOutAfterMissed !== undefined && { autoOptOutAfterMissed }),
+        ...(isTest !== undefined && { isTest: !!isTest }),
+      },
+    }).catch(() => {})
+
+    res.json({ template })
+  } catch (e) {
+    if (e?.code === 'P2025') return res.status(404).json({ error: 'Template not found' })
+    next(e)
+  }
+})
+
+// DELETE /api/tournaments/admin/templates/:id
+// Removes the template. Cascade drops subscriptions + template seed bots.
+// Occurrences keep their history (templateId FK has ON DELETE SET NULL).
+router.delete('/admin/templates/:id', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    await db.tournamentTemplate.delete({ where: { id: req.params.id } })
+    res.json({ ok: true })
+  } catch (e) {
+    if (e?.code === 'P2025') return res.status(404).json({ error: 'Template not found' })
+    next(e)
+  }
+})
+
+// POST /api/tournaments/admin/templates/:id/seed-bots
+// Adds a seed bot to the template. Body: { userId }. Idempotent — second
+// call for the same (templateId, userId) returns the existing row.
+router.post('/admin/templates/:id/seed-bots', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.body
+    if (!userId) return res.status(400).json({ error: 'userId required' })
+
+    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, isBot: true } })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (!user.isBot) return res.status(400).json({ error: 'Only bots can be seeded (isBot: true)' })
+
+    const seed = await db.tournamentTemplateSeedBot.upsert({
+      where:  { templateId_userId: { templateId: req.params.id, userId } },
+      create: { templateId: req.params.id, userId },
+      update: {},
+    })
+    res.status(201).json({ seed })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// DELETE /api/tournaments/admin/templates/:id/seed-bots/:userId
+router.delete('/admin/templates/:id/seed-bots/:userId', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    await db.tournamentTemplateSeedBot.delete({
+      where: { templateId_userId: { templateId: req.params.id, userId: req.params.userId } },
+    })
+    res.json({ ok: true })
+  } catch (e) {
+    if (e?.code === 'P2025') return res.status(404).json({ error: 'Seed bot not found on this template' })
+    next(e)
+  }
+})
+
 export default router

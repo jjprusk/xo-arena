@@ -2,12 +2,11 @@
 /**
  * Phase 3.7a.1 — admin view of recurring-tournament templates.
  *
- * Separate page from AdminTournamentsPage so the refactored
- * config-vs-runtime split has a dedicated surface. Shows each template
- * with its recurrence config, subscriber count, next-occurrence preview,
- * and pause/unpause action. Editing config still routes through the
- * existing tournament edit modal (dual-write keeps the Tournament +
- * TournamentTemplate rows in sync).
+ * Lists each template with recurrence config, subscriber / seed-bot /
+ * occurrence counts, last-occurrence peek, pause state, and a row of
+ * actions (Pause/Unpause, Edit, View, Seeds, Delete). Edit + View +
+ * Seeds all drill into /admin/templates/:id — the detail page handles
+ * the heavy-lift UI for each.
  */
 
 import React, { useEffect, useState, useCallback } from 'react'
@@ -15,41 +14,77 @@ import { Link } from 'react-router-dom'
 import { getToken } from '../../lib/getToken.js'
 import { tournamentApi } from '../../lib/tournamentApi.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
+import { ListTable, ListTh, ListTr, ListTd } from '../../components/ui/ListTable.jsx'
 
 function Spinner() {
   return <div className="w-6 h-6 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
 }
 
-function PausedBadge({ paused }) {
-  if (paused) {
-    return (
-      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-        style={{ backgroundColor: 'var(--color-amber-100)', color: 'var(--color-amber-700)' }}>
-        PAUSED
-      </span>
-    )
-  }
+function StatusBadge({ paused }) {
+  const [bg, color, label] = paused
+    ? ['var(--color-amber-100)', 'var(--color-amber-700)', 'PAUSED']
+    : ['var(--color-teal-100)',  'var(--color-teal-700)',  'ACTIVE']
   return (
-    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-      style={{ backgroundColor: 'var(--color-teal-100)', color: 'var(--color-teal-700)' }}>
-      ACTIVE
+    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+      style={{ backgroundColor: bg, color }}>
+      {label}
     </span>
   )
-}
-
-function formatRecurrence(template) {
-  const parts = []
-  parts.push(template.recurrenceInterval)
-  if (template.recurrenceEndDate) {
-    parts.push(`ends ${new Date(template.recurrenceEndDate).toLocaleDateString()}`)
-  }
-  return parts.join(' · ')
 }
 
 function formatDateTime(d) {
   if (!d) return '—'
   try { return new Date(d).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) }
   catch { return String(d) }
+}
+
+function RowButton({ children, onClick, disabled, tone = 'default', to }) {
+  const colors = {
+    default: { bg: 'var(--bg-base)',        color: 'var(--text-primary)', border: 'var(--border-default)' },
+    primary: { bg: 'var(--bg-base)',        color: 'var(--color-blue-600)', border: 'var(--border-default)' },
+    danger:  { bg: 'var(--color-red-50)',   color: 'var(--color-red-700)',   border: 'var(--color-red-200)' },
+  }
+  const c = colors[tone] ?? colors.default
+  const cls = 'text-xs font-semibold px-2.5 py-1 rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap hover:brightness-95'
+  const style = { backgroundColor: c.bg, color: c.color, borderColor: c.border }
+  if (to) return <Link to={to} className={cls} style={style}>{children}</Link>
+  return <button onClick={onClick} disabled={disabled} className={cls} style={style}>{children}</button>
+}
+
+function DeleteConfirm({ template, onCancel, onConfirm, busy }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={() => !busy && onCancel()}>
+      <div className="w-full max-w-md rounded-xl border p-5 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+        onClick={e => e.stopPropagation()}>
+        <div>
+          <h2 className="text-base font-bold leading-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+            Delete template "{template.name}"?
+          </h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            The template, its subscriber list, and its seed bots will be removed. Any historical occurrences stay but lose their link back to this template.
+          </p>
+          <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+            Subscribers: {template.subscriberCount} · Seed bots: {template.seedBotCount} · Occurrences: {template.occurrenceCount}
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} disabled={busy}
+            className="text-sm px-4 py-2 rounded-lg border font-semibold disabled:opacity-50"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={busy}
+            className="text-sm px-4 py-2 rounded-lg font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-red-600)' }}>
+            {busy ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function AdminTemplatesPage() {
@@ -60,6 +95,7 @@ export default function AdminTemplatesPage() {
   const [error, setError]         = useState(null)
   const [actionError, setActionError] = useState(null)
   const [busyId, setBusyId]       = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
   const isAdmin = session?.user?.role === 'admin'
 
   useEffect(() => {
@@ -84,14 +120,25 @@ export default function AdminTemplatesPage() {
   async function togglePause(template) {
     setBusyId(template.id); setActionError(null)
     try {
-      if (template.paused) {
-        await tournamentApi.unpauseTemplate(template.id, token)
-      } else {
-        await tournamentApi.pauseTemplate(template.id, token)
-      }
+      if (template.paused) await tournamentApi.unpauseTemplate(template.id, token)
+      else                 await tournamentApi.pauseTemplate(template.id, token)
       await load()
     } catch (err) {
       setActionError(err.message || 'Action failed.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function doDelete() {
+    if (!confirmDelete) return
+    setBusyId(confirmDelete.id); setActionError(null)
+    try {
+      await tournamentApi.deleteTemplate(confirmDelete.id, token)
+      setConfirmDelete(null)
+      await load()
+    } catch (err) {
+      setActionError(err.message || 'Delete failed.')
     } finally {
       setBusyId(null)
     }
@@ -107,11 +154,9 @@ export default function AdminTemplatesPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>
-            Admin
-          </p>
+          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Admin</p>
           <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
             Recurring Templates
           </h1>
@@ -119,11 +164,9 @@ export default function AdminTemplatesPage() {
             Recurring-tournament configurations. Each template spawns Tournament occurrences on its schedule.
           </p>
         </div>
-        <Link
-          to="/admin/tournaments"
-          className="text-sm font-semibold underline underline-offset-2"
-          style={{ color: 'var(--color-blue-600)' }}
-        >
+        <Link to="/admin/tournaments"
+          className="text-sm font-semibold underline underline-offset-2 shrink-0 mt-2"
+          style={{ color: 'var(--color-blue-600)' }}>
           ← Tournaments
         </Link>
       </div>
@@ -150,61 +193,70 @@ export default function AdminTemplatesPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden"
-          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-hover)' }}>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Name</th>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Game</th>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Recurrence</th>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Subscribers</th>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Seed bots</th>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Last occurrence</th>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Status</th>
-                <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map(t => (
-                <tr key={t.id} style={{ borderTop: '1px solid var(--border-default)' }}>
-                  <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {t.name}
+        <ListTable>
+          <thead>
+            <tr>
+              <ListTh>Name</ListTh>
+              <ListTh>Game</ListTh>
+              <ListTh>Recurrence</ListTh>
+              <ListTh align="right">Subs</ListTh>
+              <ListTh align="right">Seeds</ListTh>
+              <ListTh>Last occurrence</ListTh>
+              <ListTh>Status</ListTh>
+              <ListTh align="right">Actions</ListTh>
+            </tr>
+          </thead>
+          <tbody>
+            {templates.map((t, i) => (
+              <ListTr key={t.id} last={i === templates.length - 1}>
+                <ListTd>
+                  <div className="flex items-center gap-2">
+                    <Link to={`/admin/templates/${t.id}`} className="font-medium no-underline hover:underline"
+                      style={{ color: 'var(--text-primary)' }}>
+                      {t.name}
+                    </Link>
                     {t.isTest && (
-                      <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
                         style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-muted)' }}>
                         TEST
                       </span>
                     )}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{t.game}</td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{formatRecurrence(t)}</td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{t.subscriberCount}</td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{t.seedBotCount}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {t.lastOccurrence
-                      ? `${t.lastOccurrence.status} · ${formatDateTime(t.lastOccurrence.startTime)}`
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3"><PausedBadge paused={t.paused} /></td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => togglePause(t)}
-                      disabled={busyId === t.id}
-                      className="text-xs font-semibold px-3 py-1.5 rounded border transition-colors disabled:opacity-50"
-                      style={{
-                        borderColor: 'var(--border-default)',
-                        color: 'var(--text-primary)',
-                        backgroundColor: 'var(--bg-base)',
-                      }}>
+                  </div>
+                </ListTd>
+                <ListTd><span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t.game}</span></ListTd>
+                <ListTd><span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t.recurrenceInterval}</span></ListTd>
+                <ListTd align="right"><span className="text-xs tabular-nums" style={{ color: 'var(--text-secondary)' }}>{t.subscriberCount}</span></ListTd>
+                <ListTd align="right"><span className="text-xs tabular-nums" style={{ color: 'var(--text-secondary)' }}>{t.seedBotCount}</span></ListTd>
+                <ListTd>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {t.lastOccurrence ? `${t.lastOccurrence.status} · ${formatDateTime(t.lastOccurrence.startTime)}` : '—'}
+                  </span>
+                </ListTd>
+                <ListTd><StatusBadge paused={t.paused} /></ListTd>
+                <ListTd align="right">
+                  <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                    <RowButton onClick={() => togglePause(t)} disabled={busyId === t.id}>
                       {busyId === t.id ? '…' : t.paused ? 'Unpause' : 'Pause'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </RowButton>
+                    <RowButton to={`/admin/templates/${t.id}?edit=1`} tone="primary">Edit</RowButton>
+                    <RowButton to={`/admin/templates/${t.id}`}>View</RowButton>
+                    <RowButton to={`/admin/templates/${t.id}#seed-bots`}>Seeds</RowButton>
+                    <RowButton onClick={() => setConfirmDelete(t)} disabled={busyId === t.id} tone="danger">Delete</RowButton>
+                  </div>
+                </ListTd>
+              </ListTr>
+            ))}
+          </tbody>
+        </ListTable>
+      )}
+
+      {confirmDelete && (
+        <DeleteConfirm
+          template={confirmDelete}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={doDelete}
+          busy={busyId === confirmDelete.id}
+        />
       )}
     </div>
   )

@@ -77,9 +77,14 @@ export const tournamentApi = {
   triggerRecurringCheck:        (token)             => request('POST',   '/api/tournaments/admin/scheduler/check-recurring', {}, token),
 
   // Phase 3.7a — recurring-tournament templates (admin)
-  listTemplates:   (token)                => request('GET',  '/api/tournaments/admin/templates', undefined, token),
-  pauseTemplate:   (id, token)            => request('POST', `/api/tournaments/admin/templates/${id}/pause`, {}, token),
-  unpauseTemplate: (id, token)            => request('POST', `/api/tournaments/admin/templates/${id}/unpause`, {}, token),
+  listTemplates:    (token)               => request('GET',    '/api/tournaments/admin/templates', undefined, token),
+  getTemplate:      (id, token)           => request('GET',    `/api/tournaments/admin/templates/${id}`, undefined, token),
+  updateTemplate:   (id, data, token)     => request('PATCH',  `/api/tournaments/admin/templates/${id}`, data, token),
+  deleteTemplate:   (id, token)           => request('DELETE', `/api/tournaments/admin/templates/${id}`, undefined, token),
+  pauseTemplate:    (id, token)           => request('POST',   `/api/tournaments/admin/templates/${id}/pause`, {}, token),
+  unpauseTemplate:  (id, token)           => request('POST',   `/api/tournaments/admin/templates/${id}/unpause`, {}, token),
+  addTemplateSeed:    (id, userId, token) => request('POST',   `/api/tournaments/admin/templates/${id}/seed-bots`, { userId }, token),
+  removeTemplateSeed: (id, userId, token) => request('DELETE', `/api/tournaments/admin/templates/${id}/seed-bots/${userId}`, undefined, token),
 
   fillTestPlayers: (id, token) => request('POST', `/api/tournaments/${id}/fill-test-players`, {}, token),
   fillQaBots:      (id, data, token) => request('POST', `/api/tournaments/${id}/fill-qa-bots`, data, token),
