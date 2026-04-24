@@ -1,38 +1,67 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * Journey service — tracks and updates onboarding step completion.
+ * Journey service — the 7-step Hook + Curriculum onboarding spec per
+ * Intelligent_Guide_Requirements.md §4.
  *
- * Step index  Title
- * ─────────────────────────────────────────────────────────────
- *    1        Welcome (auto-complete on first hydration)
- *    2        Read the FAQ (client-side trigger on /faq visit)
- *    3        Play your first game
- *    4        Explore AI Training Guide (client-side trigger on /gym/guide visit)
- *    5        Create your first bot
- *    6        Train your bot (first training run > 0 episodes)
- *    7        Learn about tournaments (client-side trigger on /tournaments visit)
+ * All triggers are server-detectable — no more client-posted step events.
  *
- * On step 7 completion: +50 TC awarded; guide:notification emitted; this is the
- * terminal step — UI shows the "Onboarding Complete!" banner here.
+ *  Phase / Step                     Trigger                                  Reward
+ *  ───────────────────────────────  ──────────────────────────────────────  ──────────
+ *   1  Hook:        Play PvAI      first completed PvAI game for user       —
+ *   2  Hook:        Watch bots     demo-table spectated ≥ 2 min (§5.1)      +20 TC
+ *   3  Curriculum:  Create a bot   user-owned bot created                   —
+ *   4  Curriculum:  Train bot      first training run / Quick Bot bump      —
+ *   5  Curriculum:  Spar           user bot plays casual match (§5.2)       —
+ *   6  Curriculum:  Enter tourney  tournament participant row with own bot  —
+ *   7  Curriculum:  See result     tournament COMPLETED + finalPosition     +50 TC
  *
- * History: step 7 used to fire server-side on tournament:match:ready (bracket
- * seeded) and an 8th step fired on tournament:match:result (first match
- * finished). That required a user to register AND be paired AND have a match
- * resolve before the journey "completed" in the UI — too much friction for a
- * learning milestone. Step 7 is now a popup on /tournaments explaining how to
- * enter, and step 8 is retired. See guideStore.completeJourney on the client.
+ * On step 2: awards Hook TC + emits `guide:hook_complete`.
+ * On step 7: awards Curriculum TC + emits `guide:curriculum_complete` and
+ *            `guide:specialize_start` (single transition, two events so clients
+ *            can distinguish "just finished Curriculum" from "now in Specialize").
+ *
+ * Phase derivation (§3 of requirements):
+ *   Hook        — 0 or 1 of steps {1, 2} done, step 2 not yet done
+ *   Curriculum  — step 2 done, step 7 not yet done
+ *   Specialize  — step 7 done
+ *
+ * Reward amounts are admin-tunable via SystemConfig keys:
+ *   `guide.rewards.hookComplete`       default 20
+ *   `guide.rewards.curriculumComplete` default 50
  */
 
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
-const TOTAL_STEPS = 7
-const JOURNEY_COMPLETE_TC = 50
+export const TOTAL_STEPS      = 7
+export const HOOK_STEPS       = [1, 2]
+export const CURRICULUM_STEPS = [3, 4, 5, 6, 7]
+const HOOK_REWARD_STEP         = 2
+const CURRICULUM_REWARD_STEP   = 7
+
+export const STEP_TITLES = {
+  1: 'Play a quick game',
+  2: 'Watch two bots battle',
+  3: 'Create your first bot',
+  4: 'Train your bot',
+  5: 'Spar with your bot',
+  6: 'Enter a tournament',
+  7: 'See your bot’s first result',
+}
+
+const DEFAULT_HOOK_REWARD_TC       = 20
+const DEFAULT_CURRICULUM_REWARD_TC = 50
 
 let _io = null
 export function setIO(io) { _io = io }
 
 // ── Internal helpers ────────────────────────────────────────────────────────
+
+async function _getSystemConfig(key, defaultValue) {
+  const row = await db.systemConfig.findUnique({ where: { key } })
+  if (!row) return defaultValue
+  try { return JSON.parse(row.value) } catch { return row.value }
+}
 
 async function _getUser(userId) {
   return db.user.findUnique({
@@ -62,14 +91,28 @@ export async function getJourneyProgress(userId) {
 }
 
 /**
+ * Derives the current phase from a completedSteps array.
+ * Pure function — safe to call anywhere.
+ */
+export function deriveCurrentPhase(completedSteps = []) {
+  const done = new Set(completedSteps)
+  if (done.has(CURRICULUM_REWARD_STEP)) return 'specialize'
+  if (done.has(HOOK_REWARD_STEP))       return 'curriculum'
+  return 'hook'
+}
+
+/**
  * Idempotently marks a step complete.
- * Emits `guide:journeyStep` to the user's socket room.
- * On step 7 (the terminal step): awards TC, emits `guide:notification`.
  *
- * Returns true if this call completed the step (false if already done).
+ * Returns true if this call completed the step (false if already done or user
+ * not found). Non-fatal on any error (logs a warn, returns false).
  */
 export async function completeStep(userId, stepIndex, io) {
   const ioRef = io ?? _io
+  if (!Number.isInteger(stepIndex) || stepIndex < 1 || stepIndex > TOTAL_STEPS) {
+    logger.warn({ userId, stepIndex }, 'Journey step index out of range')
+    return false
+  }
   try {
     const prefs    = await _getPrefs(userId)
     if (!prefs) return false
@@ -77,7 +120,7 @@ export async function completeStep(userId, stepIndex, io) {
     const progress = prefs.journeyProgress ?? { completedSteps: [], dismissedAt: null }
     if (progress.completedSteps.includes(stepIndex)) return false   // idempotent
 
-    const completedSteps = [...progress.completedSteps, stepIndex]
+    const completedSteps = [...progress.completedSteps, stepIndex].sort((a, b) => a - b)
     const updated        = { ...prefs, journeyProgress: { ...progress, completedSteps } }
     await _savePrefs(userId, updated)
 
@@ -87,15 +130,15 @@ export async function completeStep(userId, stepIndex, io) {
         step:          stepIndex,
         completedSteps,
         totalSteps:    TOTAL_STEPS,
+        phase:         deriveCurrentPhase(completedSteps),
       })
     }
 
     logger.info({ userId, stepIndex, completedSteps }, 'Journey step completed')
 
-    // Terminal-step reward
-    if (stepIndex === TOTAL_STEPS) {
-      await _handleJourneyComplete(userId, ioRef)
-    }
+    // Phase-boundary rewards
+    if (stepIndex === HOOK_REWARD_STEP)       await _handleHookComplete(userId, ioRef)
+    if (stepIndex === CURRICULUM_REWARD_STEP) await _handleCurriculumComplete(userId, ioRef)
 
     return true
   } catch (err) {
@@ -105,7 +148,9 @@ export async function completeStep(userId, stepIndex, io) {
 }
 
 /**
- * Resets journey progress (used by "Restart onboarding" in Settings).
+ * Resets journey progress (used by "Restart onboarding" in Settings, and by
+ * `um journey --reset`). Does NOT re-lock SlotGrid or revoke already-granted
+ * TC — per requirements §9.3, earned shortcuts stay earned even on restart.
  */
 export async function restartJourney(userId) {
   const prefs = await _getPrefs(userId)
@@ -115,30 +160,67 @@ export async function restartJourney(userId) {
   logger.info({ userId }, 'Journey restarted')
 }
 
-// ── Internal: terminal-step completion reward ─────────────────────────────
+// ── Internal: phase-boundary rewards ────────────────────────────────────────
 
-async function _handleJourneyComplete(userId, ioRef) {
+async function _handleHookComplete(userId, ioRef) {
+  const reward = await _getSystemConfig('guide.rewards.hookComplete', DEFAULT_HOOK_REWARD_TC)
   try {
-    // Award 50 TC
     await db.user.update({
-      where:  { id: userId },
-      data:   { creditsTc: { increment: JOURNEY_COMPLETE_TC } },
+      where: { id: userId },
+      data:  { creditsTc: { increment: reward } },
     })
 
-    // Emit Guide notification
     if (ioRef) {
+      ioRef.to(`user:${userId}`).emit('guide:hook_complete', {
+        reward,
+        message: `You earned +${reward} TC — welcome to the Arena.`,
+      })
       ioRef.to(`user:${userId}`).emit('guide:notification', {
-        id:        `journey-complete-${userId}`,
-        type:      'admin',
-        title:     'Onboarding Complete! 🎉',
-        body:      `You earned +${JOURNEY_COMPLETE_TC} Tournament Credits. Welcome to the arena!`,
+        id:        `hook-complete-${userId}`,
+        type:      'reward',
+        title:     'Hook complete!',
+        body:      `+${reward} Tournament Credits. Up next: build your first bot.`,
         createdAt: new Date().toISOString(),
-        meta:      { journeyComplete: true },
+        meta:      { phaseTransition: 'hook→curriculum', reward },
       })
     }
 
-    logger.info({ userId, tc: JOURNEY_COMPLETE_TC }, 'Journey complete — TC awarded')
+    logger.info({ userId, reward }, 'Hook complete — TC awarded')
   } catch (err) {
-    logger.warn({ err, userId }, 'Journey completion reward failed (non-fatal)')
+    logger.warn({ err, userId }, 'Hook-complete reward failed (non-fatal)')
+  }
+}
+
+async function _handleCurriculumComplete(userId, ioRef) {
+  const reward = await _getSystemConfig('guide.rewards.curriculumComplete', DEFAULT_CURRICULUM_REWARD_TC)
+  try {
+    await db.user.update({
+      where: { id: userId },
+      data:  { creditsTc: { increment: reward } },
+    })
+
+    if (ioRef) {
+      // Two distinct events — lets clients distinguish "just finished
+      // Curriculum (celebrate)" from "now in Specialize (swap UI)".
+      ioRef.to(`user:${userId}`).emit('guide:curriculum_complete', {
+        reward,
+        message: `You earned +${reward} TC.`,
+      })
+      ioRef.to(`user:${userId}`).emit('guide:specialize_start', {
+        message: 'Welcome to Specialize — personalized recommendations unlocked.',
+      })
+      ioRef.to(`user:${userId}`).emit('guide:notification', {
+        id:        `curriculum-complete-${userId}`,
+        type:      'reward',
+        title:     'Journey complete! 🎉',
+        body:      `+${reward} Tournament Credits. You’re now in Specialize.`,
+        createdAt: new Date().toISOString(),
+        meta:      { phaseTransition: 'curriculum→specialize', reward },
+      })
+    }
+
+    logger.info({ userId, reward }, 'Curriculum complete — TC awarded + Specialize start emitted')
+  } catch (err) {
+    logger.warn({ err, userId }, 'Curriculum-complete reward failed (non-fatal)')
   }
 }

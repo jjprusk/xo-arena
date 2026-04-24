@@ -1,15 +1,23 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * Guide preferences API
+ * Guide preferences API — Intelligent Guide v1.
  *
- * GET  /api/v1/guide/preferences  — return guideSlots, guideNotificationPrefs, journeyProgress
- * PATCH /api/v1/guide/preferences — update one or more of those fields
+ *   GET   /api/v1/guide/preferences        return journey progress + UI prefs
+ *   PATCH /api/v1/guide/preferences        update prefs (slots, notif, uiHints)
+ *   POST  /api/v1/guide/journey/restart    reset journey progress
+ *
+ * Changes vs legacy (see Intelligent_Guide_Requirements.md §4):
+ *   - `POST /journey/step` (client-triggered step completion) REMOVED —
+ *     all 7 steps now detected server-side at their trigger events
+ *   - Auto-complete-on-hydration for step 1 REMOVED — new step 1 is
+ *     "Play a PvAI game" (fires from games.js / socketHandler.js), not
+ *     "first guide preferences fetch"
  */
 
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
-import { completeStep, restartJourney } from '../services/journeyService.js'
+import { restartJourney } from '../services/journeyService.js'
 
 const router = Router()
 
@@ -23,20 +31,6 @@ router.get('/preferences', requireAuth, async (req, res, next) => {
 
     const prefs    = user.preferences ?? {}
     const progress = prefs.journeyProgress ?? { completedSteps: [], dismissedAt: null }
-
-    // Auto-complete step 1 (Welcome) on first hydration
-    if (!progress.completedSteps.includes(1)) {
-      await completeStep(user.id, 1)
-      // Re-read so the response reflects the freshly written value
-      const fresh   = await db.user.findUnique({ where: { id: user.id }, select: { preferences: true } })
-      const updated = fresh?.preferences?.journeyProgress ?? { completedSteps: [1], dismissedAt: null }
-      return res.json({
-        guideSlots:             prefs.guideSlots             ?? [],
-        guideNotificationPrefs: prefs.guideNotificationPrefs ?? {},
-        journeyProgress:        updated,
-        uiHints:                prefs.uiHints                ?? {},
-      })
-    }
 
     res.json({
       guideSlots:             prefs.guideSlots             ?? [],
@@ -80,39 +74,10 @@ router.patch('/preferences', requireAuth, async (req, res, next) => {
 })
 
 /**
- * POST /api/v1/guide/journey/step
- * Client-side trigger for steps that can't be detected server-side.
- * Body: { step: number }
- *
- * Step 2 — visit /faq
- * Step 4 — visit /gym/guide
- * Step 7 — dismiss the "how to enter a tournament" popup on /tournaments
- *          (terminal step — completeStep fires the +50 TC reward)
- */
-router.post('/journey/step', requireAuth, async (req, res, next) => {
-  try {
-    const user = await db.user.findUnique({
-      where: { betterAuthId: req.auth.userId },
-      select: { id: true },
-    })
-    if (!user) return res.status(404).json({ error: 'User not found' })
-
-    const { step } = req.body
-    const CLIENT_TRIGGERABLE = [2, 4, 7]
-    if (!CLIENT_TRIGGERABLE.includes(step)) {
-      return res.status(400).json({ error: 'Step cannot be triggered client-side' })
-    }
-
-    await completeStep(user.id, step)
-    res.json({ ok: true })
-  } catch (err) {
-    next(err)
-  }
-})
-
-/**
  * POST /api/v1/guide/journey/restart
- * Clears all journey progress — used by "Restart onboarding" in Settings.
+ * Clears journey progress — used by "Restart onboarding" in Settings and by
+ * `um journey --reset`. Does NOT re-lock SlotGrid or revoke already-granted
+ * TC per requirements §9.3.
  */
 router.post('/journey/restart', requireAuth, async (req, res, next) => {
   try {

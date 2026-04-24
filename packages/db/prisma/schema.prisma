@@ -40,6 +40,12 @@ model User {
   nameConfirmed          Boolean                  @default(false)
   lastActiveAt           DateTime?
   emailAchievements      Boolean                  @default(false)
+  /// Excludes this user from all dashboard/metrics aggregations. Set true on
+  /// account creation for admins, seed-script accounts, and emails whose domain
+  /// matches the `metrics.internalEmailDomains` SystemConfig entry. Admins who
+  /// want their activity counted can flip their own flag via a Settings toggle.
+  /// See Intelligent_Guide_Requirements.md §2 (pollution prevention).
+  isTestUser             Boolean                  @default(false)
   feedback               Feedback[]
   gameElo                GameElo[]
   gamesAsPlayer1         Game[]                   @relation("Player1Games")
@@ -159,6 +165,10 @@ model Game {
   tournamentId       String?
   tournamentMatchId  String?
   isTournament       Boolean          @default(false)
+  /// True when the game is a user-initiated spar match (bot vs system bot,
+  /// outside any tournament). Preserved for 30 days per §5.2 retention policy;
+  /// excluded from ELO/ranking calculations. See Intelligent_Guide_Requirements.md §5.2.
+  isSpar             Boolean          @default(false)
   moveStream         Json?
   aiErrors           AIError[]
   player1            User             @relation("Player1Games", fields: [player1Id], references: [id])
@@ -175,6 +185,7 @@ model Game {
   @@index([player1Id])
   @@index([player2Id])
   @@index([tournamentId])
+  @@index([isSpar])
   @@map("games")
 }
 
@@ -546,6 +557,15 @@ model Tournament {
   // /tournaments page (filtered at the API layer) and exposed behind an
   // admin toggle. Never set by end users.
   isTest                  Boolean                 @default(false)
+  /// True for Curriculum Cup and Rookie Cup clones (curated-field guided
+  /// tournaments). Private to the creator, excluded from ELO / rankings,
+  /// GC'd after 30 days. See Intelligent_Guide_Requirements.md §5.4, §5.8.
+  isCup                   Boolean                 @default(false)
+  /// Bracket participant placement strategy. `random` = shuffle (existing
+  /// behavior, unchanged default). `deterministic` = respect each
+  /// participant's pre-assigned `slotIndex`. Rookie Cup sets this to
+  /// `deterministic` to place Sterling opposite the user. See §5.9.
+  seedingMode             TournamentSeedingMode   @default(random)
   games                   Game[]
   participants            TournamentParticipant[]
   rounds                  TournamentRound[]
@@ -555,6 +575,7 @@ model Tournament {
   @@index([game])
   @@index([createdById])
   @@index([templateId])
+  @@index([isCup])
   @@map("tournaments")
 }
 
@@ -602,6 +623,8 @@ model TournamentTemplate {
   updatedAt               DateTime                          @updatedAt
   /// True when created by an automated test suite.
   isTest                  Boolean                           @default(false)
+  /// Bracket seeding strategy inherited by cloned occurrences. See §5.9.
+  seedingMode             TournamentSeedingMode             @default(random)
   tournaments             Tournament[]
   seedBots                TournamentTemplateSeedBot[]
   subscriptions           RecurringTournamentRegistration[]
@@ -822,6 +845,10 @@ model Table {
   botSkillId        String?
   slug              String?     @unique
   displayName       String?
+  /// True for Hook-phase "Watch bots battle" demo tables. Private to the creator,
+  /// GC'd aggressively (one active per user, 2-min-post-complete, 1-hour TTL).
+  /// See Intelligent_Guide_Requirements.md §5.1.
+  isDemo            Boolean     @default(false)
 
   @@index([status])
   @@index([gameId])
@@ -829,7 +856,33 @@ model Table {
   @@index([isTournament])
   @@index([tournamentMatchId])
   @@index([botUserId])
+  @@index([isDemo])
   @@map("tables")
+}
+
+/// Daily aggregate snapshot written by a UTC-midnight cron job. The admin
+/// `/admin/guide-metrics` dashboard reads from this table for historical
+/// trend data; real-time metrics query raw events (users, games,
+/// tournaments) directly. All aggregation queries filter
+/// `WHERE user.isTestUser = false`. Retention defaults to indefinite
+/// (see Intelligent_Guide_Requirements.md §2).
+///
+/// `dimensions` is a free-form JSON slicer: e.g. `{ "bucket": "designer" }`
+/// for per-bucket breakdowns or `{ "cohortWeek": "2026-W17" }` for
+/// cohort-sliced snapshots. The `(date, metric, dimensions)` unique index
+/// makes re-running the cron for the same UTC date idempotent (same
+/// dimensions → same row → upsert, never duplicates).
+model MetricsSnapshot {
+  id         String   @id @default(cuid())
+  date       DateTime @db.Date
+  metric     String
+  value      Float
+  dimensions Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([date])
+  @@index([metric])
+  @@map("metrics_snapshots")
 }
 
 enum ScheduledJobStatus {
@@ -949,6 +1002,11 @@ enum TournamentStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum TournamentSeedingMode {
+  random
+  deterministic
 }
 
 enum TournamentStartMode {

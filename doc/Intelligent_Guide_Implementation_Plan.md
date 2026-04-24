@@ -662,16 +662,19 @@ This is the consolidated view of every task across all sprints. Check items off 
 
 #### Sprint 1 — Foundation
 
-- [ ] Schema migration (7 columns + 1 new table)
-- [ ] `journeyService` rewrite — 7-step spec
-- [ ] Remove client-triggered `/journey/step` endpoint
-- [ ] Wipe existing `journeyProgress`
-- [ ] 4 Sprint-1 SystemConfig keys seeded
-- [ ] `um journey` phase shortcuts
-- [ ] `journeyService.test.js` complete
-- [ ] Migration tested (forward + rollback)
-- [ ] Staging deploy + smoke
-- [ ] **Sprint 1 DoD passed**
+- [x] Schema migration (7 columns + 1 new table) — `20260424130000_intelligent_guide_v1_foundation`
+- [x] `journeyService` rewrite — 7-step spec with phase derivation, dual rewards, server-detectable triggers
+- [x] Remove client-triggered `/journey/step` endpoint
+- [x] Wipe existing `journeyProgress` — included in the migration
+- [x] 4 Sprint-1 SystemConfig keys seeded
+- [x] `um journey` phase shortcuts (`--phase hook|curriculum|specialize`, `--graduate`, deeper `--reset`, richer output with phase label)
+- [x] `journeyService.test.js` complete (25 new tests — constants, phase derivation, step completion, rewards, events, error handling)
+- [x] Existing callers remapped: `games.js` step 3→1, `socketHandler.js` step 3→1 (HvB only, dropped PvP firing), `bots.js` step 5→3, `mlService.js` + `skillService.js` step 6→4
+- [x] Step 7 trigger wired via `tournamentBridge.js` on `tournament:completed` event (for any tournament with finalPosition)
+- [x] Guide-route tests updated: removed "auto-completes step 1 on hydration", added "POST /journey/step returns 404" assertion
+- [x] Migration applied to docker-compose DB; `prisma generate` ran clean
+- [ ] Staging deploy + smoke (user-driven via `/stage` when ready)
+- [x] **Sprint 1 code DoD:** 1064 backend tests pass (+32 new, zero regressions)
 
 #### Sprint 2 — Phase 0
 

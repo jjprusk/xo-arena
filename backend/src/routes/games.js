@@ -76,8 +76,8 @@ router.post('/', requireAuth, async (req, res, next) => {
       recordGameCompletion({ appId: 'xo-arena', participants: pvbotParticipants, mode: 'hvb' })
         .catch((err) => logger.warn({ err }, 'Credit recording failed (non-fatal)'))
 
-      // Journey step 3: first game played (fire-and-forget)
-      completeStep(user.id, 3).catch(() => {})
+      // Journey step 1 (Hook): first PvAI game played (fire-and-forget)
+      completeStep(user.id, 1).catch(() => {})
 
       return res.status(201).json({ game: { id: game.id } })
     }
@@ -102,8 +102,8 @@ router.post('/', requireAuth, async (req, res, next) => {
     updatePlayerEloAfterPvAI(user.id, outcome, difficulty).catch(() => {})
     cache.invalidatePrefix('leaderboard:')
 
-    // Journey step 3: first game played (fire-and-forget)
-    completeStep(user.id, 3).catch(() => {})
+    // Journey step 1 (Hook): first PvAI game played (fire-and-forget)
+    completeStep(user.id, 1).catch(() => {})
 
     res.status(201).json({ game: { id: game.id } })
   } catch (err) {

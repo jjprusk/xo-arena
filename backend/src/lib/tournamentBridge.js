@@ -9,6 +9,7 @@ import db from './db.js'
 import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
+import { completeStep as completeJourneyStep } from '../services/journeyService.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
 // Stores state for PVP tournament matches waiting for players to join a room.
@@ -320,6 +321,14 @@ export async function handleEvent(io, channel, data) {
 
       for (const [notifyUserId, position] of ownerPositionMap) {
         await dispatch({ type: 'tournament.completed', targets: { userId: notifyUserId }, payload: { tournamentId, name, position } })
+
+        // Intelligent Guide v1 — Journey step 7 (Curriculum: "See your bot's
+        // first result"). Fires when the user's bot has a finalPosition in a
+        // completed tournament. Idempotent — completeStep is a no-op if
+        // step 7 was already done. Fire-and-forget; never block the notify flow.
+        if (position != null) {
+          completeJourneyStep(notifyUserId, 7).catch(() => {})
+        }
       }
 
       // Surface EOT participants' previously-held match.result notifications

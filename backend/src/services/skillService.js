@@ -878,13 +878,15 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
   engineCache.delete(modelId)
   logger.info({ sessionId, modelId, status, samples: episodeRecords.length, ...summary }, 'Frontend training finished')
 
-  // Journey step 5: first training run (fire-and-forget)
+  // Journey step 4 (Curriculum: Train your bot) — fire-and-forget.
+  // Was step 6 in the legacy spec; renumbered in the v1 Intelligent Guide
+  // rewrite (§4).
   if (safeIterations > 0) {
     db.botSkill.findUnique({ where: { id: modelId }, select: { createdBy: true } })
       .then(async model => {
         if (!model?.createdBy) return
         const user = await db.user.findUnique({ where: { betterAuthId: model.createdBy }, select: { id: true } })
-        if (user) completeJourneyStep(user.id, 6).catch(() => {})
+        if (user) completeJourneyStep(user.id, 4).catch(() => {})
       })
       .catch(() => {})
   }

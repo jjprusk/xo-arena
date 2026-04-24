@@ -28,7 +28,6 @@ vi.mock('../../logger.js', () => ({
 }))
 
 vi.mock('../../services/journeyService.js', () => ({
-  completeStep:   vi.fn().mockResolvedValue(true),
   restartJourney: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -51,13 +50,15 @@ beforeEach(() => {
 // ── GET /preferences ──────────────────────────────────────────────────────────
 
 describe('GET /preferences', () => {
-  it('returns default prefs when preferences is empty (auto-completes step 1)', async () => {
+  it('returns default prefs when preferences is empty (no auto-step in v1)', async () => {
+    // Intelligent Guide v1: GET /preferences never auto-completes a step.
+    // Step 1 is "Play a PvAI game" — server-detected in games.js / socketHandler.js,
+    // not on preferences hydration.
     const res = await request(buildApp()).get('/preferences')
     expect(res.status).toBe(200)
     expect(res.body.guideSlots).toEqual([])
     expect(res.body.guideNotificationPrefs).toEqual({})
-    // Step 1 (Welcome) is auto-completed on first hydration
-    expect(res.body.journeyProgress.completedSteps).toContain(1)
+    expect(res.body.journeyProgress.completedSteps).toEqual([])
     expect(res.body.journeyProgress.dismissedAt).toBeNull()
   })
 
@@ -140,5 +141,15 @@ describe('PATCH /preferences', () => {
         data: expect.objectContaining({ preferences: expect.objectContaining({ journeyProgress: jp }) }),
       })
     )
+  })
+})
+
+// ── POST /journey/step REMOVED in Intelligent Guide v1 ────────────────────────
+// All 7 steps are now server-detected at their trigger events.
+
+describe('POST /journey/step (removed in v1)', () => {
+  it('returns 404 — endpoint no longer exists', async () => {
+    const res = await request(buildApp()).post('/journey/step').send({ step: 2 })
+    expect(res.status).toBe(404)
   })
 })

@@ -1838,9 +1838,11 @@ async function recordPvpGame(table, io) {
     })
   }
 
-  // Journey step 3 — uses domain User.id
-  if (hostDomainId)  completeJourneyStep(hostDomainId,  3, io).catch(() => {})
-  if (guestDomainId && !table.isHvb) completeJourneyStep(guestDomainId, 3, io).catch(() => {})
+  // Journey step 1 (Hook: Play a PvAI game) — only fires for human-vs-bot
+  // table games. PvP games don't qualify for Hook step 1 in the new spec
+  // (Hook is specifically about demonstrating bots-as-first-class-players).
+  // Uses domain User.id.
+  if (hostDomainId && table.isHvb) completeJourneyStep(hostDomainId, 1, io).catch(() => {})
 
   // ELO update (skip for tournament and HvB) — uses domain User.id
   if (!isTournamentRoom && !table.isHvb && hostDomainId && guestDomainId) {

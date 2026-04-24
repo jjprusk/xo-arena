@@ -20,6 +20,12 @@ const CONFIG_DEFAULTS = [
   { key: 'game.spectatorIdleSeconds',   value: 600 },
   { key: 'session.idleWarnMinutes',     value: 30  },
   { key: 'session.idleGraceMinutes',    value: 5   },
+
+  // Intelligent Guide v1 — admin-tunable defaults (Intelligent_Guide_Requirements.md §8.4)
+  { key: 'guide.rewards.hookComplete',        value: 20  },  // TC at end-of-Hook (step 2)
+  { key: 'guide.rewards.curriculumComplete',  value: 50  },  // TC at end-of-Curriculum (step 7)
+  { key: 'guide.quickBot.defaultTier',        value: 'novice' },        // Quick Bot starting tier — Rusty-equivalent
+  { key: 'guide.quickBot.firstTrainingTier',  value: 'intermediate' },  // Tier after first training run — Copper-equivalent
 ]
 
 // ─── Built-in bot definitions ──────────────────────────────────────────────
