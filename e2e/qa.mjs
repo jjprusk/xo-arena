@@ -77,6 +77,7 @@ const MENU = [
   I('Template clone flow (Phase 3.7a)',                () => pw('tournament-template-clone'),  'TEST_ADMIN_EMAIL'),
   I('Template create endpoint (Phase 3.7a s2)',        () => pw('tournament-template-create'), 'TEST_ADMIN_EMAIL'),
   I('Follow-player spectate (5-step verification)',    () => pw('tournament-follow-player'),   'TEST_ADMIN_EMAIL'),
+  I('Tournament runaway-loop guards',                  () => pw('tournament-guards'),          'no auth'),
   I('All Playwright (chromium)',                        () => pw(null)),
   D(),
   S('Long-running'),
