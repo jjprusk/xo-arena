@@ -29,11 +29,34 @@ fly postgres attach --app xo-tournament-prod xo-db-prod
 ### `xo-backend-prod` (two gaps vs staging)
 
 ```sh
+# INTERNAL_SECRET — must be IDENTICAL to the value set on xo-tournament-prod
+# below, so the backend's bot-match completion calls can authenticate into
+# the tournament service. Generate once, then reuse it below.
+INTERNAL_SECRET="$(openssl rand -hex 32)"
+
 fly secrets set -a xo-backend-prod \
   BETTER_AUTH_URL="https://xo-backend-prod.fly.dev" \
   JWT_SECRET="$(openssl rand -hex 32)" \
-  FRONTEND_URL="https://xo-landing-prod.fly.dev,https://aiarena.callidity.com"
+  FRONTEND_URL="https://xo-landing-prod.fly.dev,https://aiarena.callidity.com" \
+  TOURNAMENT_SERVICE_URL="http://xo-tournament-prod.flycast:3001" \
+  INTERNAL_SECRET="$INTERNAL_SECRET"
 ```
+
+> **Lessons from staging 2026-04-24:**
+>
+> - `TOURNAMENT_SERVICE_URL` was unset on staging, defaulting to
+>   `http://localhost:3001`. The backend's bot runner completes each
+>   bot-vs-bot match by POSTing results to the tournament service — a
+>   localhost default on Fly means "this machine" (nothing there), so
+>   the fetch threw `TypeError: fetch failed`, matches stayed PENDING
+>   forever, and the bot runner restarted the series in an infinite
+>   loop. 514 runaway game records before we caught it.
+> - `INTERNAL_SECRET` (the shared auth token between backend and
+>   tournament service's `/api/matches/:id/complete`) was also unset,
+>   which would have been a second failure even if the URL was right —
+>   the endpoint gates on `x-internal-secret` header matching
+>   `INTERNAL_SECRET`, and an empty secret falls through to JWT-only
+>   auth. Set the SAME value on both services.
 
 > **Lesson from staging 2026-04-23:** `FRONTEND_URL` is the CORS allowlist
 > (comma-separated). It must include **every** origin the site may be
@@ -51,13 +74,16 @@ fly secrets set -a xo-landing-prod \
   TOURNAMENT_URL="https://xo-tournament-prod.fly.dev"
 ```
 
-### `xo-tournament-prod` (missing four)
+### `xo-tournament-prod` (missing five)
 
 ```sh
+# INTERNAL_SECRET here MUST match the value set on xo-backend-prod above.
+# Reuse the $INTERNAL_SECRET variable from Step 2 backend block.
 fly secrets set -a xo-tournament-prod \
   FRONTEND_URL="https://xo-landing-prod.fly.dev,https://aiarena.callidity.com" \
   NODE_ENV="production" \
-  REDIS_URL="$(fly redis status xo-redis-prod --json | jq -r '.PrivateURL')"
+  REDIS_URL="$(fly redis status xo-redis-prod --json | jq -r '.PrivateURL')" \
+  INTERNAL_SECRET="$INTERNAL_SECRET"
 ```
 
 > CORS allowlist on the tournament service must match backend's **exactly**
@@ -66,6 +92,28 @@ fly secrets set -a xo-tournament-prod \
 > only the Fly URL on tournament but all three on backend, which produced
 > a silent mismatch that only surfaced when a human admin loaded the site
 > from the custom domain and tried to create a recurring tournament.
+
+> **`INTERNAL_SECRET` must be byte-identical on both services.** Confirm
+> after the secrets land:
+>
+> ```sh
+> diff <(fly ssh console -a xo-backend-prod    -C 'printenv INTERNAL_SECRET') \
+>      <(fly ssh console -a xo-tournament-prod -C 'printenv INTERNAL_SECRET')
+> ```
+>
+> Empty output = match. Any diff = backend's match-completion calls will
+> silently 403.
+
+> **`min_machines_running` must be ≥ 1 on xo-tournament-prod.** The
+> tournament service hosts the 60s sweep (auto-cancel / auto-start / bot
+> match recovery) and the recurring-occurrence scheduler; both are
+> background jobs that need a machine alive even when no HTTP traffic is
+> hitting the app. Fly auto-stopped a staging machine during an idle
+> window and the sweep went dark, leaving IN_PROGRESS tournaments with
+> stuck PENDING matches. `tournament/fly.toml` sets
+> `min_machines_running = 1` — verify with `fly scale show -a
+> xo-tournament-prod` after first deploy. Backend + landing can stay at
+> 0 (they only matter when users are on-site).
 
 ## Step 3 — Overwrite `REDIS_URL` on backend-prod
 
