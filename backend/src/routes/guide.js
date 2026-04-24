@@ -5,6 +5,7 @@
  *   GET   /api/v1/guide/preferences        return journey progress + UI prefs
  *   PATCH /api/v1/guide/preferences        update prefs (slots, notif, uiHints)
  *   POST  /api/v1/guide/journey/restart    reset journey progress
+ *   POST  /api/v1/guide/guest-credit       credit Hook steps 1-2 from guest localStorage
  *
  * Changes vs legacy (see Intelligent_Guide_Requirements.md §4):
  *   - `POST /journey/step` (client-triggered step completion) REMOVED —
@@ -17,7 +18,8 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
-import { restartJourney } from '../services/journeyService.js'
+import logger from '../logger.js'
+import { restartJourney, completeStep } from '../services/journeyService.js'
 
 const router = Router()
 
@@ -89,6 +91,58 @@ router.post('/journey/restart', requireAuth, async (req, res, next) => {
 
     await restartJourney(user.id)
     res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/guide/guest-credit
+ *
+ * Called by the client immediately after a successful signup to credit any
+ * Hook-step progress the user accumulated as a guest (pre-signup). Payload
+ * is whatever the client stored in localStorage under `guideGuestJourney`:
+ *
+ *     { hookStep1CompletedAt?: ISO8601, hookStep2CompletedAt?: ISO8601 }
+ *
+ * Both fields optional. Missing fields → no credit for that step. Invalid
+ * step indices or non-ISO timestamps → ignored (best-effort; the guest-mode
+ * state is client-supplied and trusted low).
+ *
+ * Low-risk to trust the client: the max TC a malicious actor can claim via
+ * this endpoint is the Hook reward (+20 TC) — trivial impact. See §3.5.3 of
+ * the Intelligent Guide Requirements doc.
+ *
+ * Idempotent — completeStep already handles "step already done" as a no-op.
+ */
+router.post('/guest-credit', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const { hookStep1CompletedAt, hookStep2CompletedAt } = req.body ?? {}
+    const credited = []
+
+    // Step 1 — "Play a quick PvAI game" (pre-signup).
+    if (hookStep1CompletedAt) {
+      const ok = await completeStep(user.id, 1)
+      if (ok) credited.push(1)
+    }
+
+    // Step 2 — "Watch two bots battle" (pre-signup). Order matters: step 2's
+    // completion triggers the +20 TC Hook reward, so step 1 must be credited
+    // first (visually; semantically they're independent but the reward event
+    // reads "your Hook is done" which makes most sense when both steps are in).
+    if (hookStep2CompletedAt) {
+      const ok = await completeStep(user.id, 2)
+      if (ok) credited.push(2)
+    }
+
+    logger.info({ userId: user.id, credited }, 'Guest-credit applied')
+    res.json({ ok: true, creditedSteps: credited })
   } catch (err) {
     next(err)
   }

@@ -4,22 +4,28 @@ import { signIn, fetchAuthToken } from './helpers.js'
 /**
  * Journey smoke — onboarding regression guards.
  *
- * Named `smoke.journey.*` so it runs alongside smoke.spec.js when /stage
- * invokes `npx playwright test smoke`. The tests gracefully skip when
- * TEST_USER_EMAIL/PASSWORD aren't set — so staging runs are no-ops (the
- * dev-only QA user isn't seeded there) and localhost runs exercise the
- * full flow.
- *
- * Two guards here, both critical for new-user UX:
- *
- *   1. Step 3 → Step 4 advances after a game
- *      Regresssion hit once when the landing stopped re-hydrating the Guide
- *      store on navigation away from /play.
- *
- *   2. Step 7 terminal flow (tutorial modal)
- *      Visiting /tournaments must show the "How to enter a tournament"
- *      modal; dismissing it must mark step 7 complete and flip the Guide
- *      to the "Onboarding Complete!" banner.
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ LEGACY TEST — SKIPPED during Intelligent Guide v1 transition.           │
+ * │                                                                          │
+ * │ This test was written against the legacy 7-step journey (step 1 = auto  │
+ * │ Welcome, step 3 = "Play your first game", step 7 = dismiss tutorial).   │
+ * │ The v1 rewrite changed every step's meaning and trigger:                │
+ * │   - Step 1 "Play a quick PvAI game" — no longer auto-completes on       │
+ * │     hydration; fires server-side when the user completes a PvAI game    │
+ * │   - Step 3 "Create your first bot" — no longer "Play your first game"   │
+ * │   - Step 7 "See your bot's first tournament result" — no longer a       │
+ * │     tutorial-modal dismissal                                            │
+ * │                                                                          │
+ * │ This test will be rewritten as `guide-hook.spec.js` and                 │
+ * │ `guide-curriculum.spec.js` in Sprint 3 + Sprint 4 when the new Guide    │
+ * │ UI (JourneyCard phases, hero+checklist rendering) ships. See            │
+ * │ Intelligent_Guide_Implementation_Plan.md §7 (V1.1 sprint plan,          │
+ * │ Sprint 3 Testing Requirements).                                         │
+ * │                                                                          │
+ * │ Until then: every test in this file is `.skip()`ed so CI stays green.   │
+ * │ DO NOT remove the file — the helpers (signIn, fetchAuthToken, etc.)     │
+ * │ are reused by the Sprint 3 replacement specs.                           │
+ * └──────────────────────────────────────────────────────────────────────────┘
  */
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
@@ -75,7 +81,7 @@ async function ensureGuideOpen(page) {
   await page.getByText(JOURNEY_OPEN_MARKER).first().waitFor({ state: 'visible', timeout: 10_000 })
 }
 
-test.describe('Journey — step advancement', () => {
+test.describe.skip('Journey — step advancement [legacy — v1 rewrite pending, see header]', () => {
   test.setTimeout(45_000)
 
   test('finishing a game advances Next from step 3 to step 4', async ({ browser }) => {

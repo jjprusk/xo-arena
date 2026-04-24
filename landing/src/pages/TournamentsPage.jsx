@@ -589,17 +589,10 @@ export default function TournamentsPage() {
   }, [session?.user?.id, hydrated])
 
   function closeTutorial() {
+    // Intelligent Guide v1 — the legacy "dismiss tutorial → step 7" client-
+    // trigger was removed. New step 7 fires server-side when the user's bot
+    // gets a finalPosition in a completed tournament (tournamentBridge.js).
     setShowTutorial(false)
-    getToken().then(t => {
-      if (!t) return
-      api.guide.triggerStep(7, t).then(() => {
-        const store = useGuideStore.getState()
-        const current = store.journeyProgress?.completedSteps ?? []
-        if (!current.includes(7)) {
-          store.applyJourneyStep({ completedSteps: [...current, 7] })
-        }
-      }).catch(() => {})
-    }).catch(() => {})
   }
 
   // Filter/search/paginate state — all persisted in the URL so the browser's

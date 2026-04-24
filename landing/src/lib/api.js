@@ -77,8 +77,15 @@ export const api = {
   guide: {
     getPreferences:   (token)       => api.get('/guide/preferences', token),
     patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),
-    triggerStep:      (step, token) => api.post('/guide/journey/step', { step }, token),
     restartJourney:   (token)       => api.post('/guide/journey/restart', {}, token),
+    // Phase 0 (Intelligent Guide v1) — credit pre-signup Hook progress from
+    // guest-mode localStorage immediately after a successful signup. Body:
+    // `{ hookStep1CompletedAt?: ISO8601, hookStep2CompletedAt?: ISO8601 }`.
+    guestCredit:      (payload, token) => api.post('/guide/guest-credit', payload, token),
+    // NOTE: triggerStep() was removed in v1 — all 7 journey steps are now
+    // server-detected at their natural trigger events (see Intelligent_Guide_
+    // Requirements.md §4). Page-visit callers in FAQPage / GymGuidePage /
+    // TournamentsPage have been removed to match.
   },
 
   ml: {
