@@ -65,15 +65,35 @@ The full requirements doc covers a lot of ground, much of which only makes sense
 
 ---
 
-## 3. Team & Sprint Assumptions
+## 3. Execution Model & Sprint Assumptions
 
-**Assumptions (adjust if wrong):**
+### Who does the work
+
+**Model B: Claude Code as primary implementer, with selective sub-agent parallelism.**
+
+- **Joe (product owner):** directional decisions, go/no-go on designs, UX feedback, all `git push` / deploy operations (per established flow), final sign-off on each sprint's Definition of Done.
+- **Claude Code (primary implementer):** writes the code, runs the tests, commits to `dev`, renders docs, updates the master checklist in §9 as items complete, reports blockers.
+- **Sub-agents (selective use):** spawned only for specific patterns where they pay off.
+
+### When sub-agents are used (and when they aren't)
+
+**Used for:**
+
+1. **Bounded codebase research** — Explore agents for questions like "find all current callers of `journeyService.completeStep` and summarize their expected interface." Saves context in the main session and parallelizes research-heavy sprint kickoffs.
+2. **Truly parallel implementation tracks** — isolated-worktree general-purpose agents when two sprint deliverables touch disjoint file sets and can run concurrently. Example: Sprint 3's Demo Table endpoint (backend, `backend/src/routes/`) and JourneyCard rewrite (frontend, `landing/src/components/`) could run in parallel worktrees. Claude reviews each sub-agent's output before merging.
+
+**Not used for:**
+
+- Ongoing ownership of a sprint or a feature — sub-agents don't retain state between invocations; coordination overhead dominates
+- Cross-cutting changes that span backend + frontend + tests — single sequential pass is faster
+- Work requiring real-time back-and-forth with the product owner — that's the main session
+
+### Sprint cadence
 
 - **Sprint length:** 2 weeks
-- **Team size:** 1–2 full-stack engineers
-- **Velocity:** ~20 story points per sprint per engineer (rough industry average for this stack)
-- **Staging deploy:** after every sprint
-- **Production deploy:** v1 at end of Sprint 6, v1.1 at end of Sprint 11
+- **Velocity:** roughly equivalent to 1 full-stack engineer working ~full-time, with ~1.3× effective throughput when parallelism kicks in (conservative; sub-agent coordination adds overhead)
+- **Staging deploy:** after every sprint (user-driven per the existing `/stage` flow)
+- **Production deploy:** v1 at end of Sprint 6, v1.1 at end of Sprint 11 (user-driven)
 
 Timeline estimate if assumptions hold:
 
@@ -84,7 +104,7 @@ Timeline estimate if assumptions hold:
 | v1.1 | 5 sprints | ~10 weeks |
 | **Total** | **11 sprints + observation** | **~26 weeks (~6 months)** |
 
-Adjust sprint content or length if your team size / velocity differs.
+Actual pace will vary — some sprints (e.g. Sprint 2 Phase 0) may stretch, others (e.g. Sprint 5 rewards) compress. Adjust as reality emerges.
 
 ---
 
@@ -831,17 +851,18 @@ This is the consolidated view of every task across all sprints. Check items off 
 
 ### Communication during build
 
-- End-of-sprint demo + checklist update committed to this doc
-- Weekly quick sync: any blocked tasks? any risk register updates?
-- Staging walkthrough before every production deploy
+- **End-of-sprint:** Claude commits the completed checklist updates (§9) to this doc, writes a brief sprint recap in the commit message, and posts a short summary to Joe on what shipped + what's next.
+- **Mid-sprint blockers:** Claude flags directly in the main session as soon as they surface — doesn't wait for end-of-sprint.
+- **Staging walkthrough:** before the v1 and v1.1 production deploys (end of Sprints 6 and 11), Claude walks Joe through the full funnel on staging; Joe flips the production flag.
+- **Sub-agent results:** when a sub-agent is spawned, Claude summarizes its output in the main session before acting on it — no invisible parallel work.
 
 ---
 
 ## 12. How to Use This Doc
 
-- **For the engineering team:** this doc is the source of truth for sprint planning. Check off items as they complete. Treat it as a living document — update scope estimates as reality emerges.
-- **For QA:** the "Testing requirements" section of each sprint is the *minimum* testing bar. The test scenarios in §8 `um` can help create quick state setup for manual testing.
-- **For the product owner (you):** the master checklist in §9 is the fastest way to see where we are. Each `[ ]` is one item; each `[x]` is done.
+- **For Joe (product owner):** the master checklist in §9 is the fastest pulse-check. Each `[ ]` is one item; each `[x]` is done. Directional decisions get raised in the main session as they come up. The requirements doc stays the source of truth for feature behavior — this doc is execution-only.
+- **For Claude (implementer):** this doc drives sprint planning. Update the checklist as items complete. Treat it as living — revise sprint scope or the risk register when reality emerges. If a sub-agent is useful (per §3), spawn one; summarize its output before merging.
+- **Testing bar:** the "Testing requirements" section of each sprint is the *minimum*. The test scenarios in §10.6 of the requirements doc (`um` CLI) describe quick state-setup for manual testing — use them.
 - **When in doubt about feature behavior:** open `Intelligent_Guide_Requirements.md`. This implementation plan never re-specifies behavior — it only indexes it.
 
 ---
