@@ -824,6 +824,71 @@ function AutoDropWidget({ token }) {
   )
 }
 
+// ── In-flight tournaments widget (Phase 3.7a.6+) ─────────────────────────────
+// Shows every IN_PROGRESS tournament at a glance with its games-played vs
+// expected ratio. Runaway loops — where the bot runner re-plays the same
+// series forever because match completion can't reach the tournament
+// service — surface as a red warning here before the sweep auto-cancels
+// at 5× the expected ceiling.
+
+function InFlightWidget({ tournaments }) {
+  const inFlight = (tournaments ?? []).filter(t => t.status === 'IN_PROGRESS')
+  if (inFlight.length === 0) return null
+  const runaway = inFlight.filter(t => (t.runawayRatio ?? 0) > 3)
+  return (
+    <div
+      className="rounded-xl border p-4 flex flex-col gap-3"
+      style={{
+        backgroundColor: 'var(--bg-surface)',
+        borderColor: runaway.length > 0 ? 'var(--color-red-300)' : 'var(--border-default)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Tournaments in flight
+          </p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold tabular-nums" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+              {inFlight.length}
+            </span>
+            {runaway.length > 0 && (
+              <span className="text-xs font-semibold" style={{ color: 'var(--color-red-700)' }}>
+                ⚠ {runaway.length} runaway
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <ul className="text-xs space-y-1" style={{ color: 'var(--text-secondary)' }}>
+        {inFlight.map(t => {
+          const ratio = t.runawayRatio ?? 0
+          const isRunaway = ratio > 3
+          return (
+            <li key={t.id} className="flex items-center justify-between gap-3">
+              <span className="truncate">
+                {isRunaway && <span style={{ color: 'var(--color-red-700)' }}>⚠ </span>}
+                {t.name}
+              </span>
+              <span
+                className="shrink-0 tabular-nums"
+                style={{
+                  color: isRunaway ? 'var(--color-red-700)'
+                       : ratio > 1  ? 'var(--color-amber-700)'
+                       : 'var(--text-muted)',
+                }}
+                title={`${t.gamesPlayed} of ${t.expectedGames} expected games (${ratio.toFixed(2)}×)`}
+              >
+                {t.gamesPlayed}/{t.expectedGames} · {ratio.toFixed(1)}×
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 // ── Create / Edit modal ───────────────────────────────────────────────────────
 
 function TournamentModal({ tournament, token, onSaved, onClose }) {
@@ -1067,7 +1132,10 @@ export default function AdminTournamentsPage() {
         </Link>
       </div>
 
-      <AutoDropWidget token={token} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <AutoDropWidget token={token} />
+        <InFlightWidget tournaments={tournaments} />
+      </div>
 
       {/* Tournament list */}
       <div className="space-y-4">
@@ -1182,6 +1250,7 @@ export default function AdminTournamentsPage() {
                 <ListTh className="hidden md:table-cell">Format</ListTh>
                 <ListTh className="hidden md:table-cell">Mode</ListTh>
                 <ListTh align="right" className="hidden lg:table-cell">Players</ListTh>
+                <ListTh align="right" className="hidden xl:table-cell" title="Games played vs expected — flagged red if >3× expected">Games</ListTh>
                 <ListTh className="hidden lg:table-cell">Start</ListTh>
                 <ListTh align="right">Actions</ListTh>
               </tr>
@@ -1258,6 +1327,18 @@ export default function AdminTournamentsPage() {
                             Test
                           </span>
                         )}
+                        {/* Runaway badge — tournament has played >3× its
+                            expected game ceiling. Sweep auto-cancels at 5×,
+                            so admin has a window to investigate. */}
+                        {t.runawayRatio > 3 && (
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                            style={{ backgroundColor: 'var(--color-red-50)', color: 'var(--color-red-700)', border: '1px solid var(--color-red-300)' }}
+                            title={`Runaway loop suspected: ${t.gamesPlayed} games played vs ${t.expectedGames} expected (${t.runawayRatio.toFixed(1)}×). Auto-cancels at 5×.`}
+                          >
+                            ⚠ Runaway {t.runawayRatio.toFixed(1)}×
+                          </span>
+                        )}
                       </div>
                       {t.description && (
                         <p className="text-[10px] truncate max-w-[180px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.description}</p>
@@ -1279,6 +1360,23 @@ export default function AdminTournamentsPage() {
                       <span className="text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
                         {participantCount}{t.maxParticipants ? `/${t.maxParticipants}` : ''}
                       </span>
+                    </ListTd>
+                    <ListTd align="right" className="hidden xl:table-cell">
+                      {t.expectedGames > 0 ? (
+                        <span
+                          className="text-xs tabular-nums font-mono"
+                          style={{
+                            color: t.runawayRatio > 3 ? 'var(--color-red-700)'
+                                 : t.runawayRatio > 1 ? 'var(--color-amber-700)'
+                                 : 'var(--text-muted)'
+                          }}
+                          title={`${t.gamesPlayed} games played, ${t.expectedGames} expected (${(t.runawayRatio ?? 0).toFixed(2)}×)`}
+                        >
+                          {t.gamesPlayed}/{t.expectedGames}
+                        </span>
+                      ) : (
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
+                      )}
                     </ListTd>
                     <ListTd className="hidden lg:table-cell">
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t.startTime ? new Date(t.startTime).toLocaleString() : '—'}</span>
