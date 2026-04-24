@@ -20,6 +20,7 @@
 import db from './db.js'
 import { publish } from './redis.js'
 import { buildBotMatchReadyPayload } from './publishPayloads.js'
+import { expectedGameCount, RUNAWAY_CANCEL_RATIO } from './bracketMath.js'
 import logger from '../logger.js'
 
 const SWEEP_INTERVAL_MS = 60_000
@@ -217,6 +218,52 @@ export async function sweep() {
 
   // Phase 3: re-publish events for bot matches stuck in PENDING (event may have been lost)
   await recoverPendingBotMatches(true)
+
+  // Phase 4: runaway-loop guard. If any IN_PROGRESS tournament has played
+  // > RUNAWAY_CANCEL_RATIO × its expected game ceiling, the bot runner is
+  // almost certainly stuck re-playing the same series (e.g. match-complete
+  // fetch silently failing so the series never advances). Cancel the
+  // tournament immediately to stop the loop.
+  try {
+    const inFlight = await db.tournament.findMany({
+      where:  { status: 'IN_PROGRESS' },
+      select: {
+        id: true, name: true, bracketType: true, bestOfN: true,
+        _count: { select: { participants: true, games: true } },
+      },
+    })
+    for (const t of inFlight) {
+      const expected  = expectedGameCount(t.bracketType, t._count.participants, t.bestOfN)
+      const played    = t._count.games
+      if (expected > 0 && played > expected * RUNAWAY_CANCEL_RATIO) {
+        logger.error(
+          { tournamentId: t.id, name: t.name, gamesPlayed: played, expectedGames: expected, ratio: played / expected },
+          'Tournament sweep — RUNAWAY LOOP detected, auto-cancelling'
+        )
+        try {
+          await db.tournament.update({
+            where: { id: t.id },
+            data:  { status: 'CANCELLED' },
+          })
+          await db.tournamentMatch.updateMany({
+            where: { tournamentId: t.id, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+            data:  { status: 'CANCELLED' },
+          })
+          await publish('tournament:cancelled', {
+            tournamentId: t.id,
+            name: t.name,
+            reason: 'runaway_loop',
+            gamesPlayed: played,
+            expectedGames: expected,
+          }).catch(() => {})
+        } catch (err) {
+          logger.warn({ err, tournamentId: t.id }, 'Tournament sweep — runaway auto-cancel failed')
+        }
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'Tournament sweep — runaway guard phase failed')
+  }
 }
 
 // ─── Auto-cancel ──────────────────────────────────────────────────────────────

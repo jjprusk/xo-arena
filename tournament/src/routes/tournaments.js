@@ -6,6 +6,7 @@ import { optionalAuth, requireAuth, requireTournamentAdmin, isTournamentAdmin } 
 import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import { checkRecurringOccurrences } from '../lib/recurringScheduler.js'
 import { cloneAndSeedPersona, seedExistingSystemBot, syncTemplateSeedsToTournament } from '../lib/seedBotService.js'
+import { expectedGameCount } from '../lib/bracketMath.js'
 
 // Coerce a client-supplied date-ish value to a Prisma-safe value.
 // Crucially, empty string / null must map to `null`, NOT `new Date(null)`
@@ -61,7 +62,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
         registrationCloseAt: true,
         templateId: true,
         createdAt: true,
-        _count: { select: { participants: true } },
+        _count: { select: { participants: true, games: true } },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -80,10 +81,21 @@ router.get('/', optionalAuth, async (req, res, next) => {
     }
 
     res.json({
-      tournaments: tournaments.map(t => ({
-        ...t,
-        isRegisteredByViewer: myTournamentIds.has(t.id),
-      })),
+      tournaments: tournaments.map(t => {
+        const gamesPlayed   = t._count?.games        ?? 0
+        const participants  = t._count?.participants ?? 0
+        const expectedGames = expectedGameCount(t.bracketType, participants, t.bestOfN)
+        // Surface as runawayRatio (actual/expected). Admin UI turns red
+        // at >3, sweep auto-cancels at >5 (tournamentSweep.js).
+        const runawayRatio  = expectedGames > 0 ? gamesPlayed / expectedGames : 0
+        return {
+          ...t,
+          isRegisteredByViewer: myTournamentIds.has(t.id),
+          gamesPlayed,
+          expectedGames,
+          runawayRatio,
+        }
+      }),
     })
   } catch (e) {
     next(e)
