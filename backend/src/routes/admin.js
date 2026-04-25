@@ -20,6 +20,7 @@ import {
 import { replyTemplate } from '../lib/emailTemplates.js'
 import { dispatch, emitToRoom } from '../lib/notificationBus.js'
 import { sweep as gcSweep } from '../services/tableGcService.js'
+import { runMetricsSnapshot } from '../services/metricsSnapshotService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
@@ -82,6 +83,41 @@ router.get('/stats', async (_req, res, next) => {
     ])
 
     res.json({ stats: { totalUsers, totalGames, gamesToday, bannedUsers, totalModels } })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── Intelligent Guide metrics ────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/guide-metrics
+ *
+ * Returns the v1 Intelligent Guide metric set for the admin dashboard:
+ *  - latest snapshot (today's row, freshly computed on demand for accuracy)
+ *  - 30-day history of the same metrics for the trend lines
+ *  - current testUserCount for the "excluding N test users" footer
+ *
+ * On-demand recompute is intentionally cheap — the snapshot writer is the
+ * single source of truth, so a stale dashboard couldn't drift from cron-
+ * written rows. Idempotency is guaranteed by the unique index on
+ * (date, metric, dimensions).
+ */
+router.get('/guide-metrics', async (req, res, next) => {
+  try {
+    const fresh = await runMetricsSnapshot()
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+    const history = await db.metricsSnapshot.findMany({
+      where:   { date: { gte: since } },
+      orderBy: [{ date: 'asc' }, { metric: 'asc' }],
+      select:  { date: true, metric: true, value: true, dimensions: true },
+    })
+
+    res.json({
+      now: fresh,             // null only if today's recompute hit an internal error
+      history,
+    })
   } catch (err) {
     next(err)
   }
