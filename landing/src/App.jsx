@@ -25,6 +25,7 @@ import AdminBotsPage from './pages/admin/AdminBotsPage.jsx'
 import AdminFeedbackPage from './pages/admin/AdminFeedbackPage.jsx'
 import AdminHealthPage from './pages/admin/AdminHealthPage.jsx'
 import LogViewerPage from './pages/admin/LogViewerPage.jsx'
+import GuideMetricsPage from './pages/admin/GuideMetricsPage.jsx'
 import RankingsPage from './pages/RankingsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/admin/feedback" element={<AdminRoute><AdminFeedbackPage /></AdminRoute>} />
           <Route path="/admin/health" element={<AdminRoute><AdminHealthPage /></AdminRoute>} />
           <Route path="/admin/logs" element={<AdminRoute><LogViewerPage /></AdminRoute>} />
+          <Route path="/admin/guide-metrics" element={<AdminRoute><GuideMetricsPage /></AdminRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

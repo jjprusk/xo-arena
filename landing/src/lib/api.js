@@ -259,6 +259,11 @@ export const api = {
     // sweep hard-deleted for being unfilled). period ∈ { day | week | month }.
     tournamentsAutoDropped: (token, period = 'week') =>
       api.get(`/admin/tournaments/auto-dropped?period=${encodeURIComponent(period)}`, token),
+
+    // Sprint 5 — Intelligent Guide v1 admin dashboard. Returns the freshly
+    // computed snapshot in `now` plus the last 30 days of MetricsSnapshot
+    // rows in `history` (for trend lines).
+    guideMetrics: (token) => api.get('/admin/guide-metrics', token),
   },
   games: {
     getReplay:    (id, token)      => api.get(`/games/${id}/replay`, token),
