@@ -516,6 +516,25 @@ class BotGameRunner {
     }
     return null
   }
+
+  /**
+   * Force-close any spar matches that have been alive longer than `maxAgeMs`
+   * (default 2 hours). Catches stuck spars whose game loop hung — the runner
+   * has no other timeout. Returns the slugs that were closed so the caller
+   * can log a summary.
+   */
+  sweepStaleSpars(maxAgeMs = 2 * 60 * 60 * 1000) {
+    const now    = Date.now()
+    const closed = []
+    for (const game of [...this._games.values()]) {
+      if (!game.isSpar) continue
+      if (now - game.createdAt > maxAgeMs) {
+        this._closeGame(game.slug)
+        closed.push(game.slug)
+      }
+    }
+    return closed
+  }
 }
 
 export const botGameRunner = new BotGameRunner()

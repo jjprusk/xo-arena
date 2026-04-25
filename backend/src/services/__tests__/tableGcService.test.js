@@ -9,6 +9,11 @@ vi.mock('../../lib/db.js', () => ({
       findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    game: {
+      // Sprint 4: deleteOldSparGames runs in the same Promise.all and needs a
+      // resolved value or the whole sweep returns the error fallback.
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
   },
 }))
 
@@ -22,7 +27,8 @@ vi.mock('../../lib/notificationBus.js', () => ({
 
 vi.mock('../../realtime/botGameRunner.js', () => ({
   botGameRunner: {
-    closeGameBySlug: vi.fn(),
+    closeGameBySlug:  vi.fn(),
+    sweepStaleSpars:  vi.fn(() => []),  // Sprint 4: return slugs[]
   },
 }))
 
@@ -48,6 +54,8 @@ beforeEach(() => {
   db.table.deleteMany.mockResolvedValue({ count: 0 })
   db.table.findMany.mockResolvedValue([])
   db.table.updateMany.mockResolvedValue({ count: 0 })
+  db.game.deleteMany.mockResolvedValue({ count: 0 })
+  botGameRunner.sweepStaleSpars.mockReturnValue([])
   getSystemConfig.mockResolvedValue(120)
 })
 
@@ -258,6 +266,37 @@ describe('tableGcService sweep', () => {
       const res = await sweep(io)
       expect(res.deletedDemos).toBe(0)
       expect(botGameRunner.closeGameBySlug).not.toHaveBeenCalled()
+    })
+  })
+
+  // Sprint 4 — Spar GC (§5.2)
+  describe('spar GC', () => {
+    it('forwards stale-spar count from the runner sweep', async () => {
+      botGameRunner.sweepStaleSpars.mockReturnValue(['mt-stuck-1', 'mt-stuck-2'])
+      const res = await sweep(makeIO())
+      expect(botGameRunner.sweepStaleSpars).toHaveBeenCalledWith(2 * 60 * 60 * 1000)
+      expect(res.killedSpars).toBe(2)
+    })
+
+    it('deletes spar Game rows older than 30 days', async () => {
+      db.game.deleteMany.mockResolvedValue({ count: 7 })
+      const res = await sweep(makeIO())
+      expect(db.game.deleteMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          isSpar:  true,
+          endedAt: { lt: expect.any(Date) },
+        }),
+      }))
+      const cutoff = db.game.deleteMany.mock.calls[0][0].where.endedAt.lt
+      // 30 days ago, ±5s tolerance
+      expect(Math.abs(cutoff.getTime() - (Date.now() - 30 * 24 * 60 * 60 * 1000))).toBeLessThan(5000)
+      expect(res.deletedOldSpars).toBe(7)
+    })
+
+    it('returns 0 for both when nothing matches', async () => {
+      const res = await sweep(makeIO())
+      expect(res.killedSpars).toBe(0)
+      expect(res.deletedOldSpars).toBe(0)
     })
   })
 })
