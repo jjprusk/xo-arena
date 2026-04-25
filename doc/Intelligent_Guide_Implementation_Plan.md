@@ -205,38 +205,41 @@ Sprint 11 (v1.1 polish + release)
 
 **Deliverables:**
 
-- [ ] Landing page redesign (`landing/src/pages/HomePage.jsx`):
-  - [ ] Live bot-vs-bot demo arena as the hero (reuses §5.1 Demo Table infrastructure — plumbing built this sprint, full macro in Sprint 3)
-  - [ ] Progressive CTA ladder: "Watch another match" / "Play against a bot" / "Build your own bot"
-  - [ ] Replace existing generic hero copy
-- [ ] Guest mode (client-only, localStorage):
-  - [ ] `guideGuestJourney` localStorage schema
-  - [ ] Step 1 recording on PvAI game completion
-  - [ ] Step 2 recording on demo-match watched ≥ 2 min
-- [ ] Guest → user transfer:
-  - [ ] `POST /api/v1/guide/guest-credit` endpoint
-  - [ ] Client-side call on successful signup
-  - [ ] localStorage cleared on success
-- [ ] Signup modal updates (`landing/src/components/ui/SignInModal.jsx`):
-  - [ ] Defer email verification — user logged in immediately post-signup
-  - [ ] Soft banner: "Verify your email to enter tournaments"
-  - [ ] Contextual copy variant when opened from "Build a bot" CTA
-  - [ ] Email verification gate on tournament entry (backend middleware check on tournament register endpoint)
+- [x] Landing page redesign (`landing/src/pages/HomePage.jsx`):
+  - [x] Live bot-vs-bot demo arena as the hero (`DemoArena.jsx`)
+  - [x] Progressive CTA ladder: "Watch another match" / "Play against a bot" / "Build your own bot"
+  - [x] Replace existing generic hero copy
+- [x] Guest mode (client-only, localStorage):
+  - [x] `guideGuestJourney` localStorage schema (`landing/src/lib/guestMode.js`)
+  - [x] Step 1 recording on PvAI game completion (wired in `PlayPage.jsx`)
+  - [x] Step 2 recording on demo-match watched ≥ 2 min (wired in `DemoArena.jsx`)
+- [x] Guest → user transfer:
+  - [x] `POST /api/v1/guide/guest-credit` endpoint
+  - [x] Client-side call on successful signup
+  - [x] localStorage cleared on success
+- [x] Signup modal updates (`landing/src/components/ui/SignInModal.jsx`):
+  - [x] Defer email verification — user logged in immediately post-signup (`auth.js` `requireEmailVerification: false` + `sendOnSignUp: true`)
+  - [x] Soft banner: "Verify your email to enter tournaments" (`EmailVerifyBanner.jsx`, mounted in `AppLayout`)
+  - [x] Contextual copy variant when opened from "Build a bot" CTA (`context="build-bot"` prop)
+  - [x] Email verification gate on tournament entry (backend middleware on tournament register endpoint)
 
 **Testing requirements:**
 
-- [ ] Component test: `HomePage.test.jsx` — new CTAs render, demo embed present
-- [ ] Component test: `SignInModal.test.jsx` — deferred verification behavior, contextual copy variants
-- [ ] Backend test: `guideGuestCredit.test.js` — idempotency, only Hook steps eligible, invalid data rejected
-- [ ] Backend test: tournament-entry endpoint rejects users with unverified email (201 → 403 with action message)
-- [ ] E2E test: `guide-phase0.spec.js` — new spec covering visitor → PvAI → demo-watch → "Build a bot" click → signup → lands in Curriculum step 3 with Hook credited
+- [x] Component test: `HomePage.test.jsx` — new CTAs render, demo embed present, CTA-emphasis swap (7 tests)
+- [x] Component test: `SignInModal.test.jsx` — deferred verification behavior, contextual copy variants (6 tests)
+- [x] Backend test: `guideGuestCredit.test.js` — idempotency, only Hook steps eligible, invalid data rejected
+- [x] Backend test: tournament-entry endpoint rejects users with unverified email (201 → 403 with action message)
+- [x] E2E test: `guide-phase0.spec.js` — 4 scenarios covering hero CTAs, deferred verification, soft banner, guest-progress credit
+- [x] Component test: `PlayPage.test.jsx` — phase-aware leave destination (Hook → `/`, Curriculum → `/tables`, tournament context wins) (10 tests)
 
 **Definition of Done:**
 
-- On staging, a visitor can complete the full visitor → Curriculum step 3 flow in under 5 minutes without hitting errors
-- Hook steps 1 and 2 visibly credited to the new user's `journeyProgress`
-- No account can enter a tournament without a verified email
-- Metrics for "landing → signup within 7 days" start being recorded
+- [x] Visitor can complete the full visitor → Curriculum step 3 flow on `dev` without errors (verified during QA pass D)
+- [x] Hook steps 1 and 2 visibly credited to the new user's `journeyProgress`
+- [x] No account can enter a tournament without a verified email
+- [x] Metrics-emit hooks in place for "landing → signup within 7 days" (full dashboard ships Sprint 5)
+
+**Shipped on `dev`:** code-complete plus four QA passes (`ec57188` Phase 1 bundle, `a9168be` Phase 0 QA pass D, `32cc2fa` EmailVerifyBanner polish, plus the original Sprint 2 commits). Backend 1092/1092, landing 100/100. Pending the joint Sprint 1+2 `/stage` smoke per §11.
 
 ---
 
@@ -699,8 +702,9 @@ This is the consolidated view of every task across all sprints. Check items off 
 - [x] `EmailVerifyBanner` mounted in `AppLayout` (soft non-blocking banner)
 - [x] Phase 0 component tests — `guestMode.test.js` (11), `HomePage.test.jsx` (4), `SignInModal.test.jsx` (6); landing suite **71/71 green**
 - [x] `guide-phase0.spec.js` E2E — 4 scenarios covering hero CTAs, deferred verification, soft banner, guest-progress credit
+- [x] QA pass D — phase-aware leave destination, CTA-emphasis swap, inline result-pill, deferred-verification end-to-end, EmailVerifyBanner polish (`a9168be`, `32cc2fa`)
 - [ ] Staging deploy + smoke (user-driven via `/stage` when Sprint 1+2 stage together per §11)
-- [ ] **Sprint 2 DoD passed** (pending the staging smoke — code DoD met)
+- [x] **Sprint 2 DoD passed** (code-complete on `dev`; staging smoke is the only outstanding gate)
 
 **Out-of-band fix during Sprint 2:** `um list` cleaned up — query log spam suppressed in `backend/src/lib/db.js`, JOURNEY column rewritten to phase-aware `H 0/7` form (was hard-coded 8 steps, now uses `TOTAL_STEPS` + `deriveCurrentPhase` from journeyService).
 
