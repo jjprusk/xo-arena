@@ -1,0 +1,143 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
+/**
+ * JourneyCard — phase-aware rendering (§9.1).
+ *
+ * Covers:
+ *   - Hook phase: single hero card with the next CTA, no checklist visible
+ *   - Curriculum phase: hero + 5-row checklist, current highlighted, done ✓,
+ *     future rows dimmed
+ *   - Specialize phase: post-graduation celebration card
+ *   - dismissedAt → renders nothing
+ *   - deriveCurrentPhase pure helper
+ */
+
+import React from 'react'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { useGuideStore } from '../../../store/guideStore.js'
+import JourneyCard, { deriveCurrentPhase } from '../JourneyCard.jsx'
+
+function setProgress(completedSteps, dismissedAt = null) {
+  useGuideStore.setState({
+    journeyProgress: { completedSteps, dismissedAt },
+  })
+}
+
+function renderCard() {
+  return render(
+    <MemoryRouter>
+      <JourneyCard />
+    </MemoryRouter>,
+  )
+}
+
+beforeEach(() => {
+  // Reset store between tests so prior phase state doesn't leak.
+  useGuideStore.setState({
+    journeyProgress: { completedSteps: [], dismissedAt: null },
+    panelOpen: true,
+    slots: [],
+    notifications: [],
+  })
+})
+
+describe('deriveCurrentPhase', () => {
+  it('hook when step 2 not done', () => {
+    expect(deriveCurrentPhase([])).toBe('hook')
+    expect(deriveCurrentPhase([1])).toBe('hook')
+  })
+  it('curriculum when step 2 done but 7 not done', () => {
+    expect(deriveCurrentPhase([1, 2])).toBe('curriculum')
+    expect(deriveCurrentPhase([1, 2, 3, 4, 5])).toBe('curriculum')
+  })
+  it('specialize when step 7 done', () => {
+    expect(deriveCurrentPhase([1, 2, 3, 4, 5, 6, 7])).toBe('specialize')
+  })
+})
+
+describe('JourneyCard — Hook phase', () => {
+  it('renders the hero card with the next CTA and NO checklist', () => {
+    setProgress([])  // Hook phase, step 1 next
+    renderCard()
+    // Hero title appears once
+    expect(screen.getByText(/Welcome to the Arena/i)).toBeInTheDocument()
+    // Step 1 title is the next-step hero
+    expect(screen.getByText('Play a quick game')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Play now/i })).toHaveAttribute('href', '/play?action=vs-community-bot')
+    // No Curriculum checklist
+    expect(screen.queryByTestId('curriculum-checklist')).not.toBeInTheDocument()
+    // No Curriculum-only step titles surfaced as checklist items
+    expect(screen.queryByText('Create your first bot')).not.toBeInTheDocument()
+  })
+
+  it('with step 1 done, surfaces step 2 (the demo-watch hero)', () => {
+    setProgress([1])
+    renderCard()
+    expect(screen.getByText('Watch two bots battle')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Watch a demo/i })).toHaveAttribute('href', '/play?action=watch-demo')
+  })
+})
+
+describe('JourneyCard — Curriculum phase', () => {
+  it('renders the 5-row checklist with current step highlighted and completed marked', () => {
+    setProgress([1, 2, 3])  // Curriculum, step 4 (Train) is current
+    renderCard()
+    // Hero shows next CTA
+    expect(screen.getByText(/Next:/i)).toBeInTheDocument()
+    // Train link surfaces
+    expect(screen.getByRole('link', { name: /Train your bot/i })).toBeInTheDocument()
+    // Curriculum checklist exists with all 5 rows
+    const list = screen.getByTestId('curriculum-checklist')
+    expect(list).toBeInTheDocument()
+    expect(list).toHaveTextContent('Create your first bot')
+    expect(list).toHaveTextContent('Train your bot')
+    expect(list).toHaveTextContent('Spar with your bot')
+    expect(list).toHaveTextContent('Enter a tournament')
+    expect(list).toHaveTextContent("See your bot's first result")
+  })
+
+  it('shows ✓ on completed Curriculum steps and dims future ones', () => {
+    setProgress([1, 2, 3])  // Step 3 done, step 4 current
+    renderCard()
+    const list = screen.getByTestId('curriculum-checklist')
+    // The "Create your first bot" row should have a ✓
+    const created = list.querySelector('span') // first row's title span
+    // Walk all rows to find the "Create your first bot" row's leading marker.
+    const rows = list.querySelectorAll('[style*="display: flex"]')
+    const createdRow = Array.from(rows).find(r => r.textContent?.includes('Create your first bot'))
+    expect(createdRow).toBeTruthy()
+    expect(createdRow.textContent).toContain('✓')
+  })
+
+  it('Dismiss journey button shows in Curriculum (per spec) but not in Hook', () => {
+    setProgress([1, 2, 3])  // Curriculum
+    const { unmount } = renderCard()
+    expect(screen.getByRole('button', { name: /Dismiss journey/i })).toBeInTheDocument()
+    unmount()
+
+    setProgress([1])  // Hook
+    renderCard()
+    expect(screen.queryByRole('button', { name: /Dismiss journey/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('JourneyCard — Specialize / completion', () => {
+  it('renders the celebration card when step 7 is done', () => {
+    setProgress([1, 2, 3, 4, 5, 6, 7])
+    renderCard()
+    expect(screen.getByText(/Curriculum complete!/i)).toBeInTheDocument()
+    expect(screen.getByText(/\+50 TC/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeInTheDocument()
+    // No checklist
+    expect(screen.queryByTestId('curriculum-checklist')).not.toBeInTheDocument()
+  })
+})
+
+describe('JourneyCard — dismissed', () => {
+  it('renders nothing once dismissedAt is set', () => {
+    setProgress([1, 2], '2026-04-25T10:00:00Z')
+    const { container } = renderCard()
+    expect(container).toBeEmptyDOMElement()
+  })
+})
