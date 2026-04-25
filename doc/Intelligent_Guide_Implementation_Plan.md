@@ -706,16 +706,26 @@ This is the consolidated view of every task across all sprints. Check items off 
 
 #### Sprint 3 — Hook + Quick Bot
 
-- [ ] Demo Table macro endpoint + GC
-- [ ] Demo Table curated allowlist
-- [ ] Quick Bot wizard (UI + endpoint)
-- [ ] Quick Bot "training" difficulty bump
-- [ ] `JourneyCard` Hook + Curriculum rendering
-- [ ] Hook reward popup
-- [ ] Hook + Quick Bot unit tests
-- [ ] `guide-hook.spec.js` E2E
-- [ ] Staging deploy + smoke
-- [ ] **Sprint 3 DoD passed**
+- [x] Demo Table macro endpoint + GC — `POST /api/v1/tables/demo`, demo sweep in `tableGcService` (2-min post-complete grace + 1-hour TTL), one-active-per-user replacement
+- [x] Demo Table curated allowlist — `backend/src/config/demoTableMatchups.js` (Copper/Sterling, Rusty/Copper, Copper/Copper, Sterling/Sterling)
+- [x] Quick Bot wizard (UI + endpoint) — `POST /api/v1/bots/quick` + `landing/src/components/guide/QuickBotWizard.jsx` (3 steps: Name → Persona → Confirm)
+- [x] Quick Bot "training" difficulty bump — `POST /api/v1/bots/:id/train-quick` + "Train your bot" panel on `BotProfilePage`; bumps novice → intermediate, fires journey step 4
+- [x] `JourneyCard` Hook + Curriculum rendering — phase-aware (`hook` hero only, `curriculum` hero + 5-row checklist, `specialize` celebration); auto-step-1-on-hydration removed
+- [x] Hook reward popup — `RewardPopup` listens for `guide:hook_complete` and `guide:curriculum_complete` socket events; auto-dismiss, click-to-close
+- [x] Hook + Quick Bot unit tests — 7 `tablesDemo.test.js`, 11 `botsQuick.test.js`, 3 new `tableGcService` demo-sweep cases, 5 `QuickBotWizard.test.jsx`, 10 `JourneyCard.test.jsx`, 8 `RewardPopup.test.jsx`
+- [x] `guide-hook.spec.js` E2E — 4 scenarios (demo endpoint, one-active-per-user replacement, PvAI step 1 credit, demo-watch step 2 credit)
+- [ ] Staging deploy + smoke (user-driven via `/stage`)
+- [ ] **Sprint 3 DoD passed** (pending the staging smoke — code DoD met)
+
+**Shipped as 6 commits on `dev`:**
+1. `3c8f7d3` Demo Table macro endpoint + GC sweep
+2. `e74204e` Quick Bot wizard endpoint + 3-step UI
+3. `5e6e093` Train your bot button on bot detail page
+4. `6b84d67` JourneyCard phase-aware rewrite
+5. `fcc1077` Hook reward popup on phase-boundary events
+6. `d29b124` guide-hook.spec.js E2E
+
+Backend: 1092 tests green (+11 new). Landing: 94 tests green (+23 new).
 
 #### Sprint 4 — Curriculum Completion
 
