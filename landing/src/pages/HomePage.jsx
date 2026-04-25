@@ -186,7 +186,7 @@ export default function HomePage() {
         </div>
 
         {/* Sub-line beneath the CTAs reinforcing the unique value prop */}
-        <p className="mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p className="mt-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
           Free account, no credit card. Your bot competes in tournaments against bots built by other players.
         </p>
       </section>

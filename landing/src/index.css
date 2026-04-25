@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @source "../../packages/nav/src";
+@source "../../packages/game-xo/src";
+@source "../../packages/game-pong/src";
 
 @theme {
   /* ── Color palette ── */

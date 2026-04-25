@@ -217,7 +217,7 @@ export default function DemoArena() {
       </div>
 
       {/* Board */}
-      <div className="grid grid-cols-3 gap-1.5 aspect-square w-full">
+      <div className="grid grid-cols-3 grid-rows-3 gap-1.5 aspect-square w-full">
         {game.board.map((cell, i) => {
           const onWinLine = game.line?.includes(i)
           return (

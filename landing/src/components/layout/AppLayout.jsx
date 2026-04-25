@@ -7,7 +7,6 @@ import { getToken, clearTokenCache } from '../../lib/getToken.js'
 import { getSocket, connectSocket, disconnectSocket } from '../../lib/socket.js'
 import { perfMark } from '../../lib/perfLog.js'
 import SignInModal from '../ui/SignInModal.jsx'
-import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
 import EmailVerifyBanner from '../ui/EmailVerifyBanner.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
@@ -135,26 +134,6 @@ export default function AppLayout() {
   // CURRENT user without re-registering on every sign-in/out.
   const myBaIdRef = useRef(null)
   useEffect(() => { myBaIdRef.current = user?.id ?? null }, [user?.id])
-
-  // Guest welcome modal — shown once to non-authenticated first-time visitors
-  const [guestWelcomeOpen, setGuestWelcomeOpen] = useState(false)
-  useEffect(() => {
-    if (isPending) return
-    if (user) return
-    if (localStorage.getItem('aiarena_guest_welcome_seen')) return
-    setGuestWelcomeOpen(true)
-  }, [isPending, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function closeGuestWelcome() {
-    localStorage.setItem('aiarena_guest_welcome_seen', '1')
-    setGuestWelcomeOpen(false)
-  }
-
-  function openSignInFromWelcome() {
-    localStorage.setItem('aiarena_guest_welcome_seen', '1')
-    setGuestWelcomeOpen(false)
-    setShowSignIn(true)
-  }
 
   useJourneyAutoOpen(user?.id ?? null)
 
@@ -542,11 +521,6 @@ export default function AppLayout() {
           but the user-facing launcher had been lost in the move. */}
       <FeedbackButton appId="ai-arena" apiBase="/api/v1" hideWhenPlaying />
 
-      <GuestWelcomeModal
-        isOpen={guestWelcomeOpen}
-        onClose={closeGuestWelcome}
-        onSignIn={openSignInFromWelcome}
-      />
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
 
       {/* Audio debug overlay — activated with ?audioDebug=1 (persisted in
