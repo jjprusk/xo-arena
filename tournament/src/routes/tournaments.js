@@ -774,7 +774,9 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
       },
     })
 
-    await publish('tournament:participant:joined', { tournamentId }).catch(() => {})
+    // Include userId so the backend bridge can fire Curriculum step 6
+    // (Intelligent Guide §5.4) for the registering human user.
+    await publish('tournament:participant:joined', { tournamentId, userId }).catch(() => {})
     res.status(201).json({ participant })
   } catch (e) {
     next(e)

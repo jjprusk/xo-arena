@@ -153,10 +153,21 @@ export async function handleEvent(io, channel, data) {
       break
     }
     case 'tournament:registration_closed':
-    case 'tournament:participant:joined':
     case 'tournament:participant:left':
       // No-op: already appended to the SSE stream by tournament/redis.js.
       break
+    case 'tournament:participant:joined': {
+      // SSE pass-through is already handled by tournament/redis.js.
+      // Intelligent Guide v1 — Journey step 6 (Curriculum: "Enter your first
+      // tournament"). Fires when the user registers themselves into any
+      // tournament — Curriculum Cup or otherwise. Idempotent — completeStep
+      // no-ops if step 6 was already done. Fire-and-forget.
+      const { userId } = data ?? {}
+      if (userId) {
+        completeJourneyStep(userId, 6).catch(() => {})
+      }
+      break
+    }
     case 'tournament:flash:announced': {
       // Broadcast to all connected sockets — flash tournaments are live events.
       // No UserNotification row: if you're not online, the window has likely passed.
