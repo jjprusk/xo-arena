@@ -690,16 +690,19 @@ This is the consolidated view of every task across all sprints. Check items off 
 
 #### Sprint 2 — Phase 0
 
-- [ ] Landing page redesign — live demo hero + CTA ladder
-- [ ] Guest mode (localStorage)
-- [ ] `POST /api/v1/guide/guest-credit` endpoint
-- [ ] Signup modal — deferred email verification
-- [ ] Signup modal — contextual "Build a bot" copy
-- [ ] Tournament-entry email-verification gate
-- [ ] Phase 0 component tests
-- [ ] `guide-phase0.spec.js` E2E
-- [ ] Staging deploy + smoke
-- [ ] **Sprint 2 DoD passed**
+- [x] Landing page redesign — live demo hero + CTA ladder (`HomePage.jsx` + `DemoArena.jsx`)
+- [x] Guest mode (localStorage) — `guestMode.js` helpers; step 1 wired in `PlayPage.jsx` on PvAI completion, step 2 in `DemoArena.jsx` after 2-min watch
+- [x] `POST /api/v1/guide/guest-credit` endpoint (shipped in `91bb61c`)
+- [x] Signup modal — deferred email verification (modal closes on success, no verify-email wall)
+- [x] Signup modal — contextual "Build a bot" copy (`context="build-bot"` prop)
+- [x] Tournament-entry email-verification gate (shipped in `91bb61c`)
+- [x] `EmailVerifyBanner` mounted in `AppLayout` (soft non-blocking banner)
+- [x] Phase 0 component tests — `guestMode.test.js` (11), `HomePage.test.jsx` (4), `SignInModal.test.jsx` (6); landing suite **71/71 green**
+- [x] `guide-phase0.spec.js` E2E — 4 scenarios covering hero CTAs, deferred verification, soft banner, guest-progress credit
+- [ ] Staging deploy + smoke (user-driven via `/stage` when Sprint 1+2 stage together per §11)
+- [ ] **Sprint 2 DoD passed** (pending the staging smoke — code DoD met)
+
+**Out-of-band fix during Sprint 2:** `um list` cleaned up — query log spam suppressed in `backend/src/lib/db.js`, JOURNEY column rewritten to phase-aware `H 0/7` form (was hard-coded 8 steps, now uses `TOTAL_STEPS` + `deriveCurrentPhase` from journeyService).
 
 #### Sprint 3 — Hook + Quick Bot
 
@@ -850,6 +853,12 @@ This is the consolidated view of every task across all sprints. Check items off 
 ---
 
 ## 11. Rollout & Communication
+
+### Staging cadence
+
+- **Default:** each sprint ends with a staging deploy + smoke-test pass (user-driven via `/stage` per the established flow).
+- **Exception for Sprints 1 + 2:** Sprint 1 is pure backend infrastructure (schema + journey service + call-site remapping) with no user-visible change. Staging Sprint 1 solo would only verify "the migration applies cleanly" — real value. But Sprint 2 is where user-visible work starts (Phase 0 landing, guest mode, signup modal), and it adds zero new migrations. So **Sprints 1 + 2 stage together** as the first coherent smoke-able unit: a visitor can land → play → sign up → start Curriculum. Pre-launch with no active users, this trade-off is purely cost-saving; no blast-radius concern.
+- **Sprints 3 onward:** stage individually per the default.
 
 ### V1 Launch
 

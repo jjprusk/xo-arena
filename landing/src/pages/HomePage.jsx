@@ -3,6 +3,37 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { prefetchCommunityBot } from '../lib/communityBotCache.js'
+import DemoArena from '../components/home/DemoArena.jsx'
+import SignInModal from '../components/ui/SignInModal.jsx'
+
+/**
+ * HomePage — Phase 0 redesign (Intelligent Guide v1, §3.5.1).
+ *
+ * Hero is a live bot-vs-bot demo arena instead of generic marketing text.
+ * Three-CTA progressive ladder beneath:
+ *
+ *   1. Watch another match — refreshes the demo (zero friction)
+ *   2. Play against a bot  — opens /play?action=vs-community-bot (guest PvAI)
+ *   3. Build your own bot  — opens signup with contextual copy (signup ask)
+ *
+ * The "Build your own bot" CTA is the conversion moment — it surfaces the
+ * platform's unique value (user-built bots that compete) and gates it behind
+ * signup. Visitor sees the unique thing first (bots playing), then is asked
+ * to commit at the moment they want to participate.
+ *
+ * For signed-in users, the page replaces the sign-up CTA with a "Continue
+ * your journey" link to /play.
+ */
+
+function InfoIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="8" y1="7.5" x2="8" y2="11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="5.25" r="0.85" fill="currentColor" />
+    </svg>
+  )
+}
 
 function XOIcon() {
   return (
@@ -12,16 +43,6 @@ function XOIcon() {
       <line x1="21" y1="5"  x2="21" y2="27" stroke="var(--color-teal-400)" strokeWidth="2.5" strokeLinecap="round" />
       <line x1="5"  y1="11" x2="27" y2="11" stroke="white"                 strokeWidth="2.5" strokeLinecap="round" />
       <line x1="5"  y1="21" x2="27" y2="21" stroke="var(--color-teal-400)" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function InfoIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="8" y1="7.5" x2="8" y2="11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="8" cy="5.25" r="0.85" fill="currentColor" />
     </svg>
   )
 }
@@ -98,6 +119,8 @@ export default function HomePage() {
   const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
   const [openInfoGame, setOpenInfoGame] = useState(null)
+  const [signupOpen, setSignupOpen]     = useState(false)
+  const [demoKey, setDemoKey]           = useState(0)
 
   // Prefetch the community bot list so /play?action=vs-community-bot is instant.
   useEffect(() => { prefetchCommunityBot() }, [])
@@ -105,11 +128,11 @@ export default function HomePage() {
   return (
     <div className="flex flex-col">
 
-      {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="relative px-6 py-20 text-center">
+      {/* ── Hero — live demo + progressive CTA ladder ─────────── */}
+      <section className="relative px-4 sm:px-6 pt-12 pb-8 text-center">
         <div className="relative z-10 max-w-2xl mx-auto animate-fade-up">
           <h1
-            className="text-4xl sm:text-5xl font-bold tracking-tight"
+            className="text-3xl sm:text-5xl font-bold tracking-tight"
             style={{
               fontFamily: 'var(--font-display)',
               background: 'linear-gradient(135deg, var(--color-slate-500), var(--color-slate-300))',
@@ -121,23 +144,55 @@ export default function HomePage() {
             AI Arena
           </h1>
           <p className="mt-3 text-base sm:text-lg" style={{ color: 'var(--text-secondary)' }}>
-            Classic games. Trainable AI. Real-time multiplayer tournaments.
+            Build a bot. Train it. Watch it compete.
           </p>
-          <div className="flex items-center justify-center gap-3 mt-6 flex-wrap">
-            <Link to="/tournaments" className="btn btn-primary">
-              View Tournaments
-            </Link>
-            {!user && (
-              <Link to="/play?action=vs-community-bot" className="btn btn-secondary">
-                Play XO
-              </Link>
-            )}
-          </div>
         </div>
+
+        {/* Live bot-vs-bot demo */}
+        <div className="mt-8 mb-6">
+          <DemoArena key={demoKey} />
+        </div>
+
+        {/* Progressive CTA ladder */}
+        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap max-w-lg mx-auto">
+          <button
+            onClick={() => setDemoKey(k => k + 1)}
+            className="btn btn-tertiary btn-sm"
+            type="button"
+            aria-label="Watch another bot match"
+          >
+            ↻ Watch another match
+          </button>
+          <Link
+            to="/play?action=vs-community-bot"
+            className="btn btn-secondary btn-sm"
+          >
+            Play against a bot
+          </Link>
+          {user ? (
+            <Link to="/gym" className="btn btn-primary btn-sm">
+              Build your own bot →
+            </Link>
+          ) : (
+            <button
+              onClick={() => setSignupOpen(true)}
+              className="btn btn-primary btn-sm"
+              type="button"
+              data-cta="build-your-own-bot"
+            >
+              Build your own bot →
+            </button>
+          )}
+        </div>
+
+        {/* Sub-line beneath the CTAs reinforcing the unique value prop */}
+        <p className="mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+          Free account, no credit card. Your bot competes in tournaments against bots built by other players.
+        </p>
       </section>
 
       {/* ── Games grid ─────────────────────────────────────────── */}
-      <section className="max-w-4xl mx-auto w-full px-4 py-12">
+      <section className="max-w-4xl mx-auto w-full px-4 py-8">
         <h2
           className="text-sm font-semibold uppercase tracking-widest mb-6"
           style={{ color: 'var(--text-muted)' }}
@@ -197,6 +252,14 @@ export default function HomePage() {
 
       {openInfoGame && (
         <GameInfoPanel game={openInfoGame} onClose={() => setOpenInfoGame(null)} />
+      )}
+
+      {signupOpen && (
+        <SignInModal
+          onClose={() => setSignupOpen(false)}
+          defaultView="sign-up"
+          context="build-bot"
+        />
       )}
     </div>
   )

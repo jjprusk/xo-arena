@@ -2,11 +2,29 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { signIn, signUp, forgetPassword, sendVerificationEmail } from '../../lib/auth-client.js'
 import { triggerSessionRefresh } from '../../lib/useOptimisticSession.js'
-import { clearTokenCache } from '../../lib/getToken.js'
+import { clearTokenCache, getToken } from '../../lib/getToken.js'
+import { api } from '../../lib/api.js'
+import { readGuestJourney, hasGuestProgress, clearGuestJourney } from '../../lib/guestMode.js'
 import GoogleSignInButton from './GoogleSignInButton.jsx'
 import AppleSignInButton from './AppleSignInButton.jsx'
 
-export default function SignInModal({ onClose, defaultView = 'sign-in' }) {
+/**
+ * SignInModal — sign-in, sign-up, password recovery, and (legacy) verify-email.
+ *
+ * Phase 0 changes (Intelligent Guide v1, §3.5.4):
+ *   - On successful signup, the modal closes immediately and the user is
+ *     signed in — no more "verify-email" wall. A soft banner across the top
+ *     of the app (EmailVerifyBanner) prompts verification later. Tournament
+ *     entry remains the only feature blocked behind verified email
+ *     (enforced at the API layer with EMAIL_VERIFICATION_REQUIRED).
+ *   - On successful signup, any guest-mode Hook progress in localStorage is
+ *     posted to /api/v1/guide/guest-credit so the new user starts in
+ *     Curriculum step 3 with Hook 1+2 already credited.
+ *   - The optional `context` prop adjusts the modal's copy:
+ *       'build-bot' → "Build your first bot — create a free account"
+ *       (any other) → standard sign-in / sign-up
+ */
+export default function SignInModal({ onClose, defaultView = 'sign-in', context = null }) {
   const [view, setView]                   = useState(defaultView)  // 'sign-in' | 'sign-up' | 'verify-email' | 'forgot-password' | 'reset-sent'
   const [email, setEmail]                 = useState('')
   const [password, setPassword]           = useState('')
@@ -94,7 +112,27 @@ export default function SignInModal({ onClose, defaultView = 'sign-in' }) {
         switchView('sign-in')
         return
       }
-      setView('verify-email')
+
+      // Phase 0: signup no longer blocks on email verification. Tournament
+      // entry is the gated action (server returns 403 EMAIL_VERIFICATION_
+      // REQUIRED until verified). Sign the user in immediately and credit
+      // any guest-mode Hook progress they accumulated pre-signup.
+      clearTokenCache()
+      try {
+        if (hasGuestProgress()) {
+          const token = await getToken()
+          if (token) {
+            const journey = readGuestJourney()
+            await api.guide.guestCredit(journey, token)
+            clearGuestJourney()
+          }
+        }
+      } catch {
+        // Non-fatal — if guest-credit fails, the user is still signed up
+        // and can use the platform; they just lose the Hook pre-credit.
+      }
+      triggerSessionRefresh()
+      onClose()
     } catch (err) {
       setError(err?.message || 'Sign up failed.')
     } finally {
@@ -163,11 +201,14 @@ export default function SignInModal({ onClose, defaultView = 'sign-in' }) {
               : view === 'forgot-password' ? 'Reset password'
               : view === 'reset-sent' ? 'Check your email'
               : view === 'sign-in' ? 'Sign in to AI Arena'
+              : context === 'build-bot' ? 'Build your first bot'
               : 'Create your account'}
           </h2>
           {(view === 'sign-in' || view === 'sign-up') && (
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              One account across all games and tournaments.
+              {view === 'sign-up' && context === 'build-bot'
+                ? 'Free account. Your bot competes in tournaments against bots built by other players.'
+                : 'One account across all games and tournaments.'}
             </p>
           )}
         </div>
