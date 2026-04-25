@@ -24,6 +24,7 @@ import logger from '../logger.js'
 import { dispatch } from '../lib/notificationBus.js'
 import { mountainPool, MountainNamePool } from '../realtime/mountainNames.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
+import { pickMatchup } from '../config/demoTableMatchups.js'
 
 const router = Router()
 
@@ -322,6 +323,18 @@ router.get('/', optionalAuth, async (req, res, next) => {
 
     const conditions = [visibility]
 
+    // Demo Table macro (§5.1): demo tables are private to the creator. Even
+    // when public visibility would normally apply, others must not see another
+    // user's demo. ?mine=true exempts the filter (user sees their own demos).
+    if (mine !== 'true') {
+      conditions.push({
+        OR: [
+          { isDemo: false },
+          ...(req.auth?.userId ? [{ createdById: req.auth.userId }] : []),
+        ],
+      })
+    }
+
     if (typeof status === 'string' && status.length > 0) {
       const valid = new Set(['FORMING', 'ACTIVE', 'COMPLETED'])
       const statuses = status.split(',').map(s => s.trim().toUpperCase()).filter(s => valid.has(s))
@@ -396,6 +409,136 @@ router.get('/active-match', async (req, res, next) => {
     if (table) return res.json({ slug: table.slug })
     const slug = botGameRunner.getSlugForMatch(tournamentMatchId)
     res.json({ slug: slug ?? null })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/tables/demo
+ * Demo Table macro — Hook step 2 (§5.1).
+ *
+ * Picks a curated bot-vs-bot matchup, creates a private `isDemo=true` Table
+ * row seated by both bots in ACTIVE status, and starts the underlying
+ * botGameRunner game with a slug matching the Table's slug. Client redirects
+ * the user to `/tables/:id` and they spectate the live match.
+ *
+ * "One active demo per user": any prior in-flight demo by the same caller is
+ * killed (Table deleted, bot game closed) before the new one is started.
+ *
+ * Returns: `{ tableId, slug, displayName, botA, botB }`. botA plays X.
+ */
+router.post('/demo', requireAuth, async (req, res, next) => {
+  try {
+    // Tear down any prior in-flight demo for this user.
+    const existing = await db.table.findMany({
+      where:  { createdById: req.auth.userId, isDemo: true, status: { not: 'COMPLETED' } },
+      select: { id: true, slug: true },
+    })
+    for (const prior of existing) {
+      if (prior.slug) botGameRunner.closeGameBySlug(prior.slug)
+      await db.table.delete({ where: { id: prior.id } })
+        .catch(err => logger.warn({ err: err.message, tableId: prior.id }, 'Demo: failed to delete prior table'))
+      dispatch({
+        type: 'table.deleted',
+        targets: { broadcast: true },
+        payload: { tableId: prior.id, gameId: 'xo' },
+      }).catch(() => {})
+    }
+
+    // Resolve a curated matchup.
+    const matchup = pickMatchup()
+    const [botA, botB] = await Promise.all([
+      db.user.findUnique({ where: { username: matchup.x } }),
+      db.user.findUnique({ where: { username: matchup.o } }),
+    ])
+    if (!botA || !botB || !botA.isBot || !botB.isBot) {
+      logger.error({ matchup }, 'Demo Table: matchup references missing/non-bot users — seed runs?')
+      return res.status(503).json({ error: 'Demo bots not provisioned' })
+    }
+
+    // Allocate a slug that's free in both the mountain pool AND the DB. The
+    // mountain name's lifecycle is handed to botGameRunner via the
+    // mountainName param — the runner releases it on game close just like a
+    // name it acquired itself. On retry/failure we release it ourselves.
+    let table
+    let slug
+    let displayName
+    let chosenName
+    let lastErr
+    for (let attempt = 0; attempt < 5; attempt++) {
+      chosenName  = mountainPool.acquire()
+      if (!chosenName) return res.status(503).json({ error: 'No mountain names available' })
+      slug        = MountainNamePool.toSlug(chosenName)
+      displayName = `Mt. ${chosenName}`
+      try {
+        table = await db.table.create({
+          data: {
+            gameId:       'xo',
+            slug,
+            displayName,
+            createdById:  req.auth.userId,
+            minPlayers:   2,
+            maxPlayers:   2,
+            isPrivate:    true,
+            isTournament: false,
+            isDemo:       true,
+            status:       'ACTIVE',
+            seats: [
+              { userId: botA.id, status: 'occupied' },
+              { userId: botB.id, status: 'occupied' },
+            ],
+            previewState: {
+              board:       Array(9).fill(null),
+              currentTurn: 'X',
+              scores:      { X: 0, O: 0 },
+              round:       1,
+              winner:      null,
+              winLine:     null,
+              marks:       { [botA.id]: 'X', [botB.id]: 'O' },
+              botMark:     null,
+              moves:       [],
+            },
+          },
+        })
+        break
+      } catch (err) {
+        lastErr = err
+        mountainPool.release(chosenName)
+        chosenName = null
+        if (err?.code === 'P2002') continue
+        throw err
+      }
+    }
+    if (!table) return res.status(503).json({ error: 'Could not allocate demo table slug', detail: lastErr?.message })
+
+    // Start the bot-vs-bot game with the same slug as the Table row. Hand
+    // ownership of the mountain name to the runner so it releases on close.
+    try {
+      await botGameRunner.startGame({
+        bot1: { id: botA.id, displayName: botA.displayName, botModelId: botA.botModelId },
+        bot2: { id: botB.id, displayName: botB.displayName, botModelId: botB.botModelId },
+        slug,
+        displayName,
+        mountainName: chosenName,
+        bestOfN: 1,
+      })
+    } catch (err) {
+      // If the runner can't start, roll back: free the name and delete the
+      // ghost Table so no socket can ever join an empty room.
+      logger.warn({ err: err.message, slug }, 'Demo Table: bot game failed to start; rolling back')
+      mountainPool.release(chosenName)
+      await db.table.delete({ where: { id: table.id } }).catch(() => {})
+      return res.status(503).json({ error: 'Could not start demo match' })
+    }
+
+    res.status(201).json({
+      tableId: table.id,
+      slug,
+      displayName,
+      botA: { id: botA.id, displayName: botA.displayName },
+      botB: { id: botB.id, displayName: botB.displayName },
+    })
   } catch (err) {
     next(err)
   }

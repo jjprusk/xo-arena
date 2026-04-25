@@ -39,23 +39,24 @@ export async function sweep(io) {
   try {
     const now = new Date()
 
-    const [deletedForming, deletedCompleted, abandonedActive] = await Promise.all([
+    const [deletedForming, deletedCompleted, abandonedActive, deletedDemos] = await Promise.all([
       deleteStaleForming(now),
       deleteOldCompleted(now),
       abandonIdleActive(now, io),
+      sweepDemos(now),
     ])
 
-    if (deletedForming > 0 || deletedCompleted > 0 || abandonedActive > 0) {
+    if (deletedForming > 0 || deletedCompleted > 0 || abandonedActive > 0 || deletedDemos > 0) {
       logger.info(
-        { deletedForming, deletedCompleted, abandonedActive },
-        `Table GC: deleted ${deletedForming} forming, ${deletedCompleted} completed, abandoned ${abandonedActive} active`,
+        { deletedForming, deletedCompleted, abandonedActive, deletedDemos },
+        `Table GC: deleted ${deletedForming} forming, ${deletedCompleted} completed, abandoned ${abandonedActive} active, ${deletedDemos} demo`,
       )
     }
 
-    return { deletedForming, deletedCompleted, abandonedActive }
+    return { deletedForming, deletedCompleted, abandonedActive, deletedDemos }
   } catch (err) {
     logger.warn({ err: err.message }, 'Table GC sweep failed')
-    return { deletedForming: 0, deletedCompleted: 0, abandonedActive: 0, error: err.message }
+    return { deletedForming: 0, deletedCompleted: 0, abandonedActive: 0, deletedDemos: 0, error: err.message }
   }
 }
 
@@ -108,6 +109,57 @@ async function deleteOldCompleted(now) {
       updatedAt: { lt: cutoff },
     },
   })
+
+  return count
+}
+
+// ── 4. Demo Tables — aggressive GC ───────────────────────────────────
+//
+// Demo Tables (Hook step 2 §5.1) get three stacked cleanup mechanisms:
+//   - 2 min after the bot match completes (status=COMPLETED), delete — short
+//     grace lets the user read the result, then it's gone.
+//   - 1 hour TTL regardless of state — safety net for orphans (tab closed
+//     mid-match, server restart, etc.).
+// "One active per user" replacement is handled in POST /tables/demo, not here.
+
+const DEMO_POST_COMPLETE_GRACE_MS = 2 * 60 * 1000          // 2 min
+const DEMO_HARD_TTL_MS            = 60 * 60 * 1000         // 1 hour
+
+async function sweepDemos(now) {
+  const completedCutoff = new Date(now.getTime() - DEMO_POST_COMPLETE_GRACE_MS)
+  const ttlCutoff       = new Date(now.getTime() - DEMO_HARD_TTL_MS)
+
+  // Candidates we'll delete: completed-and-graced OR exceeded TTL.
+  const toDelete = await db.table.findMany({
+    where: {
+      isDemo: true,
+      OR: [
+        { status: 'COMPLETED', updatedAt: { lt: completedCutoff } },
+        { createdAt: { lt: ttlCutoff } },
+      ],
+    },
+    select: { id: true, gameId: true, slug: true, status: true },
+  })
+  if (toDelete.length === 0) return 0
+
+  // Forcibly close any still-running runner games before removing the row,
+  // so spectators don't keep ghost-listening to a slug that no longer maps
+  // to a Table. Imported lazily to keep the GC service free of realtime
+  // imports during boot.
+  const { botGameRunner } = await import('../realtime/botGameRunner.js')
+  for (const t of toDelete) {
+    if (t.slug) botGameRunner.closeGameBySlug(t.slug)
+  }
+
+  const { count } = await db.table.deleteMany({ where: { id: { in: toDelete.map(t => t.id) } } })
+
+  for (const t of toDelete) {
+    dispatch({
+      type: 'table.deleted',
+      targets: { broadcast: true },
+      payload: { tableId: t.id, gameId: t.gameId },
+    }).catch(() => {})
+  }
 
   return count
 }

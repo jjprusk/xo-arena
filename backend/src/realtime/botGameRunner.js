@@ -92,16 +92,30 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1 }) {
-    const name = mountainPool.acquire()
-    if (!name) throw new Error('No mountain names available for bot game')
+  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, displayName: explicitDisplayName = null, mountainName: explicitMountainName = null }) {
+    // Demo Table macro (§5.1) pre-allocates a slug + displayName so the Table
+    // row's slug matches the bot-game slug. The caller passes `mountainName`
+    // to transfer ownership — the runner releases it on game close exactly
+    // like a self-acquired name.
+    let name
+    let slug
+    let displayName
+    if (explicitSlug) {
+      name = explicitMountainName  // may be null if caller doesn't want pool tracking
+      slug = explicitSlug
+      displayName = explicitDisplayName ?? MountainNamePool.fromSlug(explicitSlug)
+    } else {
+      name = mountainPool.acquire()
+      if (!name) throw new Error('No mountain names available for bot game')
+      slug = MountainNamePool.toSlug(name)
+      displayName = `Mt. ${name}`
+    }
 
-    const slug = MountainNamePool.toSlug(name)
     const now = Date.now()
 
     const game = {
       slug,
-      displayName: `Mt. ${name}`,
+      displayName,
       name,
       bot1,   // plays X
       bot2,   // plays O
@@ -354,6 +368,39 @@ class BotGameRunner {
       }).catch(err => logger.warn({ err }, 'Failed to clear botInTournament flag after tournament game'))
     }
 
+    // Demo Table macro (§5.1): if a Table row was created with this bot game's
+    // slug, mark it COMPLETED so the demo-table GC sweep can delete it after
+    // the 2-min grace window. No-op for tournament/free bot games that don't
+    // have a Table row.
+    const demoTable = await db.table.findFirst({
+      where:  { slug, isDemo: true },
+      select: { id: true, status: true },
+    }).catch(() => null)
+
+    if (demoTable) {
+      if (demoTable.status !== 'COMPLETED') {
+        await db.table.update({
+          where: { id: demoTable.id },
+          data:  { status: 'COMPLETED' },
+        }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
+      }
+
+      // "Spectated to completion" — credit Hook step 2 for any authenticated
+      // viewer currently watching, even if they haven't hit the 2-min mark
+      // yet. Lazy-imported to keep this module free of journey/service deps
+      // at module-eval time.
+      try {
+        const { getPresence } = await import('./tablePresence.js')
+        const { completeStep } = await import('../services/journeyService.js')
+        const { userIds = [] } = getPresence(demoTable.id) ?? {}
+        for (const userId of userIds) {
+          completeStep(userId, 2).catch(() => {})
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
+      }
+    }
+
     logger.info(
       { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null },
       'Bot series recorded'
@@ -424,8 +471,20 @@ class BotGameRunner {
       this._socketToGame.delete(id)
     }
     this._games.delete(slug)
-    mountainPool.release(game.name)
+    // Caller-supplied slugs (Demo Table macro) bypass the mountain pool — only
+    // release names we acquired ourselves.
+    if (game.name) mountainPool.release(game.name)
     logger.info({ slug }, 'Bot game closed')
+  }
+
+  /**
+   * Force-close an in-flight bot game by slug. Used by the Demo Table macro's
+   * "one active per user" policy: when a user starts a new demo, any prior
+   * demo game is killed first. Idempotent — no-op if the slug isn't running.
+   */
+  closeGameBySlug(slug) {
+    if (!this._games.has(slug)) return
+    this._closeGame(slug)
   }
 }
 

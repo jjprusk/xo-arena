@@ -56,6 +56,28 @@ const _idleTimers = new Map()
 // presence so the count is correct even when players join via /play?join=slug
 // and never emit table:watch)
 const _spectatorSockets = new Map()
+// socketId → Map<tableId, NodeJS.Timeout>  (Demo Table macro §5.1 — 2-min
+// step-2 credit timers; cleared on unwatch / disconnect / earlier completion)
+const _demoWatchTimers = new Map()
+const DEMO_WATCH_THRESHOLD_MS = 2 * 60 * 1000  // 2 min
+
+function _clearDemoTimer(socketId, tableId) {
+  const m = _demoWatchTimers.get(socketId)
+  if (!m) return
+  const t = m.get(tableId)
+  if (t) {
+    clearTimeout(t)
+    m.delete(tableId)
+  }
+  if (m.size === 0) _demoWatchTimers.delete(socketId)
+}
+
+function _clearAllDemoTimers(socketId) {
+  const m = _demoWatchTimers.get(socketId)
+  if (!m) return
+  for (const t of m.values()) clearTimeout(t)
+  _demoWatchTimers.delete(socketId)
+}
 
 /** Register a socket→table mapping and track the userId. */
 function registerSocket(socketId, tableId, userId) {
@@ -1491,7 +1513,7 @@ export async function attachSocketIO(httpServer) {
         try {
           const table = await db.table.findUnique({
             where: { id: tableId },
-            select: { seats: true },
+            select: { seats: true, isDemo: true },
           })
           const cohort = Array.isArray(table?.seats)
             ? table.seats
@@ -1505,6 +1527,26 @@ export async function attachSocketIO(httpServer) {
               payload: { tableId, userId: user.id },
             }).catch(err => logger.warn({ err: err.message, tableId }, 'spectator.joined dispatch failed'))
           }
+
+          // Demo Table macro (§5.1): credit Hook step 2 after 2 min watch.
+          // The bot-game completion path also fires step 2 immediately for
+          // any current viewer, so this timer is the "watched ≥ 2 min but
+          // didn't see it finish" branch. completeStep is idempotent.
+          if (table?.isDemo) {
+            let socketTimers = _demoWatchTimers.get(socket.id)
+            if (!socketTimers) {
+              socketTimers = new Map()
+              _demoWatchTimers.set(socket.id, socketTimers)
+            }
+            if (!socketTimers.has(tableId)) {
+              const userId = user.id
+              const timer = setTimeout(() => {
+                completeJourneyStep(userId, 2).catch(() => {})
+                socketTimers.delete(tableId)
+              }, DEMO_WATCH_THRESHOLD_MS)
+              socketTimers.set(tableId, timer)
+            }
+          }
         } catch (err) {
           logger.warn({ err: err.message, tableId }, 'spectator cohort lookup failed')
         }
@@ -1515,6 +1557,7 @@ export async function attachSocketIO(httpServer) {
       if (!tableId || typeof tableId !== 'string') return
       const removed = removeTableWatcher(tableId, socket.id)
       socket.leave(`table:${tableId}`)
+      _clearDemoTimer(socket.id, tableId)
       if (removed) broadcastTablePresence(io, tableId)
     })
 
@@ -1543,6 +1586,7 @@ export async function attachSocketIO(httpServer) {
       for (const tableId of droppedFromTables) {
         broadcastTablePresence(io, tableId)
       }
+      _clearAllDemoTimers(socket.id)
 
       // Bot game spectator + pong cleanup
       botGameRunner.removeSpectator(socket.id)
