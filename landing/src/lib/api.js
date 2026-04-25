@@ -156,7 +156,8 @@ export const api = {
   },
 
   botGames: {
-    start: (body, token) => request('POST', '/bot-games', body, token),
+    start:    (body, token) => request('POST', '/bot-games',          body, token),
+    practice: (body, token) => request('POST', '/bot-games/practice', body, token),
   },
 
   skills: {

@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
@@ -19,6 +19,7 @@ const ALGORITHM_LABELS = {
 
 export default function BotProfilePage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { data: session } = useOptimisticSession()
   const [bot, setBot] = useState(null)
   const [botStats, setBotStats] = useState(null)
@@ -34,6 +35,11 @@ export default function BotProfilePage() {
   const [trainingQuick,    setTrainingQuick]    = useState(false)
   const [trainQuickError,  setTrainQuickError]  = useState(null)
   const [trainQuickResult, setTrainQuickResult] = useState(null)
+  // Spar (§5.2) — pit this bot against a system bot at the chosen tier.
+  // Curriculum step 5 fires when the spar match completes server-side.
+  const [sparTier,    setSparTier]    = useState('medium')
+  const [sparStarting, setSparStarting] = useState(false)
+  const [sparError,   setSparError]   = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -104,6 +110,21 @@ export default function BotProfilePage() {
       setTrainQuickError(err.message || 'Could not train your bot. Try again in a moment.')
     } finally {
       setTrainingQuick(false)
+    }
+  }
+
+  async function handleSpar() {
+    setSparError(null)
+    setSparStarting(true)
+    try {
+      const token = await getToken()
+      if (!token) throw new Error('Sign in to spar.')
+      const { slug } = await api.botGames.practice({ myBotId: id, opponentTier: sparTier }, token)
+      navigate(`/play?join=${encodeURIComponent(slug)}`)
+    } catch (err) {
+      setSparError(err.message || 'Could not start the spar match. Try again in a moment.')
+    } finally {
+      setSparStarting(false)
     }
   }
 
@@ -253,6 +274,56 @@ export default function BotProfilePage() {
         >
           <strong>Trained!</strong> Your bot is now at the intermediate tier — blocking threats and taking wins.
         </div>
+      )}
+
+      {/* Spar (Curriculum step 5 — §5.2). Owner-only. Tier picker → kicks off
+          a bot-vs-bot match against a system bot; the user spectates and
+          step 5 fires server-side on series completion. */}
+      {isOwner && bot.botActive && (
+        <section className="space-y-2">
+          <SectionLabel>Spar your bot</SectionLabel>
+          <div
+            className="rounded-xl border p-4 space-y-3"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Watch your bot play a system bot. Pick a tier — you'll spectate the match live.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {['easy', 'medium', 'hard'].map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => setSparTier(tier)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+                  style={{
+                    borderColor: sparTier === tier ? 'var(--color-blue-600)' : 'var(--border-default)',
+                    backgroundColor: sparTier === tier ? 'var(--color-blue-100)' : 'var(--bg-base)',
+                    color: sparTier === tier ? 'var(--color-blue-700)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {tier === 'easy' ? 'Easy · Rusty' : tier === 'medium' ? 'Medium · Copper' : 'Hard · Sterling'}
+                </button>
+              ))}
+            </div>
+            {sparError && (
+              <p role="alert" className="text-xs" style={{ color: 'var(--color-red-600)' }}>{sparError}</p>
+            )}
+            <button
+              onClick={handleSpar}
+              disabled={sparStarting || bot.botInTournament}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
+              style={{ borderColor: 'var(--color-blue-400)', color: 'var(--color-blue-700)' }}
+            >
+              {sparStarting ? 'Starting…' : 'Spar now'}
+            </button>
+            {bot.botInTournament && (
+              <p className="text-xs" style={{ color: 'var(--color-amber-600)' }}>
+                In a tournament — sparring is disabled until the bot is free.
+              </p>
+            )}
+          </div>
+        </section>
       )}
 
       {/* Win rate breakdown */}
