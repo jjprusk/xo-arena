@@ -1,6 +1,10 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import db from '../lib/db.js'
 import { formatIdle } from './idle.js'
+import { TOTAL_STEPS, deriveCurrentPhase } from '../../services/journeyService.js'
+
+// Single-letter phase tag for the JOURNEY column header
+const PHASE_TAG = { hook: 'H', curriculum: 'C', specialize: 'S' }
 
 const GREEN  = '\x1b[32m'
 const YELLOW = '\x1b[93m'
@@ -138,13 +142,15 @@ export function listCommand(program) {
         const roles    = u.userRoles.map(r => r.role).join(', ') || '—'
         const created  = u.createdAt.toISOString().slice(0, 10)
         const verified = u.emailVerified == null ? '?' : u.emailVerified ? 'yes' : 'no'
-        const prefs    = (u.preferences && typeof u.preferences === 'object') ? u.preferences : {}
-        const progress = prefs.journeyProgress
-        const journey  = progress
-          ? Array.from({ length: 8 }, (_, i) =>
-              progress.completedSteps?.includes(i + 1) ? '1' : '0'
-            ).join('') + (progress.dismissedAt ? 'D' : '')
-          : '--------'
+        const prefs     = (u.preferences && typeof u.preferences === 'object') ? u.preferences : {}
+        const progress  = prefs.journeyProgress
+        const completed = Array.isArray(progress?.completedSteps) ? progress.completedSteps : []
+        // Format: "<phase> <n>/7" + 'D' if journey dismissed.
+        // Phase derives from the latest milestone reached (hook → curriculum →
+        // specialize). Pre-Sprint-1 users (no progress row) display as "H 0/7".
+        const phaseTag  = PHASE_TAG[deriveCurrentPhase(completed)] ?? '?'
+        const dismissed = progress?.dismissedAt ? 'D' : ''
+        const journey   = `${phaseTag} ${completed.length}/${TOTAL_STEPS}${dismissed}`
         const hints    = formatHints(prefs.uiHints)
 
         // Colour the dot based on idle status (only for signed-in users).
