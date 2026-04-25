@@ -534,6 +534,7 @@ export async function createGame({
   tournamentId = null,
   tournamentMatchId = null,
   moveStream = null,
+  isSpar = false,
 }) {
   return db.game.create({
     data: {
@@ -552,6 +553,7 @@ export async function createGame({
       tournamentId,
       tournamentMatchId,
       isTournament: !!(tournamentId),
+      isSpar,
       moveStream: moveStream ?? undefined,
     },
   })

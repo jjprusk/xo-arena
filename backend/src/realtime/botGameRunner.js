@@ -92,7 +92,7 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, displayName: explicitDisplayName = null, mountainName: explicitMountainName = null }) {
+  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, displayName: explicitDisplayName = null, mountainName: explicitMountainName = null, isSpar = false, sparUserId = null }) {
     // Demo Table macro (§5.1) pre-allocates a slug + displayName so the Table
     // row's slug matches the bot-game slug. The caller passes `mountainName`
     // to transfer ownership — the runner releases it on game close exactly
@@ -137,6 +137,8 @@ class BotGameRunner {
       seriesDraws: 0,
       seriesGamesPlayed: 0,
       moves: [],  // compact move stream for replay
+      isSpar,
+      sparUserId,  // owner of bot1 — receives Hook step 5 credit on series completion
     }
 
     this._games.set(slug, game)
@@ -268,6 +270,7 @@ class BotGameRunner {
         tournamentId: game.tournamentId ?? null,
         tournamentMatchId: game.tournamentMatchId ?? null,
         moveStream: game.moves.length ? game.moves : null,
+        isSpar: !!game.isSpar,
       }).catch(err => logger.warn({ err, slug }, 'Failed to write per-game bot record'))
 
       // Update series counters after this game
@@ -401,8 +404,20 @@ class BotGameRunner {
       }
     }
 
+    // Spar series: credit Hook step 5 to the user who initiated the spar.
+    // Lazy-imported to avoid pulling journeyService into this module's eval-
+    // time graph (mirrors the demo-table step-2 pattern above).
+    if (game.isSpar && game.sparUserId) {
+      try {
+        const { completeStep } = await import('../services/journeyService.js')
+        completeStep(game.sparUserId, 5).catch(() => {})
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Spar: step-5 credit failed')
+      }
+    }
+
     logger.info(
-      { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null },
+      { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null, isSpar: !!game.isSpar },
       'Bot series recorded'
     )
   }
@@ -485,6 +500,21 @@ class BotGameRunner {
   closeGameBySlug(slug) {
     if (!this._games.has(slug)) return
     this._closeGame(slug)
+  }
+
+  /**
+   * Find an in-flight spar match for a given user-bot id. Used by the Spar
+   * endpoint's "one active spar per bot" policy — a new spar request kills
+   * any previous in-flight spar for the same bot before starting fresh.
+   * Returns the slug, or null if no active spar matches.
+   */
+  findActiveSparForBot(botId) {
+    for (const game of this._games.values()) {
+      if (game.isSpar && game.bot1?.id === botId && game.status === 'playing') {
+        return game.slug
+      }
+    }
+    return null
   }
 }
 
