@@ -40,6 +40,7 @@ import { startTournamentBridge } from './lib/tournamentBridge.js'
 import { initBus, startExpiredNotificationPruner } from './lib/notificationBus.js'
 import { startDispatcher, setIO as schedulerSetIO } from './lib/scheduledJobs.js'
 import { start as startTableGc } from './services/tableGcService.js'
+import { startMetricsSnapshotCron } from './services/metricsSnapshotService.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -115,6 +116,7 @@ startReplayPurgeJob()
 startIdleSessionPurgeJob()
 startDispatcher()
 startExpiredNotificationPruner()
+startMetricsSnapshotCron()
 
 attachSocketIO(server).then((io) => {
   app.set('io', io)
