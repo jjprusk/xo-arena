@@ -10,6 +10,7 @@ import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
+import { pickCoachingCard } from '../config/coachingCardRules.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
 // Stores state for PVP tournament matches waiting for players to join a room.
@@ -294,6 +295,25 @@ export async function handleEvent(io, channel, data) {
     case 'tournament:completed': {
       const { tournamentId, name, finalStandings } = data
 
+      // Curriculum Cup gets the post-cup coaching card (§5.5) — fetch the
+      // isCup flag once so we can branch the notify loop below without re-
+      // querying. Non-cup tournaments still fire step 7; they just don't
+      // get a card.
+      let cupTotalParticipants = 0
+      let isCupCompletion = false
+      try {
+        const t = await db.tournament.findUnique({
+          where:  { id: tournamentId },
+          select: { isCup: true },
+        })
+        isCupCompletion = !!t?.isCup
+        if (isCupCompletion) {
+          cupTotalParticipants = await db.tournamentParticipant.count({ where: { tournamentId } })
+        }
+      } catch (err) {
+        logger.warn({ err, tournamentId }, 'tournament:completed: failed to read isCup flag')
+      }
+
       // Build a map of notifyUserId → best position across all their bots.
       // A single owner may own multiple bot participants; send one notification
       // with their best-placed bot's position rather than one per bot.
@@ -339,6 +359,27 @@ export async function handleEvent(io, channel, data) {
         // step 7 was already done. Fire-and-forget; never block the notify flow.
         if (position != null) {
           completeJourneyStep(notifyUserId, 7).catch(() => {})
+        }
+
+        // Coaching card (§5.5) — only emitted for cup completions, only for
+        // users with a real finalPosition. v1 passes didTrainImprove=false
+        // (placeholder); v1.1 will compute it from ML model history. The
+        // bracket size lets the rules distinguish lost-in-semis from
+        // lost-earlier in larger brackets.
+        if (isCupCompletion && position != null && io) {
+          const card = pickCoachingCard({
+            finalPosition:    position,
+            lostInSemis:      cupTotalParticipants > 2 && position > 2,
+            didTrainImprove:  false,
+          })
+          if (card) {
+            io.to(`user:${notifyUserId}`).emit('guide:coaching_card', {
+              tournamentId,
+              tournamentName: name,
+              finalPosition:  position,
+              card,
+            })
+          }
         }
       }
 
