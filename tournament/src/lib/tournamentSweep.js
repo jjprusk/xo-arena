@@ -36,9 +36,11 @@ let _lastAutoDropPruneAt = 0
 // Sprint 4 — Curriculum Cup retention (§5.4). Cups are private to the user
 // who created them and have no tournament-history value beyond the owner's
 // reflection window. 30 days matches the Sprint 4 spec; the per-hour gate
-// keeps the sweep cheap.
-const CUP_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
-const CUP_SWEEP_INTERVAL_MS = 60 * 60 * 1000
+// keeps the sweep cheap. Sprint 6 made this admin-tunable via SystemConfig
+// `guide.cup.retentionDays` (read inside sweepOldCups so changes take effect
+// on the next sweep, not requiring a restart).
+const DEFAULT_CUP_RETENTION_DAYS = 30
+const CUP_SWEEP_INTERVAL_MS      = 60 * 60 * 1000
 let _lastCupSweepAt = 0
 
 export function startTournamentSweep() {
@@ -515,7 +517,13 @@ export async function cleanupSeededBots(tournamentId) {
  * @returns {Promise<{tournaments:number, bots:number}>}
  */
 export async function sweepOldCups(now = new Date()) {
-  const cutoff = new Date(now.getTime() - CUP_RETENTION_MS)
+  // Read tunable retention each sweep — admin changes via SystemConfig take
+  // effect immediately, no restart. Coerce to a positive number; bad values
+  // fall back to the default so a typo can't disable the sweep.
+  const row     = await db.systemConfig.findUnique({ where: { key: 'guide.cup.retentionDays' } }).catch(() => null)
+  const parsed  = row ? Number(typeof row.value === 'string' ? JSON.parse(row.value) : row.value) : null
+  const days    = (Number.isFinite(parsed) && parsed > 0) ? parsed : DEFAULT_CUP_RETENTION_DAYS
+  const cutoff  = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
 
   // Use the cup's own age (createdAt) so cups that never finished still get
   // collected. Cups complete in ~2 minutes; anything 30 days old has either

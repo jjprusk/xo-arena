@@ -85,6 +85,11 @@ export async function grantDiscoveryReward(userId, rewardKey, io) {
     logger.warn({ userId, rewardKey }, 'Unknown discovery-reward key — ignoring')
     return false
   }
+  // Sprint 6 — same V1 release gate as journeyService.completeStep. When the
+  // flag is off, all guide credits silently become no-ops; the underlying
+  // event paths (training, tournament wins, etc.) still complete normally.
+  const enabled = await _getSystemConfig('guide.v1.enabled', true)
+  if (enabled === false) return false
   try {
     const user = await _getUser(userId)
     if (!user) return false

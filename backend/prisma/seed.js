@@ -39,6 +39,21 @@ const CONFIG_DEFAULTS = [
   // creation. Admin opt-in toggle in Settings can override per-user later.
   // Default empty — site operator fills in via admin UI / um CLI.
   { key: 'metrics.internalEmailDomains', value: [] },
+
+  // Cup + demo + flag — Sprint 6 (§8.4). Migrating these from in-code
+  // constants so the admin SystemConfig UI can tune them without a deploy.
+  // guide.cup.sizeEntrants is reserved/informational in v1 — the cup spawns
+  // with a fixed 4-bot bracket (caller + 3 opponents) because the opponent
+  // mix is part of the curriculum design. v1.1 wires it as a true tunable.
+  { key: 'guide.cup.sizeEntrants',  value: 4  },
+  { key: 'guide.cup.retentionDays', value: 30 },
+  { key: 'guide.demo.ttlMinutes',   value: 60 },
+  // V1 release gate. Default true so dev/staging keep working as-is; the
+  // production deploy seeds this off, then admin flips on once metrics
+  // dashboards confirm a healthy first-day funnel. When off, the journey
+  // step + discovery-reward grant calls become no-ops — the rest of the
+  // platform (games, bots, tournaments) still works.
+  { key: 'guide.v1.enabled',        value: true },
 ]
 
 // ─── Built-in bot definitions ──────────────────────────────────────────────

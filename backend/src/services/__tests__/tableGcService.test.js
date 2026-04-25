@@ -244,8 +244,14 @@ describe('tableGcService sweep', () => {
       }))
     })
 
-    it('uses the correct cutoff windows: 2-min post-complete and 1-hour TTL', async () => {
+    it('uses the correct cutoff windows: 2-min post-complete and the configured TTL (minutes)', async () => {
       db.table.findMany.mockResolvedValue([])
+      // Sprint 6: demo TTL is now SystemConfig'd via guide.demo.ttlMinutes.
+      // Override the default-120 mock for this specific key so we exercise
+      // the read path with a known value.
+      getSystemConfig.mockImplementation(async (key, fallback) =>
+        key === 'guide.demo.ttlMinutes' ? 60 : 120
+      )
 
       const io = makeIO()
       await sweep(io)
@@ -255,7 +261,7 @@ describe('tableGcService sweep', () => {
       const [completedCond, ttlCond] = demoFind[0].where.OR
       const completeCutoff = completedCond.updatedAt.lt
       const ttlCutoff      = ttlCond.createdAt.lt
-      // 2 min ago and 1 hour ago, ±5s tolerance
+      // 2 min ago and 60 min ago, ±5s tolerance
       expect(Math.abs(completeCutoff.getTime() - (Date.now() - 2 * 60 * 1000))).toBeLessThan(5000)
       expect(Math.abs(ttlCutoff.getTime()      - (Date.now() - 60 * 60 * 1000))).toBeLessThan(5000)
     })

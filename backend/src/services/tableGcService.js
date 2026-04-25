@@ -125,12 +125,13 @@ async function deleteOldCompleted(now) {
 //     mid-match, server restart, etc.).
 // "One active per user" replacement is handled in POST /tables/demo, not here.
 
-const DEMO_POST_COMPLETE_GRACE_MS = 2 * 60 * 1000          // 2 min
-const DEMO_HARD_TTL_MS            = 60 * 60 * 1000         // 1 hour
+const DEMO_POST_COMPLETE_GRACE_MS = 2 * 60 * 1000          // 2 min (UX, not tunable)
+const DEFAULT_DEMO_TTL_MINUTES    = 60                     // Sprint 6 fallback
 
 async function sweepDemos(now) {
+  const ttlMinutes      = await getSystemConfig('guide.demo.ttlMinutes', DEFAULT_DEMO_TTL_MINUTES)
   const completedCutoff = new Date(now.getTime() - DEMO_POST_COMPLETE_GRACE_MS)
-  const ttlCutoff       = new Date(now.getTime() - DEMO_HARD_TTL_MS)
+  const ttlCutoff       = new Date(now.getTime() - ttlMinutes * 60 * 1000)
 
   // Candidates we'll delete: completed-and-graced OR exceeded TTL.
   const toDelete = await db.table.findMany({

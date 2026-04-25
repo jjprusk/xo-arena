@@ -12,8 +12,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../db.js', () => ({
   default: {
-    tournament: { findMany: vi.fn(), deleteMany: vi.fn() },
-    user:       { deleteMany: vi.fn() },
+    tournament:   { findMany: vi.fn(), deleteMany: vi.fn() },
+    user:         { deleteMany: vi.fn() },
+    // Sprint 6 — sweepOldCups now reads guide.cup.retentionDays from
+    // SystemConfig (with a 30-day fallback). Default mock returns null →
+    // fallback applies → existing 30-day assertions stay valid.
+    systemConfig: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }))
 vi.mock('../redis.js', () => ({ publish: vi.fn().mockResolvedValue(undefined) }))

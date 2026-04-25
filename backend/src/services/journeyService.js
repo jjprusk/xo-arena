@@ -113,6 +113,14 @@ export async function completeStep(userId, stepIndex, io) {
     logger.warn({ userId, stepIndex }, 'Journey step index out of range')
     return false
   }
+  // Sprint 6 — V1 release gate. When the flag is off, journey credits become
+  // a no-op (the rest of the platform — games, bots, tournaments — keeps
+  // working). Default true: flag is opt-out for staging, opt-in for the
+  // production rollout. Read fresh per call so admin can flip without a
+  // restart; cost is one indexed lookup, dominated by the user.findUnique
+  // that follows.
+  const enabled = await _getSystemConfig('guide.v1.enabled', true)
+  if (enabled === false) return false
   try {
     const prefs    = await _getPrefs(userId)
     if (!prefs) return false
