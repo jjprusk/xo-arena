@@ -26,6 +26,13 @@ const CONFIG_DEFAULTS = [
   { key: 'guide.rewards.curriculumComplete',  value: 50  },  // TC at end-of-Curriculum (step 7)
   { key: 'guide.quickBot.defaultTier',        value: 'novice' },        // Quick Bot starting tier — Rusty-equivalent
   { key: 'guide.quickBot.firstTrainingTier',  value: 'intermediate' },  // Tier after first training run — Copper-equivalent
+
+  // Discovery rewards — Sprint 5 (Intelligent_Guide_Requirements.md §5.7).
+  // One-shot grants outside the linear journey; idempotent per user.
+  { key: 'guide.rewards.discovery.specializeAct',            value: 10 },
+  { key: 'guide.rewards.discovery.nonCurriculumWin',         value: 25 },
+  { key: 'guide.rewards.discovery.nonDefaultAlgorithmTrain', value: 10 },
+  { key: 'guide.rewards.discovery.firstTemplateClone',       value: 10 },
 ]
 
 // ─── Built-in bot definitions ──────────────────────────────────────────────
