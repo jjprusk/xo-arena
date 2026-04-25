@@ -42,12 +42,48 @@ function formatYmd(date) {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * Sprint 6 cohort slicer (§2). Roll a list of `{ date, value }` daily points
+ * into Day / Week / Month buckets — same data, different DATE_TRUNC. Average
+ * across the bucket because northStar is a percentage, not a sum.
+ *
+ *   Day   → identity (one bucket per row)
+ *   Week  → bucket on ISO week start (Mon 00:00 UTC)
+ *   Month → bucket on month start (1st 00:00 UTC)
+ *
+ * Returns `[{ bucket, value }]` ordered ascending. Empty input → empty out.
+ */
+export function rollupTrend(points, granularity = 'week') {
+  if (!Array.isArray(points) || points.length === 0) return []
+  function bucketKey(d) {
+    if (granularity === 'day')   return formatYmd(d)
+    if (granularity === 'month') return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+    // week — ISO week (Mon-start), keyed by week-start YMD
+    const dow      = (d.getUTCDay() + 6) % 7  // Mon = 0
+    const monStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow))
+    return formatYmd(monStart)
+  }
+  const map = new Map()
+  for (const p of points) {
+    const d = p.date instanceof Date ? p.date : new Date(p.date)
+    const k = bucketKey(d)
+    const acc = map.get(k) ?? { sum: 0, n: 0 }
+    acc.sum += p.value
+    acc.n   += 1
+    map.set(k, acc)
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+    .map(([bucket, { sum, n }]) => ({ bucket, value: Number((sum / n).toFixed(2)) }))
+}
+
 // ── Section: North Star + trend ──────────────────────────────────────────────
 
-function NorthStarPanel({ now, history }) {
-  const trend = history
+function NorthStarPanel({ now, history, granularity }) {
+  const daily = history
     .filter(r => r.metric === 'northStar')
-    .map(r => ({ date: formatYmd(r.date), value: Number((r.value * 100).toFixed(2)) }))
+    .map(r => ({ date: r.date, value: Number((r.value * 100).toFixed(2)) }))
+  const trend = rollupTrend(daily, granularity)
 
   const ns = now?.northStar
   return (
@@ -80,7 +116,7 @@ function NorthStarPanel({ now, history }) {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trend}>
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} unit="%" />
                 <Tooltip formatter={(v) => `${v}%`} />
                 <Line type="monotone" dataKey="value" stroke="var(--color-teal-600)" strokeWidth={2} dot={false} />
@@ -190,9 +226,12 @@ function SignupSplitPanel({ now }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function GuideMetricsPage() {
-  const [data,    setData]    = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
+  const [data,        setData]        = useState(null)
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState(null)
+  // Sprint 6 cohort slicer (§2). Week is the default per spec — Day for
+  // high-volume periods, Month when daily buckets are too sparse to read.
+  const [granularity, setGranularity] = useState('week')
 
   useEffect(() => {
     let cancelled = false
@@ -214,11 +253,27 @@ export default function GuideMetricsPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <AdminHeader title="Guide metrics" subtitle="Intelligent Guide v1 — North Star, funnel, signup split" />
+
+      <div className="flex items-center gap-2 text-xs">
+        <label htmlFor="granularity" style={{ color: 'var(--text-muted)' }}>Trend granularity</label>
+        <select
+          id="granularity"
+          value={granularity}
+          onChange={(e) => setGranularity(e.target.value)}
+          className="px-2 py-1 rounded border text-xs"
+          style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+        >
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+          <option value="month">Month</option>
+        </select>
+      </div>
+
       {loading && <Spinner />}
       {error && <ErrorMsg>{error}</ErrorMsg>}
       {data && (
         <>
-          <NorthStarPanel now={data.now} history={data.history ?? []} />
+          <NorthStarPanel now={data.now} history={data.history ?? []} granularity={granularity} />
           <FunnelPanel    now={data.now} />
           <SignupSplitPanel now={data.now} />
           <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
