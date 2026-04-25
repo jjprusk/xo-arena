@@ -6,6 +6,7 @@ import { optionalAuth, requireAuth, requireTournamentAdmin, isTournamentAdmin } 
 import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import { checkRecurringOccurrences } from '../lib/recurringScheduler.js'
 import { cloneAndSeedPersona, seedExistingSystemBot, syncTemplateSeedsToTournament } from '../lib/seedBotService.js'
+import { cloneCurriculumCup } from '../lib/curriculumCupService.js'
 import { expectedGameCount } from '../lib/bracketMath.js'
 
 // Coerce a client-supplied date-ish value to a Prisma-safe value.
@@ -39,6 +40,18 @@ router.get('/', optionalAuth, async (req, res, next) => {
         : { not: 'DRAFT' }
     }
     if (!showTest) where.isTest = false
+
+    // Curriculum / Rookie Cups (§5.4 / §5.8) are private to the creator. Hide
+    // them from everyone else — guests too. Admins still see all cups so they
+    // can investigate abuse / runaway state.
+    if (!isAdmin) {
+      const callerDbId = req.auth?.dbUserId ?? null
+      if (callerDbId) {
+        where.OR = [{ isCup: false }, { isCup: true, createdById: callerDbId }]
+      } else {
+        where.isCup = false
+      }
+    }
 
     const tournaments = await db.tournament.findMany({
       where,
@@ -97,6 +110,28 @@ router.get('/', optionalAuth, async (req, res, next) => {
         }
       }),
     })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/tournaments/curriculum-cup/clone
+//
+// Spawns a fresh Curriculum Cup for the calling user (Intelligent Guide
+// §5.4). Creates 3 ownerless opponent bots cloned from Rusty/Copper, builds
+// a 4-bot single-elim bracket with the user's bot at slot 0, and starts
+// the bracket immediately (no registration window). Step 6 fires through
+// the standard `tournament:participant:joined` publish.
+//
+// Body: { myBotId? } — auto-picks the user's most-recent bot if omitted.
+router.post('/curriculum-cup/clone', requireAuth, async (req, res, next) => {
+  try {
+    const callerId = req.auth?.dbUserId
+    if (!callerId) return res.status(401).json({ error: 'Unauthorized' })
+
+    const { myBotId } = req.body ?? {}
+    const result = await cloneCurriculumCup({ callerId, myBotId })
+    res.status(result.status).json(result.body)
   } catch (e) {
     next(e)
   }
