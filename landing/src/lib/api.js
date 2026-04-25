@@ -47,7 +47,10 @@ async function request(method, path, body, token) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status })
+    throw Object.assign(new Error(err.error || 'Request failed'), {
+      status: res.status,
+      code:   err.code ?? null,
+    })
   }
 
   if (res.status === 204) return null
@@ -143,11 +146,13 @@ export const api = {
       const qs = p.toString()
       return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
     },
-    mine:     (token)              => request('GET',    '/bots/mine', null, token),
-    create:   (body, token)        => request('POST',   '/bots', body, token),
-    update:   (id, body, token)    => request('PATCH',  `/bots/${id}`, body, token),
-    delete:   (id, token)          => request('DELETE', `/bots/${id}`, null, token),
-    resetElo: (id, token)          => request('POST',   `/bots/${id}/reset-elo`, {}, token),
+    mine:       (token)             => request('GET',    '/bots/mine', null, token),
+    create:     (body, token)       => request('POST',   '/bots', body, token),
+    quickCreate:(body, token)       => request('POST',   '/bots/quick', body, token),
+    update:     (id, body, token)   => request('PATCH',  `/bots/${id}`, body, token),
+    delete:     (id, token)         => request('DELETE', `/bots/${id}`, null, token),
+    resetElo:   (id, token)         => request('POST',   `/bots/${id}/reset-elo`, {}, token),
+    trainQuick: (id, token)         => request('POST',   `/bots/${id}/train-quick`, {}, token),
   },
 
   botGames: {
