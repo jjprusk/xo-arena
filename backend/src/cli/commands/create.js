@@ -27,8 +27,12 @@ export async function createUser({ username, email, displayName, password, verif
     await tx.baAccount.create({
       data: { id: baAccountId, accountId: email, providerId: 'credential', userId: baUserId, password: hashed },
     })
+    // CLI-created accounts are dev / QA by definition — flag them out of
+    // metrics aggregations per Intelligent_Guide_Requirements.md §2.
+    // Covers the "accounts created via setup-qa-users.sh" branch (which
+    // shells out to `um create`).
     const appUser = await tx.user.create({
-      data: { username, email, displayName, betterAuthId: baUserId, oauthProvider: 'email', nameConfirmed: true },
+      data: { username, email, displayName, betterAuthId: baUserId, oauthProvider: 'email', nameConfirmed: true, isTestUser: true },
     })
     for (const role of roles) {
       await tx.userRole.create({ data: { userId: appUser.id, role, grantedById: appUser.id } })

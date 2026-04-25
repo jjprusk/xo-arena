@@ -18,6 +18,9 @@ vi.mock('../../lib/db.js', () => ({
     gameElo: {
       upsert: vi.fn(),
     },
+    systemConfig: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
     $transaction: vi.fn(async (ops) => Array.isArray(ops) ? Promise.all(ops) : ops({})),
     $queryRaw: vi.fn(),
   },

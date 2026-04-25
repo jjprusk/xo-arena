@@ -19,9 +19,38 @@ async function _getSystemConfig(key, defaultValue = null) {
 }
 
 /**
+ * Returns true if the email's domain matches the
+ * `metrics.internalEmailDomains` SystemConfig list (case-insensitive). Used
+ * by syncUser to default `isTestUser=true` on creation for internal accounts.
+ *
+ * The SystemConfig value is a JSON array of strings. Each entry may include or
+ * omit a leading "@" — both styles compare equally. Null/empty list = match
+ * nothing (the default seeded value).
+ */
+export async function isInternalEmailDomain(email) {
+  if (!email || typeof email !== 'string') return false
+  const at = email.lastIndexOf('@')
+  if (at < 0) return false
+  const domain = email.slice(at + 1).toLowerCase()
+  if (!domain) return false
+  const list = await _getSystemConfig('metrics.internalEmailDomains', [])
+  if (!Array.isArray(list)) return false
+  return list.some(entry => {
+    if (typeof entry !== 'string' || !entry) return false
+    const norm = entry.toLowerCase().replace(/^@/, '')
+    return norm === domain
+  })
+}
+
+/**
  * Find or create a domain User row.
  * Supports both Better Auth (betterAuthId) and legacy Clerk (clerkId) paths.
  * Auto-links existing Clerk users to Better Auth by email.
+ *
+ * Sprint 5 (§2 / §8.4): brand-new accounts whose email matches the
+ * `metrics.internalEmailDomains` SystemConfig list are flagged
+ * `isTestUser=true` on creation. Existing rows are not retroactively flagged
+ * (admins can flip via the upcoming Settings toggle or `um testuser` CLI).
  */
 export async function syncUser({ betterAuthId, clerkId, email, username, displayName, oauthProvider, avatarUrl, nameConfirmed = false }) {
   if (betterAuthId) {
@@ -45,17 +74,19 @@ export async function syncUser({ betterAuthId, clerkId, email, username, display
     }
     // New user — create from scratch
     const safeUsername = username || email?.split('@')[0] || betterAuthId
+    const isTestUser   = await isInternalEmailDomain(email)
     return db.user.create({
-      data: { betterAuthId, email, username: safeUsername, displayName, oauthProvider, avatarUrl, nameConfirmed },
+      data: { betterAuthId, email, username: safeUsername, displayName, oauthProvider, avatarUrl, nameConfirmed, isTestUser },
     })
   }
 
   // Legacy Clerk path (kept during cutover window)
   if (clerkId) {
+    const isTestUser = await isInternalEmailDomain(email)
     return db.user.upsert({
       where: { clerkId },
       update: { email, displayName, avatarUrl },
-      create: { clerkId, email, username: username || clerkId, displayName, oauthProvider, avatarUrl },
+      create: { clerkId, email, username: username || clerkId, displayName, oauthProvider, avatarUrl, isTestUser },
     })
   }
 

@@ -295,6 +295,13 @@ router.patch('/users/:id', async (req, res, next) => {
         })
         baRole_ = updated.role
         emailVerified_ = updated.emailVerified
+        // §2 metrics-pollution prevention: granting BA admin flags this
+        // domain user as a test user (excluded from dashboards). Reversal
+        // is manual via the upcoming admin toggle, not an automatic inverse
+        // of role removal.
+        if (baData.role === 'admin') {
+          await db.user.update({ where: { id: req.params.id }, data: { isTestUser: true } })
+        }
       } else {
         const ba = await db.baUser.findUnique({ where: { id: user.betterAuthId }, select: { role: true, emailVerified: true } })
         baRole_ = ba?.role ?? null
