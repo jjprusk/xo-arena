@@ -7,6 +7,8 @@ import { getCommunityBot } from '../lib/communityBotCache.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import { perfMark, perfDumpSummary } from '../lib/perfLog.js'
 import { recordGuestHookStep1 } from '../lib/guestMode.js'
+import { useGuideStore } from '../store/guideStore.js'
+import { deriveCurrentPhase } from '../components/guide/JourneyCard.jsx'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 // Note: we deliberately do NOT statically import `meta` from @callidity/game-xo
@@ -68,26 +70,36 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     })
   }, [sdk])
 
-  const tablesHref = tournamentId ? `/tournaments/${tournamentId}` : '/tables'
+  // Phase-aware leave destination. While the user is still in the Hook phase
+  // (or is a guest, who derives to 'hook' by default), dropping them in the
+  // /tables list after a quick PvAI game is a flat dead-end — the welcome
+  // funnel is supposed to lead back to the landing page. Once they've cleared
+  // Hook (Curriculum / Specialize), /tables is the right destination because
+  // they're navigating around an arena, not being onboarded.
+  const completedSteps = useGuideStore(s => s.journeyProgress?.completedSteps ?? [])
+  const inHookPhase = deriveCurrentPhase(completedSteps) === 'hook'
+  const leaveHref = tournamentId
+    ? `/tournaments/${tournamentId}`
+    : (inHookPhase ? '/' : '/tables')
 
   // Register leave-table callback so sdk.leaveTable() navigates away
   useEffect(() => {
     sdk._onGameEnd(({ leave } = {}) => {
-      if (leave) navigate(tablesHref, { replace: true })
+      if (leave) navigate(leaveHref, { replace: true })
     })
   }, [sdk]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abandoned → navigate away after brief notice
   useEffect(() => {
     if (!abandoned) return
-    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
+    const id = setTimeout(() => navigate(leaveHref, { replace: true }), 3000)
     return () => clearTimeout(id)
   }, [abandoned]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opponent left post-game → navigate after brief notice
   useEffect(() => {
     if (!opponentLeft) return
-    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
+    const id = setTimeout(() => navigate(leaveHref, { replace: true }), 3000)
     return () => clearTimeout(id)
   }, [opponentLeft]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -135,7 +147,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
           Opponent has left the table
         </p>
         <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
-          Returning to Tables…
+          Returning…
         </p>
       </div>
     )
@@ -178,7 +190,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
         gameState={gameState}
         spectatorCount={liveSpectatorCount}
         tournamentId={tournamentId}
-        backHref={tournamentId ? `/tournaments/${tournamentId}` : '/'}
+        backHref={leaveHref}
       >
         {(phase === 'playing' || phase === 'finished') && (
           <XOGame session={session} sdk={sdk} />

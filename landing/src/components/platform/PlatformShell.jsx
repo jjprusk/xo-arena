@@ -14,7 +14,7 @@
  *     and meta.supportsPuzzles — links route to /gym and /puzzles on landing
  *
  * Layout:
- *   The table surface (seat pods, surface background, outcome banner) is
+ *   The table surface (seat pods, surface background) is
  *   always visible — players sit at the table for the duration of the session.
  *   The info sidebar (game title, status, Gym/Puzzles links, Leave button) is
  *   toggleable via a ▣/◫ button so players can focus on the board without
@@ -239,30 +239,6 @@ function TableSurface({ phase, session, gameState, spectatorCount, children }) {
     ? (players[1] ?? null)
     : (players.find(p => p.id !== currentUserId) ?? null)
 
-  // Outcome banner
-  let outcomeLabel = null, outcomeVariant = null
-  if (phase === 'finished' && gameState) {
-    if (gameState.isDraw) {
-      outcomeLabel = 'Draw'; outcomeVariant = 'draw'
-    } else if (gameState.winner) {
-      if (isSpectator) {
-        const winnerPlayer = players.find(
-          p => session?.settings?.marks?.[p.id] === gameState.winner
-        )
-        outcomeLabel = winnerPlayer ? `${winnerPlayer.displayName} wins` : 'Win'
-        outcomeVariant = 'win'
-      } else {
-        const myMark = session?.settings?.myMark
-          ?? session?.settings?.marks?.[currentUserId]
-        if (gameState.winner === myMark) {
-          outcomeLabel = 'You Win'; outcomeVariant = 'win'
-        } else {
-          outcomeLabel = 'You Lose'; outcomeVariant = 'lose'
-        }
-      }
-    }
-  }
-
   const archetype = 'table-2p' // sit-down 2p — extend per meta.tableArchetype later
 
   return (
@@ -276,9 +252,6 @@ function TableSurface({ phase, session, gameState, spectatorCount, children }) {
             : children
           }
         </div>
-        {outcomeLabel && (
-          <OutcomeBanner label={outcomeLabel} variant={outcomeVariant} />
-        )}
       </div>
 
       {topPlayer && (
@@ -330,14 +303,6 @@ function SpectatorBadge({ count }) {
   return (
     <div className="spectator-badge" aria-label={`${count} watching`}>
       {count} watching
-    </div>
-  )
-}
-
-function OutcomeBanner({ label, variant }) {
-  return (
-    <div className={`outcome-banner outcome-banner--${variant}`} role="status">
-      {label}
     </div>
   )
 }

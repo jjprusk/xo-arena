@@ -1,6 +1,7 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState, useRef } from 'react'
 import { recordGuestHookStep2 } from '../../lib/guestMode.js'
+import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 
 /**
  * DemoArena — Phase 0 hero embed (Intelligent Guide v1, §3.5.1).
@@ -147,9 +148,15 @@ export default function DemoArena() {
   const watchStartRef         = useRef(Date.now())
   const recordedRef           = useRef(false)
   const timerRef              = useRef(null)
+  const { data: session }     = useOptimisticSession()
+  const isAuthed              = !!session?.user
 
-  // Step 2 watch-time tracker
+  // Step 2 watch-time tracker — guest-only. If the user is signed in we
+  // skip the timer entirely so a logged-in visitor lingering on the home
+  // page doesn't repopulate guideGuestJourney that was just cleared by
+  // the post-signup credit POST.
   useEffect(() => {
+    if (isAuthed) return
     function tick() {
       if (recordedRef.current) return
       const elapsed = Date.now() - watchStartRef.current
@@ -160,7 +167,7 @@ export default function DemoArena() {
     }
     const id = setInterval(tick, 5_000)
     return () => clearInterval(id)
-  }, [])
+  }, [isAuthed])
 
   // Game progression
   useEffect(() => {

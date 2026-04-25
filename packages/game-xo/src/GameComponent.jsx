@@ -176,9 +176,14 @@ export default function GameComponent({ session, sdk }) {
     sdk.submitMove(index)
   }
 
-  function handleForfeit() {
+  // Confirms the "Leave the table?" dialog when a game is still in progress.
+  // Routes through sdk.leaveTable() (not sdk.forfeit()) — leaveTable sets the
+  // SDK's leavingRef so that when the server echoes game:forfeit, navigation
+  // fires immediately. Calling sdk.forfeit() directly leaves the player
+  // stranded at a finished table because no leave-flag was set.
+  function handleConfirmLeaveMidGame() {
     sdk.playSound?.('forfeit')
-    sdk.forfeit?.()
+    sdk.leaveTable?.()
     setShowForfeit(false)
   }
 
@@ -291,9 +296,8 @@ export default function GameComponent({ session, sdk }) {
 
       {/* Bottom action row — always visible to active players so the user
           can leave at any time. mb-6 reserves space below the row so the
-          bottom seat avatar (which straddles the table's bottom rim) and the
-          absolute-positioned outcome banner have room without overlapping
-          the buttons. */}
+          bottom seat avatar (which straddles the table's bottom rim) has
+          room without overlapping the buttons. */}
       {isPlayer && (status === 'playing' || status === 'finished') && (
         <div className="flex items-center gap-3 w-full mb-6">
           {sdk.sendReaction && (
@@ -324,8 +328,8 @@ export default function GameComponent({ session, sdk }) {
       )}
 
       {/* Leave-mid-game confirmation — opens when the player clicks Leave
-          Table while a game is in progress. Functionally still a forfeit
-          (handleForfeit) but worded for the Leave Table verb. */}
+          Table while a game is in progress. Confirm routes through
+          sdk.leaveTable() so the forfeit + navigation happen atomically. */}
       {showForfeit && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div
@@ -347,7 +351,7 @@ export default function GameComponent({ session, sdk }) {
                 Cancel
               </button>
               <button
-                onClick={handleForfeit}
+                onClick={handleConfirmLeaveMidGame}
                 className="flex-1 py-2 rounded-xl font-medium text-white transition-colors"
                 style={{ background: 'var(--color-red-600)' }}
               >
@@ -408,19 +412,22 @@ function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn
       </span>
     )
   } else if (status === 'finished' && winner) {
+    const youWon = !isSpectator && winner === myMark
+    const variant = isSpectator ? 'win' : (youWon ? 'win' : 'lose')
+    const label = isSpectator
+      ? `${winner} wins!`
+      : youWon ? 'You win! 🎉' : 'Opponent wins!'
     turnNode = (
-      <span className="font-bold" style={{
-        color: isSpectator
-          ? MARK_COLOR[winner]
-          : winner === myMark ? 'var(--color-teal-600)' : 'var(--color-red-600)',
-      }}>
-        {isSpectator
-          ? `${winner} wins!`
-          : winner === myMark ? 'You win! 🎉' : 'Opponent wins!'}
+      <span className={`result-pill result-pill--${variant}`} role="status">
+        {label}
       </span>
     )
   } else if (status === 'finished') {
-    turnNode = <span className="font-bold" style={{ color: 'var(--color-amber-600)' }}>Draw!</span>
+    turnNode = (
+      <span className="result-pill result-pill--draw" role="status">
+        Draw!
+      </span>
+    )
   } else {
     turnNode = null
   }
