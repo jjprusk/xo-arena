@@ -29,6 +29,11 @@ export default function BotProfilePage() {
   const [availError, setAvailError] = useState(null)
   const [sessions, setSessions] = useState([])
   const [selectedSession, setSelectedSession] = useState('')
+  // Quick Bot training (§5.3) — bumps a fresh Quick Bot from novice to
+  // intermediate tier. Hides itself once the bot is trained.
+  const [trainingQuick,    setTrainingQuick]    = useState(false)
+  const [trainQuickError,  setTrainQuickError]  = useState(null)
+  const [trainQuickResult, setTrainQuickResult] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -85,6 +90,22 @@ export default function BotProfilePage() {
   }
 
   const isOwner = session?.user?.id && bot.ownerBetterAuthId && session.user.id === bot.ownerBetterAuthId
+
+  async function handleTrainQuick() {
+    setTrainQuickError(null)
+    setTrainingQuick(true)
+    try {
+      const token = await getToken()
+      if (!token) throw new Error('Sign in to train your bot.')
+      const { bot: updated, alreadyTrained } = await api.bots.trainQuick(id, token)
+      setBot(prev => ({ ...prev, ...updated }))
+      setTrainQuickResult(alreadyTrained ? 'already' : 'trained')
+    } catch (err) {
+      setTrainQuickError(err.message || 'Could not train your bot. Try again in a moment.')
+    } finally {
+      setTrainingQuick(false)
+    }
+  }
 
   async function toggleAvailability() {
     const next = !bot.botAvailable
@@ -194,6 +215,45 @@ export default function BotProfilePage() {
           <Row label="Member since" value={new Date(bot.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} />
         </dl>
       </div>
+
+      {/* Quick Bot training (Curriculum step 4 — §5.3). Only shown for the
+          owner of a minimax bot still on the default (novice) tier; the
+          training-flow trigger bumps it to the intermediate tier. */}
+      {isOwner && bot.botModelType === 'minimax' && typeof bot.botModelId === 'string' && bot.botModelId.endsWith(':novice') && (
+        <section className="space-y-2">
+          <SectionLabel>Train your bot</SectionLabel>
+          <div
+            className="rounded-xl border p-4 space-y-3"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Right now your bot plays random valid moves. The first training run sharpens it to block threats and take wins.
+            </p>
+            {trainQuickError && (
+              <p role="alert" className="text-xs" style={{ color: 'var(--color-red-600)' }}>{trainQuickError}</p>
+            )}
+            <button
+              onClick={handleTrainQuick}
+              disabled={trainingQuick}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
+              style={{ borderColor: 'var(--color-amber-400)', color: 'var(--color-amber-700)' }}
+            >
+              {trainingQuick ? 'Training…' : 'Train your bot'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Post-training celebration — shown briefly after a successful bump. */}
+      {trainQuickResult === 'trained' && (
+        <div
+          className="rounded-xl border p-4 text-sm"
+          role="status"
+          style={{ backgroundColor: 'rgba(36,181,135,0.07)', borderColor: 'var(--color-teal-400)', color: 'var(--color-teal-700)' }}
+        >
+          <strong>Trained!</strong> Your bot is now at the intermediate tier — blocking threats and taking wins.
+        </div>
+      )}
 
       {/* Win rate breakdown */}
       {botStats && botStats.total > 0 && (
