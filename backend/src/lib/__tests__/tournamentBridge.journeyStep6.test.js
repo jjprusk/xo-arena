@@ -30,6 +30,9 @@ vi.mock('../../logger.js', () => ({
 vi.mock('../../services/journeyService.js', () => ({
   completeStep: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('../../services/discoveryRewardsService.js', () => ({
+  grantDiscoveryReward: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { completeStep as mockCompleteStep } from '../../services/journeyService.js'
 const { handleEvent } = await import('../tournamentBridge.js')

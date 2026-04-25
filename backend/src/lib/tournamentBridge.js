@@ -10,6 +10,7 @@ import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
+import { grantDiscoveryReward } from '../services/discoveryRewardsService.js'
 import { pickCoachingCard } from '../config/coachingCardRules.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
@@ -359,6 +360,14 @@ export async function handleEvent(io, channel, data) {
         // step 7 was already done. Fire-and-forget; never block the notify flow.
         if (position != null) {
           completeJourneyStep(notifyUserId, 7).catch(() => {})
+        }
+
+        // Intelligent Guide v1 — Discovery reward §5.7 "first non-Curriculum
+        // tournament win". Position 1 only; cup wins are explicitly excluded
+        // (the Curriculum Cup is a guided funnel step, not an open win).
+        // grantDiscoveryReward dedupes — second open-cup win is a no-op.
+        if (position === 1 && !isCupCompletion) {
+          grantDiscoveryReward(notifyUserId, 'firstRealTournamentWin', io).catch(() => {})
         }
 
         // Coaching card (§5.5) — only emitted for cup completions, only for

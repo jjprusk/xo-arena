@@ -22,6 +22,7 @@ import {
 } from '@xo-arena/ai'
 import logger from '../logger.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
+import { grantDiscoveryReward } from './discoveryRewardsService.js'
 
 // ─── Socket.io reference ────────────────────────────────────────────────────
 let _io = null
@@ -880,13 +881,17 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
 
   // Journey step 4 (Curriculum: Train your bot) — fire-and-forget.
   // Was step 6 in the legacy spec; renumbered in the v1 Intelligent Guide
-  // rewrite (§4).
+  // rewrite (§4). Also grants §5.7 "first non-default-algorithm" discovery
+  // reward — any successful BotSkill train is by definition non-minimax.
   if (safeIterations > 0) {
     db.botSkill.findUnique({ where: { id: modelId }, select: { createdBy: true } })
       .then(async model => {
         if (!model?.createdBy) return
         const user = await db.user.findUnique({ where: { betterAuthId: model.createdBy }, select: { id: true } })
-        if (user) completeJourneyStep(user.id, 4).catch(() => {})
+        if (user) {
+          completeJourneyStep(user.id, 4).catch(() => {})
+          grantDiscoveryReward(user.id, 'firstNonDefaultAlgorithm').catch(() => {})
+        }
       })
       .catch(() => {})
   }

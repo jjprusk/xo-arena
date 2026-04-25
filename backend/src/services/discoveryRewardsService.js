@@ -1,37 +1,40 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * Discovery rewards — Sprint 5 (Intelligent_Guide_Requirements.md §5.7).
+ * Discovery rewards — Sprint 5 (Intelligent_Guide_Requirements.md §5.7, §8.4).
  *
  * Four one-shot rewards that fire on detected behaviour outside the linear
  * 7-step journey. Each is idempotent — granted at most once per user, ever.
  *
- *   key                         default TC   trigger (server-detected)
- *   ──────────────────────────  ──────────  ────────────────────────────────
- *   specializeAct               10          first Specialize recommendation
- *                                            acted on (v1.1 — wired but no
- *                                            production caller in v1)
- *   nonCurriculumWin            25          first tournament win where the
- *                                            tournament is NOT a Curriculum
- *                                            Cup clone
- *   nonDefaultAlgorithmTrain    10          first bot trained with a non-
- *                                            default algorithm
- *   firstTemplateClone          10          first tournament-template clone
+ *   key                       default TC   trigger (server-detected)
+ *   ────────────────────────  ──────────  ────────────────────────────────────
+ *   firstSpecializeAction     10          first Specialize recommendation
+ *                                          acted on (v1.1 — wired but no
+ *                                          production caller in v1)
+ *   firstRealTournamentWin    25          first tournament win where the
+ *                                          tournament is NOT a Curriculum
+ *                                          Cup clone
+ *   firstNonDefaultAlgorithm  10          first bot trained with a non-
+ *                                          default (non-minimax) algorithm
+ *   firstTemplateClone        10          first tournament-template clone
+ *                                          (v1.1 — wired but no production
+ *                                          caller in v1; Curriculum Cup
+ *                                          clones are deliberately excluded)
  *
  * Dedupe key: `user.preferences.discoveryRewardsGranted: string[]` — the
  * presence of a key in that array means the reward has been paid.
  *
  * Reward amounts are admin-tunable via SystemConfig keys
- * `guide.rewards.discovery.<key>` (e.g. `guide.rewards.discovery.specializeAct`).
+ * `guide.rewards.discovery.<key>` (e.g. `guide.rewards.discovery.firstRealTournamentWin`).
  */
 
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
 export const DISCOVERY_REWARDS = {
-  specializeAct:            { defaultTc: 10, title: 'First specialization!',     body: 'You took your first Specialize recommendation.' },
-  nonCurriculumWin:         { defaultTc: 25, title: 'First open-tourney win!',   body: 'Your bot took an open tournament — nicely done.' },
-  nonDefaultAlgorithmTrain: { defaultTc: 10, title: 'New algorithm unlocked!',   body: 'You trained with a non-default algorithm.' },
-  firstTemplateClone:       { defaultTc: 10, title: 'First template clone!',     body: 'You spun up a tournament from a template.' },
+  firstSpecializeAction:    { defaultTc: 10, title: 'First specialization!',   body: 'The Guide is working for you — first Specialize action.' },
+  firstRealTournamentWin:   { defaultTc: 25, title: 'First open-tourney win!', body: 'Your bot took an open tournament — nicely done.' },
+  firstNonDefaultAlgorithm: { defaultTc: 10, title: 'New algorithm unlocked!', body: 'You trained with a non-default algorithm.' },
+  firstTemplateClone:       { defaultTc: 10, title: 'First template clone!',   body: 'You spun up a tournament from a template.' },
 }
 
 export const DISCOVERY_REWARD_KEYS = Object.freeze(Object.keys(DISCOVERY_REWARDS))

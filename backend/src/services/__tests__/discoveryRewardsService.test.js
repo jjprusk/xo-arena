@@ -46,11 +46,11 @@ beforeEach(() => {
 // ── Module surface ────────────────────────────────────────────────────────────
 
 describe('discoveryRewardsService — module surface', () => {
-  it('exposes the four v1 reward keys', () => {
+  it('exposes the four v1 reward keys (canonical names per requirements §8.4)', () => {
     expect(DISCOVERY_REWARD_KEYS).toEqual([
-      'specializeAct',
-      'nonCurriculumWin',
-      'nonDefaultAlgorithmTrain',
+      'firstSpecializeAction',
+      'firstRealTournamentWin',
+      'firstNonDefaultAlgorithm',
       'firstTemplateClone',
     ])
   })
@@ -79,8 +79,8 @@ describe('getGrantedRewards', () => {
   })
 
   it('returns the stored array when present', async () => {
-    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['nonCurriculumWin'] }))
-    expect(await getGrantedRewards(userId)).toEqual(['nonCurriculumWin'])
+    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['firstRealTournamentWin'] }))
+    expect(await getGrantedRewards(userId)).toEqual(['firstRealTournamentWin'])
   })
 
   it('returns empty array when discoveryRewardsGranted is not an array', async () => {
@@ -128,24 +128,24 @@ describe('grantDiscoveryReward — happy path', () => {
   })
 
   it('appends to an existing discoveryRewardsGranted array', async () => {
-    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['nonCurriculumWin'] }))
+    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['firstRealTournamentWin'] }))
 
     await grantDiscoveryReward(userId, 'firstTemplateClone')
 
     const args = db.user.update.mock.calls[0][0]
     expect(args.data.preferences.discoveryRewardsGranted).toEqual([
-      'nonCurriculumWin', 'firstTemplateClone',
+      'firstRealTournamentWin', 'firstTemplateClone',
     ])
   })
 
   it('uses admin-configured reward amount when SystemConfig key is set', async () => {
     db.user.findUnique.mockResolvedValue(mockUser({ granted: [] }))
     db.systemConfig.findUnique.mockImplementation(async ({ where: { key } }) => {
-      if (key === 'guide.rewards.discovery.nonCurriculumWin') return { value: '40' }
+      if (key === 'guide.rewards.discovery.firstRealTournamentWin') return { value: '40' }
       return null
     })
 
-    await grantDiscoveryReward(userId, 'nonCurriculumWin')
+    await grantDiscoveryReward(userId, 'firstRealTournamentWin')
 
     const args = db.user.update.mock.calls[0][0]
     expect(args.data.creditsTc).toEqual({ increment: 40 })
@@ -174,19 +174,19 @@ describe('grantDiscoveryReward — happy path', () => {
 
 describe('grantDiscoveryReward — idempotency', () => {
   it('returns false and skips writes when reward already granted', async () => {
-    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['nonCurriculumWin'] }))
+    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['firstRealTournamentWin'] }))
 
-    const result = await grantDiscoveryReward(userId, 'nonCurriculumWin')
+    const result = await grantDiscoveryReward(userId, 'firstRealTournamentWin')
 
     expect(result).toBe(false)
     expect(db.user.update).not.toHaveBeenCalled()
   })
 
   it('does not emit any socket event when already granted', async () => {
-    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['nonCurriculumWin'] }))
+    db.user.findUnique.mockResolvedValue(mockUser({ granted: ['firstRealTournamentWin'] }))
     const io = mockIo()
 
-    await grantDiscoveryReward(userId, 'nonCurriculumWin', io)
+    await grantDiscoveryReward(userId, 'firstRealTournamentWin', io)
 
     expect(io.roomEmit).not.toHaveBeenCalled()
   })
@@ -204,7 +204,7 @@ describe('grantDiscoveryReward — defensive paths', () => {
 
   it('returns false when user not found', async () => {
     db.user.findUnique.mockResolvedValue(null)
-    const result = await grantDiscoveryReward(userId, 'nonCurriculumWin')
+    const result = await grantDiscoveryReward(userId, 'firstRealTournamentWin')
     expect(result).toBe(false)
     expect(db.user.update).not.toHaveBeenCalled()
   })
