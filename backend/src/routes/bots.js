@@ -98,8 +98,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl, ownerBaId: baId })
     cache.invalidate(BOTS_CACHE_KEY)
 
-    // Journey step 5: first bot created (fire-and-forget)
-    completeStep(userId, 5).catch(() => {})
+    // Journey step 3 (Curriculum: Create your first bot) — fire-and-forget.
+    // Was step 5 in the legacy 7-step spec; renumbered in the v1 Intelligent
+    // Guide rewrite (§4).
+    completeStep(userId, 3).catch(() => {})
 
     res.status(201).json({ bot })
   } catch (err) {

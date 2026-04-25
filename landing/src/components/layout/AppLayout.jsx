@@ -8,6 +8,7 @@ import { getSocket, connectSocket, disconnectSocket } from '../../lib/socket.js'
 import { perfMark } from '../../lib/perfLog.js'
 import SignInModal from '../ui/SignInModal.jsx'
 import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
+import EmailVerifyBanner from '../ui/EmailVerifyBanner.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
@@ -473,6 +474,9 @@ export default function AppLayout() {
           </div>
         }
       />
+
+      {/* ── Email verify soft banner — non-blocking ──────────── */}
+      <EmailVerifyBanner />
 
       {/* ── Admin sub-nav ────────────────────────────────────── */}
       {isAdmin && (

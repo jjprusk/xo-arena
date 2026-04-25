@@ -4,8 +4,6 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
-import { api } from '../lib/api.js'
-import { getToken } from '../lib/getToken.js'
 import { useGuideStore } from '../store/guideStore.js'
 
 
@@ -212,19 +210,9 @@ export default function FAQPage() {
   // Close guide panel so the page is unobstructed
   useEffect(() => { useGuideStore.getState().close() }, [])
 
-  // Journey step 2: visiting the FAQ page — update store directly so UI reflects completion without waiting for socket
-  useEffect(() => {
-    getToken().then(token => {
-      if (!token) return
-      api.guide.triggerStep(2, token).then(() => {
-        const store = useGuideStore.getState()
-        const current = store.journeyProgress?.completedSteps ?? []
-        if (!current.includes(2)) {
-          store.applyJourneyStep({ completedSteps: [...current, 2] })
-        }
-      }).catch(() => {})
-    }).catch(() => {})
-  }, [])
+  // Intelligent Guide v1 — the legacy "visit /faq → step 2" client-trigger
+  // was removed. New step 2 is "Watch two bots battle" (Sprint 3). FAQ visits
+  // no longer contribute to journey progress.
 
   // Parse markdown into preamble (H1) + sections (H2 blocks)
   const { preamble, sections } = useMemo(() => {

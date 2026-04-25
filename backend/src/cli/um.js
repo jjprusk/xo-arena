@@ -1,5 +1,12 @@
 #!/usr/bin/env node --experimental-transform-types --no-warnings
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
+// Belt-and-suspenders signal that we're running under the CLI. The real
+// gate in backend/src/lib/db.js detects the CLI via process.argv[1] (since
+// ES module imports hoist above this assignment), but we also honour the
+// env var so explicit child_process.spawn callers can opt in regardless of
+// argv shape.
+process.env.UM_CLI = '1'
+
 import { Command } from 'commander'
 import { guardProduction, umEnv, ensureProxy } from './lib/safety.js'
 import { disconnect } from './lib/db.js'

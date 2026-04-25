@@ -6,6 +6,7 @@ import { useGameSDK } from '../lib/useGameSDK.js'
 import { getCommunityBot } from '../lib/communityBotCache.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import { perfMark, perfDumpSummary } from '../lib/perfLog.js'
+import { recordGuestHookStep1 } from '../lib/guestMode.js'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 // Note: we deliberately do NOT statically import `meta` from @callidity/game-xo
@@ -95,6 +96,17 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     if (!kicked) return
     navigate('/', { replace: true })
   }, [kicked]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Guest Hook step 1 — Phase 0 (Intelligent Guide v1, §3.5.2). When an
+  // unauthenticated visitor finishes a vs-community-bot game, persist step 1
+  // to localStorage so it can be credited on signup. Helper is idempotent.
+  // We only fire for vs-bot guest games (no currentUser AND a botConfig is set);
+  // tournament-routed and PvP paths are skipped.
+  const isGuestPvAI = !currentUser && !!botConfig
+  useEffect(() => {
+    if (!isGuestPvAI) return
+    if (gameState.winner || gameState.isDraw) recordGuestHookStep1()
+  }, [isGuestPvAI, gameState.winner, gameState.isDraw])
 
   // Tournament series complete screen
   if (seriesResult) {

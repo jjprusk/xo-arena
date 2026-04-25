@@ -665,6 +665,25 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
     const tournamentId = req.params.id
     const requestingUserId = req.auth.dbUserId
 
+    // Intelligent Guide v1 — email verification gate (§3.5.4).
+    // Signup no longer blocks on verification; tournament entry is where the
+    // gate moves to. A user with an unverified email cannot register
+    // themselves OR their bot in any tournament, Cup-tier or otherwise.
+    // Returns 403 with a code the client can key off to prompt a resend.
+    const baId = req.auth.userId
+    if (baId) {
+      const baUser = await db.baUser.findUnique({
+        where: { id: baId },
+        select: { emailVerified: true },
+      })
+      if (baUser && baUser.emailVerified === false) {
+        return res.status(403).json({
+          error:  'Email verification required to enter tournaments',
+          code:   'EMAIL_VERIFICATION_REQUIRED',
+        })
+      }
+    }
+
     // participantUserId lets the owner register a bot they own.
     // If not provided, register the requesting user themselves.
     let userId = requestingUserId

@@ -1,8 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { api } from '../lib/api.js'
-import { getToken } from '../lib/getToken.js'
 import { useGuideStore } from '../store/guideStore.js'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -80,19 +78,9 @@ export default function GymGuidePage() {
   // Close guide panel immediately so the page feels unobstructed
   useEffect(() => { useGuideStore.getState().close() }, [])
 
-  // Journey step 4: visiting the AI Training Guide page — update store directly so UI reflects completion without waiting for socket
-  useEffect(() => {
-    getToken().then(token => {
-      if (!token) return
-      api.guide.triggerStep(4, token).then(() => {
-        const store = useGuideStore.getState()
-        const current = store.journeyProgress?.completedSteps ?? []
-        if (!current.includes(4)) {
-          store.applyJourneyStep({ completedSteps: [...current, 4] })
-        }
-      }).catch(() => {})
-    }).catch(() => {})
-  }, [])
+  // Intelligent Guide v1 — the legacy "visit /gym/guide → step 4" client-
+  // trigger was removed. New step 4 is "Train your bot" (fires server-side
+  // when mlService or Quick Bot completes a training run).
 
   const displayContent = useMemo(() => {
     if (!content) return content
