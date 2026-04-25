@@ -14,3 +14,7 @@ prisma/dev.db
 prisma/dev.db-journal
 backend/src/generated/
 packages/db/src/generated/
+
+# Claude Code per-user state — local permission settings, agent worktrees,
+# plugin config. None of this is meant to be shared across machines.
+.claude/
