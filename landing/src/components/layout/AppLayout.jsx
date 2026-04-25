@@ -11,6 +11,7 @@ import GuestWelcomeModal from '../ui/GuestWelcomeModal.jsx'
 import EmailVerifyBanner from '../ui/EmailVerifyBanner.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
 import GuidePanel from '../guide/GuidePanel.jsx'
+import RewardPopup from '../guide/RewardPopup.jsx'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import AudioDebugOverlay from '../debug/AudioDebugOverlay.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
@@ -534,6 +535,7 @@ export default function AppLayout() {
       </footer>
 
       <GuidePanel isAdmin={user?.role === 'admin'} />
+      {user && <RewardPopup />}
 
       {/* Floating 💬 feedback button + modal. Ported back from the retired
           frontend/ app after Phase 3.0; the Admin inbox was already in landing,
