@@ -5,26 +5,20 @@ import { io } from 'socket.io-client'
 // using window.location.host. io(undefined) correctly defaults to the current origin.
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined
 
-// WebSocket-only on every environment.
+// WebSocket primary, polling fallback.
 //
-// History: we previously used polling-only because the polling→websocket
-// *upgrade* negotiation was flaky through both Vite's dev proxy and the
-// landing express + http-proxy-middleware chain on Fly. That avoided the
-// upgrade race, but polling XHRs get aborted constantly by Safari when the
-// tab backgrounds or the network blips — and WebKit logs every aborted XHR
-// as a misleading "XMLHttpRequest cannot load … due to access control
-// checks" in the console. Each disconnect emits two such errors (original
-// poll + close-packet POST that also fails), cluttering the console on
-// every page.
+// History: we previously used polling-only (Vite/Fly upgrade negotiation was
+// flaky), then switched to websocket-only (Safari console spam from aborted
+// polling XHRs). WS-only worked on Fly but the Vite dev proxy intermittently
+// closes the WS handshake under Safari Private — leaving socket.io in an
+// infinite reconnect loop with no real-time and no visible UI signal.
 //
-// WebSocket-only sidesteps XHR entirely: one long-lived connection, no
-// aborted polling requests, no Safari log spam. Both proxy layers already
-// forward WebSocket correctly (Vite has `ws: true`; landing/server.js has
-// `ws: true` + `server.on('upgrade', backendProxy.upgrade)`). If the
-// handshake ever fails, socket.io emits `connect_error` and the app has
-// no real-time — very visible, easy to catch in QA. Revert to `polling` if
-// that happens.
-const TRANSPORTS = ['websocket']
+// Listing both transports keeps WS as the happy path (production + most dev
+// sessions) and lets socket.io drop to polling when the WS handshake fails.
+// Safari log spam only appears when polling is the active transport, which
+// now only happens when WS is genuinely unreachable — i.e. exactly the case
+// where falling back is correct.
+const TRANSPORTS = ['websocket', 'polling']
 
 let _socket = null
 

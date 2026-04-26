@@ -10,7 +10,6 @@ export const SLOT_ACTIONS = [
   { key: 'play',         label: 'Play',           icon: '⊞',  href: '/play?action=vs-community-bot',      section: 'Platform', crossSite: false },
   { key: 'play_my_bot',  label: 'Play vs Bot',    icon: '🎮', href: '/play?action=vs-my-bot',             section: 'Platform', crossSite: false },
   { key: 'journey_complete', label: 'Congrats',   icon: '🏅', href: null,                                 section: 'Platform', crossSite: false },
-  { key: 'faq',          label: 'Read the FAQ',   icon: '❓', href: '/faq',                               section: 'Platform', crossSite: false },
   { key: 'gym_guide',    label: 'AI Training',    icon: '📖', href: '/gym/guide',                         section: 'Platform', crossSite: false },
   { key: 'gym',          label: 'Train Bot',      icon: '⚡', href: '/gym?action=start-training',         section: 'Platform', crossSite: false },
   { key: 'bots',         label: 'My Bots',        icon: '🤖', href: '/profile?section=bots',              section: 'Platform', crossSite: false },
@@ -44,12 +43,5 @@ export const POST_JOURNEY_SLOTS = [
   { actionKey: 'puzzles' },
 ]
 
-export const JOURNEY_DEFAULT_SLOTS = [
-  { actionKey: null,           stepIndex: 1, label: 'Welcome',  icon: '🎉', href: null },
-  { actionKey: 'faq',          stepIndex: 2 },
-  { actionKey: 'play',         stepIndex: 3 },
-  { actionKey: 'gym_guide',    stepIndex: 4 },
-  { actionKey: 'create_bot',   stepIndex: 5 },
-  { actionKey: 'gym',          stepIndex: 6 },
-  { actionKey: 'tournaments',  stepIndex: 7, isFinalStep: true },
-]
+// Journey tile metadata moved to ./journeySteps.js (single source of truth
+// shared with JourneyCard so the two surfaces can't drift).

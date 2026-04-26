@@ -192,7 +192,7 @@ async function _handleHookComplete(userId, ioRef) {
       ioRef.to(`user:${userId}`).emit('guide:notification', {
         id:        `hook-complete-${userId}`,
         type:      'reward',
-        title:     'Hook complete!',
+        title:     'Off to a great start!',
         body:      `+${reward} Tournament Credits. Up next: build your first bot.`,
         createdAt: new Date().toISOString(),
         meta:      { phaseTransition: 'hook→curriculum', reward },

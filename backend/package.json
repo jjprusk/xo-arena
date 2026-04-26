@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src --ignore src/generated --watch ../packages/db/prisma/schema.prisma --ext js,mjs,ts,prisma --exec 'npx prisma generate --schema=../packages/db/prisma/schema.prisma && node --experimental-transform-types src/index.js'",
+    "dev": "nodemon --watch src --ignore src/generated --watch ../packages/db/prisma/schema.prisma --ext js,mjs,ts,prisma --exec 'if [ ../packages/db/prisma/schema.prisma -nt ../packages/db/src/generated/prisma/client.ts ]; then npx prisma generate --schema=../packages/db/prisma/schema.prisma; fi && node --experimental-transform-types src/index.js'",
     "start": "npx prisma migrate deploy --schema=../packages/db/prisma/schema.prisma && node --experimental-transform-types src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",

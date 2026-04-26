@@ -11,8 +11,8 @@ const RESET = '\x1b[0m'
  * Stored at preferences.uiHints.<key>.
  */
 const HINT_DEFS = {
-  faqTipShown:     'FAQ "Take your time" tip modal',
-  faqPointerShown: 'Guide slot finger pointer (Read the FAQ)',
+  faqTipShown:         'FAQ "Take your time" tip modal',
+  journeyPointerShown: 'Guide slot finger pointer (next journey step)',
 }
 
 export function hintsCommand(program) {

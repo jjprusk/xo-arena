@@ -3,6 +3,11 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
 import { POST_JOURNEY_SLOTS } from './slotActions.js'
+import {
+  JOURNEY_STEPS as STEPS,
+  TOTAL_STEPS as TOTAL,
+  deriveCurrentPhase,
+} from './journeySteps.js'
 
 /**
  * JourneyCard — phase-aware rendering of the 7-step Hook + Curriculum journey.
@@ -22,31 +27,14 @@ import { POST_JOURNEY_SLOTS } from './slotActions.js'
  * All journey-step triggers are server-detected (POST /journey/step was
  * removed in Sprint 1). The card is read-only; it observes journeyProgress
  * coming from socket `guide:journeyStep` events relayed into the guide store.
+ *
+ * Step metadata (titles, CTAs, hrefs) lives in journeySteps.js — shared with
+ * SlotGrid so the two journey surfaces can't drift.
  */
 
-// Step metadata — drives the card title and CTA per phase. The CTAs target
-// the surface where the trigger fires; titles match
-// backend journeyService.js STEP_TITLES.
-const STEPS = [
-  { index: 1, title: 'Play a quick game',           cta: 'Play now',          href: '/play?action=vs-community-bot' },
-  { index: 2, title: 'Watch two bots battle',       cta: 'Watch a demo',      href: '/play?action=watch-demo'      },
-  { index: 3, title: 'Create your first bot',       cta: 'Build a bot',       href: '/profile?action=quick-bot'    },
-  { index: 4, title: 'Train your bot',              cta: 'Train your bot',    href: '/profile?action=train-bot'    },
-  { index: 5, title: 'Spar with your bot',          cta: 'Spar now',          href: '/profile?action=spar'         },
-  { index: 6, title: 'Enter a tournament',          cta: 'Enter Curriculum Cup', href: '/profile?action=cup'       },
-  { index: 7, title: "See your bot's first result", cta: 'View result',       href: '/profile?action=cup-result'   },
-]
-
-const TOTAL = 7
-const HOOK_REWARD_STEP       = 2
-const CURRICULUM_REWARD_STEP = 7
-
-export function deriveCurrentPhase(completedSteps = []) {
-  const done = new Set(completedSteps)
-  if (done.has(CURRICULUM_REWARD_STEP)) return 'specialize'
-  if (done.has(HOOK_REWARD_STEP))       return 'curriculum'
-  return 'hook'
-}
+// Re-export so existing test imports (`import { deriveCurrentPhase } from
+// '../JourneyCard.jsx'`) keep working without touching test files.
+export { deriveCurrentPhase }
 
 const RING_R    = 13
 const RING_C    = 18

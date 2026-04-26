@@ -10,6 +10,7 @@ import { disconnectSocket } from '../lib/socket.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
+import QuickBotWizard from '../components/guide/QuickBotWizard.jsx'
 import { GAMES } from '../lib/gameRegistry.js'
 
 const BOT_MODEL_LABELS = {
@@ -94,6 +95,17 @@ export default function ProfilePage() {
     setShowCreateBot(true)
     setCreateForm(f => f.name ? f : { ...f, name: `${dbUser.username}-bot` })
   }, [dbUser]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ?action=quick-bot — Curriculum step 3 entry point. The journey CTA points
+  // here; we mount the QuickBotWizard as a modal overlay. Backend POST
+  // /bots/quick fires journey step 3 server-side, so completing the wizard
+  // advances the JourneyCard naturally via the guide:journeyStep socket event.
+  const [showQuickBot, setShowQuickBot] = useState(false)
+  useEffect(() => {
+    if (searchParams.get('action') !== 'quick-bot') return
+    useGuideStore.getState().close()
+    setShowQuickBot(true)
+  }, [searchParams])
 
   // ?section=bots — close guide, bots accordion already open via lazy initializer
   useEffect(() => {
@@ -928,6 +940,28 @@ export default function ProfilePage() {
             window.location.href = '/gym'
           }}
         />
+      )}
+
+      {showQuickBot && (
+        <div
+          role="presentation"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowQuickBot(false); navigate('/profile', { replace: true }) } }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1100,
+            background: 'rgba(8,12,22,0.6)', backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <QuickBotWizard
+            getToken={getToken}
+            onCancel={() => { setShowQuickBot(false); navigate('/profile', { replace: true }) }}
+            onCreated={(bot) => {
+              setShowQuickBot(false)
+              navigate(`/bots/${bot.id}`, { replace: true })
+            }}
+          />
+        </div>
       )}
     </div>
   )

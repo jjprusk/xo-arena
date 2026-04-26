@@ -19,7 +19,7 @@ import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 import { useEventStream } from '../../lib/useEventStream.js'
 import { useHeartbeat } from '../../lib/useHeartbeat.js'
-import { JOURNEY_DEFAULT_SLOTS } from '../guide/slotActions.js'
+import { TOTAL_STEPS } from '../guide/journeySteps.js'
 import { AppNav } from '@xo-arena/nav'
 
 // Kick off the game-xo chunk download immediately on app load — by the time
@@ -160,9 +160,14 @@ export default function AppLayout() {
   // events we may have missed during gameplay (e.g. brief disconnect, subscribe
   // race, backend restart). Cheap GET; runs once per non-/play route change.
   //
-  // When transitioning FROM /play, also reopen the Guide synchronously if the
-  // journey is still active — step 3 ("Play your first game") likely just
-  // advanced, and the user should see the progress land.
+  // When transitioning FROM /play back HOME, also reopen the Guide synchronously
+  // if the journey is still active — step 1 / step 3 likely just advanced and
+  // the user should see the progress land on the home journey card.
+  //
+  // Scoped to currPath === '/' specifically: /play is sometimes used as a transit
+  // route (e.g. /play?action=watch-demo immediately replace-redirects to
+  // /tables/<id> for spectating), and re-opening the panel on those landings
+  // overlays the destination page with the panel backdrop.
   useEffect(() => {
     if (!session?.user?.id) return
     const prevPath = prevPathRef.current
@@ -170,10 +175,10 @@ export default function AppLayout() {
     prevPathRef.current = currPath
     if (currPath.startsWith('/play')) return
 
-    if (prevPath.startsWith('/play')) {
+    if (prevPath.startsWith('/play') && currPath === '/') {
       const { journeyProgress } = useGuideStore.getState()
       const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-      if (!dismissedAt && completedSteps.length < JOURNEY_DEFAULT_SLOTS.length) {
+      if (!dismissedAt && completedSteps.length < TOTAL_STEPS) {
         useGuideStore.getState().open()
       }
     }
@@ -199,19 +204,30 @@ export default function AppLayout() {
           perfMark('AppLayout:hydrate-done')
           const { journeyProgress } = useGuideStore.getState()
           const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-          if (!dismissedAt && completedSteps.length < JOURNEY_DEFAULT_SLOTS.length) {
+          if (!dismissedAt && completedSteps.length < TOTAL_STEPS) {
             useGuideStore.getState().open()
           }
         })
       }
       // Connect the socket so journeyService can emit guide:journeyStep into
       // our per-user room and so /play can reuse the live connection.
+      //
+      // Re-emit user:subscribe explicitly when the socket is already
+      // connected: a guest who played PvAI first connected without a token
+      // (via useGameSDK), so the connect-listener fired once with no token
+      // and skipped subscribe. After signup the socket doesn't reconnect, so
+      // without this the new user is never placed into the user:${id} room
+      // and guide:hook_complete + guide:journeyStep emissions silently drop.
       getToken().then(token => {
         perfMark('AppLayout:token-resolved', token ? 'ok' : 'null')
         if (!token) return
         const socket = connectSocket(token)
-        if (socket.connected) perfMark('AppLayout:socket-already-connected')
-        else socket.once('connect', () => perfMark('AppLayout:socket-connected'))
+        if (socket.connected) {
+          perfMark('AppLayout:socket-already-connected')
+          socket.emit('user:subscribe', { authToken: token })
+        } else {
+          socket.once('connect', () => perfMark('AppLayout:socket-connected'))
+        }
       }).catch(() => {})
     } else {
       useGuideStore.getState().reset()

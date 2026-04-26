@@ -792,6 +792,40 @@ export async function attachSocketIO(httpServer) {
       if (role === 'spectator') {
         // Try PvP tables first (by slug), then bot game rooms
         const table = await db.table.findFirst({ where: { slug } })
+        // Demo tables (Hook step 2): the Table row is private + bot-vs-bot,
+        // but botGameRunner owns the move stream — game:moved events are
+        // emitted to io.to(slug), not io.to(`table:${id}`). Route the viewer
+        // through the bot-game spectator path so they actually see the game.
+        // The isPrivate gate doesn't apply to demos: the creator IS the
+        // intended audience. (Other private tables stay locked.)
+        if (table?.isDemo && botGameRunner.hasSlug(slug)) {
+          const result = botGameRunner.joinAsSpectator({ slug, socketId: socket.id })
+          if (result.error) return socket.emit('error', { message: result.error })
+          socket.join(slug)
+          const g = result.game
+          socket.emit('room:joined', {
+            slug,
+            role: 'spectator',
+            room: {
+              slug: g.slug,
+              displayName: g.displayName,
+              status: g.status,
+              board: g.board,
+              currentTurn: g.currentTurn,
+              winner: g.winner,
+              winLine: g.winLine,
+              scores: { X: g.seriesBot1Wins, O: g.seriesBot2Wins },
+              round: g.seriesGamesPlayed + 1,
+              spectatorCount: g.spectatorIds.size,
+              spectatorAllowed: true,
+              isBotGame: true,
+              bot1: { displayName: g.bot1.displayName, mark: 'X' },
+              bot2: { displayName: g.bot2.displayName, mark: 'O' },
+            },
+          })
+          io.to(slug).emit('room:spectatorJoined', { spectatorCount: g.spectatorIds.size })
+          return
+        }
         if (table) {
           if (table.isPrivate) return socket.emit('error', { message: 'Spectators not allowed in this room' })
           registerSocket(socket.id, table.id, null)

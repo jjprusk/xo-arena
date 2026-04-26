@@ -52,7 +52,7 @@ describe('RewardPopup', () => {
     act(() => {
       fire({ reward: 20, message: 'Welcome to the Arena.' })
     })
-    expect(screen.getByText(/Hook complete!/i)).toBeInTheDocument()
+    expect(screen.getByText(/Off to a great start!/i)).toBeInTheDocument()
     expect(screen.getByText(/\+20 Tournament Credits/i)).toBeInTheDocument()
     expect(screen.getByText(/build your first bot/i)).toBeInTheDocument()
   })

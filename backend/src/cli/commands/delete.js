@@ -39,7 +39,16 @@ export function deleteCommand(program) {
           continue
         }
         if (isAdmin) remainingAdmins--
-        toDelete.push(user)
+
+        // botOwnerId has no FK in schema (just a String? column), so deleting
+        // a human owner leaves their bots dangling. Look them up here so the
+        // confirmation prompt can surface them and the transaction below can
+        // cascade-delete them.
+        const bots = await db.user.findMany({
+          where:  { botOwnerId: user.id, isBot: true },
+          select: { id: true, username: true, displayName: true, betterAuthId: true },
+        })
+        toDelete.push({ ...user, _bots: bots })
       }
 
       if (toDelete.length === 0) {
@@ -50,11 +59,17 @@ export function deleteCommand(program) {
       if (!opts.yes) {
         if (toDelete.length === 1) {
           const u = toDelete[0]
-          const confirmed = await confirm(`Delete user "${u.username}" (${u.email})? This cannot be undone.`)
+          const botSuffix = u._bots.length > 0
+            ? ` and ${u._bots.length} bot${u._bots.length === 1 ? '' : 's'} (${u._bots.map(b => b.username).join(', ')})`
+            : ''
+          const confirmed = await confirm(`Delete user "${u.username}" (${u.email})${botSuffix}? This cannot be undone.`)
           if (!confirmed) { console.log('Aborted.'); process.exit(0) }
         } else {
           console.log(`About to delete ${toDelete.length} users:`)
-          for (const u of toDelete) console.log(`  ${u.username} (${u.email})`)
+          for (const u of toDelete) {
+            const botSuffix = u._bots.length > 0 ? ` [+${u._bots.length} bot${u._bots.length === 1 ? '' : 's'}]` : ''
+            console.log(`  ${u.username} (${u.email})${botSuffix}`)
+          }
           const confirmed = await confirm('Delete all of the above? This cannot be undone.')
           if (!confirmed) { console.log('Aborted.'); process.exit(0) }
         }
@@ -62,12 +77,19 @@ export function deleteCommand(program) {
 
       for (const user of toDelete) {
         await db.$transaction(async (tx) => {
+          for (const bot of user._bots) {
+            if (bot.betterAuthId) {
+              await tx.baUser.delete({ where: { id: bot.betterAuthId } })
+            }
+            await tx.user.delete({ where: { id: bot.id } })
+          }
           if (user.betterAuthId) {
             await tx.baUser.delete({ where: { id: user.betterAuthId } })
           }
           await tx.user.delete({ where: { id: user.id } })
         })
-        ok(`Deleted user "${user.username}"`)
+        const botSuffix = user._bots.length > 0 ? ` (+${user._bots.length} bot${user._bots.length === 1 ? '' : 's'})` : ''
+        ok(`Deleted user "${user.username}"${botSuffix}`)
       }
     })
 }

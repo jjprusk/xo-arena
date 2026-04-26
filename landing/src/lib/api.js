@@ -320,6 +320,12 @@ export const api = {
     getActiveByMatchId: (matchId) => api.get(`/tables/active-match?tournamentMatchId=${encodeURIComponent(matchId)}`),
     /** Create a new table. body: { gameId, minPlayers, maxPlayers, isPrivate?, isTournament? } */
     create: (body, token) => api.post('/tables', body, token),
+    /**
+     * Create a private bot-vs-bot demo table — Hook step 2 (§5.1).
+     * Server picks the matchup, seats both bots, and starts the game.
+     * Returns `{ tableId, slug, displayName, botA, botB }`.
+     */
+    createDemo: (token) => api.post('/tables/demo', null, token),
     /** Claim an empty seat. Idempotent. Pass { seatIndex } to target a specific seat. */
     join:   (id, opts, token) => {
       // Back-compat: older callers pass (id, token) with no opts.
