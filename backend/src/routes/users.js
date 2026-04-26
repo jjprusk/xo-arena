@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { getUserById, updateUser, getUserStats, getBotStats, syncUser } from '../services/userService.js'
 import { getUserCredits } from '../services/creditService.js'
+import { findOwnedBots, deleteUserWithBots } from '../services/userDeletionService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
@@ -125,35 +126,16 @@ router.delete('/me', requireAuth, async (req, res, next) => {
       return res.json({ ok: true })
     }
 
-    // Collect bot IDs before the transaction so we can clean up their games
-    const bots = await db.user.findMany({
-      where: { botOwnerId: domainUser.id, isBot: true },
-      select: { id: true },
-    })
-    const botIds = bots.map(b => b.id)
+    const bots = await findOwnedBots(db, domainUser.id)
+    if (bots.length > 0) {
+      return res.status(409).json({
+        error: `You own ${bots.length} bot${bots.length === 1 ? '' : 's'}. Delete ${bots.length === 1 ? 'it' : 'them'} first, then delete your account.`,
+        code:  'USER_OWNS_BOTS',
+        bots:  bots.map(b => ({ id: b.id, username: b.username, displayName: b.displayName })),
+      })
+    }
 
-    await db.$transaction(async (tx) => {
-      // Delete each bot's games, then the bot itself
-      for (const botId of botIds) {
-        await tx.game.updateMany({ where: { player2Id: botId }, data: { player2Id: null } })
-        await tx.game.updateMany({ where: { winnerId:  botId }, data: { winnerId:  null } })
-        await tx.game.deleteMany({ where: { player1Id: botId } })
-        await tx.user.delete({ where: { id: botId } })
-      }
-
-      // Nullify nullable game references for the owner
-      await tx.game.updateMany({ where: { player2Id: domainUser.id }, data: { player2Id: null } })
-      await tx.game.updateMany({ where: { winnerId:  domainUser.id }, data: { winnerId:  null } })
-
-      // Delete games where user is player1 (NOT NULL — cannot nullify)
-      await tx.game.deleteMany({ where: { player1Id: domainUser.id } })
-
-      // Delete the domain User (cascades UserEloHistory, UserRole)
-      await tx.user.delete({ where: { id: domainUser.id } })
-
-      // Delete the Better Auth user (cascades BaSession, BaAccount)
-      await tx.baUser.delete({ where: { id: baUser.id } })
-    })
+    await deleteUserWithBots(db, domainUser, [])
 
     logger.info({ userId: domainUser.id }, 'User self-deleted account')
     res.json({ ok: true })

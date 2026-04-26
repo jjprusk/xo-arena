@@ -7,6 +7,7 @@ import { getSystemConfig } from '../services/skillService.js'
 import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
 import { completeStep } from '../services/journeyService.js'
+import { deleteBot as deleteBotCascade, BuiltinBotProtectedError } from '../services/userDeletionService.js'
 import cache from '../utils/cache.js'
 
 const BOTS_CACHE_KEY = 'bots:public'
@@ -425,8 +426,9 @@ async function loadBotAndAuthorize(req, res) {
   const bot = await db.user.findUnique({
     where: { id: req.params.id },
     select: {
-      id: true, displayName: true, botOwnerId: true, botActive: true,
+      id: true, username: true, displayName: true, botOwnerId: true, botActive: true,
       botInTournament: true, botModelType: true, botModelId: true, isBot: true,
+      betterAuthId: true,
     },
   })
   if (!bot || !bot.isBot) { res.status(404).json({ error: 'Bot not found' }); return null }
@@ -546,25 +548,12 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!result) return
     const { bot } = result
 
-    // Delete everything atomically so no orphaned ML models are left behind.
-    // Games where this bot was player1 have a required (non-nullable) FK — no
-    // cascade is defined so we must delete them first. Games where it was
-    // player2 or winner use nullable FKs and will be set to null automatically.
-    await db.$transaction(async (tx) => {
-      await tx.game.deleteMany({ where: { player1Id: bot.id } })
-      // Multi-skill bots may have additional BotSkill rows beyond botModelId.
-      // Delete all of them; falls back to id-keyed delete for legacy rows
-      // whose botId column was never backfilled.
-      await tx.botSkill.deleteMany({ where: { botId: bot.id } })
-      if (bot.botModelId) {
-        await tx.botSkill.deleteMany({ where: { id: bot.botModelId } })
-      }
-      await tx.user.delete({ where: { id: bot.id } })
-    })
+    await deleteBotCascade(db, bot)
 
     cache.invalidate(BOTS_CACHE_KEY)
     res.status(204).end()
   } catch (err) {
+    if (err instanceof BuiltinBotProtectedError) return res.status(400).json({ error: err.message })
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bot not found' })
     next(err)
   }

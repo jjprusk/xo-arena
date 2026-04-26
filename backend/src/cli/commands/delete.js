@@ -2,6 +2,11 @@
 import { createInterface } from 'readline'
 import db from '../lib/db.js'
 import { resolveUsers, ok, fail } from '../lib/safety.js'
+import {
+  findOwnedBots,
+  deleteUserWithBots,
+  BuiltinBotProtectedError,
+} from '../../services/userDeletionService.js'
 
 async function confirm(question) {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
@@ -40,14 +45,7 @@ export function deleteCommand(program) {
         }
         if (isAdmin) remainingAdmins--
 
-        // botOwnerId has no FK in schema (just a String? column), so deleting
-        // a human owner leaves their bots dangling. Look them up here so the
-        // confirmation prompt can surface them and the transaction below can
-        // cascade-delete them.
-        const bots = await db.user.findMany({
-          where:  { botOwnerId: user.id, isBot: true },
-          select: { id: true, username: true, displayName: true, betterAuthId: true },
-        })
+        const bots = await findOwnedBots(db, user.id)
         toDelete.push({ ...user, _bots: bots })
       }
 
@@ -76,18 +74,15 @@ export function deleteCommand(program) {
       }
 
       for (const user of toDelete) {
-        await db.$transaction(async (tx) => {
-          for (const bot of user._bots) {
-            if (bot.betterAuthId) {
-              await tx.baUser.delete({ where: { id: bot.betterAuthId } })
-            }
-            await tx.user.delete({ where: { id: bot.id } })
+        try {
+          await deleteUserWithBots(db, user, user._bots)
+        } catch (err) {
+          if (err instanceof BuiltinBotProtectedError) {
+            console.error(`  ✗ "${user.username}" skipped — ${err.message}`)
+            continue
           }
-          if (user.betterAuthId) {
-            await tx.baUser.delete({ where: { id: user.betterAuthId } })
-          }
-          await tx.user.delete({ where: { id: user.id } })
-        })
+          throw err
+        }
         const botSuffix = user._bots.length > 0 ? ` (+${user._bots.length} bot${user._bots.length === 1 ? '' : 's'})` : ''
         ok(`Deleted user "${user.username}"${botSuffix}`)
       }

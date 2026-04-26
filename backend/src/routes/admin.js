@@ -21,6 +21,12 @@ import { replyTemplate } from '../lib/emailTemplates.js'
 import { dispatch, emitToRoom } from '../lib/notificationBus.js'
 import { sweep as gcSweep } from '../services/tableGcService.js'
 import { runMetricsSnapshot } from '../services/metricsSnapshotService.js'
+import {
+  findOwnedBots,
+  deleteBot as deleteBotCascade,
+  deleteUserWithBots,
+  BuiltinBotProtectedError,
+} from '../services/userDeletionService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
@@ -407,33 +413,16 @@ router.get('/users/:id', async (req, res, next) => {
 
 router.delete('/users/:id', async (req, res, next) => {
   try {
-    const [domainUser, bots] = await Promise.all([
-      db.user.findUnique({ where: { id: req.params.id }, select: { betterAuthId: true } }),
-      db.user.findMany({ where: { botOwnerId: req.params.id, isBot: true }, select: { id: true } }),
-    ])
-    const botIds = bots.map(b => b.id)
-
-    await db.$transaction(async (tx) => {
-      for (const botId of botIds) {
-        await tx.game.updateMany({ where: { player2Id: botId }, data: { player2Id: null } })
-        await tx.game.updateMany({ where: { winnerId:  botId }, data: { winnerId:  null } })
-        await tx.game.deleteMany({ where: { player1Id: botId } })
-        await tx.user.delete({ where: { id: botId } })
-      }
-      await tx.game.updateMany({ where: { player2Id: req.params.id }, data: { player2Id: null } })
-      await tx.game.updateMany({ where: { winnerId:  req.params.id }, data: { winnerId:  null } })
-      await tx.game.deleteMany({ where: { player1Id: req.params.id } })
-      await tx.user.delete({ where: { id: req.params.id } })
-      // Remove Better Auth records so the email can be re-registered
-      if (domainUser?.betterAuthId) {
-        await tx.baSession.deleteMany({ where: { userId: domainUser.betterAuthId } })
-        await tx.baAccount.deleteMany({ where: { userId: domainUser.betterAuthId } })
-        try { await tx.baUser.delete({ where: { id: domainUser.betterAuthId } }) } catch { }
-      }
+    const domainUser = await db.user.findUnique({
+      where:  { id: req.params.id },
+      select: { id: true, username: true, betterAuthId: true },
     })
-
+    if (!domainUser) return res.status(404).json({ error: 'User not found' })
+    const bots = await findOwnedBots(db, domainUser.id)
+    await deleteUserWithBots(db, domainUser, bots)
     res.status(204).end()
   } catch (err) {
+    if (err instanceof BuiltinBotProtectedError) return res.status(400).json({ error: err.message })
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' })
     next(err)
   }
@@ -976,33 +965,17 @@ router.patch('/bots/:id', async (req, res, next) => {
  * DELETE /api/v1/admin/bots/:id
  * Hard delete any bot.
  */
-// Usernames of the four built-in personas — cannot be deleted via admin API.
-const BUILTIN_BOT_USERNAMES = new Set(['bot-rusty', 'bot-copper', 'bot-sterling', 'bot-magnus'])
-
 router.delete('/bots/:id', async (req, res, next) => {
   try {
     const bot = await db.user.findUnique({
-      where: { id: req.params.id },
-      select: { id: true, isBot: true, botModelId: true, username: true },
+      where:  { id: req.params.id },
+      select: { id: true, isBot: true, botModelId: true, username: true, betterAuthId: true },
     })
     if (!bot || !bot.isBot) return res.status(404).json({ error: 'Bot not found' })
-    if (BUILTIN_BOT_USERNAMES.has(bot.username)) {
-      return res.status(400).json({
-        error: 'Built-in system bots (Rusty, Copper, Sterling, Magnus) cannot be deleted — they are the cloning source for all seeded tournament bots.',
-      })
-    }
-
-    await db.$transaction(async (tx) => {
-      await tx.game.deleteMany({ where: { player1Id: bot.id } })
-      await tx.user.delete({ where: { id: bot.id } })
-    })
-
-    if (bot.botModelId) {
-      await db.botSkill.delete({ where: { id: bot.botModelId } }).catch(() => {})
-    }
-
+    await deleteBotCascade(db, bot)
     res.status(204).end()
   } catch (err) {
+    if (err instanceof BuiltinBotProtectedError) return res.status(400).json({ error: err.message })
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bot not found' })
     next(err)
   }

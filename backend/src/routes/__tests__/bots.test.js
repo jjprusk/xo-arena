@@ -19,8 +19,13 @@ const mockDb = {
   },
   game: {
     deleteMany: vi.fn(),
+    updateMany: vi.fn(),
   },
   botSkill: {
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  baUser: {
     delete: vi.fn(),
   },
   gameElo: {
@@ -737,7 +742,7 @@ describe('DELETE /api/v1/bots/:id', () => {
     })
     const txSkillDeleteMany = vi.fn().mockResolvedValue({ count: 0 })
     mockDb.$transaction.mockImplementation(async (fn) =>
-      fn({ game: mockDb.game, user: mockDb.user, botSkill: { deleteMany: txSkillDeleteMany } })
+      fn({ game: mockDb.game, user: mockDb.user, baUser: mockDb.baUser, botSkill: { deleteMany: txSkillDeleteMany } })
     )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
@@ -759,7 +764,7 @@ describe('DELETE /api/v1/bots/:id', () => {
     })
     const txSkillDeleteMany = vi.fn().mockResolvedValue({ count: 1 })
     mockDb.$transaction.mockImplementation(async (fn) =>
-      fn({ game: mockDb.game, user: mockDb.user, botSkill: { deleteMany: txSkillDeleteMany } })
+      fn({ game: mockDb.game, user: mockDb.user, baUser: mockDb.baUser, botSkill: { deleteMany: txSkillDeleteMany } })
     )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
