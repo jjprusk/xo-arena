@@ -43,15 +43,15 @@ The pre-signup flow on the landing page. The hero is the demo arena; below it si
 ### 1.1 Fresh-load landing as a guest
 
 - Open http://localhost:5174/ in a clean session.
-- Welcome modal appears once — dismiss it.
-- Hero arena renders: a bot-vs-bot match plays in the background.
-- CTA copy reads: "Play a quick game" + "Build your own bot".
+- Hero `DemoArena` renders: a bot-vs-bot match plays as the hero (no popup; the legacy `GuestWelcomeModal` was retired in `ec57188` — the demo arena IS the welcome).
+- Three CTAs render directly under the arena: **↻ Watch another match**, **Play against a bot**, **Build your own bot →**.
 
 ### 1.2 Play one PvAI
 
-- Click "Play a quick game". You land on the board, mark X by default.
+- Click "Play against a bot". You land on the board, mark X by default.
+- The page is intentionally minimal for the guest demo: just the table surface, the seat pods, and a small `← Back` link. The platform sidebar (Game info, "Gym — train a bot", "Back to Tables") and its toggle are suppressed via `minimalChrome` — those concepts are introduced post-signup, and they competed with the conversion CTA below.
 - Play through to a result (win, lose, or draw — doesn't matter).
-- The result screen appears with the "Build your own bot" CTA.
+- After a ~2-second pause (so the result pill gets its uncluttered moment), a narrow toast slides down from the top of the viewport (under the nav): "Like this? Save your progress." with a pulsing **Build your own bot →** button and a × dismiss. After another ~5 seconds the toast dims to 50% opacity (still clickable; hover restores). It re-attention-grabs on each new finished game. (You can also `← Back` to home, where the same CTA sits in the hero ladder.)
 
 ### 1.3 Sign up
 

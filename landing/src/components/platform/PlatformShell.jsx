@@ -75,6 +75,11 @@ export function selectDefaultMode({ isSpectator: _s, phase: _p }) {
  * @param {'focused'|'chrome-present'} [props.initialMode]  'focused' → sidebar hidden initially
  * @param {string|null}[props.backHref]     where the escape affordance links to
  * @param {() => void} [props.onLeave]      if provided, shows a Leave button in the sidebar
+ * @param {boolean}    [props.minimalChrome] true → hide the sidebar AND its toggle entirely.
+ *                                           Used for the guest demo (Phase 0): the sidebar
+ *                                           surfaces concepts like "Gym" and "Back to Tables"
+ *                                           that haven't been introduced yet, and they compete
+ *                                           with the post-game signup CTA.
  * @param {ReactNode}  props.children       the game component
  */
 export default function PlatformShell({
@@ -88,6 +93,7 @@ export default function PlatformShell({
   initialMode,
   backHref = '/',
   onLeave,
+  minimalChrome = false,
   children,
 }) {
   // On mobile (< 768px), sidebar starts hidden when already playing (e.g. reconnect).
@@ -123,9 +129,10 @@ export default function PlatformShell({
       tournamentId={tournamentId}
       themeStyle={themeStyle}
       backHref={backHref}
-      showSidebar={showSidebar}
+      showSidebar={!minimalChrome && showSidebar}
       onToggleSidebar={() => setShowSidebar(v => !v)}
       onLeave={onLeave}
+      minimalChrome={minimalChrome}
     >
       {children}
     </GameFrame>
@@ -137,6 +144,7 @@ export default function PlatformShell({
 function GameFrame({
   children, gameMeta, session, phase, gameState, table, spectatorCount,
   tournamentId, themeStyle, backHref, showSidebar, onToggleSidebar, onLeave,
+  minimalChrome,
 }) {
   const controlStyle = {
     color: 'var(--text-secondary)',
@@ -148,7 +156,9 @@ function GameFrame({
       <div className={`grid gap-4 items-start${showSidebar ? ' md:grid-cols-[1fr_260px]' : ''}`}>
         {/* Game column */}
         <div className="w-full flex flex-col items-center" style={themeStyle}>
-          {/* Control bar: ← Back on left, sidebar toggle on right */}
+          {/* Control bar: ← Back on left, sidebar toggle on right.
+              In minimalChrome (guest demo) the toggle is suppressed since
+              there's no sidebar to toggle. */}
           <div className="w-full max-w-[440px] flex items-center justify-between mb-2 px-1">
             <Link
               to={backHref}
@@ -157,15 +167,17 @@ function GameFrame({
             >
               ← Back
             </Link>
-            <button
-              onClick={onToggleSidebar}
-              className="text-xs px-2 py-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
-              style={controlStyle}
-              title={showSidebar ? 'Hide info panel' : 'Show info panel'}
-              aria-label={showSidebar ? 'Hide info panel' : 'Show info panel'}
-            >
-              {showSidebar ? '◫' : '▣'}
-            </button>
+            {!minimalChrome && (
+              <button
+                onClick={onToggleSidebar}
+                className="text-xs px-2 py-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
+                style={controlStyle}
+                title={showSidebar ? 'Hide info panel' : 'Show info panel'}
+                aria-label={showSidebar ? 'Hide info panel' : 'Show info panel'}
+              >
+                {showSidebar ? '◫' : '▣'}
+              </button>
+            )}
           </div>
           <TableSurface
             phase={phase}
