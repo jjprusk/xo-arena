@@ -91,10 +91,10 @@ router.post('/practice', requireAuth, async (req, res, next) => {
     // Ownership + bot validity
     const myBot = await db.user.findUnique({
       where:  { id: myBotId },
-      select: { id: true, displayName: true, botModelId: true, isBot: true, botActive: true, ownerId: true, botInTournament: true },
+      select: { id: true, displayName: true, botModelId: true, isBot: true, botActive: true, botOwnerId: true, botInTournament: true },
     })
-    if (!myBot?.isBot)              return res.status(404).json({ error: 'myBot not found' })
-    if (myBot.ownerId !== caller.id) return res.status(403).json({ error: 'You do not own this bot' })
+    if (!myBot?.isBot)                  return res.status(404).json({ error: 'myBot not found' })
+    if (myBot.botOwnerId !== caller.id) return res.status(403).json({ error: 'You do not own this bot' })
     if (!myBot.botActive)            return res.status(409).json({ error: `${myBot.displayName} is inactive` })
     if (myBot.botInTournament) {
       return res.status(409).json({ error: `${myBot.displayName} is currently in a tournament` })

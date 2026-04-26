@@ -17,8 +17,8 @@
 export const CURRICULUM_CUP_CONFIG = Object.freeze({
   name:            'Curriculum Cup',
   game:            'xo',
-  mode:            'BVB',                  // bots play, human spectates
-  format:          'SINGLE_ELIMINATION',
+  mode:            'BOT_VS_BOT',           // bots play, human spectates
+  format:          'FLASH',                // spawned-on-demand, no registration window
   bracketType:     'SINGLE_ELIM',
   bestOfN:         1,
   minParticipants: 4,

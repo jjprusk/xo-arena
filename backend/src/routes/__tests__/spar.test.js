@@ -43,7 +43,7 @@ const MY_BOT = {
   botModelId:       'user:user-caller:minimax:novice',
   isBot:            true,
   botActive:        true,
-  ownerId:          'user-caller',
+  botOwnerId:       'user-caller',
   botInTournament:  false,
 }
 const RUSTY    = { id: 'sysbot-rusty',    displayName: 'Rusty',    botModelId: 'builtin:minimax:novice',       isBot: true, botActive: true }
@@ -105,7 +105,7 @@ describe('POST /practice — ownership + bot state', () => {
   it('403 when caller does not own myBot', async () => {
     db.user.findUnique.mockImplementation(({ where }) => {
       if (where.betterAuthId === 'ba-caller') return Promise.resolve(CALLER)
-      if (where.id === 'bot-mine')            return Promise.resolve({ ...MY_BOT, ownerId: 'someone-else' })
+      if (where.id === 'bot-mine')            return Promise.resolve({ ...MY_BOT, botOwnerId: 'someone-else' })
       if (where.username === 'bot-rusty')     return Promise.resolve(RUSTY)
       return Promise.resolve(null)
     })

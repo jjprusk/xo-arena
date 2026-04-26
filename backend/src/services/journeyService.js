@@ -32,6 +32,7 @@
 
 import db from '../lib/db.js'
 import logger from '../logger.js'
+import { experimentVariant } from './experimentService.js'
 
 export const TOTAL_STEPS      = 7
 export const HOOK_STEPS       = [1, 2]
@@ -172,6 +173,11 @@ export async function restartJourney(userId) {
 
 async function _handleHookComplete(userId, ioRef) {
   const reward = await _getSystemConfig('guide.rewards.hookComplete', DEFAULT_HOOK_REWARD_TC)
+  // Sprint 6 — A/B surface (Sprint6_Kickoff §3.4 / Resume §2 #22). v1 has no
+  // experiment defined so this returns 'control' for every user; v1.1 swaps in
+  // a reward-amount split via the SystemConfig key
+  // `guide.experiments.reward.amount.buckets`.
+  const variant = await experimentVariant(userId, 'reward.amount', 'control')
   try {
     await db.user.update({
       where: { id: userId },
@@ -193,14 +199,15 @@ async function _handleHookComplete(userId, ioRef) {
       })
     }
 
-    logger.info({ userId, reward }, 'Hook complete — TC awarded')
+    logger.info({ userId, reward, variant }, 'Hook complete — TC awarded')
   } catch (err) {
     logger.warn({ err, userId }, 'Hook-complete reward failed (non-fatal)')
   }
 }
 
 async function _handleCurriculumComplete(userId, ioRef) {
-  const reward = await _getSystemConfig('guide.rewards.curriculumComplete', DEFAULT_CURRICULUM_REWARD_TC)
+  const reward  = await _getSystemConfig('guide.rewards.curriculumComplete', DEFAULT_CURRICULUM_REWARD_TC)
+  const variant = await experimentVariant(userId, 'reward.amount', 'control')
   try {
     await db.user.update({
       where: { id: userId },
@@ -227,7 +234,7 @@ async function _handleCurriculumComplete(userId, ioRef) {
       })
     }
 
-    logger.info({ userId, reward }, 'Curriculum complete — TC awarded + Specialize start emitted')
+    logger.info({ userId, reward, variant }, 'Curriculum complete — TC awarded + Specialize start emitted')
   } catch (err) {
     logger.warn({ err, userId }, 'Curriculum-complete reward failed (non-fatal)')
   }

@@ -264,6 +264,12 @@ export const api = {
     // computed snapshot in `now` plus the last 30 days of MetricsSnapshot
     // rows in `history` (for trend lines).
     guideMetrics: (token) => api.get('/admin/guide-metrics', token),
+
+    // Sprint 6 — Intelligent Guide v1 SystemConfig editor. GET returns the
+    // full 13-key map; PATCH accepts a partial map and returns the updated
+    // 13-key map.
+    getGuideConfig: (token)       => api.get('/admin/guide-config', token),
+    setGuideConfig: (body, token) => api.patch('/admin/guide-config', body, token),
   },
   games: {
     getReplay:    (id, token)      => api.get(`/games/${id}/replay`, token),

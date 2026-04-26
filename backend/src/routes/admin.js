@@ -1198,6 +1198,109 @@ router.patch('/replay-config', async (req, res, next) => {
   }
 })
 
+// ─── Intelligent Guide v1 SystemConfig ───────────────────────────────────────
+//
+// Sprint 6 (§8.4 / Sprint6_Kickoff §3.4): inline-edit the v1 Guide tunables
+// from the admin dashboard so reward sizes, the release flag, etc. can be
+// tuned without a deploy.
+//
+// Spec table is the single source of truth — used by both GET (returns
+// defaults when a key isn't seeded yet) and PATCH (validates types + ranges
+// + enum membership). guide.cup.sizeEntrants is reserved/informational in v1
+// because the cup spawn logic hardcodes the slot mix; PATCH rejects writes.
+
+const TIER_VALUES = ['novice', 'intermediate', 'advanced', 'master']
+
+const GUIDE_CONFIG_SPEC = {
+  'guide.v1.enabled':                                 { type: 'boolean',     default: true        },
+  'guide.rewards.hookComplete':                       { type: 'integer',     default: 20,  min: 0, max: 1000 },
+  'guide.rewards.curriculumComplete':                 { type: 'integer',     default: 50,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstSpecializeAction':    { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstRealTournamentWin':   { type: 'integer',     default: 25,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstNonDefaultAlgorithm': { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstTemplateClone':       { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.quickBot.defaultTier':                       { type: 'enum',        default: 'novice',       enum: TIER_VALUES },
+  'guide.quickBot.firstTrainingTier':                 { type: 'enum',        default: 'intermediate', enum: TIER_VALUES },
+  'guide.cup.sizeEntrants':                           { type: 'integer',     default: 4,   readOnly: true   },
+  'guide.cup.retentionDays':                          { type: 'integer',     default: 30,  min: 1, max: 365 },
+  'guide.demo.ttlMinutes':                            { type: 'integer',     default: 60,  min: 5, max: 1440 },
+  'metrics.internalEmailDomains':                     { type: 'stringArray', default: []                    },
+}
+
+function _validateGuideConfigValue(key, raw) {
+  const spec = GUIDE_CONFIG_SPEC[key]
+  if (!spec) return { ok: false, error: `Unknown guide-config key "${key}"` }
+  if (spec.readOnly) return { ok: false, error: `"${key}" is read-only in v1` }
+
+  if (spec.type === 'boolean') {
+    if (typeof raw !== 'boolean') return { ok: false, error: `"${key}" must be a boolean` }
+    return { ok: true, value: raw }
+  }
+  if (spec.type === 'integer') {
+    const n = typeof raw === 'number' ? raw : parseInt(raw, 10)
+    if (!Number.isFinite(n) || !Number.isInteger(n)) return { ok: false, error: `"${key}" must be an integer` }
+    if (spec.min !== undefined && n < spec.min) return { ok: false, error: `"${key}" must be >= ${spec.min}` }
+    if (spec.max !== undefined && n > spec.max) return { ok: false, error: `"${key}" must be <= ${spec.max}` }
+    return { ok: true, value: n }
+  }
+  if (spec.type === 'enum') {
+    if (!spec.enum.includes(raw)) return { ok: false, error: `"${key}" must be one of: ${spec.enum.join(', ')}` }
+    return { ok: true, value: raw }
+  }
+  if (spec.type === 'stringArray') {
+    if (!Array.isArray(raw)) return { ok: false, error: `"${key}" must be an array` }
+    const cleaned = raw.map(s => String(s ?? '').trim()).filter(Boolean)
+    return { ok: true, value: cleaned }
+  }
+  return { ok: false, error: `"${key}" has an unsupported spec type` }
+}
+
+async function _readGuideConfigMap() {
+  const out = {}
+  await Promise.all(Object.entries(GUIDE_CONFIG_SPEC).map(async ([key, spec]) => {
+    out[key] = await getSystemConfig(key, spec.default)
+  }))
+  return out
+}
+
+/**
+ * GET /api/v1/admin/guide-config
+ * Returns the full 13-key map of Intelligent Guide v1 SystemConfig values
+ * (with defaults filled in from the spec table when a key hasn't been seeded
+ * yet).
+ */
+router.get('/guide-config', async (_req, res, next) => {
+  try {
+    res.json({ config: await _readGuideConfigMap() })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/guide-config
+ * Body: `{ "<key>": <value>, ... }` — partial map. Each key is validated
+ * against `GUIDE_CONFIG_SPEC`; any unknown / read-only / out-of-range value
+ * yields a 400 with no writes (all-or-nothing). Returns the full updated map.
+ */
+router.patch('/guide-config', async (req, res, next) => {
+  try {
+    const body = req.body || {}
+    const updates = []
+    for (const [key, raw] of Object.entries(body)) {
+      const r = _validateGuideConfigValue(key, raw)
+      if (!r.ok) return res.status(400).json({ error: r.error })
+      updates.push([key, r.value])
+    }
+    for (const [key, value] of updates) {
+      await setSystemConfig(key, value)
+    }
+    res.json({ config: await _readGuideConfigMap() })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── Feedback management (admin mirror) ──────────────────────────────────────
 
 /**
