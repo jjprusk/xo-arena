@@ -5,19 +5,19 @@
 
 > Phases are sequential; items within a phase can run in parallel unless noted.
 
-## Status at a glance (2026-04-23)
+## Status at a glance (2026-04-26)
 
 | Phase | Status | Notes |
 |---|---|---|
-| 1 - Foundation (SDK + botInterface + XO refactor) | **done** (69/75) | Tail items in 1.4 / 1.5 / 1.7 are optional polish. |
+| 1 - Foundation (SDK + botInterface + XO refactor) | **done** (71/71) | Complete. (Four registry-switch items relocated to Phase 7.2.) |
 | 2 - Platform Consolidation (rebrand + nav) | **done** (44/44) | Complete. |
-| 3 - Frontend Retirement, Tables Page, Platform Shell | in progress (58/67) | 3.0-3.5 complete. 3.6 (multi-seat sit-down) + 3.7 (rendered-table polish) intentionally deferred until Poker lands. |
-| 3.7a - Pre-prod cleanups | **done** (25/28) | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .2 frontend follow-up (deferred to 3.8 redesign), .5 cosmetic built-in-bot polish. |
-| 3.8 - Multi-Skill Bots | not started (0/24) | Next up. Must ship before Phase 4 so Connect4 can add skills to existing bot identities instead of spawning duplicate bot rows. |
+| 3 - Frontend Retirement, Tables Page, Platform Shell | **done** (58/58) | 3.0-3.5 complete. (3.6 multi-seat shell relocated to Phase 5.0; 3.7 rendered-table polish relocated to Cross-Cutting.) |
+| 3.7a - Pre-prod cleanups | **done** (25/27) | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .5 cosmetic built-in-bot polish (optional). (Frontend follow-up from .2 relocated to 3.8.3.) |
+| 3.8 - Multi-Skill Bots | in progress (8/25) | Backend additive layer shipped on `dev` (3.8.1 schema/seed + 4 of 6 endpoints in 3.8.2 + initial vitest). Reshape items (3.8.2.1, 3.8.2.5) and all frontend (3.8.3-3.8.5) deferred until V1 QA completes. |
 | 4 - Connect4 | not started (0/20) | Blocked on 3.8. |
-| 5 - Poker | not started (0/19) | Blocked on 3.6 + 3.8 + 4. |
+| 5 - Poker | not started (0/24) | Blocked on 3.8 + 4. (Now includes 5.0 multi-seat shell, formerly 3.6.) |
 | 6 - Pong | not started (0/18) | Blocked on 5's real-time spike review. |
-| 7 - External Developer Onboarding | not started (0/15) | Long-tail; no code dependencies. |
+| 7 - External Developer Onboarding | not started (0/11) | Long-tail; no code dependencies. Now includes 7.2 — the four XO registry-switch items relocated from 1.4. |
 
 ---
 
@@ -66,13 +66,9 @@
 - [x] Implement `botInterface.getTrainingConfig()`, `train()`, `serializeState()`, `deserializeMove()`
 - [x] Migrate GymComponent into the package as `botInterface.GymComponent`
 - [x] Migrate puzzle content into the package as `botInterface.puzzles`
-- [ ] Publish `@callidity/game-xo` to GitHub Packages — requires `CALLIDITY_NPM_TOKEN` secret (fine-grained PAT with write:packages on callidity org); see doc/Registry_Switch_Guide.md
 - [x] Verify platform loads XO via `React.lazy(() => import('@callidity/game-xo'))` — bundled path (builds clean, 37KB separate chunk)
-- [ ] Deploy `@callidity/game-xo` as a standalone local test service — deferred to Phase 7 (requires importmap for shared React instance; documented in Registry_Switch_Guide.md)
-- [ ] Verify platform loads XO via dynamic URL import — deferred to Phase 7
-- [ ] Confirm `/* @vite-ignore */` import works, CORS headers correct, SDK props cross the bundle boundary correctly — deferred to Phase 7 (importmap prerequisite)
 - [x] Document the registry switch mechanism — `doc/Registry_Switch_Guide.md`
-- [x] Run full regression — all XO functionality works through both loading paths (bundled path verified: PvP, win/draw/loss detection, marks, scores, reactions, forfeit, rematch; split-out URL path deferred to 1.4 outstanding items)
+- [x] Run full regression — all XO functionality works through both loading paths (bundled path verified: PvP, win/draw/loss detection, marks, scores, reactions, forfeit, rematch; split-out URL path lives in Phase 7 — see "XO as the registry-switch reference")
 - [x] Move `ruleBasedImplementation` from `backend/src/ai/ruleBased.js` into `packages/ai` so rule-based bot personas work in `botInterface.makeMove()`
 
 ### 1.5 Replay and live view abstraction
@@ -81,7 +77,7 @@
 - [x] Update game renderer to accept either live socket feed or recorded move array — `useReplaySDK` provides same `{ session, sdk }` interface as `useGameSDK`
 - [x] Implement replay controls: play/pause, step forward/back, scrub, variable speed — `ReplayPage` + `ReplayControls`
 - [x] Implement live view mode: input disabled, observer status signalled in UI — derived from `session.isSpectator: true`; `ReplayPage` delivers via fake spectate SDK
-- [ ] For Pong (future): confirm sampled snapshot approach (100ms intervals) works within this abstraction — deferred until Pong spike (1.8)
+- [x] For Pong (future): confirm sampled snapshot approach (100ms intervals) works within this abstraction — confirmed in Phase 1.8 spike (`doc/Pong_Spike_Findings.md` §"Replay storage")
 - [x] Test: replay a completed XO game end-to-end — play a game, visit `/replay/:id`
 
 ### 1.6 Replay retention infrastructure
@@ -105,7 +101,7 @@
 - [x] Add `algorithm String` field — records which algorithm produced the weights so `makeMove` can deserialize correctly (e.g. `'qlearning'`, `'alphazero'`)
 - [x] Migrate existing `MLModel` records — set `gameId = 'xo'`, set `botId` from `createdBy`, set `algorithm = 'qlearning'`
 - [x] Remove `eloRating` from `BotSkill` (ELO moves to `GameElo`)
-- [ ] Run and verify migration against staging DB
+- [x] Run and verify migration against staging DB — `20260414000000_phase17_bot_skill_game_elo` + `20260414120000_fix_game_elo_bot_skill_column_maps` shipped with the v1.3.0-alpha-1.x staging cycle and are live in current staging
 
 **Per-game ELO**
 - [x] Create `GameElo` model: `{ userId, gameId, rating Float, gamesPlayed Int }`
@@ -332,25 +328,6 @@
 - [x] **Active table preview thumbnail.** Render a mini `previewState` snapshot (e.g., a small XO board with current marks) on the Tables list page for ACTIVE tables. Deferred from Phase 3.2 — requires the game-specific renderer that the `<TableSurface>` component provides.
 - [x] QA: XO still plays correctly via the new shell on both desktop and mobile. _(QA_Phase_3.4 closed 2026-04-22; archived at `doc/archive/QA_Phase_3.4.md`.)_
 
-### 3.6 Multi-seat sit-down shell (infrastructure for Poker)
-
-> **Goal:** Shell gains layouts for 3–8p sit-down tables and the per-seat render slot API for hidden-info games. No user-visible change from a gameplay standpoint — this is infrastructure so Poker can land cleanly in Phase 5.
-
-- [ ] Seat position maps for 3/4/6/8p (round / oval) in the shell.
-- [ ] Per-seat render slot API — game returns content per seat, shell positions it spatially.
-- [ ] Per-seat visibility control via `getPlayerState(playerId)` — shell asks the game what to render for each seat from each viewer's POV.
-- [ ] Responsive behavior: 8p oval on desktop, compact/rotated on portrait mobile.
-- [ ] XO / Connect4 leave per-seat slots empty — no game-package changes required.
-
-### 3.7 Rendered-table polish (optional, not blocking)
-
-> Lands opportunistically after 3.5 and 3.6 once live use surfaces friction.
-
-- [ ] Sit-down animation on seat claim (Table_Paradigm §4.4 option C).
-- [ ] Showdown / chip / card animations for card games (per-game assets; arrives with Poker).
-- [ ] **ELO in seat pod.** Shell fetches `GameElo` for each seated user on table load and displays the rating below the display name. Shell owns the fetch (not the game package) via a join on `GET /api/v1/tables/:id` or a dedicated enrichment endpoint. Deferred from 3.5 — display name + avatar is sufficient for the core paradigm.
-- [ ] Any additional visual refinements from live use.
-
 ---
 
 ## Phase 3.7a — Pre-prod cleanups
@@ -382,7 +359,6 @@ Full design in `doc/Tournament_Template_Refactor_Scope.md`. Shipped in three sta
 - [x] Migration `20260423010000_bot_displayname_hybrid_unique` applied to local DB. Cleanup step deleted 344 orphan test bots (E2E / stress-test leftovers); built-in roster untouched.
 - [x] `POST /api/v1/bots` returns 409 `BOT_NAME_TAKEN` on collision (either partial unique). Other P2002 collisions (email, etc.) fall through to the generic handler.
 - [x] 3 new vitest cases cover per-owner collision, built-in collision, and the non-name P2002 fall-through.
-- [ ] **Frontend follow-up (do during Phase 3.8 Profile redesign):** bot-create form checks availability inline (debounced GET) before submit; mixed-owner lists (leaderboard, bot picker, tournament bracket) render "Rusty · @joe" / "Rusty · built-in" when multiple bots share a name in the visible set.
 
 ### 3.7a.3 Profile URL structure — done
 
@@ -429,18 +405,18 @@ Deferred to prod-bringup day. No code change in this phase.
 
 ### 3.8.1 Schema + seed
 
-- [ ] Confirm `BotSkill (botId, gameId)` unique + `BotSkill.botId` relation to `User` hold up for multi-skill. No new migration expected.
-- [ ] Update the Prisma seed to give each built-in bot (Rusty/Copper/Sterling/Magnus) exactly one XO `BotSkill` — behaviour-preserving, but structured so a Connect4 skill can be appended in Phase 4 by adding one row per bot.
-- [ ] Keep `User.botModelId` as a nullable pointer to the bot's *primary* (last-trained-or-selected) skill. Compute it at creation time, update it when the user trains or switches active skill.
+- [x] Confirm `BotSkill (botId, gameId)` unique + `BotSkill.botId` relation to `User` hold up for multi-skill. No new migration expected. *(Verified 2026-04-26 — partial unique index `(bot_id, game_id) WHERE bot_id IS NOT NULL` exists at DB and Prisma level. `BotSkill.botId` is intentionally a loose String pointer matching the existing `User.botModelId` pattern; cascade safety handled in DELETE-bot route.)*
+- [x] Update the Prisma seed to give each built-in bot (Rusty/Copper/Sterling/Magnus) exactly one XO `BotSkill` — behaviour-preserving, but structured so a Connect4 skill can be appended in Phase 4 by adding one row per bot. *(BotSkill.id matches `botModelId` so the existing string pointer + new row are self-consistent.)*
+- [x] Keep `User.botModelId` as a nullable pointer to the bot's *primary* (last-trained-or-selected) skill. *(Documented via Prisma `///` doc comment on the field; semantics formalised. Wiring to update on train/switch lands with 3.8.4 frontend work.)*
 
 ### 3.8.2 Backend — bots + skills API
 
-- [ ] `POST /api/v1/bots` — accepts `{ name, avatarUrl, competitive }` only. No algorithm/game at this step. Creates a skill-less bot. `botModelId` starts null.
-- [ ] `POST /api/v1/bots/:botId/skills` — body `{ gameId, algorithm, modelType }`. Creates a BotSkill, sets `botModelId = newSkill.id` if it's the bot's first. Idempotent on `(botId, gameId)` — second call returns existing skill.
-- [ ] `GET /api/v1/bots/:botId` — includes `skills: BotSkill[]` with per-skill ELO joined from `GameElo (userId=botId, gameId=skill.gameId)`.
-- [ ] `DELETE /api/v1/bots/:botId/skills/:skillId` — removes one skill. If the deleted skill was `botModelId`, repoint to any remaining skill or null.
-- [ ] Tournament registration: validate that the picked bot has a `BotSkill` for the tournament's `gameId`; return a clear 400 if not.
-- [ ] `GET /api/v1/bots?gameId=X` — list helper for community bot pickers, filters to bots that have a skill for `X`.
+- [ ] `POST /api/v1/bots` — accepts `{ name, avatarUrl, competitive }` only. No algorithm/game at this step. Creates a skill-less bot. `botModelId` starts null. *(Deferred until V1 QA completes — reshapes the existing endpoint that the Quick Bot wizard depends on.)*
+- [x] `POST /api/v1/bots/:botId/skills` — body `{ gameId, algorithm, modelType }`. Creates a BotSkill, sets `botModelId = newSkill.id` if it's the bot's first. Idempotent on `(botId, gameId)` — second call returns existing skill.
+- [x] `GET /api/v1/bots/:botId` — includes `skills: BotSkill[]` with per-skill ELO joined from `GameElo (userId=botId, gameId=skill.gameId)`.
+- [x] `DELETE /api/v1/bots/:botId/skills/:skillId` — removes one skill. If the deleted skill was `botModelId`, repoint to any remaining skill or null. *(Also fixed `DELETE /api/v1/bots/:id` to sweep all the bot's BotSkill rows, not just the primary.)*
+- [ ] Tournament registration: validate that the picked bot has a `BotSkill` for the tournament's `gameId`; return a clear 400 if not. *(Deferred until V1 QA completes — could reject in-flight QA enrollments.)*
+- [x] `GET /api/v1/bots?gameId=X` — list helper for community bot pickers, filters to bots that have a skill for `X`.
 
 ### 3.8.3 Frontend — Profile / bot creation
 
@@ -448,6 +424,7 @@ Deferred to prod-bringup day. No code change in this phase.
 - [ ] Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
 - [ ] "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`.
 - [ ] **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button in addition to the skill pills. Also add a "Gym ⚡" link in the My Bots section header. Closes the navigation gap identified in Phase 3.7a audit — today returning users with dismissed journey and no "AI Training" slot can't reach `/gym` from Profile. Deferred to 3.8 (not 3.7a) because the bot card is redesigned here; doing it twice would be waste.
+- [ ] **Bot-name uniqueness UX (relocated from 3.7a.2):** bot-create form checks availability inline (debounced GET) before submit; mixed-owner lists (leaderboard, bot picker, tournament bracket) render "Rusty · @joe" / "Rusty · built-in" when multiple bots share a name in the visible set. Backend partial-unique indexes already enforce the rule; this closes the UX side.
 
 ### 3.8.4 Frontend — Gym
 
@@ -464,10 +441,10 @@ Deferred to prod-bringup day. No code change in this phase.
 
 ### 3.8.6 QA + tests
 
-- [ ] Vitest: `POST /bots` creates skill-less bot; `POST /bots/:id/skills` creates + repoints `botModelId`; duplicate skill returns 400; deleting the primary skill repoints.
-- [ ] Vitest: tournament registration rejects bot lacking the tournament's skill.
-- [ ] Playwright smoke.journey: add a case where a user creates a bot, adds an XO skill, enters XO match vs community bot — proves the two-step flow end-to-end.
-- [ ] Manual: Rusty with an XO skill still plays a PvB match identically to v1.28.
+- [x] Vitest: `POST /bots/:id/skills` creates + repoints `botModelId`; idempotent on `(botId, gameId)`; deleting the primary skill repoints to next remaining or null. *(21 new cases in `bots.test.js`; the `POST /bots` skill-less-bot reshape is deferred so its case lands with that work.)*
+- [ ] Vitest: tournament registration rejects bot lacking the tournament's skill. *(Deferred — pairs with the deferred 3.8.2.5 endpoint validation.)*
+- [ ] Playwright smoke.journey: add a case where a user creates a bot, adds an XO skill, enters XO match vs community bot — proves the two-step flow end-to-end. *(Deferred — depends on 3.8.3 UI.)*
+- [ ] Manual: Rusty with an XO skill still plays a PvB match identically to v1.28. *(Pending — run after V1 QA completes.)*
 
 ---
 
@@ -515,6 +492,16 @@ Deferred to prod-bringup day. No code change in this phase.
 ## Phase 5 — Poker
 
 > **Goal:** Third game ships. Introduces variable player counts, hidden information, and multi-player bot dynamics.
+
+### 5.0 Multi-seat sit-down shell (relocated from 3.6)
+
+> Shell gains layouts for 3–8p sit-down tables and the per-seat render slot API for hidden-info games. No user-visible change from a gameplay standpoint — this is infrastructure so Poker can land cleanly. Was parked in Phase 3.6 until Poker was imminent.
+
+- [ ] Seat position maps for 3/4/6/8p (round / oval) in the shell.
+- [ ] Per-seat render slot API — game returns content per seat, shell positions it spatially.
+- [ ] Per-seat visibility control via `getPlayerState(playerId)` — shell asks the game what to render for each seat from each viewer's POV.
+- [ ] Responsive behavior: 8p oval on desktop, compact/rotated on portrait mobile.
+- [ ] XO / Connect4 leave per-seat slots empty — no game-package changes required.
 
 ### 5.1 SDK extension — hidden information
 
@@ -580,6 +567,8 @@ Deferred to prod-bringup day. No code change in this phase.
 
 > **Goal:** Open the platform to approved third-party game and bot developers.
 
+### 7.1 SDK + documentation
+
 - [ ] Publish `@callidity/game-sdk` as a standalone npm package (TypeScript types, helpers, full contract)
 - [ ] Publish SDK + botInterface documentation publicly
 - [ ] Write game developer guide: contract spec, SDK usage, botInterface implementation, publish workflow
@@ -587,6 +576,15 @@ Deferred to prod-bringup day. No code change in this phase.
 - [ ] Define submission and review process for external games and bots
 - [ ] Evaluate opening GitHub Packages scope or migrating to public npm registry
 - [ ] Onboard first external developer (game or bot) as a pilot
+
+### 7.2 XO as the registry-switch reference (relocated from 1.4)
+
+> Validates the URL-based dynamic-import path that external developers will use. The bundled path already works; this proves the same package can be consumed remotely.
+
+- [ ] Publish `@callidity/game-xo` to GitHub Packages — requires `CALLIDITY_NPM_TOKEN` secret (fine-grained PAT with write:packages on callidity org); see `doc/Registry_Switch_Guide.md`
+- [ ] Deploy `@callidity/game-xo` as a standalone local test service — requires importmap for shared React instance (documented in `doc/Registry_Switch_Guide.md`)
+- [ ] Verify platform loads XO via dynamic URL import
+- [ ] Confirm `/* @vite-ignore */` import works, CORS headers correct, SDK props cross the bundle boundary correctly
 
 ---
 
@@ -598,6 +596,11 @@ Deferred to prod-bringup day. No code change in this phase.
 - [ ] Mobile QA: Tables page, game shell focused/chrome modes, Gym, replay controls
 - [ ] Performance: verify `React.lazy` chunking — each game is a separate bundle
 - [ ] Bot leaderboard: per-game bot rankings, ELO history, training stats
+- [ ] **Rendered-table polish (relocated from 3.7).** Lands opportunistically once live use surfaces friction:
+  - Sit-down animation on seat claim (Table_Paradigm §4.4 option C)
+  - Showdown / chip / card animations for card games (per-game assets; arrives with Poker)
+  - **ELO in seat pod** — shell fetches `GameElo` for each seated user on table load and displays the rating below the display name. Shell owns the fetch (not the game package) via a join on `GET /api/v1/tables/:id` or a dedicated enrichment endpoint. Deferred from 3.5 — display name + avatar is sufficient for the core paradigm.
+  - Any additional visual refinements from live use
 - [ ] **Cross-tab session-switch banner.** When a user signs in as a different account in another tab (same browser/origin), the cookies + localStorage session cache are shared, so every other tab silently swaps to the new user on the next `useOptimisticSession` poll (≤60s). This is correct HTTP/cookie behavior — not fixable — but it is confusing. Detect when the polled `session.user.id` differs from the previously-cached id on the same tab, and surface a banner ("Signed-in account changed in another tab — now signed in as **B**. Refresh to continue.") instead of silently mutating the UI. Small polish; likely fits in 30 lines in `useOptimisticSession` + a banner component.
 - [ ] **socket.io multi-machine routing on Fly.io.** As of 2026-04-16 staging has been manually scaled to 1 backend machine because socket.io polling transport + Fly.io round-robin load balancing causes a 400-Bad-Request cascade on every other poll (each polling request can land on a different machine, but only the issuing machine knows the SID). Current workaround: `flyctl scale count 1 -a xo-backend-staging`. Real fixes (pick one before scaling back to N machines in prod):
   - **Sticky sessions via `fly-replay`.** Add backend middleware that detects a polling request carrying an SID owned by a different instance and sets `fly-replay: instance=<owner>` so Fly's edge proxy re-routes. Requires tracking SID-to-instance-id mapping (e.g., via Redis with the existing adapter).

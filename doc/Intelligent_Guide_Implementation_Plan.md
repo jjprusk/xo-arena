@@ -192,13 +192,6 @@ Sprint 11 (v1.1 polish + release)
 
 ---
 
-### Deferred from Sprint 1 (by design — parked for the right sprint)
-
-- **Step 6 trigger** (tournament entry for *non-Cup* tournaments) — requires upgrading the `tournament:participant:joined` event payload to include userId so `tournamentBridge.js` can fire `completeStep(userId, 6)`. Moved to **Sprint 4** alongside Curriculum Cup, where the clone endpoint fires step 6 directly on the same pass.
-- **Step 2 and Step 5 triggers** (Hook demo-watch + Curriculum spar) — require features that ship in Sprints 3 & 4 respectively (Demo Table macro §5.1, public Spar endpoint §5.2). Trigger wiring lands with those features.
-
----
-
 ### Sprint 2 — Phase 0: Visitor → Registered User
 
 **Sprint goal:** the highest-leverage work in v1 — convert landing visitors into registered users with a live demo, guest mode, and contextual signup.
@@ -611,8 +604,7 @@ If any of these fail, stop and fix v1 before starting v1.1.
   - [ ] GuideOrb pulse animation on receipt
   - [ ] Non-modal slide-in panel escalation after 2 min of inaction
   - [ ] SystemConfig key: `guide.inactivityNudgeDays` (14)
-- [ ] Backfill script for historical metrics (runs once, populates snapshots from raw events)
-- [ ] Dashboard cohort slicer: add histograms to the cohort view
+- [ ] Dashboard cohort slicer: add per-bucket histograms to the cohort view (basic slicer shipped Sprint 6)
 
 **Testing requirements:**
 
@@ -857,7 +849,6 @@ Backend: 1092 tests green (+11 new). Landing: 94 tests green (+23 new).
 - [ ] 14-day inactivity nudge
 - [ ] Orb pulse animation
 - [ ] Slide-in panel escalation
-- [ ] Backfill script for historical metrics
 - [ ] Re-engagement tests
 - [ ] Staging deploy + smoke
 - [ ] **Sprint 10 DoD passed**

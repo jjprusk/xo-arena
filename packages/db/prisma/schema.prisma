@@ -28,6 +28,13 @@ model User {
   botCompetitive         Boolean                  @default(false)
   botInTournament        Boolean                  @default(false)
   botLimit               Int?
+  /// Nullable pointer to the bot's *primary* (or last-trained) skill — see
+  /// Phase 3.8 in Platform_Implementation_Plan.md. Source of truth for the
+  /// full skill set is `BotSkill.findMany({ where: { botId } })`; this field
+  /// is a UI-convenience alias the runtime reads via
+  /// `botGameRunner.parseBotModelId` (built-in bots use the well-known
+  /// `builtin:minimax:<tier>` form). Set on first skill add, repointed on
+  /// training completion or when the primary skill is deleted.
   botModelId             String?                  @unique
   botModelType           String?
   botOwnerId             String?
