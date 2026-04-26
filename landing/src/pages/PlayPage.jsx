@@ -7,6 +7,9 @@ import { getCommunityBot } from '../lib/communityBotCache.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import { perfMark, perfDumpSummary } from '../lib/perfLog.js'
 import { recordGuestHookStep1 } from '../lib/guestMode.js'
+import { useGuideStore } from '../store/guideStore.js'
+import { deriveCurrentPhase } from '../components/guide/JourneyCard.jsx'
+import SignInModal from '../components/ui/SignInModal.jsx'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 // Note: we deliberately do NOT statically import `meta` from @callidity/game-xo
@@ -68,26 +71,36 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     })
   }, [sdk])
 
-  const tablesHref = tournamentId ? `/tournaments/${tournamentId}` : '/tables'
+  // Phase-aware leave destination. While the user is still in the Hook phase
+  // (or is a guest, who derives to 'hook' by default), dropping them in the
+  // /tables list after a quick PvAI game is a flat dead-end — the welcome
+  // funnel is supposed to lead back to the landing page. Once they've cleared
+  // Hook (Curriculum / Specialize), /tables is the right destination because
+  // they're navigating around an arena, not being onboarded.
+  const completedSteps = useGuideStore(s => s.journeyProgress?.completedSteps ?? [])
+  const inHookPhase = deriveCurrentPhase(completedSteps) === 'hook'
+  const leaveHref = tournamentId
+    ? `/tournaments/${tournamentId}`
+    : (inHookPhase ? '/' : '/tables')
 
   // Register leave-table callback so sdk.leaveTable() navigates away
   useEffect(() => {
     sdk._onGameEnd(({ leave } = {}) => {
-      if (leave) navigate(tablesHref, { replace: true })
+      if (leave) navigate(leaveHref, { replace: true })
     })
   }, [sdk]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abandoned → navigate away after brief notice
   useEffect(() => {
     if (!abandoned) return
-    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
+    const id = setTimeout(() => navigate(leaveHref, { replace: true }), 3000)
     return () => clearTimeout(id)
   }, [abandoned]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opponent left post-game → navigate after brief notice
   useEffect(() => {
     if (!opponentLeft) return
-    const id = setTimeout(() => navigate(tablesHref, { replace: true }), 3000)
+    const id = setTimeout(() => navigate(leaveHref, { replace: true }), 3000)
     return () => clearTimeout(id)
   }, [opponentLeft]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -107,6 +120,34 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     if (!isGuestPvAI) return
     if (gameState.winner || gameState.isDraw) recordGuestHookStep1()
   }, [isGuestPvAI, gameState.winner, gameState.isDraw])
+
+  // Post-game signup CTA for guest PvAI — Phase 0's high-intent conversion
+  // moment. The hero ladder on / is the other signup surface; this one fires
+  // right after the player has invested in a finished game.
+  //
+  // UX shape: top-of-viewport toast that appears 2s AFTER the game ends (so
+  // the result + side panel get their moment uncluttered), then pulses for
+  // ~5s to grab attention, then fades to a low-opacity ambient state (still
+  // clickable, not blocking). Dismiss × removes entirely. Resets on rematch.
+  const [signupOpen, setSignupOpen]           = useState(false)
+  const [signupDismissed, setSignupDismissed] = useState(false)
+  const [ctaArmed, setCtaArmed]               = useState(false)
+  const [ctaFaded, setCtaFaded]               = useState(false)
+
+  const gameFinished = phase === 'finished' && (gameState.winner || gameState.isDraw)
+  const showGuestSignupCta =
+    isGuestPvAI && gameFinished && ctaArmed && !signupOpen && !signupDismissed
+
+  useEffect(() => {
+    if (!isGuestPvAI || !gameFinished) { setCtaArmed(false); setCtaFaded(false); return }
+    const armTimer  = setTimeout(() => setCtaArmed(true),  2000)
+    const fadeTimer = setTimeout(() => setCtaFaded(true),  7000)
+    return () => { clearTimeout(armTimer); clearTimeout(fadeTimer) }
+  }, [isGuestPvAI, gameFinished])
+
+  useEffect(() => {
+    if (phase === 'playing') setSignupDismissed(false)
+  }, [phase])
 
   // Tournament series complete screen
   if (seriesResult) {
@@ -135,7 +176,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
           Opponent has left the table
         </p>
         <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
-          Returning to Tables…
+          Returning…
         </p>
       </div>
     )
@@ -171,19 +212,70 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     const liveSpectatorCount = session?.settings?.spectatorCount ?? spectatingCount
 
     return (
-      <PlatformShell
-        gameMeta={xoMeta}
-        session={session}
-        phase={phase}
-        gameState={gameState}
-        spectatorCount={liveSpectatorCount}
-        tournamentId={tournamentId}
-        backHref={tournamentId ? `/tournaments/${tournamentId}` : '/'}
-      >
-        {(phase === 'playing' || phase === 'finished') && (
-          <XOGame session={session} sdk={sdk} />
+      <>
+        <PlatformShell
+          gameMeta={xoMeta}
+          session={session}
+          phase={phase}
+          gameState={gameState}
+          spectatorCount={liveSpectatorCount}
+          tournamentId={tournamentId}
+          backHref={leaveHref}
+          minimalChrome={isGuestPvAI}
+        >
+          {(phase === 'playing' || phase === 'finished') && (
+            <XOGame session={session} sdk={sdk} />
+          )}
+        </PlatformShell>
+
+        {showGuestSignupCta && (
+          <div
+            className={`fixed left-0 right-0 z-40 px-3 sm:px-4 pointer-events-none transition-opacity duration-700 animate-fade-up ${ctaFaded ? 'opacity-50 hover:opacity-100' : 'opacity-100'}`}
+            style={{ top: '4.5rem' }}
+            data-testid="guest-signup-cta"
+          >
+            <div
+              className="pointer-events-auto mx-auto max-w-sm flex items-center gap-2 px-3 py-2.5 rounded-xl shadow-2xl"
+              style={{
+                backgroundColor: 'var(--bg-surface)',
+                border:          '2px solid var(--color-primary)',
+              }}
+            >
+              <span
+                className="text-sm font-medium flex-1 min-w-0"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                Like this? Save your progress.
+              </span>
+              <button
+                type="button"
+                onClick={() => setSignupOpen(true)}
+                className={`btn btn-primary btn-sm whitespace-nowrap ${ctaFaded ? '' : 'guide-pulse'}`}
+                data-cta="build-your-own-bot"
+              >
+                Build your own bot →
+              </button>
+              <button
+                type="button"
+                onClick={() => setSignupDismissed(true)}
+                aria-label="Dismiss"
+                className="ml-1 px-2 text-xl leading-none flex-shrink-0"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
         )}
-      </PlatformShell>
+
+        {signupOpen && (
+          <SignInModal
+            onClose={() => setSignupOpen(false)}
+            defaultView="sign-up"
+            context="build-bot"
+          />
+        )}
+      </>
     )
   }
 

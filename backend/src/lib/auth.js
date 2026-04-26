@@ -101,7 +101,12 @@ export const auth = betterAuth({
   // Email + password is built-in — no plugin import needed
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,
+    // Phase 0 (Intelligent Guide v1, §3.5.4): deferred verification. Signup
+    // creates an authenticated session immediately so the new account can
+    // explore the platform; tournament entry is the gated action and
+    // enforces emailVerified at its own boundary. The amber EmailVerifyBanner
+    // surfaces the prompt non-blockingly until they verify.
+    requireEmailVerification: false,
     password: { hash: hashPassword, verify: verifyPassword },
     sendResetPassword: async ({ user, url }) => {
       await sendEmail({
@@ -115,6 +120,10 @@ export const auth = betterAuth({
     },
   },
   emailVerification: {
+    // Required when requireEmailVerification is false — otherwise no
+    // verification email is sent at signup and the Resend banner button has
+    // nothing to re-send.
+    sendOnSignUp: true,
     sendVerificationEmail: async ({ user, url }) => {
       await sendEmail({
         to: user.email,

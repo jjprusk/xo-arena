@@ -88,4 +88,49 @@ describe('HomePage — Phase 0 hero', () => {
     // The CTA itself stays clickable (no error thrown rendering the new instance).
     expect(before).toBeDefined()
   })
+
+  // CTA-emphasis swap: a true first-time guest should see Play as the
+  // primary call (blue gradient); after they've completed the first PvAI
+  // game, the Build → signup CTA takes over as primary.
+  describe('CTA emphasis (guest pre/post first PvAI game)', () => {
+    beforeEach(() => {
+      window.localStorage.clear()
+    })
+
+    it('pre-play guest: Play is primary, Build is secondary', () => {
+      renderPage()
+      const playLink   = screen.getByRole('link',   { name: /play against a bot/i })
+      const buildBtn   = screen.getByRole('button', { name: /build your own bot/i })
+      expect(playLink.className).toContain('btn-primary')
+      expect(playLink.className).not.toContain('btn-secondary')
+      expect(buildBtn.className).toContain('btn-secondary')
+      expect(buildBtn.className).not.toContain('btn-primary')
+    })
+
+    it('post-play guest: Build is primary, Play is secondary', () => {
+      window.localStorage.setItem(
+        'guideGuestJourney',
+        JSON.stringify({ hookStep1CompletedAt: '2026-04-25T12:00:00.000Z' })
+      )
+      renderPage()
+      const playLink = screen.getByRole('link',   { name: /play against a bot/i })
+      const buildBtn = screen.getByRole('button', { name: /build your own bot/i })
+      expect(buildBtn.className).toContain('btn-primary')
+      expect(buildBtn.className).not.toContain('btn-secondary')
+      expect(playLink.className).toContain('btn-secondary')
+      expect(playLink.className).not.toContain('btn-primary')
+    })
+
+    it('signed-in user: Build (link to /gym) is primary regardless of localStorage', () => {
+      useOptimisticSession.mockReturnValue({
+        data: { user: { id: 'u1', email: 'u@x.com' } },
+        isPending: false,
+      })
+      renderPage()
+      const playLink  = screen.getByRole('link', { name: /play against a bot/i })
+      const buildLink = screen.getByRole('link', { name: /build your own bot/i })
+      expect(buildLink.className).toContain('btn-primary')
+      expect(playLink.className).toContain('btn-secondary')
+    })
+  })
 })

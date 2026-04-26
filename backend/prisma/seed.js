@@ -26,6 +26,34 @@ const CONFIG_DEFAULTS = [
   { key: 'guide.rewards.curriculumComplete',  value: 50  },  // TC at end-of-Curriculum (step 7)
   { key: 'guide.quickBot.defaultTier',        value: 'novice' },        // Quick Bot starting tier — Rusty-equivalent
   { key: 'guide.quickBot.firstTrainingTier',  value: 'intermediate' },  // Tier after first training run — Copper-equivalent
+
+  // Discovery rewards — Sprint 5 (Intelligent_Guide_Requirements.md §5.7 / §8.4).
+  // One-shot grants outside the linear journey; idempotent per user.
+  { key: 'guide.rewards.discovery.firstSpecializeAction',    value: 10 },
+  { key: 'guide.rewards.discovery.firstRealTournamentWin',   value: 25 },
+  { key: 'guide.rewards.discovery.firstNonDefaultAlgorithm', value: 10 },
+  { key: 'guide.rewards.discovery.firstTemplateClone',       value: 10 },
+
+  // Metrics pollution prevention — Sprint 5 (Intelligent_Guide_Requirements.md §2 / §8.4).
+  // Email domains here cause new accounts to be flagged isTestUser=true on
+  // creation. Admin opt-in toggle in Settings can override per-user later.
+  // Default empty — site operator fills in via admin UI / um CLI.
+  { key: 'metrics.internalEmailDomains', value: [] },
+
+  // Cup + demo + flag — Sprint 6 (§8.4). Migrating these from in-code
+  // constants so the admin SystemConfig UI can tune them without a deploy.
+  // guide.cup.sizeEntrants is reserved/informational in v1 — the cup spawns
+  // with a fixed 4-bot bracket (caller + 3 opponents) because the opponent
+  // mix is part of the curriculum design. v1.1 wires it as a true tunable.
+  { key: 'guide.cup.sizeEntrants',  value: 4  },
+  { key: 'guide.cup.retentionDays', value: 30 },
+  { key: 'guide.demo.ttlMinutes',   value: 60 },
+  // V1 release gate. Default true so dev/staging keep working as-is; the
+  // production deploy seeds this off, then admin flips on once metrics
+  // dashboards confirm a healthy first-day funnel. When off, the journey
+  // step + discovery-reward grant calls become no-ops — the rest of the
+  // platform (games, bots, tournaments) still works.
+  { key: 'guide.v1.enabled',        value: true },
 ]
 
 // ─── Built-in bot definitions ──────────────────────────────────────────────
@@ -80,14 +108,17 @@ async function main() {
     }
     console.log('✓ System config defaults')
 
-    // 2. System account — the owner of all built-in bots
+    // 2. System account — the owner of all built-in bots. Flagged
+    // isTestUser=true per §2 metrics-pollution prevention so any stray
+    // activity attributed to it is excluded from dashboards.
     const systemAccount = await db.user.upsert({
       where:  { username: 'system' },
-      update: {},
+      update: { isTestUser: true },
       create: {
         username:    'system',
         email:       'system@xo-arena.internal',
         displayName: 'System',
+        isTestUser:  true,
       },
     })
     console.log('✓ System account:', systemAccount.id)

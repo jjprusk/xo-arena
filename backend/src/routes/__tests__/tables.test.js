@@ -171,9 +171,16 @@ describe('GET /api/v1/tables', () => {
     const res = await request(app).get('/api/v1/tables')
     expect(res.status).toBe(200)
     expect(res.body.tables).toHaveLength(1)
-    // optionalAuth sets req.auth = null by default in the mock, so guest path
+    // optionalAuth sets req.auth = null by default in the mock, so guest path.
+    // The Demo Table macro (§5.1) adds an isDemo guard on every list query
+    // unless ?mine=true; for guests, only "isDemo:false" qualifies.
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { isPrivate: false },
+      where: {
+        AND: [
+          { isPrivate: false },
+          { OR: [{ isDemo: false }] },
+        ],
+      },
     }))
   })
 
@@ -188,9 +195,19 @@ describe('GET /api/v1/tables', () => {
     expect(res.status).toBe(200)
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        OR: [
-          { isPrivate: false },
-          { createdById: 'ba_user_1' },
+        AND: [
+          {
+            OR: [
+              { isPrivate: false },
+              { createdById: 'ba_user_1' },
+            ],
+          },
+          {
+            OR: [
+              { isDemo: false },
+              { createdById: 'ba_user_1' },
+            ],
+          },
         ],
       },
     }))
@@ -223,6 +240,7 @@ describe('GET /api/v1/tables', () => {
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { AND: [
         { isPrivate: false },
+        { OR: [{ isDemo: false }] },
         { status: 'ACTIVE' },
         { gameId: 'connect4' },
       ] },
@@ -244,6 +262,7 @@ describe('GET /api/v1/tables', () => {
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { AND: [
         { isPrivate: false },
+        { OR: [{ isDemo: false }] },
         { status: { in: ['FORMING', 'ACTIVE'] } },
       ] },
     }))
@@ -257,6 +276,7 @@ describe('GET /api/v1/tables', () => {
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { AND: [
         { isPrivate: false },
+        { OR: [{ isDemo: false }] },
         { createdAt: { gte: new Date(since) } },
       ] },
     }))
@@ -274,6 +294,7 @@ describe('GET /api/v1/tables', () => {
     expect(db.table.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { AND: [
         { isPrivate: false },
+        { OR: [{ isDemo: false }] },
         { OR: [
           { seats: { array_contains: [{ userId: 'ba_alice', status: 'occupied' }] } },
         ] },

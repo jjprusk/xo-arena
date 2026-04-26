@@ -92,16 +92,30 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1 }) {
-    const name = mountainPool.acquire()
-    if (!name) throw new Error('No mountain names available for bot game')
+  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, displayName: explicitDisplayName = null, mountainName: explicitMountainName = null, isSpar = false, sparUserId = null }) {
+    // Demo Table macro (§5.1) pre-allocates a slug + displayName so the Table
+    // row's slug matches the bot-game slug. The caller passes `mountainName`
+    // to transfer ownership — the runner releases it on game close exactly
+    // like a self-acquired name.
+    let name
+    let slug
+    let displayName
+    if (explicitSlug) {
+      name = explicitMountainName  // may be null if caller doesn't want pool tracking
+      slug = explicitSlug
+      displayName = explicitDisplayName ?? MountainNamePool.fromSlug(explicitSlug)
+    } else {
+      name = mountainPool.acquire()
+      if (!name) throw new Error('No mountain names available for bot game')
+      slug = MountainNamePool.toSlug(name)
+      displayName = `Mt. ${name}`
+    }
 
-    const slug = MountainNamePool.toSlug(name)
     const now = Date.now()
 
     const game = {
       slug,
-      displayName: `Mt. ${name}`,
+      displayName,
       name,
       bot1,   // plays X
       bot2,   // plays O
@@ -123,6 +137,8 @@ class BotGameRunner {
       seriesDraws: 0,
       seriesGamesPlayed: 0,
       moves: [],  // compact move stream for replay
+      isSpar,
+      sparUserId,  // owner of bot1 — receives Hook step 5 credit on series completion
     }
 
     this._games.set(slug, game)
@@ -254,6 +270,7 @@ class BotGameRunner {
         tournamentId: game.tournamentId ?? null,
         tournamentMatchId: game.tournamentMatchId ?? null,
         moveStream: game.moves.length ? game.moves : null,
+        isSpar: !!game.isSpar,
       }).catch(err => logger.warn({ err, slug }, 'Failed to write per-game bot record'))
 
       // Update series counters after this game
@@ -354,8 +371,53 @@ class BotGameRunner {
       }).catch(err => logger.warn({ err }, 'Failed to clear botInTournament flag after tournament game'))
     }
 
+    // Demo Table macro (§5.1): if a Table row was created with this bot game's
+    // slug, mark it COMPLETED so the demo-table GC sweep can delete it after
+    // the 2-min grace window. No-op for tournament/free bot games that don't
+    // have a Table row.
+    const demoTable = await db.table.findFirst({
+      where:  { slug, isDemo: true },
+      select: { id: true, status: true },
+    }).catch(() => null)
+
+    if (demoTable) {
+      if (demoTable.status !== 'COMPLETED') {
+        await db.table.update({
+          where: { id: demoTable.id },
+          data:  { status: 'COMPLETED' },
+        }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
+      }
+
+      // "Spectated to completion" — credit Hook step 2 for any authenticated
+      // viewer currently watching, even if they haven't hit the 2-min mark
+      // yet. Lazy-imported to keep this module free of journey/service deps
+      // at module-eval time.
+      try {
+        const { getPresence } = await import('./tablePresence.js')
+        const { completeStep } = await import('../services/journeyService.js')
+        const { userIds = [] } = getPresence(demoTable.id) ?? {}
+        for (const userId of userIds) {
+          completeStep(userId, 2).catch(() => {})
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
+      }
+    }
+
+    // Spar series: credit Hook step 5 to the user who initiated the spar.
+    // Lazy-imported to avoid pulling journeyService into this module's eval-
+    // time graph (mirrors the demo-table step-2 pattern above).
+    if (game.isSpar && game.sparUserId) {
+      try {
+        const { completeStep } = await import('../services/journeyService.js')
+        completeStep(game.sparUserId, 5).catch(() => {})
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Spar: step-5 credit failed')
+      }
+    }
+
     logger.info(
-      { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null },
+      { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null, isSpar: !!game.isSpar },
       'Bot series recorded'
     )
   }
@@ -424,8 +486,54 @@ class BotGameRunner {
       this._socketToGame.delete(id)
     }
     this._games.delete(slug)
-    mountainPool.release(game.name)
+    // Caller-supplied slugs (Demo Table macro) bypass the mountain pool — only
+    // release names we acquired ourselves.
+    if (game.name) mountainPool.release(game.name)
     logger.info({ slug }, 'Bot game closed')
+  }
+
+  /**
+   * Force-close an in-flight bot game by slug. Used by the Demo Table macro's
+   * "one active per user" policy: when a user starts a new demo, any prior
+   * demo game is killed first. Idempotent — no-op if the slug isn't running.
+   */
+  closeGameBySlug(slug) {
+    if (!this._games.has(slug)) return
+    this._closeGame(slug)
+  }
+
+  /**
+   * Find an in-flight spar match for a given user-bot id. Used by the Spar
+   * endpoint's "one active spar per bot" policy — a new spar request kills
+   * any previous in-flight spar for the same bot before starting fresh.
+   * Returns the slug, or null if no active spar matches.
+   */
+  findActiveSparForBot(botId) {
+    for (const game of this._games.values()) {
+      if (game.isSpar && game.bot1?.id === botId && game.status === 'playing') {
+        return game.slug
+      }
+    }
+    return null
+  }
+
+  /**
+   * Force-close any spar matches that have been alive longer than `maxAgeMs`
+   * (default 2 hours). Catches stuck spars whose game loop hung — the runner
+   * has no other timeout. Returns the slugs that were closed so the caller
+   * can log a summary.
+   */
+  sweepStaleSpars(maxAgeMs = 2 * 60 * 60 * 1000) {
+    const now    = Date.now()
+    const closed = []
+    for (const game of [...this._games.values()]) {
+      if (!game.isSpar) continue
+      if (now - game.createdAt > maxAgeMs) {
+        this._closeGame(game.slug)
+        closed.push(game.slug)
+      }
+    }
+    return closed
   }
 }
 

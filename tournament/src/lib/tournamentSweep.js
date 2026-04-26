@@ -33,6 +33,16 @@ const AUTO_DROP_RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 const AUTO_DROP_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
 let _lastAutoDropPruneAt = 0
 
+// Sprint 4 — Curriculum Cup retention (§5.4). Cups are private to the user
+// who created them and have no tournament-history value beyond the owner's
+// reflection window. 30 days matches the Sprint 4 spec; the per-hour gate
+// keeps the sweep cheap. Sprint 6 made this admin-tunable via SystemConfig
+// `guide.cup.retentionDays` (read inside sweepOldCups so changes take effect
+// on the next sweep, not requiring a restart).
+const DEFAULT_CUP_RETENTION_DAYS = 30
+const CUP_SWEEP_INTERVAL_MS      = 60 * 60 * 1000
+let _lastCupSweepAt = 0
+
 export function startTournamentSweep() {
   logger.info('Tournament sweep job started (60s interval)')
   recoverPendingBotMatches().catch(err => logger.warn({ err }, 'Tournament sweep — startup recovery failed'))
@@ -111,6 +121,19 @@ export async function sweep() {
       if (r.count > 0) logger.info({ pruned: r.count }, 'Tournament sweep — pruned tournament_auto_drops older than 90d')
     }).catch(err => {
       logger.warn({ err: err.message }, 'Tournament sweep — auto-drop prune failed')
+    })
+  }
+
+  // Hourly sweep of expired Curriculum Cups (§5.4). Out-of-band from the
+  // phase logic; failures are non-fatal.
+  if (now.getTime() - _lastCupSweepAt > CUP_SWEEP_INTERVAL_MS) {
+    _lastCupSweepAt = now.getTime()
+    sweepOldCups(now).then(({ tournaments, bots }) => {
+      if (tournaments > 0 || bots > 0) {
+        logger.info({ tournaments, bots }, 'Tournament sweep — pruned old Curriculum Cups')
+      }
+    }).catch(err => {
+      logger.warn({ err: err.message }, 'Tournament sweep — cup retention failed')
     })
   }
 
@@ -479,4 +502,63 @@ export async function cleanupSeededBots(tournamentId) {
 
   const { count } = await db.user.deleteMany({ where: { id: { in: seededIds } } })
   return count
+}
+
+/**
+ * Delete Curriculum Cup tournaments older than 30 days, plus any orphaned
+ * cup-clone bot users (`bot-cup-*`) they brought in. Tournament cascade-
+ * deletes participants, but the User rows are not cascade-deleted from
+ * elsewhere — we collect them first, drop the tournament, then delete the
+ * users (whose participant FK is now gone).
+ *
+ * Exported for unit tests.
+ *
+ * @param {Date} now
+ * @returns {Promise<{tournaments:number, bots:number}>}
+ */
+export async function sweepOldCups(now = new Date()) {
+  // Read tunable retention each sweep — admin changes via SystemConfig take
+  // effect immediately, no restart. Coerce to a positive number; bad values
+  // fall back to the default so a typo can't disable the sweep.
+  const row     = await db.systemConfig.findUnique({ where: { key: 'guide.cup.retentionDays' } }).catch(() => null)
+  const parsed  = row ? Number(typeof row.value === 'string' ? JSON.parse(row.value) : row.value) : null
+  const days    = (Number.isFinite(parsed) && parsed > 0) ? parsed : DEFAULT_CUP_RETENTION_DAYS
+  const cutoff  = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+
+  // Use the cup's own age (createdAt) so cups that never finished still get
+  // collected. Cups complete in ~2 minutes; anything 30 days old has either
+  // run, been abandoned, or stuck.
+  const oldCups = await db.tournament.findMany({
+    where:  { isCup: true, createdAt: { lt: cutoff } },
+    select: {
+      id: true,
+      participants: {
+        select: { user: { select: { id: true, username: true } } },
+      },
+    },
+  })
+  if (oldCups.length === 0) return { tournaments: 0, bots: 0 }
+
+  // Collect cup-clone bot user ids before the cascade delete drops the
+  // participant rows that reference them.
+  const cupBotIds = new Set()
+  for (const cup of oldCups) {
+    for (const p of cup.participants) {
+      if (p.user?.username?.startsWith('bot-cup-')) cupBotIds.add(p.user.id)
+    }
+  }
+
+  const { count: tournamentsDeleted } = await db.tournament.deleteMany({
+    where: { id: { in: oldCups.map(c => c.id) } },
+  })
+
+  let botsDeleted = 0
+  if (cupBotIds.size > 0) {
+    const { count } = await db.user.deleteMany({
+      where: { id: { in: [...cupBotIds] } },
+    })
+    botsDeleted = count
+  }
+
+  return { tournaments: tournamentsDeleted, bots: botsDeleted }
 }

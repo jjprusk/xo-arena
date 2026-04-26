@@ -47,7 +47,10 @@ async function request(method, path, body, token) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status })
+    throw Object.assign(new Error(err.error || 'Request failed'), {
+      status: res.status,
+      code:   err.code ?? null,
+    })
   }
 
   if (res.status === 204) return null
@@ -143,15 +146,18 @@ export const api = {
       const qs = p.toString()
       return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
     },
-    mine:     (token)              => request('GET',    '/bots/mine', null, token),
-    create:   (body, token)        => request('POST',   '/bots', body, token),
-    update:   (id, body, token)    => request('PATCH',  `/bots/${id}`, body, token),
-    delete:   (id, token)          => request('DELETE', `/bots/${id}`, null, token),
-    resetElo: (id, token)          => request('POST',   `/bots/${id}/reset-elo`, {}, token),
+    mine:       (token)             => request('GET',    '/bots/mine', null, token),
+    create:     (body, token)       => request('POST',   '/bots', body, token),
+    quickCreate:(body, token)       => request('POST',   '/bots/quick', body, token),
+    update:     (id, body, token)   => request('PATCH',  `/bots/${id}`, body, token),
+    delete:     (id, token)         => request('DELETE', `/bots/${id}`, null, token),
+    resetElo:   (id, token)         => request('POST',   `/bots/${id}/reset-elo`, {}, token),
+    trainQuick: (id, token)         => request('POST',   `/bots/${id}/train-quick`, {}, token),
   },
 
   botGames: {
-    start: (body, token) => request('POST', '/bot-games', body, token),
+    start:    (body, token) => request('POST', '/bot-games',          body, token),
+    practice: (body, token) => request('POST', '/bot-games/practice', body, token),
   },
 
   skills: {
@@ -253,6 +259,17 @@ export const api = {
     // sweep hard-deleted for being unfilled). period ∈ { day | week | month }.
     tournamentsAutoDropped: (token, period = 'week') =>
       api.get(`/admin/tournaments/auto-dropped?period=${encodeURIComponent(period)}`, token),
+
+    // Sprint 5 — Intelligent Guide v1 admin dashboard. Returns the freshly
+    // computed snapshot in `now` plus the last 30 days of MetricsSnapshot
+    // rows in `history` (for trend lines).
+    guideMetrics: (token) => api.get('/admin/guide-metrics', token),
+
+    // Sprint 6 — Intelligent Guide v1 SystemConfig editor. GET returns the
+    // full 13-key map; PATCH accepts a partial map and returns the updated
+    // 13-key map.
+    getGuideConfig: (token)       => api.get('/admin/guide-config', token),
+    setGuideConfig: (body, token) => api.patch('/admin/guide-config', body, token),
   },
   games: {
     getReplay:    (id, token)      => api.get(`/games/${id}/replay`, token),

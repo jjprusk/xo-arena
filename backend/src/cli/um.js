@@ -26,6 +26,8 @@ import { journeyCommand }      from './commands/journey.js'
 import { sessionConfigCommand } from './commands/sessionconfig.js'
 import { envCommand }          from './commands/env.js'
 import { testbotsCommand }     from './commands/testbots.js'
+import { testuserCommand }     from './commands/testuser.js'
+import { rewardsCommand }      from './commands/rewards.js'
 
 guardProduction()
 await ensureProxy()
@@ -80,6 +82,8 @@ journeyCommand(program)
 sessionConfigCommand(program)
 envCommand(program)
 testbotsCommand(program)
+testuserCommand(program)
+rewardsCommand(program)
 
 program.hook('postAction', () => disconnect())
 program.parse()

@@ -2,15 +2,17 @@
 /**
  * Bot vs Bot game management routes.
  *
- * POST /api/v1/bot-games        Start a new server-side bot vs bot game (admin/bot-admin only)
- * GET  /api/v1/bot-games        List active bot games
- * GET  /api/v1/bot-games/:slug  Get state of a specific bot game
+ * POST /api/v1/bot-games           Start a new server-side bot vs bot game (admin/bot-admin only)
+ * POST /api/v1/bot-games/practice  Spar — user's bot vs system bot at chosen tier (any signed-in user)
+ * GET  /api/v1/bot-games           List active bot games
+ * GET  /api/v1/bot-games/:slug     Get state of a specific bot game
  */
 
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { hasRole } from '../utils/roles.js'
+import { isValidSparTier, botUsernameForTier, SPAR_TIERS } from '../config/sparTiers.js'
 import db from '../lib/db.js'
 
 const router = Router()
@@ -52,6 +54,75 @@ router.post('/', requireAuth, async (req, res, next) => {
     })
 
     res.status(201).json({ slug, displayName })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/bot-games/practice
+ *
+ * Spar — kick off a bot-vs-bot match between the caller's bot and a system
+ * bot at the chosen tier. The caller spectates the match like any other
+ * bot-game; on completion, journey step 5 is credited (Curriculum step 5).
+ *
+ * Body: { myBotId, opponentTier: 'easy' | 'medium' | 'hard', moveDelayMs? }
+ *
+ * Auth: any signed-in user. Caller must own `myBotId`.
+ *
+ * One-active-spar-per-bot: a previous in-flight spar for the same bot is
+ * force-closed first, mirroring the Demo Table macro's replacement policy.
+ */
+router.post('/practice', requireAuth, async (req, res, next) => {
+  try {
+    const caller = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { id: true },
+    })
+    if (!caller) return res.status(404).json({ error: 'User not found' })
+
+    const { myBotId, opponentTier, moveDelayMs } = req.body ?? {}
+    if (!myBotId)         return res.status(400).json({ error: 'myBotId is required' })
+    if (!opponentTier)    return res.status(400).json({ error: 'opponentTier is required' })
+    if (!isValidSparTier(opponentTier)) {
+      return res.status(400).json({ error: `opponentTier must be one of: ${SPAR_TIERS.join(', ')}` })
+    }
+
+    // Ownership + bot validity
+    const myBot = await db.user.findUnique({
+      where:  { id: myBotId },
+      select: { id: true, displayName: true, botModelId: true, isBot: true, botActive: true, botOwnerId: true, botInTournament: true },
+    })
+    if (!myBot?.isBot)                  return res.status(404).json({ error: 'myBot not found' })
+    if (myBot.botOwnerId !== caller.id) return res.status(403).json({ error: 'You do not own this bot' })
+    if (!myBot.botActive)            return res.status(409).json({ error: `${myBot.displayName} is inactive` })
+    if (myBot.botInTournament) {
+      return res.status(409).json({ error: `${myBot.displayName} is currently in a tournament` })
+    }
+
+    // Resolve opponent system bot by tier
+    const opponentUsername = botUsernameForTier(opponentTier)
+    const opponentBot = await db.user.findUnique({
+      where:  { username: opponentUsername },
+      select: { id: true, displayName: true, botModelId: true, isBot: true, botActive: true },
+    })
+    if (!opponentBot?.isBot) {
+      return res.status(500).json({ error: `Tier opponent ${opponentUsername} is missing — re-run seed?` })
+    }
+
+    // One-active-spar-per-bot: kill any prior in-flight spar for this bot.
+    const existingSlug = botGameRunner.findActiveSparForBot(myBot.id)
+    if (existingSlug) botGameRunner.closeGameBySlug(existingSlug)
+
+    const { slug, displayName } = await botGameRunner.startGame({
+      bot1: myBot,
+      bot2: opponentBot,
+      moveDelayMs: moveDelayMs ? Number(moveDelayMs) : undefined,
+      isSpar: true,
+      sparUserId: caller.id,
+    })
+
+    res.status(201).json({ slug, displayName, opponentTier })
   } catch (err) {
     next(err)
   }

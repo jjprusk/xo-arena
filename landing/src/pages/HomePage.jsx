@@ -5,6 +5,7 @@ import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { prefetchCommunityBot } from '../lib/communityBotCache.js'
 import DemoArena from '../components/home/DemoArena.jsx'
 import SignInModal from '../components/ui/SignInModal.jsx'
+import { readGuestJourney } from '../lib/guestMode.js'
 
 /**
  * HomePage — Phase 0 redesign (Intelligent Guide v1, §3.5.1).
@@ -122,6 +123,16 @@ export default function HomePage() {
   const [signupOpen, setSignupOpen]     = useState(false)
   const [demoKey, setDemoKey]           = useState(0)
 
+  // Has the visitor already completed the first PvAI game? Drives the
+  // CTA-emphasis swap: pre-play guests see Play as the primary blue button
+  // (the right next step); after playing, Build → signup becomes primary.
+  // Read once on mount — when the user returns to `/` after /play, this
+  // page remounts and the fresh localStorage state is picked up.
+  const [playedFirstGame] = useState(() => !!readGuestJourney().hookStep1CompletedAt)
+  const buildIsPrimary = !!user || playedFirstGame
+  const playClass  = buildIsPrimary ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'
+  const buildClass = buildIsPrimary ? 'btn btn-primary btn-sm'   : 'btn btn-secondary btn-sm'
+
   // Prefetch the community bot list so /play?action=vs-community-bot is instant.
   useEffect(() => { prefetchCommunityBot() }, [])
 
@@ -165,18 +176,18 @@ export default function HomePage() {
           </button>
           <Link
             to="/play?action=vs-community-bot"
-            className="btn btn-secondary btn-sm"
+            className={playClass}
           >
             Play against a bot
           </Link>
           {user ? (
-            <Link to="/gym" className="btn btn-primary btn-sm">
+            <Link to="/gym" className={buildClass}>
               Build your own bot →
             </Link>
           ) : (
             <button
               onClick={() => setSignupOpen(true)}
-              className="btn btn-primary btn-sm"
+              className={buildClass}
               type="button"
               data-cta="build-your-own-bot"
             >
@@ -186,7 +197,7 @@ export default function HomePage() {
         </div>
 
         {/* Sub-line beneath the CTAs reinforcing the unique value prop */}
-        <p className="mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p className="mt-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
           Free account, no credit card. Your bot competes in tournaments against bots built by other players.
         </p>
       </section>

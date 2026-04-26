@@ -129,6 +129,120 @@ router.post('/', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * POST /api/v1/bots/quick
+ *
+ * Quick Bot wizard endpoint (Curriculum step 3, §5.3) — friction-reduced bot
+ * creation. Body: `{ name, persona }`. Always uses algorithm=minimax with the
+ * tier from SystemConfig `guide.quickBot.defaultTier` (default 'novice') so
+ * the user's bot starts at Rusty-equivalent strength. The first training run
+ * (step 4) bumps the tier — that visible transformation is the pedagogy.
+ *
+ * Returns the same `{ bot }` shape as POST / so the client can reuse existing
+ * bot-detail rendering.
+ */
+router.post('/quick', requireAuth, async (req, res, next) => {
+  try {
+    const baId = req.auth.userId
+    const user = await db.user.findUnique({
+      where: { betterAuthId: baId },
+      include: { userRoles: { select: { role: true } } },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    // Bot-limit check mirrors POST / so quick-creators don't bypass the cap.
+    if (!hasRole(user, 'BOT_ADMIN')) {
+      const limit = await getTierLimit(user.id, 'bots')
+      const count = await db.user.count({ where: { botOwnerId: user.id, isBot: true } })
+      if (limit !== 0 && count >= limit) {
+        return res.status(409).json({ error: `Bot limit reached (${limit})`, code: 'BOT_LIMIT_REACHED' })
+      }
+    }
+
+    const { name, persona } = req.body ?? {}
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required', code: 'INVALID_NAME' })
+    }
+    // Persona is purely display — current bot row has no persona column, so
+    // we accept and ignore it. Once we surface persona in the UI it gets
+    // stored in user.preferences.botPersona[<botId>] or similar; out of scope
+    // for Sprint 3.
+    if (persona !== undefined && typeof persona !== 'string') {
+      return res.status(400).json({ error: 'persona must be a string', code: 'INVALID_PERSONA' })
+    }
+
+    const tier = await getSystemConfig('guide.quickBot.defaultTier', 'novice')
+    const bot = await createBot(user.id, {
+      name,
+      algorithm:  'minimax',
+      difficulty: tier,
+      ownerBaId:  baId,
+    })
+    cache.invalidate(BOTS_CACHE_KEY)
+
+    // Curriculum step 3 — fire-and-forget; same pattern as POST /.
+    completeStep(user.id, 3).catch(() => {})
+
+    res.status(201).json({ bot })
+  } catch (err) {
+    if (err.code === 'RESERVED_NAME')      return res.status(400).json({ error: err.message, code: err.code })
+    if (err.code === 'PROFANITY')          return res.status(400).json({ error: err.message, code: err.code })
+    if (err.code === 'INVALID_NAME')       return res.status(400).json({ error: err.message, code: err.code })
+    if (err.code === 'NAME_TAKEN')         return res.status(409).json({ error: err.message, code: err.code })
+    if (err.code === 'INVALID_ALGORITHM')  return res.status(400).json({ error: err.message, code: err.code })
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/bots/:id/train-quick
+ *
+ * Quick Bot training-flow trigger (§5.3) — bumps the bot's botModelId tier
+ * from `guide.quickBot.defaultTier` (novice → Rusty-equivalent) to
+ * `guide.quickBot.firstTrainingTier` (intermediate → Copper-equivalent). This
+ * is the "first training run that visibly transforms the bot" — the
+ * pedagogical payoff for starting weak. Fires journey step 4 alongside the
+ * existing mlService trigger for real ML training.
+ *
+ * No-op (200) if the bot is already at or past the trained tier — keeps the
+ * UI simple (button can stay, click is idempotent).
+ */
+router.post('/:id/train-quick', requireAuth, async (req, res, next) => {
+  try {
+    const result = await loadBotAndAuthorize(req, res)
+    if (!result) return
+    const { bot, caller } = result
+
+    // Only minimax bots use the user:<id>:minimax:<diff> botModelId pattern;
+    // ML bots' botModelId is a UUID FK into BotSkill — bumping tier is
+    // meaningless there. Reject early so the wrong button doesn't break a
+    // real ML bot's model assignment.
+    if (bot.botModelType !== 'minimax') {
+      return res.status(400).json({ error: 'Quick training only applies to Quick Bots (minimax)', code: 'NOT_QUICK_BOT' })
+    }
+
+    const trainedTier = await getSystemConfig('guide.quickBot.firstTrainingTier', 'intermediate')
+    const expectedId  = `user:${caller.id}:minimax:${trainedTier}`
+
+    if (bot.botModelId === expectedId) {
+      // Idempotent — still fire step 4 in case it never landed before.
+      completeStep(caller.id, 4).catch(() => {})
+      return res.json({ bot, alreadyTrained: true })
+    }
+
+    const updated = await db.user.update({
+      where: { id: bot.id },
+      data:  { botModelId: expectedId },
+    })
+    cache.invalidate(BOTS_CACHE_KEY)
+    completeStep(caller.id, 4).catch(() => {})
+
+    res.json({ bot: updated, alreadyTrained: false })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * Helper: verify the caller owns the bot or has BOT_ADMIN/ADMIN role.
  * Returns { bot, caller } or sends an error response.
  */

@@ -27,6 +27,16 @@ vi.mock('../../lib/socket.js', () => ({
   disconnectSocket: vi.fn(),
 }))
 
+// Mock the guide store so individual tests can drive the journey phase
+// (Hook = empty completedSteps; Curriculum = step 2 completed). The selector
+// signature `useGuideStore(s => ...)` is preserved so call sites work.
+let mockCompletedSteps = []
+vi.mock('../../store/guideStore.js', () => ({
+  useGuideStore: (selector) => selector({
+    journeyProgress: { completedSteps: mockCompletedSteps, dismissedAt: null },
+  }),
+}))
+
 import { useGameSDK } from '../../lib/useGameSDK.js'
 import PlayPage from '../PlayPage.jsx'
 
@@ -46,6 +56,7 @@ function renderPlay(search = '') {
       <Routes>
         <Route path="/play" element={<PlayPage />} />
         <Route path="/"    element={<div>Home</div>} />
+        <Route path="/tables" element={<div>Tables</div>} />
         <Route path="/tournaments/:id" element={<div>Tournament</div>} />
       </Routes>
     </MemoryRouter>
@@ -54,6 +65,7 @@ function renderPlay(search = '') {
 
 beforeEach(() => {
   useGameSDK.mockReturnValue({ ...defaultSDKReturn })
+  mockCompletedSteps = []
 })
 
 describe('PlayPage', () => {
@@ -109,5 +121,46 @@ describe('PlayPage', () => {
     })
     await act(async () => { renderPlay('?join=some-room') })
     expect(document.querySelectorAll('[aria-label^="Cell"]').length).toBe(9)
+  })
+
+  // Leave-destination logic — see PlayPage.jsx `leaveHref`. The Back link in
+  // PlatformShell is wired to the same href used by the Leave Table /
+  // abandoned / opponentLeft navigations, so asserting on it covers all three.
+  describe('leave destination by journey phase', () => {
+    it('Hook user (default empty completedSteps) → Back goes to /', async () => {
+      mockCompletedSteps = []
+      useGameSDK.mockReturnValue({
+        ...defaultSDKReturn,
+        phase: 'playing',
+        session: { tableId: 'room-1', settings: {}, players: [] },
+      })
+      await act(async () => { renderPlay('?join=some-room') })
+      const back = screen.getByRole('link', { name: /^← Back$/ })
+      expect(back.getAttribute('href')).toBe('/')
+    })
+
+    it('Curriculum user (step 2 done) → Back goes to /tables', async () => {
+      mockCompletedSteps = [1, 2]
+      useGameSDK.mockReturnValue({
+        ...defaultSDKReturn,
+        phase: 'playing',
+        session: { tableId: 'room-1', settings: {}, players: [] },
+      })
+      await act(async () => { renderPlay('?join=some-room') })
+      const back = screen.getByRole('link', { name: /^← Back$/ })
+      expect(back.getAttribute('href')).toBe('/tables')
+    })
+
+    it('Tournament context → Back goes to /tournaments/<id> regardless of phase', async () => {
+      mockCompletedSteps = []  // even a Hook user in a tournament returns to the bracket
+      useGameSDK.mockReturnValue({
+        ...defaultSDKReturn,
+        phase: 'playing',
+        session: { tableId: 'room-1', settings: {}, players: [] },
+      })
+      await act(async () => { renderPlay('?join=some-room&tournamentId=t-42') })
+      const back = screen.getByRole('link', { name: /^← Back$/ })
+      expect(back.getAttribute('href')).toBe('/tournaments/t-42')
+    })
   })
 })

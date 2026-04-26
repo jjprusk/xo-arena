@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
+import GuideConfigPanel from './GuideConfigPanel.jsx'
 
 function MLLimitsPanel() {
   const [limits, setLimits]   = useState(null)
@@ -627,6 +628,7 @@ export default function AdminDashboard() {
       <IdleConfigPanel />
       <SessionIdlePanel />
       <ReplayConfigPanel />
+      <GuideConfigPanel />
 
     </div>
   )

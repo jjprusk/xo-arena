@@ -176,9 +176,14 @@ export default function GameComponent({ session, sdk }) {
     sdk.submitMove(index)
   }
 
-  function handleForfeit() {
+  // Confirms the "Leave the table?" dialog when a game is still in progress.
+  // Routes through sdk.leaveTable() (not sdk.forfeit()) — leaveTable sets the
+  // SDK's leavingRef so that when the server echoes game:forfeit, navigation
+  // fires immediately. Calling sdk.forfeit() directly leaves the player
+  // stranded at a finished table because no leave-flag was set.
+  function handleConfirmLeaveMidGame() {
     sdk.playSound?.('forfeit')
-    sdk.forfeit?.()
+    sdk.leaveTable?.()
     setShowForfeit(false)
   }
 
@@ -279,40 +284,6 @@ export default function GameComponent({ session, sdk }) {
         )}
       </div>
 
-      {/* Reaction menu — small right-aligned pill BELOW the board. Lives
-          outside the board's relative wrapper so it never overlaps a cell
-          on desktop the way the old -top-2 -right-1 positioning did. */}
-      {isPlayer && (status === 'playing' || status === 'finished') && sdk.sendReaction && (
-        <div className="w-full flex justify-end">
-          <div className="relative">
-            <button
-              onClick={() => setShowReactions(v => !v)}
-              aria-label="Reactions"
-              className="text-lg w-9 h-9 rounded-full border transition-colors hover:bg-[var(--bg-surface-hover)] active:scale-95 flex items-center justify-center"
-              style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
-            >
-              😊
-            </button>
-            {showReactions && (
-              <div
-                className="absolute right-0 top-full mt-1 flex gap-1 flex-wrap justify-end max-w-[12rem] p-1 rounded-lg border z-10"
-                style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
-              >
-                {REACTIONS.map(emoji => (
-                  <button
-                    key={emoji}
-                    onClick={() => handleReaction(emoji)}
-                    className="text-lg w-8 h-8 rounded-md transition-colors hover:bg-[var(--bg-surface-hover)] active:scale-95 flex items-center justify-center"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Spectator badge */}
       {session?.isSpectator && (
         <span
@@ -323,44 +294,42 @@ export default function GameComponent({ session, sdk }) {
         </span>
       )}
 
-      {/* Game-end actions — players only. Sits immediately under the board
-          (no floating emoji row in between anymore) so it's in-viewport on a
-          cold iPhone load. */}
-      {status === 'finished' && isPlayer && (
-        <div className="flex gap-3 w-full">
-          {sdk.rematch && (
+      {/* Bottom action row — always visible to active players so the user
+          can leave at any time. mb-6 reserves space below the row so the
+          bottom seat avatar (which straddles the table's bottom rim) has
+          room without overlapping the buttons. */}
+      {isPlayer && (status === 'playing' || status === 'finished') && (
+        <div className="flex items-center gap-3 w-full mb-6">
+          {sdk.sendReaction && (
+            <ReactionPill
+              showReactions={showReactions}
+              setShowReactions={setShowReactions}
+              handleReaction={handleReaction}
+            />
+          )}
+          {status === 'finished' && sdk.rematch && (
             <button
               onClick={handleRematch}
-              className="flex-1 py-3 rounded-xl font-semibold border-2 transition-colors"
-              style={{ borderColor: 'var(--color-blue-600)', color: 'var(--color-blue-600)' }}
+              className="flex-1 min-w-0 py-3 rounded-xl font-semibold border-2 border-blue-600 text-blue-600 bg-white transition-colors hover:bg-blue-50 active:scale-[0.98]"
             >
               {session?.settings?.isTournament ? 'Continue' : 'Rematch'}
             </button>
           )}
           <button
-            onClick={() => sdk.leaveTable?.()}
-            className="btn btn-primary flex-1 py-3 rounded-xl active:scale-[0.98]"
+            onClick={() => {
+              if (status === 'playing') setShowForfeit(true)
+              else sdk.leaveTable?.()
+            }}
+            className="flex-1 min-w-0 py-3 rounded-xl font-semibold border-2 border-transparent text-white bg-slate-600 transition-colors hover:bg-slate-700 active:scale-[0.98]"
           >
             Leave Table
           </button>
         </div>
       )}
 
-      {/* Forfeit — promoted from a text link to a real pill button so mobile
-          tap targets hit the 44×44 minimum. Still subtle (outline, muted
-          colors) so it doesn't compete with the primary Rematch/Leave row
-          when the game ends. */}
-      {status === 'playing' && isPlayer && sdk.forfeit && (
-        <button
-          onClick={() => setShowForfeit(true)}
-          className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--bg-surface-hover)] hover:text-[var(--color-red-600)] active:scale-[0.98]"
-          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-        >
-          Forfeit
-        </button>
-      )}
-
-      {/* Forfeit confirmation dialog */}
+      {/* Leave-mid-game confirmation — opens when the player clicks Leave
+          Table while a game is in progress. Confirm routes through
+          sdk.leaveTable() so the forfeit + navigation happen atomically. */}
       {showForfeit && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div
@@ -368,10 +337,10 @@ export default function GameComponent({ session, sdk }) {
             style={{ backgroundColor: 'var(--bg-surface)' }}
           >
             <h2 className="font-bold text-lg" style={{ fontFamily: 'var(--font-display)' }}>
-              Forfeit game?
+              Leave the table?
             </h2>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Your opponent will be declared the winner.
+              The game is still in progress — leaving will forfeit and your opponent will be declared the winner.
             </p>
             <div className="flex gap-3">
               <button
@@ -382,11 +351,11 @@ export default function GameComponent({ session, sdk }) {
                 Cancel
               </button>
               <button
-                onClick={handleForfeit}
+                onClick={handleConfirmLeaveMidGame}
                 className="flex-1 py-2 rounded-xl font-medium text-white transition-colors"
                 style={{ background: 'var(--color-red-600)' }}
               >
-                Forfeit
+                Leave
               </button>
             </div>
           </div>
@@ -443,19 +412,22 @@ function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn
       </span>
     )
   } else if (status === 'finished' && winner) {
+    const youWon = !isSpectator && winner === myMark
+    const variant = isSpectator ? 'win' : (youWon ? 'win' : 'lose')
+    const label = isSpectator
+      ? `${winner} wins!`
+      : youWon ? 'You win! 🎉' : 'Opponent wins!'
     turnNode = (
-      <span className="font-bold" style={{
-        color: isSpectator
-          ? MARK_COLOR[winner]
-          : winner === myMark ? 'var(--color-teal-600)' : 'var(--color-red-600)',
-      }}>
-        {isSpectator
-          ? `${winner} wins!`
-          : winner === myMark ? 'You win! 🎉' : 'Opponent wins!'}
+      <span className={`result-pill result-pill--${variant}`} role="status">
+        {label}
       </span>
     )
   } else if (status === 'finished') {
-    turnNode = <span className="font-bold" style={{ color: 'var(--color-amber-600)' }}>Draw!</span>
+    turnNode = (
+      <span className="result-pill result-pill--draw" role="status">
+        Draw!
+      </span>
+    )
   } else {
     turnNode = null
   }
@@ -471,6 +443,37 @@ function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn
           <span style={{ color: MARK_COLOR.O, fontFamily: 'var(--font-display)' }}>{scoreO}</span>
         </span>
       </div>
+    </div>
+  )
+}
+
+function ReactionPill({ showReactions, setShowReactions, handleReaction }) {
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setShowReactions(v => !v)}
+        aria-label="Reactions"
+        className="text-lg w-9 h-9 rounded-full border transition-colors hover:bg-[var(--bg-surface-hover)] active:scale-95 flex items-center justify-center"
+        style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+      >
+        😊
+      </button>
+      {showReactions && (
+        <div
+          className="absolute left-0 bottom-full mb-1 flex gap-1 flex-wrap max-w-[12rem] p-1 rounded-lg border z-10"
+          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+        >
+          {REACTIONS.map(emoji => (
+            <button
+              key={emoji}
+              onClick={() => handleReaction(emoji)}
+              className="text-lg w-8 h-8 rounded-md transition-colors hover:bg-[var(--bg-surface-hover)] active:scale-95 flex items-center justify-center"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

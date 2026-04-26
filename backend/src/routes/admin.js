@@ -20,6 +20,7 @@ import {
 import { replyTemplate } from '../lib/emailTemplates.js'
 import { dispatch, emitToRoom } from '../lib/notificationBus.js'
 import { sweep as gcSweep } from '../services/tableGcService.js'
+import { runMetricsSnapshot } from '../services/metricsSnapshotService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
@@ -82,6 +83,41 @@ router.get('/stats', async (_req, res, next) => {
     ])
 
     res.json({ stats: { totalUsers, totalGames, gamesToday, bannedUsers, totalModels } })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── Intelligent Guide metrics ────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/guide-metrics
+ *
+ * Returns the v1 Intelligent Guide metric set for the admin dashboard:
+ *  - latest snapshot (today's row, freshly computed on demand for accuracy)
+ *  - 30-day history of the same metrics for the trend lines
+ *  - current testUserCount for the "excluding N test users" footer
+ *
+ * On-demand recompute is intentionally cheap — the snapshot writer is the
+ * single source of truth, so a stale dashboard couldn't drift from cron-
+ * written rows. Idempotency is guaranteed by the unique index on
+ * (date, metric, dimensions).
+ */
+router.get('/guide-metrics', async (req, res, next) => {
+  try {
+    const fresh = await runMetricsSnapshot()
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+    const history = await db.metricsSnapshot.findMany({
+      where:   { date: { gte: since } },
+      orderBy: [{ date: 'asc' }, { metric: 'asc' }],
+      select:  { date: true, metric: true, value: true, dimensions: true },
+    })
+
+    res.json({
+      now: fresh,             // null only if today's recompute hit an internal error
+      history,
+    })
   } catch (err) {
     next(err)
   }
@@ -295,6 +331,13 @@ router.patch('/users/:id', async (req, res, next) => {
         })
         baRole_ = updated.role
         emailVerified_ = updated.emailVerified
+        // §2 metrics-pollution prevention: granting BA admin flags this
+        // domain user as a test user (excluded from dashboards). Reversal
+        // is manual via the upcoming admin toggle, not an automatic inverse
+        // of role removal.
+        if (baData.role === 'admin') {
+          await db.user.update({ where: { id: req.params.id }, data: { isTestUser: true } })
+        }
       } else {
         const ba = await db.baUser.findUnique({ where: { id: user.betterAuthId }, select: { role: true, emailVerified: true } })
         baRole_ = ba?.role ?? null
@@ -1150,6 +1193,109 @@ router.patch('/replay-config', async (req, res, next) => {
       getSystemConfig('replay.tournamentRetentionDays', 90),
     ])
     res.json({ casualRetentionDays: casual, tournamentRetentionDays: tournament })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── Intelligent Guide v1 SystemConfig ───────────────────────────────────────
+//
+// Sprint 6 (§8.4 / Sprint6_Kickoff §3.4): inline-edit the v1 Guide tunables
+// from the admin dashboard so reward sizes, the release flag, etc. can be
+// tuned without a deploy.
+//
+// Spec table is the single source of truth — used by both GET (returns
+// defaults when a key isn't seeded yet) and PATCH (validates types + ranges
+// + enum membership). guide.cup.sizeEntrants is reserved/informational in v1
+// because the cup spawn logic hardcodes the slot mix; PATCH rejects writes.
+
+const TIER_VALUES = ['novice', 'intermediate', 'advanced', 'master']
+
+const GUIDE_CONFIG_SPEC = {
+  'guide.v1.enabled':                                 { type: 'boolean',     default: true        },
+  'guide.rewards.hookComplete':                       { type: 'integer',     default: 20,  min: 0, max: 1000 },
+  'guide.rewards.curriculumComplete':                 { type: 'integer',     default: 50,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstSpecializeAction':    { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstRealTournamentWin':   { type: 'integer',     default: 25,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstNonDefaultAlgorithm': { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstTemplateClone':       { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.quickBot.defaultTier':                       { type: 'enum',        default: 'novice',       enum: TIER_VALUES },
+  'guide.quickBot.firstTrainingTier':                 { type: 'enum',        default: 'intermediate', enum: TIER_VALUES },
+  'guide.cup.sizeEntrants':                           { type: 'integer',     default: 4,   readOnly: true   },
+  'guide.cup.retentionDays':                          { type: 'integer',     default: 30,  min: 1, max: 365 },
+  'guide.demo.ttlMinutes':                            { type: 'integer',     default: 60,  min: 5, max: 1440 },
+  'metrics.internalEmailDomains':                     { type: 'stringArray', default: []                    },
+}
+
+function _validateGuideConfigValue(key, raw) {
+  const spec = GUIDE_CONFIG_SPEC[key]
+  if (!spec) return { ok: false, error: `Unknown guide-config key "${key}"` }
+  if (spec.readOnly) return { ok: false, error: `"${key}" is read-only in v1` }
+
+  if (spec.type === 'boolean') {
+    if (typeof raw !== 'boolean') return { ok: false, error: `"${key}" must be a boolean` }
+    return { ok: true, value: raw }
+  }
+  if (spec.type === 'integer') {
+    const n = typeof raw === 'number' ? raw : parseInt(raw, 10)
+    if (!Number.isFinite(n) || !Number.isInteger(n)) return { ok: false, error: `"${key}" must be an integer` }
+    if (spec.min !== undefined && n < spec.min) return { ok: false, error: `"${key}" must be >= ${spec.min}` }
+    if (spec.max !== undefined && n > spec.max) return { ok: false, error: `"${key}" must be <= ${spec.max}` }
+    return { ok: true, value: n }
+  }
+  if (spec.type === 'enum') {
+    if (!spec.enum.includes(raw)) return { ok: false, error: `"${key}" must be one of: ${spec.enum.join(', ')}` }
+    return { ok: true, value: raw }
+  }
+  if (spec.type === 'stringArray') {
+    if (!Array.isArray(raw)) return { ok: false, error: `"${key}" must be an array` }
+    const cleaned = raw.map(s => String(s ?? '').trim()).filter(Boolean)
+    return { ok: true, value: cleaned }
+  }
+  return { ok: false, error: `"${key}" has an unsupported spec type` }
+}
+
+async function _readGuideConfigMap() {
+  const out = {}
+  await Promise.all(Object.entries(GUIDE_CONFIG_SPEC).map(async ([key, spec]) => {
+    out[key] = await getSystemConfig(key, spec.default)
+  }))
+  return out
+}
+
+/**
+ * GET /api/v1/admin/guide-config
+ * Returns the full 13-key map of Intelligent Guide v1 SystemConfig values
+ * (with defaults filled in from the spec table when a key hasn't been seeded
+ * yet).
+ */
+router.get('/guide-config', async (_req, res, next) => {
+  try {
+    res.json({ config: await _readGuideConfigMap() })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/guide-config
+ * Body: `{ "<key>": <value>, ... }` — partial map. Each key is validated
+ * against `GUIDE_CONFIG_SPEC`; any unknown / read-only / out-of-range value
+ * yields a 400 with no writes (all-or-nothing). Returns the full updated map.
+ */
+router.patch('/guide-config', async (req, res, next) => {
+  try {
+    const body = req.body || {}
+    const updates = []
+    for (const [key, raw] of Object.entries(body)) {
+      const r = _validateGuideConfigValue(key, raw)
+      if (!r.ok) return res.status(400).json({ error: r.error })
+      updates.push([key, r.value])
+    }
+    for (const [key, value] of updates) {
+      await setSystemConfig(key, value)
+    }
+    res.json({ config: await _readGuideConfigMap() })
   } catch (err) {
     next(err)
   }

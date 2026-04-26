@@ -35,6 +35,13 @@ export function roleCommand(program) {
           }
           await db.userRole.create({ data: { userId: user.id, role: normalised, grantedById: user.id } })
           ok(`Granted ${normalised} to "${user.username}"`)
+          // §2 metrics-pollution prevention: granting ADMIN flags the user as
+          // a test user. Reversal is manual via `um testuser <user> --off`,
+          // not an inverse of role removal — admins who lose ADMIN rarely
+          // become "real" users from a metrics perspective.
+          if (normalised === 'ADMIN' && !user.isTestUser) {
+            await db.user.update({ where: { id: user.id }, data: { isTestUser: true } })
+          }
         }
       }
     })

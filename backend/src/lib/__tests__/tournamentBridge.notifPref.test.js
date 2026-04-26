@@ -48,9 +48,13 @@ vi.mock('../../logger.js', () => ({
 vi.mock('../../services/journeyService.js', () => ({
   completeStep: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('../../services/discoveryRewardsService.js', () => ({
+  grantDiscoveryReward: vi.fn().mockResolvedValue(undefined),
+}))
 
 // Capture reference so we can re-set implementation after vi.resetAllMocks()
 import { completeStep as mockCompleteStep } from '../../services/journeyService.js'
+import { grantDiscoveryReward as mockGrant } from '../../services/discoveryRewardsService.js'
 
 // ─── Import handleEvent directly (exported for testability) ──────────────────
 
@@ -83,6 +87,7 @@ beforeEach(() => {
   mockDispatch.mockResolvedValue(undefined)
   // vi.resetAllMocks() clears the implementation — must restore so .catch() doesn't throw
   mockCompleteStep.mockResolvedValue(undefined)
+  mockGrant.mockResolvedValue(undefined)
   mockDb.userNotification.findMany.mockResolvedValue([])
   mockDb.userNotification.updateMany.mockResolvedValue({ count: 0 })
   mockDb.userNotification.create.mockResolvedValue({ id: 'n_created' })
