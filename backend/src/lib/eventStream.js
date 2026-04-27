@@ -81,6 +81,24 @@ export async function getStreamLength() {
 }
 
 /**
+ * Hard-truncate the stream to at most `maxLen` entries. Used by the admin
+ * "drain dev backlog" endpoint when a long-running dev environment has
+ * accumulated more entries than the consumer is willing to walk through on
+ * the next /events/replay call. Returns the deleted count, or -1 if Redis
+ * is unavailable.
+ */
+export async function truncateStream(maxLen = 0) {
+  const redis = getRedis()
+  if (!redis) return -1
+  try {
+    return await redis.xtrim(STREAM_KEY, 'MAXLEN', String(maxLen))
+  } catch (err) {
+    logger.warn({ err, maxLen }, 'Redis XTRIM (events stream) failed')
+    return -1
+  }
+}
+
+/**
  * Read entries from the stream after a given id.
  * Used by GET /api/v1/events/replay.
  *

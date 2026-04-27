@@ -66,6 +66,18 @@ const _spectatorSockets = new Map()
 const _demoWatchTimers = new Map()
 const DEMO_WATCH_THRESHOLD_MS = 2 * 60 * 1000  // 2 min
 
+// Tracks which socket.io adapter backed io on this process: 'redis' if the
+// Redis pub/sub adapter attached cleanly at boot, 'in-memory' if it fell
+// back. Surfaced via /api/v1/admin/health/tables so the admin dashboard can
+// see the degraded-but-running state instead of having it hide in a single
+// WARN line on stdout.
+let _socketAdapterState = 'unknown'
+
+/** Read the current socket.io adapter state ('redis' | 'in-memory' | 'unknown'). */
+export function getSocketAdapterState() {
+  return _socketAdapterState
+}
+
 function _clearDemoTimer(socketId, tableId) {
   const m = _demoWatchTimers.get(socketId)
   if (!m) return
@@ -465,10 +477,21 @@ export async function attachSocketIO(httpServer) {
     cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
   })
 
-  // Redis adapter for horizontal scaling
+  // Redis adapter for horizontal scaling.
+  //
+  // ioredis defaults to eager auto-connect: `new Redis(url)` already opens
+  // the socket. Calling `.connect()` afterward throws "Redis is already
+  // connecting/connected", which used to land us in the in-memory branch on
+  // every boot — including when redis was healthy and reachable. The pub/sub
+  // pair would then silently degrade horizontal-scale guarantees and
+  // eventually starve the notification stream once its backlog grew.
+  //
+  // Fix: pass `lazyConnect: true` so auto-connect is disabled, then drive
+  // the connection ourselves. `duplicate()` inherits the option for the
+  // sub client.
   if (process.env.REDIS_URL) {
     try {
-      const pubClient = new Redis(process.env.REDIS_URL)
+      const pubClient = new Redis(process.env.REDIS_URL, { lazyConnect: true })
       const subClient = pubClient.duplicate()
       pubClient.on('connect', () => incrementRedis())
       pubClient.on('end',     () => decrementRedis())
@@ -476,10 +499,14 @@ export async function attachSocketIO(httpServer) {
       subClient.on('end',     () => decrementRedis())
       await Promise.all([pubClient.connect(), subClient.connect()])
       io.adapter(createAdapter(pubClient, subClient))
+      _socketAdapterState = 'redis'
       logger.info('Socket.io Redis adapter connected')
     } catch (err) {
+      _socketAdapterState = 'in-memory'
       logger.warn({ err: err.message }, 'Redis adapter unavailable, using in-memory adapter')
     }
+  } else {
+    _socketAdapterState = 'in-memory'
   }
 
   io.on('connection', (socket) => {

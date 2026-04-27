@@ -5,7 +5,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import { releaseSeats } from '../lib/tableSeats.js'
 import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
-import { unregisterTable } from '../realtime/socketHandler.js'
+import { unregisterTable, getSocketAdapterState } from '../realtime/socketHandler.js'
 import logger from '../logger.js'
 import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats, getTableReleased } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
@@ -22,6 +22,7 @@ import {
 } from '../lib/feedbackHelpers.js'
 import { replyTemplate } from '../lib/emailTemplates.js'
 import { dispatch, emitToRoom } from '../lib/notificationBus.js'
+import { truncateStream } from '../lib/eventStream.js'
 import { sweep as gcSweep } from '../services/tableGcService.js'
 import { runMetricsSnapshot } from '../services/metricsSnapshotService.js'
 import {
@@ -110,6 +111,7 @@ router.get('/health/tables', (req, res) => {
     tableCreateErrors: creates,
     tableReleased:     released,
     gc,
+    socketAdapter:     getSocketAdapterState(),  // 'redis' | 'in-memory' | 'unknown'
     uptime: Math.round(process.uptime()),
   })
 })
@@ -1461,6 +1463,43 @@ router.post('/feedback/:id/reply', async (req, res, next) => {
     res.status(201).json({ reply: result.reply, replies: result.replies })
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/admin/dev/flush-notifications
+ *
+ * Operational drain for the dev/staging notification backlog. Marks every
+ * undelivered `user_notifications` row as delivered (clearing the
+ * notifQueueDepth gauge) and truncates the `events:tier2:stream` Redis
+ * stream to `?maxLen=` entries (default 0 — wipe).
+ *
+ * Sized for the case where a long-running dev environment has accumulated
+ * thousands of stale entries (we hit `tier2StreamLen: 3697` /
+ * `notifQueueDepth: 235` after a redis-outage stretch on 2026-04-27) and
+ * the SSE consumer can't catch up. Production should never need this —
+ * the consumer keeps the stream drained — but in dev this is a faster
+ * path than restarting redis.
+ */
+router.post('/dev/flush-notifications', async (req, res, next) => {
+  try {
+    const maxLen = Math.max(0, Number(req.query.maxLen ?? 0))
+    const [{ count: notifsCleared }, streamRemaining] = await Promise.all([
+      db.userNotification.updateMany({
+        where: { deliveredAt: null },
+        data:  { deliveredAt: new Date() },
+      }),
+      truncateStream(maxLen),
+    ])
+    res.json({
+      ok: true,
+      notifsMarkedDelivered: notifsCleared,
+      streamRemaining,                  // -1 if Redis unavailable
+      streamMaxLenRequested: maxLen,
+    })
+  } catch (err) {
+    logger.error({ err }, 'Admin flush-notifications failed')
     next(err)
   }
 })

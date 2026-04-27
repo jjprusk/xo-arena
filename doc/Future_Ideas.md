@@ -18,6 +18,7 @@ Deferred features and improvements that are worth revisiting but not currently p
 | Multi-Game Architecture | ✅ Largely done as the Game SDK (Phases 1.1–1.4) — remaining games are their own phases |
 | Tier 2/3 instrumentation | 🟡 Partly done (3 counters live; rest in `doc/Observability_Plan.md`) |
 | Recurring tournaments refactor (now Phase 3.7a) | 🚧 In-plan (scheduled as Phase 3.7a of the Implementation Plan, pre-prod window) |
+| `table.released` per-reason soak monitor | ⏳ Open (post-prod-launch — needs real traffic to be meaningful) |
 
 ## Migration-sensitivity audit (2026-04-23)
 
@@ -330,5 +331,24 @@ This works and ships, but is awkward:
 - `GET /api/tournaments` filters stay on `Tournament`; `GET /api/templates` becomes the admin view.
 
 **Effort:** ~4–6 hours. Schema migration + data backfill (split existing templates into their config rows + preserved-as-occurrence rows) + rewriting the sweep + updating 3-4 UI surfaces. No functional gain for users in isolation — only worth doing when the current model actively causes a bug or a planned feature requires separating config from history.
+
+---
+
+## `table.released` per-reason soak monitor — ⏳ OPEN (defer until prod has traffic)
+
+**Background:** Chunk 3 of the table-fixes sweep added a per-reason `table.released` counter to `/api/v1/admin/health/tables` (reasons: `disconnect`, `leave`, `game-end`, `gc-stale`, `gc-idle`, `admin`, `guest-cleanup`, plus `OTHER` catch-all). The shape of the per-reason histogram is the V1-acceptance success metric for "where do tables actually die" — does the disconnect bucket dominate (Safari hang regression) vs. the game-end bucket (healthy completion), is the `OTHER` bucket nonzero (typo'd reason at a call site), is `gc-idle` climbing (idle abandonment runaway), etc.
+
+**Why deferred:** On staging the only traffic is manual QA — the per-reason distribution reflects the tester's clicks, not real user behaviour. Running a soak there would just measure the test, not the system. The metric's value scales with traffic.
+
+**What to do post-prod:**
+
+- Schedule a periodic poll of `/api/v1/admin/health/tables` (e.g. hourly via the same scheduler used for tournament sweeps, or a cron-driven Slack/Linear post). Diff against the previous reading and post the per-reason deltas.
+- Alert thresholds (rough first cuts; tune from data):
+  - `OTHER > 0` for any window → call-site typo, page on-call.
+  - `disconnect / game-end > 0.5` over a 1-h window → Safari/network regression suspected; page on-call.
+  - `gc-idle` rising > 5/hour while active sessions are non-zero → idle threshold misconfigured.
+- Cross-reference with `tableCreateErrors.P2002` (should be ~0 post-chunk-1) and `gc.secondsSinceLastSuccess` (should be < 600s).
+
+**Effort:** ~2 hours. Reuse the existing scheduler + a small `lib/healthDiff.js` to compute deltas. Pairs naturally with the rest of the Tier 2/3 instrumentation work (see entry above).
 
 ---

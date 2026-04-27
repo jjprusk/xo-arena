@@ -95,6 +95,11 @@ describe('GET /api/v1/admin/health/tables', () => {
       },
       gc: { failures: 0, lastSuccessAt: null, secondsSinceLastSuccess: null },
     })
+    // socketAdapter is added by the redis-race fix bundle — exposes whether
+    // the socket.io adapter attached cleanly ('redis') or fell back to
+    // 'in-memory'. Test mock returns 'unknown' since attachSocketIO was never
+    // called in this isolated route test.
+    expect(['redis', 'in-memory', 'unknown']).toContain(res.body.socketAdapter)
     expect(typeof res.body.uptime).toBe('number')
   })
 
