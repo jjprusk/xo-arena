@@ -26,12 +26,6 @@ export function getSocket() {
       autoConnect: false,
       transports: TRANSPORTS,
     })
-    // TEMP diagnostic logging — remove once Safari hang is resolved.
-    _socket.on('connect',       () => console.log('[socket] connect',       { id: _socket.id, transport: _socket.io.engine?.transport?.name }))
-    _socket.on('disconnect',    (reason) => console.log('[socket] disconnect', reason))
-    _socket.on('connect_error', (err) => console.log('[socket] connect_error', err?.message, err))
-    _socket.io.on('reconnect_attempt', (n) => console.log('[socket] reconnect_attempt', n))
-    _socket.io.on('error',      (err) => console.log('[socket] manager error', err?.message, err))
   }
   return _socket
 }

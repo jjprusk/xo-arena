@@ -382,6 +382,19 @@ export function unregisterTable(tableId) {
  * guest tables), no ELO impact, and no value in keeping the row around. Not
  * deleting them clutters the DB and shows up in "mine"/admin views.
  *
+ * Timing rule (chunk 3 P2 — guest-table deletion):
+ *   - `game:move` natural game-end: deletion is **deferred**. The player
+ *     is still at the table waiting on Rematch, and the row must survive
+ *     until the socket actually disconnects. The disconnect-after-COMPLETED
+ *     branch then calls this helper.
+ *   - `game:forfeit` / `room:cancel` / `disconnect 60-s timer`: deletion is
+ *     **immediate**. The forfeiter / canceller is leaving by intent (or has
+ *     stopped responding); no Rematch path is reachable, so keeping the row
+ *     just delays the inevitable cleanup.
+ *   - 24-h `tableGcService` sweep is the backstop in case neither path runs.
+ * Document this here rather than at every call site so future readers don't
+ * have to reverse-engineer the pattern from the inventory.
+ *
  * Accepts either a tableId string or a partial table object with
  * `{ id, createdById }` — the latter skips the extra lookup when the caller
  * already has the row in memory. Always best-effort; logs and swallows
@@ -1173,9 +1186,15 @@ export async function attachSocketIO(httpServer) {
       io.to(`table:${tableId}`).emit('room:cancelled')
       broadcastTablePresence(io, tableId)  // F8 — final spectator refresh before unregister
       clearAllIdleTimersForTable(tableId)
-      // Remove all socket mappings for this table
+      // Remove all socket mappings for this table; also drop each socket
+      // from the `table:${id}` socket.io room (chunk 3 P1 — socket.leave
+      // symmetry) so a stale event emitted to that room after this point
+      // can't accidentally reach the cancelling client.
       for (const [sid, tid] of _socketToTable) {
-        if (tid === tableId) unregisterSocket(sid)
+        if (tid === tableId) {
+          io.sockets.sockets.get(sid)?.leave(`table:${tableId}`)
+          unregisterSocket(sid)
+        }
       }
     })
 
@@ -1247,11 +1266,9 @@ export async function attachSocketIO(httpServer) {
         dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'game-move' })
         broadcastTablePresence(io, tableId)  // F8 — spectators see status flip
         recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
-        // Guest tables (createdById === 'anonymous') used to be deleted here,
-        // but that broke Rematch: the next game:rematch would fail with
-        // "Room not found" and the client would navigate away to /tables.
-        // Keep the row until the socket disconnects (handled in the disconnect
-        // branch below) or the 24h tableGcService sweep picks it up.
+        // Guest-table deletion is intentionally deferred here — see the
+        // timing rule documented on deleteIfGuestTable. The disconnect
+        // branch picks it up; tableGcService is the 24h backstop.
       } else {
         // Track activity for the mover
         if (myUserId) recordActivity(myUserId)
@@ -1374,6 +1391,9 @@ export async function attachSocketIO(httpServer) {
       io.to(`table:${tableId}`).emit('game:forfeit', { forfeiterMark: mark, winner: oppMark, scores: ps.scores })
       dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.LEAVE, { trigger: 'forfeit' })
       broadcastTablePresence(io, tableId)  // F8
+      // Drop the forfeiter from the table room so any future events on this
+      // tableId don't re-render in their post-game UI (chunk 3 P1).
+      socket.leave(`table:${tableId}`)
       recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
       deleteIfGuestTable(updated)
     })
@@ -1387,6 +1407,9 @@ export async function attachSocketIO(httpServer) {
       const tableId = _socketToTable.get(socket.id)
       if (!tableId) return
       socket.to(`table:${tableId}`).emit('game:opponent_left')
+      // Drop the leaving socket from the room so it stops receiving events
+      // for a table it has explicitly left (chunk 3 P1).
+      socket.leave(`table:${tableId}`)
 
       // Free this player's seat so the row stops appearing occupied in the
       // /tables list. game:leave is post-game, so the row is already
