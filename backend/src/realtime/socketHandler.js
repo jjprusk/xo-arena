@@ -34,6 +34,7 @@ import {
   addWatcher as addTableWatcher,
   removeWatcher as removeTableWatcher,
   removeWatcherFromAllTables,
+  removeAllWatchersForTable,
   getPresence as getTablePresence,
 } from './tablePresence.js'
 import { dispatch as dispatchBus } from '../lib/notificationBus.js'
@@ -320,6 +321,54 @@ function clearAllIdleTimersForTable(tableId) {
       clearIdleTimer(sid)
     }
   }
+}
+
+/**
+ * Drop every in-memory pointer at a given tableId — chunk 3 F4/F5.
+ *
+ * GC sweeps and admin DELETE used to flip `Table.status` (or delete the row)
+ * but leave `_socketToTable`, `_disconnectTimers`, `_idleTimers`,
+ * `_spectatorSockets`, `_demoWatchTimers`, and the watcher map all pointing
+ * at the dead row. The maps then held stale entries until the next disconnect
+ * fired, which is why a stuck process accumulated orphan timers + sockets.
+ *
+ * Idempotent and safe to call from any caller — this is the single point of
+ * cleanup the GC + admin paths can hit. Returns the list of sockets that were
+ * pointing at the table so the caller can decide whether to broadcast presence
+ * (the row is gone, so usually they shouldn't).
+ */
+export function unregisterTable(tableId) {
+  if (!tableId) return []
+
+  // Snapshot every socket that referenced this table — players + spectators.
+  const affectedSockets = new Set()
+  for (const [sid, tid] of _socketToTable) {
+    if (tid === tableId) affectedSockets.add(sid)
+  }
+  for (const [sid, tid] of _spectatorSockets) {
+    if (tid === tableId) affectedSockets.add(sid)
+  }
+
+  for (const sid of affectedSockets) {
+    clearIdleTimer(sid)
+    _spectatorSockets.delete(sid)
+    _clearAllDemoTimers(sid)
+    unregisterSocket(sid)
+  }
+
+  // Disconnect timers are keyed by the *original* socketId (which has since
+  // gone away) but carry the tableId in their value — sweep by tableId.
+  for (const [sid, info] of _disconnectTimers) {
+    if (info?.tableId === tableId) {
+      clearTimeout(info.timerId)
+      _disconnectTimers.delete(sid)
+    }
+  }
+
+  // Drop watchers for this table — the table:watch presence map must agree.
+  removeAllWatchersForTable(tableId)
+
+  return [...affectedSockets]
 }
 
 /**

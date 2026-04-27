@@ -105,6 +105,22 @@ export function getPresence(tableId) {
 }
 
 /**
+ * Drop every watcher for a single table. Called when GC or admin DELETE
+ * removes the underlying row, so the presence map doesn't keep pointing at
+ * a tableId that no longer exists.
+ *
+ * @returns {string[]} socketIds that were watching (empty if none)
+ */
+export function removeAllWatchersForTable(tableId) {
+  if (!tableId) return []
+  const watchers = _tableWatchers.get(tableId)
+  if (!watchers) return []
+  const socketIds = [...watchers.keys()]
+  _tableWatchers.delete(tableId)
+  return socketIds
+}
+
+/**
  * Return all tableIds currently being watched. Used by the periodic
  * re-broadcast and by tests.
  */

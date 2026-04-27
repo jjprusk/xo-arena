@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import { releaseSeats } from '../lib/tableSeats.js'
+import { unregisterTable } from '../realtime/socketHandler.js'
 import logger from '../logger.js'
 import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
@@ -1486,6 +1487,12 @@ router.delete('/tables/:id', async (req, res, next) => {
       targets: { broadcast: true },
       payload: { tableId: req.params.id, slug: table.slug },
     })
+
+    // Drop every in-memory pointer at this table — disconnect timers, idle
+    // timers, socket→table mappings, watchers (chunk 3 F5). Without this the
+    // maps held stale entries until the next disconnect, wasting one
+    // db.table.findUnique per orphan timer.
+    unregisterTable(req.params.id)
 
     res.json({ ok: true })
   } catch (err) {

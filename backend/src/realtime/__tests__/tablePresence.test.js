@@ -3,6 +3,7 @@ import {
   addWatcher,
   removeWatcher,
   removeWatcherFromAllTables,
+  removeAllWatchersForTable,
   getPresence,
   getActiveTableIds,
   getTotalWatchers,
@@ -104,6 +105,32 @@ describe('tablePresence — removeWatcherFromAllTables (disconnect cleanup)', ()
 describe('tablePresence — getPresence on unknown tables', () => {
   it('returns count 0 and empty userIds', () => {
     expect(getPresence('tbl_unknown')).toEqual({ count: 0, userIds: [] })
+  })
+})
+
+describe('tablePresence — removeAllWatchersForTable (chunk 3 F4/F5)', () => {
+  it('drops every watcher on the named table and returns their socketIds', () => {
+    addWatcher('tbl_1', 'sock_a', { userId: 'user_a' })
+    addWatcher('tbl_1', 'sock_b', { userId: 'user_b' })
+    addWatcher('tbl_2', 'sock_c', { userId: 'user_c' })
+
+    const removed = removeAllWatchersForTable('tbl_1')
+    expect(removed.sort()).toEqual(['sock_a', 'sock_b'])
+
+    expect(getPresence('tbl_1')).toEqual({ count: 0, userIds: [] })
+    expect(getActiveTableIds()).toEqual(['tbl_2'])
+    expect(getPresence('tbl_2').count).toBe(1)  // unaffected
+  })
+
+  it('returns an empty array when the table has no watchers', () => {
+    expect(removeAllWatchersForTable('tbl_unknown')).toEqual([])
+  })
+
+  it('returns an empty array when called with no tableId', () => {
+    addWatcher('tbl_1', 'sock_a', { userId: 'user_a' })
+    expect(removeAllWatchersForTable(null)).toEqual([])
+    expect(removeAllWatchersForTable(undefined)).toEqual([])
+    expect(getPresence('tbl_1').count).toBe(1)  // unaffected
   })
 })
 

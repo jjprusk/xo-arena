@@ -22,6 +22,7 @@ import { dispatch } from '../lib/notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { incrementGcFailure, recordGcSuccess } from '../lib/resourceCounters.js'
 import { releaseSeats } from '../lib/tableSeats.js'
+import { unregisterTable } from '../realtime/socketHandler.js'
 
 const SWEEP_INTERVAL_MS = 60_000 // 1 minute
 
@@ -93,8 +94,10 @@ async function deleteStaleForming(now) {
 
   const { count } = await db.table.deleteMany({ where: { id: { in: emptyIds } } })
 
-  // Fire bus events so the Tables list page reacts in real time
+  // Fire bus events so the Tables list page reacts in real time, and drop
+  // any in-memory pointers at these now-gone rows (chunk 3 F4).
   for (const t of candidates.filter(c => emptyIds.includes(c.id))) {
+    unregisterTable(t.id)
     dispatch({
       type: 'table.deleted',
       targets: { broadcast: true },
@@ -110,12 +113,23 @@ async function deleteStaleForming(now) {
 async function deleteOldCompleted(now) {
   const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hr ago
 
-  const { count } = await db.table.deleteMany({
+  // Two-step: fetch candidate ids first so we can drop in-memory state for
+  // each row (chunk 3 F4). The previous bulk deleteMany left orphan socket
+  // map entries pointing at gone rows until the next disconnect.
+  const candidates = await db.table.findMany({
     where: {
       status: 'COMPLETED',
       updatedAt: { lt: cutoff },
     },
+    select: { id: true },
   })
+
+  if (candidates.length === 0) return 0
+
+  const ids = candidates.map((t) => t.id)
+  const { count } = await db.table.deleteMany({ where: { id: { in: ids } } })
+
+  for (const id of ids) unregisterTable(id)
 
   return count
 }
@@ -160,6 +174,7 @@ async function sweepDemos(now) {
   const { count } = await db.table.deleteMany({ where: { id: { in: toDelete.map(t => t.id) } } })
 
   for (const t of toDelete) {
+    unregisterTable(t.id)
     dispatch({
       type: 'table.deleted',
       targets: { broadcast: true },
@@ -203,11 +218,16 @@ async function abandonIdleActive(now, io) {
     ),
   )
 
-  // Notify connected sockets for each table
+  // Notify connected sockets for each table, then drop in-memory state
+  // (chunk 3 F4). Order matters: emit first so clients still receive the
+  // event before their socket→table mapping is cleared.
   if (io) {
     for (const table of idleTables) {
       io.to(`table:${table.id}`).emit('room:abandoned', { reason: 'idle' })
     }
+  }
+  for (const table of idleTables) {
+    unregisterTable(table.id)
   }
 
   return idleTables.length

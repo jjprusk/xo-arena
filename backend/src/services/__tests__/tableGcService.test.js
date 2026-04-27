@@ -41,12 +41,20 @@ vi.mock('../../lib/resourceCounters.js', () => ({
   recordGcSuccess:    vi.fn(),
 }))
 
+// Chunk 3 F4: GC must drop in-memory pointers at every row it deletes /
+// completes. socketHandler is heavyweight (imports nanoid, jose, redis, ai)
+// — mock just the export the GC service uses.
+vi.mock('../../realtime/socketHandler.js', () => ({
+  unregisterTable: vi.fn(),
+}))
+
 const { sweep } = await import('../tableGcService.js')
 const { incrementGcFailure, recordGcSuccess } = await import('../../lib/resourceCounters.js')
 const db = (await import('../../lib/db.js')).default
 const { getSystemConfig } = await import('../skillService.js')
 const { botGameRunner } = await import('../../realtime/botGameRunner.js')
 const { dispatch: busDispatch } = await import('../../lib/notificationBus.js')
+const { unregisterTable } = await import('../../realtime/socketHandler.js')
 
 // Fake socket.io server
 function makeIO() {
@@ -99,24 +107,41 @@ describe('tableGcService sweep', () => {
     const formingDelete = db.table.deleteMany.mock.calls.find(c => c[0]?.where?.id?.in)
     expect(formingDelete).toBeTruthy()
     expect(formingDelete[0].where.id.in).toEqual(['tbl_empty_1'])
+
+    // Chunk 3 F4: in-memory pointers for the deleted row are dropped.
+    expect(unregisterTable).toHaveBeenCalledWith('tbl_empty_1')
+    expect(unregisterTable).not.toHaveBeenCalledWith('tbl_occupied')
   })
 
-  it('deletes old COMPLETED tables older than 24 hr', async () => {
-    db.table.findMany.mockResolvedValue([])
-    // COMPLETED deleteMany (the first deleteMany call in deleteOldCompleted).
-    db.table.deleteMany.mockResolvedValueOnce({ count: 5 })
+  it('deletes old COMPLETED tables older than 24 hr and drops in-memory state', async () => {
+    db.table.findMany.mockImplementation(async ({ where }) => {
+      if (where?.status === 'COMPLETED') {
+        return [{ id: 'old_1' }, { id: 'old_2' }]
+      }
+      return []
+    })
+    db.table.deleteMany.mockResolvedValue({ count: 2 })
 
     const io = makeIO()
     await sweep(io)
 
-    // The COMPLETED deleteMany should have status + updatedAt filter
-    const completedCall = db.table.deleteMany.mock.calls[0]?.[0]
-    expect(completedCall.where.status).toBe('COMPLETED')
-    expect(completedCall.where.updatedAt.lt).toBeInstanceOf(Date)
+    // COMPLETED findMany (chunk 3 F4: switched from bulk deleteMany to
+    // findMany→delete so we can iterate ids for unregisterTable)
+    const completedFind = db.table.findMany.mock.calls.find(c => c[0]?.where?.status === 'COMPLETED')
+    expect(completedFind).toBeTruthy()
+    expect(completedFind[0].where.updatedAt.lt).toBeInstanceOf(Date)
 
-    const cutoff = completedCall.where.updatedAt.lt
+    const cutoff = completedFind[0].where.updatedAt.lt
     const twentyFourHrAgo = Date.now() - 24 * 60 * 60 * 1000
     expect(Math.abs(cutoff.getTime() - twentyFourHrAgo)).toBeLessThan(5000)
+
+    // Subsequent deleteMany targets the resolved ids.
+    const completedDelete = db.table.deleteMany.mock.calls.find(c => c[0]?.where?.id?.in)
+    expect(completedDelete[0].where.id.in).toEqual(['old_1', 'old_2'])
+
+    // Chunk 3 F4: in-memory pointers for each row are dropped.
+    expect(unregisterTable).toHaveBeenCalledWith('old_1')
+    expect(unregisterTable).toHaveBeenCalledWith('old_2')
   })
 
   it('marks idle ACTIVE tables as COMPLETED, releases occupied seats, and emits room:abandoned', async () => {
@@ -170,6 +195,10 @@ describe('tableGcService sweep', () => {
     // Should emit room:abandoned for each table
     expect(io.to).toHaveBeenCalledWith('table:tbl_1')
     expect(io.to).toHaveBeenCalledWith('table:tbl_2')
+
+    // Chunk 3 F4: in-memory pointers are dropped after the abandon emit.
+    expect(unregisterTable).toHaveBeenCalledWith('tbl_1')
+    expect(unregisterTable).toHaveBeenCalledWith('tbl_2')
   })
 
   it('does not touch fresh tables', async () => {
@@ -217,7 +246,10 @@ describe('tableGcService sweep', () => {
   })
 
   it('handles sweep errors gracefully', async () => {
-    db.table.deleteMany.mockRejectedValue(new Error('DB down'))
+    // Chunk 3 F4: deleteOldCompleted now does findMany first, so rejecting
+    // findMany is the right way to surface a DB-down failure to the sweep
+    // wrapper. deleteMany default-mock kept so the other branches stay quiet.
+    db.table.findMany.mockRejectedValue(new Error('DB down'))
 
     const io = makeIO()
     // Should not throw — returns error summary instead
@@ -264,6 +296,10 @@ describe('tableGcService sweep', () => {
         type:    'table.deleted',
         payload: expect.objectContaining({ tableId: 'demo_1' }),
       }))
+
+      // Chunk 3 F4: in-memory pointers for each demo row are dropped.
+      expect(unregisterTable).toHaveBeenCalledWith('demo_1')
+      expect(unregisterTable).toHaveBeenCalledWith('demo_2')
     })
 
     it('uses the correct cutoff windows: 2-min post-complete and the configured TTL (minutes)', async () => {
