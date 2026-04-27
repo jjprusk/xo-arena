@@ -1,8 +1,9 @@
 # Table Slug Redesign + Table-Resource Hardening
 
-**Status:** chunk 1 complete (on dev), chunks 2 & 3 pending
+**Status:** chunks 1 & 2 complete (on dev), chunk 3 pending
 **Created:** 2026-04-27
 **Chunk 1 landed:** 2026-04-27
+**Chunk 2 landed:** 2026-04-27
 **Branch target:** dev → staging → main
 **Decision owner:** Joe Pruskowski
 

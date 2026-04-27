@@ -4,7 +4,7 @@ import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
-import { getSnapshots, getLatestSnapshot, getAlerts } from '../lib/resourceCounters.js'
+import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
 import { hasRole } from '../utils/roles.js'
 import {
@@ -65,6 +65,46 @@ router.get('/health/sockets', (req, res) => {
     latest: getLatestSnapshot(),
     history: getSnapshots(),
     alerts: getAlerts(),
+    uptime: Math.round(process.uptime()),
+  })
+})
+
+/**
+ * GET /api/v1/admin/health/tables
+ *
+ * Table-resource health view for the admin dashboard. Same shape pattern as
+ * /health/sockets but scoped to table-related counters: per-mode active
+ * breakdown, stale-FORMING count, GC liveness, and `db.table.create` error
+ * counts keyed by Prisma error code (so a P2002 burst is distinguishable
+ * from a real schema regression).
+ *
+ * Lives under the admin router → already gated by requireAuth + requireAdmin.
+ */
+router.get('/health/tables', (req, res) => {
+  const latest  = getLatestSnapshot() ?? {}
+  const alerts  = getAlerts()
+  const gc      = getGcStats()
+  const creates = getTableCreateErrors()
+  res.json({
+    latest: {
+      ts:                       latest.ts ?? null,
+      tablesForming:            latest.tablesForming ?? 0,
+      tablesActive:             latest.tablesActive ?? 0,
+      tablesCompleted:          latest.tablesCompleted ?? 0,
+      tablesStaleForming:       latest.tablesStaleForming ?? 0,
+      tablesActive_pvp:         latest.tablesActive_pvp ?? 0,
+      tablesActive_hvb:         latest.tablesActive_hvb ?? 0,
+      tablesActive_tournament:  latest.tablesActive_tournament ?? 0,
+      tablesActive_demo:        latest.tablesActive_demo ?? 0,
+      tableWatchers:            latest.tableWatchers ?? 0,
+    },
+    alerts: {
+      tablesActive:       !!alerts.tablesActive,
+      tablesStaleForming: !!alerts.tablesStaleForming,
+      gcStale:            !!alerts.gcStale,
+    },
+    tableCreateErrors: creates,
+    gc,
     uptime: Math.round(process.uptime()),
   })
 })

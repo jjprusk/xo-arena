@@ -24,6 +24,7 @@ import logger from '../logger.js'
 import { dispatch } from '../lib/notificationBus.js'
 import { nanoid } from 'nanoid'
 import { botGameRunner } from '../realtime/botGameRunner.js'
+import { createTableTracked } from '../lib/createTableTracked.js'
 import { pickMatchup } from '../config/demoTableMatchups.js'
 
 const router = Router()
@@ -231,7 +232,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       const slug = nanoid(8)
       try {
-        table = await db.table.create({
+        table = await createTableTracked({
           data: {
             gameId,
             slug,
@@ -453,7 +454,7 @@ router.post('/demo', requireAuth, async (req, res, next) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       slug = nanoid(8)
       try {
-        table = await db.table.create({
+        table = await createTableTracked({
           data: {
             gameId:       'xo',
             slug,

@@ -20,6 +20,7 @@ import logger from '../logger.js'
 import { getSystemConfig } from './skillService.js'
 import { dispatch } from '../lib/notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
+import { incrementGcFailure, recordGcSuccess } from '../lib/resourceCounters.js'
 
 const SWEEP_INTERVAL_MS = 60_000 // 1 minute
 
@@ -56,8 +57,10 @@ export async function sweep(io) {
       )
     }
 
+    recordGcSuccess()
     return { deletedForming, deletedCompleted, abandonedActive, deletedDemos, killedSpars, deletedOldSpars }
   } catch (err) {
+    incrementGcFailure()
     logger.warn({ err: err.message }, 'Table GC sweep failed')
     return { deletedForming: 0, deletedCompleted: 0, abandonedActive: 0, deletedDemos: 0, killedSpars: 0, deletedOldSpars: 0, error: err.message }
   }

@@ -40,6 +40,7 @@ import { dispatch as dispatchBus } from '../lib/notificationBus.js'
 import { appendToStream } from '../lib/eventStream.js'
 import { nanoid } from 'nanoid'
 import { formatTableLabel } from '../lib/tableLabel.js'
+import { createTableTracked } from '../lib/createTableTracked.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -505,7 +506,7 @@ export async function attachSocketIO(httpServer) {
         // that shouldn't clutter the public Tables list. Table GC auto-cleans
         // them after completion (COMPLETED + >24h).
         const isGuest = !user?.betterAuthId
-        const table = await db.table.create({
+        const table = await createTableTracked({
           data: {
             gameId: 'xo',
             slug,
@@ -737,7 +738,7 @@ export async function attachSocketIO(httpServer) {
         const botSeatDisplayName = tourMatchOpponentName
           ?? (await db.user.findUnique({ where: { id: botUserRow.id }, select: { displayName: true } }).catch(() => null))?.displayName
           ?? 'Bot'
-        const table = await db.table.create({
+        const table = await createTableTracked({
           data: {
             gameId,
             slug,
@@ -1346,7 +1347,7 @@ export async function attachSocketIO(httpServer) {
         const baId = user.betterAuthId
         const marks = { [baId]: 'X' }
 
-        const table = await db.table.create({
+        const table = await createTableTracked({
           data: {
             gameId: 'xo',
             slug,

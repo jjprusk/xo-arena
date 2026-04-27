@@ -32,7 +32,14 @@ vi.mock('../../realtime/botGameRunner.js', () => ({
   },
 }))
 
+// Chunk 2: GC liveness counter — captured for the per-test assertions below.
+vi.mock('../../lib/resourceCounters.js', () => ({
+  incrementGcFailure: vi.fn(),
+  recordGcSuccess:    vi.fn(),
+}))
+
 const { sweep } = await import('../tableGcService.js')
+const { incrementGcFailure, recordGcSuccess } = await import('../../lib/resourceCounters.js')
 const db = (await import('../../lib/db.js')).default
 const { getSystemConfig } = await import('../skillService.js')
 const { botGameRunner } = await import('../../realtime/botGameRunner.js')
@@ -303,6 +310,23 @@ describe('tableGcService sweep', () => {
       const res = await sweep(makeIO())
       expect(res.killedSpars).toBe(0)
       expect(res.deletedOldSpars).toBe(0)
+    })
+  })
+
+  describe('liveness instrumentation (chunk 2)', () => {
+    it('records a successful sweep on the happy path', async () => {
+      await sweep(makeIO())
+      expect(recordGcSuccess).toHaveBeenCalledTimes(1)
+      expect(incrementGcFailure).not.toHaveBeenCalled()
+    })
+
+    it('increments the failure counter and skips the success record when a sub-task throws', async () => {
+      // Force one of the parallel queries to fail.
+      db.table.findMany.mockRejectedValueOnce(new Error('boom'))
+      const res = await sweep(makeIO())
+      expect(res.error).toBe('boom')
+      expect(incrementGcFailure).toHaveBeenCalledTimes(1)
+      expect(recordGcSuccess).not.toHaveBeenCalled()
     })
   })
 })
