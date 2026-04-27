@@ -224,6 +224,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
           tournamentId={tournamentId}
           backHref={leaveHref}
           minimalChrome={isGuestPvAI}
+          onLeave={() => sdk.leaveTable()}
         >
           {(phase === 'playing' || phase === 'finished') && (
             <XOGame session={session} sdk={sdk} />

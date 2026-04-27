@@ -8,6 +8,9 @@ vi.mock('../../lib/db.js', () => ({
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      // Chunk 3 F1: abandonIdleActive switched to per-row update so it can
+      // release seats; the bulk updateMany is no longer used on that path.
+      update: vi.fn().mockResolvedValue({}),
     },
     game: {
       // Sprint 4: deleteOldSparGames runs in the same Promise.all and needs a
@@ -61,6 +64,7 @@ beforeEach(() => {
   db.table.deleteMany.mockResolvedValue({ count: 0 })
   db.table.findMany.mockResolvedValue([])
   db.table.updateMany.mockResolvedValue({ count: 0 })
+  db.table.update.mockResolvedValue({})
   db.game.deleteMany.mockResolvedValue({ count: 0 })
   botGameRunner.sweepStaleSpars.mockReturnValue([])
   getSystemConfig.mockResolvedValue(120)
@@ -115,10 +119,16 @@ describe('tableGcService sweep', () => {
     expect(Math.abs(cutoff.getTime() - twentyFourHrAgo)).toBeLessThan(5000)
   })
 
-  it('marks idle ACTIVE tables as COMPLETED and emits room:abandoned', async () => {
+  it('marks idle ACTIVE tables as COMPLETED, releases occupied seats, and emits room:abandoned', async () => {
     const idleTables = [
-      { id: 'tbl_1', gameId: 'game_1' },
-      { id: 'tbl_2', gameId: 'game_2' },
+      { id: 'tbl_1', gameId: 'game_1', seats: [
+        { userId: 'u_a', status: 'occupied', displayName: 'Alice' },
+        { userId: 'u_b', status: 'occupied', displayName: 'Bob' },
+      ]},
+      { id: 'tbl_2', gameId: 'game_2', seats: [
+        { userId: 'u_c', status: 'occupied', displayName: 'Carol' },
+        { userId: null, status: 'empty' },
+      ]},
     ]
     // findMany is called concurrently for FORMING, ACTIVE-idle, and demo
     // sweep — route by where clause, not call order.
@@ -126,7 +136,7 @@ describe('tableGcService sweep', () => {
       if (where?.status === 'ACTIVE') return idleTables
       return []
     })
-    db.table.updateMany.mockResolvedValue({ count: 2 })
+    db.table.update.mockResolvedValue({})
 
     getSystemConfig
       .mockResolvedValueOnce(120)  // game.idleWarnSeconds
@@ -144,13 +154,18 @@ describe('tableGcService sweep', () => {
     const idleCutoff = Date.now() - 180 * 1000
     expect(Math.abs(cutoff.getTime() - idleCutoff)).toBeLessThan(5000)
 
-    // Should bulk-update to COMPLETED
-    expect(db.table.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: { in: ['tbl_1', 'tbl_2'] } },
-        data: { status: 'COMPLETED' },
-      })
-    )
+    // Per-row update with seats released — chunk 3 F1
+    const updateCalls = db.table.update.mock.calls.map(c => c[0])
+    const tbl1Update = updateCalls.find(c => c?.where?.id === 'tbl_1')
+    const tbl2Update = updateCalls.find(c => c?.where?.id === 'tbl_2')
+    expect(tbl1Update?.data.status).toBe('COMPLETED')
+    expect(tbl1Update?.data.seats).toEqual([
+      { userId: null, status: 'empty', displayName: null },
+      { userId: null, status: 'empty', displayName: null },
+    ])
+    expect(tbl2Update?.data.status).toBe('COMPLETED')
+    expect(tbl2Update?.data.seats[0]).toEqual({ userId: null, status: 'empty', displayName: null })
+    expect(tbl2Update?.data.seats[1]).toEqual({ userId: null, status: 'empty' })  // already empty, untouched
 
     // Should emit room:abandoned for each table
     expect(io.to).toHaveBeenCalledWith('table:tbl_1')

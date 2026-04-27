@@ -14,6 +14,7 @@ import { getMoveForModel } from '../services/skillService.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
+import { releaseSeats } from '../lib/tableSeats.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -364,14 +365,14 @@ class BotGameRunner {
     // have a Table row.
     const demoTable = await db.table.findFirst({
       where:  { slug, isDemo: true },
-      select: { id: true, status: true },
+      select: { id: true, status: true, seats: true },
     }).catch(() => null)
 
     if (demoTable) {
       if (demoTable.status !== 'COMPLETED') {
         await db.table.update({
           where: { id: demoTable.id },
-          data:  { status: 'COMPLETED' },
+          data:  { status: 'COMPLETED', seats: releaseSeats(demoTable.seats) },
         }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
       }
 

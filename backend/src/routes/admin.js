@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
+import { releaseSeats } from '../lib/tableSeats.js'
 import logger from '../logger.js'
 import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
@@ -1471,7 +1472,7 @@ router.delete('/tables/:id', async (req, res, next) => {
 
     await db.table.update({
       where: { id: req.params.id },
-      data:  { status: 'COMPLETED' },
+      data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
     })
 
     // End the game immediately for connected players so GameComponent transitions

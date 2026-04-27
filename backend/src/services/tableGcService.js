@@ -21,6 +21,7 @@ import { getSystemConfig } from './skillService.js'
 import { dispatch } from '../lib/notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { incrementGcFailure, recordGcSuccess } from '../lib/resourceCounters.js'
+import { releaseSeats } from '../lib/tableSeats.js'
 
 const SWEEP_INTERVAL_MS = 60_000 // 1 minute
 
@@ -185,18 +186,22 @@ async function abandonIdleActive(now, io) {
       status: 'ACTIVE',
       updatedAt: { lt: cutoff },
     },
-    select: { id: true, gameId: true },
+    select: { id: true, gameId: true, seats: true },
   })
 
   if (idleTables.length === 0) return 0
 
-  const ids = idleTables.map((t) => t.id)
-
-  // Bulk-update to COMPLETED
-  await db.table.updateMany({
-    where: { id: { in: ids } },
-    data: { status: 'COMPLETED' },
-  })
+  // Per-row update so we can clear occupied seats — `updateMany` can't write
+  // a per-row JSON shape. The list is bounded (idle ACTIVE tables in the
+  // last sweep window) so the loop is fine in practice.
+  await Promise.all(
+    idleTables.map((t) =>
+      db.table.update({
+        where: { id: t.id },
+        data:  { status: 'COMPLETED', seats: releaseSeats(t.seats) },
+      }).catch((err) => logger.warn({ err: err.message, tableId: t.id }, 'abandonIdleActive: per-row update failed')),
+    ),
+  )
 
   // Notify connected sockets for each table
   if (io) {

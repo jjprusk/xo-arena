@@ -587,12 +587,34 @@ export function useGameSDK({
     document.addEventListener('visibilitychange', onVisibilityShow)
     window.addEventListener('focus', autoIdlePong)
 
+    // Graceful close on tab/window close (chunk 3 F2). Until this hook
+    // existed, Safari closing the tab fired no socket message at all, so the
+    // opponent waited the full 60-s disconnect-forfeit window before the
+    // table abandoned. Now we explicitly fire game:forfeit (mid-game) or
+    // game:leave (post-game) on pagehide. socket.io flushes the buffer when
+    // the underlying connection closes, so the server sees the event before
+    // the disconnect handler runs — short-circuiting the forfeit timer.
+    //
+    // We listen on `pagehide` (covers tab close, navigation, BFCache stash)
+    // rather than `beforeunload` (unreliable on mobile, blocks BFCache).
+    function onPageHide() {
+      try {
+        if (phaseRef.current === 'playing') {
+          getSocket().emit('game:forfeit')
+        } else if (phaseRef.current === 'finished') {
+          getSocket().emit('game:leave')
+        }
+      } catch (_) { /* nothing we can do during teardown */ }
+    }
+    window.addEventListener('pagehide', onPageHide)
+
     return () => {
       // Cancel pending connect handler and all event listeners
       socket.off('connect', onConnect)
       emitted = true // prevent any in-flight getToken().then from emitting after cleanup
       document.removeEventListener('visibilitychange', onVisibilityShow)
       window.removeEventListener('focus', autoIdlePong)
+      window.removeEventListener('pagehide', onPageHide)
       ;[
         'room:created', 'room:created:hvb', 'room:joined', 'room:guestJoined',
         'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',

@@ -41,6 +41,7 @@ import { appendToStream } from '../lib/eventStream.js'
 import { nanoid } from 'nanoid'
 import { formatTableLabel } from '../lib/tableLabel.js'
 import { createTableTracked } from '../lib/createTableTracked.js'
+import { releaseSeats, releaseSeatForUser } from '../lib/tableSeats.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -282,8 +283,11 @@ function resetIdleTimer({ socketId, tableId, isPlayer, warnMs, graceMs, onWarn, 
           const table = await db.table.findUnique({ where: { id: tableId }, select: { seats: true, tournamentMatchId: true } })
           const seat = table?.seats?.find(s => _socketToTable.get(socketId) === tableId)
           const absentUserId = seat?.userId ?? null
-          // Mark table COMPLETED
-          await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          // Mark table COMPLETED + free seats
+          await db.table.update({
+            where: { id: tableId },
+            data:  { status: 'COMPLETED', seats: releaseSeats(table?.seats) },
+          }).catch(() => {})
           if (table?.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
           await deleteIfGuestTable(tableId)
         } catch (_) { /* best effort */ }
@@ -488,7 +492,14 @@ export async function attachSocketIO(httpServer) {
         // If this socket already owns a FORMING table, close it first (StrictMode double-invoke)
         const existingTableId = _socketToTable.get(socket.id)
         if (existingTableId) {
-          await db.table.update({ where: { id: existingTableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          const existing = await db.table.findUnique({
+            where:  { id: existingTableId },
+            select: { seats: true },
+          }).catch(() => null)
+          await db.table.update({
+            where: { id: existingTableId },
+            data:  { status: 'COMPLETED', seats: releaseSeats(existing?.seats) },
+          }).catch(() => {})
           await deleteIfGuestTable(existingTableId)
           unregisterSocket(socket.id)
         }
@@ -641,7 +652,14 @@ export async function attachSocketIO(httpServer) {
           // Cancel any pending disconnect timer for this socket
           const dt = _disconnectTimers.get(socket.id)
           if (dt) { clearTimeout(dt.timerId); _disconnectTimers.delete(socket.id) }
-          await db.table.update({ where: { id: existingTableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          const existing = await db.table.findUnique({
+            where:  { id: existingTableId },
+            select: { seats: true },
+          }).catch(() => null)
+          await db.table.update({
+            where: { id: existingTableId },
+            data:  { status: 'COMPLETED', seats: releaseSeats(existing?.seats) },
+          }).catch(() => {})
           await deleteIfGuestTable(existingTableId)
           unregisterSocket(socket.id)
         }
@@ -1091,7 +1109,10 @@ export async function attachSocketIO(httpServer) {
 
       const table = await db.table.findUnique({ where: { id: tableId } })
       if (table) {
-        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        await db.table.update({
+          where: { id: tableId },
+          data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
+        }).catch(() => {})
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
       }
@@ -1282,7 +1303,15 @@ export async function attachSocketIO(httpServer) {
 
       const updated = await db.table.update({
         where: { id: tableId },
-        data: { status: 'COMPLETED', previewState: ps },
+        data: {
+          status: 'COMPLETED',
+          previewState: ps,
+          // The forfeiter is leaving the table. Free their seat so the row
+          // doesn't show up as still-occupied in /api/v1/tables. The other
+          // player may still be there for the post-game screen — leave them
+          // seated until they themselves disconnect or click Leave.
+          seats: releaseSeatForUser(seats, myUserId),
+        },
       })
 
       clearAllIdleTimersForTable(tableId)
@@ -1296,10 +1325,29 @@ export async function attachSocketIO(httpServer) {
     // Relays to the rest of the table room so the remaining player knows
     // immediately, without waiting for the socket disconnect timeout.
 
-    on('game:leave', () => {
+    on('game:leave', async () => {
       const tableId = _socketToTable.get(socket.id)
       if (!tableId) return
       socket.to(`table:${tableId}`).emit('game:opponent_left')
+
+      // Free this player's seat so the row stops appearing occupied in the
+      // /tables list. game:leave is post-game, so the row is already
+      // COMPLETED — we're only updating the seats blob.
+      try {
+        const table = await db.table.findUnique({
+          where:  { id: tableId },
+          select: { seats: true },
+        })
+        if (!table) return
+        const myUserId = findUserIdForSocket(socket.id, tableId, table.seats || [])
+        if (!myUserId) return
+        await db.table.update({
+          where: { id: tableId },
+          data:  { seats: releaseSeatForUser(table.seats, myUserId) },
+        })
+      } catch (err) {
+        logger.warn({ err: err.message, tableId }, 'game:leave: failed to release seat')
+      }
     })
 
     // ── Emoji reactions ──────────────────────────────────────────────
@@ -1617,8 +1665,11 @@ export async function attachSocketIO(httpServer) {
       }
 
       if (table.status === 'FORMING') {
-        // Host left before anyone joined — close immediately
-        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        // Host left before anyone joined — close immediately and free seats
+        await db.table.update({
+          where: { id: tableId },
+          data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
+        }).catch(() => {})
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) {
           // For tournament matches: reset slug so player 1 can rejoin after a
@@ -1641,6 +1692,14 @@ export async function attachSocketIO(httpServer) {
         // still works.
         clearIdleTimer(socket.id)
         unregisterSocket(socket.id)
+        // Free this player's seat — they've left a finished game. The other
+        // player's seat stays occupied until they too disconnect or leave.
+        if (myUserId) {
+          await db.table.update({
+            where: { id: tableId },
+            data:  { seats: releaseSeatForUser(table.seats, myUserId) },
+          }).catch((err) => logger.warn({ err: err.message, tableId }, 'disconnect-COMPLETED: failed to release seat'))
+        }
         deleteIfGuestTable(table)
         return
       }
@@ -1661,8 +1720,11 @@ export async function attachSocketIO(httpServer) {
       }
 
       if (otherDisconnected) {
-        // Both players disconnected — close immediately
-        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        // Both players disconnected — close immediately and free both seats
+        await db.table.update({
+          where: { id: tableId },
+          data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
+        }).catch(() => {})
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
         clearAllIdleTimersForTable(tableId)
@@ -1691,9 +1753,16 @@ export async function attachSocketIO(httpServer) {
           tps.winner = oppMark
           tps.scores[oppMark] = (tps.scores[oppMark] || 0) + 1
 
+          // The disconnected player is gone — free their seat. The opponent
+          // (still socket-connected) keeps theirs until they disconnect or
+          // click Leave.
           const updated = await db.table.update({
             where: { id: tableId },
-            data: { status: 'COMPLETED', previewState: tps },
+            data: {
+              status: 'COMPLETED',
+              previewState: tps,
+              seats: releaseSeatForUser(t.seats, myUserId),
+            },
           })
 
           io.to(`table:${tableId}`).emit('game:forfeit', {
