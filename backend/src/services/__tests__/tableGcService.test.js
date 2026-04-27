@@ -48,6 +48,21 @@ vi.mock('../../realtime/socketHandler.js', () => ({
   unregisterTable: vi.fn(),
 }))
 
+// Chunk 3 F6: GC sweeps emit `table.released{reason}` events. Mock the
+// helper directly so we can assert the per-reason wiring.
+vi.mock('../../lib/tableReleased.js', () => ({
+  dispatchTableReleased: vi.fn(),
+  TABLE_RELEASED_REASONS: {
+    DISCONNECT:    'disconnect',
+    LEAVE:         'leave',
+    GAME_END:      'game-end',
+    GC_STALE:      'gc-stale',
+    GC_IDLE:       'gc-idle',
+    ADMIN:         'admin',
+    GUEST_CLEANUP: 'guest-cleanup',
+  },
+}))
+
 const { sweep } = await import('../tableGcService.js')
 const { incrementGcFailure, recordGcSuccess } = await import('../../lib/resourceCounters.js')
 const db = (await import('../../lib/db.js')).default
@@ -55,6 +70,7 @@ const { getSystemConfig } = await import('../skillService.js')
 const { botGameRunner } = await import('../../realtime/botGameRunner.js')
 const { dispatch: busDispatch } = await import('../../lib/notificationBus.js')
 const { unregisterTable } = await import('../../realtime/socketHandler.js')
+const { dispatchTableReleased } = await import('../../lib/tableReleased.js')
 
 // Fake socket.io server
 function makeIO() {
@@ -111,6 +127,11 @@ describe('tableGcService sweep', () => {
     // Chunk 3 F4: in-memory pointers for the deleted row are dropped.
     expect(unregisterTable).toHaveBeenCalledWith('tbl_empty_1')
     expect(unregisterTable).not.toHaveBeenCalledWith('tbl_occupied')
+
+    // Chunk 3 F6: gc-stale released event fires for the deleted row.
+    expect(dispatchTableReleased).toHaveBeenCalledWith(
+      'tbl_empty_1', 'gc-stale', expect.any(Object),
+    )
   })
 
   it('deletes old COMPLETED tables older than 24 hr and drops in-memory state', async () => {
@@ -142,6 +163,10 @@ describe('tableGcService sweep', () => {
     // Chunk 3 F4: in-memory pointers for each row are dropped.
     expect(unregisterTable).toHaveBeenCalledWith('old_1')
     expect(unregisterTable).toHaveBeenCalledWith('old_2')
+
+    // Chunk 3 F6: gc-stale released event fires for each row.
+    expect(dispatchTableReleased).toHaveBeenCalledWith('old_1', 'gc-stale', expect.any(Object))
+    expect(dispatchTableReleased).toHaveBeenCalledWith('old_2', 'gc-stale', expect.any(Object))
   })
 
   it('marks idle ACTIVE tables as COMPLETED, releases occupied seats, and emits room:abandoned', async () => {
@@ -199,6 +224,12 @@ describe('tableGcService sweep', () => {
     // Chunk 3 F4: in-memory pointers are dropped after the abandon emit.
     expect(unregisterTable).toHaveBeenCalledWith('tbl_1')
     expect(unregisterTable).toHaveBeenCalledWith('tbl_2')
+
+    // Chunk 3 F6: gc-idle released event fires per table (note: distinct
+    // reason from gc-stale so the per-reason histogram can show idle vs
+    // stale separately).
+    expect(dispatchTableReleased).toHaveBeenCalledWith('tbl_1', 'gc-idle', expect.any(Object))
+    expect(dispatchTableReleased).toHaveBeenCalledWith('tbl_2', 'gc-idle', expect.any(Object))
   })
 
   it('does not touch fresh tables', async () => {
@@ -300,6 +331,10 @@ describe('tableGcService sweep', () => {
       // Chunk 3 F4: in-memory pointers for each demo row are dropped.
       expect(unregisterTable).toHaveBeenCalledWith('demo_1')
       expect(unregisterTable).toHaveBeenCalledWith('demo_2')
+
+      // Chunk 3 F6: gc-stale released event fires for each demo row.
+      expect(dispatchTableReleased).toHaveBeenCalledWith('demo_1', 'gc-stale', expect.any(Object))
+      expect(dispatchTableReleased).toHaveBeenCalledWith('demo_2', 'gc-stale', expect.any(Object))
     })
 
     it('uses the correct cutoff windows: 2-min post-complete and the configured TTL (minutes)', async () => {

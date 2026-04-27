@@ -50,3 +50,33 @@ describe('gc liveness counter', () => {
     expect(counters.getGcStats().failures).toBe(start + 2)
   })
 })
+
+// Chunk 3 F7 — table.released per-reason counter.
+describe('table-released counter', () => {
+  it('exposes a bucket per known reason plus an OTHER catch-all', () => {
+    const snap = counters.getTableReleased()
+    for (const reason of [
+      'disconnect', 'leave', 'game-end',
+      'gc-stale', 'gc-idle', 'admin', 'guest-cleanup',
+      'OTHER',
+    ]) {
+      expect(snap).toHaveProperty(reason)
+    }
+  })
+
+  it('incrementTableReleased bumps the matching bucket and lands typos in OTHER', () => {
+    const start = counters.getTableReleased()
+    counters.incrementTableReleased('disconnect')
+    counters.incrementTableReleased('disconnect')
+    counters.incrementTableReleased('definitely-not-a-reason')
+    const after = counters.getTableReleased()
+    expect(after.disconnect).toBe(start.disconnect + 2)
+    expect(after.OTHER).toBe(start.OTHER + 1)
+  })
+
+  it('returns a copy, not the live object — caller cannot mutate state', () => {
+    const snap = counters.getTableReleased()
+    snap.disconnect = 999_999
+    expect(counters.getTableReleased().disconnect).not.toBe(999_999)
+  })
+})

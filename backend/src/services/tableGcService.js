@@ -22,6 +22,7 @@ import { dispatch } from '../lib/notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { incrementGcFailure, recordGcSuccess } from '../lib/resourceCounters.js'
 import { releaseSeats } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import { unregisterTable } from '../realtime/socketHandler.js'
 
 const SWEEP_INTERVAL_MS = 60_000 // 1 minute
@@ -98,6 +99,7 @@ async function deleteStaleForming(now) {
   // any in-memory pointers at these now-gone rows (chunk 3 F4).
   for (const t of candidates.filter(c => emptyIds.includes(c.id))) {
     unregisterTable(t.id)
+    dispatchTableReleased(t.id, TABLE_RELEASED_REASONS.GC_STALE, { trigger: 'stale-forming' })
     dispatch({
       type: 'table.deleted',
       targets: { broadcast: true },
@@ -129,7 +131,10 @@ async function deleteOldCompleted(now) {
   const ids = candidates.map((t) => t.id)
   const { count } = await db.table.deleteMany({ where: { id: { in: ids } } })
 
-  for (const id of ids) unregisterTable(id)
+  for (const id of ids) {
+    unregisterTable(id)
+    dispatchTableReleased(id, TABLE_RELEASED_REASONS.GC_STALE, { trigger: 'old-completed' })
+  }
 
   return count
 }
@@ -175,6 +180,7 @@ async function sweepDemos(now) {
 
   for (const t of toDelete) {
     unregisterTable(t.id)
+    dispatchTableReleased(t.id, TABLE_RELEASED_REASONS.GC_STALE, { trigger: 'demo-sweep' })
     dispatch({
       type: 'table.deleted',
       targets: { broadcast: true },
@@ -227,6 +233,7 @@ async function abandonIdleActive(now, io) {
     }
   }
   for (const table of idleTables) {
+    dispatchTableReleased(table.id, TABLE_RELEASED_REASONS.GC_IDLE, { trigger: 'abandon-idle-active' })
     unregisterTable(table.id)
   }
 

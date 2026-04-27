@@ -44,6 +44,23 @@ const _tableCreateErrors = { P2002: 0, P2003: 0, OTHER: 0 }
 let _gcFailures = 0
 let _gcLastSuccessAt = null
 
+// Chunk 3 F7 — per-reason `table.released` counter. Surfaced via
+// /health/tables. The reasons match the chunk-3 release paths inventory and
+// are validated at the dispatch site (lib/tableReleased.js); unknown reasons
+// land in OTHER so a typo in one site doesn't silently disappear.
+const TABLE_RELEASED_REASONS = [
+  'disconnect',
+  'leave',
+  'game-end',
+  'gc-stale',
+  'gc-idle',
+  'admin',
+  'guest-cleanup',
+]
+const _tableReleased = Object.fromEntries(
+  [...TABLE_RELEASED_REASONS, 'OTHER'].map((r) => [r, 0]),
+)
+
 export function incrementTableCreateError(code) {
   if (code === 'P2002')      _tableCreateErrors.P2002++
   else if (code === 'P2003') _tableCreateErrors.P2003++
@@ -53,6 +70,12 @@ export function getTableCreateErrors() { return { ..._tableCreateErrors } }
 
 export function incrementGcFailure() { _gcFailures++ }
 export function recordGcSuccess()     { _gcLastSuccessAt = Date.now() }
+
+export function incrementTableReleased(reason) {
+  if (reason in _tableReleased && reason !== 'OTHER') _tableReleased[reason]++
+  else                                                _tableReleased.OTHER++
+}
+export function getTableReleased() { return { ..._tableReleased } }
 export function getGcStats() {
   return {
     failures:       _gcFailures,

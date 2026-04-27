@@ -4,9 +4,10 @@ import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import { releaseSeats } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import { unregisterTable } from '../realtime/socketHandler.js'
 import logger from '../logger.js'
-import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats } from '../lib/resourceCounters.js'
+import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats, getTableReleased } from '../lib/resourceCounters.js'
 import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
 import { hasRole } from '../utils/roles.js'
 import {
@@ -83,10 +84,11 @@ router.get('/health/sockets', (req, res) => {
  * Lives under the admin router → already gated by requireAuth + requireAdmin.
  */
 router.get('/health/tables', (req, res) => {
-  const latest  = getLatestSnapshot() ?? {}
-  const alerts  = getAlerts()
-  const gc      = getGcStats()
-  const creates = getTableCreateErrors()
+  const latest   = getLatestSnapshot() ?? {}
+  const alerts   = getAlerts()
+  const gc       = getGcStats()
+  const creates  = getTableCreateErrors()
+  const released = getTableReleased()
   res.json({
     latest: {
       ts:                       latest.ts ?? null,
@@ -106,6 +108,7 @@ router.get('/health/tables', (req, res) => {
       gcStale:            !!alerts.gcStale,
     },
     tableCreateErrors: creates,
+    tableReleased:     released,
     gc,
     uptime: Math.round(process.uptime()),
   })
@@ -1487,6 +1490,7 @@ router.delete('/tables/:id', async (req, res, next) => {
       targets: { broadcast: true },
       payload: { tableId: req.params.id, slug: table.slug },
     })
+    dispatchTableReleased(req.params.id, TABLE_RELEASED_REASONS.ADMIN, { trigger: 'admin-delete' })
 
     // Drop every in-memory pointer at this table — disconnect timers, idle
     // timers, socket→table mappings, watchers (chunk 3 F5). Without this the

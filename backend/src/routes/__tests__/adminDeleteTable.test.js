@@ -44,18 +44,32 @@ vi.mock('../../realtime/socketHandler.js', () => ({
   unregisterTable: vi.fn(),
 }))
 
+vi.mock('../../lib/tableReleased.js', () => ({
+  dispatchTableReleased: vi.fn(),
+  TABLE_RELEASED_REASONS: {
+    DISCONNECT: 'disconnect', LEAVE: 'leave', GAME_END: 'game-end',
+    GC_STALE:   'gc-stale',   GC_IDLE: 'gc-idle',
+    ADMIN:      'admin',      GUEST_CLEANUP: 'guest-cleanup',
+  },
+}))
+
 vi.mock('../../lib/resourceCounters.js', () => ({
   getSnapshots:         vi.fn(() => []),
   getLatestSnapshot:    vi.fn(),
   getAlerts:            vi.fn(() => ({})),
   getTableCreateErrors: vi.fn(() => ({ P2002: 0, P2003: 0, OTHER: 0 })),
   getGcStats:           vi.fn(() => ({ failures: 0, lastSuccessAt: null, secondsSinceLastSuccess: null })),
+  getTableReleased:     vi.fn(() => ({
+    disconnect: 0, leave: 0, 'game-end': 0,
+    'gc-stale': 0, 'gc-idle': 0, admin: 0, 'guest-cleanup': 0, OTHER: 0,
+  })),
 }))
 
 const adminRouter = (await import('../admin.js')).default
 const db = (await import('../../lib/db.js')).default
 const { unregisterTable } = await import('../../realtime/socketHandler.js')
 const { dispatch, emitToRoom } = await import('../../lib/notificationBus.js')
+const { dispatchTableReleased } = await import('../../lib/tableReleased.js')
 
 function makeApp() {
   const app = express()
@@ -120,5 +134,10 @@ describe('DELETE /api/v1/admin/tables/:id', () => {
 
     // F5: in-memory pointers dropped for this table
     expect(unregisterTable).toHaveBeenCalledWith('tbl_1')
+
+    // F6: per-reason release event fires with reason=admin
+    expect(dispatchTableReleased).toHaveBeenCalledWith(
+      'tbl_1', 'admin', expect.objectContaining({ trigger: 'admin-delete' }),
+    )
   })
 })

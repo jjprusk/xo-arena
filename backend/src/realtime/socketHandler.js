@@ -43,6 +43,7 @@ import { nanoid } from 'nanoid'
 import { formatTableLabel } from '../lib/tableLabel.js'
 import { createTableTracked } from '../lib/createTableTracked.js'
 import { releaseSeats, releaseSeatForUser } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -289,6 +290,7 @@ function resetIdleTimer({ socketId, tableId, isPlayer, warnMs, graceMs, onWarn, 
             where: { id: tableId },
             data:  { status: 'COMPLETED', seats: releaseSeats(table?.seats) },
           }).catch(() => {})
+          dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'idle-abandon' })
           if (table?.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
           await deleteIfGuestTable(tableId)
         } catch (_) { /* best effort */ }
@@ -402,6 +404,7 @@ async function deleteIfGuestTable(tableOrId) {
     }
     if (!tableId || createdById !== 'anonymous') return
     await db.table.delete({ where: { id: tableId } })
+    dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.GUEST_CLEANUP)
   } catch (err) {
     logger.warn({ err: err.message }, 'deleteIfGuestTable failed')
   }
@@ -1162,11 +1165,13 @@ export async function attachSocketIO(httpServer) {
           where: { id: tableId },
           data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
         }).catch(() => {})
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.LEAVE, { trigger: 'room-cancel' })
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
       }
 
       io.to(`table:${tableId}`).emit('room:cancelled')
+      broadcastTablePresence(io, tableId)  // F8 — final spectator refresh before unregister
       clearAllIdleTimersForTable(tableId)
       // Remove all socket mappings for this table
       for (const [sid, tid] of _socketToTable) {
@@ -1239,6 +1244,8 @@ export async function attachSocketIO(httpServer) {
 
       if (newStatus === 'COMPLETED') {
         clearAllIdleTimersForTable(tableId)
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'game-move' })
+        broadcastTablePresence(io, tableId)  // F8 — spectators see status flip
         recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
         // Guest tables (createdById === 'anonymous') used to be deleted here,
         // but that broke Rematch: the next game:rematch would fail with
@@ -1365,6 +1372,8 @@ export async function attachSocketIO(httpServer) {
 
       clearAllIdleTimersForTable(tableId)
       io.to(`table:${tableId}`).emit('game:forfeit', { forfeiterMark: mark, winner: oppMark, scores: ps.scores })
+      dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.LEAVE, { trigger: 'forfeit' })
+      broadcastTablePresence(io, tableId)  // F8
       recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
       deleteIfGuestTable(updated)
     })
@@ -1719,6 +1728,7 @@ export async function attachSocketIO(httpServer) {
           where: { id: tableId },
           data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
         }).catch(() => {})
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'disconnect-forming' })
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) {
           // For tournament matches: reset slug so player 1 can rejoin after a
@@ -1774,6 +1784,7 @@ export async function attachSocketIO(httpServer) {
           where: { id: tableId },
           data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
         }).catch(() => {})
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'disconnect-both-gone' })
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
         clearAllIdleTimersForTable(tableId)
@@ -1820,6 +1831,8 @@ export async function attachSocketIO(httpServer) {
             scores: tps.scores,
             reason: 'disconnect',
           })
+          dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'disconnect-forfeit-timer' })
+          broadcastTablePresence(io, tableId)  // F8
 
           recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record disconnect forfeit'))
           deleteIfGuestTable(updated)

@@ -22,6 +22,11 @@ vi.mock('../../lib/resourceCounters.js', () => ({
   getAlerts:            vi.fn(() => ({})),
   getTableCreateErrors: vi.fn(() => ({ P2002: 0, P2003: 0, OTHER: 0 })),
   getGcStats:           vi.fn(() => ({ failures: 0, lastSuccessAt: null, secondsSinceLastSuccess: null })),
+  getTableReleased:     vi.fn(() => ({
+    disconnect: 0, leave: 0, 'game-end': 0,
+    'gc-stale': 0, 'gc-idle': 0, admin: 0, 'guest-cleanup': 0,
+    OTHER: 0,
+  })),
 }))
 
 vi.mock('../../lib/db.js', () => ({
@@ -53,6 +58,11 @@ beforeEach(() => {
   counters.getAlerts.mockReturnValue({})
   counters.getTableCreateErrors.mockReturnValue({ P2002: 0, P2003: 0, OTHER: 0 })
   counters.getGcStats.mockReturnValue({ failures: 0, lastSuccessAt: null, secondsSinceLastSuccess: null })
+  counters.getTableReleased.mockReturnValue({
+    disconnect: 0, leave: 0, 'game-end': 0,
+    'gc-stale': 0, 'gc-idle': 0, admin: 0, 'guest-cleanup': 0,
+    OTHER: 0,
+  })
 })
 
 describe('GET /api/v1/admin/health/tables', () => {
@@ -78,9 +88,29 @@ describe('GET /api/v1/admin/health/tables', () => {
         gcStale:            false,
       },
       tableCreateErrors: { P2002: 0, P2003: 0, OTHER: 0 },
+      tableReleased: {
+        disconnect: 0, leave: 0, 'game-end': 0,
+        'gc-stale': 0, 'gc-idle': 0, admin: 0, 'guest-cleanup': 0,
+        OTHER: 0,
+      },
       gc: { failures: 0, lastSuccessAt: null, secondsSinceLastSuccess: null },
     })
     expect(typeof res.body.uptime).toBe('number')
+  })
+
+  it('passes through populated table-released counts (chunk 3 F7)', async () => {
+    counters.getTableReleased.mockReturnValue({
+      disconnect: 14, leave: 7, 'game-end': 200,
+      'gc-stale': 3, 'gc-idle': 1, admin: 2, 'guest-cleanup': 18,
+      OTHER: 0,
+    })
+    const res = await request(makeApp()).get('/api/v1/admin/health/tables')
+    expect(res.status).toBe(200)
+    expect(res.body.tableReleased).toEqual({
+      disconnect: 14, leave: 7, 'game-end': 200,
+      'gc-stale': 3, 'gc-idle': 1, admin: 2, 'guest-cleanup': 18,
+      OTHER: 0,
+    })
   })
 
   it('passes through per-mode active counts and table-create errors when populated', async () => {

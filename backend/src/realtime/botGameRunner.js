@@ -15,6 +15,7 @@ import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
 import { releaseSeats } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -374,6 +375,7 @@ class BotGameRunner {
           where: { id: demoTable.id },
           data:  { status: 'COMPLETED', seats: releaseSeats(demoTable.seats) },
         }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
+        dispatchTableReleased(demoTable.id, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'demo-finish' })
       }
 
       // "Spectated to completion" — credit Hook step 2 for any authenticated
