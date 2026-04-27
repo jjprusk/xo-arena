@@ -38,7 +38,7 @@ export default function RewardPopup() {
     function onHookComplete({ reward, message } = {}) {
       show({
         kind:     'hook',
-        title:    'Hook complete!',
+        title:    'Off to a great start!',
         amount:   reward ?? 20,
         body:     message ?? 'Welcome to the Arena.',
         nextHint: 'Up next: build your first bot.',

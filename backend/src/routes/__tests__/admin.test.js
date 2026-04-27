@@ -44,6 +44,7 @@ vi.mock('../../lib/db.js', () => {
     findUnique: vi.fn(),
     update:     vi.fn(),
     delete:     vi.fn(),
+    deleteMany: vi.fn(),
   }
   const gameElo = {
     findUnique: vi.fn(),
@@ -64,7 +65,7 @@ vi.mock('../../lib/db.js', () => {
   return {
     default: {
       user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig, tournamentAutoDrop,
-      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount })),
+      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount, botSkill })),
     },
   }
 })
@@ -396,11 +397,12 @@ describe('PATCH /api/v1/admin/users/:id', () => {
 
 describe('DELETE /api/v1/admin/users/:id', () => {
   it('deletes a user with no bots inside a transaction', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/users/usr_1')
 
@@ -410,11 +412,12 @@ describe('DELETE /api/v1/admin/users/:id', () => {
   })
 
   it('nullifies game references before deleting user', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     await request(app).delete('/api/v1/admin/users/usr_1')
 
@@ -427,43 +430,47 @@ describe('DELETE /api/v1/admin/users/:id', () => {
     expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'usr_1' } })
   })
 
-  it('cleans up bot games before deleting bots and user', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
-    db.user.findMany.mockResolvedValue([{ id: 'bot_1' }])
+  it('cleans up bot games and bot skills before deleting bots and user', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
+    db.user.findMany.mockResolvedValue([
+      { id: 'bot_1', username: 'b1', displayName: 'B1', betterAuthId: null, botModelId: null },
+    ])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
+    db.botSkill.deleteMany.mockResolvedValue({ count: 0 })
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/users/usr_1')
 
     expect(res.status).toBe(204)
-    // Bot game cleanup
+    // Bot game + skill cleanup
     expect(db.game.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ player2Id: 'bot_1' }) })
     )
     expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'bot_1' } })
+    expect(db.botSkill.deleteMany).toHaveBeenCalledWith({ where: { botId: 'bot_1' } })
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'bot_1' } })
     // Owner game cleanup and deletion
     expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'usr_1' } })
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
   })
 
-  it('deletes Better Auth records so the email can be re-registered', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
+  it('deletes the Better Auth user (cascades sessions and accounts)', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     await request(app).delete('/api/v1/admin/users/usr_1')
 
-    expect(db.baSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'ba_user_1' } })
-    expect(db.baAccount.deleteMany).toHaveBeenCalledWith({ where: { userId: 'ba_user_1' } })
     expect(db.baUser.delete).toHaveBeenCalledWith({ where: { id: 'ba_user_1' } })
   })
 
   it('skips BA cleanup when user has no betterAuthId', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: null })
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: null })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
@@ -477,10 +484,6 @@ describe('DELETE /api/v1/admin/users/:id', () => {
 
   it('returns 404 for missing user', async () => {
     db.user.findUnique.mockResolvedValue(null)
-    db.user.findMany.mockResolvedValue([])
-    const err = new Error('Not found')
-    err.code = 'P2025'
-    db.$transaction.mockRejectedValue(err)
 
     const res = await request(app).delete('/api/v1/admin/users/nonexistent')
 
@@ -684,14 +687,18 @@ describe('PATCH /api/v1/admin/bots/:id', () => {
 
 describe('DELETE /api/v1/admin/bots/:id', () => {
   it('deletes bot and its games', async () => {
-    db.user.findUnique.mockResolvedValue({ id: 'bot_1', isBot: true, botModelId: null, username: 'bot-clone-x' })
-    db.$transaction.mockImplementation(async (fn) => fn({ game: db.game, user: db.user }))
+    db.user.findUnique.mockResolvedValue({
+      id: 'bot_1', isBot: true, botModelId: null, username: 'bot-clone-x', betterAuthId: null,
+    })
+    db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
+    db.botSkill.deleteMany.mockResolvedValue({ count: 0 })
     db.user.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/bots/bot_1')
 
     expect(res.status).toBe(204)
+    expect(db.botSkill.deleteMany).toHaveBeenCalledWith({ where: { botId: 'bot_1' } })
   })
 
   it('returns 404 for non-bot id', async () => {

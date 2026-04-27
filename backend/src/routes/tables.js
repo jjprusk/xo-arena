@@ -22,8 +22,9 @@ import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 import { dispatch } from '../lib/notificationBus.js'
-import { mountainPool, MountainNamePool } from '../realtime/mountainNames.js'
+import { nanoid } from 'nanoid'
 import { botGameRunner } from '../realtime/botGameRunner.js'
+import { createTableTracked } from '../lib/createTableTracked.js'
 import { pickMatchup } from '../config/demoTableMatchups.js'
 
 const router = Router()
@@ -220,28 +221,21 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (typeof isPrivate    !== 'boolean')                 return res.status(400).json({ error: 'isPrivate must be boolean' })
     if (typeof isTournament !== 'boolean')                 return res.status(400).json({ error: 'isTournament must be boolean' })
 
-    // Every table gets a mountain-name slug + displayName. The slug is the
-    // room key the socket layer uses for room:join — without it GameView
-    // falls through useGameSDK's `else` branch and emits room:create instead
-    // of attaching, so each player ends up in their own phantom room.
-    //
-    // The pool is in-memory; it doesn't know about tables persisted from a
-    // previous process. If `acquire()` picks a name whose slug already exists
-    // in the DB we'd get a P2002 unique-constraint error, so retry a few times
-    // with fresh names before giving up.
+    // Every table gets a nanoid(8) slug. The slug is the room key the socket
+    // layer uses for room:join — without it GameView falls through useGameSDK's
+    // `else` branch and emits room:create instead of attaching, so each player
+    // ends up in their own phantom room. nanoid(8) gives ~218T combinations,
+    // but we still retry on P2002 as a defensive backstop against birthday-
+    // paradox collisions or a stuck random source.
     let table
     let lastErr
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const name = mountainPool.acquire()
-      if (!name) return res.status(503).json({ error: 'No mountain names available' })
-      const slug = MountainNamePool.toSlug(name)
-      const displayName = `Mt. ${name}`
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const slug = nanoid(8)
       try {
-        table = await db.table.create({
+        table = await createTableTracked({
           data: {
             gameId,
             slug,
-            displayName,
             createdById: req.auth.userId,
             minPlayers,
             maxPlayers,
@@ -253,10 +247,6 @@ router.post('/', requireAuth, async (req, res, next) => {
         break
       } catch (err) {
         lastErr = err
-        // P2002 = unique-constraint violation. The only unique constraint on a
-        // fresh `table.create` is the slug, so any P2002 here is a slug
-        // collision — retry with a different mountain name. Keep the colliding
-        // name out of the pool so acquire() won't pick it again this session.
         if (err?.code === 'P2002') continue
         throw err
       }
@@ -426,7 +416,7 @@ router.get('/active-match', async (req, res, next) => {
  * "One active demo per user": any prior in-flight demo by the same caller is
  * killed (Table deleted, bot game closed) before the new one is started.
  *
- * Returns: `{ tableId, slug, displayName, botA, botB }`. botA plays X.
+ * Returns: `{ tableId, slug, botA, botB }`. botA plays X.
  */
 router.post('/demo', requireAuth, async (req, res, next) => {
   try {
@@ -457,26 +447,17 @@ router.post('/demo', requireAuth, async (req, res, next) => {
       return res.status(503).json({ error: 'Demo bots not provisioned' })
     }
 
-    // Allocate a slug that's free in both the mountain pool AND the DB. The
-    // mountain name's lifecycle is handed to botGameRunner via the
-    // mountainName param — the runner releases it on game close just like a
-    // name it acquired itself. On retry/failure we release it ourselves.
+    // Allocate a nanoid(8) slug; retry on the (vanishingly rare) P2002.
     let table
     let slug
-    let displayName
-    let chosenName
     let lastErr
-    for (let attempt = 0; attempt < 5; attempt++) {
-      chosenName  = mountainPool.acquire()
-      if (!chosenName) return res.status(503).json({ error: 'No mountain names available' })
-      slug        = MountainNamePool.toSlug(chosenName)
-      displayName = `Mt. ${chosenName}`
+    for (let attempt = 0; attempt < 3; attempt++) {
+      slug = nanoid(8)
       try {
-        table = await db.table.create({
+        table = await createTableTracked({
           data: {
             gameId:       'xo',
             slug,
-            displayName,
             createdById:  req.auth.userId,
             minPlayers:   2,
             maxPlayers:   2,
@@ -485,8 +466,8 @@ router.post('/demo', requireAuth, async (req, res, next) => {
             isDemo:       true,
             status:       'ACTIVE',
             seats: [
-              { userId: botA.id, status: 'occupied' },
-              { userId: botB.id, status: 'occupied' },
+              { userId: botA.id, status: 'occupied', displayName: botA.displayName },
+              { userId: botB.id, status: 'occupied', displayName: botB.displayName },
             ],
             previewState: {
               board:       Array(9).fill(null),
@@ -504,30 +485,24 @@ router.post('/demo', requireAuth, async (req, res, next) => {
         break
       } catch (err) {
         lastErr = err
-        mountainPool.release(chosenName)
-        chosenName = null
         if (err?.code === 'P2002') continue
         throw err
       }
     }
     if (!table) return res.status(503).json({ error: 'Could not allocate demo table slug', detail: lastErr?.message })
 
-    // Start the bot-vs-bot game with the same slug as the Table row. Hand
-    // ownership of the mountain name to the runner so it releases on close.
+    // Start the bot-vs-bot game with the same slug as the Table row.
     try {
       await botGameRunner.startGame({
         bot1: { id: botA.id, displayName: botA.displayName, botModelId: botA.botModelId },
         bot2: { id: botB.id, displayName: botB.displayName, botModelId: botB.botModelId },
         slug,
-        displayName,
-        mountainName: chosenName,
         bestOfN: 1,
       })
     } catch (err) {
-      // If the runner can't start, roll back: free the name and delete the
-      // ghost Table so no socket can ever join an empty room.
+      // If the runner can't start, roll back: delete the ghost Table so no
+      // socket can ever join an empty room.
       logger.warn({ err: err.message, slug }, 'Demo Table: bot game failed to start; rolling back')
-      mountainPool.release(chosenName)
       await db.table.delete({ where: { id: table.id } }).catch(() => {})
       return res.status(503).json({ error: 'Could not start demo match' })
     }
@@ -535,7 +510,6 @@ router.post('/demo', requireAuth, async (req, res, next) => {
     res.status(201).json({
       tableId: table.id,
       slug,
-      displayName,
       botA: { id: botA.id, displayName: botA.displayName },
       botB: { id: botB.id, displayName: botB.displayName },
     })

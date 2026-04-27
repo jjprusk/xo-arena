@@ -123,10 +123,10 @@ test.describe('PvP game flow', () => {
     }
   })
 
-  // Dropped: "table display name is shown on the board" (pre-Phase-3.4). The
-  // PlatformShell no longer renders "Mt. <name>" anywhere on the game surface
-  // in the Tables paradigm — that label now lives in the Tables list only. The
-  // mountain-name allocation itself is covered by mountainNames unit tests.
+  // Dropped: "table display name is shown on the board" — the Tables paradigm
+  // no longer renders a curated mountain name anywhere on the game surface;
+  // labels are now computed on read from seats + tournament context (see
+  // backend/src/lib/tableLabel.js).
 })
 
 test.describe('Spectator flow', () => {

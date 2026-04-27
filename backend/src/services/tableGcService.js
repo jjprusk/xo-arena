@@ -20,6 +20,10 @@ import logger from '../logger.js'
 import { getSystemConfig } from './skillService.js'
 import { dispatch } from '../lib/notificationBus.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
+import { incrementGcFailure, recordGcSuccess } from '../lib/resourceCounters.js'
+import { releaseSeats } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
+import { unregisterTable } from '../realtime/socketHandler.js'
 
 const SWEEP_INTERVAL_MS = 60_000 // 1 minute
 
@@ -56,8 +60,10 @@ export async function sweep(io) {
       )
     }
 
+    recordGcSuccess()
     return { deletedForming, deletedCompleted, abandonedActive, deletedDemos, killedSpars, deletedOldSpars }
   } catch (err) {
+    incrementGcFailure()
     logger.warn({ err: err.message }, 'Table GC sweep failed')
     return { deletedForming: 0, deletedCompleted: 0, abandonedActive: 0, deletedDemos: 0, killedSpars: 0, deletedOldSpars: 0, error: err.message }
   }
@@ -89,8 +95,11 @@ async function deleteStaleForming(now) {
 
   const { count } = await db.table.deleteMany({ where: { id: { in: emptyIds } } })
 
-  // Fire bus events so the Tables list page reacts in real time
+  // Fire bus events so the Tables list page reacts in real time, and drop
+  // any in-memory pointers at these now-gone rows (chunk 3 F4).
   for (const t of candidates.filter(c => emptyIds.includes(c.id))) {
+    unregisterTable(t.id)
+    dispatchTableReleased(t.id, TABLE_RELEASED_REASONS.GC_STALE, { trigger: 'stale-forming' })
     dispatch({
       type: 'table.deleted',
       targets: { broadcast: true },
@@ -106,12 +115,26 @@ async function deleteStaleForming(now) {
 async function deleteOldCompleted(now) {
   const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hr ago
 
-  const { count } = await db.table.deleteMany({
+  // Two-step: fetch candidate ids first so we can drop in-memory state for
+  // each row (chunk 3 F4). The previous bulk deleteMany left orphan socket
+  // map entries pointing at gone rows until the next disconnect.
+  const candidates = await db.table.findMany({
     where: {
       status: 'COMPLETED',
       updatedAt: { lt: cutoff },
     },
+    select: { id: true },
   })
+
+  if (candidates.length === 0) return 0
+
+  const ids = candidates.map((t) => t.id)
+  const { count } = await db.table.deleteMany({ where: { id: { in: ids } } })
+
+  for (const id of ids) {
+    unregisterTable(id)
+    dispatchTableReleased(id, TABLE_RELEASED_REASONS.GC_STALE, { trigger: 'old-completed' })
+  }
 
   return count
 }
@@ -156,6 +179,8 @@ async function sweepDemos(now) {
   const { count } = await db.table.deleteMany({ where: { id: { in: toDelete.map(t => t.id) } } })
 
   for (const t of toDelete) {
+    unregisterTable(t.id)
+    dispatchTableReleased(t.id, TABLE_RELEASED_REASONS.GC_STALE, { trigger: 'demo-sweep' })
     dispatch({
       type: 'table.deleted',
       targets: { broadcast: true },
@@ -182,24 +207,34 @@ async function abandonIdleActive(now, io) {
       status: 'ACTIVE',
       updatedAt: { lt: cutoff },
     },
-    select: { id: true, gameId: true },
+    select: { id: true, gameId: true, seats: true },
   })
 
   if (idleTables.length === 0) return 0
 
-  const ids = idleTables.map((t) => t.id)
+  // Per-row update so we can clear occupied seats — `updateMany` can't write
+  // a per-row JSON shape. The list is bounded (idle ACTIVE tables in the
+  // last sweep window) so the loop is fine in practice.
+  await Promise.all(
+    idleTables.map((t) =>
+      db.table.update({
+        where: { id: t.id },
+        data:  { status: 'COMPLETED', seats: releaseSeats(t.seats) },
+      }).catch((err) => logger.warn({ err: err.message, tableId: t.id }, 'abandonIdleActive: per-row update failed')),
+    ),
+  )
 
-  // Bulk-update to COMPLETED
-  await db.table.updateMany({
-    where: { id: { in: ids } },
-    data: { status: 'COMPLETED' },
-  })
-
-  // Notify connected sockets for each table
+  // Notify connected sockets for each table, then drop in-memory state
+  // (chunk 3 F4). Order matters: emit first so clients still receive the
+  // event before their socket→table mapping is cleared.
   if (io) {
     for (const table of idleTables) {
       io.to(`table:${table.id}`).emit('room:abandoned', { reason: 'idle' })
     }
+  }
+  for (const table of idleTables) {
+    dispatchTableReleased(table.id, TABLE_RELEASED_REASONS.GC_IDLE, { trigger: 'abandon-idle-active' })
+    unregisterTable(table.id)
   }
 
   return idleTables.length

@@ -7,6 +7,7 @@ import { getSystemConfig } from '../services/skillService.js'
 import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
 import { completeStep } from '../services/journeyService.js'
+import { deleteBot as deleteBotCascade, BuiltinBotProtectedError } from '../services/userDeletionService.js'
 import cache from '../utils/cache.js'
 
 const BOTS_CACHE_KEY = 'bots:public'
@@ -21,7 +22,7 @@ const router = Router()
  */
 router.get('/', async (req, res, next) => {
   try {
-    const { ownerId, includeInactive } = req.query
+    const { ownerId, includeInactive, gameId } = req.query
 
     // Owner-specific requests are user-scoped — never cache them.
     if (ownerId) {
@@ -35,6 +36,23 @@ router.get('/', async (req, res, next) => {
       const limit = isExempt ? null : (owner ? await getTierLimit(owner.id, 'bots') : 3)
       const count = await db.user.count({ where: { botOwnerId: ownerId, isBot: true } })
       return res.json({ bots, limitInfo: { count, limit, isExempt }, provisionalThreshold })
+    }
+
+    // Phase 3.8.2.6 — gameId filter for community bot pickers. Bypasses the
+    // public cache because the filter dimension would multiply cache entries
+    // for what is a relatively rare query path.
+    if (gameId && typeof gameId === 'string') {
+      const skillRows = await db.botSkill.findMany({
+        where:    { gameId, botId: { not: null } },
+        select:   { botId: true },
+        distinct: ['botId'],
+      })
+      const botIds = skillRows.map((s) => s.botId).filter(Boolean)
+      if (botIds.length === 0) return res.json({ bots: [] })
+
+      const all = await listBots({ includeInactive: includeInactive === 'true' })
+      const idSet = new Set(botIds)
+      return res.json({ bots: all.filter((b) => idSet.has(b.id)) })
     }
 
     // Public active bot list — cacheable.
@@ -65,6 +83,53 @@ router.get('/mine', requireAuth, async (req, res, next) => {
     if (!caller) return res.status(401).json({ error: 'Unauthorized' })
     const bots = await listBots({ ownerId: caller.id })
     res.json({ bots })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/bots/:id
+ *
+ * Bot identity + per-game skills. Public — used by community bot pickers and
+ * the Profile bot card. Each skill row carries the per-skill ELO joined from
+ * `GameElo (userId=botId, gameId=skill.gameId)` so the client doesn't need a
+ * second fetch.
+ */
+router.get('/:id', async (req, res, next) => {
+  try {
+    const bot = await db.user.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true, displayName: true, avatarUrl: true,
+        isBot: true, botActive: true, botAvailable: true, botCompetitive: true,
+        botProvisional: true, botGamesPlayed: true,
+        botModelId: true, botModelType: true, botOwnerId: true,
+        createdAt: true,
+      },
+    })
+    if (!bot || !bot.isBot) return res.status(404).json({ error: 'Bot not found' })
+
+    const skills = await db.botSkill.findMany({
+      where: { botId: bot.id },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    const elos = skills.length === 0 ? [] : await db.gameElo.findMany({
+      where: {
+        userId: bot.id,
+        gameId: { in: skills.map((s) => s.gameId) },
+      },
+      select: { gameId: true, rating: true, gamesPlayed: true },
+    })
+    const elosByGame = new Map(elos.map((e) => [e.gameId, e]))
+
+    const enriched = skills.map((s) => ({
+      ...s,
+      elo: elosByGame.get(s.gameId) ?? null,
+    }))
+
+    res.json({ bot: { ...bot, skills: enriched } })
   } catch (err) {
     next(err)
   }
@@ -242,6 +307,110 @@ router.post('/:id/train-quick', requireAuth, async (req, res, next) => {
   }
 })
 
+// Algorithms accepted by POST /:botId/skills. Mirrors the registry in
+// backend/src/ai — kept as an explicit allow-list so a typo in the body
+// can't create an unrunnable skill row.
+const SUPPORTED_SKILL_ALGORITHMS = new Set([
+  'minimax', 'ml', 'qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero',
+])
+
+/**
+ * POST /api/v1/bots/:botId/skills
+ *
+ * Phase 3.8 multi-skill foundation. Body `{ gameId, algorithm, modelType? }`.
+ * Idempotent on `(botId, gameId)` — a second call returns the existing skill
+ * with status 200 instead of erroring. Sets `User.botModelId` to the new
+ * skill if the bot had no primary skill before.
+ */
+/**
+ * DELETE /api/v1/bots/:id/skills/:skillId
+ *
+ * Remove one skill from a bot. If the deleted skill was the bot's primary
+ * (`User.botModelId`), repoint to any remaining skill or null.
+ */
+router.delete('/:id/skills/:skillId', requireAuth, async (req, res, next) => {
+  try {
+    const result = await loadBotAndAuthorize(req, res)
+    if (!result) return
+    const { bot } = result
+
+    const skill = await db.botSkill.findUnique({ where: { id: req.params.skillId } })
+    if (!skill || skill.botId !== bot.id) {
+      return res.status(404).json({ error: 'Skill not found for this bot' })
+    }
+
+    await db.$transaction(async (tx) => {
+      await tx.botSkill.delete({ where: { id: skill.id } })
+
+      if (bot.botModelId === skill.id) {
+        const remaining = await tx.botSkill.findFirst({
+          where: { botId: bot.id },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        })
+        await tx.user.update({
+          where: { id: bot.id },
+          data:  { botModelId: remaining ? remaining.id : null },
+        })
+      }
+    })
+
+    cache.invalidate(BOTS_CACHE_KEY)
+    res.status(204).end()
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Skill not found' })
+    next(err)
+  }
+})
+
+router.post('/:id/skills', requireAuth, async (req, res, next) => {
+  try {
+    const result = await loadBotAndAuthorize(req, res)
+    if (!result) return
+    const { bot } = result
+
+    const { gameId, algorithm, modelType } = req.body ?? {}
+    if (typeof gameId !== 'string' || !gameId.trim()) {
+      return res.status(400).json({ error: 'gameId is required', code: 'INVALID_GAME_ID' })
+    }
+    if (typeof algorithm !== 'string' || !SUPPORTED_SKILL_ALGORITHMS.has(algorithm)) {
+      return res.status(400).json({ error: 'algorithm is required and must be supported', code: 'INVALID_ALGORITHM' })
+    }
+    if (modelType !== undefined && typeof modelType !== 'string') {
+      return res.status(400).json({ error: 'modelType must be a string', code: 'INVALID_MODEL_TYPE' })
+    }
+
+    const existing = await db.botSkill.findFirst({ where: { botId: bot.id, gameId } })
+    if (existing) {
+      return res.status(200).json({ skill: existing, created: false })
+    }
+
+    const skill = await db.botSkill.create({
+      data: {
+        botId:     bot.id,
+        gameId,
+        algorithm,
+        name:      `${bot.displayName} ${gameId.toUpperCase()}`,
+        config:    {},
+      },
+    })
+
+    // First-skill bots inherit this skill as their primary so existing
+    // surfaces (botModelId-keyed lookups, runtime dispatch) keep working.
+    if (!bot.botModelId) {
+      await db.user.update({
+        where: { id: bot.id },
+        data:  { botModelId: skill.id, ...(modelType ? { botModelType: modelType } : {}) },
+      })
+    }
+
+    cache.invalidate(BOTS_CACHE_KEY)
+    res.status(201).json({ skill, created: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
 /**
  * Helper: verify the caller owns the bot or has BOT_ADMIN/ADMIN role.
  * Returns { bot, caller } or sends an error response.
@@ -257,8 +426,9 @@ async function loadBotAndAuthorize(req, res) {
   const bot = await db.user.findUnique({
     where: { id: req.params.id },
     select: {
-      id: true, displayName: true, botOwnerId: true, botActive: true,
+      id: true, username: true, displayName: true, botOwnerId: true, botActive: true,
       botInTournament: true, botModelType: true, botModelId: true, isBot: true,
+      betterAuthId: true,
     },
   })
   if (!bot || !bot.isBot) { res.status(404).json({ error: 'Bot not found' }); return null }
@@ -378,21 +548,12 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!result) return
     const { bot } = result
 
-    // Delete everything atomically so no orphaned ML models are left behind.
-    // Games where this bot was player1 have a required (non-nullable) FK — no
-    // cascade is defined so we must delete them first. Games where it was
-    // player2 or winner use nullable FKs and will be set to null automatically.
-    await db.$transaction(async (tx) => {
-      await tx.game.deleteMany({ where: { player1Id: bot.id } })
-      await tx.user.delete({ where: { id: bot.id } })
-      if (bot.botModelId) {
-        await tx.botSkill.delete({ where: { id: bot.botModelId } })
-      }
-    })
+    await deleteBotCascade(db, bot)
 
     cache.invalidate(BOTS_CACHE_KEY)
     res.status(204).end()
   } catch (err) {
+    if (err instanceof BuiltinBotProtectedError) return res.status(400).json({ error: err.message })
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bot not found' })
     next(err)
   }

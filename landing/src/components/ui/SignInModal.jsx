@@ -23,8 +23,12 @@ import AppleSignInButton from './AppleSignInButton.jsx'
  *   - The optional `context` prop adjusts the modal's copy:
  *       'build-bot' → "Build your first bot — create a free account"
  *       (any other) → standard sign-in / sign-up
+ *   - The optional `onSuccess` callback fires after a successful sign-in or
+ *     sign-up (before `onClose`) so callers can run post-auth navigation —
+ *     e.g. PlayPage routes the user to `/` so the post-signup landing matches
+ *     the V1 acceptance flow instead of leaving them stuck mid-PvAI.
  */
-export default function SignInModal({ onClose, defaultView = 'sign-in', context = null }) {
+export default function SignInModal({ onClose, onSuccess, defaultView = 'sign-in', context = null }) {
   const [view, setView]                   = useState(defaultView)  // 'sign-in' | 'sign-up' | 'verify-email' | 'forgot-password' | 'reset-sent'
   const [email, setEmail]                 = useState('')
   const [password, setPassword]           = useState('')
@@ -69,6 +73,7 @@ export default function SignInModal({ onClose, defaultView = 'sign-in', context 
       // even though the session is already live.
       clearTokenCache()
       triggerSessionRefresh()
+      onSuccess?.()
       onClose()
     } catch (err) {
       setError(err?.message || 'Sign in failed.')
@@ -118,20 +123,23 @@ export default function SignInModal({ onClose, defaultView = 'sign-in', context 
       // REQUIRED until verified). Sign the user in immediately and credit
       // any guest-mode Hook progress they accumulated pre-signup.
       clearTokenCache()
-      try {
-        if (hasGuestProgress()) {
-          const token = await getToken()
-          if (token) {
+      // Guest-credit is non-essential — fire and forget so a slow or hung
+      // /guide/guest-credit can't block the modal close + post-auth navigation.
+      // If it fails the user just loses the Hook pre-credit (recoverable from
+      // server-side step detection on first journey check).
+      if (hasGuestProgress()) {
+        ;(async () => {
+          try {
+            const token = await getToken()
+            if (!token) return
             const journey = readGuestJourney()
             await api.guide.guestCredit(journey, token)
             clearGuestJourney()
-          }
-        }
-      } catch {
-        // Non-fatal — if guest-credit fails, the user is still signed up
-        // and can use the platform; they just lose the Hook pre-credit.
+          } catch { /* non-fatal */ }
+        })()
       }
       triggerSessionRefresh()
+      onSuccess?.()
       onClose()
     } catch (err) {
       setError(err?.message || 'Sign up failed.')

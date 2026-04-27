@@ -237,18 +237,18 @@ export function useGameSDK({
 
     // ── Room events ───────────────────────────────────────────────────────────
 
-    socket.on('room:created', ({ slug, displayName, mark }) => {
+    socket.on('room:created', ({ slug, label, mark }) => {
       const cu = currentUserRef.current
       slugRef.current = slug
       const hostId = cu?.id ?? 'host'
       marksRef.current[hostId] = mark
       playersRef.current = [{ id: hostId, displayName: cu?.displayName ?? 'You', isBot: false }]
-      settingsRef.current = { displayName, myMark: mark }
+      settingsRef.current = { label, myMark: mark }
       setPhase('waiting')
       buildSession({ isSpectator: false })
     })
 
-    socket.on('room:created:hvb', ({ slug, displayName, mark, board, currentTurn }) => {
+    socket.on('room:created:hvb', ({ slug, label, mark, board, currentTurn }) => {
       perfMark('useGameSDK:room:created:hvb')
       const cu = currentUserRef.current
       slugRef.current = slug
@@ -260,7 +260,7 @@ export function useGameSDK({
         { id: hostId, displayName: cu?.displayName ?? 'You', isBot: false },
         { id: botId, displayName: 'Bot', isBot: true },
       ]
-      settingsRef.current = { displayName, myMark: mark, isTournament: !!tournamentMatchId }
+      settingsRef.current = { label, myMark: mark, isTournament: !!tournamentMatchId }
       boardRef.current = board
       setPhase('playing')
       buildSession({ isSpectator: false })
@@ -273,12 +273,6 @@ export function useGameSDK({
         scores: { X: 0, O: 0 },
         round: 1,
       })
-    })
-
-    socket.on('room:renamed', ({ slug, displayName }) => {
-      slugRef.current = slug
-      settingsRef.current = { ...settingsRef.current, displayName }
-      buildSession()
     })
 
     socket.on('room:joined', ({ slug, role, mark, room }) => {
@@ -311,7 +305,7 @@ export function useGameSDK({
 
       playersRef.current = guestPlayer ? [hostPlayer, guestPlayer] : [hostPlayer]
       settingsRef.current = {
-        displayName:    room?.displayName,
+        label:          room?.label,
         spectatorCount: room?.spectatorCount ?? 0,
         myMark:         isSpectator ? null : mark,
         isTournament:   !!tournamentMatchId,
@@ -593,14 +587,36 @@ export function useGameSDK({
     document.addEventListener('visibilitychange', onVisibilityShow)
     window.addEventListener('focus', autoIdlePong)
 
+    // Graceful close on tab/window close (chunk 3 F2). Until this hook
+    // existed, Safari closing the tab fired no socket message at all, so the
+    // opponent waited the full 60-s disconnect-forfeit window before the
+    // table abandoned. Now we explicitly fire game:forfeit (mid-game) or
+    // game:leave (post-game) on pagehide. socket.io flushes the buffer when
+    // the underlying connection closes, so the server sees the event before
+    // the disconnect handler runs — short-circuiting the forfeit timer.
+    //
+    // We listen on `pagehide` (covers tab close, navigation, BFCache stash)
+    // rather than `beforeunload` (unreliable on mobile, blocks BFCache).
+    function onPageHide() {
+      try {
+        if (phaseRef.current === 'playing') {
+          getSocket().emit('game:forfeit')
+        } else if (phaseRef.current === 'finished') {
+          getSocket().emit('game:leave')
+        }
+      } catch (_) { /* nothing we can do during teardown */ }
+    }
+    window.addEventListener('pagehide', onPageHide)
+
     return () => {
       // Cancel pending connect handler and all event listeners
       socket.off('connect', onConnect)
       emitted = true // prevent any in-flight getToken().then from emitting after cleanup
       document.removeEventListener('visibilitychange', onVisibilityShow)
       window.removeEventListener('focus', autoIdlePong)
+      window.removeEventListener('pagehide', onPageHide)
       ;[
-        'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
+        'room:created', 'room:created:hvb', 'room:joined', 'room:guestJoined',
         'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',
         'room:cancelled', 'room:abandoned', 'room:kicked',
         'game:start', 'game:moved', 'game:forfeit', 'game:opponent_left',

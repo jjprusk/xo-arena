@@ -45,4 +45,9 @@ export function clearTokenCache() {
   _cachedToken = null
   _tokenExpiry = 0
   _nullUntil   = 0
+  // Drop any in-flight guest-mode fetch so the next getToken() issues a fresh
+  // request with the new auth cookie. Without this, a post-signup await would
+  // return the still-pending guest-mode promise (which resolves to null) and
+  // skip the authenticated branch — see SignInModal handleSignUp.
+  _inflight    = null
 }

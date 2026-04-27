@@ -7,13 +7,15 @@
  * Results are recorded to the DB and ELO is updated when the game ends.
  */
 
-import { mountainPool, MountainNamePool } from './mountainNames.js'
+import { nanoid } from 'nanoid'
 import { getWinner, isBoardFull, getEmptyCells, WIN_LINES } from '@xo-arena/ai'
 import registry from '../ai/registry.js'
 import { getMoveForModel } from '../services/skillService.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
+import { releaseSeats } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -92,31 +94,18 @@ class BotGameRunner {
    * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, displayName: explicitDisplayName = null, mountainName: explicitMountainName = null, isSpar = false, sparUserId = null }) {
-    // Demo Table macro (§5.1) pre-allocates a slug + displayName so the Table
-    // row's slug matches the bot-game slug. The caller passes `mountainName`
-    // to transfer ownership — the runner releases it on game close exactly
-    // like a self-acquired name.
-    let name
-    let slug
-    let displayName
-    if (explicitSlug) {
-      name = explicitMountainName  // may be null if caller doesn't want pool tracking
-      slug = explicitSlug
-      displayName = explicitDisplayName ?? MountainNamePool.fromSlug(explicitSlug)
-    } else {
-      name = mountainPool.acquire()
-      if (!name) throw new Error('No mountain names available for bot game')
-      slug = MountainNamePool.toSlug(name)
-      displayName = `Mt. ${name}`
-    }
+  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, isSpar = false, sparUserId = null }) {
+    // Demo Table macro (§5.1) pre-allocates a slug so the Table row's slug
+    // matches the bot-game slug. Otherwise we mint our own.
+    const slug = explicitSlug ?? nanoid(8)
+    // Synthesised label for spectator UIs (no longer stored on the Table row).
+    const displayName = `${bot1.displayName} vs ${bot2.displayName}`
 
     const now = Date.now()
 
     const game = {
       slug,
       displayName,
-      name,
       bot1,   // plays X
       bot2,   // plays O
       board: Array(9).fill(null),
@@ -377,15 +366,16 @@ class BotGameRunner {
     // have a Table row.
     const demoTable = await db.table.findFirst({
       where:  { slug, isDemo: true },
-      select: { id: true, status: true },
+      select: { id: true, status: true, seats: true },
     }).catch(() => null)
 
     if (demoTable) {
       if (demoTable.status !== 'COMPLETED') {
         await db.table.update({
           where: { id: demoTable.id },
-          data:  { status: 'COMPLETED' },
+          data:  { status: 'COMPLETED', seats: releaseSeats(demoTable.seats) },
         }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
+        dispatchTableReleased(demoTable.id, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'demo-finish' })
       }
 
       // "Spectated to completion" — credit Hook step 2 for any authenticated
@@ -486,9 +476,6 @@ class BotGameRunner {
       this._socketToGame.delete(id)
     }
     this._games.delete(slug)
-    // Caller-supplied slugs (Demo Table macro) bypass the mountain pool — only
-    // release names we acquired ourselves.
-    if (game.name) mountainPool.release(game.name)
     logger.info({ slug }, 'Bot game closed')
   }
 

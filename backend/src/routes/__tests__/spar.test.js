@@ -52,7 +52,7 @@ const STERLING = { id: 'sysbot-sterling', displayName: 'Sterling', botModelId: '
 
 beforeEach(() => {
   vi.clearAllMocks()
-  botGameRunner.startGame.mockResolvedValue({ slug: 'mt-test', displayName: 'Mt. Test' })
+  botGameRunner.startGame.mockResolvedValue({ slug: 'spar-slug', displayName: 'My Bot vs Rusty' })
   botGameRunner.findActiveSparForBot.mockReturnValue(null)
   db.user.findUnique.mockImplementation(({ where }) => {
     if (where.betterAuthId === 'ba-caller')   return Promise.resolve(CALLER)
@@ -185,11 +185,11 @@ describe('POST /practice — one-active-spar-per-bot replacement', () => {
   })
 
   it('calls closeGameBySlug for the prior spar before starting a new one', async () => {
-    botGameRunner.findActiveSparForBot.mockReturnValue('mt-old-spar')
+    botGameRunner.findActiveSparForBot.mockReturnValue('old-spar-slug')
     const res = await request(buildApp()).post('/practice').send({ myBotId: 'bot-mine', opponentTier: 'medium' })
     expect(res.status).toBe(201)
     expect(botGameRunner.findActiveSparForBot).toHaveBeenCalledWith('bot-mine')
-    expect(botGameRunner.closeGameBySlug).toHaveBeenCalledWith('mt-old-spar')
+    expect(botGameRunner.closeGameBySlug).toHaveBeenCalledWith('old-spar-slug')
     // Replacement happens BEFORE startGame
     const closeCall = botGameRunner.closeGameBySlug.mock.invocationCallOrder[0]
     const startCall = botGameRunner.startGame.mock.invocationCallOrder[0]
@@ -201,7 +201,7 @@ describe('POST /practice — happy path response shape', () => {
   it('returns 201 with slug, displayName, opponentTier echoed', async () => {
     const res = await request(buildApp()).post('/practice').send({ myBotId: 'bot-mine', opponentTier: 'medium' })
     expect(res.status).toBe(201)
-    expect(res.body).toEqual({ slug: 'mt-test', displayName: 'Mt. Test', opponentTier: 'medium' })
+    expect(res.body).toEqual({ slug: 'spar-slug', displayName: 'My Bot vs Rusty', opponentTier: 'medium' })
   })
 
   it('passes moveDelayMs through when provided', async () => {

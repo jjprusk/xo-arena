@@ -1,10 +1,10 @@
 {
   "name": "@xo-arena/backend",
-  "version": "1.3.0-alpha-3.0",
+  "version": "1.3.0-alpha-4.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src --ignore src/generated --watch ../packages/db/prisma/schema.prisma --ext js,mjs,ts,prisma --exec 'npx prisma generate --schema=../packages/db/prisma/schema.prisma && node --experimental-transform-types src/index.js'",
+    "dev": "nodemon --watch src --ignore src/generated --watch ../packages/db/prisma/schema.prisma --ext js,mjs,ts,prisma --exec 'if [ ../packages/db/prisma/schema.prisma -nt ../packages/db/src/generated/prisma/client.ts ]; then npx prisma generate --schema=../packages/db/prisma/schema.prisma; fi && node --experimental-transform-types src/index.js'",
     "start": "npx prisma migrate deploy --schema=../packages/db/prisma/schema.prisma && node --experimental-transform-types src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -32,6 +32,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^8.3.2",
     "ioredis": "^5.4.2",
+    "nanoid": "^3.3.11",
     "pg": "^8.14.1",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",

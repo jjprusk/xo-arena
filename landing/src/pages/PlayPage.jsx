@@ -10,6 +10,8 @@ import { recordGuestHookStep1 } from '../lib/guestMode.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { deriveCurrentPhase } from '../components/guide/JourneyCard.jsx'
 import SignInModal from '../components/ui/SignInModal.jsx'
+import { api } from '../lib/api.js'
+import { getToken } from '../lib/getToken.js'
 
 // Load XO via React.lazy — satisfies the GameContract from @callidity/sdk
 // Note: we deliberately do NOT statically import `meta` from @callidity/game-xo
@@ -222,6 +224,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
           tournamentId={tournamentId}
           backHref={leaveHref}
           minimalChrome={isGuestPvAI}
+          onLeave={() => sdk.leaveTable()}
         >
           {(phase === 'playing' || phase === 'finished') && (
             <XOGame session={session} sdk={sdk} />
@@ -271,6 +274,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
         {signupOpen && (
           <SignInModal
             onClose={() => setSignupOpen(false)}
+            onSuccess={() => navigate('/', { replace: true })}
             defaultView="sign-up"
             context="build-bot"
           />
@@ -286,6 +290,7 @@ export default function PlayPage() {
   perfMark('PlayPage:render')
   const [searchParams]         = useSearchParams()
   const { data: authSession }  = useOptimisticSession()
+  const navigate               = useNavigate()
 
   const joinSlug          = searchParams.get('join')
   const tournamentMatchId = searchParams.get('tournamentMatch')
@@ -302,6 +307,7 @@ export default function PlayPage() {
 
   const [botConfig, setBotConfig] = useState(null)   // { botUserId, botSkillId }
   const [botError, setBotError]   = useState(false)
+  const [demoError, setDemoError] = useState(false)
 
   // Game chunk is preloaded at the module level in AppLayout — no need to re-trigger here.
 
@@ -318,11 +324,44 @@ export default function PlayPage() {
       .catch(() => setBotError(true))
   }, [action, joinSlug])
 
+  // Watch-demo: spawn a private bot-vs-bot demo table (Hook step 2) and
+  // redirect to /tables/:id to spectate. The trigger that credits step 2
+  // fires server-side on participant:joined as soon as the demo starts.
+  useEffect(() => {
+    if (action !== 'watch-demo') return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = await getToken()
+        if (!token) {
+          // Demo creation requires auth (private table, createdById). The
+          // journey link only renders post-signup, so missing token means
+          // session expired — bounce home and let the auth flow recover.
+          if (!cancelled) navigate('/', { replace: true })
+          return
+        }
+        const res = await api.tables.createDemo(token)
+        if (cancelled) return
+        navigate(`/tables/${res.tableId}`, { replace: true })
+      } catch {
+        if (!cancelled) setDemoError(true)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [action]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // No join slug, no recognised action, and no direct bot params → home
   if (!joinSlug && !action && !botUserId) return <Navigate to="/" replace />
 
   // Bot fetch failed → back to home
   if (botError) return <Navigate to="/" replace />
+
+  // Demo create failed → back to home
+  if (demoError) return <Navigate to="/" replace />
+
+  // Watch-demo: render spinner while the demo table is being spawned;
+  // the effect above redirects to /tables/:id once the response lands.
+  if (action === 'watch-demo') return <Spinner />
 
   // Waiting for community bot to be resolved
   if (action === 'vs-community-bot' && !joinSlug && !botConfig) return <Spinner />

@@ -19,8 +19,13 @@ const mockDb = {
   },
   game: {
     deleteMany: vi.fn(),
+    updateMany: vi.fn(),
   },
   botSkill: {
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  baUser: {
     delete: vi.fn(),
   },
   gameElo: {
@@ -187,6 +192,42 @@ describe('GET /api/v1/bots', () => {
     expect(getTierLimit).not.toHaveBeenCalled()
   })
 
+  it('gameId filter → returns only bots that have a BotSkill for that game; bypasses cache', async () => {
+    mockDb.botSkill.findMany = vi.fn().mockResolvedValue([
+      { botId: 'bot_xo_a' },
+      { botId: 'bot_xo_b' },
+    ])
+    listBots.mockResolvedValue([
+      { id: 'bot_xo_a', displayName: 'A' },
+      { id: 'bot_xo_b', displayName: 'B' },
+      { id: 'bot_other', displayName: 'C' },
+    ])
+    cache.get.mockReturnValue('SHOULD-NOT-BE-USED')
+
+    const res = await request(app).get('/api/v1/bots?gameId=xo')
+
+    expect(res.status).toBe(200)
+    expect(res.body.bots).toHaveLength(2)
+    expect(res.body.bots.map(b => b.id)).toEqual(['bot_xo_a', 'bot_xo_b'])
+    expect(mockDb.botSkill.findMany).toHaveBeenCalledWith({
+      where:    { gameId: 'xo', botId: { not: null } },
+      select:   { botId: true },
+      distinct: ['botId'],
+    })
+    // Cache untouched
+    expect(cache.set).not.toHaveBeenCalled()
+  })
+
+  it('gameId filter with no matching skills → empty list, listBots not called', async () => {
+    mockDb.botSkill.findMany = vi.fn().mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/bots?gameId=connect4')
+
+    expect(res.status).toBe(200)
+    expect(res.body.bots).toEqual([])
+    expect(listBots).not.toHaveBeenCalled()
+  })
+
   it('includeInactive=true is passed through to listBots', async () => {
     cache.get.mockReturnValue(null)
     listBots.mockResolvedValue([])
@@ -194,6 +235,99 @@ describe('GET /api/v1/bots', () => {
     await request(app).get('/api/v1/bots?includeInactive=true')
 
     expect(listBots).toHaveBeenCalledWith({ includeInactive: true })
+  })
+})
+
+// ─── GET /:id ────────────────────────────────────────────────────────────────
+
+describe('GET /api/v1/bots/:id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.botSkill.findMany = vi.fn()
+    mockDb.gameElo.findMany  = vi.fn()
+  })
+
+  function arrangeBot(bot) {
+    mockDb.user.findUnique.mockImplementation(async ({ where }) => (where.id === bot.id ? bot : null))
+  }
+
+  it('returns bot with skills array enriched by per-skill ELO', async () => {
+    arrangeBot({
+      id: 'bot_1', displayName: 'Rusty', avatarUrl: null,
+      isBot: true, botActive: true, botAvailable: true, botCompetitive: true,
+      botProvisional: false, botGamesPlayed: 12,
+      botModelId: 'skill_xo', botModelType: 'minimax', botOwnerId: null,
+      createdAt: new Date('2026-04-01'),
+    })
+    mockDb.botSkill.findMany.mockResolvedValue([
+      { id: 'skill_xo',       botId: 'bot_1', gameId: 'xo',       algorithm: 'minimax', createdAt: new Date('2026-04-01') },
+      { id: 'skill_connect4', botId: 'bot_1', gameId: 'connect4', algorithm: 'minimax', createdAt: new Date('2026-04-15') },
+    ])
+    mockDb.gameElo.findMany.mockResolvedValue([
+      { gameId: 'xo',       rating: 1450, gamesPlayed: 12 },
+      { gameId: 'connect4', rating: 1200, gamesPlayed: 0  },
+    ])
+
+    const res = await request(app).get('/api/v1/bots/bot_1')
+
+    expect(res.status).toBe(200)
+    expect(res.body.bot.id).toBe('bot_1')
+    expect(res.body.bot.skills).toHaveLength(2)
+    expect(res.body.bot.skills[0].elo).toEqual({ gameId: 'xo', rating: 1450, gamesPlayed: 12 })
+    expect(res.body.bot.skills[1].elo).toEqual({ gameId: 'connect4', rating: 1200, gamesPlayed: 0 })
+  })
+
+  it('skill without a matching ELO row → elo: null (not crashed)', async () => {
+    arrangeBot({
+      id: 'bot_2', displayName: 'NewBot', avatarUrl: null,
+      isBot: true, botActive: true, botAvailable: true, botCompetitive: false,
+      botProvisional: true, botGamesPlayed: 0,
+      botModelId: 'skill_xo', botModelType: 'minimax', botOwnerId: 'usr_1',
+      createdAt: new Date(),
+    })
+    mockDb.botSkill.findMany.mockResolvedValue([
+      { id: 'skill_xo', botId: 'bot_2', gameId: 'xo', algorithm: 'minimax' },
+    ])
+    mockDb.gameElo.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/bots/bot_2')
+
+    expect(res.status).toBe(200)
+    expect(res.body.bot.skills).toHaveLength(1)
+    expect(res.body.bot.skills[0].elo).toBeNull()
+  })
+
+  it('bot with no skills → skills: [] (no GameElo query needed)', async () => {
+    arrangeBot({
+      id: 'bot_3', displayName: 'Skillless', avatarUrl: null,
+      isBot: true, botActive: true, botAvailable: false, botCompetitive: false,
+      botProvisional: true, botGamesPlayed: 0,
+      botModelId: null, botModelType: null, botOwnerId: 'usr_1',
+      createdAt: new Date(),
+    })
+    mockDb.botSkill.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/bots/bot_3')
+
+    expect(res.status).toBe(200)
+    expect(res.body.bot.skills).toEqual([])
+    expect(mockDb.gameElo.findMany).not.toHaveBeenCalled()
+  })
+
+  it('non-bot user → 404', async () => {
+    arrangeBot({ id: 'usr_x', isBot: false, displayName: 'Real User' })
+
+    const res = await request(app).get('/api/v1/bots/usr_x')
+
+    expect(res.status).toBe(404)
+  })
+
+  it('unknown id → 404', async () => {
+    mockDb.user.findUnique.mockResolvedValue(null)
+
+    const res = await request(app).get('/api/v1/bots/missing')
+
+    expect(res.status).toBe(404)
   })
 })
 
@@ -600,42 +734,44 @@ describe('POST /api/v1/bots/:id/reset-elo', () => {
 describe('DELETE /api/v1/bots/:id', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('deletes bot (no model) → 204', async () => {
+  it('deletes bot (no model) → 204, sweeps botId-scoped skills, no id-scoped sweep', async () => {
     mockDb.user.findUnique.mockImplementation(async ({ where }) => {
       if (where.betterAuthId) return mockCaller
       if (where.id === 'bot_1') return mockBot  // botModelId: null
       return null
     })
-    const txMlModelDelete = vi.fn()
+    const txSkillDeleteMany = vi.fn().mockResolvedValue({ count: 0 })
     mockDb.$transaction.mockImplementation(async (fn) =>
-      fn({ game: mockDb.game, user: mockDb.user, botSkill: { delete: txMlModelDelete } })
+      fn({ game: mockDb.game, user: mockDb.user, baUser: mockDb.baUser, botSkill: { deleteMany: txSkillDeleteMany } })
     )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
 
     expect(res.status).toBe(204)
     expect(mockDb.$transaction).toHaveBeenCalled()
-    expect(txMlModelDelete).not.toHaveBeenCalled()
+    // botId sweep always runs; id-scoped sweep only when botModelId set
+    expect(txSkillDeleteMany).toHaveBeenCalledTimes(1)
+    expect(txSkillDeleteMany).toHaveBeenCalledWith({ where: { botId: 'bot_1' } })
     expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
   })
 
-  it('deletes bot with model → model deleted inside transaction', async () => {
+  it('deletes bot with model → both botId and id sweeps run inside transaction', async () => {
     const botWithModel = { ...mockBot, botModelId: 'model_1' }
     mockDb.user.findUnique.mockImplementation(async ({ where }) => {
       if (where.betterAuthId) return mockCaller
       if (where.id === 'bot_1') return botWithModel
       return null
     })
-    const txMlModelDelete = vi.fn().mockResolvedValue({})
+    const txSkillDeleteMany = vi.fn().mockResolvedValue({ count: 1 })
     mockDb.$transaction.mockImplementation(async (fn) =>
-      fn({ game: mockDb.game, user: mockDb.user, botSkill: { delete: txMlModelDelete } })
+      fn({ game: mockDb.game, user: mockDb.user, baUser: mockDb.baUser, botSkill: { deleteMany: txSkillDeleteMany } })
     )
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
 
     expect(res.status).toBe(204)
-    expect(txMlModelDelete).toHaveBeenCalledWith({ where: { id: 'model_1' } })
-    expect(mockDb.botSkill.delete).not.toHaveBeenCalled()
+    expect(txSkillDeleteMany).toHaveBeenCalledWith({ where: { botId: 'bot_1' } })
+    expect(txSkillDeleteMany).toHaveBeenCalledWith({ where: { id: 'model_1' } })
   })
 
   it('bot not found → 404', async () => {
@@ -673,6 +809,242 @@ describe('DELETE /api/v1/bots/:id', () => {
     })
 
     const res = await request(app).delete('/api/v1/bots/bot_1')
+
+    expect(res.status).toBe(403)
+  })
+})
+
+// ─── POST /:id/skills ─────────────────────────────────────────────────────────
+
+describe('POST /api/v1/bots/:id/skills', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.botSkill.findFirst = vi.fn()
+    mockDb.botSkill.create    = vi.fn()
+  })
+
+  function arrangeOwnedBot(overrides = {}) {
+    const bot = { ...mockBot, ...overrides }
+    mockDb.user.findUnique.mockImplementation(async ({ where }) => {
+      if (where.betterAuthId) return mockCaller
+      if (where.id === bot.id) return bot
+      return null
+    })
+    return bot
+  }
+
+  it('first skill on a skill-less bot → 201, sets botModelId, returns created:true', async () => {
+    arrangeOwnedBot({ botModelId: null })
+    mockDb.botSkill.findFirst.mockResolvedValue(null)
+    const created = { id: 'skill_new', botId: 'bot_1', gameId: 'xo', algorithm: 'minimax' }
+    mockDb.botSkill.create.mockResolvedValue(created)
+    mockDb.user.update.mockResolvedValue({})
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'xo', algorithm: 'minimax', modelType: 'minimax' })
+
+    expect(res.status).toBe(201)
+    expect(res.body.created).toBe(true)
+    expect(res.body.skill).toEqual(created)
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { id: 'bot_1' },
+      data:  { botModelId: 'skill_new', botModelType: 'minimax' },
+    })
+    expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+  })
+
+  it('idempotent: existing skill for (botId, gameId) → 200, created:false, no create, no botModelId update', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_old' })
+    const existing = { id: 'skill_old', botId: 'bot_1', gameId: 'xo', algorithm: 'minimax' }
+    mockDb.botSkill.findFirst.mockResolvedValue(existing)
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'xo', algorithm: 'minimax' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.created).toBe(false)
+    expect(res.body.skill).toEqual(existing)
+    expect(mockDb.botSkill.create).not.toHaveBeenCalled()
+    expect(mockDb.user.update).not.toHaveBeenCalled()
+  })
+
+  it('second skill on a bot with existing primary → 201, does NOT repoint botModelId', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_xo' })
+    mockDb.botSkill.findFirst.mockResolvedValue(null)
+    mockDb.botSkill.create.mockResolvedValue({ id: 'skill_c4', botId: 'bot_1', gameId: 'connect4', algorithm: 'minimax' })
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'connect4', algorithm: 'minimax' })
+
+    expect(res.status).toBe(201)
+    expect(mockDb.user.update).not.toHaveBeenCalled()
+  })
+
+  it('missing gameId → 400 INVALID_GAME_ID', async () => {
+    arrangeOwnedBot()
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ algorithm: 'minimax' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('INVALID_GAME_ID')
+    expect(mockDb.botSkill.create).not.toHaveBeenCalled()
+  })
+
+  it('unsupported algorithm → 400 INVALID_ALGORITHM', async () => {
+    arrangeOwnedBot()
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'xo', algorithm: 'bogus' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('INVALID_ALGORITHM')
+    expect(mockDb.botSkill.create).not.toHaveBeenCalled()
+  })
+
+  it('caller not owner and not BOT_ADMIN → 403, no create', async () => {
+    arrangeOwnedBot({ botOwnerId: 'usr_other' })
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_1/skills')
+      .send({ gameId: 'xo', algorithm: 'minimax' })
+
+    expect(res.status).toBe(403)
+    expect(mockDb.botSkill.create).not.toHaveBeenCalled()
+  })
+
+  it('bot not found → 404', async () => {
+    mockDb.user.findUnique.mockImplementation(async ({ where }) => {
+      if (where.betterAuthId) return mockCaller
+      return null
+    })
+
+    const res = await request(app)
+      .post('/api/v1/bots/bot_unknown/skills')
+      .send({ gameId: 'xo', algorithm: 'minimax' })
+
+    expect(res.status).toBe(404)
+  })
+})
+
+// ─── DELETE /:id/skills/:skillId ──────────────────────────────────────────────
+
+describe('DELETE /api/v1/bots/:id/skills/:skillId', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.botSkill.findUnique = vi.fn()
+    mockDb.botSkill.findFirst  = vi.fn()
+    mockDb.botSkill.delete     = vi.fn()
+  })
+
+  function arrangeOwnedBot(overrides = {}) {
+    const bot = { ...mockBot, ...overrides }
+    mockDb.user.findUnique.mockImplementation(async ({ where }) => {
+      if (where.betterAuthId) return mockCaller
+      if (where.id === bot.id) return bot
+      return null
+    })
+    return bot
+  }
+
+  it('deletes a non-primary skill → 204, does NOT touch botModelId', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_xo' })
+    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_c4', botId: 'bot_1', gameId: 'connect4' })
+
+    const txDelete = vi.fn().mockResolvedValue({})
+    const txFindFirst = vi.fn()
+    const txUserUpdate = vi.fn()
+    mockDb.$transaction.mockImplementation(async (fn) =>
+      fn({
+        botSkill: { delete: txDelete, findFirst: txFindFirst },
+        user:     { update: txUserUpdate },
+      })
+    )
+
+    const res = await request(app).delete('/api/v1/bots/bot_1/skills/skill_c4')
+
+    expect(res.status).toBe(204)
+    expect(txDelete).toHaveBeenCalledWith({ where: { id: 'skill_c4' } })
+    expect(txUserUpdate).not.toHaveBeenCalled()
+    expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+  })
+
+  it('deletes the primary skill, repoints botModelId to remaining skill', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_xo' })
+    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_xo', botId: 'bot_1', gameId: 'xo' })
+
+    const txDelete = vi.fn().mockResolvedValue({})
+    const txFindFirst = vi.fn().mockResolvedValue({ id: 'skill_c4' })
+    const txUserUpdate = vi.fn().mockResolvedValue({})
+    mockDb.$transaction.mockImplementation(async (fn) =>
+      fn({
+        botSkill: { delete: txDelete, findFirst: txFindFirst },
+        user:     { update: txUserUpdate },
+      })
+    )
+
+    const res = await request(app).delete('/api/v1/bots/bot_1/skills/skill_xo')
+
+    expect(res.status).toBe(204)
+    expect(txDelete).toHaveBeenCalledWith({ where: { id: 'skill_xo' } })
+    expect(txUserUpdate).toHaveBeenCalledWith({
+      where: { id: 'bot_1' },
+      data:  { botModelId: 'skill_c4' },
+    })
+  })
+
+  it('deletes the only/primary skill, repoints botModelId to null', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_xo' })
+    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_xo', botId: 'bot_1', gameId: 'xo' })
+
+    const txDelete = vi.fn().mockResolvedValue({})
+    const txFindFirst = vi.fn().mockResolvedValue(null)
+    const txUserUpdate = vi.fn().mockResolvedValue({})
+    mockDb.$transaction.mockImplementation(async (fn) =>
+      fn({
+        botSkill: { delete: txDelete, findFirst: txFindFirst },
+        user:     { update: txUserUpdate },
+      })
+    )
+
+    const res = await request(app).delete('/api/v1/bots/bot_1/skills/skill_xo')
+
+    expect(res.status).toBe(204)
+    expect(txUserUpdate).toHaveBeenCalledWith({
+      where: { id: 'bot_1' },
+      data:  { botModelId: null },
+    })
+  })
+
+  it('skill belongs to a different bot → 404', async () => {
+    arrangeOwnedBot({ botModelId: 'skill_xo' })
+    mockDb.botSkill.findUnique.mockResolvedValue({ id: 'skill_other', botId: 'bot_other', gameId: 'xo' })
+
+    const res = await request(app).delete('/api/v1/bots/bot_1/skills/skill_other')
+
+    expect(res.status).toBe(404)
+    expect(mockDb.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('skill not found → 404', async () => {
+    arrangeOwnedBot()
+    mockDb.botSkill.findUnique.mockResolvedValue(null)
+
+    const res = await request(app).delete('/api/v1/bots/bot_1/skills/missing')
+
+    expect(res.status).toBe(404)
+    expect(mockDb.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('caller not owner and not BOT_ADMIN → 403', async () => {
+    arrangeOwnedBot({ botOwnerId: 'usr_other' })
+
+    const res = await request(app).delete('/api/v1/bots/bot_1/skills/skill_xo')
 
     expect(res.status).toBe(403)
   })

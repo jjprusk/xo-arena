@@ -5,26 +5,18 @@ import { io } from 'socket.io-client'
 // using window.location.host. io(undefined) correctly defaults to the current origin.
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined
 
-// WebSocket-only on every environment.
+// Dev: polling-only. Prod: polling primary, WS upgrade.
 //
-// History: we previously used polling-only because the polling→websocket
-// *upgrade* negotiation was flaky through both Vite's dev proxy and the
-// landing express + http-proxy-middleware chain on Fly. That avoided the
-// upgrade race, but polling XHRs get aborted constantly by Safari when the
-// tab backgrounds or the network blips — and WebKit logs every aborted XHR
-// as a misleading "XMLHttpRequest cannot load … due to access control
-// checks" in the console. Each disconnect emits two such errors (original
-// poll + close-packet POST that also fails), cluttering the console on
-// every page.
-//
-// WebSocket-only sidesteps XHR entirely: one long-lived connection, no
-// aborted polling requests, no Safari log spam. Both proxy layers already
-// forward WebSocket correctly (Vite has `ws: true`; landing/server.js has
-// `ws: true` + `server.on('upgrade', backendProxy.upgrade)`). If the
-// handshake ever fails, socket.io emits `connect_error` and the app has
-// no real-time — very visible, easy to catch in QA. Revert to `polling` if
-// that happens.
-const TRANSPORTS = ['websocket']
+// The Vite dev proxy + Safari (esp. Private) cannot reliably upgrade
+// polling → WebSocket: the upgrade fails with "network connection was
+// lost", and the failed upgrade *invalidates the polling session on the
+// backend* — subsequent polling requests then 400, and the page hangs
+// with no working transport. Skipping the upgrade in dev avoids this
+// entirely; localhost latency makes polling indistinguishable from WS.
+// In prod (Fly) the WS upgrade works, so we keep both transports.
+const TRANSPORTS = import.meta.env.DEV
+  ? ['polling']
+  : ['polling', 'websocket']
 
 let _socket = null
 
@@ -34,7 +26,6 @@ export function getSocket() {
       autoConnect: false,
       transports: TRANSPORTS,
     })
-    _socket.on('connect_error', () => {})
   }
   return _socket
 }

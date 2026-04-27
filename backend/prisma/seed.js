@@ -5,6 +5,8 @@
  *  1. System config defaults (bot limits, calibration count)
  *  2. System account (owner of built-in bots)
  *  3. Built-in bot personas: Rusty, Copper, Sterling, Magnus
+ *  4. One XO BotSkill per built-in bot (Phase 3.8 multi-skill foundation —
+ *     Connect4 will append a second row per bot in Phase 4)
  */
 
 import db from '@xo-arena/db'
@@ -58,6 +60,10 @@ const CONFIG_DEFAULTS = [
 
 // ─── Built-in bot definitions ──────────────────────────────────────────────
 
+// Each built-in bot's `botModelId` doubles as the `id` of its XO BotSkill
+// row. The runtime dispatches on the `builtin:minimax:<tier>` prefix
+// (botGameRunner.parseBotModelId), so writing the BotSkill row with the
+// same id keeps `User.botModelId` and `BotSkill.id` self-consistent.
 export const BUILT_IN_BOTS = [
   {
     username:     'bot-rusty',
@@ -66,6 +72,7 @@ export const BUILT_IN_BOTS = [
     botModelType: 'minimax',
     botModelId:   'builtin:minimax:novice',
     botCompetitive: true,
+    tier:         'novice',
   },
   {
     username:     'bot-copper',
@@ -74,6 +81,7 @@ export const BUILT_IN_BOTS = [
     botModelType: 'minimax',
     botModelId:   'builtin:minimax:intermediate',
     botCompetitive: true,
+    tier:         'intermediate',
   },
   {
     username:     'bot-sterling',
@@ -82,6 +90,7 @@ export const BUILT_IN_BOTS = [
     botModelType: 'minimax',
     botModelId:   'builtin:minimax:advanced',
     botCompetitive: true,
+    tier:         'advanced',
   },
   {
     username:     'bot-magnus',
@@ -90,6 +99,7 @@ export const BUILT_IN_BOTS = [
     botModelType: 'minimax',
     botModelId:   'builtin:minimax:master',
     botCompetitive: true,
+    tier:         'master',
   },
 ]
 
@@ -123,9 +133,11 @@ async function main() {
     })
     console.log('✓ System account:', systemAccount.id)
 
-    // 3. Built-in bots
+    // 3. Built-in bots + their XO BotSkill rows. The BotSkill row id matches
+    // the bot's `botModelId` so the existing string pointer and the new row
+    // are self-consistent. Phase 4 will append a Connect4 row per bot here.
     for (const bot of BUILT_IN_BOTS) {
-      await db.user.upsert({
+      const userRow = await db.user.upsert({
         where:  { username: bot.username },
         update: {
           // Keep competitive flag and model type in sync with seed definition
@@ -145,7 +157,26 @@ async function main() {
           botAvailable:   true,
         },
       })
-      console.log('✓ Bot:', bot.displayName)
+
+      await db.botSkill.upsert({
+        where:  { id: bot.botModelId },
+        update: {
+          botId:  userRow.id,
+          gameId: 'xo',
+        },
+        create: {
+          id:          bot.botModelId,
+          botId:       userRow.id,
+          gameId:      'xo',
+          name:        `${bot.displayName} XO`,
+          description: `Built-in ${bot.tier} minimax skill for XO.`,
+          algorithm:   'minimax',
+          config:      { tier: bot.tier },
+          featured:    true,
+        },
+      })
+
+      console.log('✓ Bot:', bot.displayName, '(+ XO skill)')
     }
   } finally {
     await db.$disconnect()

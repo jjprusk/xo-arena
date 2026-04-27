@@ -23,39 +23,43 @@ vi.mock('../../services/userService.js', () => ({
 }))
 
 // Mock db for sync endpoint (baUser lookup) and game history
-vi.mock('../../lib/db.js', () => ({
-  default: {
-    baUser: {
-      findUnique: vi.fn(async () => ({
-        id: 'ba_user_1',
-        email: 'a@b.com',
-        name: 'Test User',
-        image: null,
-      })),
+vi.mock('../../lib/db.js', () => {
+  const game = {
+    findMany:   vi.fn(async () => []),
+    count:      vi.fn(async () => 0),
+    deleteMany: vi.fn(async () => ({ count: 0 })),
+    updateMany: vi.fn(async () => ({ count: 0 })),
+  }
+  const baUser = {
+    findUnique: vi.fn(async () => ({
+      id: 'ba_user_1',
+      email: 'a@b.com',
+      name: 'Test User',
+      image: null,
+    })),
+    delete: vi.fn(async () => ({})),
+  }
+  const user = {
+    findUnique: vi.fn(),
+    findMany:   vi.fn(async () => []),
+    update:     vi.fn(async () => ({})),
+    delete:     vi.fn(async () => ({})),
+  }
+  const botSkill = { deleteMany: vi.fn(async () => ({ count: 0 })) }
+  return {
+    default: {
+      baUser, user, game, botSkill,
+      userEloHistory: { findMany: vi.fn(async () => []) },
+      gameElo:        { findUnique: vi.fn(async () => ({ rating: 1200 })) },
+      mLPlayerProfile:{ findMany: vi.fn(async () => []) },
+      userNotification: {
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, botSkill })),
     },
-    user: {
-      findUnique: vi.fn(),
-      update: vi.fn(async () => ({})),
-    },
-    game: {
-      findMany: vi.fn(async () => []),
-      count: vi.fn(async () => 0),
-    },
-    userEloHistory: {
-      findMany: vi.fn(async () => []),
-    },
-    gameElo: {
-      findUnique: vi.fn(async () => ({ rating: 1200 })),
-    },
-    mLPlayerProfile: {
-      findMany: vi.fn(async () => []),
-    },
-    userNotification: {
-      findMany: vi.fn(async () => []),
-      updateMany: vi.fn(async () => ({ count: 0 })),
-    },
-  },
-}))
+  }
+})
 
 vi.mock('../../services/creditService.js', () => ({
   getUserCredits: vi.fn(),
@@ -444,5 +448,61 @@ describe('PATCH /api/v1/users/me/settings', () => {
       .patch('/api/v1/users/me/settings')
       .send({ emailAchievements: false })
     expect(res.status).toBe(404)
+  })
+})
+
+describe('DELETE /api/v1/users/me', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.baUser.findUnique.mockResolvedValue({ id: 'ba_user_1', email: 'a@b.com', role: 'user' })
+  })
+
+  it('refuses 403 when caller is an admin', async () => {
+    db.baUser.findUnique.mockResolvedValue({ id: 'ba_user_1', email: 'a@b.com', role: 'admin' })
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(403)
+    expect(db.user.delete).not.toHaveBeenCalled()
+  })
+
+  it('refuses 409 with bot list when caller owns bots', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', betterAuthId: 'ba_user_1' })
+    db.user.findMany.mockResolvedValue([
+      { id: 'bot_1', username: 'mybot', displayName: 'MyBot', betterAuthId: null, botModelId: null },
+      { id: 'bot_2', username: 'other', displayName: 'Other', betterAuthId: null, botModelId: null },
+    ])
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('USER_OWNS_BOTS')
+    expect(res.body.bots).toEqual([
+      { id: 'bot_1', username: 'mybot', displayName: 'MyBot' },
+      { id: 'bot_2', username: 'other', displayName: 'Other' },
+    ])
+    expect(db.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('deletes the user when no bots are owned', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
+    db.user.findMany.mockResolvedValue([])
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ ok: true })
+    expect(db.$transaction).toHaveBeenCalledTimes(1)
+    expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
+  })
+
+  it('deletes only the BaUser when there is no domain user record yet', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(200)
+    expect(db.baUser.delete).toHaveBeenCalledWith({ where: { id: 'ba_user_1' } })
+    expect(db.$transaction).not.toHaveBeenCalled()
   })
 })

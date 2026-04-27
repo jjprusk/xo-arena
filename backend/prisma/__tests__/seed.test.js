@@ -24,6 +24,14 @@ describe('BUILT_IN_BOTS', () => {
       expect(bot.botModelType).toBe('minimax')
       expect(bot.botModelId).toMatch(/^builtin:/)
       expect(bot.botCompetitive).toBe(true)
+      expect(bot.tier).toMatch(/^(novice|intermediate|advanced|master)$/)
+    }
+  })
+
+  it('botModelId tier suffix matches the explicit tier field', () => {
+    for (const bot of BUILT_IN_BOTS) {
+      const tierFromId = bot.botModelId.split(':')[2]
+      expect(tierFromId).toBe(bot.tier)
     }
   })
 

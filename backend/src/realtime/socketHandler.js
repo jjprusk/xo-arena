@@ -34,11 +34,16 @@ import {
   addWatcher as addTableWatcher,
   removeWatcher as removeTableWatcher,
   removeWatcherFromAllTables,
+  removeAllWatchersForTable,
   getPresence as getTablePresence,
 } from './tablePresence.js'
 import { dispatch as dispatchBus } from '../lib/notificationBus.js'
 import { appendToStream } from '../lib/eventStream.js'
-import { mountainPool, MountainNamePool } from './mountainNames.js'
+import { nanoid } from 'nanoid'
+import { formatTableLabel } from '../lib/tableLabel.js'
+import { createTableTracked } from '../lib/createTableTracked.js'
+import { releaseSeats, releaseSeatForUser } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -147,7 +152,10 @@ function sanitizeTable(table, extras = {}) {
   const spectatorCount = 0 // spectator count not tracked in DB seats
   return {
     slug: table.slug,
-    displayName: table.displayName,
+    label: formatTableLabel(table, extras.viewerId ?? null),
+    isHvb: !!table.isHvb,
+    isDemo: !!table.isDemo,
+    isTournament: !!table.isTournament,
     status: mapStatus(table.status),
     board: ps.board ?? Array(9).fill(null),
     currentTurn: ps.currentTurn ?? 'X',
@@ -277,8 +285,12 @@ function resetIdleTimer({ socketId, tableId, isPlayer, warnMs, graceMs, onWarn, 
           const table = await db.table.findUnique({ where: { id: tableId }, select: { seats: true, tournamentMatchId: true } })
           const seat = table?.seats?.find(s => _socketToTable.get(socketId) === tableId)
           const absentUserId = seat?.userId ?? null
-          // Mark table COMPLETED
-          await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          // Mark table COMPLETED + free seats
+          await db.table.update({
+            where: { id: tableId },
+            data:  { status: 'COMPLETED', seats: releaseSeats(table?.seats) },
+          }).catch(() => {})
+          dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'idle-abandon' })
           if (table?.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
           await deleteIfGuestTable(tableId)
         } catch (_) { /* best effort */ }
@@ -314,6 +326,54 @@ function clearAllIdleTimersForTable(tableId) {
 }
 
 /**
+ * Drop every in-memory pointer at a given tableId — chunk 3 F4/F5.
+ *
+ * GC sweeps and admin DELETE used to flip `Table.status` (or delete the row)
+ * but leave `_socketToTable`, `_disconnectTimers`, `_idleTimers`,
+ * `_spectatorSockets`, `_demoWatchTimers`, and the watcher map all pointing
+ * at the dead row. The maps then held stale entries until the next disconnect
+ * fired, which is why a stuck process accumulated orphan timers + sockets.
+ *
+ * Idempotent and safe to call from any caller — this is the single point of
+ * cleanup the GC + admin paths can hit. Returns the list of sockets that were
+ * pointing at the table so the caller can decide whether to broadcast presence
+ * (the row is gone, so usually they shouldn't).
+ */
+export function unregisterTable(tableId) {
+  if (!tableId) return []
+
+  // Snapshot every socket that referenced this table — players + spectators.
+  const affectedSockets = new Set()
+  for (const [sid, tid] of _socketToTable) {
+    if (tid === tableId) affectedSockets.add(sid)
+  }
+  for (const [sid, tid] of _spectatorSockets) {
+    if (tid === tableId) affectedSockets.add(sid)
+  }
+
+  for (const sid of affectedSockets) {
+    clearIdleTimer(sid)
+    _spectatorSockets.delete(sid)
+    _clearAllDemoTimers(sid)
+    unregisterSocket(sid)
+  }
+
+  // Disconnect timers are keyed by the *original* socketId (which has since
+  // gone away) but carry the tableId in their value — sweep by tableId.
+  for (const [sid, info] of _disconnectTimers) {
+    if (info?.tableId === tableId) {
+      clearTimeout(info.timerId)
+      _disconnectTimers.delete(sid)
+    }
+  }
+
+  // Drop watchers for this table — the table:watch presence map must agree.
+  removeAllWatchersForTable(tableId)
+
+  return [...affectedSockets]
+}
+
+/**
  * If a table was created by an unauthenticated guest, delete the row.
  *
  * Guest tables (createdById === 'anonymous') are ephemeral — they exist only
@@ -321,6 +381,19 @@ function clearAllIdleTimersForTable(tableId) {
  * game ends there's no Game record to join back to (recordPvpGame skips all-
  * guest tables), no ELO impact, and no value in keeping the row around. Not
  * deleting them clutters the DB and shows up in "mine"/admin views.
+ *
+ * Timing rule (chunk 3 P2 — guest-table deletion):
+ *   - `game:move` natural game-end: deletion is **deferred**. The player
+ *     is still at the table waiting on Rematch, and the row must survive
+ *     until the socket actually disconnects. The disconnect-after-COMPLETED
+ *     branch then calls this helper.
+ *   - `game:forfeit` / `room:cancel` / `disconnect 60-s timer`: deletion is
+ *     **immediate**. The forfeiter / canceller is leaving by intent (or has
+ *     stopped responding); no Rematch path is reachable, so keeping the row
+ *     just delays the inevitable cleanup.
+ *   - 24-h `tableGcService` sweep is the backstop in case neither path runs.
+ * Document this here rather than at every call site so future readers don't
+ * have to reverse-engineer the pattern from the inventory.
  *
  * Accepts either a tableId string or a partial table object with
  * `{ id, createdById }` — the latter skips the extra lookup when the caller
@@ -344,6 +417,7 @@ async function deleteIfGuestTable(tableOrId) {
     }
     if (!tableId || createdById !== 'anonymous') return
     await db.table.delete({ where: { id: tableId } })
+    dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.GUEST_CLEANUP)
   } catch (err) {
     logger.warn({ err: err.message }, 'deleteIfGuestTable failed')
   }
@@ -447,7 +521,7 @@ export async function attachSocketIO(httpServer) {
           const ps = table.previewState || {}
           socket.emit('room:created:hvb', {
             slug: table.slug,
-            displayName: table.displayName,
+            label: formatTableLabel(table, baId),
             mark: ps.marks?.[baId] ?? 'X',
             board: ps.board,
             currentTurn: ps.currentTurn,
@@ -483,15 +557,19 @@ export async function attachSocketIO(httpServer) {
         // If this socket already owns a FORMING table, close it first (StrictMode double-invoke)
         const existingTableId = _socketToTable.get(socket.id)
         if (existingTableId) {
-          await db.table.update({ where: { id: existingTableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          const existing = await db.table.findUnique({
+            where:  { id: existingTableId },
+            select: { seats: true },
+          }).catch(() => null)
+          await db.table.update({
+            where: { id: existingTableId },
+            data:  { status: 'COMPLETED', seats: releaseSeats(existing?.seats) },
+          }).catch(() => {})
           await deleteIfGuestTable(existingTableId)
           unregisterSocket(socket.id)
         }
 
-        const name = mountainPool.acquire()
-        if (!name) return socket.emit('error', { message: 'No mountain names available' })
-        const slug = MountainNamePool.toSlug(name)
-        const displayName = `Mt. ${name}`
+        const slug = nanoid(8)
 
         // Use betterAuthId for seats/marks — matches session.user.id on the frontend.
         // For guests (no auth), use a socket-derived sentinel so seats/marks always
@@ -504,11 +582,10 @@ export async function attachSocketIO(httpServer) {
         // that shouldn't clutter the public Tables list. Table GC auto-cleans
         // them after completion (COMPLETED + >24h).
         const isGuest = !user?.betterAuthId
-        const table = await db.table.create({
+        const table = await createTableTracked({
           data: {
             gameId: 'xo',
             slug,
-            displayName,
             createdById: user?.betterAuthId ?? 'anonymous',
             minPlayers: 2,
             maxPlayers: 2,
@@ -524,7 +601,7 @@ export async function attachSocketIO(httpServer) {
 
         registerSocket(socket.id, table.id, baId)
         socket.join(`table:${table.id}`)
-        socket.emit('room:created', { slug: table.slug, displayName: table.displayName, mark: 'X' })
+        socket.emit('room:created', { slug: table.slug, label: formatTableLabel(table, baId), mark: 'X' })
       } catch (err) {
         socket.emit('error', { message: err.message })
       }
@@ -573,7 +650,7 @@ export async function attachSocketIO(httpServer) {
                 socket.join(`table:${existing.id}`)
                 socket.emit('room:created:hvb', {
                   slug: existing.slug,
-                  displayName: existing.displayName,
+                  label: formatTableLabel(existing, user.betterAuthId),
                   mark: eps.marks?.[user.betterAuthId] ?? 'X',
                   board: eps.board,
                   currentTurn: eps.currentTurn,
@@ -606,7 +683,7 @@ export async function attachSocketIO(httpServer) {
                 socket.join(`table:${refreshed.id}`)
                 socket.emit('room:created:hvb', {
                   slug: refreshed.slug,
-                  displayName: refreshed.displayName,
+                  label: formatTableLabel(refreshed, user.betterAuthId),
                   mark: fps.marks?.[user.betterAuthId] ?? 'X',
                   board: fps.board,
                   currentTurn: fps.currentTurn,
@@ -640,21 +717,19 @@ export async function attachSocketIO(httpServer) {
           // Cancel any pending disconnect timer for this socket
           const dt = _disconnectTimers.get(socket.id)
           if (dt) { clearTimeout(dt.timerId); _disconnectTimers.delete(socket.id) }
-          // Release mountain name
-          try {
-            const old = await db.table.findUnique({ where: { id: existingTableId }, select: { displayName: true } })
-            const oldName = old?.displayName?.replace('Mt. ', '')
-            if (oldName) mountainPool.release(oldName)
-          } catch {}
-          await db.table.update({ where: { id: existingTableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+          const existing = await db.table.findUnique({
+            where:  { id: existingTableId },
+            select: { seats: true },
+          }).catch(() => null)
+          await db.table.update({
+            where: { id: existingTableId },
+            data:  { status: 'COMPLETED', seats: releaseSeats(existing?.seats) },
+          }).catch(() => {})
           await deleteIfGuestTable(existingTableId)
           unregisterSocket(socket.id)
         }
 
-        const name = mountainPool.acquire()
-        if (!name) return socket.emit('error', { message: 'No mountain names available' })
-        const slug = MountainNamePool.toSlug(name)
-        const displayName = `Mt. ${name}`
+        const slug = nanoid(8)
 
         const baId = user?.betterAuthId ?? `guest:${socket.id}`
 
@@ -740,11 +815,16 @@ export async function attachSocketIO(httpServer) {
         }
 
         const isGuest = !user?.betterAuthId
-        const table = await db.table.create({
+        // Bot's seat-display name preference: tournament-resolved opponent
+        // name (for MIXED matches), else the bot's own user.displayName, else
+        // a generic 'Bot' fallback. Surfaced via formatTableLabel.
+        const botSeatDisplayName = tourMatchOpponentName
+          ?? (await db.user.findUnique({ where: { id: botUserRow.id }, select: { displayName: true } }).catch(() => null))?.displayName
+          ?? 'Bot'
+        const table = await createTableTracked({
           data: {
             gameId,
             slug,
-            displayName,
             createdById: user?.betterAuthId ?? 'anonymous',
             minPlayers: 2,
             maxPlayers: 2,
@@ -759,7 +839,7 @@ export async function attachSocketIO(httpServer) {
             bestOfN:           tourBestOfN,
             seats: [
               { userId: baId,       status: 'occupied', displayName: user?.displayName ?? 'Guest' },
-              { userId: botSeatId,  status: 'occupied', displayName: tourMatchOpponentName ?? 'Bot' },
+              { userId: botSeatId,  status: 'occupied', displayName: botSeatDisplayName },
             ],
             previewState: makePreviewState({ marks, botMark: 'O' }),
           },
@@ -770,7 +850,7 @@ export async function attachSocketIO(httpServer) {
         const ps = table.previewState
         socket.emit('room:created:hvb', {
           slug: table.slug,
-          displayName: table.displayName,
+          label: formatTableLabel(table, baId),
           mark: 'X',
           board: ps.board,
           currentTurn: ps.currentTurn,
@@ -792,6 +872,40 @@ export async function attachSocketIO(httpServer) {
       if (role === 'spectator') {
         // Try PvP tables first (by slug), then bot game rooms
         const table = await db.table.findFirst({ where: { slug } })
+        // Demo tables (Hook step 2): the Table row is private + bot-vs-bot,
+        // but botGameRunner owns the move stream — game:moved events are
+        // emitted to io.to(slug), not io.to(`table:${id}`). Route the viewer
+        // through the bot-game spectator path so they actually see the game.
+        // The isPrivate gate doesn't apply to demos: the creator IS the
+        // intended audience. (Other private tables stay locked.)
+        if (table?.isDemo && botGameRunner.hasSlug(slug)) {
+          const result = botGameRunner.joinAsSpectator({ slug, socketId: socket.id })
+          if (result.error) return socket.emit('error', { message: result.error })
+          socket.join(slug)
+          const g = result.game
+          socket.emit('room:joined', {
+            slug,
+            role: 'spectator',
+            room: {
+              slug: g.slug,
+              label: `${g.bot1.displayName} vs ${g.bot2.displayName}`,
+              status: g.status,
+              board: g.board,
+              currentTurn: g.currentTurn,
+              winner: g.winner,
+              winLine: g.winLine,
+              scores: { X: g.seriesBot1Wins, O: g.seriesBot2Wins },
+              round: g.seriesGamesPlayed + 1,
+              spectatorCount: g.spectatorIds.size,
+              spectatorAllowed: true,
+              isBotGame: true,
+              bot1: { displayName: g.bot1.displayName, mark: 'X' },
+              bot2: { displayName: g.bot2.displayName, mark: 'O' },
+            },
+          })
+          io.to(slug).emit('room:spectatorJoined', { spectatorCount: g.spectatorIds.size })
+          return
+        }
         if (table) {
           if (table.isPrivate) return socket.emit('error', { message: 'Spectators not allowed in this room' })
           registerSocket(socket.id, table.id, null)
@@ -822,7 +936,7 @@ export async function attachSocketIO(httpServer) {
             role: 'spectator',
             room: {
               slug: g.slug,
-              displayName: g.displayName,
+              label: `${g.bot1.displayName} vs ${g.bot2.displayName}`,
               status: g.status,
               board: g.board,
               currentTurn: g.currentTurn,
@@ -1054,55 +1168,33 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    on('room:swapName', async () => {
-      const tableId = _socketToTable.get(socket.id)
-      if (!tableId) return socket.emit('error', { message: 'Room not found' })
-
-      const table = await db.table.findUnique({ where: { id: tableId } })
-      if (!table) return socket.emit('error', { message: 'Room not found' })
-      if (table.status !== 'FORMING') return socket.emit('error', { message: 'Cannot rename after opponent joins' })
-
-      // Verify host (seat 0)
-      const seats = table.seats || []
-      const hostSeatUserId = seats[0]?.userId
-      // We can't check by socketId directly; check that this socket is mapped to this table
-      // and that the table is still FORMING (only the creator would be connected)
-
-      const oldName = table.displayName.replace('Mt. ', '')
-      const newName = mountainPool.swap(oldName)
-      if (!newName) return socket.emit('error', { message: 'No names available' })
-
-      const newSlug = MountainNamePool.toSlug(newName)
-      const newDisplayName = `Mt. ${newName}`
-
-      await db.table.update({
-        where: { id: tableId },
-        data: { slug: newSlug, displayName: newDisplayName },
-      })
-
-      socket.emit('room:renamed', { slug: newSlug, displayName: newDisplayName })
-    })
-
     on('room:cancel', async () => {
       const tableId = _socketToTable.get(socket.id)
       if (!tableId) return
 
       const table = await db.table.findUnique({ where: { id: tableId } })
       if (table) {
-        // Release mountain name
-        const name = table.displayName?.replace('Mt. ', '')
-        if (name) mountainPool.release(name)
-
-        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        await db.table.update({
+          where: { id: tableId },
+          data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
+        }).catch(() => {})
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.LEAVE, { trigger: 'room-cancel' })
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
       }
 
       io.to(`table:${tableId}`).emit('room:cancelled')
+      broadcastTablePresence(io, tableId)  // F8 — final spectator refresh before unregister
       clearAllIdleTimersForTable(tableId)
-      // Remove all socket mappings for this table
+      // Remove all socket mappings for this table; also drop each socket
+      // from the `table:${id}` socket.io room (chunk 3 P1 — socket.leave
+      // symmetry) so a stale event emitted to that room after this point
+      // can't accidentally reach the cancelling client.
       for (const [sid, tid] of _socketToTable) {
-        if (tid === tableId) unregisterSocket(sid)
+        if (tid === tableId) {
+          io.sockets.sockets.get(sid)?.leave(`table:${tableId}`)
+          unregisterSocket(sid)
+        }
       }
     })
 
@@ -1171,12 +1263,12 @@ export async function attachSocketIO(httpServer) {
 
       if (newStatus === 'COMPLETED') {
         clearAllIdleTimersForTable(tableId)
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'game-move' })
+        broadcastTablePresence(io, tableId)  // F8 — spectators see status flip
         recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
-        // Guest tables (createdById === 'anonymous') used to be deleted here,
-        // but that broke Rematch: the next game:rematch would fail with
-        // "Room not found" and the client would navigate away to /tables.
-        // Keep the row until the socket disconnects (handled in the disconnect
-        // branch below) or the 24h tableGcService sweep picks it up.
+        // Guest-table deletion is intentionally deferred here — see the
+        // timing rule documented on deleteIfGuestTable. The disconnect
+        // branch picks it up; tableGcService is the 24h backstop.
       } else {
         // Track activity for the mover
         if (myUserId) recordActivity(myUserId)
@@ -1284,11 +1376,24 @@ export async function attachSocketIO(httpServer) {
 
       const updated = await db.table.update({
         where: { id: tableId },
-        data: { status: 'COMPLETED', previewState: ps },
+        data: {
+          status: 'COMPLETED',
+          previewState: ps,
+          // The forfeiter is leaving the table. Free their seat so the row
+          // doesn't show up as still-occupied in /api/v1/tables. The other
+          // player may still be there for the post-game screen — leave them
+          // seated until they themselves disconnect or click Leave.
+          seats: releaseSeatForUser(seats, myUserId),
+        },
       })
 
       clearAllIdleTimersForTable(tableId)
       io.to(`table:${tableId}`).emit('game:forfeit', { forfeiterMark: mark, winner: oppMark, scores: ps.scores })
+      dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.LEAVE, { trigger: 'forfeit' })
+      broadcastTablePresence(io, tableId)  // F8
+      // Drop the forfeiter from the table room so any future events on this
+      // tableId don't re-render in their post-game UI (chunk 3 P1).
+      socket.leave(`table:${tableId}`)
       recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP forfeit game'))
       deleteIfGuestTable(updated)
     })
@@ -1298,10 +1403,32 @@ export async function attachSocketIO(httpServer) {
     // Relays to the rest of the table room so the remaining player knows
     // immediately, without waiting for the socket disconnect timeout.
 
-    on('game:leave', () => {
+    on('game:leave', async () => {
       const tableId = _socketToTable.get(socket.id)
       if (!tableId) return
       socket.to(`table:${tableId}`).emit('game:opponent_left')
+      // Drop the leaving socket from the room so it stops receiving events
+      // for a table it has explicitly left (chunk 3 P1).
+      socket.leave(`table:${tableId}`)
+
+      // Free this player's seat so the row stops appearing occupied in the
+      // /tables list. game:leave is post-game, so the row is already
+      // COMPLETED — we're only updating the seats blob.
+      try {
+        const table = await db.table.findUnique({
+          where:  { id: tableId },
+          select: { seats: true },
+        })
+        if (!table) return
+        const myUserId = findUserIdForSocket(socket.id, tableId, table.seats || [])
+        if (!myUserId) return
+        await db.table.update({
+          where: { id: tableId },
+          data:  { seats: releaseSeatForUser(table.seats, myUserId) },
+        })
+      } catch (err) {
+        logger.warn({ err: err.message, tableId }, 'game:leave: failed to release seat')
+      }
     })
 
     // ── Emoji reactions ──────────────────────────────────────────────
@@ -1344,19 +1471,15 @@ export async function attachSocketIO(httpServer) {
 
       if (!slug) {
         // First player — create the table (use betterAuthId for seats/marks)
-        const name = mountainPool.acquire()
-        if (!name) return socket.emit('error', { message: 'No mountain names available' })
-        slug = MountainNamePool.toSlug(name)
-        const displayName = `Mt. ${name}`
+        slug = nanoid(8)
 
         const baId = user.betterAuthId
         const marks = { [baId]: 'X' }
 
-        const table = await db.table.create({
+        const table = await createTableTracked({
           data: {
             gameId: 'xo',
             slug,
-            displayName,
             createdById: baId,
             minPlayers: 2,
             maxPlayers: 2,
@@ -1623,10 +1746,12 @@ export async function attachSocketIO(httpServer) {
       }
 
       if (table.status === 'FORMING') {
-        // Host left before anyone joined — close immediately
-        const name = table.displayName?.replace('Mt. ', '')
-        if (name) mountainPool.release(name)
-        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        // Host left before anyone joined — close immediately and free seats
+        await db.table.update({
+          where: { id: tableId },
+          data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
+        }).catch(() => {})
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'disconnect-forming' })
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) {
           // For tournament matches: reset slug so player 1 can rejoin after a
@@ -1649,6 +1774,14 @@ export async function attachSocketIO(httpServer) {
         // still works.
         clearIdleTimer(socket.id)
         unregisterSocket(socket.id)
+        // Free this player's seat — they've left a finished game. The other
+        // player's seat stays occupied until they too disconnect or leave.
+        if (myUserId) {
+          await db.table.update({
+            where: { id: tableId },
+            data:  { seats: releaseSeatForUser(table.seats, myUserId) },
+          }).catch((err) => logger.warn({ err: err.message, tableId }, 'disconnect-COMPLETED: failed to release seat'))
+        }
         deleteIfGuestTable(table)
         return
       }
@@ -1669,10 +1802,12 @@ export async function attachSocketIO(httpServer) {
       }
 
       if (otherDisconnected) {
-        // Both players disconnected — close immediately
-        const name = table.displayName?.replace('Mt. ', '')
-        if (name) mountainPool.release(name)
-        await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
+        // Both players disconnected — close immediately and free both seats
+        await db.table.update({
+          where: { id: tableId },
+          data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
+        }).catch(() => {})
+        dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'disconnect-both-gone' })
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
         clearAllIdleTimersForTable(tableId)
@@ -1701,9 +1836,16 @@ export async function attachSocketIO(httpServer) {
           tps.winner = oppMark
           tps.scores[oppMark] = (tps.scores[oppMark] || 0) + 1
 
+          // The disconnected player is gone — free their seat. The opponent
+          // (still socket-connected) keeps theirs until they disconnect or
+          // click Leave.
           const updated = await db.table.update({
             where: { id: tableId },
-            data: { status: 'COMPLETED', previewState: tps },
+            data: {
+              status: 'COMPLETED',
+              previewState: tps,
+              seats: releaseSeatForUser(t.seats, myUserId),
+            },
           })
 
           io.to(`table:${tableId}`).emit('game:forfeit', {
@@ -1712,6 +1854,8 @@ export async function attachSocketIO(httpServer) {
             scores: tps.scores,
             reason: 'disconnect',
           })
+          dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'disconnect-forfeit-timer' })
+          broadcastTablePresence(io, tableId)  // F8
 
           recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record disconnect forfeit'))
           deleteIfGuestTable(updated)
@@ -1875,7 +2019,7 @@ async function recordPvpGame(table, io) {
       totalMoves,
       durationMs,
       startedAt: new Date(table.createdAt),
-      roomName: table.displayName?.replace('Mt. ', '') ?? null,
+      roomName: null,
       tournamentId: table.tournamentId ?? null,
       tournamentMatchId: table.tournamentMatchId ?? null,
       moveStream: ps.moves?.length ? ps.moves : null,

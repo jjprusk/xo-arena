@@ -2,25 +2,32 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
-import { getActionByKey, JOURNEY_DEFAULT_SLOTS } from './slotActions.js'
+import { getActionByKey } from './slotActions.js'
+import { JOURNEY_STEPS } from './journeySteps.js'
 
 const TOTAL_SLOTS = 8  // post-journey slot count (POST_JOURNEY_SLOTS has 8 entries)
 
 export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction }) {
   const { slots, updateSlots, journeyProgress, close } = useGuideStore()
 
-  // Computed once on mount — prevents reactive feedback loop where setUiHint
-  // immediately flips showFaqPointer to false before the finger is ever rendered.
-  const [showFaqPointer] = useState(() => {
+  const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+  const journeyActive = !dismissedAt
+  const nextStepIndex = journeyActive
+    ? (JOURNEY_STEPS.find(s => !completedSteps.includes(s.index))?.index ?? null)
+    : null
+
+  // Computed once on mount — prevents a reactive feedback loop where setUiHint
+  // immediately flips the pointer flag to false before the finger ever paints.
+  // The pointer guides the user to whichever step is next when the panel first
+  // opens; once seen (persisted via setUiHint) it does not re-appear.
+  const [showPointerOnce] = useState(() => {
     const store = useGuideStore.getState()
-    if (store.uiHints?.faqPointerShown) return false
-    const steps = store.journeyProgress?.completedSteps ?? []
-    return !steps.includes(2)
+    if (store.uiHints?.journeyPointerShown) return false
+    return nextStepIndex !== null
   })
 
-  // Mark seen on first display — persists to server for cross-site coordination
   useEffect(() => {
-    if (showFaqPointer) useGuideStore.getState().setUiHint('faqPointerShown')
+    if (showPointerOnce) useGuideStore.getState().setUiHint('journeyPointerShown')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function removeSlot(index) {
@@ -28,18 +35,17 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction })
     updateSlots(next)
   }
 
-  const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-  const journeyActive = !dismissedAt
-  const nextStepIndex = journeyActive
-    ? (JOURNEY_DEFAULT_SLOTS.find(s => !completedSteps.includes(s.stepIndex))?.stepIndex ?? null)
-    : null
-
-  const slotCount = journeyActive ? JOURNEY_DEFAULT_SLOTS.length : TOTAL_SLOTS
+  // Journey mode: render exactly the 7 canonical steps from JOURNEY_STEPS.
+  // Post-journey: fall back to the user's customizable slot deck.
   const cells = journeyActive
-    ? Array.from({ length: slotCount }, (_, i) => {
-        const j = JOURNEY_DEFAULT_SLOTS[i]
-        return j ? { ...j, _journey: true } : null
-      })
+    ? JOURNEY_STEPS.map(step => ({
+        _journey:    true,
+        stepIndex:   step.index,
+        label:       step.shortLabel,
+        icon:        step.icon,
+        href:        step.href,
+        isFinalStep: step.index === JOURNEY_STEPS.length,
+      }))
     : Array.from({ length: TOTAL_SLOTS }, (_, i) => slots[i] ?? null)
 
   return (
@@ -62,14 +68,18 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction })
             )
           }
 
-          const action = getActionByKey(slot.actionKey ?? slot.key) ?? slot
+          // Journey tile fields come straight off the slot; post-journey
+          // tiles look up their action in SLOT_ACTIONS as before.
+          const action = slot._journey
+            ? { icon: slot.icon, label: slot.label, href: slot.href, key: null, crossSite: false }
+            : (getActionByKey(slot.actionKey ?? slot.key) ?? slot)
           const isExternal = action.crossSite || action.href?.startsWith('http')
           const hasHref = !!action.href
 
           const stepDone    = slot._journey && completedSteps.includes(slot.stepIndex)
           const stepCurrent = slot._journey && slot.stepIndex === nextStepIndex
           const stepTodo    = slot._journey && !stepDone && !stepCurrent
-          const showPointer = showFaqPointer && stepCurrent && slot.stepIndex === 2 && !editMode
+          const showPointer = showPointerOnce && stepCurrent && !editMode
           // Final journey step: intercept click to show the completion popup
           // instead of navigating directly; GuidePanel navigates after dismissal.
           const isFinalJourneyStep = slot._journey && slot.isFinalStep && stepCurrent
@@ -100,8 +110,8 @@ export default function SlotGrid({ editMode, onAddSlot, isAdmin, onSlotAction })
           }
 
           return (
-            <div key={slot.key ?? i} style={{ position: 'relative', overflow: 'visible' }}>
-              {/* Animated finger — points from the left at the FAQ slot, first open only */}
+            <div key={slot.key ?? `journey-${slot.stepIndex ?? i}`} style={{ position: 'relative', overflow: 'visible' }}>
+              {/* Animated finger — points from the left at the current step, first open only */}
               {showPointer && (
                 <div style={{
                   position: 'absolute',
