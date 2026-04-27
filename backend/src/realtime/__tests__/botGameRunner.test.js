@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 // All vi.mock() calls must precede the dynamic import of the module under test.
 
-vi.mock('../mountainNames.js', () => ({
-  mountainPool: { acquire: vi.fn(() => 'Everest'), release: vi.fn() },
-  MountainNamePool: { toSlug: vi.fn((name) => name.toLowerCase()) },
+// Deterministic slug for tests — nanoid is otherwise random.
+vi.mock('nanoid', () => ({
+  nanoid: vi.fn(() => 'testslug'),
 }))
 
 vi.mock('@xo-arena/ai', () => ({
@@ -50,8 +50,7 @@ const { botGameRunner } = await import('../botGameRunner.js')
 function makeMockGame(overrides = {}) {
   return {
     slug: 'test-slug',
-    displayName: 'Mt. Test',
-    name: 'Test',
+    displayName: 'Bot1 vs Bot2',
     bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
     bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
     board: Array(9).fill(null),
@@ -204,22 +203,9 @@ describe('setIO', () => {
 // ---------------------------------------------------------------------------
 
 describe('startGame', () => {
-  it('throws when mountainPool.acquire returns null', async () => {
-    const { mountainPool } = await import('../mountainNames.js')
-    mountainPool.acquire.mockReturnValueOnce(null)
-
-    await expect(
-      botGameRunner.startGame({
-        bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
-        bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
-      })
-    ).rejects.toThrow('No mountain names available')
-  })
-
-  it('returns { slug, displayName } when a name is available', async () => {
-    const { mountainPool, MountainNamePool } = await import('../mountainNames.js')
-    mountainPool.acquire.mockReturnValueOnce('Everest')
-    MountainNamePool.toSlug.mockReturnValueOnce('everest')
+  it('mints a nanoid slug and synthesises a label from the bot names', async () => {
+    const { nanoid } = await import('nanoid')
+    nanoid.mockReturnValueOnce('abc12345')
 
     const result = await botGameRunner.startGame({
       bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
@@ -227,7 +213,17 @@ describe('startGame', () => {
       moveDelayMs: 9_999_999,
     })
 
-    expect(result).toHaveProperty('slug', 'everest')
-    expect(result).toHaveProperty('displayName', 'Mt. Everest')
+    expect(result).toEqual({ slug: 'abc12345', displayName: 'Bot1 vs Bot2' })
+  })
+
+  it('uses an explicit slug when the caller provides one', async () => {
+    const result = await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'demo-xyz',
+      moveDelayMs: 9_999_999,
+    })
+
+    expect(result.slug).toBe('demo-xyz')
   })
 })

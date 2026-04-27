@@ -237,18 +237,18 @@ export function useGameSDK({
 
     // ── Room events ───────────────────────────────────────────────────────────
 
-    socket.on('room:created', ({ slug, displayName, mark }) => {
+    socket.on('room:created', ({ slug, label, mark }) => {
       const cu = currentUserRef.current
       slugRef.current = slug
       const hostId = cu?.id ?? 'host'
       marksRef.current[hostId] = mark
       playersRef.current = [{ id: hostId, displayName: cu?.displayName ?? 'You', isBot: false }]
-      settingsRef.current = { displayName, myMark: mark }
+      settingsRef.current = { label, myMark: mark }
       setPhase('waiting')
       buildSession({ isSpectator: false })
     })
 
-    socket.on('room:created:hvb', ({ slug, displayName, mark, board, currentTurn }) => {
+    socket.on('room:created:hvb', ({ slug, label, mark, board, currentTurn }) => {
       perfMark('useGameSDK:room:created:hvb')
       const cu = currentUserRef.current
       slugRef.current = slug
@@ -260,7 +260,7 @@ export function useGameSDK({
         { id: hostId, displayName: cu?.displayName ?? 'You', isBot: false },
         { id: botId, displayName: 'Bot', isBot: true },
       ]
-      settingsRef.current = { displayName, myMark: mark, isTournament: !!tournamentMatchId }
+      settingsRef.current = { label, myMark: mark, isTournament: !!tournamentMatchId }
       boardRef.current = board
       setPhase('playing')
       buildSession({ isSpectator: false })
@@ -273,12 +273,6 @@ export function useGameSDK({
         scores: { X: 0, O: 0 },
         round: 1,
       })
-    })
-
-    socket.on('room:renamed', ({ slug, displayName }) => {
-      slugRef.current = slug
-      settingsRef.current = { ...settingsRef.current, displayName }
-      buildSession()
     })
 
     socket.on('room:joined', ({ slug, role, mark, room }) => {
@@ -311,7 +305,7 @@ export function useGameSDK({
 
       playersRef.current = guestPlayer ? [hostPlayer, guestPlayer] : [hostPlayer]
       settingsRef.current = {
-        displayName:    room?.displayName,
+        label:          room?.label,
         spectatorCount: room?.spectatorCount ?? 0,
         myMark:         isSpectator ? null : mark,
         isTournament:   !!tournamentMatchId,
@@ -600,7 +594,7 @@ export function useGameSDK({
       document.removeEventListener('visibilitychange', onVisibilityShow)
       window.removeEventListener('focus', autoIdlePong)
       ;[
-        'room:created', 'room:created:hvb', 'room:renamed', 'room:joined', 'room:guestJoined',
+        'room:created', 'room:created:hvb', 'room:joined', 'room:guestJoined',
         'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',
         'room:cancelled', 'room:abandoned', 'room:kicked',
         'game:start', 'game:moved', 'game:forfeit', 'game:opponent_left',

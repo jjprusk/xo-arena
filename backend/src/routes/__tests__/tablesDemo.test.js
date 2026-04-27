@@ -62,23 +62,15 @@ vi.mock('../../config/demoTableMatchups.js', () => ({
   pickMatchup: vi.fn(),
 }))
 
-// Mountain pool — give us predictable names for slug verification.
-vi.mock('../../realtime/mountainNames.js', () => ({
-  mountainPool: {
-    acquire: vi.fn(),
-    release: vi.fn(),
-    swap:    vi.fn(),
-  },
-  MountainNamePool: {
-    toSlug:   (n) => `mt-${n.toLowerCase()}`,
-    fromSlug: (s) => `Mt. ${s.replace(/^mt-/, '')}`,
-  },
+// Deterministic slug minting for the new nanoid-based allocator.
+vi.mock('nanoid', () => ({
+  nanoid: vi.fn(() => 'slug0001'),
 }))
 
 const tablesRouter = (await import('../tables.js')).default
 const db = (await import('../../lib/db.js')).default
 const { botGameRunner } = await import('../../realtime/botGameRunner.js')
-const { mountainPool } = await import('../../realtime/mountainNames.js')
+const { nanoid } = await import('nanoid')
 const { dispatch } = await import('../../lib/notificationBus.js')
 const { pickMatchup } = await import('../../config/demoTableMatchups.js')
 
@@ -107,11 +99,11 @@ const sterlingBot = {
 beforeEach(() => {
   vi.clearAllMocks()
   pickMatchup.mockReturnValue({ x: 'bot-copper', o: 'bot-sterling' })
-  botGameRunner.startGame.mockResolvedValue({ slug: 'mt-test', displayName: 'Mt. Test' })
+  botGameRunner.startGame.mockResolvedValue({ slug: 'slug0001', displayName: 'Copper vs Sterling' })
   botGameRunner.getSlugForMatch.mockReturnValue(null)
-  // Fresh per-test pool so .shift() doesn't deplete across tests.
-  const poolQueue = ['Everest', 'K2', 'Lhotse']
-  mountainPool.acquire.mockImplementation(() => poolQueue.shift() ?? null)
+  // Fresh per-test slug queue so retry tests get a different slug on attempt 2.
+  const slugQueue = ['slug0001', 'slug0002', 'slug0003']
+  nanoid.mockImplementation(() => slugQueue.shift() ?? 'slug-fallback')
   db.table.findMany.mockResolvedValue([])
   db.user.findUnique.mockImplementation(async ({ where }) => {
     if (where?.username === 'bot-copper')   return copperBot
@@ -124,15 +116,14 @@ describe('POST /api/v1/tables/demo', () => {
   it('creates an isDemo, private, ACTIVE table seated by both bots and starts the runner', async () => {
     db.table.create.mockResolvedValue({
       id: 'tbl_demo_1',
-      slug: 'mt-everest',
-      displayName: 'Mt. Everest',
+      slug: 'slug0001',
       isDemo: true,
       isPrivate: true,
       status: 'ACTIVE',
       createdById: 'ba_user_1',
       seats: [
-        { userId: 'bot_copper',   status: 'occupied' },
-        { userId: 'bot_sterling', status: 'occupied' },
+        { userId: 'bot_copper',   status: 'occupied', displayName: 'Copper'   },
+        { userId: 'bot_sterling', status: 'occupied', displayName: 'Sterling' },
       ],
     })
 
@@ -141,33 +132,38 @@ describe('POST /api/v1/tables/demo', () => {
     expect(res.status).toBe(201)
     expect(res.body).toMatchObject({
       tableId: 'tbl_demo_1',
-      slug:    'mt-everest',
-      botA:    { id: 'bot_copper',   displayName: 'Copper' },
+      slug:    'slug0001',
+      botA:    { id: 'bot_copper',   displayName: 'Copper'   },
       botB:    { id: 'bot_sterling', displayName: 'Sterling' },
     })
+    expect(res.body).not.toHaveProperty('displayName')
     expect(db.table.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         gameId:       'xo',
-        slug:         'mt-everest',
-        displayName:  'Mt. Everest',
+        slug:         'slug0001',
         createdById:  'ba_user_1',
         isPrivate:    true,
         isDemo:       true,
         status:       'ACTIVE',
         seats: [
-          { userId: 'bot_copper',   status: 'occupied' },
-          { userId: 'bot_sterling', status: 'occupied' },
+          { userId: 'bot_copper',   status: 'occupied', displayName: 'Copper'   },
+          { userId: 'bot_sterling', status: 'occupied', displayName: 'Sterling' },
         ],
       }),
     }))
+    // `displayName` is no longer a column on the Table — it must not be passed.
+    const createArgs = db.table.create.mock.calls[0][0]
+    expect(createArgs.data).not.toHaveProperty('displayName')
     expect(botGameRunner.startGame).toHaveBeenCalledWith(expect.objectContaining({
-      slug:         'mt-everest',
-      displayName:  'Mt. Everest',
-      mountainName: 'Everest',
-      bestOfN:      1,
+      slug:    'slug0001',
+      bestOfN: 1,
       bot1: { id: 'bot_copper',   displayName: 'Copper',   botModelId: 'builtin:minimax:intermediate' },
       bot2: { id: 'bot_sterling', displayName: 'Sterling', botModelId: 'builtin:minimax:advanced' },
     }))
+    // No mountainName param — that path is gone.
+    const startArgs = botGameRunner.startGame.mock.calls[0][0]
+    expect(startArgs).not.toHaveProperty('mountainName')
+    expect(startArgs).not.toHaveProperty('displayName')
   })
 
   it('returns 503 when matchup references a missing bot (seed not run)', async () => {
@@ -181,10 +177,10 @@ describe('POST /api/v1/tables/demo', () => {
 
   it('tears down a prior in-flight demo (deletes table + closes runner) before creating a new one', async () => {
     db.table.findMany.mockResolvedValueOnce([
-      { id: 'tbl_old', slug: 'mt-old' },
+      { id: 'tbl_old', slug: 'oldslug1' },
     ])
     db.table.delete.mockResolvedValue({})
-    db.table.create.mockResolvedValue({ id: 'tbl_demo_2', slug: 'mt-everest', displayName: 'Mt. Everest' })
+    db.table.create.mockResolvedValue({ id: 'tbl_demo_2', slug: 'slug0001' })
 
     const res = await request(makeApp()).post('/api/v1/tables/demo')
     expect(res.status).toBe(201)
@@ -197,7 +193,7 @@ describe('POST /api/v1/tables/demo', () => {
       }),
     }))
     // Runner closed for the old slug
-    expect(botGameRunner.closeGameBySlug).toHaveBeenCalledWith('mt-old')
+    expect(botGameRunner.closeGameBySlug).toHaveBeenCalledWith('oldslug1')
     // Old table deleted
     expect(db.table.delete).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'tbl_old' },
@@ -209,8 +205,8 @@ describe('POST /api/v1/tables/demo', () => {
     }))
   })
 
-  it('rolls back the table row and frees the mountain name when runner.startGame throws', async () => {
-    db.table.create.mockResolvedValue({ id: 'tbl_demo_3', slug: 'mt-everest' })
+  it('rolls back the table row when runner.startGame throws', async () => {
+    db.table.create.mockResolvedValue({ id: 'tbl_demo_3', slug: 'slug0001' })
     db.table.delete.mockResolvedValue({})
     botGameRunner.startGame.mockRejectedValueOnce(new Error('no slot'))
 
@@ -221,23 +217,20 @@ describe('POST /api/v1/tables/demo', () => {
     expect(db.table.delete).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'tbl_demo_3' },
     }))
-    expect(mountainPool.release).toHaveBeenCalledWith('Everest')
   })
 
   it('retries on slug collision (P2002) before giving up', async () => {
     const p2002 = Object.assign(new Error('unique'), { code: 'P2002' })
     db.table.create
       .mockRejectedValueOnce(p2002)
-      .mockResolvedValueOnce({ id: 'tbl_demo_4', slug: 'mt-k2', displayName: 'Mt. K2' })
+      .mockResolvedValueOnce({ id: 'tbl_demo_4', slug: 'slug0002' })
 
     const res = await request(makeApp()).post('/api/v1/tables/demo')
 
     expect(res.status).toBe(201)
     expect(db.table.create).toHaveBeenCalledTimes(2)
-    // Second attempt used the next mountain name (K2 → mt-k2)
-    expect(res.body.slug).toBe('mt-k2')
-    // First name was returned to the pool when the create collided
-    expect(mountainPool.release).toHaveBeenCalledWith('Everest')
+    // Second attempt minted a fresh nanoid
+    expect(res.body.slug).toBe('slug0002')
   })
 })
 

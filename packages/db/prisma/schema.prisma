@@ -850,8 +850,9 @@ model Table {
   isHvb             Boolean     @default(false)
   botUserId         String?
   botSkillId        String?
+  /// Opaque URL slug (nanoid). Unique per row; UI labels are computed on read
+  /// from seats + tournament context (see lib/tableLabel.js), not stored here.
   slug              String?     @unique
-  displayName       String?
   /// True for Hook-phase "Watch bots battle" demo tables. Private to the creator,
   /// GC'd aggressively (one active per user, 2-min-post-complete, 1-hour TTL).
   /// See Intelligent_Guide_Requirements.md §5.1.

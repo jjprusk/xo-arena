@@ -5,20 +5,18 @@ import { io } from 'socket.io-client'
 // using window.location.host. io(undefined) correctly defaults to the current origin.
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined
 
-// WebSocket primary, polling fallback.
+// Dev: polling-only. Prod: polling primary, WS upgrade.
 //
-// History: we previously used polling-only (Vite/Fly upgrade negotiation was
-// flaky), then switched to websocket-only (Safari console spam from aborted
-// polling XHRs). WS-only worked on Fly but the Vite dev proxy intermittently
-// closes the WS handshake under Safari Private — leaving socket.io in an
-// infinite reconnect loop with no real-time and no visible UI signal.
-//
-// Listing both transports keeps WS as the happy path (production + most dev
-// sessions) and lets socket.io drop to polling when the WS handshake fails.
-// Safari log spam only appears when polling is the active transport, which
-// now only happens when WS is genuinely unreachable — i.e. exactly the case
-// where falling back is correct.
-const TRANSPORTS = ['websocket', 'polling']
+// The Vite dev proxy + Safari (esp. Private) cannot reliably upgrade
+// polling → WebSocket: the upgrade fails with "network connection was
+// lost", and the failed upgrade *invalidates the polling session on the
+// backend* — subsequent polling requests then 400, and the page hangs
+// with no working transport. Skipping the upgrade in dev avoids this
+// entirely; localhost latency makes polling indistinguishable from WS.
+// In prod (Fly) the WS upgrade works, so we keep both transports.
+const TRANSPORTS = import.meta.env.DEV
+  ? ['polling']
+  : ['polling', 'websocket']
 
 let _socket = null
 
@@ -28,7 +26,12 @@ export function getSocket() {
       autoConnect: false,
       transports: TRANSPORTS,
     })
-    _socket.on('connect_error', () => {})
+    // TEMP diagnostic logging — remove once Safari hang is resolved.
+    _socket.on('connect',       () => console.log('[socket] connect',       { id: _socket.id, transport: _socket.io.engine?.transport?.name }))
+    _socket.on('disconnect',    (reason) => console.log('[socket] disconnect', reason))
+    _socket.on('connect_error', (err) => console.log('[socket] connect_error', err?.message, err))
+    _socket.io.on('reconnect_attempt', (n) => console.log('[socket] reconnect_attempt', n))
+    _socket.io.on('error',      (err) => console.log('[socket] manager error', err?.message, err))
   }
   return _socket
 }

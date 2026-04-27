@@ -38,7 +38,8 @@ import {
 } from './tablePresence.js'
 import { dispatch as dispatchBus } from '../lib/notificationBus.js'
 import { appendToStream } from '../lib/eventStream.js'
-import { mountainPool, MountainNamePool } from './mountainNames.js'
+import { nanoid } from 'nanoid'
+import { formatTableLabel } from '../lib/tableLabel.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -147,7 +148,10 @@ function sanitizeTable(table, extras = {}) {
   const spectatorCount = 0 // spectator count not tracked in DB seats
   return {
     slug: table.slug,
-    displayName: table.displayName,
+    label: formatTableLabel(table, extras.viewerId ?? null),
+    isHvb: !!table.isHvb,
+    isDemo: !!table.isDemo,
+    isTournament: !!table.isTournament,
     status: mapStatus(table.status),
     board: ps.board ?? Array(9).fill(null),
     currentTurn: ps.currentTurn ?? 'X',
@@ -447,7 +451,7 @@ export async function attachSocketIO(httpServer) {
           const ps = table.previewState || {}
           socket.emit('room:created:hvb', {
             slug: table.slug,
-            displayName: table.displayName,
+            label: formatTableLabel(table, baId),
             mark: ps.marks?.[baId] ?? 'X',
             board: ps.board,
             currentTurn: ps.currentTurn,
@@ -488,10 +492,7 @@ export async function attachSocketIO(httpServer) {
           unregisterSocket(socket.id)
         }
 
-        const name = mountainPool.acquire()
-        if (!name) return socket.emit('error', { message: 'No mountain names available' })
-        const slug = MountainNamePool.toSlug(name)
-        const displayName = `Mt. ${name}`
+        const slug = nanoid(8)
 
         // Use betterAuthId for seats/marks — matches session.user.id on the frontend.
         // For guests (no auth), use a socket-derived sentinel so seats/marks always
@@ -508,7 +509,6 @@ export async function attachSocketIO(httpServer) {
           data: {
             gameId: 'xo',
             slug,
-            displayName,
             createdById: user?.betterAuthId ?? 'anonymous',
             minPlayers: 2,
             maxPlayers: 2,
@@ -524,7 +524,7 @@ export async function attachSocketIO(httpServer) {
 
         registerSocket(socket.id, table.id, baId)
         socket.join(`table:${table.id}`)
-        socket.emit('room:created', { slug: table.slug, displayName: table.displayName, mark: 'X' })
+        socket.emit('room:created', { slug: table.slug, label: formatTableLabel(table, baId), mark: 'X' })
       } catch (err) {
         socket.emit('error', { message: err.message })
       }
@@ -573,7 +573,7 @@ export async function attachSocketIO(httpServer) {
                 socket.join(`table:${existing.id}`)
                 socket.emit('room:created:hvb', {
                   slug: existing.slug,
-                  displayName: existing.displayName,
+                  label: formatTableLabel(existing, user.betterAuthId),
                   mark: eps.marks?.[user.betterAuthId] ?? 'X',
                   board: eps.board,
                   currentTurn: eps.currentTurn,
@@ -606,7 +606,7 @@ export async function attachSocketIO(httpServer) {
                 socket.join(`table:${refreshed.id}`)
                 socket.emit('room:created:hvb', {
                   slug: refreshed.slug,
-                  displayName: refreshed.displayName,
+                  label: formatTableLabel(refreshed, user.betterAuthId),
                   mark: fps.marks?.[user.betterAuthId] ?? 'X',
                   board: fps.board,
                   currentTurn: fps.currentTurn,
@@ -640,21 +640,12 @@ export async function attachSocketIO(httpServer) {
           // Cancel any pending disconnect timer for this socket
           const dt = _disconnectTimers.get(socket.id)
           if (dt) { clearTimeout(dt.timerId); _disconnectTimers.delete(socket.id) }
-          // Release mountain name
-          try {
-            const old = await db.table.findUnique({ where: { id: existingTableId }, select: { displayName: true } })
-            const oldName = old?.displayName?.replace('Mt. ', '')
-            if (oldName) mountainPool.release(oldName)
-          } catch {}
           await db.table.update({ where: { id: existingTableId }, data: { status: 'COMPLETED' } }).catch(() => {})
           await deleteIfGuestTable(existingTableId)
           unregisterSocket(socket.id)
         }
 
-        const name = mountainPool.acquire()
-        if (!name) return socket.emit('error', { message: 'No mountain names available' })
-        const slug = MountainNamePool.toSlug(name)
-        const displayName = `Mt. ${name}`
+        const slug = nanoid(8)
 
         const baId = user?.betterAuthId ?? `guest:${socket.id}`
 
@@ -740,11 +731,16 @@ export async function attachSocketIO(httpServer) {
         }
 
         const isGuest = !user?.betterAuthId
+        // Bot's seat-display name preference: tournament-resolved opponent
+        // name (for MIXED matches), else the bot's own user.displayName, else
+        // a generic 'Bot' fallback. Surfaced via formatTableLabel.
+        const botSeatDisplayName = tourMatchOpponentName
+          ?? (await db.user.findUnique({ where: { id: botUserRow.id }, select: { displayName: true } }).catch(() => null))?.displayName
+          ?? 'Bot'
         const table = await db.table.create({
           data: {
             gameId,
             slug,
-            displayName,
             createdById: user?.betterAuthId ?? 'anonymous',
             minPlayers: 2,
             maxPlayers: 2,
@@ -759,7 +755,7 @@ export async function attachSocketIO(httpServer) {
             bestOfN:           tourBestOfN,
             seats: [
               { userId: baId,       status: 'occupied', displayName: user?.displayName ?? 'Guest' },
-              { userId: botSeatId,  status: 'occupied', displayName: tourMatchOpponentName ?? 'Bot' },
+              { userId: botSeatId,  status: 'occupied', displayName: botSeatDisplayName },
             ],
             previewState: makePreviewState({ marks, botMark: 'O' }),
           },
@@ -770,7 +766,7 @@ export async function attachSocketIO(httpServer) {
         const ps = table.previewState
         socket.emit('room:created:hvb', {
           slug: table.slug,
-          displayName: table.displayName,
+          label: formatTableLabel(table, baId),
           mark: 'X',
           board: ps.board,
           currentTurn: ps.currentTurn,
@@ -808,7 +804,7 @@ export async function attachSocketIO(httpServer) {
             role: 'spectator',
             room: {
               slug: g.slug,
-              displayName: g.displayName,
+              label: `${g.bot1.displayName} vs ${g.bot2.displayName}`,
               status: g.status,
               board: g.board,
               currentTurn: g.currentTurn,
@@ -856,7 +852,7 @@ export async function attachSocketIO(httpServer) {
             role: 'spectator',
             room: {
               slug: g.slug,
-              displayName: g.displayName,
+              label: `${g.bot1.displayName} vs ${g.bot2.displayName}`,
               status: g.status,
               board: g.board,
               currentTurn: g.currentTurn,
@@ -1088,45 +1084,12 @@ export async function attachSocketIO(httpServer) {
       }
     })
 
-    on('room:swapName', async () => {
-      const tableId = _socketToTable.get(socket.id)
-      if (!tableId) return socket.emit('error', { message: 'Room not found' })
-
-      const table = await db.table.findUnique({ where: { id: tableId } })
-      if (!table) return socket.emit('error', { message: 'Room not found' })
-      if (table.status !== 'FORMING') return socket.emit('error', { message: 'Cannot rename after opponent joins' })
-
-      // Verify host (seat 0)
-      const seats = table.seats || []
-      const hostSeatUserId = seats[0]?.userId
-      // We can't check by socketId directly; check that this socket is mapped to this table
-      // and that the table is still FORMING (only the creator would be connected)
-
-      const oldName = table.displayName.replace('Mt. ', '')
-      const newName = mountainPool.swap(oldName)
-      if (!newName) return socket.emit('error', { message: 'No names available' })
-
-      const newSlug = MountainNamePool.toSlug(newName)
-      const newDisplayName = `Mt. ${newName}`
-
-      await db.table.update({
-        where: { id: tableId },
-        data: { slug: newSlug, displayName: newDisplayName },
-      })
-
-      socket.emit('room:renamed', { slug: newSlug, displayName: newDisplayName })
-    })
-
     on('room:cancel', async () => {
       const tableId = _socketToTable.get(socket.id)
       if (!tableId) return
 
       const table = await db.table.findUnique({ where: { id: tableId } })
       if (table) {
-        // Release mountain name
-        const name = table.displayName?.replace('Mt. ', '')
-        if (name) mountainPool.release(name)
-
         await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
@@ -1378,10 +1341,7 @@ export async function attachSocketIO(httpServer) {
 
       if (!slug) {
         // First player — create the table (use betterAuthId for seats/marks)
-        const name = mountainPool.acquire()
-        if (!name) return socket.emit('error', { message: 'No mountain names available' })
-        slug = MountainNamePool.toSlug(name)
-        const displayName = `Mt. ${name}`
+        slug = nanoid(8)
 
         const baId = user.betterAuthId
         const marks = { [baId]: 'X' }
@@ -1390,7 +1350,6 @@ export async function attachSocketIO(httpServer) {
           data: {
             gameId: 'xo',
             slug,
-            displayName,
             createdById: baId,
             minPlayers: 2,
             maxPlayers: 2,
@@ -1658,8 +1617,6 @@ export async function attachSocketIO(httpServer) {
 
       if (table.status === 'FORMING') {
         // Host left before anyone joined — close immediately
-        const name = table.displayName?.replace('Mt. ', '')
-        if (name) mountainPool.release(name)
         await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) {
@@ -1704,8 +1661,6 @@ export async function attachSocketIO(httpServer) {
 
       if (otherDisconnected) {
         // Both players disconnected — close immediately
-        const name = table.displayName?.replace('Mt. ', '')
-        if (name) mountainPool.release(name)
         await db.table.update({ where: { id: tableId }, data: { status: 'COMPLETED' } }).catch(() => {})
         await deleteIfGuestTable(table)
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
@@ -1909,7 +1864,7 @@ async function recordPvpGame(table, io) {
       totalMoves,
       durationMs,
       startedAt: new Date(table.createdAt),
-      roomName: table.displayName?.replace('Mt. ', '') ?? null,
+      roomName: null,
       tournamentId: table.tournamentId ?? null,
       tournamentMatchId: table.tournamentMatchId ?? null,
       moveStream: ps.moves?.length ? ps.moves : null,
