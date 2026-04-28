@@ -59,9 +59,14 @@ const BASE = import.meta.env.VITE_API_URL ?? ''
  * Path may start with `/rt/...` (we'll prepend `/api/v1`) or with a leading
  * `/api/...` for internal callers that want the full path explicit.
  */
-export async function rtFetch(path, { method = 'POST', body, headers: extraHeaders } = {}) {
+export async function rtFetch(path, { method = 'POST', body, headers: extraHeaders, sessionId: sessionIdOverride } = {}) {
   const token = await getToken().catch(() => null)
-  const sessionId = _sseSessionId
+  // Override beats cache. Used when a feature must pin a specific SSE session
+  // id across multiple POSTs (e.g. pong: the server keys players by the
+  // sessionId that did the join, so all subsequent inputs from that game must
+  // attach the same id — even if a later EventSource opened and overwrote
+  // the module-level cache).
+  const sessionId = sessionIdOverride ?? _sseSessionId
   const headers = {
     ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...(token     ? { Authorization: `Bearer ${token}` }            : {}),

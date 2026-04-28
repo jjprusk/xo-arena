@@ -15,7 +15,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { connectSocket, getSocket } from './socket.js'
 import { viaSse } from './realtimeMode.js'
-import { rtFetch } from './rtSession.js'
+import { rtFetch, getSseSession, onSseSessionChange } from './rtSession.js'
 import { useEventStream } from './useEventStream.js'
 
 /**
@@ -36,6 +36,11 @@ export function usePongSDK({ slug: joinSlug = null, currentUser = null }) {
   const moveHandlersRef = useRef([])
   const gameEndCbRef    = useRef(null)
   const slugRef         = useRef(joinSlug)
+  // SSE branch: capture the sessionId that did the join and pin it to all
+  // subsequent input POSTs. Without this, a later useEventStream mount
+  // overwrites the module-level cache, and inputs land on a session that
+  // isn't seated in the room (server: `room.players.indexOf(sid) === -1`).
+  const pongSessionIdRef = useRef(null)
 
   // ── SDK object ─────────────────────────────────────────────────────────────
   const sdk = useMemo(() => ({
@@ -47,7 +52,12 @@ export function usePongSDK({ slug: joinSlug = null, currentUser = null }) {
       const slug = slugRef.current
       if (!slug) return
       if (viaSse('pong')) {
-        rtFetch(`/rt/pong/rooms/${slug}/input`, { body: { direction } }).catch(() => {})
+        rtFetch(`/rt/pong/rooms/${slug}/input`, {
+          body:      { direction },
+          sessionId: pongSessionIdRef.current,
+        }).catch((err) => {
+          console.warn('[usePongSDK] input POST failed', err?.status, err?.code, err?.message)
+        })
         return
       }
       getSocket().emit('pong:input', { slug, direction })
@@ -185,10 +195,33 @@ export function usePongSDK({ slug: joinSlug = null, currentUser = null }) {
     }
 
     let cancelled = false
+    let unsubSession = null
+
+    // Cold-load race: PongPage mounts at the same time as AppLayout's guide
+    // EventSource. The join POST has to attach X-SSE-Session, but that id
+    // only becomes available once the EventSource has parsed its first
+    // `event: session` frame. Wait until the holder is non-null before
+    // posting, otherwise the server returns 409 SSE_SESSION_MISSING.
+    function waitForSession() {
+      if (getSseSession()) return Promise.resolve()
+      return new Promise((resolve) => {
+        unsubSession = onSseSessionChange((id) => { if (id) resolve() })
+      })
+    }
+
     ;(async () => {
       try {
+        await waitForSession()
+        if (cancelled) return
+
+        // Pin the current sessionId for the lifetime of this game. Snapshot
+        // here, BEFORE the rtFetch — that way any later useEventStream mount
+        // that overwrites the global cache doesn't affect input POSTs.
+        const pinnedSid = getSseSession()
+        pongSessionIdRef.current = pinnedSid
+
         if (joinSlug) {
-          const res = await rtFetch(`/rt/pong/rooms/${joinSlug}/join`)
+          const res = await rtFetch(`/rt/pong/rooms/${joinSlug}/join`, { sessionId: pinnedSid })
           if (cancelled) return
           slugRef.current        = res.slug
           playerIndexRef.current = res.playerIndex
@@ -202,20 +235,22 @@ export function usePongSDK({ slug: joinSlug = null, currentUser = null }) {
         } else {
           const slug = `pong-${Math.random().toString(36).slice(2, 8)}`
           slugRef.current = slug
-          const res = await rtFetch('/rt/pong/rooms', { body: { slug } })
+          const res = await rtFetch('/rt/pong/rooms', { body: { slug }, sessionId: pinnedSid })
           if (cancelled) return
           playerIndexRef.current = res.playerIndex
           setRoomSlug(slug)
           setPhase('waiting')
           buildSession({ playerIndex: res.playerIndex })
         }
-      } catch {
-        // Connection issues surface via the EventSource auto-reconnect; the
-        // user-visible state stays in `connecting` until the join succeeds.
+      } catch (err) {
+        // Surface the failure rather than silently sticking on "Connecting…".
+        console.warn('[usePongSDK] SSE+POST join failed:', err?.status, err?.code, err?.message)
+        setAbandoned({ reason: err?.code === 'SSE_SESSION_MISSING' ? 'session-missing' : 'join-failed' })
+        setPhase('finished')
       }
     })()
 
-    return () => { cancelled = true }
+    return () => { cancelled = true; unsubSession?.() }
   }, [joinSlug])
 
   // SSE channel subscription — fires only when we know the slug. The server
