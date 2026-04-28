@@ -149,19 +149,25 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
       try {
         const { handleSessionGone } = await import('../services/tablePresenceService.js')
         const dropped = handleSessionGone({ sessionId: sid })
-        if (dropped.length === 0) return
-        const { getPresence } = await import('../realtime/tablePresence.js')
-        const { dualEmitPresence } = await import('../services/tablePresenceService.js')
-        // The Express app is reachable via req.app — but this callback runs
-        // after `req.on('close')`, when the Express request lifecycle is
-        // already torn down. Pull the io instance lazily off the request
-        // we still hold a reference to (capture it by closure).
-        const io = req.app?.get?.('io') ?? null
-        for (const tableId of dropped) {
-          dualEmitPresence(io, tableId, getPresence(tableId), 0)
+        if (dropped.length > 0) {
+          const { getPresence } = await import('../realtime/tablePresence.js')
+          const { dualEmitPresence } = await import('../services/tablePresenceService.js')
+          // The Express app is reachable via req.app — but this callback runs
+          // after `req.on('close')`, when the Express request lifecycle is
+          // already torn down. Pull the io instance lazily off the request
+          // we still hold a reference to (capture it by closure).
+          const io = req.app?.get?.('io') ?? null
+          for (const tableId of dropped) {
+            dualEmitPresence(io, tableId, getPresence(tableId), 0)
+          }
         }
+        // Phase 6: tear down any pong rooms this session was in. The runner
+        // emits `pong:<slug>:lifecycle` (kind=abandoned) so the surviving
+        // participant — on either transport — sees the dropout.
+        const pong = await import('../realtime/pongRunner.js')
+        pong.removeSocket(sid)
       } catch (err) {
-        logger.warn({ err: err.message, sessionId: sid }, 'sseSessions onDispose: presence cleanup failed')
+        logger.warn({ err: err.message, sessionId: sid }, 'sseSessions onDispose: cleanup failed')
       }
     },
   })

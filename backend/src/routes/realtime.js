@@ -31,6 +31,7 @@ import {
 } from '../services/tablePresenceService.js'
 import { getPresence as getTablePresence } from '../realtime/tablePresence.js'
 import { appendToStream } from '../lib/eventStream.js'
+import * as pongRunner from '../realtime/pongRunner.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
@@ -257,6 +258,79 @@ router.delete('/tables/:tableId/watch', async (req, res) => {
     return res.json({ tableId, removed })
   } catch (err) {
     logger.error({ err, tableId: req.params.tableId }, 'DELETE /rt/tables/:tableId/watch failed')
+    return res.status(500).json({ error: 'Internal error' })
+  }
+})
+
+// ── Pong (Phase 6) ───────────────────────────────────────────────────────────
+//
+// SSE+POST counterparts to the legacy `pong:create` / `pong:join` / `pong:input`
+// socket emits. The runner accepts an opaque participant id; for the SSE
+// transport that id is the sseSessionId (no collision with socket.id).
+
+// POST /api/v1/rt/pong/rooms { slug }  → { slug, playerIndex }
+//
+// Creates the room (idempotent — re-creating an existing slug is a no-op)
+// and seats the caller as the first available player.
+router.post('/pong/rooms', async (req, res) => {
+  try {
+    const { slug } = req.body ?? {}
+    if (!slug || typeof slug !== 'string') {
+      return res.status(400).json({ error: 'slug required' })
+    }
+    const { sessionId } = req.sseSession
+    pongRunner.createRoom(slug)
+    const result = pongRunner.joinRoom(slug, sessionId)
+    if (result.error) return res.status(404).json({ error: result.error })
+    sseSessions.joinPongRoom(sessionId, slug)
+    return res.json({ slug, playerIndex: result.playerIndex })
+  } catch (err) {
+    logger.error({ err }, 'POST /rt/pong/rooms failed')
+    return res.status(500).json({ error: 'Internal error' })
+  }
+})
+
+// POST /api/v1/rt/pong/rooms/:slug/join  → { slug, playerIndex, spectating, state }
+//
+// Joins an existing room (or creates it on demand, matching the legacy
+// `pong:join` semantics). The caller may end up as P2 or, if both seats
+// are taken, as a spectator. `state` is the current game state so a late
+// arrival can render immediately without waiting for the next tick.
+router.post('/pong/rooms/:slug/join', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const { sessionId } = req.sseSession
+    if (!pongRunner.hasRoom(slug)) pongRunner.createRoom(slug)
+    const result = pongRunner.joinRoom(slug, sessionId)
+    if (result.error) return res.status(404).json({ error: result.error })
+    sseSessions.joinPongRoom(sessionId, slug)
+    return res.json({
+      slug,
+      playerIndex: result.playerIndex ?? null,
+      spectating:  result.spectating ?? false,
+      state:       pongRunner.getState(slug),
+    })
+  } catch (err) {
+    logger.error({ err, slug: req.params.slug }, 'POST /rt/pong/rooms/:slug/join failed')
+    return res.status(500).json({ error: 'Internal error' })
+  }
+})
+
+// POST /api/v1/rt/pong/rooms/:slug/input { direction }
+//
+// Replaces the per-keyframe `pong:input` socket emit. Body is { direction:
+// 'up' | 'down' | 'stop' }. Returns 204 — the next tick over the SSE
+// `pong:<slug>:state` channel reflects the change.
+router.post('/pong/rooms/:slug/input', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const { direction } = req.body ?? {}
+    if (!direction) return res.status(400).json({ error: 'direction required' })
+    const { sessionId } = req.sseSession
+    pongRunner.applyInput(slug, sessionId, direction)
+    return res.status(204).end()
+  } catch (err) {
+    logger.error({ err, slug: req.params.slug }, 'POST /rt/pong/rooms/:slug/input failed')
     return res.status(500).json({ error: 'Internal error' })
   }
 })

@@ -14,6 +14,9 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { connectSocket, getSocket } from './socket.js'
+import { viaSse } from './realtimeMode.js'
+import { rtFetch } from './rtSession.js'
+import { useEventStream } from './useEventStream.js'
 
 /**
  * @param {{ slug: string|null, currentUser: object|null }} options
@@ -36,9 +39,18 @@ export function usePongSDK({ slug: joinSlug = null, currentUser = null }) {
 
   // ── SDK object ─────────────────────────────────────────────────────────────
   const sdk = useMemo(() => ({
-    // Send paddle direction to server
+    // Send paddle direction to server. On the SSE+POST transport, this fires
+    // an async POST to /rt/pong/rooms/:slug/input — the next ~33 ms tick on
+    // the `pong:<slug>:state` channel reflects the change. On the legacy
+    // socket transport, the emit is synchronous.
     submitMove({ direction }) {
-      getSocket().emit('pong:input', { slug: slugRef.current, direction })
+      const slug = slugRef.current
+      if (!slug) return
+      if (viaSse('pong')) {
+        rtFetch(`/rt/pong/rooms/${slug}/input`, { body: { direction } }).catch(() => {})
+        return
+      }
+      getSocket().emit('pong:input', { slug, direction })
     },
 
     // Register handler for pong:state ticks  → { state, sentAt }
@@ -60,8 +72,9 @@ export function usePongSDK({ slug: joinSlug = null, currentUser = null }) {
     _onGameEnd(cb) { gameEndCbRef.current = cb },
   }), [])
 
-  // ── Socket lifecycle ───────────────────────────────────────────────────────
+  // ── Socket lifecycle (legacy transport) ────────────────────────────────────
   useEffect(() => {
+    if (viaSse('pong')) return  // Phase 6 — SSE+POST branch handles wiring
     const socket = connectSocket()
 
     function buildSession(overrides = {}) {
@@ -147,6 +160,94 @@ export function usePongSDK({ slug: joinSlug = null, currentUser = null }) {
         .forEach(ev => socket.off(ev))
     }
   }, [joinSlug])
+
+  // ── SSE+POST lifecycle (Phase 6) ──────────────────────────────────────────
+  // Mirrors the socket effect above but uses rtFetch + useEventStream. The
+  // server runs the same `pongRunner.joinRoom()` either way — the only
+  // differences are how the create/join is invoked (POST vs socket.emit) and
+  // how the resulting state ticks reach the client (SSE channel vs socket.io
+  // room).
+  useEffect(() => {
+    if (!viaSse('pong')) return
+
+    function buildSession(overrides = {}) {
+      const s = {
+        tableId:       slugRef.current ?? '',
+        gameId:        'pong',
+        players:       [],
+        currentUserId: currentUserRef.current?.id ?? null,
+        isSpectator:   overrides.isSpectator ?? false,
+        playerIndex:   overrides.playerIndex ?? playerIndexRef.current,
+        settings:      {},
+      }
+      setSession(s)
+      return s
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        if (joinSlug) {
+          const res = await rtFetch(`/rt/pong/rooms/${joinSlug}/join`)
+          if (cancelled) return
+          slugRef.current        = res.slug
+          playerIndexRef.current = res.playerIndex
+          setRoomSlug(res.slug)
+          const isSpec = res.spectating || res.playerIndex === null
+          setPhase(isSpec || res.state?.status === 'playing' ? 'playing' : 'waiting')
+          buildSession({ playerIndex: res.playerIndex, isSpectator: isSpec })
+          if (res.state) {
+            moveHandlersRef.current.forEach(h => h({ state: res.state, sentAt: null }))
+          }
+        } else {
+          const slug = `pong-${Math.random().toString(36).slice(2, 8)}`
+          slugRef.current = slug
+          const res = await rtFetch('/rt/pong/rooms', { body: { slug } })
+          if (cancelled) return
+          playerIndexRef.current = res.playerIndex
+          setRoomSlug(slug)
+          setPhase('waiting')
+          buildSession({ playerIndex: res.playerIndex })
+        }
+      } catch {
+        // Connection issues surface via the EventSource auto-reconnect; the
+        // user-visible state stays in `connecting` until the join succeeds.
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [joinSlug])
+
+  // SSE channel subscription — fires only when we know the slug. The server
+  // dual-emits to `pong:<slug>:state` (per-tick) and `pong:<slug>:lifecycle`
+  // (started/abandoned).
+  useEventStream({
+    enabled: viaSse('pong') && !!roomSlug,
+    channels: roomSlug ? [`pong:${roomSlug}:state`, `pong:${roomSlug}:lifecycle`] : [],
+    eventTypes: roomSlug ? [`pong:${roomSlug}:state`, `pong:${roomSlug}:lifecycle`] : [],
+    onEvent: (channel, data) => {
+      if (channel === `pong:${roomSlug}:state`) {
+        const { state, sentAt } = data ?? {}
+        if (!state) return
+        moveHandlersRef.current.forEach(h => h({ state, sentAt: sentAt ?? null }))
+        if (state.status === 'finished') setPhase('finished')
+        return
+      }
+      if (channel === `pong:${roomSlug}:lifecycle`) {
+        if (data?.kind === 'started') {
+          setPhase('playing')
+          if (data.state) {
+            moveHandlersRef.current.forEach(h => h({ state: data.state, sentAt: null }))
+          }
+          return
+        }
+        if (data?.kind === 'abandoned') {
+          setAbandoned({ reason: data.reason ?? 'disconnect' })
+          setPhase('finished')
+        }
+      }
+    },
+  })
 
   return { session, sdk, phase, abandoned, roomSlug }
 }
