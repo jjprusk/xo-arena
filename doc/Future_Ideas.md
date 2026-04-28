@@ -3,6 +3,49 @@
 
 Deferred features and improvements that are worth revisiting but not currently prioritized.
 
+## Known bugs (must fix — not deferred)
+
+These are **bugs**, not future ideas. Listed here for tracking; should be picked up before the next ship cycle.
+
+### Disconnect-forfeit UX — survivor bounced to `/tables` instead of seeing a "you win" screen
+
+**Surfaced by:** Phase 8 SSE+POST migration QA (see `Realtime_Migration_Postmortem.md`).
+
+**Symptom:** When one player closes their tab mid-game, the server-side disconnect detection fires correctly: `pagehide` POSTs the forfeit, the table flips to COMPLETED, and `dispatchTableReleased` emits a `table.released` bus event. The surviving player's tab receives the event but `TableDetailPage` treats `lifecycle: cancelled` / `abandoned` by navigating to `/tables`. Net effect: the survivor sees a "table released" toast in the guide drawer and lands on the Tables list, with no "Opponent forfeited — you win" celebration screen and no Rematch button.
+
+**Why it's user-visible:** the realtime path is doing its job — seat freed, ELO updates, tournament series progresses — but the survivor's view of the moment is wrong. Looks abrupt and broken.
+
+**Fix outline:**
+
+- In `useGameSDK.js`, the `kind: 'forfeit'` SSE state already sets `phase = 'finished'` and emits a synthetic move event with `winner` populated. The XO game component should already render the win/loss screen — verify it does.
+- The bounce comes from `TableDetailPage`'s `useEventStream({ channels: [`table:${id}:lifecycle`] })` handler reacting to `kind === 'cancelled'` with `navigate('/tables')`. When the table was ACTIVE before the forfeit, suppress the navigation — let the `state` channel's `kind: 'forfeit'` drive the UI to the win screen and offer Rematch.
+- Server side, consider whether forfeit *should* be emitted as a lifecycle `cancelled` at all, or only as a `state` `forfeit`. Likely: drop the `dispatchTableReleased` call in the forfeit path on free-play tables (keep it for tournament/admin), so the survivor isn't fighting two competing event shapes.
+
+**Effort:** ~1–2 hours. Touch points: `landing/src/pages/TableDetailPage.jsx` (lifecycle handler), `backend/src/services/tableFlowService.js::forfeitGame` (release-event semantics), and the XO game component's finished-state render path. Add a Playwright test that closes one tab mid-game and asserts the survivor lands on the win screen.
+
+### Admin log viewer — empty even with traffic
+
+**Surfaced by:** Phase 8 QA — pre-existing, not caused by the realtime migration.
+
+**Symptom:** `/admin/logs` renders the filter UI and the empty-state message, but no entries appear even when toggling **Live tail** and generating backend log activity in another tab. The "this was always broken" entry — never landed correctly.
+
+**Likely causes (need to dig):**
+
+- The REST list endpoint may be filtering by a default `level` set that excludes everything actually being logged.
+- The pruner may be running aggressively and deleting rows faster than the page can fetch them.
+- The frontend's `useEventStream` subscription for `admin:logs:entry` may not be matching what `routes/logs.js` actually appends. Phase 8 confirmed the server side is publishing on `admin:logs:entry`; verify the page's `eventTypes` list contains that exact name and the `onEvent` handler routes it to the list state.
+- Live-tail toggle may be wired to the legacy SystemConfig `realtime.admin.via` flag whose default no longer matters post-Phase-8.
+
+**Fix outline:**
+
+- Check the `/api/v1/logs` GET in dev with admin auth and a wide level filter — confirm rows exist in the DB.
+- If rows exist, the issue is purely client-side: walk the LogViewerPage subscription against the channel/event-type names emitted by `routes/logs.js`.
+- Add a Playwright test that posts a synthetic log entry (via the public POST `/api/v1/logs`) and asserts a row appears in the admin viewer within 2 s.
+
+**Effort:** ~2–3 hours including the test.
+
+---
+
 ## Status snapshot (last reviewed 2026-04-23)
 
 | Item | Status |

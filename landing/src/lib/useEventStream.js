@@ -2,15 +2,18 @@
 /**
  * useEventStream — Tier 2 SSE client.
  *
- * Opens a long-lived SSE connection to /api/v1/events/stream and dispatches
- * events to caller-supplied handlers by channel prefix. Persists the last
- * seen event id in sessionStorage so reconnects (page reloads, temporary
- * network drops) replay missed events via Last-Event-ID.
+ * One shared EventSource per tab. Multiple useEventStream callers
+ * (AppLayout, TableDetailPage, useGameSDK, gym tabs, …) all attach
+ * handlers to the same connection rather than opening their own
+ * stream. Without this, the per-user 8-connection cap on the server
+ * (and React StrictMode's double-invoke in dev) reliably blew past the
+ * limit and 429-storms killed gameplay.
  *
- * EventSource handles auto-reconnect + Last-Event-ID natively — we just
- * persist the id between page loads since a fresh EventSource starts with
- * no id. Channel filter is a comma-joined prefix list sent as a query param
- * (matches the server's startsWith filter).
+ * Channel filter is the union of every caller's prefix list. When a
+ * caller's prefix is not already covered, the shared connection is
+ * reopened with the wider filter; otherwise the existing connection
+ * is reused. Last-Event-ID is persisted in sessionStorage so the
+ * reopened stream replays missed events.
  *
  * Usage:
  *   useEventStream({
@@ -19,8 +22,8 @@
  *     enabled:  someCondition,
  *   })
  */
-import { useEffect, useRef, useState } from 'react'
-import { setSseSession, clearSseSession } from './rtSession.js'
+import { useEffect, useRef } from 'react'
+import { setSseSession } from './rtSession.js'
 
 const STORAGE_KEY = 'aiarena_tier2_last_event_id'
 
@@ -31,30 +34,158 @@ function saveLastId(id) {
   try { sessionStorage.setItem(STORAGE_KEY, id) } catch {}
 }
 
+// ── Singleton connection ─────────────────────────────────────────────────────
+//
+// `_es`        — current EventSource (null when no callers are mounted)
+// `_callers`   — Set of registered caller records: { channels, eventTypes, handler }
+// `_listeners` — Map<eventType, fn> of currently-attached EventSource listeners.
+//   We keep a single `handle` per event type that fans out to every caller.
+// `_currentChannels` — sorted, deduped union of every caller's channels; used to
+//   decide whether a reopen is needed when a new caller arrives.
+
+let _es = null
+let _currentChannels = []
+const _callers = new Set()
+const _listeners = new Map()
+
+function dispatchToCallers(eventType, payload, eventId) {
+  for (const c of _callers) {
+    if (c.channels.length === 0) {
+      c.handler?.(eventType, payload, eventId)
+      continue
+    }
+    if (c.channels.some(p => eventType === p || eventType.startsWith(p))) {
+      c.handler?.(eventType, payload, eventId)
+    }
+  }
+}
+
+function makeHandler(eventType) {
+  return (e) => {
+    saveLastId(e.lastEventId || '')
+    let payload = {}
+    try { payload = e.data ? JSON.parse(e.data) : {} } catch {}
+    dispatchToCallers(eventType, payload, e.lastEventId)
+  }
+}
+
+function attachListener(es, eventType) {
+  if (_listeners.has(eventType)) return
+  const fn = makeHandler(eventType)
+  _listeners.set(eventType, fn)
+  es.addEventListener(eventType, fn)
+}
+
+function detachAllListeners(es) {
+  for (const [eventType, fn] of _listeners) {
+    es.removeEventListener(eventType, fn)
+  }
+  _listeners.clear()
+}
+
+function unionChannels() {
+  const set = new Set()
+  for (const c of _callers) for (const p of c.channels) set.add(p)
+  return [...set].sort()
+}
+
+function unionEventTypes() {
+  const set = new Set(KNOWN_SSE_EVENT_TYPES)
+  for (const c of _callers) for (const t of c.eventTypes) set.add(t)
+  return [...set]
+}
+
+function openStream() {
+  const channels = unionChannels()
+  const params = new URLSearchParams()
+  if (channels.length) params.set('channels', channels.join(','))
+  const lastId = loadLastId()
+  if (lastId) params.set('lastEventId', lastId)
+
+  const url = `/api/v1/events/stream${params.toString() ? `?${params}` : ''}`
+  console.info('[useEventStream] opening shared SSE:', url)
+
+  const es = new EventSource(url, { withCredentials: true })
+  es.onopen  = () => console.info('[useEventStream] SSE open')
+  es.onerror = () => console.warn('[useEventStream] SSE error — readyState=' + es.readyState)
+
+  es.addEventListener('session', (e) => {
+    try {
+      const { sseSessionId } = JSON.parse(e.data || '{}')
+      if (sseSessionId) setSseSession(sseSessionId)
+    } catch {}
+  })
+
+  // onmessage covers any unnamed events (rare).
+  es.onmessage = (e) => {
+    saveLastId(e.lastEventId || '')
+    let payload = {}
+    try { payload = e.data ? JSON.parse(e.data) : {} } catch {}
+    dispatchToCallers('message', payload, e.lastEventId)
+  }
+
+  for (const t of unionEventTypes()) attachListener(es, t)
+
+  _es = es
+  _currentChannels = channels
+}
+
+function closeStream() {
+  if (!_es) return
+  detachAllListeners(_es)
+  _es.close()
+  _es = null
+  _currentChannels = []
+}
+
+function reopenIfFilterWidened() {
+  const next = unionChannels()
+  if (!_es) {
+    if (_callers.size > 0) openStream()
+    return
+  }
+  // If the next filter is the same as current, reuse.
+  if (next.length === _currentChannels.length && next.every((p, i) => p === _currentChannels[i])) {
+    // Channels unchanged — but ensure named-event listeners are up to date.
+    for (const t of unionEventTypes()) attachListener(_es, t)
+    return
+  }
+  // Channels changed — must reopen with wider filter so new callers receive
+  // their topics. The session id may turn over; rtFetch handles that.
+  closeStream()
+  openStream()
+}
+
+function register(record) {
+  _callers.add(record)
+  reopenIfFilterWidened()
+  return () => {
+    _callers.delete(record)
+    if (_callers.size === 0) closeStream()
+    // No reopen on unregister — narrower filter is fine; existing stream still
+    // delivers a superset of what remaining callers need.
+  }
+}
+
 /**
- * Open an SSE connection to the Tier 2 event stream and dispatch events
- * to the caller's onEvent handler.
+ * Subscribe to the shared SSE stream.
  *
  * Options:
- *   channels — server-side prefix filter (e.g. ['guide:', 'presence:'])
- *   eventTypes — extra named event types to register listeners for. Required
- *     for dynamic, per-user channel names like `user:<id>:idle` that can't
- *     live in the static KNOWN list.
- *   onEvent(channel, payload, eventId) — called once per delivered event.
- *   enabled — defer opening the EventSource until truthy.
+ *   channels — server-side prefix filter contributed by this caller. The
+ *     shared connection's filter is the union of every caller's channels.
+ *   eventTypes — extra named event types this caller wants registered as
+ *     EventSource listeners (in addition to KNOWN_SSE_EVENT_TYPES).
+ *   onEvent(channel, payload, eventId) — called once per delivered event
+ *     whose type matches one of this caller's `channels` prefixes (or any
+ *     event when `channels` is empty).
+ *   enabled — defer registering until truthy.
  */
 export function useEventStream({ channels = [], eventTypes = [], onEvent, enabled = true } = {}) {
-  // Keep latest onEvent in a ref so re-renders don't cycle the connection.
   const handlerRef = useRef(onEvent)
   useEffect(() => { handlerRef.current = onEvent }, [onEvent])
 
-  // Hold the EventSource in state so a separate effect can attach/detach
-  // listeners as `eventTypes` changes WITHOUT closing the connection. Without
-  // this split, a Phase 7d caller that learns the table id mid-game (and
-  // wants to add `table:<id>:state` listeners) would have to reopen the
-  // EventSource — which mints a new session id and disposes the old session,
-  // forfeiting the FORMING table the user just created.
-  const [es, setEs] = useState(null)
+  const channelsKey   = channels.join(',')
+  const eventTypesKey = eventTypes.join(',')
 
   useEffect(() => {
     if (!enabled) return
@@ -62,67 +193,18 @@ export function useEventStream({ channels = [], eventTypes = [], onEvent, enable
       console.warn('[useEventStream] EventSource not available in this browser')
       return
     }
-
-    const params = new URLSearchParams()
-    if (channels.length) params.set('channels', channels.join(','))
-    const lastId = loadLastId()
-    if (lastId) params.set('lastEventId', lastId)
-
-    // Using relative URL so Vite/landing proxy forwards to backend.
-    const url = `/api/v1/events/stream${params.toString() ? `?${params}` : ''}`
-    console.info('[useEventStream] opening SSE:', url)
-
-    // EventSource sends cookies with same-origin requests, which is what we
-    // want — the BA session cookie authenticates us through the landing proxy.
-    const newEs = new EventSource(url, { withCredentials: true })
-    newEs.onopen = () => console.info('[useEventStream] SSE open')
-
-    // First frame from the server is `event: session\ndata: {sseSessionId}`.
-    function onSession(e) {
-      try {
-        const { sseSessionId } = JSON.parse(e.data || '{}')
-        if (sseSessionId) setSseSession(sseSessionId)
-      } catch {}
+    const record = {
+      channels:   [...channels],
+      eventTypes: [...eventTypes],
+      handler:    (channel, payload, id) => handlerRef.current?.(channel, payload, id),
     }
-    newEs.addEventListener('session', onSession)
-
-    newEs.onerror = (e) => {
-      console.warn('[useEventStream] SSE error — readyState=' + newEs.readyState + ' (0=connecting, 1=open, 2=closed)')
-    }
-
-    setEs(newEs)
-
-    return () => {
-      newEs.removeEventListener('session', onSession)
-      clearSseSession()
-      newEs.close()
-      setEs(null)
-    }
-  }, [enabled, channels.join(',')])
-
-  // Listener-management effect — attaches handlers for the requested
-  // event types without touching the EventSource connection itself.
-  useEffect(() => {
-    if (!es) return
-    function handle(e) {
-      saveLastId(e.lastEventId || '')
-      let payload = {}
-      try { payload = e.data ? JSON.parse(e.data) : {} } catch {}
-      handlerRef.current?.(e.type, payload, e.lastEventId)
-    }
-    for (const t of KNOWN_SSE_EVENT_TYPES) es.addEventListener(t, handle)
-    for (const t of eventTypes) es.addEventListener(t, handle)
-    es.onmessage = handle
-    return () => {
-      for (const t of KNOWN_SSE_EVENT_TYPES) es.removeEventListener(t, handle)
-      for (const t of eventTypes) es.removeEventListener(t, handle)
-      es.onmessage = null
-    }
-  }, [es, eventTypes.join(',')])
+    return register(record)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, channelsKey, eventTypesKey])
 }
 
-// Re-exported so other modules can extend the listener set in future phases
-// without modifying useEventStream itself.
+// Re-exported so other modules can extend the static listener set without
+// modifying useEventStream itself.
 export const KNOWN_SSE_EVENT_TYPES = [
   'tournament:published',
   'tournament:flash:announced',

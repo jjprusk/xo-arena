@@ -79,11 +79,11 @@ export async function rtFetch(path, { method = 'POST', body, headers: extraHeade
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (res.status === 409) {
-    // Server says our SSE session is gone. Drop the cached id; useEventStream
-    // will set a new one when the EventSource reconnects.
-    clearSseSession()
-  }
+  // 409 used to clearSseSession() here; that races with multiple useEventStream
+  // callers — clearing the cache because of one stale-session POST then breaks
+  // every other component's POST until the next session frame arrives. The
+  // cache now turns over only when a new session frame is published; rtFetch
+  // just surfaces the 409 to the caller.
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({ error: res.statusText }))
     const err = new Error(errBody?.error || 'Realtime request failed')
