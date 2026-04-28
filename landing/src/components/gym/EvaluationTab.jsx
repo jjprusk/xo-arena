@@ -6,9 +6,7 @@ import {
 } from 'recharts'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
-import { getSocket } from '../../lib/socket.js'
 import { useEventStream } from '../../lib/useEventStream.js'
-import { viaSse } from '../../lib/realtimeMode.js'
 import {
   Card, SectionLabel, MiniStat, ChartPanel, Btn, Spinner, tooltipStyle, playerLabel,
 } from './gymShared.jsx'
@@ -19,7 +17,6 @@ function BenchmarkPanel({ model }) {
   const [benchmarks, setBenchmarks] = useState([])
   const [running, setRunning] = useState(false)
   const [activeBid, setActiveBid] = useState(null)
-  const socketRef = useRef(null)
 
   useEffect(() => {
     api.ml.listBenchmarks(model.id).then(r => setBenchmarks(r.benchmarks))
@@ -286,7 +283,6 @@ function TournamentPanel({ models }) {
   const [running, setRunning] = useState(false)
   const [tournament, setTournament] = useState(null)
   const [history, setHistory] = useState([])
-  const socketRef = useRef(null)
   const tournamentIdRef = useRef(null)
 
   useEffect(() => {
@@ -306,14 +302,10 @@ function TournamentPanel({ models }) {
     })
   }
 
-  // Phase 4 — SSE path for `ml:tournament_complete`. mlService dual-emits
-  // on Socket.io room `ml:tournament` and SSE channel
-  // `ml:tournament:tournament_complete`. The hook is a no-op when the flag
-  // is off; the socket effect inside handleRun() is the legacy path.
   useEventStream({
     channels:   ['ml:tournament:'],
     eventTypes: ['ml:tournament:tournament_complete'],
-    enabled:    running && viaSse('ml'),
+    enabled:    running,
     onEvent: (channel, payload) => {
       if (channel === 'ml:tournament:tournament_complete') handleTournamentComplete(payload?.tournamentId)
     },
@@ -327,17 +319,6 @@ function TournamentPanel({ models }) {
       const { tournament: t } = await api.ml.startTournament({ modelIds: selected, gamesPerPair }, token)
       tournamentIdRef.current = t.id
       setTournament({ ...t, status: 'RUNNING' })
-
-      if (!viaSse('ml')) {
-        const socket = getSocket()
-        if (!socket.connected) socket.connect()
-        socketRef.current = socket
-        socket.on('ml:tournament_complete', (data) => {
-          if (data.tournamentId !== t.id) return
-          handleTournamentComplete(data.tournamentId)
-          socket.off('ml:tournament_complete')
-        })
-      }
     } catch (err) {
       alert(err.message)
       setRunning(false)

@@ -60,7 +60,10 @@ describe('sseSessions — dispose debounce', () => {
     dispose('s1')
     vi.advanceTimersByTime(_DISPOSE_DEBOUNCE_MS + 50)
     expect(cb).toHaveBeenCalledOnce()
-    expect(cb).toHaveBeenCalledWith('u1', 's1')
+    expect(cb).toHaveBeenCalledWith('u1', 's1', {
+      joinedTables:    [],
+      joinedPongRooms: [],
+    })
     expect(get('s1')).toBeNull()
   })
 

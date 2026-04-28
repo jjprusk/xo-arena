@@ -29,10 +29,6 @@ import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
 import { appendToStream } from '../lib/eventStream.js'
 
-// ─── Socket.io reference ────────────────────────────────────────────────────
-let _io = null
-export function setIO(io) { _io = io }
-
 // ─── In-memory caches ───────────────────────────────────────────────────────
 
 /**
@@ -1682,10 +1678,9 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
  * (`ml:session:abc:`) and receive every event for that session.
  */
 function _emit(scope, event, data) {
-  if (_io) _io.to(scope).emit(event, data)
-  // Strip the leading `ml:` from the Socket.io event so the SSE channel name
-  // is the more conventional `<scope>:<topic>` (e.g. `ml:session:abc:progress`)
-  // rather than the doubled-up `ml:session:abc:ml:progress`.
+  // SSE channel name = `<scope>:<topic>` so a client can subscribe to a
+  // single prefix (e.g. `ml:session:abc:`) and receive every event for
+  // that scope. Strip the leading `ml:` from the event name.
   const topic = event.startsWith('ml:') ? event.slice(3) : event
   appendToStream(`${scope}:${topic}`, data, { userId: '*' }).catch(() => {})
 }

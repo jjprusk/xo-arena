@@ -13,21 +13,14 @@ import { createGameState, tick, setPaddleDir, TICK_MS } from './pongPhysics.js'
 import { appendToStream } from '../lib/eventStream.js'
 import logger from '../logger.js'
 
-// Re-export physics constants so socketHandler can import them from one place
+// Re-export physics constants — same place external modules look for them.
 export { BOARD_W, BOARD_H, P1_X, P2_X, PADDLE_W, PADDLE_H, BALL_R } from './pongPhysics.js'
 
-let _io = null
-export function setIO(io) { _io = io }
-
-// Dual-emit helpers — fan a pong tick / lifecycle event to BOTH the legacy
-// Socket.io room AND the SSE channel so clients on either transport see it
-// without changing the runner's call sites.
+// Fan tick / lifecycle events out via SSE channels.
 function dualEmitState(slug, payload) {
-  if (_io) _io.to(slug).emit('pong:state', payload)
   appendToStream(`pong:${slug}:state`, payload, { userId: '*' }).catch(() => {})
 }
 function dualEmitLifecycle(slug, kind, payload = {}) {
-  if (_io) _io.to(slug).emit(`pong:${kind}`, payload)
   appendToStream(`pong:${slug}:lifecycle`, { kind, ...payload }, { userId: '*' }).catch(() => {})
 }
 

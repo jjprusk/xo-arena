@@ -8,10 +8,6 @@ import { appendToStream } from './eventStream.js'
 import { sendToUser as pushToUser, buildPushPayload } from './pushService.js'
 import * as sseBroker from './sseBroker.js'
 
-let _io = null
-export function initBus(io) { _io = io }
-export function emitToRoom(room, event, payload) { if (_io) _io.to(room).emit(event, payload) }
-
 // ── Dispatch counters (for monitoring) ───────────────────────────────────────
 const _dispatchCounters = {}
 export function getDispatchCounters() { return { ..._dispatchCounters } }

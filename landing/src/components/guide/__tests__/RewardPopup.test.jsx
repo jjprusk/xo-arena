@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
- * RewardPopup — phase-boundary celebrations driven by socket events
+ * RewardPopup — phase-boundary celebrations driven by SSE events
  * (Sprint 3 §9.1).
  *
  * Covers:
@@ -16,28 +16,28 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
 
-// Fake socket — captures the most recent listener for each event so tests
-// can fire payloads at will.
-const _listeners = new Map()
-const fakeSocket = {
-  on: vi.fn((event, cb) => { _listeners.set(event, cb) }),
-  off: vi.fn((event) => { _listeners.delete(event) }),
-}
-
-vi.mock('../../../lib/socket.js', () => ({
-  getSocket: () => fakeSocket,
+// Capture the most recent useEventStream onEvent handler so tests can
+// dispatch SSE payloads at will.
+let _sseHandler = null
+vi.mock('../../../lib/useEventStream.js', () => ({
+  useEventStream: ({ onEvent }) => { _sseHandler = onEvent },
 }))
 
 import RewardPopup from '../RewardPopup.jsx'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  _listeners.clear()
+  _sseHandler = null
 })
 
 afterEach(() => {
   vi.useRealTimers()
 })
+
+function fire(channel, payload) {
+  expect(_sseHandler).toBeTypeOf('function')
+  act(() => _sseHandler(channel, payload))
+}
 
 describe('RewardPopup', () => {
   it('renders nothing before any event fires', () => {
@@ -47,11 +47,7 @@ describe('RewardPopup', () => {
 
   it('shows the Hook reward popup with +20 TC on guide:hook_complete', () => {
     render(<RewardPopup />)
-    const fire = _listeners.get('guide:hook_complete')
-    expect(fire).toBeTypeOf('function')
-    act(() => {
-      fire({ reward: 20, message: 'Welcome to the Arena.' })
-    })
+    fire('guide:hook_complete', { reward: 20, message: 'Welcome to the Arena.' })
     expect(screen.getByText(/Off to a great start!/i)).toBeInTheDocument()
     expect(screen.getByText(/\+20 Tournament Credits/i)).toBeInTheDocument()
     expect(screen.getByText(/build your first bot/i)).toBeInTheDocument()
@@ -59,9 +55,7 @@ describe('RewardPopup', () => {
 
   it('shows the Curriculum reward popup with +50 TC on guide:curriculum_complete', () => {
     render(<RewardPopup />)
-    act(() => {
-      _listeners.get('guide:curriculum_complete')({ reward: 50, message: 'You earned the graduation reward.' })
-    })
+    fire('guide:curriculum_complete', { reward: 50, message: 'You earned the graduation reward.' })
     expect(screen.getByText(/Journey complete!/i)).toBeInTheDocument()
     expect(screen.getByText(/\+50 Tournament Credits/i)).toBeInTheDocument()
     expect(screen.getByText(/Specialize/i)).toBeInTheDocument()
@@ -69,13 +63,13 @@ describe('RewardPopup', () => {
 
   it('falls back to default reward amounts when the payload omits them', () => {
     render(<RewardPopup />)
-    act(() => { _listeners.get('guide:hook_complete')({}) })
+    fire('guide:hook_complete', {})
     expect(screen.getByText(/\+20 Tournament Credits/i)).toBeInTheDocument()
   })
 
   it('the close button dismisses the popup', () => {
     render(<RewardPopup />)
-    act(() => { _listeners.get('guide:hook_complete')({ reward: 20 }) })
+    fire('guide:hook_complete', { reward: 20 })
     expect(screen.getByTestId('reward-popup')).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText(/Dismiss reward popup/i))
     expect(screen.queryByTestId('reward-popup')).not.toBeInTheDocument()
@@ -84,7 +78,7 @@ describe('RewardPopup', () => {
   it('auto-dismisses after 8 seconds', () => {
     vi.useFakeTimers()
     render(<RewardPopup />)
-    act(() => { _listeners.get('guide:hook_complete')({ reward: 20 }) })
+    fire('guide:hook_complete', { reward: 20 })
     expect(screen.getByTestId('reward-popup')).toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(8_000) })
     expect(screen.queryByTestId('reward-popup')).not.toBeInTheDocument()
@@ -93,23 +87,13 @@ describe('RewardPopup', () => {
   it('a second event resets the auto-dismiss window (newest reward wins)', () => {
     vi.useFakeTimers()
     render(<RewardPopup />)
-    act(() => { _listeners.get('guide:hook_complete')({ reward: 20 }) })
-    act(() => { vi.advanceTimersByTime(5_000) })  // halfway through dismiss
-    act(() => { _listeners.get('guide:curriculum_complete')({ reward: 50 }) })
-    expect(screen.getByText(/\+50 Tournament Credits/i)).toBeInTheDocument()
-    // Old timer should not have dismissed at 8s from first fire — the new
-    // event reset it.
-    act(() => { vi.advanceTimersByTime(3_000) })  // total 8s from first fire
-    expect(screen.getByTestId('reward-popup')).toBeInTheDocument()
-    // 8s from the second fire — now it dismisses
+    fire('guide:hook_complete', { reward: 20 })
     act(() => { vi.advanceTimersByTime(5_000) })
+    fire('guide:curriculum_complete', { reward: 50 })
+    expect(screen.getByText(/\+50 Tournament Credits/i)).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(3_000) })  // 8s from first fire
+    expect(screen.getByTestId('reward-popup')).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(5_000) })  // 8s from second fire
     expect(screen.queryByTestId('reward-popup')).not.toBeInTheDocument()
-  })
-
-  it('cleans up socket listeners on unmount', () => {
-    const { unmount } = render(<RewardPopup />)
-    unmount()
-    expect(fakeSocket.off).toHaveBeenCalledWith('guide:hook_complete', expect.any(Function))
-    expect(fakeSocket.off).toHaveBeenCalledWith('guide:curriculum_complete', expect.any(Function))
   })
 })

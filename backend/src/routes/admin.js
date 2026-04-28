@@ -21,7 +21,8 @@ import {
   createReply,
 } from '../lib/feedbackHelpers.js'
 import { replyTemplate } from '../lib/emailTemplates.js'
-import { dispatch, emitToRoom } from '../lib/notificationBus.js'
+import { dispatch } from '../lib/notificationBus.js'
+import { appendToStream } from '../lib/eventStream.js'
 import { truncateStream } from '../lib/eventStream.js'
 import { sweep as gcSweep } from '../services/tableGcService.js'
 import { runMetricsSnapshot } from '../services/metricsSnapshotService.js'
@@ -111,7 +112,7 @@ router.get('/health/tables', (req, res) => {
     tableCreateErrors: creates,
     tableReleased:     released,
     gc,
-    socketAdapter:     getSocketAdapterState(),  // 'redis' | 'in-memory' | 'unknown'
+    socketAdapter:     'sse',  // socket.io removed — SSE+POST is the only transport
     uptime: Math.round(process.uptime()),
   })
 })
@@ -1521,7 +1522,11 @@ router.delete('/tables/:id', async (req, res, next) => {
     // End the game immediately for connected players so GameComponent transitions
     // to the finished state before the table.deleted navigation arrives.
     const scores = table.previewState?.scores ?? { X: 0, O: 0 }
-    emitToRoom(`table:${table.id}`, 'game:forfeit', { winner: null, scores })
+    appendToStream(
+      `table:${table.id}:state`,
+      { kind: 'forfeit', winner: null, scores },
+      { userId: '*' },
+    ).catch(() => {})
 
     // Bounce connected players/spectators back to the tables list.
     dispatch({

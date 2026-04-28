@@ -6,7 +6,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { signOut } from '../lib/auth-client.js'
-import { disconnectSocket } from '../lib/socket.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
@@ -357,7 +356,6 @@ export default function ProfilePage() {
         .forEach(k => sessionStorage.removeItem(k))
       clearSessionCache()
       clearTokenCache()
-      disconnectSocket()
       await signOut()
       triggerSessionRefresh()  // update useOptimisticSession state immediately
       navigate('/')

@@ -11,6 +11,11 @@ vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../../lib/eventStream.js', () => ({ appendToStream: mockAppendToStream }))
+
 import db from '../../lib/db.js'
 import {
   DISCOVERY_REWARDS,
@@ -151,22 +156,19 @@ describe('grantDiscoveryReward — happy path', () => {
     expect(args.data.creditsTc).toEqual({ increment: 40 })
   })
 
-  it('emits guide:discovery_reward + guide:notification when io is provided', async () => {
+  it('appends guide:discovery_reward to the SSE stream', async () => {
     db.user.findUnique.mockResolvedValue(mockUser({ granted: [] }))
-    const io = mockIo()
+    mockAppendToStream.mockClear()
 
-    await grantDiscoveryReward(userId, 'firstTemplateClone', io)
+    await grantDiscoveryReward(userId, 'firstTemplateClone')
 
-    expect(io.to).toHaveBeenCalledWith(`user:${userId}`)
-    const events = io.roomEmit.mock.calls.map(c => c[0])
-    expect(events).toContain('guide:discovery_reward')
-    expect(events).toContain('guide:notification')
-
-    const discoveryEvt = io.roomEmit.mock.calls.find(c => c[0] === 'guide:discovery_reward')[1]
-    expect(discoveryEvt).toMatchObject({
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:discovery_reward')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[1]).toMatchObject({
       rewardKey: 'firstTemplateClone',
       reward:    DISCOVERY_REWARDS.firstTemplateClone.defaultTc,
     })
+    expect(sseCall[2]).toEqual({ userId })
   })
 })
 

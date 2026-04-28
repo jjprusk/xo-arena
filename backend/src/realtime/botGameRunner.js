@@ -16,6 +16,7 @@ import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
 import { releaseSeats } from '../lib/tableSeats.js'
 import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
+import { appendToStream } from '../lib/eventStream.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -76,12 +77,6 @@ class BotGameRunner {
     this._games = new Map()
     /** @type {Map<string, string>} socketId → slug */
     this._socketToGame = new Map()
-    /** @type {import('socket.io').Server|null} */
-    this._io = null
-  }
-
-  setIO(io) {
-    this._io = io
   }
 
   /**
@@ -173,15 +168,17 @@ class BotGameRunner {
       game.moves = []
       const gameStartedAt = new Date(game.createdAt)
 
-      // Emit game:start for each game in the series
-      this._io?.to(slug).emit('game:start', {
+      // Emit per-round opening state on the SSE table:<slug>:state channel
+      // so spectators see each round of the series.
+      const startPayload = {
         board: game.board,
         currentTurn: game.currentTurn,
         round: game.seriesGamesPlayed + 1,
         scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
         bot1: { displayName: game.bot1.displayName, mark: 'X' },
         bot2: { displayName: game.bot2.displayName, mark: 'O' },
-      })
+      }
+      appendToStream(`table:${slug}:state`, { kind: 'start', ...startPayload }, { userId: '*' }).catch(() => {})
 
       // Play until terminal state
       while (game.status === 'playing') {
@@ -200,16 +197,19 @@ class BotGameRunner {
           logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
           game.winner = game.currentTurn === 'X' ? 'O' : 'X'
           game.status = 'finished'
-          this._io?.to(slug).emit('game:moved', {
-            cellIndex: null,
-            board: game.board,
-            currentTurn: game.currentTurn,
-            status: game.status,
-            winner: game.winner,
-            winLine: null,
-            forfeit: true,
-            scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
-          })
+          {
+            const movedPayload = {
+              cellIndex: null,
+              board: game.board,
+              currentTurn: game.currentTurn,
+              status: game.status,
+              winner: game.winner,
+              winLine: null,
+              forfeit: true,
+              scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
+            }
+            appendToStream(`table:${slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+          }
           break
         }
 
@@ -233,15 +233,18 @@ class BotGameRunner {
           game.currentTurn = game.currentTurn === 'X' ? 'O' : 'X'
         }
 
-        this._io?.to(slug).emit('game:moved', {
-          cellIndex,
-          board: game.board,
-          currentTurn: game.currentTurn,
-          status: game.status,
-          winner: game.winner,
-          winLine: game.winLine,
-          scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
-        })
+        {
+          const movedPayload = {
+            cellIndex,
+            board: game.board,
+            currentTurn: game.currentTurn,
+            status: game.status,
+            winner: game.winner,
+            winLine: game.winLine,
+            scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
+          }
+          appendToStream(`table:${slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+        }
       }
 
       // Save a DB record for this individual game in the series

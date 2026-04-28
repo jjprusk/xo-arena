@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
+// Phase 7a: /rt/* routes now use optionalAuth globally. Pong specifically
+// supports guests, so the mock attaches `req.auth = null` by default —
+// individual tests can override if they need the authed branch.
 vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req, _res, next) => {
     req.auth = { userId: 'ba_user_1' }

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 npm workspaces monorepo. Four runtime services + shared packages:
 
-- `backend/` — Express + Prisma + Socket.io. Auth, games, bots, journey, admin. Port 3000. CLI lives at `backend/src/cli/` (the `um` tool).
+- `backend/` — Express + Prisma + SSE+POST realtime. Auth, games, bots, journey, admin. Port 3000. CLI lives at `backend/src/cli/` (the `um` tool).
 - `landing/` — React + Vite SPA (the user-facing site). Port 5174 in dev. `server.js` proxies `/api/*` → backend, `/api/v1/*` and tournament endpoints → backend, `/api/(classification|recurring|tournaments)/*` → tournament service.
 - `tournament/` — Express + Prisma microservice for classification/merits, recurring tournaments, tier ladder. Port 3001. **Important:** the tournament service runs in its own container with its own Prisma client; the landing proxy routes specific paths to it (see `landing/server.js`).
 - `packages/` — shared code: `db` (Prisma schema + generated client, used by both `backend` and `tournament`), `ai` (game AI engines, including the tiered minimax), `game-xo` / `game-pong` (game implementations), `nav` (shared nav UI), `sdk` (game contract), `auth`, `ui`.
@@ -79,4 +79,6 @@ Authoritative references in `/doc`:
 - `Prod_Bringup_Runbook.md` — first-time prod deploy
 - `Registry_Switch_Guide.md` — container registry migration
 - `Observability_Plan.md` — logging/metrics/alerts
-- `Realtime_Migration_Plan.md` — Socket.io → SSE+POST migration plan (active workstream)
+- `Realtime_Migration_Plan.md` — Socket.io → SSE+POST migration plan (complete)
+- `Realtime_Channels.md` — channel namespace + POST routes reference
+- `Realtime_Migration_Postmortem.md` — Phase 8 cut summary + bugs surfaced

@@ -6,9 +6,7 @@ import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useEventStream } from '../lib/useEventStream.js'
-import { connectSocket } from '../lib/socket.js'
 import { rtFetch } from '../lib/rtSession.js'
-import { viaSse } from '../lib/realtimeMode.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import { useReplaySDK } from '../lib/useReplaySDK.js'
@@ -29,38 +27,12 @@ async function fetchMyBots(token, dbUserId) {
 }
 
 // ── Match-table join helper ───────────────────────────────────────────────────
-// Acquires the playable Table for a tournament match. Resolves with
-// `{ slug, tournamentId }` once the server has assigned (or created) the
-// table. Picks the SSE+POST transport when realtime.tournament.via='sse',
-// otherwise falls back to the legacy socket flow. The callers are all the
-// "Join Match" buttons on the tournament page — the inline cards and the
-// pop-up overlays. Centralised so the rename / dual-transport change lives
-// in one place.
+// Acquires the playable Table for a tournament match via SSE+POST. Resolves
+// with `{ slug, tournamentId }` once the server has assigned (or created) the
+// table.
 function joinMatchTable(matchId) {
-  if (viaSse('tournament')) {
-    return rtFetch(`/rt/tournaments/matches/${matchId}/table`, { method: 'POST' })
-      .then(({ slug, tournamentId }) => ({ slug, tournamentId }))
-  }
-  // Legacy socket path. Listen for `tournament:table:ready` first (post-Phase-3
-  // server emits both names), fall back to `tournament:room:ready` for older
-  // backends still in the field. socket.once is fine for both — whichever
-  // arrives first wins, the other handler is removed in cleanup.
-  return new Promise((resolve, reject) => {
-    const socket = connectSocket()
-    function cleanup() {
-      socket.off('tournament:table:ready', onReady)
-      socket.off('tournament:room:ready',  onReady)
-      socket.off('error', onError)
-    }
-    function onReady({ slug, tournamentId }) { cleanup(); resolve({ slug, tournamentId }) }
-    function onError({ message }) { cleanup(); reject(new Error(message || 'Failed to join match')) }
-    socket.once('tournament:table:ready', onReady)
-    socket.once('tournament:room:ready',  onReady)
-    socket.once('error', onError)
-    getToken().then(authToken => {
-      socket.emit('tournament:table:join', { matchId, authToken })
-    })
-  })
+  return rtFetch(`/rt/tournaments/matches/${matchId}/table`, { method: 'POST' })
+    .then(({ slug, tournamentId }) => ({ slug, tournamentId }))
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────

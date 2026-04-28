@@ -1,11 +1,9 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { connectSocket, disconnectSocket, getSocket } from './socket.js'
 import { getToken } from './getToken.js'
 import { useSoundStore } from '../store/soundStore.js'
 import { perfMark } from './perfLog.js'
-import { viaSse } from './realtimeMode.js'
-import { rtFetch } from './rtSession.js'
+import { rtFetch, getSseSession, onSseSessionChange } from './rtSession.js'
 import { useEventStream } from './useEventStream.js'
 
 /**
@@ -14,8 +12,6 @@ import { useEventStream } from './useEventStream.js'
  * `eventTypes` array is a stable reference across renders.
  */
 function useSseIdleWarning({ enabled, channel, onWarn }) {
-  // Stable arrays — useEventStream re-opens the EventSource if these change
-  // identity, even when the contents are equal.
   const channels   = useMemo(() => channel ? [channel.replace(/idle$/, '')] : [], [channel])
   const eventTypes = useMemo(() => channel ? [channel] : [], [channel])
   useEventStream({
@@ -32,11 +28,12 @@ function useSseIdleWarning({ enabled, channel, onWarn }) {
 }
 
 /**
- * Platform-side SDK provider for socket-based games.
+ * Platform-side SDK provider for SSE+POST games.
  *
  * Creates the GameSession and GameSDK objects and bridges them to the
- * existing socket infrastructure. Games receive { session, sdk } as props
- * and never interact with sockets, auth, or platform internals directly.
+ * /rt/* POST routes + the per-table SSE channels published by
+ * tableFlowService. Games receive { session, sdk } as props and never
+ * interact with auth, transport, or platform internals directly.
  *
  * @param {object} options
  * @param {string}  options.gameId         - e.g. 'xo'
@@ -58,7 +55,7 @@ export function useGameSDK({
   spectate        = false,
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
-  const [phase, setPhase_]          = useState('connecting')   // connecting | waiting | playing | finished
+  const [phase, setPhase_]          = useState('connecting')
   const phaseRef                    = useRef('connecting')
   const setPhase = (p) => { phaseRef.current = p; setPhase_(p) }
   const [session, setSession]       = useState(null)
@@ -66,24 +63,23 @@ export function useGameSDK({
   const [kicked, setKicked]         = useState(false)
   const [seriesResult, setSeriesResult] = useState(null)
   const [opponentLeft, setOpponentLeft] = useState(false)
+  // Once the initial create/join POST returns, we record the canonical Table.id
+  // so useEventStream below can subscribe to `table:<id>:state|lifecycle|reaction`.
+  const [tableId, setTableId] = useState(null)
 
-  // currentUser in a ref so auth changes don't re-trigger the socket effect.
-  // The effect reads currentUserRef.current so it always has the latest value.
+  // currentUser in a ref so auth changes don't re-trigger the init effect.
   const currentUserRef = useRef(currentUser)
   currentUserRef.current = currentUser
 
-  // Mutable state tracked in refs so sdk callbacks always have fresh values
   const boardRef    = useRef(Array(9).fill(null))
-  const marksRef    = useRef({})          // { [userId]: 'X' | 'O' }
+  const marksRef    = useRef({})
   const playersRef  = useRef([])
   const settingsRef = useRef({})
   const slugRef     = useRef(null)
-  // Set to true when leaveTable() fires mid-game. Navigation is deferred until
-  // the server echoes game:forfeit back to this socket — guaranteeing the forfeit
-  // was received and processed before the socket can disconnect.
+  // Set to true when leaveTable() fires mid-game. The forfeit lifecycle event
+  // surfacing from SSE flips this back and fires the gameEnd callback.
   const leavingRef  = useRef(false)
 
-  // Registered move handlers (from sdk.onMove / sdk.spectate)
   const moveHandlersRef    = useRef([])
   const reactionHandlersRef = useRef([])
   const idleHandlersRef    = useRef([])
@@ -97,19 +93,16 @@ export function useGameSDK({
 
   // ── SDK object (stable reference — methods close over refs) ───────────────
   const sdk = useMemo(() => ({
-    // ── Core contract methods ──────────────────────────────────────────────
-
     submitMove(move) {
-      getSocket().emit('game:move', { cellIndex: move })
+      if (!slugRef.current) return
+      rtFetch(`/rt/tables/${slugRef.current}/move`, { body: { cellIndex: move } })
+        .catch(err => console.warn('[useGameSDK] move POST failed:', err?.status, err?.code, err?.message))
     },
 
     onMove(handler) {
       moveHandlersRef.current.push(handler)
       // Replay the most recent move event so a newly-mounted subscriber
-      // (fresh XOGame instance after a shell mode switch, for example)
-      // hydrates to the current board state instead of showing an empty
-      // initialGameState. `replay: true` tells the consumer to update state
-      // but skip side effects (sounds, signalEnd, last-cell animations).
+      // hydrates to the current board state.
       if (lastMoveEventRef.current) handler({ ...lastMoveEventRef.current, replay: true })
       return () => {
         moveHandlersRef.current = moveHandlersRef.current.filter(h => h !== handler)
@@ -117,7 +110,6 @@ export function useGameSDK({
     },
 
     signalEnd(result) {
-      // Server already recorded the game. Notify platform shell for UI cleanup.
       gameEndCallbackRef.current?.(result)
     },
 
@@ -131,7 +123,6 @@ export function useGameSDK({
 
     spectate(handler) {
       moveHandlersRef.current.push(handler)
-      // Same rehydration logic as onMove — covers spectator remounts too.
       if (lastMoveEventRef.current) handler({ ...lastMoveEventRef.current, replay: true })
       return () => {
         moveHandlersRef.current = moveHandlersRef.current.filter(h => h !== handler)
@@ -143,48 +134,43 @@ export function useGameSDK({
     },
 
     getPlayerState(_playerId) {
-      // XO is fully public — all players see the same state
       return { board: [...boardRef.current] }
     },
 
-    // ── XO-specific extensions (not in base contract) ──────────────────────
-
     forfeit() {
-      getSocket().emit('game:forfeit')
+      if (!slugRef.current) return
+      rtFetch(`/rt/tables/${slugRef.current}/forfeit`, { body: {} })
+        .catch(err => console.warn('[useGameSDK] forfeit POST failed:', err?.status, err?.code, err?.message))
     },
 
     rematch() {
-      getSocket().emit('game:rematch')
+      if (!slugRef.current) return
+      rtFetch(`/rt/tables/${slugRef.current}/rematch`, { body: {} })
+        .catch(err => console.warn('[useGameSDK] rematch POST failed:', err?.status, err?.code, err?.message))
     },
 
     sendReaction(emoji) {
-      getSocket().emit('game:reaction', { emoji })
+      if (!slugRef.current) return
+      rtFetch(`/rt/tables/${slugRef.current}/reaction`, { body: { emoji } })
+        .catch(err => console.warn('[useGameSDK] reaction POST failed:', err?.status, err?.code, err?.message))
     },
 
     idlePong() {
-      // SSE+POST transport (Realtime_Migration_Plan.md Phase 1): when the
-      // `idle` feature is routed via SSE, fire a POST instead of the legacy
-      // socket emit. Errors are swallowed — the next idle warning will
-      // arrive normally if the keep-alive failed for any reason.
-      if (viaSse('idle') && slugRef.current) {
-        rtFetch(`/rt/tables/${slugRef.current}/idle/pong`, { method: 'POST' }).catch(() => {})
-        return
-      }
-      getSocket().emit('idle:pong')
+      if (!slugRef.current) return
+      rtFetch(`/rt/tables/${slugRef.current}/idle/pong`, { method: 'POST' }).catch(() => {})
     },
 
     leaveTable() {
+      if (!slugRef.current) return
       if (phaseRef.current === 'playing') {
         // Mid-game: forfeit so the opponent is notified immediately.
-        // Defer navigation until the server echoes game:forfeit back — this
-        // guarantees the forfeit is processed before the socket can disconnect,
-        // eliminating the race where the socket closes first and the opponent
-        // gets room:playerDisconnected instead of game:forfeit.
+        // The forfeit lifecycle event drives the gameEnd callback.
         leavingRef.current = true
-        getSocket().emit('game:forfeit')
+        rtFetch(`/rt/tables/${slugRef.current}/forfeit`, { body: {} })
+          .catch(err => console.warn('[useGameSDK] forfeit POST failed:', err?.status, err?.code, err?.message))
       } else if (phaseRef.current === 'finished') {
-        // Post-game: tell the other player the opponent has left.
-        getSocket().emit('game:leave')
+        rtFetch(`/rt/tables/${slugRef.current}/leave`, { body: {} })
+          .catch(err => console.warn('[useGameSDK] leave POST failed:', err?.status, err?.code, err?.message))
         gameEndCallbackRef.current?.({ leave: true })
       }
     },
@@ -203,42 +189,42 @@ export function useGameSDK({
       }
     },
 
-    // ── Platform audio ─────────────────────────────────────────────────────
-    // Games route all sound through this — platform owns the AudioContext
-    // (mute, volume, suspend/resume lifecycle). Unknown keys are a no-op.
-
     playSound(key) {
       useSoundStore.getState().play(key)
     },
 
-    // Register platform shell game-end callback
     _onGameEnd(cb) {
       gameEndCallbackRef.current = cb
     },
   }), [])
 
-  // ── SSE idle channel (Realtime_Migration_Plan.md Phase 1) ─────────────────
-  // When the `idle` feature is routed via SSE, the server publishes the warn
-  // event to `user:<id>:idle`. We translate it to the same idleHandlersRef
-  // shape the legacy socket listener fires so downstream UI is identical.
-  // Defensive: in dual mode the socket listener also fires — duplicate warn
-  // events within ~1s are idempotent (same UI overlay, same secondsRemaining).
+  // ── SSE idle channel ──────────────────────────────────────────────────────
+  // Server publishes warn events to `user:<id>:idle`; translate to the same
+  // idleHandlersRef shape downstream UI expects.
   const idleChannel = currentUser?.id ? `user:${currentUser.id}:idle` : null
   useSseIdleWarning({
-    enabled: !!idleChannel && viaSse('idle'),
+    enabled: !!idleChannel,
     channel: idleChannel,
     onWarn:  ({ secondsRemaining }) => {
       idleHandlersRef.current.forEach(h => h({ secondsRemaining }))
     },
   })
 
-  // ── Socket lifecycle ───────────────────────────────────────────────────────
+  // ── SSE+POST gameflow init ────────────────────────────────────────────────
+  //
+  // The HTTP response from POST /rt/tables (or /rt/tables/:slug/join) carries
+  // the initial board + seat data so the joiner doesn't wait on an SSE round
+  // trip to render. The per-table channels then drive everything else:
+  //
+  //   table:<id>:state     — kind ∈ {start, moved, forfeit}
+  //   table:<id>:lifecycle — kind ∈ {cancelled, abandoned, guestJoined,
+  //                                  spectatorJoined, playerDisconnected,
+  //                                  playerReconnected, opponent_left}
+  //   table:<id>:reaction  — { emoji, fromMark }
   useEffect(() => {
     perfMark('useGameSDK:effect-start', { gameId, joinSlug, tournamentMatchId })
-    const socket = connectSocket()
-    perfMark('useGameSDK:after-connectSocket', socket.connected ? 'already-connected' : 'connecting')
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    let cancelled = false
+    let unsubSession = null
 
     function buildSession(overrides = {}) {
       const s = {
@@ -249,10 +235,7 @@ export function useGameSDK({
         isSpectator:   overrides.isSpectator ?? false,
         settings:      { ...settingsRef.current, marks: { ...marksRef.current } },
       }
-      // Preserve object identity when nothing meaningful changed — avoids a
-      // re-render of the game component on every socket event. Scalars are
-      // compared directly; players/settings (small objects/arrays) use
-      // JSON.stringify — cheap at this scale and exact.
+      // Preserve identity when nothing meaningful changed — avoids re-renders.
       setSession(prev => {
         if (
           prev
@@ -278,15 +261,11 @@ export function useGameSDK({
         state:     { ...state, marks: { ...marksRef.current } },
         timestamp: new Date().toISOString(),
       }
-      // Save for replay to handlers that subscribe later (e.g., a remounted
-      // XOGame after the PlatformShell mode switch).
       lastMoveEventRef.current = event
       moveHandlersRef.current.forEach(h => h(event))
     }
 
-    // ── Room events ───────────────────────────────────────────────────────────
-
-    socket.on('room:created', ({ slug, label, mark }) => {
+    function applyCreateResultPvp({ slug, label, mark }) {
       const cu = currentUserRef.current
       slugRef.current = slug
       const hostId = cu?.id ?? 'host'
@@ -295,10 +274,9 @@ export function useGameSDK({
       settingsRef.current = { label, myMark: mark }
       setPhase('waiting')
       buildSession({ isSpectator: false })
-    })
+    }
 
-    socket.on('room:created:hvb', ({ slug, label, mark, board, currentTurn }) => {
-      perfMark('useGameSDK:room:created:hvb')
+    function applyCreateResultHvb({ slug, label, mark, board, currentTurn }) {
       const cu = currentUserRef.current
       slugRef.current = slug
       const hostId = cu?.id ?? 'host'
@@ -310,33 +288,28 @@ export function useGameSDK({
         { id: botId, displayName: 'Bot', isBot: true },
       ]
       settingsRef.current = { label, myMark: mark, isTournament: !!tournamentMatchId }
-      boardRef.current = board
+      boardRef.current = board ?? Array(9).fill(null)
       setPhase('playing')
       buildSession({ isSpectator: false })
       emitMoveEvent(null, {
-        board,
+        board:       boardRef.current,
         currentTurn: currentTurn ?? 'X',
-        status: 'playing',
-        winner: null,
-        winLine: null,
-        scores: { X: 0, O: 0 },
-        round: 1,
+        status:      'playing',
+        winner:      null,
+        winLine:     null,
+        scores:      { X: 0, O: 0 },
+        round:       1,
       })
-    })
+    }
 
-    socket.on('room:joined', ({ slug, role, mark, room }) => {
+    function applyJoinResult({ slug, mark, action, room, startPayload }) {
       slugRef.current = slug
-      const isSpectator = role === 'spectator'
+      const isSpectator = action === 'spectated_pvp'
 
-      // Key marks by canonical seat userId from the room object.
-      // Do NOT fall back to currentUserRef for guestId: when the table is FORMING
-      // (no guest yet), room.guestUserId is null and we must leave it null.
-      // The fallback caused hostId === guestId, overwriting 'X' with 'O' for
-      // the host player and making them see "X Opponent's turn" instead of "Your turn".
       const hostId  = room?.hostUserId  ?? 'host'
       const guestId = room?.guestUserId ?? null
       if (mark) {
-        marksRef.current[hostId]  = 'X'
+        marksRef.current[hostId] = 'X'
         if (guestId) marksRef.current[guestId] = 'O'
       }
 
@@ -351,7 +324,6 @@ export function useGameSDK({
         displayName: room?.guestUserDisplayName ?? cu?.displayName ?? 'Guest',
         isBot:       false,
       } : null
-
       playersRef.current = guestPlayer ? [hostPlayer, guestPlayer] : [hostPlayer]
       settingsRef.current = {
         label:          room?.label,
@@ -360,34 +332,30 @@ export function useGameSDK({
         isTournament:   !!tournamentMatchId,
       }
 
-      // Re-attach to an already-active game: skip 'waiting' and go straight to
-      // 'playing'. The separate game:start that follows is still handled and is
-      // idempotent. Without this shortcut, if game:start is lost or arrives
-      // while listeners are being re-registered (React StrictMode double-invoke),
-      // the player is permanently stuck in the waiting spinner.
-      const isReattach = !isSpectator && room?.status === 'playing'
-      if (isReattach && room?.board) {
-        boardRef.current = room.board
+      // ACTIVE re-attach: skip waiting and synthesize a start event so the
+      // game component renders immediately.
+      const isReattach = action === 'reattached_active' && startPayload?.board
+      if (isReattach) {
+        boardRef.current = startPayload.board
         setPhase('playing')
         buildSession({ isSpectator: false })
         emitMoveEvent(null, {
-          board:       room.board,
-          currentTurn: room.currentTurn ?? 'X',
+          board:       startPayload.board,
+          currentTurn: startPayload.currentTurn ?? 'X',
           status:      'playing',
-          winner:      room.winner  ?? null,
-          winLine:     room.winLine ?? null,
-          scores:      room.scores  ?? { X: 0, O: 0 },
-          round:       room.round   ?? 1,
+          winner:      room?.winner  ?? null,
+          winLine:     room?.winLine ?? null,
+          scores:      room?.scores  ?? { X: 0, O: 0 },
+          round:       startPayload.round ?? 1,
         })
         return
       }
 
-      setPhase(isSpectator ? 'playing' : 'waiting')
-      buildSession({ isSpectator })
-
-      // Spectator joins mid-game — emit current state as a start event
+      // Spectator joining a live game — render the current state.
       if (isSpectator && room?.board) {
         boardRef.current = room.board
+        setPhase('playing')
+        buildSession({ isSpectator: true })
         emitMoveEvent(null, {
           board:       room.board,
           currentTurn: room.currentTurn ?? 'X',
@@ -397,244 +365,120 @@ export function useGameSDK({
           scores:      room.scores ?? { X: 0, O: 0 },
           round:       room.round ?? 1,
         })
+        return
       }
-    })
 
-    socket.on('room:guestJoined', ({ room }) => {
-      // Host side: learn the guest's identity
-      if (room?.guestUserId) {
-        const guestMark = 'O'
-        marksRef.current[room.guestUserId] = guestMark
-        const existing = playersRef.current.find(p => p.id === room.guestUserId)
-        if (!existing) {
-          playersRef.current = [
-            ...playersRef.current,
-            { id: room.guestUserId, displayName: room.guestUserDisplayName ?? 'Guest', isBot: false },
-          ]
+      setPhase(isSpectator ? 'playing' : 'waiting')
+      buildSession({ isSpectator })
+    }
+
+    function waitForSseSession() {
+      if (getSseSession()) return Promise.resolve()
+      return new Promise((resolve, reject) => {
+        let done = false
+        let poll, timeout
+        const cleanup = () => {
+          clearInterval(poll)
+          clearTimeout(timeout)
         }
-        buildSession()
-      }
-    })
-
-    socket.on('room:spectatorJoined', ({ spectatorCount }) => {
-      settingsRef.current = { ...settingsRef.current, spectatorCount }
-      // Rebuild the session so downstream consumers (PlatformShell's
-      // TableSurface / TableContextSidebar) re-render with the new count.
-      buildSession()
-    })
-
-    socket.on('room:playerDisconnected', () => {
-      // Preserve full prior game state so GameComponent doesn't crash on
-      // missing scores/round. The opponent is gone but the game is still
-      // technically "playing" — the idle/disconnect timer will resolve it.
-      const prev = lastMoveEventRef.current?.state ?? {}
-      emitMoveEvent(null, {
-        board:       boardRef.current ?? prev.board,
-        currentTurn: prev.currentTurn ?? null,
-        status:      'playing',
-        winner:      null,
-        winLine:     null,
-        scores:      prev.scores ?? { X: 0, O: 0 },
-        round:       prev.round ?? 1,
+        const finish = () => { if (done) return; done = true; cleanup(); resolve() }
+        const rawUnsub = onSseSessionChange((id) => { if (id) finish() })
+        unsubSession = () => { cleanup(); rawUnsub?.() }
+        // Poll fallback — guards against a setSseSession() call that fires
+        // between our cache read and the listener registration.
+        poll = setInterval(() => {
+          if (getSseSession()) finish()
+        }, 50)
+        timeout = setTimeout(() => {
+          if (done) return
+          done = true
+          cleanup()
+          reject(new Error('SSE session never arrived'))
+        }, 10_000)
       })
-    })
-
-    socket.on('room:cancelled', () => {
-      setAbandoned({ reason: 'cancelled' })
-    })
-
-    socket.on('room:abandoned', ({ reason, absentUserId }) => {
-      setAbandoned({ reason, absentUserId })
-    })
-
-    socket.on('room:kicked', ({ reason }) => {
-      setKicked(reason === 'idle')
-    })
-
-    // ── Game events ────────────────────────────────────────────────────────────
-
-    socket.on('game:start', ({ board, currentTurn, round, scores }) => {
-      boardRef.current = board
-      setPhase('playing')
-      buildSession()
-      // Emit a synthetic start event (move: null) so the game component resets
-      emitMoveEvent(null, {
-        board,
-        currentTurn: currentTurn ?? 'X',
-        status:      'playing',
-        winner:      null,
-        winLine:     null,
-        scores:      scores ?? { X: 0, O: 0 },
-        round:       round ?? 1,
-      })
-    })
-
-    socket.on('game:moved', ({ cellIndex, board, currentTurn, status, winner, winLine, scores, round }) => {
-      setPhase(status === 'finished' ? 'finished' : 'playing')
-      emitMoveEvent(cellIndex, { board, currentTurn, status, winner, winLine, scores: scores ?? { X: 0, O: 0 }, round: round ?? 1 })
-    })
-
-    socket.on('game:forfeit', ({ winner, scores }) => {
-      emitMoveEvent(null, {
-        board:       boardRef.current,
-        currentTurn: null,
-        status:      'finished',
-        winner:      winner ?? null,
-        winLine:     null,
-        scores:      scores ?? { X: 0, O: 0 },
-        round:       null,
-      })
-      setPhase('finished')
-      // If this player initiated the leave, navigate now that the server has
-      // confirmed the forfeit (the socket is still alive at this point).
-      if (leavingRef.current) {
-        leavingRef.current = false
-        gameEndCallbackRef.current?.({ leave: true })
-      }
-    })
-
-    // Opponent clicked Leave Table after the game ended.
-    socket.on('game:opponent_left', () => {
-      setOpponentLeft(true)
-    })
-
-    // ── Reaction + idle ────────────────────────────────────────────────────────
-
-    socket.on('game:reaction', ({ emoji, fromMark }) => {
-      reactionHandlersRef.current.forEach(h => h({ emoji, fromMark }))
-    })
-
-    socket.on('idle:warning', ({ secondsRemaining }) => {
-      idleHandlersRef.current.forEach(h => h({ secondsRemaining }))
-    })
-
-    // ── Tournament series ──────────────────────────────────────────────────────
-
-    socket.on('tournament:series:complete', (data) => {
-      if (!tournamentMatchId || data.matchId === tournamentMatchId) {
-        setSeriesResult(data)
-      }
-    })
-
-    // ── Error ──────────────────────────────────────────────────────────────────
-
-    socket.on('error', ({ message }) => {
-      // Room full when joining as player — fall back to spectator. Use
-      // joinSlug as a fallback because slugRef is only populated after a
-      // successful room:joined, which this caller never got.
-      const slug = slugRef.current ?? joinSlug
-      if (
-        !session?.isSpectator &&
-        slug &&
-        (message === 'Room is not waiting for a player' || message === 'Room is full')
-      ) {
-        socket.emit('room:join', { slug, role: 'spectator' })
-        return
-      }
-      // "Room not found" happens when the server-side room has been cleaned
-      // up (idle abandonment after game.idleWarnSeconds + game.idleGraceSeconds
-      // = 3 min default, or socket reconnected with a new socket.id that the
-      // room no longer recognizes). Without this branch, clicks after the
-      // room is gone silently fail — sound plays, no move, no feedback.
-      // Surface as the same "abandoned" state the room:abandoned event uses
-      // so PlayPage's existing cleanup path runs.
-      if (message === 'Room not found') {
-        setAbandoned({ reason: 'stale', message: 'Game ended (idle). Returning…' })
-        return
-      }
-      // Tournament table rejected join because token hadn't resolved yet — retry
-      // once with a fresh token. With the getToken() fix in resolveAndEmit this
-      // path should be rare, but guard it defensively.
-      if (message === 'Authentication required for this match' && joinSlug) {
-        getToken().then(token => {
-          if (token) socket.emit('room:join', { slug: joinSlug, role: 'player', authToken: token })
-        })
-        return
-      }
-      // Any other unrecognized error: log to the console so it's visible in
-      // devtools instead of eaten silently. Pre-existing behavior swallowed
-      // everything, which is how this bug hid.
-      // eslint-disable-next-line no-console
-      console.warn('[useGameSDK] unhandled socket error:', message)
-    })
-
-    // ── Initial join / create ──────────────────────────────────────────────────
-
-    // Guard: ensure we only emit once per effect run even if 'connect' fires
-    // multiple times or the effect is double-invoked in React Strict Mode.
-    let emitted = false
-    function emitRoomAction(token) {
-      if (emitted) return
-      emitted = true
-      perfMark('useGameSDK:emitRoomAction', { hasToken: !!token, botUserId, joinSlug })
-      if (joinSlug) {
-        socket.emit('room:join', { slug: joinSlug, role: spectate ? 'spectator' : 'player', authToken: token ?? null })
-      } else if (botUserId) {
-        // MIXED tournament (tournamentMatchId + botUserId) and free-play PvE
-        // both land here — tournamentMatchId is forwarded so the server can
-        // link the table to the tournament match and set bestOfN.
-        socket.emit('room:create:hvb', { gameId, botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null, tournamentMatchId: tournamentMatchId ?? null })
-      } else if (tournamentMatchId) {
-        // HvH tournament match — discover/create the match table. The new
-        // event name is `tournament:table:join`; the legacy `room:join`
-        // continues to work as an alias on the server during the dual-mode
-        // window.
-        socket.emit('tournament:table:join', { matchId: tournamentMatchId, authToken: token ?? null })
-      } else {
-        socket.emit('room:create', { spectatorAllowed: true, authToken: token ?? null })
-      }
     }
 
-    // Must wait for the socket to be fully connected before emitting —
-    // emitting before 'connect' fires is silently dropped by socket.io.
-    //
-    // Use socket.on (not socket.once) so that a disconnect-reconnect cycle
-    // while still in the 'connecting' phase re-emits the room action.
-    // Guard: only re-emit if we haven't received a room slug yet (slugRef is null),
-    // so a reconnect mid-game never accidentally creates a second room.
-    // Skip the /api/token round trip for guests — we already know there's no
-    // auth to send. Eliminates an async hop on the /play hot path.
-    function resolveAndEmit() {
-      if (joinSlug || tournamentMatchId) {
-        // For room joins, always try to get a token — currentUser may be null
-        // briefly even for logged-in users (optimistic session hasn't propagated
-        // yet on the initial render). getToken() returns null for genuine guests.
-        getToken().then(token => emitRoomAction(token ?? null))
-      } else if (!currentUserRef.current?.id) {
-        emitRoomAction(null)
-      } else {
-        getToken().then(emitRoomAction)
+    ;(async () => {
+      try {
+        await waitForSseSession()
+        if (cancelled) return
+
+        if (joinSlug) {
+          const role = spectate ? 'spectator' : 'player'
+          const res = await rtFetch(`/rt/tables/${joinSlug}/join`, { body: { role } })
+          if (cancelled) return
+          applyJoinResult({
+            slug:         joinSlug,
+            mark:         res.mark,
+            action:       res.action,
+            room:         res.room,
+            startPayload: res.startPayload,
+          })
+          if (res.tableId) setTableId(res.tableId)
+        } else if (botUserId) {
+          // HvB (free-play or MIXED tournament rematch).
+          const res = await rtFetch('/rt/tables', {
+            body: { kind: 'hvb', botUserId, botSkillId, tournamentMatchId, spectatorAllowed: true },
+          })
+          if (cancelled) return
+          applyCreateResultHvb(res)
+          // The HTTP response carries slug but not the canonical Table.id;
+          // a follow-up join is idempotent for the creator and yields the id.
+          const joined = await rtFetch(`/rt/tables/${res.slug}/join`, { body: { role: 'player' } })
+            .catch(() => null)
+          if (cancelled) return
+          if (joined?.tableId) setTableId(joined.tableId)
+        } else if (tournamentMatchId) {
+          // HvH tournament: discover/seat through the match-table endpoint,
+          // then complete the join to surface the room shape + tableId.
+          const m = await rtFetch(`/rt/tournaments/matches/${tournamentMatchId}/table`, { body: {} })
+          if (cancelled) return
+          const j = await rtFetch(`/rt/tables/${m.slug}/join`, { body: { role: 'player' } })
+          if (cancelled) return
+          applyJoinResult({
+            slug:         m.slug,
+            mark:         j.mark ?? m.mark,
+            action:       j.action,
+            room:         j.room,
+            startPayload: j.startPayload,
+          })
+          if (j.tableId) setTableId(j.tableId)
+        } else {
+          // PvP create.
+          const res = await rtFetch('/rt/tables', { body: { kind: 'pvp', spectatorAllowed: true } })
+          if (cancelled) return
+          applyCreateResultPvp(res)
+          const joined = await rtFetch(`/rt/tables/${res.slug}/join`, { body: { role: 'player' } })
+            .catch(() => null)
+          if (cancelled) return
+          if (joined?.tableId) setTableId(joined.tableId)
+        }
+      } catch (err) {
+        console.warn('[useGameSDK] init failed:', err?.status, err?.code, err?.message)
+        if (err?.status === 404) {
+          setAbandoned({ reason: 'stale', message: 'Game ended (idle). Returning…' })
+        } else {
+          setAbandoned({ reason: 'init-failed', message: err?.message ?? 'Failed to start game' })
+        }
       }
-    }
+    })()
 
-    function onConnect() {
-      perfMark('useGameSDK:socket-connect-fired')
-      // Always reset the guard on reconnect. If the user has an existing
-      // game (slugRef set), the server's tryReconnect() will detect the
-      // pending disconnect timer and rejoin the game instead of creating
-      // a new one. Without this reset, the emitted guard prevents ANY
-      // re-emit and the client sits frozen after a socket reconnect
-      // (e.g., macOS desktop switch triggers Safari disconnect).
-      emitted = false
-      resolveAndEmit()
+    function onPageHide() {
+      try {
+        if (!slugRef.current) return
+        if (phaseRef.current === 'playing') {
+          rtFetch(`/rt/tables/${slugRef.current}/forfeit`, { body: {} }).catch(() => {})
+        } else if (phaseRef.current === 'finished') {
+          rtFetch(`/rt/tables/${slugRef.current}/leave`, { body: {} }).catch(() => {})
+        }
+      } catch (_) { /* nothing we can do during teardown */ }
     }
+    window.addEventListener('pagehide', onPageHide)
 
-    socket.on('connect', onConnect)
-    if (socket.connected) {
-      perfMark('useGameSDK:socket-already-connected')
-      resolveAndEmit()
-    }
-
-    // Auto-pong when the user returns from another window/desktop — resets the
-    // server-side idle timer without requiring the user to click "I'm here".
-    // This prevents spurious timeouts caused by macOS Spaces switching.
     function autoIdlePong() {
       if (phaseRef.current !== 'playing') return
-      if (viaSse('idle') && slugRef.current) {
-        rtFetch(`/rt/tables/${slugRef.current}/idle/pong`, { method: 'POST' }).catch(() => {})
-        return
-      }
-      try { getSocket().emit('idle:pong') } catch (_) {}
+      if (!slugRef.current) return
+      rtFetch(`/rt/tables/${slugRef.current}/idle/pong`).catch(() => {})
     }
     function onVisibilityShow() {
       if (document.visibilityState === 'visible') autoIdlePong()
@@ -642,52 +486,188 @@ export function useGameSDK({
     document.addEventListener('visibilitychange', onVisibilityShow)
     window.addEventListener('focus', autoIdlePong)
 
-    // Graceful close on tab/window close (chunk 3 F2). Until this hook
-    // existed, Safari closing the tab fired no socket message at all, so the
-    // opponent waited the full 60-s disconnect-forfeit window before the
-    // table abandoned. Now we explicitly fire game:forfeit (mid-game) or
-    // game:leave (post-game) on pagehide. socket.io flushes the buffer when
-    // the underlying connection closes, so the server sees the event before
-    // the disconnect handler runs — short-circuiting the forfeit timer.
-    //
-    // We listen on `pagehide` (covers tab close, navigation, BFCache stash)
-    // rather than `beforeunload` (unreliable on mobile, blocks BFCache).
-    function onPageHide() {
-      try {
-        if (phaseRef.current === 'playing') {
-          getSocket().emit('game:forfeit')
-        } else if (phaseRef.current === 'finished') {
-          getSocket().emit('game:leave')
-        }
-      } catch (_) { /* nothing we can do during teardown */ }
-    }
-    window.addEventListener('pagehide', onPageHide)
-
     return () => {
-      // Cancel pending connect handler and all event listeners
-      socket.off('connect', onConnect)
-      emitted = true // prevent any in-flight getToken().then from emitting after cleanup
+      cancelled = true
+      unsubSession?.()
+      window.removeEventListener('pagehide', onPageHide)
       document.removeEventListener('visibilitychange', onVisibilityShow)
       window.removeEventListener('focus', autoIdlePong)
-      window.removeEventListener('pagehide', onPageHide)
-      ;[
-        'room:created', 'room:created:hvb', 'room:joined', 'room:guestJoined',
-        'room:spectatorJoined', 'room:playerDisconnected', 'room:playerReconnected',
-        'room:cancelled', 'room:abandoned', 'room:kicked',
-        'game:start', 'game:moved', 'game:forfeit', 'game:opponent_left',
-        'game:reaction', 'idle:warning',
-        'tournament:series:complete', 'error',
-      ].forEach(ev => socket.off(ev))
-      // Cleanup note: we do NOT emit room:cancel here. SPA navigation keeps
-      // the socket alive, and the room:cancel can race with a re-mount
-      // (StrictMode or fast back-navigation). Instead, the server-side
-      // room:create / room:create:hvb handler detects the stale table via
-      // _socketToTable and cleans it up before creating the new one.
     }
-  // currentUser intentionally omitted — it's accessed via currentUserRef.current
-  // so auth changes don't tear down and re-register socket listeners.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, joinSlug, tournamentMatchId])
+
+  // ── SSE channel subscription ──────────────────────────────────────────────
+  // Stable channel filter — passed to the server-side `?channels=` filter.
+  // Must NOT change after the EventSource opens, or the connection reopens
+  // and the original SSE session (which holds this game's table seat) is
+  // disposed mid-game. The broad `table:` prefix matches every table; we
+  // narrow on the client by tableId in onEvent.
+  const sseChannels = useMemo(() => ['table:'], [])
+  // Dynamic listener set — picks up the per-table named events as soon as
+  // the initial POST surfaces tableId, without reopening the connection.
+  const sseEventTypes = useMemo(() => {
+    if (!tableId) return []
+    return [
+      `table:${tableId}:state`,
+      `table:${tableId}:lifecycle`,
+      `table:${tableId}:reaction`,
+    ]
+  }, [tableId])
+
+  useEventStream({
+    enabled:    true,
+    channels:   sseChannels,
+    eventTypes: sseEventTypes,
+    onEvent: (channel, payload) => {
+      if (!channel || !tableId) return
+      const tablePrefix = `table:${tableId}:`
+      if (!channel.startsWith(tablePrefix)) return
+      const topic = channel.slice(tablePrefix.length)
+
+      if (topic === 'state') {
+        const kind = payload?.kind
+        if (kind === 'start') {
+          boardRef.current = payload.board
+          setPhase('playing')
+          const event = {
+            playerId:  null,
+            move:      null,
+            state: {
+              board:       payload.board,
+              currentTurn: payload.currentTurn ?? 'X',
+              status:      'playing',
+              winner:      null,
+              winLine:     null,
+              scores:      payload.scores ?? { X: 0, O: 0 },
+              round:       payload.round ?? 1,
+              marks:       { ...marksRef.current },
+            },
+            timestamp: new Date().toISOString(),
+          }
+          lastMoveEventRef.current = event
+          moveHandlersRef.current.forEach(h => h(event))
+          return
+        }
+        if (kind === 'moved') {
+          const { cellIndex, board, currentTurn, status, winner, winLine, scores, round } = payload
+          boardRef.current = board ?? boardRef.current
+          setPhase(status === 'finished' ? 'finished' : 'playing')
+          const event = {
+            playerId: cellIndex !== null
+              ? Object.entries(marksRef.current).find(([, m]) => m === board?.[cellIndex])?.[0] ?? null
+              : null,
+            move: cellIndex,
+            state: {
+              board, currentTurn, status, winner, winLine,
+              scores: scores ?? { X: 0, O: 0 },
+              round:  round  ?? 1,
+              marks:  { ...marksRef.current },
+            },
+            timestamp: new Date().toISOString(),
+          }
+          lastMoveEventRef.current = event
+          moveHandlersRef.current.forEach(h => h(event))
+          return
+        }
+        if (kind === 'forfeit') {
+          const { winner, scores } = payload
+          const event = {
+            playerId: null,
+            move:     null,
+            state: {
+              board:       boardRef.current,
+              currentTurn: null,
+              status:      'finished',
+              winner:      winner ?? null,
+              winLine:     null,
+              scores:      scores ?? { X: 0, O: 0 },
+              round:       null,
+              marks:       { ...marksRef.current },
+            },
+            timestamp: new Date().toISOString(),
+          }
+          lastMoveEventRef.current = event
+          moveHandlersRef.current.forEach(h => h(event))
+          setPhase('finished')
+          if (leavingRef.current) {
+            leavingRef.current = false
+            gameEndCallbackRef.current?.({ leave: true })
+          }
+          return
+        }
+        return
+      }
+
+      if (topic === 'lifecycle') {
+        const kind = payload?.kind
+        if (kind === 'cancelled') {
+          setAbandoned({ reason: 'cancelled' })
+          return
+        }
+        if (kind === 'abandoned') {
+          setAbandoned({ reason: payload.reason, absentUserId: payload.absentUserId })
+          return
+        }
+        if (kind === 'guestJoined' && payload.room) {
+          if (payload.room.guestUserId) {
+            const guestMark = 'O'
+            marksRef.current[payload.room.guestUserId] = guestMark
+            const existing = playersRef.current.find(p => p.id === payload.room.guestUserId)
+            if (!existing) {
+              playersRef.current = [
+                ...playersRef.current,
+                {
+                  id:          payload.room.guestUserId,
+                  displayName: payload.room.guestUserDisplayName ?? 'Guest',
+                  isBot:       false,
+                },
+              ]
+            }
+            setSession(prev => prev ? { ...prev, players: playersRef.current, settings: { ...settingsRef.current, marks: { ...marksRef.current } } } : prev)
+          }
+          return
+        }
+        if (kind === 'spectatorJoined') {
+          settingsRef.current = { ...settingsRef.current, spectatorCount: payload.spectatorCount }
+          setSession(prev => prev ? { ...prev, settings: { ...settingsRef.current, marks: { ...marksRef.current } } } : prev)
+          return
+        }
+        if (kind === 'playerDisconnected') {
+          const prev = lastMoveEventRef.current?.state ?? {}
+          const event = {
+            playerId: null, move: null,
+            state: {
+              board:       boardRef.current ?? prev.board,
+              currentTurn: prev.currentTurn ?? null,
+              status:      'playing',
+              winner:      null, winLine: null,
+              scores:      prev.scores ?? { X: 0, O: 0 },
+              round:       prev.round ?? 1,
+              marks:       { ...marksRef.current },
+            },
+            timestamp: new Date().toISOString(),
+          }
+          lastMoveEventRef.current = event
+          moveHandlersRef.current.forEach(h => h(event))
+          return
+        }
+        if (kind === 'opponent_left') {
+          setOpponentLeft(true)
+          return
+        }
+        return
+      }
+
+      if (topic === 'reaction') {
+        const { emoji, fromMark } = payload ?? {}
+        // Don't fire my own reactions back into the local handler.
+        const myMark = settingsRef.current?.myMark
+        if (myMark && fromMark === myMark) return
+        reactionHandlersRef.current.forEach(h => h({ emoji, fromMark }))
+        return
+      }
+    },
+  })
 
   return { session, sdk, phase, abandoned, kicked, seriesResult, opponentLeft }
 }

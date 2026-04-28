@@ -5,12 +5,21 @@ vi.mock('../db.js', () => ({
   default: { table: { create: vi.fn() } },
 }))
 
+// Phase 7a: createTableTracked now stamps `gameflowVia` from SystemConfig if
+// the caller didn't pass one. Tests pin this to 'socketio' by default so the
+// existing assertions don't have to thread the new field through.
+const { getSystemConfig } = vi.hoisted(() => ({
+  getSystemConfig: vi.fn(async (_k, dflt) => dflt),
+}))
+vi.mock('../../services/skillService.js', () => ({ getSystemConfig }))
+
 const { createTableTracked } = await import('../createTableTracked.js')
 const db = (await import('../db.js')).default
 const { getTableCreateErrors } = await import('../resourceCounters.js')
 
 beforeEach(() => {
   vi.clearAllMocks()
+  getSystemConfig.mockImplementation(async (_k, dflt) => dflt)
 })
 
 function snap() { return getTableCreateErrors() }
@@ -53,5 +62,54 @@ describe('createTableTracked', () => {
     const before = snap().OTHER
     await expect(createTableTracked({ data: {} })).rejects.toBeUndefined()
     expect(snap().OTHER).toBe(before + 1)
+  })
+
+  // ── Phase 7a: gameflowVia stamping ──────────────────────────────────────
+  describe('gameflowVia stamping (Phase 7a / Risk R7)', () => {
+    it('stamps gameflowVia=socketio when SystemConfig has no override', async () => {
+      db.table.create.mockResolvedValueOnce({ id: 't1' })
+      await createTableTracked({ data: { gameId: 'xo' } })
+      expect(db.table.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ gameId: 'xo', gameflowVia: 'socketio' }),
+      })
+    })
+
+    it('stamps gameflowVia=sse when SystemConfig says realtime.gameflow.via=sse', async () => {
+      getSystemConfig.mockImplementation(async (k, dflt) =>
+        k === 'realtime.gameflow.via' ? 'sse' : dflt,
+      )
+      db.table.create.mockResolvedValueOnce({ id: 't1' })
+      await createTableTracked({ data: { gameId: 'xo' } })
+      expect(db.table.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ gameflowVia: 'sse' }),
+      })
+    })
+
+    it('preserves an explicitly-passed gameflowVia and skips the SystemConfig read', async () => {
+      db.table.create.mockResolvedValueOnce({ id: 't1' })
+      await createTableTracked({ data: { gameId: 'xo', gameflowVia: 'sse' } })
+      expect(db.table.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ gameflowVia: 'sse' }),
+      })
+      expect(getSystemConfig).not.toHaveBeenCalled()
+    })
+
+    it('falls back to socketio if SystemConfig read throws', async () => {
+      getSystemConfig.mockRejectedValueOnce(new Error('redis down'))
+      db.table.create.mockResolvedValueOnce({ id: 't1' })
+      await createTableTracked({ data: { gameId: 'xo' } })
+      expect(db.table.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ gameflowVia: 'socketio' }),
+      })
+    })
+
+    it('coerces unexpected SystemConfig values to socketio (defensive)', async () => {
+      getSystemConfig.mockImplementation(async () => 'webtransport')
+      db.table.create.mockResolvedValueOnce({ id: 't1' })
+      await createTableTracked({ data: { gameId: 'xo' } })
+      expect(db.table.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ gameflowVia: 'socketio' }),
+      })
+    })
   })
 })

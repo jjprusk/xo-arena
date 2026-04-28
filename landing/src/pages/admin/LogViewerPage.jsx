@@ -2,9 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getToken } from '../../lib/getToken.js'
 import { api } from '../../lib/api.js'
-import { getSocket } from '../../lib/socket.js'
 import { useEventStream } from '../../lib/useEventStream.js'
-import { viaSse } from '../../lib/realtimeMode.js'
 
 const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
 const SOURCES = ['frontend', 'api', 'realtime', 'ai']
@@ -57,23 +55,10 @@ export default function LogViewerPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Live tail — Phase 4 dual transport. When `realtime.admin.via=sse`, the
-  // SSE hook below is the live source; otherwise the legacy Socket.io
-  // listener wins. Switch is one-shot at boot (viaSse value won't flip
-  // mid-session without a reload).
-  useEffect(() => {
-    if (!liveTail) return
-    if (viaSse('admin')) return
-    const socket = getSocket()
-    const handler = (entry) => setLogs((prev) => [entry, ...prev.slice(0, 999)])
-    socket.on('log:entry', handler)
-    return () => socket.off('log:entry', handler)
-  }, [liveTail])
-
   useEventStream({
     channels:   ['admin:logs:'],
     eventTypes: ['admin:logs:entry'],
-    enabled:    liveTail && viaSse('admin'),
+    enabled:    liveTail,
     onEvent: (channel, payload) => {
       if (channel === 'admin:logs:entry') setLogs((prev) => [payload, ...prev.slice(0, 999)])
     },

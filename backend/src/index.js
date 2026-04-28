@@ -15,7 +15,6 @@ import leaderboardRouter from './routes/leaderboard.js'
 // roomsRouter removed in Phase 3.4 — Tables are the only game primitive
 import adminAiRouter from './routes/adminAi.js'
 import gamesRouter from './routes/games.js'
-import { attachSocketIO } from './realtime/socketHandler.js'
 import mlRouter from './routes/ml.js'
 import skillsRouter from './routes/skills.js'
 import puzzlesRouter from './routes/puzzles.js'
@@ -31,15 +30,13 @@ import eventsRouter from './routes/events.js'
 import presenceRouter from './routes/presence.js'
 import pushRouter from './routes/push.js'
 import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realtime.js'
-import { setIO as mlSetIO, getSystemConfig } from './services/skillService.js'
-import { setIO as logSetIO } from './routes/logs.js'
-import { setIO as journeySetIO } from './services/journeyService.js'
+import { getSystemConfig } from './services/skillService.js'
 import { startActivityFlushJob } from './services/activityService.js'
 import { startReplayPurgeJob } from './services/replayPurgeService.js'
 import { startIdleSessionPurgeJob } from './services/idleSessionPurgeService.js'
 import { startTournamentBridge } from './lib/tournamentBridge.js'
-import { initBus, startExpiredNotificationPruner } from './lib/notificationBus.js'
-import { startDispatcher, setIO as schedulerSetIO } from './lib/scheduledJobs.js'
+import { startExpiredNotificationPruner } from './lib/notificationBus.js'
+import { startDispatcher } from './lib/scheduledJobs.js'
 import { start as startTableGc } from './services/tableGcService.js'
 import { startMetricsSnapshotCron } from './services/metricsSnapshotService.js'
 
@@ -121,18 +118,13 @@ startDispatcher()
 startExpiredNotificationPruner()
 startMetricsSnapshotCron()
 
-attachSocketIO(server).then((io) => {
-  app.set('io', io)
-  mlSetIO(io)
-  logSetIO(io)
-  journeySetIO(io)
-  schedulerSetIO(io)
-  startTournamentBridge(io)
-  initBus(io)
-  startTableGc(io)
-  server.listen(PORT, () => {
-    logger.info(`XO Arena backend running on port ${PORT}`)
-  })
+// SSE+POST is the only realtime transport (Realtime_Migration_Plan.md
+// Phase 8). socket.io was removed in this commit.
+app.set('io', null)
+startTournamentBridge(null)
+startTableGc(null)
+server.listen(PORT, () => {
+  logger.info(`XO Arena backend running on port ${PORT}`)
 })
 
 export default server

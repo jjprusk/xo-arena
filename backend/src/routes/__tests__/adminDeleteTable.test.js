@@ -36,8 +36,11 @@ vi.mock('../../services/skillService.js', () => ({
 }))
 
 vi.mock('../../lib/notificationBus.js', () => ({
-  dispatch:    vi.fn().mockResolvedValue(undefined),
-  emitToRoom:  vi.fn(),
+  dispatch: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../../lib/eventStream.js', () => ({
+  appendToStream: vi.fn().mockResolvedValue('1-0'),
 }))
 
 vi.mock('../../realtime/socketHandler.js', () => ({
@@ -68,7 +71,8 @@ vi.mock('../../lib/resourceCounters.js', () => ({
 const adminRouter = (await import('../admin.js')).default
 const db = (await import('../../lib/db.js')).default
 const { unregisterTable } = await import('../../realtime/socketHandler.js')
-const { dispatch, emitToRoom } = await import('../../lib/notificationBus.js')
+const { dispatch } = await import('../../lib/notificationBus.js')
+const { appendToStream } = await import('../../lib/eventStream.js')
 const { dispatchTableReleased } = await import('../../lib/tableReleased.js')
 
 function makeApp() {
@@ -119,11 +123,11 @@ describe('DELETE /api/v1/admin/tables/:id', () => {
       },
     })
 
-    // game:forfeit emitted to the table room with the live scores
-    expect(emitToRoom).toHaveBeenCalledWith(
-      'table:tbl_1',
-      'game:forfeit',
-      expect.objectContaining({ winner: null, scores: { X: 2, O: 1 } }),
+    // forfeit state appended to the SSE channel with the live scores
+    expect(appendToStream).toHaveBeenCalledWith(
+      'table:tbl_1:state',
+      expect.objectContaining({ kind: 'forfeit', winner: null, scores: { X: 2, O: 1 } }),
+      { userId: '*' },
     )
 
     // bus event for the rest of the platform

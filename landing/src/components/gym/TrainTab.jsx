@@ -7,9 +7,7 @@ import {
 } from 'recharts'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
-import { getSocket } from '../../lib/socket.js'
 import { useEventStream } from '../../lib/useEventStream.js'
-import { viaSse } from '../../lib/realtimeMode.js'
 import { runTrainingSession } from '../../services/trainingService.js'
 import { useGymStore } from '../../store/gymStore.js'
 import {
@@ -55,18 +53,13 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
   const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
-  const socketRef    = useRef(null)
   const cleanupRef   = useRef(null)
   const cancelRef    = useRef(false)
-  // Phase 4 SSE path — set by the resume-watch effect when a backend-driven
-  // session is running. The hook below subscribes to its progress channel.
+  // Set by the resume-watch effect when a backend-driven session is running.
+  // The hook below subscribes to its progress channel.
   const handlersRef  = useRef(null)
   const [watchedSessionId, setWatchedSessionId] = useState(null)
 
-  // Resume-watch over SSE. Mirrors the socket listeners below — same handler
-  // names, same gating on sessionId — but driven by the SSE+POST transport
-  // when `realtime.ml.via=sse`. The socket effect skips its work in that
-  // mode, so events flow over exactly one transport at a time.
   useEventStream({
     channels:   watchedSessionId ? [`ml:session:${watchedSessionId}:`] : [],
     eventTypes: watchedSessionId
@@ -78,7 +71,7 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
           `ml:session:${watchedSessionId}:error`,
         ]
       : [],
-    enabled: !!watchedSessionId && viaSse('ml'),
+    enabled: !!watchedSessionId,
     onEvent: (channel, payload) => {
       const h = handlersRef.current
       if (!h) return
@@ -90,7 +83,6 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
     },
   })
 
-  // Clean up on unmount: tear down socket listeners and stop any running frontend loop
   useEffect(() => {
     return () => {
       cleanupRef.current?.()
@@ -148,39 +140,11 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
       // Stash for the SSE useEventStream subscription above to invoke.
       handlersRef.current = { onProgress, onCurriculumAdvance, onComplete: onComplete_, onCancelled, onError }
 
-      if (viaSse('ml')) {
-        // SSE path — the hook at the top of the component does the listening.
-        setWatchedSessionId(runningSession.id)
-        cleanupRef.current = () => {
-          setWatchedSessionId(null)
-          handlersRef.current = null
-          cleanupRef.current = null
-        }
-      } else {
-        // Legacy Socket.io path.
-        const socket = getSocket()
-        if (!socket.connected) socket.connect()
-        socketRef.current = socket
-        socket.emit('ml:watch', { sessionId: runningSession.id })
-
-        const teardown = () => {
-          socket.emit('ml:unwatch', { sessionId: runningSession.id })
-          socket.off('ml:progress',           onProgress)
-          socket.off('ml:curriculum_advance', onCurriculumAdvance)
-          socket.off('ml:complete',           onComplete_)
-          socket.off('ml:cancelled',          onCancelled)
-          socket.off('ml:error',              onError)
-          handlersRef.current = null
-          cleanupRef.current = null
-        }
-
-        socket.on('ml:progress',           onProgress)
-        socket.on('ml:curriculum_advance', onCurriculumAdvance)
-        socket.once('ml:complete',         onComplete_)
-        socket.once('ml:cancelled',        onCancelled)
-        socket.once('ml:error',            onError)
-
-        cleanupRef.current = teardown
+      setWatchedSessionId(runningSession.id)
+      cleanupRef.current = () => {
+        setWatchedSessionId(null)
+        handlersRef.current = null
+        cleanupRef.current = null
       }
     }).catch(() => {})
 

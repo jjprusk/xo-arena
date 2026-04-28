@@ -33,9 +33,18 @@ vi.mock('../services/eloService.js', () => ({
   updateBothElosAfterBotVsBot: vi.fn(),
 }))
 
+vi.mock('../services/skillService.js', () => ({
+  getMoveForModel: vi.fn().mockResolvedValue(0),
+}))
+
 vi.mock('../lib/db.js', () => ({
   default: { user: { updateMany: vi.fn() } },
 }))
+
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../../lib/eventStream.js', () => ({ appendToStream: mockAppendToStream }))
 
 vi.mock('../logger.js', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
@@ -69,6 +78,7 @@ function makeMockGame(overrides = {}) {
 beforeEach(() => {
   botGameRunner._games.clear()
   botGameRunner._socketToGame.clear()
+  mockAppendToStream.mockClear()
 })
 
 // ---------------------------------------------------------------------------
@@ -185,20 +195,6 @@ describe('listGames', () => {
 })
 
 // ---------------------------------------------------------------------------
-// setIO
-// ---------------------------------------------------------------------------
-
-describe('setIO', () => {
-  it('stores the io instance on _io', () => {
-    const fakeIo = { to: vi.fn() }
-    botGameRunner.setIO(fakeIo)
-    expect(botGameRunner._io).toBe(fakeIo)
-    // clean up so other tests start with _io = null
-    botGameRunner.setIO(null)
-  })
-})
-
-// ---------------------------------------------------------------------------
 // startGame
 // ---------------------------------------------------------------------------
 
@@ -225,5 +221,27 @@ describe('startGame', () => {
     })
 
     expect(result.slug).toBe('demo-xyz')
+  })
+
+  it('emits a kind=start frame on table:<slug>:state for SSE spectators', async () => {
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'sse-emit',
+      moveDelayMs: 9_999_999,
+    })
+    // _runGameLoop is fire-and-forget. Yield the event loop several times so
+    // the loop's start emit fires before we assert.
+    for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r))
+
+    expect(mockAppendToStream).toHaveBeenCalledWith(
+      'table:sse-emit:state',
+      expect.objectContaining({
+        kind:        'start',
+        currentTurn: 'X',
+        round:       1,
+      }),
+      { userId: '*' },
+    )
   })
 })

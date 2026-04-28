@@ -11,12 +11,6 @@ const VALID_LEVELS  = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
 const VALID_SOURCES = ['frontend', 'api', 'realtime', 'ai']
 const DEFAULT_MAX_ENTRIES = 10_000
 
-// Socket.io reference for the legacy live-tail push. Phase 4 of the realtime
-// migration also publishes each row to the SSE stream on `admin:logs:entry`;
-// the client picks the transport via `realtime.admin.via`.
-let _io = null
-export function setIO(io) { _io = io }
-
 // ─── Prune oldest logs to stay within the configured limit ───────────────────
 async function pruneIfNeeded() {
   const limit = await getSystemConfig('logs.maxEntries', DEFAULT_MAX_ENTRIES)
@@ -62,12 +56,11 @@ router.post('/', async (req, res, next) => {
 
     await db.log.createMany({ data: rows })
 
-    // Live-tail fan-out for admins. Dual-emit: legacy Socket.io room +
-    // SSE channel. `admin:logs:entry` is broadcast to all SSE subscribers;
-    // the GET /events/stream endpoint already gates by admin role for
-    // anything under the `admin:` prefix, so unprivileged tabs never see it.
+    // Live-tail fan-out for admins. The `admin:logs:entry` channel is
+    // broadcast to all SSE subscribers; GET /events/stream already gates by
+    // admin role for anything under the `admin:` prefix, so unprivileged
+    // tabs never see it.
     for (const row of rows) {
-      if (_io) _io.to('admin:logs').emit('log:entry', row)
       appendToStream('admin:logs:entry', row, { userId: '*' }).catch(() => {})
     }
 

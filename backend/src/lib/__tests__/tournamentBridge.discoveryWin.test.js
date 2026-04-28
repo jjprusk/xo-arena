@@ -61,7 +61,7 @@ describe('tournament:completed → firstRealTournamentWin discovery reward', () 
       name:           'Open Tournament',
       finalStandings: [{ userId: 'user-winner', position: 1 }],
     })
-    expect(mockGrant).toHaveBeenCalledWith('user-winner', 'firstRealTournamentWin', expect.anything())
+    expect(mockGrant).toHaveBeenCalledWith('user-winner', 'firstRealTournamentWin')
   })
 
   it('does NOT grant for non-winning positions in a non-cup tournament', async () => {
@@ -96,7 +96,7 @@ describe('tournament:completed → firstRealTournamentWin discovery reward', () 
       name:           'Open Tournament',
       finalStandings: [{ userId: 'bot-id', position: 1 }],
     })
-    expect(mockGrant).toHaveBeenCalledWith('user-owner', 'firstRealTournamentWin', expect.anything())
+    expect(mockGrant).toHaveBeenCalledWith('user-owner', 'firstRealTournamentWin')
   })
 
   it('survives a grant rejection (fire-and-forget)', async () => {

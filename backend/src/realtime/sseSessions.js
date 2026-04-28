@@ -89,11 +89,16 @@ export function dispose(sessionId, { immediate = false } = {}) {
 
   const finish = () => {
     const onDispose = _onDispose.get(sessionId)
+    // Snapshot membership before deleting the entry so callers (Phase 7e
+    // disconnect-forfeit) can act on the tables/pong rooms this session was
+    // last in, rather than re-querying after the entry is gone.
+    const joinedTables    = entry?.joinedTables    ? [...entry.joinedTables]    : []
+    const joinedPongRooms = entry?.joinedPongRooms ? [...entry.joinedPongRooms] : []
     _sessions.delete(sessionId)
     _removeFromUserIndex(sessionId, userId)
     _onDispose.delete(sessionId)
     if (userId) _pendingDispose.delete(userId)
-    try { onDispose?.(userId, sessionId) } catch {}
+    try { onDispose?.(userId, sessionId, { joinedTables, joinedPongRooms }) } catch {}
   }
 
   if (immediate || !userId) {

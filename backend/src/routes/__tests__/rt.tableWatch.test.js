@@ -2,12 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
+// Phase 7a: /rt/* routes now use optionalAuth globally. Tests that exercise
+// the authenticated path expect a user in req.auth, so the mock attaches one.
 vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req, _res, next) => {
     req.auth = { userId: 'ba_user_1' }
     next()
   },
-  optionalAuth: (req, _res, next) => { req.auth = null; next() },
+  optionalAuth: (req, _res, next) => {
+    req.auth = { userId: 'ba_user_1' }
+    next()
+  },
 }))
 
 vi.mock('../../lib/db.js', () => ({

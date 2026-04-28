@@ -58,84 +58,63 @@ beforeEach(() => {
 })
 
 describe('tournament:completed — coaching card emission', () => {
-  it('emits CHAMPION card when an isCup tournament finishes with the user at position 1', async () => {
+  function findCardCall(channel = 'guide:coaching_card') {
+    return mockAppendToStream.mock.calls.find(([ch]) => ch === channel)
+  }
+
+  it('appends CHAMPION card when an isCup tournament finishes with the user at position 1', async () => {
     mockDb.tournament.findUnique.mockResolvedValue({ isCup: true })
-    const io = makeIo()
-    await handleEvent(io, 'tournament:completed', {
+    await handleEvent(null, 'tournament:completed', {
       tournamentId:   'cup-1',
       name:           'Curriculum Cup',
       finalStandings: [{ userId: 'user-caller', position: 1 }],
     })
-    expect(io.to).toHaveBeenCalledWith('user:user-caller')
-    const cardEmit = io._emit.mock.calls.find(([ev]) => ev === 'guide:coaching_card')
-    expect(cardEmit).toBeDefined()
-    expect(cardEmit[1].card.id).toBe('champion')
-    expect(cardEmit[1].finalPosition).toBe(1)
-    // Phase 2 SSE dual-emit — same payload, scoped per-user.
-    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:coaching_card')
+    const sseCall = findCardCall()
     expect(sseCall).toBeDefined()
     expect(sseCall[1].card.id).toBe('champion')
+    expect(sseCall[1].finalPosition).toBe(1)
     expect(sseCall[2]).toEqual({ userId: 'user-caller' })
   })
 
-  it('emits RUNNER_UP card on position 2', async () => {
+  it('appends RUNNER_UP card on position 2', async () => {
     mockDb.tournament.findUnique.mockResolvedValue({ isCup: true })
-    const io = makeIo()
-    await handleEvent(io, 'tournament:completed', {
+    await handleEvent(null, 'tournament:completed', {
       tournamentId:   'cup-2',
       name:           'Curriculum Cup',
       finalStandings: [{ userId: 'user-caller', position: 2 }],
     })
-    const cardEmit = io._emit.mock.calls.find(([ev]) => ev === 'guide:coaching_card')
-    expect(cardEmit[1].card.id).toBe('runner_up')
+    expect(findCardCall()[1].card.id).toBe('runner_up')
   })
 
-  it('emits HEAVY_LOSS card on position 3 in a 4-bot bracket (didTrainImprove=false)', async () => {
+  it('appends HEAVY_LOSS card on position 3 in a 4-bot bracket (didTrainImprove=false)', async () => {
     mockDb.tournament.findUnique.mockResolvedValue({ isCup: true })
     mockDb.tournamentParticipant.count.mockResolvedValue(4)
-    const io = makeIo()
-    await handleEvent(io, 'tournament:completed', {
+    await handleEvent(null, 'tournament:completed', {
       tournamentId:   'cup-3',
       name:           'Curriculum Cup',
       finalStandings: [{ userId: 'user-caller', position: 3 }],
     })
-    const cardEmit = io._emit.mock.calls.find(([ev]) => ev === 'guide:coaching_card')
-    expect(cardEmit[1].card.id).toBe('heavy_loss')
+    expect(findCardCall()[1].card.id).toBe('heavy_loss')
   })
 
-  it('does NOT emit a coaching card for non-cup tournaments', async () => {
+  it('does NOT append a coaching card for non-cup tournaments', async () => {
     mockDb.tournament.findUnique.mockResolvedValue({ isCup: false })
-    const io = makeIo()
-    await handleEvent(io, 'tournament:completed', {
+    await handleEvent(null, 'tournament:completed', {
       tournamentId:   'reg-1',
       name:           'Regular',
       finalStandings: [{ userId: 'user-caller', position: 1 }],
     })
-    const cardEmit = io._emit.mock.calls.find(([ev]) => ev === 'guide:coaching_card')
-    expect(cardEmit).toBeUndefined()
-    // Dual-emit must respect the same gate — non-cup tournaments are silent.
-    expect(mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:coaching_card')).toBeUndefined()
+    expect(findCardCall()).toBeUndefined()
   })
 
-  it('does NOT emit a coaching card when the user has no finalPosition', async () => {
+  it('does NOT append a coaching card when the user has no finalPosition', async () => {
     mockDb.tournament.findUnique.mockResolvedValue({ isCup: true })
     mockDb.tournamentParticipant.findMany.mockResolvedValue([{ userId: 'user-caller' }])
-    const io = makeIo()
-    await handleEvent(io, 'tournament:completed', {
+    await handleEvent(null, 'tournament:completed', {
       tournamentId:   'cup-4',
       name:           'Curriculum Cup',
       finalStandings: [],
     })
-    const cardEmit = io._emit.mock.calls.find(([ev]) => ev === 'guide:coaching_card')
-    expect(cardEmit).toBeUndefined()
-  })
-
-  it('does NOT throw when io is null (defensive)', async () => {
-    mockDb.tournament.findUnique.mockResolvedValue({ isCup: true })
-    await expect(handleEvent(null, 'tournament:completed', {
-      tournamentId:   'cup-5',
-      name:           'Curriculum Cup',
-      finalStandings: [{ userId: 'user-caller', position: 1 }],
-    })).resolves.toBeUndefined()
+    expect(findCardCall()).toBeUndefined()
   })
 })

@@ -19,9 +19,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react'
-import { getSocket } from '../../lib/socket.js'
 import { useEventStream } from '../../lib/useEventStream.js'
-import { viaSse } from '../../lib/realtimeMode.js'
 
 const AUTO_DISMISS_MS = 8_000
 
@@ -56,33 +54,15 @@ export default function RewardPopup() {
     }
   }
 
-  // Socket transport — fires only when the guide feature is NOT on SSE.
-  // Subscribes always (cheap), gates inside the handler so a flag flip at
-  // runtime doesn't double-fire popups on a transport hand-off.
   useEffect(() => {
-    const socket = getSocket()
-    function onHookComplete(payload) {
-      if (viaSse('guide')) return
-      showRef.current(buildHookReward(payload))
-    }
-    function onCurriculumComplete(payload) {
-      if (viaSse('guide')) return
-      showRef.current(buildCurriculumReward(payload))
-    }
-    socket.on('guide:hook_complete',       onHookComplete)
-    socket.on('guide:curriculum_complete', onCurriculumComplete)
     return () => {
-      socket.off('guide:hook_complete',       onHookComplete)
-      socket.off('guide:curriculum_complete', onCurriculumComplete)
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
     }
   }, [])
 
-  // SSE transport — fires only when the guide feature IS on SSE.
   useEventStream({
     channels: ['guide:'],
     onEvent: (channel, payload) => {
-      if (!viaSse('guide')) return
       if (channel === 'guide:hook_complete')       showRef.current(buildHookReward(payload))
       if (channel === 'guide:curriculum_complete') showRef.current(buildCurriculumReward(payload))
     },

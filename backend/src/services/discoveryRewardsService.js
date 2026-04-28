@@ -28,6 +28,7 @@
  */
 
 import db from '../lib/db.js'
+import { appendToStream } from '../lib/eventStream.js'
 import logger from '../logger.js'
 
 export const DISCOVERY_REWARDS = {
@@ -38,9 +39,6 @@ export const DISCOVERY_REWARDS = {
 }
 
 export const DISCOVERY_REWARD_KEYS = Object.freeze(Object.keys(DISCOVERY_REWARDS))
-
-let _io = null
-export function setIO(io) { _io = io }
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 
@@ -78,8 +76,7 @@ export async function getGrantedRewards(userId) {
  * unknown key, user missing, or any error). Never throws — non-fatal on all
  * paths so a misfire from an event handler won't tank the originating action.
  */
-export async function grantDiscoveryReward(userId, rewardKey, io) {
-  const ioRef = io ?? _io
+export async function grantDiscoveryReward(userId, rewardKey, _io) {
   const meta  = DISCOVERY_REWARDS[rewardKey]
   if (!meta) {
     logger.warn({ userId, rewardKey }, 'Unknown discovery-reward key — ignoring')
@@ -122,22 +119,16 @@ export async function grantDiscoveryReward(userId, rewardKey, io) {
       },
     })
 
-    if (ioRef) {
-      ioRef.to(`user:${userId}`).emit('guide:discovery_reward', {
+    appendToStream(
+      'guide:discovery_reward',
+      {
         rewardKey,
         reward,
         title: meta.title,
         body:  `+${reward} TC — ${meta.body}`,
-      })
-      ioRef.to(`user:${userId}`).emit('guide:notification', {
-        id:        `discovery-${rewardKey}-${userId}`,
-        type:      'reward',
-        title:     meta.title,
-        body:      `+${reward} Tournament Credits.`,
-        createdAt: new Date().toISOString(),
-        meta:      { discoveryReward: rewardKey, reward },
-      })
-    }
+      },
+      { userId },
+    ).catch(() => {})
 
     logger.info({ userId, rewardKey, reward }, 'Discovery reward granted')
     return true

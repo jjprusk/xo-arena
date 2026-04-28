@@ -30,22 +30,28 @@ import logger from '../logger.js'
 // custom headers, so Bearer-only auth is unusable here. We read the BA session
 // cookie via auth.api.getSession() — same path Better Auth uses everywhere
 // else, so it honors session expiry, banned users, etc.
-async function requireSessionCookie(req, res, next) {
+//
+// Guest play (Phase 7a / Risk R3): if there's no BA session, allow the stream
+// to open with `req.auth = null`. The session id minted in the route handler
+// is still attached to every `/rt/*` POST, so the client→server attribution
+// works the same way for guests as for signed-in users — we just can't filter
+// per-user broadcasts to them, which is fine because guests only receive
+// table-scoped (`userId: '*'`) events.
+async function optionalSessionCookie(req, _res, next) {
   try {
     const session = await auth.api.getSession({ headers: req.headers })
-    if (!session?.user?.id) {
-      logger.warn({ url: req.url, hasCookie: !!req.headers.cookie }, 'SSE stream: 401 (no session)')
-      return res.status(401).json({ error: 'Authentication required' })
+    if (session?.user?.id) {
+      logger.info({ url: req.url, userId: session.user.id }, 'SSE stream: auth ok')
+      req.auth = { userId: session.user.id }
+    } else {
+      logger.info({ url: req.url, hasCookie: !!req.headers.cookie }, 'SSE stream: guest connection')
+      req.auth = null
     }
-    logger.info({ url: req.url, userId: session.user.id }, 'SSE stream: auth ok')
-    // Keep req.auth shape consistent with requireAuth so downstream code
-    // (readStream, user lookups) is interchangeable.
-    req.auth = { userId: session.user.id }
-    next()
   } catch (err) {
-    logger.warn({ err: err.message }, 'SSE cookie auth failed')
-    return res.status(401).json({ error: 'Authentication required' })
+    logger.warn({ err: err.message }, 'SSE cookie auth failed — proceeding as guest')
+    req.auth = null
   }
+  next()
 }
 
 const router = Router()
@@ -99,11 +105,16 @@ router.get('/replay', requireAuth, async (req, res, next) => {
 //   event: <channel>         e.g. 'tournament:started'
 //   data: <json payload>
 //   (comment heartbeats every 30s keep proxies from closing idle connections)
-router.get('/stream', requireSessionCookie, async (req, res) => {
-  const appUser = await db.user.findUnique({
-    where: { betterAuthId: req.auth.userId },
-    select: { id: true },
-  })
+router.get('/stream', optionalSessionCookie, async (req, res) => {
+  // Guests have `req.auth === null` (see optionalSessionCookie). They get a
+  // session id and can subscribe to broadcast channels (`userId: '*'`) but
+  // not personal channels — there's no user to filter for.
+  const appUser = req.auth?.userId
+    ? await db.user.findUnique({
+        where:  { betterAuthId: req.auth.userId },
+        select: { id: true },
+      })
+    : null
   const userId = appUser?.id ?? null
 
   // Per-user connection cap — prevents a runaway tab from exhausting connections.
@@ -145,10 +156,11 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
   sseSessions.register(sseSessionId, {
     userId,
     res,
-    onDispose: async (uid, sid) => {
+    onDispose: async (uid, sid, snapshot = {}) => {
       try {
         const { handleSessionGone } = await import('../services/tablePresenceService.js')
         const dropped = handleSessionGone({ sessionId: sid })
+        const io = req.app?.get?.('io') ?? null
         if (dropped.length > 0) {
           const { getPresence } = await import('../realtime/tablePresence.js')
           const { dualEmitPresence } = await import('../services/tablePresenceService.js')
@@ -156,7 +168,6 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
           // after `req.on('close')`, when the Express request lifecycle is
           // already torn down. Pull the io instance lazily off the request
           // we still hold a reference to (capture it by closure).
-          const io = req.app?.get?.('io') ?? null
           for (const tableId of dropped) {
             dualEmitPresence(io, tableId, getPresence(tableId), 0)
           }
@@ -166,6 +177,14 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
         // participant — on either transport — sees the dropout.
         const pong = await import('../realtime/pongRunner.js')
         pong.removeSocket(sid)
+        // Phase 7e: gameplay disconnect-forfeit — for each table this session
+        // was seated at, run the FORMING-close / ACTIVE-forfeit-timer / etc.
+        // logic that the legacy `socket.on('disconnect')` handler did.
+        const tablesGone = Array.isArray(snapshot.joinedTables) ? snapshot.joinedTables : []
+        if (tablesGone.length > 0) {
+          const { handleDisconnect } = await import('../services/disconnectForfeitService.js')
+          await handleDisconnect({ io, userId: uid, sessionId: sid, tablesGone })
+        }
       } catch (err) {
         logger.warn({ err: err.message, sessionId: sid }, 'sseSessions onDispose: cleanup failed')
       }

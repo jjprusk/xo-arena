@@ -3,8 +3,9 @@
  * Skill Service — CRUD, training orchestration, in-memory cache.
  *
  * Training runs as a background setImmediate loop, yielding every
- * BATCH_SIZE episodes so the event loop stays responsive. Progress
- * is broadcast via Socket.io to the room `ml:session:{id}`.
+ * BATCH_SIZE episodes so the event loop stays responsive. Progress is
+ * broadcast over SSE on the `ml:session:{id}:` channel prefix; clients
+ * subscribe via useEventStream.
  */
 
 import db from '../lib/db.js'
@@ -21,12 +22,9 @@ import {
   proportionPValue, twoProportionPValue,
 } from '@xo-arena/ai'
 import logger from '../logger.js'
+import { appendToStream } from '../lib/eventStream.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
-
-// ─── Socket.io reference ────────────────────────────────────────────────────
-let _io = null
-export function setIO(io) { _io = io }
 
 // ─── In-memory caches ───────────────────────────────────────────────────────
 
@@ -1737,8 +1735,13 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
   return { move: best, votes: actions }
 }
 
-function _emit(room, event, data) {
-  if (_io) _io.to(room).emit(event, data)
+function _emit(scope, event, data) {
+  // SSE channel name is `<scope>:<topic>` so a client can subscribe to a
+  // single prefix (e.g. `ml:session:abc:`) and receive every event for
+  // that scope. Strip the leading `ml:` from the event name to avoid the
+  // doubled-up `ml:session:abc:ml:progress` form.
+  const topic = event.startsWith('ml:') ? event.slice(3) : event
+  appendToStream(`${scope}:${topic}`, data, { userId: '*' }).catch(() => {})
 }
 
 // ─── Player Profiling ─────────────────────────────────────────────────────────

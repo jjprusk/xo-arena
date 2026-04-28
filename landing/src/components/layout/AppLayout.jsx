@@ -4,7 +4,6 @@ import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-do
 import { useOptimisticSession, clearSessionCache, triggerSessionRefresh } from '../../lib/useOptimisticSession.js'
 import { signOut } from '../../lib/auth-client.js'
 import { getToken, clearTokenCache } from '../../lib/getToken.js'
-import { getSocket, connectSocket, disconnectSocket } from '../../lib/socket.js'
 import { perfMark } from '../../lib/perfLog.js'
 import SignInModal from '../ui/SignInModal.jsx'
 import EmailVerifyBanner from '../ui/EmailVerifyBanner.jsx'
@@ -18,7 +17,6 @@ import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 import { useEventStream } from '../../lib/useEventStream.js'
-import { viaSse } from '../../lib/realtimeMode.js'
 import { useHeartbeat } from '../../lib/useHeartbeat.js'
 import { TOTAL_STEPS } from '../guide/journeySteps.js'
 import { AppNav } from '@xo-arena/nav'
@@ -210,129 +208,55 @@ export default function AppLayout() {
           }
         })
       }
-      // Connect the socket so journeyService can emit guide:journeyStep into
-      // our per-user room and so /play can reuse the live connection.
-      //
-      // Re-emit user:subscribe explicitly when the socket is already
-      // connected: a guest who played PvAI first connected without a token
-      // (via useGameSDK), so the connect-listener fired once with no token
-      // and skipped subscribe. After signup the socket doesn't reconnect, so
-      // without this the new user is never placed into the user:${id} room
-      // and guide:hook_complete + guide:journeyStep emissions silently drop.
-      getToken().then(token => {
-        perfMark('AppLayout:token-resolved', token ? 'ok' : 'null')
-        if (!token) return
-        const socket = connectSocket(token)
-        if (socket.connected) {
-          perfMark('AppLayout:socket-already-connected')
-          socket.emit('user:subscribe', { authToken: token })
-        } else {
-          socket.once('connect', () => perfMark('AppLayout:socket-connected'))
-        }
-      }).catch(() => {})
     } else {
       useGuideStore.getState().reset()
     }
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Holds the guide-notification handler so both the socket path and the
-  // Tier 2 SSE hook (below) can invoke the same logic. Declared here so the
-  // useEffect below can write into it.
-  const guideNotifHandlerRef      = useRef(null)
-  // Same pattern for guide:journeyStep — set by the socket effect, invoked
-  // from the SSE hook when realtime.guide.via routes that channel to SSE.
-  const journeyStepHandlerRef     = useRef(null)
-  // Set by the presence effect below; called from the SSE 'presence:changed'
-  // handler to trigger a REST refetch.
   const refreshOnlineFromRestRef  = useRef(null)
   function refreshOnlineFromRest() { refreshOnlineFromRestRef.current?.() }
 
-  // Socket guide listeners — registered once on mount.
-  // On every (re)connect, re-join the per-user socket room so journeyService
-  // can push guide:journeyStep to this tab after a backend restart.
-  useEffect(() => {
-    const socket = getSocket()
-
-    async function onConnect() {
-      const token = await getToken()
-      if (token) socket.emit('user:subscribe', { authToken: token })
+  function onGuideNotification({ type, payload = {}, expiresAt = null }) {
+    // When a game starts, the "took a seat" notifications for that table are
+    // stale — the game is underway so the seat context is already obvious.
+    if (type === 'table.started' && payload?.tableId) {
+      useGuideStore.getState().dismissNotificationsForTable(payload.tableId)
+      return
     }
-    function onGuideNotification({ type, payload = {}, expiresAt = null }) {
-      // When a game starts, the "took a seat" notifications for that table are
-      // stale — the game is underway so the seat context is already obvious.
-      // Dismiss them before the player finishes their game and opens the Guide.
-      if (type === 'table.started' && payload?.tableId) {
-        useGuideStore.getState().dismissNotificationsForTable(payload.tableId)
-        return
-      }
-      // Stakeholder filter for seat-change events. These broadcast to every
-      // connected client (list page + detail page seat strips need to react),
-      // but the notification drawer should only surface them for users who
-      // actually care — the table's creator or anyone currently seated. The
-      // actor themselves is excluded (they just performed the action).
-      if (type === 'player.joined' || type === 'player.left') {
-        const myBaId = myBaIdRef.current
-        if (!myBaId) return                                    // guest / not signed in
-        if (payload.userId === myBaId) return                  // self-action
-        const stakes = Array.isArray(payload.stakeholders) ? payload.stakeholders : []
-        if (!stakes.includes(myBaId)) return                   // not relevant to this user
-      }
-      const notif = normalizeBusNotification(type, payload, expiresAt)
-      // State-nudge events (e.g. table.created, spectator.joined) return
-      // null — not user-facing, consumed by pages via their own subscription.
-      if (!notif) return
-      useGuideStore.getState().addNotification(notif)
-      useNotifSoundStore.getState().play()
-      if (notif.uiType === 'flash' || notif.uiType === 'match_ready') {
-        if (!useGuideStore.getState().panelOpen) useGuideStore.getState().open()
-      }
+    // Stakeholder filter for seat-change events: surface only to the table's
+    // creator or anyone currently seated; exclude the actor themselves.
+    if (type === 'player.joined' || type === 'player.left') {
+      const myBaId = myBaIdRef.current
+      if (!myBaId) return
+      if (payload.userId === myBaId) return
+      const stakes = Array.isArray(payload.stakeholders) ? payload.stakeholders : []
+      if (!stakes.includes(myBaId)) return
     }
-    function applyJourneyStepFromEvent({ completedSteps } = {}) {
-      useGuideStore.getState().applyJourneyStep({ completedSteps })
-      useGuideStore.getState().open()
+    const notif = normalizeBusNotification(type, payload, expiresAt)
+    if (!notif) return
+    useGuideStore.getState().addNotification(notif)
+    useNotifSoundStore.getState().play()
+    if (notif.uiType === 'flash' || notif.uiType === 'match_ready') {
+      if (!useGuideStore.getState().panelOpen) useGuideStore.getState().open()
     }
-    function onJourneyStep(payload) {
-      // Phase 2 SSE migration: skip on socket when SSE is the live transport
-      // for guide events — the SSE hook below routes the event identically.
-      if (viaSse('guide')) return
-      applyJourneyStepFromEvent(payload)
-    }
+  }
+  const guideNotifHandlerRef = useRef(onGuideNotification)
+  guideNotifHandlerRef.current = onGuideNotification
 
-    socket.on('connect',            onConnect)
-    socket.on('guide:journeyStep',  onJourneyStep)
-    if (socket.connected) onConnect()
-
-    // Expose handlers so the SSE hook below can reuse the same filtering,
-    // sound, panel-open, and store-application logic.
-    guideNotifHandlerRef.current  = onGuideNotification
-    journeyStepHandlerRef.current = applyJourneyStepFromEvent
-
-    return () => {
-      socket.off('connect',            onConnect)
-      socket.off('guide:journeyStep',  onJourneyStep)
-      guideNotifHandlerRef.current  = null
-      journeyStepHandlerRef.current = null
-    }
-  }, [])
-
-  // ── Tier 2 SSE subscription for guide notifications + presence ─────────────
-  // Presence membership changes trigger a REST refetch — state always derives
-  // from /presence/online rather than from socket payloads.
   useEventStream({
     channels: ['guide:', 'presence:'],
-    enabled: !!user?.id,
+    // Always-on so guests get an SSE session id minted at app boot —
+    // without this, guests never open an EventSource and the rt POST flow
+    // hangs on waitForSseSession.
+    enabled: true,
     onEvent: (channel, payload) => {
       if (channel === 'guide:notification') {
-        const handler = guideNotifHandlerRef.current
-        if (handler) handler(payload)
+        guideNotifHandlerRef.current?.(payload)
         return
       }
       if (channel === 'guide:journeyStep') {
-        // Only consume when SSE is the live transport for guide events; the
-        // socket listener handles the legacy path.
-        if (!viaSse('guide')) return
-        const handler = journeyStepHandlerRef.current
-        if (handler) handler(payload)
+        useGuideStore.getState().applyJourneyStep({ completedSteps: payload?.completedSteps })
+        useGuideStore.getState().open()
         return
       }
       if (channel === 'presence:changed') {
@@ -409,7 +333,6 @@ export default function AppLayout() {
     await signOut()
     clearSessionCache()
     clearTokenCache()
-    disconnectSocket()
     // Force useOptimisticSession to re-check — clearing localStorage alone
     // doesn't update the hook's React state, so the UI would keep showing
     // the signed-in avatar/menu until the next 60s poll or a page refresh.

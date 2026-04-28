@@ -857,6 +857,12 @@ model Table {
   /// GC'd aggressively (one active per user, 2-min-post-complete, 1-hour TTL).
   /// See Intelligent_Guide_Requirements.md §5.1.
   isDemo            Boolean     @default(false)
+  /// Realtime transport this table was opened with: 'socketio' or 'sse'.
+  /// Pinned at create time from `realtime.gameflow.via` SystemConfig so a
+  /// mid-rollout PvP doesn't end up with players on different transports —
+  /// per Realtime_Migration_Plan.md Risk R7. The legacy default keeps prod
+  /// safe before the flag flip.
+  gameflowVia       String      @default("socketio")
 
   @@index([status])
   @@index([gameId])
