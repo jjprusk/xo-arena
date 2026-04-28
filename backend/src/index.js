@@ -30,6 +30,7 @@ import tournamentMatchesRouter from './routes/tournamentMatches.js'
 import eventsRouter from './routes/events.js'
 import presenceRouter from './routes/presence.js'
 import pushRouter from './routes/push.js'
+import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realtime.js'
 import { setIO as mlSetIO, getSystemConfig } from './services/skillService.js'
 import { setIO as logSetIO } from './routes/logs.js'
 import { setIO as journeySetIO } from './services/journeyService.js'
@@ -66,6 +67,8 @@ registerRoutes(app, {
   '/events':             eventsRouter,
   '/presence':           presenceRouter,
   '/push':               pushRouter,
+  '/rt':                 realtimeRouter,
+  '/realtime':           realtimeModeRouter,
 })
 
 // Public version endpoint — no auth required

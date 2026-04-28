@@ -266,7 +266,23 @@ async function getIdleConfig() {
 function makeIdleCallbacks(io) {
   return {
     onWarn: ({ socketId, graceMs }) => {
-      io.to(socketId).emit('idle:warning', { secondsRemaining: Math.round(graceMs / 1000) })
+      const secondsRemaining = Math.round(graceMs / 1000)
+      io.to(socketId).emit('idle:warning', { secondsRemaining })
+
+      // Also publish onto the SSE stream so clients on the SSE+POST transport
+      // (or in dual mode) receive the warning. We address it to the user, not
+      // the socket, because SSE has no socket.id concept — sseBroker filters
+      // personal events by userId. Lookup is best-effort: if the socket has
+      // already gone away, skip the publish (the socket emit above is the
+      // canonical legacy path).
+      const userId = _socketToUser.get(socketId)
+      if (userId) {
+        appendToStream(
+          `user:${userId}:idle`,
+          { kind: 'warning', secondsRemaining },
+          { userId },
+        ).catch(() => {})
+      }
     },
     onAbandon: ({ absentSocketId, absentUserId, tableId }) => {
       io.to(`table:${tableId}`).emit('room:abandoned', { reason: 'idle', absentUserId })
@@ -277,6 +293,53 @@ function makeIdleCallbacks(io) {
       io.to(socketId).emit('room:kicked', { reason: 'idle' })
     },
   }
+}
+
+/**
+ * Reset the idle timer for a given (userId, tableId) pair using the socket-
+ * keyed machinery in this module. Called by the SSE+POST `idle/pong` route
+ * and the legacy socket `idle:pong` handler so both transports share the
+ * exact same reset behavior.
+ *
+ * Returns one of:
+ *   { ok: true, isPlayer }                — timer reset
+ *   { ok: false, reason: 'no-session' }    — user is not connected to this table
+ *   { ok: false, reason: 'not-active' }    — table is not ACTIVE
+ *   { ok: false, reason: 'not-found' }     — table does not exist
+ */
+export async function resetIdleForUserInTable(io, userId, tableId) {
+  if (!io || !userId || !tableId) return { ok: false, reason: 'no-session' }
+
+  const table = await db.table.findUnique({ where: { id: tableId } })
+  if (!table) return { ok: false, reason: 'not-found' }
+  if (table.status !== 'ACTIVE') return { ok: false, reason: 'not-active' }
+
+  // Find the user's socket(s) at this table. Same user can have multiple tabs
+  // — reset the timer for each so a refresh in any one keeps them all alive.
+  const sockets = []
+  for (const [sid, uid] of _socketToUser) {
+    if (uid === userId && _socketToTable.get(sid) === tableId) sockets.push(sid)
+  }
+  if (sockets.length === 0) return { ok: false, reason: 'no-session' }
+
+  const seats = table.seats || []
+  const isPlayer = seats.some(s => s.userId === userId && s.status === 'occupied')
+  const { warnMs, graceMs, spectatorMs } = await getIdleConfig()
+  const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
+
+  for (const sid of sockets) {
+    resetIdleTimer({
+      socketId: sid,
+      tableId,
+      isPlayer,
+      warnMs: isPlayer ? warnMs : spectatorMs,
+      graceMs,
+      onWarn,
+      onAbandon,
+      onKick,
+    })
+  }
+  return { ok: true, isPlayer }
 }
 
 /**
@@ -1316,6 +1379,10 @@ export async function attachSocketIO(httpServer) {
     })
 
     on('idle:pong', async () => {
+      // The legacy socket path retains the original socket-id reset (it's
+      // O(1) and avoids touching the user→sockets index for the common
+      // single-tab case). The shared service `handleIdlePong()` covers the
+      // identical behavior from the SSE+POST path.
       const tableId = _socketToTable.get(socket.id)
       if (!tableId) return
 

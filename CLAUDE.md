@@ -79,3 +79,4 @@ Authoritative references in `/doc`:
 - `Prod_Bringup_Runbook.md` — first-time prod deploy
 - `Registry_Switch_Guide.md` — container registry migration
 - `Observability_Plan.md` — logging/metrics/alerts
+- `Realtime_Migration_Plan.md` — Socket.io → SSE+POST migration plan (active workstream)

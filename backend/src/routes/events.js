@@ -17,9 +17,11 @@
  * the tab regains focus after being hidden.
  */
 import { Router } from 'express'
+import { nanoid } from 'nanoid'
 import { requireAuth } from '../middleware/auth.js'
 import { readStream } from '../lib/eventStream.js'
 import * as sseBroker from '../lib/sseBroker.js'
+import * as sseSessions from '../realtime/sseSessions.js'
 import { auth } from '../lib/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
@@ -130,6 +132,14 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
   // Suggest a 2s client reconnect delay. Browsers default to 3s otherwise.
   res.write('retry: 2000\n\n')
 
+  // Mint an SSE session id and ship it as the first named event. Clients
+  // echo this on every /api/v1/rt/* POST via the X-SSE-Session header so the
+  // server can attribute the call to a live SSE connection — replaces
+  // socket.id for the SSE+POST transport (see Realtime_Migration_Plan.md C1).
+  const sseSessionId = nanoid(16)
+  res.write(`event: session\ndata: ${JSON.stringify({ sseSessionId })}\n\n`)
+  sseSessions.register(sseSessionId, { userId, res })
+
   // Replay missed events for Last-Event-ID reconnects. Bounded at 500 to
   // avoid a runaway replay for long-offline clients — they'll need a full
   // REST resync beyond that horizon.
@@ -149,7 +159,7 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
   }
 
   // Register for live events.
-  sseBroker.register(res, { userId, channels })
+  sseBroker.register(res, { userId, sessionId: sseSessionId, channels })
 
   // Heartbeat — SSE comment line every 30s. Without this, idle proxies drop
   // the connection after ~60s of silence.
@@ -158,9 +168,13 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
   }, SSE_HEARTBEAT_MS)
 
   // Cleanup on client disconnect (tab closed, navigation, network drop).
+  // sseSessions.dispose() is debounced — a tab refresh that reopens within
+  // ~3s for the same userId cancels the disposal so transient drops don't
+  // trigger forfeits.
   req.on('close', () => {
     clearInterval(heartbeat)
     sseBroker.unregister(res)
+    sseSessions.dispose(sseSessionId)
   })
 })
 

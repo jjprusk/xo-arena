@@ -4,6 +4,32 @@ import { connectSocket, disconnectSocket, getSocket } from './socket.js'
 import { getToken } from './getToken.js'
 import { useSoundStore } from '../store/soundStore.js'
 import { perfMark } from './perfLog.js'
+import { viaSse } from './realtimeMode.js'
+import { rtFetch } from './rtSession.js'
+import { useEventStream } from './useEventStream.js'
+
+/**
+ * Subscribe to a single per-user idle channel via SSE. Internal helper for
+ * useGameSDK — extracted so the hook signature stays simple and the
+ * `eventTypes` array is a stable reference across renders.
+ */
+function useSseIdleWarning({ enabled, channel, onWarn }) {
+  // Stable arrays — useEventStream re-opens the EventSource if these change
+  // identity, even when the contents are equal.
+  const channels   = useMemo(() => channel ? [channel.replace(/idle$/, '')] : [], [channel])
+  const eventTypes = useMemo(() => channel ? [channel] : [], [channel])
+  useEventStream({
+    enabled,
+    channels,
+    eventTypes,
+    onEvent: (chan, payload) => {
+      if (chan !== channel) return
+      if (payload?.kind === 'warning' && typeof payload.secondsRemaining === 'number') {
+        onWarn(payload)
+      }
+    },
+  })
+}
 
 /**
  * Platform-side SDK provider for socket-based games.
@@ -136,6 +162,14 @@ export function useGameSDK({
     },
 
     idlePong() {
+      // SSE+POST transport (Realtime_Migration_Plan.md Phase 1): when the
+      // `idle` feature is routed via SSE, fire a POST instead of the legacy
+      // socket emit. Errors are swallowed — the next idle warning will
+      // arrive normally if the keep-alive failed for any reason.
+      if (viaSse('idle') && slugRef.current) {
+        rtFetch(`/rt/tables/${slugRef.current}/idle/pong`, { method: 'POST' }).catch(() => {})
+        return
+      }
       getSocket().emit('idle:pong')
     },
 
@@ -182,6 +216,21 @@ export function useGameSDK({
       gameEndCallbackRef.current = cb
     },
   }), [])
+
+  // ── SSE idle channel (Realtime_Migration_Plan.md Phase 1) ─────────────────
+  // When the `idle` feature is routed via SSE, the server publishes the warn
+  // event to `user:<id>:idle`. We translate it to the same idleHandlersRef
+  // shape the legacy socket listener fires so downstream UI is identical.
+  // Defensive: in dual mode the socket listener also fires — duplicate warn
+  // events within ~1s are idempotent (same UI overlay, same secondsRemaining).
+  const idleChannel = currentUser?.id ? `user:${currentUser.id}:idle` : null
+  useSseIdleWarning({
+    enabled: !!idleChannel && viaSse('idle'),
+    channel: idleChannel,
+    onWarn:  ({ secondsRemaining }) => {
+      idleHandlersRef.current.forEach(h => h({ secondsRemaining }))
+    },
+  })
 
   // ── Socket lifecycle ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -577,9 +626,12 @@ export function useGameSDK({
     // server-side idle timer without requiring the user to click "I'm here".
     // This prevents spurious timeouts caused by macOS Spaces switching.
     function autoIdlePong() {
-      if (phaseRef.current === 'playing') {
-        try { getSocket().emit('idle:pong') } catch (_) {}
+      if (phaseRef.current !== 'playing') return
+      if (viaSse('idle') && slugRef.current) {
+        rtFetch(`/rt/tables/${slugRef.current}/idle/pong`, { method: 'POST' }).catch(() => {})
+        return
       }
+      try { getSocket().emit('idle:pong') } catch (_) {}
     }
     function onVisibilityShow() {
       if (document.visibilityState === 'visible') autoIdlePong()
