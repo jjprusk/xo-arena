@@ -20,11 +20,8 @@ import { minimaxMove, getWinner, isBoardFull, WIN_LINES } from '@xo-arena/ai'
 import { recordActivity } from '../services/activityService.js'
 import { recordGameCompletion } from '../services/creditService.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
-import {
-  getPendingPvpMatch,
-  setPendingPvpMatchSlug,
-  deletePendingPvpMatch,
-} from '../lib/tournamentBridge.js'
+import { deletePendingPvpMatch } from '../lib/tournamentBridge.js'
+import { joinMatchTable, TournamentMatchError } from '../services/tournamentMatchService.js'
 import {
   incrementSocket, decrementSocket,
   incrementRedis, decrementRedis,
@@ -1542,130 +1539,71 @@ export async function attachSocketIO(httpServer) {
       socket.to(`table:${tableId}`).emit('game:reaction', { emoji, fromMark })
     })
 
-    // ── Tournament PVP room join ─────────────────────────────────────
+    // ── Tournament PVP match-table join ──────────────────────────────
+    // Phase 3 of the Realtime Migration: the data-mutation body of this
+    // handler now lives in `services/tournamentMatchService.js` so the
+    // SSE+POST transport (`POST /api/v1/rt/tournaments/matches/:id/table`)
+    // shares the exact same flow. The legacy `tournament:room:join` /
+    // `tournament:room:ready` event names are also accepted/emitted as
+    // aliases so any in-flight client tab from before the rename keeps
+    // working until Phase 8 strips socket.io entirely.
 
-    on('tournament:room:join', async ({ matchId, authToken } = {}) => {
+    async function handleTournamentTableJoin({ matchId, authToken } = {}) {
       if (!matchId) return socket.emit('error', { message: 'matchId required' })
 
       const user = await resolveSocketUser(authToken)
       if (!socket.connected) return
       if (!user) return socket.emit('error', { message: 'Authentication required' })
 
-      const pending = getPendingPvpMatch(matchId)
-      if (!pending) return socket.emit('error', { message: 'Tournament match not found or already started' })
-
-      const { tournamentId, participant1UserId, participant2UserId, bestOfN } = pending
-
-      if (user.betterAuthId !== participant1UserId && user.betterAuthId !== participant2UserId) {
-        return socket.emit('error', { message: 'You are not a participant in this match' })
+      let result
+      try {
+        result = await joinMatchTable({ user, matchId })
+      } catch (err) {
+        if (err instanceof TournamentMatchError) {
+          if (err.code === 'NOT_FOUND')        return socket.emit('error', { message: 'Tournament match not found or already started' })
+          if (err.code === 'NOT_READY')        return socket.emit('error', { message: 'Match not ready yet — please try again' })
+          if (err.code === 'NOT_PARTICIPANT')  return socket.emit('error', { message: 'You are not a participant in this match' })
+        }
+        logger.error({ err, matchId }, 'tournament:table:join failed')
+        return socket.emit('error', { message: 'Failed to join match' })
       }
 
-      let slug = pending.slug
-      let mark
+      const { slug, mark, tournamentId, bestOfN, tableId } = result
+      registerSocket(socket.id, tableId, user.betterAuthId)
+      socket.join(`table:${tableId}`)
 
-      if (!slug) {
-        // First player — create the table (use betterAuthId for seats/marks)
-        slug = nanoid(8)
+      const readyPayload = { slug, mark, tournamentId, matchId, bestOfN }
+      socket.emit('tournament:table:ready', readyPayload)
+      // Legacy alias for clients that haven't reloaded since the rename.
+      socket.emit('tournament:room:ready', readyPayload)
+      // Phase 3 SSE dual-emit: clients on the SSE+POST transport pick this
+      // up via `tournament:<tournamentId>:table:ready`. Broadcast (no userId
+      // filter) so both participants on the tournament page see it; the
+      // listener filters by matchId.
+      appendToStream(`tournament:${tournamentId}:table:ready`, readyPayload).catch(() => {})
 
-        const baId = user.betterAuthId
-        const marks = { [baId]: 'X' }
-
-        const table = await createTableTracked({
-          data: {
-            gameId: 'xo',
-            slug,
-            createdById: baId,
-            minPlayers: 2,
-            maxPlayers: 2,
-            isPrivate: true,
-            isTournament: true,
-            tournamentMatchId: matchId,
-            tournamentId,
-            bestOfN,
-            status: 'FORMING',
-            seats: [
-              { userId: baId, status: 'occupied', displayName: user.displayName ?? null },
-              { userId: null, status: 'empty' },
-            ],
-            previewState: makePreviewState({ marks }),
-          },
-        })
-
-        registerSocket(socket.id, table.id, baId)
-        socket.join(`table:${table.id}`)
-        mark = 'X'
-        setPendingPvpMatchSlug(matchId, slug)
-        socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })
-      } else {
-        // Second player — join as guest
-        const table = await db.table.findFirst({ where: { slug, status: 'FORMING' } })
-        if (!table) return socket.emit('error', { message: 'Match not ready yet — please try again' })
-
-        const baId = user.betterAuthId
-        const ps = { ...table.previewState }
-        const marks = { ...(ps.marks || {}) }
-        marks[baId] = 'O'
-        ps.marks = marks
-
-        const newSeats = [
-          table.seats[0],
-          { userId: baId, status: 'occupied', displayName: user.displayName ?? null },
-        ]
-
-        const updated = await db.table.update({
-          where: { id: table.id },
-          data: {
-            status: 'ACTIVE',
-            seats: newSeats,
-            previewState: ps,
-          },
-        })
-
-        registerSocket(socket.id, updated.id, baId)
-        socket.join(`table:${updated.id}`)
-        mark = 'O'
-
-        // Build extras — ELO lookups need domain User.id
-        let hostElo = null
-        const hostBaId = hostUserId(newSeats)
-        if (hostBaId) {
-          const hostUser = await db.user.findUnique({ where: { betterAuthId: hostBaId }, select: { id: true } })
-          if (hostUser) {
-            const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: hostUser.id, gameId: 'xo' } } })
-            hostElo = eloRow?.rating ?? null
-          }
-        }
-        let guestElo = null
-        if (user.id) {
-          const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } })
-          guestElo = eloRow?.rating ?? null
-        }
-
-        const extras = {
-          hostUserDisplayName: newSeats[0]?.displayName ?? null,
-          hostUserElo: hostElo,
-          guestUserDisplayName: user.displayName ?? null,
-          guestUserElo: guestElo,
-        }
-
-        socket.emit('tournament:room:ready', { slug, mark, tournamentId, matchId, bestOfN })
-        io.to(`table:${updated.id}`).emit('room:guestJoined', { room: sanitizeTable(updated, extras) })
-        io.to(`table:${updated.id}`).emit('game:start', {
-          board: ps.board,
-          currentTurn: ps.currentTurn,
-          round: ps.round ?? 1,
+      if (result.action === 'joined') {
+        io.to(`table:${tableId}`).emit('room:guestJoined', { room: sanitizeTable(result.table, result.extras) })
+        io.to(`table:${tableId}`).emit('game:start', {
+          board: result.previewState.board,
+          currentTurn: result.previewState.currentTurn,
+          round: result.previewState.round ?? 1,
         })
 
         // Start idle timers for both players
         const { warnMs, graceMs } = await getIdleConfig()
         const { onWarn, onAbandon, onKick } = makeIdleCallbacks(io)
         for (const [sid, tid] of _socketToTable) {
-          if (tid === updated.id) {
-            resetIdleTimer({ socketId: sid, tableId: updated.id, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
+          if (tid === tableId) {
+            resetIdleTimer({ socketId: sid, tableId, isPlayer: true, warnMs, graceMs, onWarn, onAbandon, onKick })
           }
         }
       }
-    })
+    }
+
+    on('tournament:table:join', handleTournamentTableJoin)
+    // Legacy alias — pre-Phase-3 clients still emit the old name.
+    on('tournament:room:join',  handleTournamentTableJoin)
 
     // ── Pong spike ───────────────────────────────────────────────────────────
 
@@ -2172,13 +2110,17 @@ async function recordPvpGame(table, io) {
       const completed = await completeTournamentMatch(table.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames)
       if (completed) deletePendingPvpMatch(table.tournamentMatchId)
 
-      io.to(`table:${table.id}`).emit('tournament:series:complete', {
+      const seriesPayload = {
         tournamentId: table.tournamentId,
         matchId: table.tournamentMatchId,
         p1Wins: xWins,
         p2Wins: oWins,
         seriesWinnerUserId: seriesWinnerBaId,
-      })
+      }
+      io.to(`table:${table.id}`).emit('tournament:series:complete', seriesPayload)
+      // Phase 3 SSE dual-emit on the tournament prefix so the tournament
+      // detail page receives series completion without a socket connection.
+      appendToStream(`tournament:${table.tournamentId}:series:complete`, seriesPayload).catch(() => {})
     } else {
       // Mid-series: persist the current score so the bracket updates live.
       db.tournamentMatch.update({

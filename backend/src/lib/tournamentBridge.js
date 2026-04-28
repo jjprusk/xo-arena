@@ -15,9 +15,11 @@ import { grantDiscoveryReward } from '../services/discoveryRewardsService.js'
 import { pickCoachingCard } from '../config/coachingCardRules.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
-// Stores state for PVP tournament matches waiting for players to join a room.
-// matchId → { tournamentId, participant1UserId, participant2UserId, bestOfN, slug, expiresAt }
-// "slug" is null until the first player requests the room via tournament:room:join.
+// Stores state for PVP tournament matches waiting for players to join the
+// match table. matchId → { tournamentId, participant1UserId, participant2UserId,
+// bestOfN, slug, expiresAt }. "slug" is null until the first player requests
+// the match table via `tournament:table:join` (legacy: `tournament:room:join`)
+// or POST /api/v1/rt/tournaments/matches/:id/table.
 // Entries expire after PENDING_MATCH_TTL_MS to prevent unbounded growth.
 
 const _pendingPvpMatches = new Map()

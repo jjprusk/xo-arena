@@ -575,8 +575,11 @@ export function useGameSDK({
         // link the table to the tournament match and set bestOfN.
         socket.emit('room:create:hvb', { gameId, botUserId, botSkillId: botSkillId ?? null, authToken: token ?? null, tournamentMatchId: tournamentMatchId ?? null })
       } else if (tournamentMatchId) {
-        // HvH tournament match — emit tournament:room:join to discover/create the room.
-        socket.emit('tournament:room:join', { matchId: tournamentMatchId, authToken: token ?? null })
+        // HvH tournament match — discover/create the match table. The new
+        // event name is `tournament:table:join`; the legacy `room:join`
+        // continues to work as an alias on the server during the dual-mode
+        // window.
+        socket.emit('tournament:table:join', { matchId: tournamentMatchId, authToken: token ?? null })
       } else {
         socket.emit('room:create', { spectatorAllowed: true, authToken: token ?? null })
       }

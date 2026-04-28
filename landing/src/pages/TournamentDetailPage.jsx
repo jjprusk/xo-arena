@@ -7,6 +7,8 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useEventStream } from '../lib/useEventStream.js'
 import { connectSocket } from '../lib/socket.js'
+import { rtFetch } from '../lib/rtSession.js'
+import { viaSse } from '../lib/realtimeMode.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import { useReplaySDK } from '../lib/useReplaySDK.js'
@@ -24,6 +26,41 @@ async function fetchMyBots(token, dbUserId) {
   if (!res.ok) return []
   const data = await res.json()
   return (data.bots ?? []).filter(b => b.botActive)
+}
+
+// ── Match-table join helper ───────────────────────────────────────────────────
+// Acquires the playable Table for a tournament match. Resolves with
+// `{ slug, tournamentId }` once the server has assigned (or created) the
+// table. Picks the SSE+POST transport when realtime.tournament.via='sse',
+// otherwise falls back to the legacy socket flow. The callers are all the
+// "Join Match" buttons on the tournament page — the inline cards and the
+// pop-up overlays. Centralised so the rename / dual-transport change lives
+// in one place.
+function joinMatchTable(matchId) {
+  if (viaSse('tournament')) {
+    return rtFetch(`/rt/tournaments/matches/${matchId}/table`, { method: 'POST' })
+      .then(({ slug, tournamentId }) => ({ slug, tournamentId }))
+  }
+  // Legacy socket path. Listen for `tournament:table:ready` first (post-Phase-3
+  // server emits both names), fall back to `tournament:room:ready` for older
+  // backends still in the field. socket.once is fine for both — whichever
+  // arrives first wins, the other handler is removed in cleanup.
+  return new Promise((resolve, reject) => {
+    const socket = connectSocket()
+    function cleanup() {
+      socket.off('tournament:table:ready', onReady)
+      socket.off('tournament:room:ready',  onReady)
+      socket.off('error', onError)
+    }
+    function onReady({ slug, tournamentId }) { cleanup(); resolve({ slug, tournamentId }) }
+    function onError({ message }) { cleanup(); reject(new Error(message || 'Failed to join match')) }
+    socket.once('tournament:table:ready', onReady)
+    socket.once('tournament:room:ready',  onReady)
+    socket.once('error', onError)
+    getToken().then(authToken => {
+      socket.emit('tournament:table:join', { matchId, authToken })
+    })
+  })
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -1110,24 +1147,14 @@ function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDis
   function handleJoin() {
     setJoining(true)
     setErr(null)
-    const socket = connectSocket()
-
-    function cleanup() {
-      socket.off('tournament:room:ready', onReady)
-      socket.off('error', onError)
-    }
-
-    function onReady({ slug, tournamentId }) {
-      cleanup()
+    joinMatchTable(matchId).then(({ slug, tournamentId }) => {
       // Safari Private Browsing has sessionStorage quota = 0; setItem throws.
       try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
       onDismiss()
       navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
-    }
-
-    function onError({ message }) {
-      cleanup()
+    }).catch(err => {
       setJoining(false)
+      const message = err?.message ?? 'Failed to join match'
       const gone = message === 'Tournament match not found or already started' ||
                    message === 'Match not ready yet — please try again'
       if (gone) {
@@ -1135,13 +1162,7 @@ function PvpMatchBanner({ tournament, userBetterAuthId, token, matchEvent, onDis
         navigate('/tournaments')
         return
       }
-      setErr(message || 'Failed to join match room')
-    }
-
-    socket.once('tournament:room:ready', onReady)
-    socket.once('error', onError)
-    getToken().then(authToken => {
-      socket.emit('tournament:room:join', { matchId, authToken })
+      setErr(message)
     })
   }
 
@@ -1207,27 +1228,13 @@ function HvhMatchReadyCard({ matchData, token }) {
   function handleJoin() {
     setJoining(true)
     setErr(null)
-    const socket = connectSocket()
-
-    function cleanup() {
-      socket.off('tournament:room:ready', onReady)
-      socket.off('error', onError)
-    }
-    function onReady({ slug, tournamentId }) {
-      cleanup()
-      // Safari Private Browsing has sessionStorage quota = 0; setItem throws.
+    joinMatchTable(matchId).then(({ slug, tournamentId }) => {
       try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
       navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
-    }
-    function onError({ message }) {
-      cleanup()
+    }).catch(err => {
       setJoining(false)
-      setErr(message || 'Failed to join match room')
-    }
-
-    socket.once('tournament:room:ready', onReady)
-    socket.once('error', onError)
-    getToken().then(authToken => socket.emit('tournament:room:join', { matchId, authToken }))
+      setErr(err?.message ?? 'Failed to join match')
+    })
   }
 
   return (
@@ -1283,30 +1290,19 @@ function MixedMatchReadyCard({ matchData, tournament }) {
   }
 
   // MIXED mode can pair two humans just like HVH. When the opponent is human
-  // we must use the shared HvH room flow (tournament:room:join) — otherwise
-  // BOTH players would navigate into separate HvB rooms where each treats
-  // the other as a bot and the games never connect.
+  // we must use the shared HvH match-table flow — otherwise BOTH players
+  // would navigate into separate HvB tables where each treats the other as
+  // a bot and the games never connect.
   function playVsHuman() {
     setJoining(true)
     setJoinErr(null)
-    const socket = connectSocket()
-    function cleanup() {
-      socket.off('tournament:room:ready', onReady)
-      socket.off('error', onError)
-    }
-    function onReady({ slug, tournamentId }) {
-      cleanup()
+    joinMatchTable(matchId).then(({ slug, tournamentId }) => {
       markJoined()
       navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
-    }
-    function onError({ message }) {
-      cleanup()
+    }).catch(err => {
       setJoining(false)
-      setJoinErr(message || 'Failed to join match room')
-    }
-    socket.once('tournament:room:ready', onReady)
-    socket.once('error', onError)
-    getToken().then(authToken => socket.emit('tournament:room:join', { matchId, authToken }))
+      setJoinErr(err?.message ?? 'Failed to join match')
+    })
   }
 
   const handlePlay = isOpponentBot ? playVsBot : playVsHuman
@@ -1580,24 +1576,14 @@ function MixedMatchBanner({ tournament, userId, matchEvent, onDismiss }) {
     navigate(`/play?${params.toString()}`)
   }
 
-  // MIXED mode can pair two humans — route them through the HvH room flow
-  // so both land in the same room instead of independent HvB games.
+  // MIXED mode can pair two humans — route them through the HvH match-table
+  // flow so both land at the same Table instead of independent HvB games.
   function playVsHuman() {
-    const socket = connectSocket()
-    function cleanup() {
-      socket.off('tournament:room:ready', onReady)
-      socket.off('error', onError)
-    }
-    function onReady({ slug, tournamentId }) {
-      cleanup()
+    joinMatchTable(matchId).then(({ slug, tournamentId }) => {
       try { sessionStorage.setItem(`aiarena_joined_match_${matchId}`, '1') } catch {}
       onDismiss?.()
       navigate(`/play?join=${slug}&tournamentMatch=${matchId}&tournamentId=${tournamentId}`)
-    }
-    function onError() { cleanup() }
-    socket.once('tournament:room:ready', onReady)
-    socket.once('error', onError)
-    getToken().then(authToken => socket.emit('tournament:room:join', { matchId, authToken }))
+    }).catch(() => {})
   }
 
   const handlePlay = isOpponentBot ? playVsBot : playVsHuman
@@ -2086,8 +2072,12 @@ export default function TournamentDetailPage() {
   // ── Tier 2 SSE subscription ────────────────────────────────────────────────
   // Any tournament:* SSE event for this tournament triggers a REST refetch.
   // This is the authoritative "something changed on this tournament" signal.
+  // Phase 3: also listen for `tournament:<tid>:table:ready` and
+  // `tournament:<tid>:series:complete`, the per-tournament-id channels
+  // dual-emitted from the socket handler / POST route.
   useEventStream({
-    channels: ['tournament:'],
+    channels:   ['tournament:'],
+    eventTypes: id ? [`tournament:${id}:table:ready`, `tournament:${id}:series:complete`] : [],
     onEvent: (channel, payload) => {
       if (payload?.tournamentId !== id) return
       if (channel === 'tournament:match:ready') setActiveMatchEvent(payload)

@@ -23,6 +23,8 @@ import { requireAuth } from '../middleware/auth.js'
 import * as sseSessions from '../realtime/sseSessions.js'
 import { getSystemConfig } from '../services/skillService.js'
 import { handleIdlePong } from '../services/tableService.js'
+import { joinMatchTable, TournamentMatchError } from '../services/tournamentMatchService.js'
+import { appendToStream } from '../lib/eventStream.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
@@ -123,6 +125,51 @@ router.post('/tables/:slug/idle/pong', async (req, res) => {
     return res.status(400).json({ error: 'Bad request' })
   } catch (err) {
     logger.error({ err }, 'POST /rt/tables/:slug/idle/pong failed')
+    return res.status(500).json({ error: 'Internal error' })
+  }
+})
+
+// POST /api/v1/rt/tournaments/matches/:id/table
+//
+// Replaces `socket.emit('tournament:room:join', { matchId })` for clients on
+// the SSE+POST transport. The same `tournamentMatchService.joinMatchTable`
+// runs on both sides, so a Phase 3 partial rollout (one player on socket,
+// the other on SSE+POST) lands them on the same DB Table row.
+//
+// Returns 200 + { slug, mark, tournamentId, matchId, bestOfN, action } on
+// success. SSE side-effect: a `tournament:<tournamentId>:table:ready` event
+// is appended for the tournament page to react to (server-only fan-out;
+// the client doesn't depend on it for slug/mark — those come back in the
+// HTTP response).
+router.post('/tournaments/matches/:id/table', async (req, res) => {
+  try {
+    const { id: matchId } = req.params
+
+    const appUser = await db.user.findUnique({
+      where:  { betterAuthId: req.auth.userId },
+      select: { id: true, betterAuthId: true, displayName: true },
+    })
+    if (!appUser?.betterAuthId) return res.status(401).json({ error: 'User not found' })
+
+    const result = await joinMatchTable({ user: appUser, matchId })
+
+    const readyPayload = {
+      slug:          result.slug,
+      mark:          result.mark,
+      tournamentId:  result.tournamentId,
+      matchId:       result.matchId,
+      bestOfN:       result.bestOfN,
+    }
+    appendToStream(`tournament:${result.tournamentId}:table:ready`, readyPayload).catch(() => {})
+
+    return res.json({ ...readyPayload, action: result.action })
+  } catch (err) {
+    if (err instanceof TournamentMatchError) {
+      if (err.code === 'NOT_FOUND')       return res.status(404).json({ error: err.message, code: err.code })
+      if (err.code === 'NOT_READY')       return res.status(409).json({ error: err.message, code: err.code })
+      if (err.code === 'NOT_PARTICIPANT') return res.status(403).json({ error: err.message, code: err.code })
+    }
+    logger.error({ err, matchId: req.params.id }, 'POST /rt/tournaments/matches/:id/table failed')
     return res.status(500).json({ error: 'Internal error' })
   }
 })
