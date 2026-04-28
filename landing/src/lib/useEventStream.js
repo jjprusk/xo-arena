@@ -116,6 +116,11 @@ export function useEventStream({ channels = [], eventTypes = [], onEvent, enable
       'tournament:completed',
       'tournament:cancelled',
       'guide:notification',
+      'guide:journeyStep',
+      'guide:hook_complete',
+      'guide:curriculum_complete',
+      'guide:specialize_start',
+      'guide:coaching_card',
       'presence:changed',
     ]
     for (const t of KNOWN_EVENT_TYPES) es.addEventListener(t, handle)
@@ -159,5 +164,10 @@ export const KNOWN_SSE_EVENT_TYPES = [
   'tournament:completed',
   'tournament:cancelled',
   'guide:notification',
+  'guide:journeyStep',
+  'guide:hook_complete',
+  'guide:curriculum_complete',
+  'guide:specialize_start',
+  'guide:coaching_card',
   'presence:changed',
 ]

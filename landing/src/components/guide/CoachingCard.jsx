@@ -19,20 +19,35 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
+import { viaSse } from '../../lib/realtimeMode.js'
 
 export default function CoachingCard() {
   const [active, setActive] = useState(null)
   const navigate = useNavigate()
 
+  // Socket transport — fires only when the guide feature is NOT on SSE.
   useEffect(() => {
     const socket = getSocket()
     function onCoachingCard(payload) {
+      if (viaSse('guide')) return
       if (!payload?.card) return
       setActive(payload)
     }
     socket.on('guide:coaching_card', onCoachingCard)
     return () => { socket.off('guide:coaching_card', onCoachingCard) }
   }, [])
+
+  // SSE transport — fires only when the guide feature IS on SSE.
+  useEventStream({
+    channels: ['guide:'],
+    onEvent: (channel, payload) => {
+      if (!viaSse('guide')) return
+      if (channel !== 'guide:coaching_card') return
+      if (!payload?.card) return
+      setActive(payload)
+    },
+  })
 
   if (!active) return null
   const { card, tournamentName, finalPosition } = active

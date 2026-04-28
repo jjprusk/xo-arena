@@ -18,6 +18,7 @@ import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 import { useEventStream } from '../../lib/useEventStream.js'
+import { viaSse } from '../../lib/realtimeMode.js'
 import { useHeartbeat } from '../../lib/useHeartbeat.js'
 import { TOTAL_STEPS } from '../guide/journeySteps.js'
 import { AppNav } from '@xo-arena/nav'
@@ -238,6 +239,9 @@ export default function AppLayout() {
   // Tier 2 SSE hook (below) can invoke the same logic. Declared here so the
   // useEffect below can write into it.
   const guideNotifHandlerRef      = useRef(null)
+  // Same pattern for guide:journeyStep — set by the socket effect, invoked
+  // from the SSE hook when realtime.guide.via routes that channel to SSE.
+  const journeyStepHandlerRef     = useRef(null)
   // Set by the presence effect below; called from the SSE 'presence:changed'
   // handler to trigger a REST refetch.
   const refreshOnlineFromRestRef  = useRef(null)
@@ -283,23 +287,31 @@ export default function AppLayout() {
         if (!useGuideStore.getState().panelOpen) useGuideStore.getState().open()
       }
     }
-    function onJourneyStep({ completedSteps }) {
+    function applyJourneyStepFromEvent({ completedSteps } = {}) {
       useGuideStore.getState().applyJourneyStep({ completedSteps })
       useGuideStore.getState().open()
+    }
+    function onJourneyStep(payload) {
+      // Phase 2 SSE migration: skip on socket when SSE is the live transport
+      // for guide events — the SSE hook below routes the event identically.
+      if (viaSse('guide')) return
+      applyJourneyStepFromEvent(payload)
     }
 
     socket.on('connect',            onConnect)
     socket.on('guide:journeyStep',  onJourneyStep)
     if (socket.connected) onConnect()
 
-    // Expose the notification handler so the SSE hook below reuses the same
-    // filtering, sound, and panel-open logic.
-    guideNotifHandlerRef.current = onGuideNotification
+    // Expose handlers so the SSE hook below can reuse the same filtering,
+    // sound, panel-open, and store-application logic.
+    guideNotifHandlerRef.current  = onGuideNotification
+    journeyStepHandlerRef.current = applyJourneyStepFromEvent
 
     return () => {
       socket.off('connect',            onConnect)
       socket.off('guide:journeyStep',  onJourneyStep)
-      guideNotifHandlerRef.current = null
+      guideNotifHandlerRef.current  = null
+      journeyStepHandlerRef.current = null
     }
   }, [])
 
@@ -312,6 +324,14 @@ export default function AppLayout() {
     onEvent: (channel, payload) => {
       if (channel === 'guide:notification') {
         const handler = guideNotifHandlerRef.current
+        if (handler) handler(payload)
+        return
+      }
+      if (channel === 'guide:journeyStep') {
+        // Only consume when SSE is the live transport for guide events; the
+        // socket listener handles the legacy path.
+        if (!viaSse('guide')) return
+        const handler = journeyStepHandlerRef.current
         if (handler) handler(payload)
         return
       }

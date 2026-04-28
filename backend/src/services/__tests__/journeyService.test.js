@@ -18,6 +18,13 @@ vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../../lib/eventStream.js', () => ({
+  appendToStream: mockAppendToStream,
+}))
+
 import db from '../../lib/db.js'
 import {
   TOTAL_STEPS,
@@ -208,6 +215,21 @@ describe('completeStep — basic behavior', () => {
       totalSteps: 7,
       phase: 'hook',
     }))
+    // Phase 2 SSE dual-emit — same payload, scoped per-user.
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:journeyStep')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[1]).toMatchObject({ step: 1, completedSteps: [1], phase: 'hook' })
+    expect(sseCall[2]).toEqual({ userId: mockUserId })
+  })
+
+  it('emits guide:journeyStep on SSE even when no io is provided (offline tab)', async () => {
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([]))
+
+    await completeStep(mockUserId, 1)
+
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:journeyStep')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[2]).toEqual({ userId: mockUserId })
   })
 })
 
@@ -248,6 +270,11 @@ describe('completeStep — Hook reward on step 2', () => {
     const emittedEvents = io.roomEmit.mock.calls.map(c => c[0])
     expect(emittedEvents).toContain('guide:hook_complete')
     expect(emittedEvents).toContain('guide:notification')
+    // Phase 2 SSE dual-emit — guide:hook_complete also reaches the SSE stream
+    // scoped to the user. guide:notification is already SSE-native via dispatch.
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:hook_complete')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[2]).toEqual({ userId: mockUserId })
   })
 
   it('does NOT award Hook reward on any other step (not step 1, 3, 4, 5, 6, 7)', async () => {
@@ -303,6 +330,10 @@ describe('completeStep — Curriculum reward + Specialize start on step 7', () =
     expect(emittedEvents).toContain('guide:curriculum_complete')
     expect(emittedEvents).toContain('guide:specialize_start')
     expect(emittedEvents).toContain('guide:notification')
+    // Phase 2 SSE dual-emit — both rewards reach the SSE stream too.
+    const sseChannels = mockAppendToStream.mock.calls.map(c => c[0])
+    expect(sseChannels).toContain('guide:curriculum_complete')
+    expect(sseChannels).toContain('guide:specialize_start')
   })
 })
 

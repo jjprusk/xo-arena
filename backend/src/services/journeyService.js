@@ -33,6 +33,7 @@
 import db from '../lib/db.js'
 import logger from '../logger.js'
 import { experimentVariant } from './experimentService.js'
+import { appendToStream } from '../lib/eventStream.js'
 
 export const TOTAL_STEPS      = 7
 export const HOOK_STEPS       = [1, 2]
@@ -134,14 +135,17 @@ export async function completeStep(userId, stepIndex, io) {
     await _savePrefs(userId, updated)
 
     // Notify client of step completion
-    if (ioRef) {
-      ioRef.to(`user:${userId}`).emit('guide:journeyStep', {
-        step:          stepIndex,
-        completedSteps,
-        totalSteps:    TOTAL_STEPS,
-        phase:         deriveCurrentPhase(completedSteps),
-      })
+    const journeyStepPayload = {
+      step:          stepIndex,
+      completedSteps,
+      totalSteps:    TOTAL_STEPS,
+      phase:         deriveCurrentPhase(completedSteps),
     }
+    if (ioRef) {
+      ioRef.to(`user:${userId}`).emit('guide:journeyStep', journeyStepPayload)
+    }
+    // Phase 2 SSE dual-emit: client picks transport via realtime.guide.via.
+    appendToStream('guide:journeyStep', journeyStepPayload, { userId }).catch(() => {})
 
     logger.info({ userId, stepIndex, completedSteps }, 'Journey step completed')
 
@@ -184,11 +188,12 @@ async function _handleHookComplete(userId, ioRef) {
       data:  { creditsTc: { increment: reward } },
     })
 
+    const hookPayload = {
+      reward,
+      message: `You earned +${reward} TC — welcome to the Arena.`,
+    }
     if (ioRef) {
-      ioRef.to(`user:${userId}`).emit('guide:hook_complete', {
-        reward,
-        message: `You earned +${reward} TC — welcome to the Arena.`,
-      })
+      ioRef.to(`user:${userId}`).emit('guide:hook_complete', hookPayload)
       ioRef.to(`user:${userId}`).emit('guide:notification', {
         id:        `hook-complete-${userId}`,
         type:      'reward',
@@ -198,6 +203,8 @@ async function _handleHookComplete(userId, ioRef) {
         meta:      { phaseTransition: 'hook→curriculum', reward },
       })
     }
+    // Phase 2 SSE dual-emit: client picks transport via realtime.guide.via.
+    appendToStream('guide:hook_complete', hookPayload, { userId }).catch(() => {})
 
     logger.info({ userId, reward, variant }, 'Hook complete — TC awarded')
   } catch (err) {
@@ -214,16 +221,18 @@ async function _handleCurriculumComplete(userId, ioRef) {
       data:  { creditsTc: { increment: reward } },
     })
 
+    const curriculumPayload = {
+      reward,
+      message: `You earned +${reward} TC.`,
+    }
+    const specializePayload = {
+      message: 'Welcome to Specialize — personalized recommendations unlocked.',
+    }
     if (ioRef) {
       // Two distinct events — lets clients distinguish "just finished
       // Curriculum (celebrate)" from "now in Specialize (swap UI)".
-      ioRef.to(`user:${userId}`).emit('guide:curriculum_complete', {
-        reward,
-        message: `You earned +${reward} TC.`,
-      })
-      ioRef.to(`user:${userId}`).emit('guide:specialize_start', {
-        message: 'Welcome to Specialize — personalized recommendations unlocked.',
-      })
+      ioRef.to(`user:${userId}`).emit('guide:curriculum_complete', curriculumPayload)
+      ioRef.to(`user:${userId}`).emit('guide:specialize_start', specializePayload)
       ioRef.to(`user:${userId}`).emit('guide:notification', {
         id:        `curriculum-complete-${userId}`,
         type:      'reward',
@@ -233,6 +242,9 @@ async function _handleCurriculumComplete(userId, ioRef) {
         meta:      { phaseTransition: 'curriculum→specialize', reward },
       })
     }
+    // Phase 2 SSE dual-emit: client picks transport via realtime.guide.via.
+    appendToStream('guide:curriculum_complete', curriculumPayload, { userId }).catch(() => {})
+    appendToStream('guide:specialize_start',    specializePayload,  { userId }).catch(() => {})
 
     logger.info({ userId, reward, variant }, 'Curriculum complete — TC awarded + Specialize start emitted')
   } catch (err) {

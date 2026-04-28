@@ -20,6 +20,8 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
+import { viaSse } from '../../lib/realtimeMode.js'
 
 const AUTO_DISMISS_MS = 8_000
 
@@ -27,33 +29,46 @@ export default function RewardPopup() {
   const [active, setActive] = useState(null)
   const dismissTimerRef = useRef(null)
 
+  // Stable show() across both transports — sub-effects below call into it.
+  const showRef = useRef(null)
+  showRef.current = (reward) => {
+    setActive(reward)
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+    dismissTimerRef.current = setTimeout(() => setActive(null), AUTO_DISMISS_MS)
+  }
+
+  function buildHookReward({ reward, message } = {}) {
+    return {
+      kind:     'hook',
+      title:    'Off to a great start!',
+      amount:   reward ?? 20,
+      body:     message ?? 'Welcome to the Arena.',
+      nextHint: 'Up next: build your first bot.',
+    }
+  }
+  function buildCurriculumReward({ reward, message } = {}) {
+    return {
+      kind:     'curriculum',
+      title:    'Journey complete!',
+      amount:   reward ?? 50,
+      body:     message ?? 'You earned the graduation reward.',
+      nextHint: "You're now in Specialize — personalized recommendations unlock here.",
+    }
+  }
+
+  // Socket transport — fires only when the guide feature is NOT on SSE.
+  // Subscribes always (cheap), gates inside the handler so a flag flip at
+  // runtime doesn't double-fire popups on a transport hand-off.
   useEffect(() => {
     const socket = getSocket()
-    function show(reward) {
-      setActive(reward)
-      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-      dismissTimerRef.current = setTimeout(() => setActive(null), AUTO_DISMISS_MS)
+    function onHookComplete(payload) {
+      if (viaSse('guide')) return
+      showRef.current(buildHookReward(payload))
     }
-
-    function onHookComplete({ reward, message } = {}) {
-      show({
-        kind:     'hook',
-        title:    'Off to a great start!',
-        amount:   reward ?? 20,
-        body:     message ?? 'Welcome to the Arena.',
-        nextHint: 'Up next: build your first bot.',
-      })
+    function onCurriculumComplete(payload) {
+      if (viaSse('guide')) return
+      showRef.current(buildCurriculumReward(payload))
     }
-    function onCurriculumComplete({ reward, message } = {}) {
-      show({
-        kind:     'curriculum',
-        title:    'Journey complete!',
-        amount:   reward ?? 50,
-        body:     message ?? 'You earned the graduation reward.',
-        nextHint: "You're now in Specialize — personalized recommendations unlock here.",
-      })
-    }
-
     socket.on('guide:hook_complete',       onHookComplete)
     socket.on('guide:curriculum_complete', onCurriculumComplete)
     return () => {
@@ -62,6 +77,16 @@ export default function RewardPopup() {
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
     }
   }, [])
+
+  // SSE transport — fires only when the guide feature IS on SSE.
+  useEventStream({
+    channels: ['guide:'],
+    onEvent: (channel, payload) => {
+      if (!viaSse('guide')) return
+      if (channel === 'guide:hook_complete')       showRef.current(buildHookReward(payload))
+      if (channel === 'guide:curriculum_complete') showRef.current(buildCurriculumReward(payload))
+    },
+  })
 
   if (!active) return null
 

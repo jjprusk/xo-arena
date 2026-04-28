@@ -8,6 +8,7 @@ import Redis from 'ioredis'
 import db from './db.js'
 import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
+import { appendToStream } from './eventStream.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
 import { grantDiscoveryReward } from '../services/discoveryRewardsService.js'
@@ -382,12 +383,16 @@ export async function handleEvent(io, channel, data) {
             didTrainImprove:  false,
           })
           if (card) {
-            io.to(`user:${notifyUserId}`).emit('guide:coaching_card', {
+            const cardPayload = {
               tournamentId,
               tournamentName: name,
               finalPosition:  position,
               card,
-            })
+            }
+            io.to(`user:${notifyUserId}`).emit('guide:coaching_card', cardPayload)
+            // Phase 2 SSE dual-emit: client picks transport via realtime.guide.via.
+            appendToStream('guide:coaching_card', cardPayload, { userId: notifyUserId })
+              .catch(() => {})
           }
         }
       }

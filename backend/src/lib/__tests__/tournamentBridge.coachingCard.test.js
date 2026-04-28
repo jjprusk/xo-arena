@@ -22,6 +22,10 @@ const mockDb = {
 }
 vi.mock('../db.js', () => ({ default: mockDb }))
 vi.mock('../notificationBus.js', () => ({ dispatch: vi.fn().mockResolvedValue(undefined) }))
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../eventStream.js', () => ({ appendToStream: mockAppendToStream }))
 vi.mock('ioredis', () => {
   const Redis = vi.fn(() => ({ on: vi.fn(), subscribe: vi.fn() }))
   return { default: Redis }
@@ -67,6 +71,11 @@ describe('tournament:completed — coaching card emission', () => {
     expect(cardEmit).toBeDefined()
     expect(cardEmit[1].card.id).toBe('champion')
     expect(cardEmit[1].finalPosition).toBe(1)
+    // Phase 2 SSE dual-emit — same payload, scoped per-user.
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:coaching_card')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[1].card.id).toBe('champion')
+    expect(sseCall[2]).toEqual({ userId: 'user-caller' })
   })
 
   it('emits RUNNER_UP card on position 2', async () => {
@@ -104,6 +113,8 @@ describe('tournament:completed — coaching card emission', () => {
     })
     const cardEmit = io._emit.mock.calls.find(([ev]) => ev === 'guide:coaching_card')
     expect(cardEmit).toBeUndefined()
+    // Dual-emit must respect the same gate — non-cup tournaments are silent.
+    expect(mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:coaching_card')).toBeUndefined()
   })
 
   it('does NOT emit a coaching card when the user has no finalPosition', async () => {
