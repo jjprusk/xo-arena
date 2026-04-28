@@ -24,6 +24,12 @@ import * as sseSessions from '../realtime/sseSessions.js'
 import { getSystemConfig } from '../services/skillService.js'
 import { handleIdlePong } from '../services/tableService.js'
 import { joinMatchTable, TournamentMatchError } from '../services/tournamentMatchService.js'
+import {
+  watchForSession,
+  unwatchForSession,
+  dualEmitPresence,
+} from '../services/tablePresenceService.js'
+import { getPresence as getTablePresence } from '../realtime/tablePresence.js'
 import { appendToStream } from '../lib/eventStream.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
@@ -170,6 +176,87 @@ router.post('/tournaments/matches/:id/table', async (req, res) => {
       if (err.code === 'NOT_PARTICIPANT') return res.status(403).json({ error: err.message, code: err.code })
     }
     logger.error({ err, matchId: req.params.id }, 'POST /rt/tournaments/matches/:id/table failed')
+    return res.status(500).json({ error: 'Internal error' })
+  }
+})
+
+// POST /api/v1/rt/tables/:tableId/watch
+//
+// Replaces `socket.emit('table:watch', { tableId, authToken })` for clients
+// on the SSE+POST transport. Adds the SSE session as a watcher of the
+// given Table, fires the spectator.joined cohort dispatch (when newly
+// authenticated), starts the demo Hook step-2 credit timer for demo tables,
+// and broadcasts updated presence on `table:<id>:presence` (and the legacy
+// Socket.io `table:presence` channel via dualEmitPresence).
+//
+// Returns 200 + { tableId, count, userIds } on success, 404 if the table
+// doesn't exist. Idempotent — re-watching from the same session is a no-op
+// for the cohort/demo side-effects.
+router.post('/tables/:tableId/watch', async (req, res) => {
+  try {
+    const { tableId } = req.params
+    const { sessionId } = req.sseSession
+
+    const table = await db.table.findUnique({
+      where:  { id: tableId },
+      select: { id: true },
+    })
+    if (!table) return res.status(404).json({ error: 'Table not found' })
+
+    const appUser = req.auth?.userId
+      ? await db.user.findUnique({
+          where:  { betterAuthId: req.auth.userId },
+          select: { id: true, displayName: true, username: true },
+        })
+      : null
+
+    await watchForSession({ tableId, sessionId, user: appUser })
+
+    // Track in the session record so dispose-time cleanup knows what to
+    // remove + rebroadcast for.
+    const sseSessions = await import('../realtime/sseSessions.js')
+    sseSessions.joinTable(sessionId, tableId)
+
+    // Rebroadcast presence on both transports. The spectator-count side of
+    // the payload is socket-only state for now (`_spectatorSockets` lives
+    // in socketHandler), so we pass 0 — the Socket.io legacy emit on the
+    // socket path already carries the right number for socket clients.
+    const presence = getTablePresence(tableId)
+    const io = req.app.get('io')
+    dualEmitPresence(io, tableId, presence, 0)
+
+    return res.json({ tableId, ...presence })
+  } catch (err) {
+    logger.error({ err, tableId: req.params.tableId }, 'POST /rt/tables/:tableId/watch failed')
+    return res.status(500).json({ error: 'Internal error' })
+  }
+})
+
+// DELETE /api/v1/rt/tables/:tableId/watch
+//
+// Counterpart to POST /watch. Removes this SSE session from the watcher
+// list, clears any pending demo timer, and rebroadcasts presence so the
+// badge count drops immediately (instead of waiting for the SSE session
+// to dispose entirely).
+router.delete('/tables/:tableId/watch', async (req, res) => {
+  try {
+    const { tableId } = req.params
+    const { sessionId } = req.sseSession
+
+    const { removed } = unwatchForSession({ tableId, sessionId })
+
+    const sseSessions = await import('../realtime/sseSessions.js')
+    sseSessions.leaveTable(sessionId, tableId)
+
+    if (removed) {
+      const presence = getTablePresence(tableId)
+      const io = req.app.get('io')
+      dualEmitPresence(io, tableId, presence, 0)
+    }
+
+    return res.json({ tableId, removed })
+  } catch (err) {
+    logger.error({ err, tableId: req.params.tableId }, 'DELETE /rt/tables/:tableId/watch failed')
     return res.status(500).json({ error: 'Internal error' })
   }
 })

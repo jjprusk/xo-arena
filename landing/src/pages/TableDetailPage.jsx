@@ -22,6 +22,8 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { getSocket } from '../lib/socket.js'
 import { useEventStream } from '../lib/useEventStream.js'
+import { viaSse } from '../lib/realtimeMode.js'
+import { rtFetch } from '../lib/rtSession.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 import { GameView } from './PlayPage.jsx'
@@ -71,7 +73,16 @@ export default function TableDetailPage() {
   // without it the server only detects the disconnect when the polling
   // transport times out (~45s on default settings), leaving a stale
   // watcher in the count. `pagehide` fires reliably on close + refresh.
+  //
+  // Phase 5: when `realtime.tables.presence.via === 'sse'`, the legacy
+  // socket emit is replaced with an authenticated POST/DELETE pair against
+  // /rt/tables/:tableId/watch. The SSE session id (set by useEventStream's
+  // 'session' frame handler) flows automatically via rtFetch's X-SSE-Session
+  // header. SSE-side presence cleanup happens via the sseSessions dispose
+  // callback when the EventSource closes — pagehide DELETE is the latency
+  // optimization, not the correctness path.
   useEffect(() => {
+    if (viaSse('tables')) return  // SSE branch handled by the next effect
     const socket = getSocket()
     let cancelled = false
 
@@ -99,6 +110,31 @@ export default function TableDetailPage() {
     }
   }, [tableId])
 
+  // Phase 5 SSE branch: POST /rt/tables/:tableId/watch when the SSE
+  // transport is selected. Re-POST is harmless — `addWatcher` is idempotent
+  // for the same (tableId, sessionId).
+  useEffect(() => {
+    if (!viaSse('tables')) return
+    let cancelled = false
+
+    async function postWatch() {
+      try { await rtFetch(`/rt/tables/${tableId}/watch`, { method: 'POST' }) } catch {}
+    }
+    function deleteWatchBeacon() {
+      // pagehide best-effort — fetch keepalive still flushes during unload.
+      rtFetch(`/rt/tables/${tableId}/watch`, { method: 'DELETE' }).catch(() => {})
+    }
+
+    postWatch()
+    window.addEventListener('pagehide', deleteWatchBeacon)
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('pagehide', deleteWatchBeacon)
+      deleteWatchBeacon()
+    }
+  }, [tableId])
+
   // Real-time: table.* bus events via SSE trigger a refetch when this table
   // is affected. table:presence stays on the socket — it's a per-table room
   // broadcast, not a Tier 2 SSE channel.
@@ -117,6 +153,7 @@ export default function TableDetailPage() {
     },
   })
   useEffect(() => {
+    if (viaSse('tables')) return  // SSE branch handled by useEventStream below
     const socket = getSocket()
     function onPresence(data) {
       if (data?.tableId !== tableId) return
@@ -125,6 +162,41 @@ export default function TableDetailPage() {
     socket.on('table:presence', onPresence)
     return () => socket.off('table:presence', onPresence)
   }, [tableId])
+
+  // Phase 5: SSE-side presence + lifecycle subscriptions. EventSource
+  // requires explicit event-type registration for named events, so each
+  // channel name is listed in eventTypes. Lifecycle events (guestJoined,
+  // cancelled, abandoned, playerDisconnected/Reconnected, spectatorJoined)
+  // trigger a refetch — same response as the legacy bus path on the right.
+  useEventStream({
+    enabled:    viaSse('tables') && !!tableId,
+    channels:   tableId
+      ? [`table:${tableId}:presence`, `table:${tableId}:lifecycle`]
+      : [],
+    eventTypes: tableId
+      ? [`table:${tableId}:presence`, `table:${tableId}:lifecycle`]
+      : [],
+    onEvent: (channel, data) => {
+      if (channel === `table:${tableId}:presence`) {
+        if (data?.tableId !== tableId) return
+        setPresence({
+          count:           data.count           ?? 0,
+          userIds:         data.userIds         ?? [],
+          spectatingCount: data.spectatingCount ?? 0,
+        })
+        return
+      }
+      if (channel === `table:${tableId}:lifecycle`) {
+        // Cancelled / abandoned: navigate away — the table is gone.
+        if (data?.kind === 'cancelled' || data?.kind === 'abandoned') {
+          navigate('/tables', { replace: true })
+          return
+        }
+        // Otherwise refetch table state so seats / status are current.
+        load()
+      }
+    },
+  })
 
   const mySeatIndex = table?.seats?.findIndex?.(s => s.userId && s.userId === currentUserId) ?? -1
   const isSeated    = mySeatIndex !== -1

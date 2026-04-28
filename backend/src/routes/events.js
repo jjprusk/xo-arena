@@ -138,7 +138,33 @@ router.get('/stream', requireSessionCookie, async (req, res) => {
   // socket.id for the SSE+POST transport (see Realtime_Migration_Plan.md C1).
   const sseSessionId = nanoid(16)
   res.write(`event: session\ndata: ${JSON.stringify({ sseSessionId })}\n\n`)
-  sseSessions.register(sseSessionId, { userId, res })
+  // Phase 5: when the session truly goes away (3-s debounce expires), drop
+  // it from every table presence map it had joined and rebroadcast presence
+  // so badge counts settle. The dispatcher fetches latest sessionsModule
+  // lazily because tablePresenceService → sseSessions has no inverse import.
+  sseSessions.register(sseSessionId, {
+    userId,
+    res,
+    onDispose: async (uid, sid) => {
+      try {
+        const { handleSessionGone } = await import('../services/tablePresenceService.js')
+        const dropped = handleSessionGone({ sessionId: sid })
+        if (dropped.length === 0) return
+        const { getPresence } = await import('../realtime/tablePresence.js')
+        const { dualEmitPresence } = await import('../services/tablePresenceService.js')
+        // The Express app is reachable via req.app — but this callback runs
+        // after `req.on('close')`, when the Express request lifecycle is
+        // already torn down. Pull the io instance lazily off the request
+        // we still hold a reference to (capture it by closure).
+        const io = req.app?.get?.('io') ?? null
+        for (const tableId of dropped) {
+          dualEmitPresence(io, tableId, getPresence(tableId), 0)
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, sessionId: sid }, 'sseSessions onDispose: presence cleanup failed')
+      }
+    },
+  })
 
   // Replay missed events for Last-Event-ID reconnects. Bounded at 500 to
   // avoid a runaway replay for long-offline clients — they'll need a full

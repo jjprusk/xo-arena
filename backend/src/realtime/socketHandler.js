@@ -36,6 +36,10 @@ import {
 } from './tablePresence.js'
 import { dispatch as dispatchBus } from '../lib/notificationBus.js'
 import { appendToStream } from '../lib/eventStream.js'
+import {
+  dualEmitPresence,
+  dualEmitLifecycle,
+} from '../services/tablePresenceService.js'
 import { nanoid } from 'nanoid'
 import { formatTableLabel } from '../lib/tableLabel.js'
 import { createTableTracked } from '../lib/createTableTracked.js'
@@ -132,9 +136,12 @@ function getSpectatorCount(tableId) {
 }
 
 function broadcastTablePresence(io, tableId) {
+  // Phase 5 dual-emit: `table:presence` over Socket.io (legacy) AND a
+  // matching SSE append on the `table:<id>:presence` channel. Both
+  // transports see the same payload; clients select via `viaSse('tables')`.
   const presence = getTablePresence(tableId)
   const spectatingCount = getSpectatorCount(tableId)
-  io.to(`table:${tableId}`).emit('table:presence', { tableId, ...presence, spectatingCount })
+  dualEmitPresence(io, tableId, presence, spectatingCount)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -282,12 +289,26 @@ function makeIdleCallbacks(io) {
       }
     },
     onAbandon: ({ absentSocketId, absentUserId, tableId }) => {
-      io.to(`table:${tableId}`).emit('room:abandoned', { reason: 'idle', absentUserId })
+      // Phase 5 dual-emit: legacy `room:abandoned` to socket room + SSE
+      // lifecycle channel for clients on the SSE+POST transport.
+      dualEmitLifecycle(io, tableId, 'abandoned', { reason: 'idle', absentUserId })
       dispatchBus({ type: 'table.completed', targets: { broadcast: true }, payload: { tableId } })
         .catch(() => {})
     },
     onKick: ({ socketId }) => {
+      // `room:kicked` is targeted at a single socket. SSE has no per-socket
+      // address, so the SSE counterpart goes onto the user's personal
+      // channel. Resolve the userId via the in-memory map; if it's gone,
+      // skip the SSE side (the socket emit still fires below).
       io.to(socketId).emit('room:kicked', { reason: 'idle' })
+      const userId = _socketToUser.get(socketId)
+      if (userId) {
+        appendToStream(
+          `user:${userId}:room:kicked`,
+          { reason: 'idle' },
+          { userId },
+        ).catch(() => {})
+      }
     },
   }
 }
@@ -614,8 +635,9 @@ export async function attachSocketIO(httpServer) {
             currentTurn: ps.currentTurn,
           })
 
-          // Notify the room the player reconnected
-          io.to(`table:${table.id}`).emit('room:playerReconnected', { userId: baId })
+          // Notify the room the player reconnected — Phase 5 dual-emit so
+          // SSE-side spectators clear the "opponent disconnected" overlay.
+          dualEmitLifecycle(io, table.id, 'playerReconnected', { userId: baId })
 
           // Restart idle timer
           const { warnMs, graceMs } = await getIdleConfig()
@@ -1005,7 +1027,18 @@ export async function attachSocketIO(httpServer) {
           // sidebar shows "N watching". `broadcastTablePresence` below powers
           // TableDetailPage's SSE fallback but doesn't feed useGameSDK, which
           // listens for room:spectatorJoined specifically.
+          // Phase 5: dual-emit room:spectatorJoined. Socket flavor uses
+          // socket.to(...) (everyone except the joiner — they already get
+          // the count back in their room:joined response). SSE side appends
+          // to the lifecycle channel; the joining client picks it up via
+          // their fresh table:watch subscription, but the payload is
+          // idempotent (same spectatorCount they got in room:joined).
           socket.to(`table:${table.id}`).emit('room:spectatorJoined', { spectatorCount })
+          appendToStream(
+            `table:${table.id}:lifecycle`,
+            { kind: 'spectatorJoined', spectatorCount },
+            { userId: '*' },
+          ).catch(() => {})
           broadcastTablePresence(io, table.id)
           // Start spectator idle timer if game is in progress
           if (table.status === 'ACTIVE') {
@@ -1100,7 +1133,7 @@ export async function attachSocketIO(httpServer) {
                 clearTimeout(info.timerId)
                 _disconnectTimers.delete(oldSid)
                 unregisterSocket(oldSid)
-                io.to(`table:${table.id}`).emit('room:playerReconnected', { mark: table.previewState?.marks?.[baId] })
+                dualEmitLifecycle(io, table.id, 'playerReconnected', { mark: table.previewState?.marks?.[baId] })
                 break
               }
             }
@@ -1186,7 +1219,7 @@ export async function attachSocketIO(httpServer) {
           const extras = await buildExtras(newSeats[0], newSeats[1], user?.id ?? null)
           socket.emit('room:joined', { slug, role: 'player', mark: 'X', room: sanitizeTable(updated, extras) })
           if (bothSeated) {
-            io.to(`table:${updated.id}`).emit('room:guestJoined', { room: sanitizeTable(updated, extras) })
+            dualEmitLifecycle(io, updated.id, 'guestJoined', { room: sanitizeTable(updated, extras) })
             io.to(`table:${updated.id}`).emit('game:start', {
               board: ps.board,
               currentTurn: ps.currentTurn,
@@ -1233,7 +1266,7 @@ export async function attachSocketIO(httpServer) {
         const extras = await buildExtras(newSeats[0], newSeats[1], user?.id ?? null)
 
         socket.emit('room:joined', { slug, role: 'player', mark: 'O', room: sanitizeTable(updated, extras) })
-        io.to(`table:${updated.id}`).emit('room:guestJoined', { room: sanitizeTable(updated, extras) })
+        dualEmitLifecycle(io, updated.id, 'guestJoined', { room: sanitizeTable(updated, extras) })
         if (bothSeated) {
           io.to(`table:${updated.id}`).emit('game:start', {
             board: ps.board,
@@ -1270,7 +1303,7 @@ export async function attachSocketIO(httpServer) {
         if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
       }
 
-      io.to(`table:${tableId}`).emit('room:cancelled')
+      dualEmitLifecycle(io, tableId, 'cancelled')
       broadcastTablePresence(io, tableId)  // F8 — final spectator refresh before unregister
       clearAllIdleTimersForTable(tableId)
       // Remove all socket mappings for this table; also drop each socket
@@ -1583,7 +1616,7 @@ export async function attachSocketIO(httpServer) {
       appendToStream(`tournament:${tournamentId}:table:ready`, readyPayload).catch(() => {})
 
       if (result.action === 'joined') {
-        io.to(`table:${tableId}`).emit('room:guestJoined', { room: sanitizeTable(result.table, result.extras) })
+        dualEmitLifecycle(io, tableId, 'guestJoined', { room: sanitizeTable(result.table, result.extras) })
         io.to(`table:${tableId}`).emit('game:start', {
           board: result.previewState.board,
           currentTurn: result.previewState.currentTurn,
@@ -1851,9 +1884,10 @@ export async function attachSocketIO(httpServer) {
         return
       }
 
-      // Notify the room that this player disconnected
+      // Notify the room that this player disconnected — dual-emit so SSE
+      // spectators see the same overlay flip as legacy socket clients.
       const myMark = ps.marks?.[myUserId]
-      io.to(`table:${tableId}`).emit('room:playerDisconnected', {
+      dualEmitLifecycle(io, tableId, 'playerDisconnected', {
         mark: myMark,
         reconnectWindowMs: RECONNECT_WINDOW_MS,
       })

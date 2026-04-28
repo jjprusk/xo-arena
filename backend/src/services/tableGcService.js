@@ -24,6 +24,7 @@ import { incrementGcFailure, recordGcSuccess } from '../lib/resourceCounters.js'
 import { releaseSeats } from '../lib/tableSeats.js'
 import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import { unregisterTable } from '../realtime/socketHandler.js'
+import { dualEmitLifecycle } from './tablePresenceService.js'
 
 const SWEEP_INTERVAL_MS = 60_000 // 1 minute
 
@@ -227,10 +228,10 @@ async function abandonIdleActive(now, io) {
   // Notify connected sockets for each table, then drop in-memory state
   // (chunk 3 F4). Order matters: emit first so clients still receive the
   // event before their socket→table mapping is cleared.
-  if (io) {
-    for (const table of idleTables) {
-      io.to(`table:${table.id}`).emit('room:abandoned', { reason: 'idle' })
-    }
+  // Phase 5 dual-emit: legacy `room:abandoned` to socket room + SSE
+  // `table:<id>:lifecycle` so clients on either transport see the abandon.
+  for (const table of idleTables) {
+    dualEmitLifecycle(io, table.id, 'abandoned', { reason: 'idle' })
   }
   for (const table of idleTables) {
     dispatchTableReleased(table.id, TABLE_RELEASED_REASONS.GC_IDLE, { trigger: 'abandon-idle-active' })
