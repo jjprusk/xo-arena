@@ -1636,7 +1636,9 @@ export async function attachSocketIO(httpServer) {
       pongRunner.applyInput(slug, socket.id, direction)
     })
 
-    // ── Support room ─────────────────────────────────────────────────
+    // ── Support staff fan-out ────────────────────────────────────────
+    // Joins a Socket.io support broadcast group. The SSE+POST equivalent
+    // is a `?channels=support:` filter on /events/stream — no POST needed.
 
     on('support:join', () => {
       socket.join('support')

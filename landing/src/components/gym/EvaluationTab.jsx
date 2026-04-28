@@ -7,6 +7,8 @@ import {
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
+import { viaSse } from '../../lib/realtimeMode.js'
 import {
   Card, SectionLabel, MiniStat, ChartPanel, Btn, Spinner, tooltipStyle, playerLabel,
 } from './gymShared.jsx'
@@ -285,6 +287,7 @@ function TournamentPanel({ models }) {
   const [tournament, setTournament] = useState(null)
   const [history, setHistory] = useState([])
   const socketRef = useRef(null)
+  const tournamentIdRef = useRef(null)
 
   useEffect(() => {
     api.ml.listTournaments().then(r => setHistory(r.tournaments))
@@ -294,26 +297,47 @@ function TournamentPanel({ models }) {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
+  function handleTournamentComplete(tournamentId) {
+    if (tournamentId !== tournamentIdRef.current) return
+    api.ml.getTournament(tournamentId).then(r => {
+      setTournament(r.tournament)
+      setRunning(false)
+      setHistory(prev => [r.tournament, ...prev.filter(x => x.id !== r.tournament.id)])
+    })
+  }
+
+  // Phase 4 — SSE path for `ml:tournament_complete`. mlService dual-emits
+  // on Socket.io room `ml:tournament` and SSE channel
+  // `ml:tournament:tournament_complete`. The hook is a no-op when the flag
+  // is off; the socket effect inside handleRun() is the legacy path.
+  useEventStream({
+    channels:   ['ml:tournament:'],
+    eventTypes: ['ml:tournament:tournament_complete'],
+    enabled:    running && viaSse('ml'),
+    onEvent: (channel, payload) => {
+      if (channel === 'ml:tournament:tournament_complete') handleTournamentComplete(payload?.tournamentId)
+    },
+  })
+
   async function handleRun() {
     if (selected.length < 2) return
     setRunning(true)
     const token = await getToken()
     try {
       const { tournament: t } = await api.ml.startTournament({ modelIds: selected, gamesPerPair }, token)
+      tournamentIdRef.current = t.id
       setTournament({ ...t, status: 'RUNNING' })
 
-      const socket = getSocket()
-      if (!socket.connected) socket.connect()
-      socketRef.current = socket
-      socket.on('ml:tournament_complete', (data) => {
-        if (data.tournamentId !== t.id) return
-        api.ml.getTournament(t.id).then(r => {
-          setTournament(r.tournament)
-          setRunning(false)
-          setHistory(prev => [r.tournament, ...prev.filter(x => x.id !== r.tournament.id)])
+      if (!viaSse('ml')) {
+        const socket = getSocket()
+        if (!socket.connected) socket.connect()
+        socketRef.current = socket
+        socket.on('ml:tournament_complete', (data) => {
+          if (data.tournamentId !== t.id) return
+          handleTournamentComplete(data.tournamentId)
+          socket.off('ml:tournament_complete')
         })
-        socket.off('ml:tournament_complete')
-      })
+      }
     } catch (err) {
       alert(err.message)
       setRunning(false)

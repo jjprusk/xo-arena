@@ -59,6 +59,11 @@ vi.mock('../../lib/emailTemplates.js', () => ({
   staffAlertTemplate: vi.fn(() => '<html>staff alert</html>'),
 }))
 
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../../lib/eventStream.js', () => ({ appendToStream: mockAppendToStream }))
+
 // Must be set before feedback.js is imported so `new Resend(key)` is called
 process.env.RESEND_API_KEY = 'test-key'
 
@@ -230,19 +235,31 @@ describe('POST /api/v1/feedback — no thank-you for anonymous', () => {
   })
 })
 
-// ── Socket.io event ───────────────────────────────────────────────────────────
+// ── Realtime fan-out ─────────────────────────────────────────────────────────
 
-describe('POST /api/v1/feedback — Socket.io event', () => {
-  it('emits feedback:new to support room', async () => {
+describe('POST /api/v1/feedback — realtime fan-out', () => {
+  beforeEach(() => { mockAppendToStream.mockClear() })
+
+  it('emits feedback:new on Socket.io and SSE (Phase 4 dual-emit)', async () => {
     const { app, mockIo } = makeApp()
     await request(app).post('/api/v1/feedback').send(VALID_BODY)
-    expect(mockIo.to).toHaveBeenCalledWith('support')
-    expect(mockIo.emit).toHaveBeenCalledWith('feedback:new', expect.objectContaining({
-      id:      mockFeedback.id,
+    const expected = expect.objectContaining({
+      id:       mockFeedback.id,
       category: mockFeedback.category,
-      appId:   mockFeedback.appId,
-      pageUrl: mockFeedback.pageUrl,
-    }))
+      appId:    mockFeedback.appId,
+      pageUrl:  mockFeedback.pageUrl,
+    })
+
+    // Legacy Socket.io path.
+    expect(mockIo.to).toHaveBeenCalledWith('support')
+    expect(mockIo.emit).toHaveBeenCalledWith('feedback:new', expected)
+
+    // SSE dual-emit on the support: prefix.
+    expect(mockAppendToStream).toHaveBeenCalledWith(
+      'support:feedback:new',
+      expected,
+      { userId: '*' },
+    )
   })
 })
 

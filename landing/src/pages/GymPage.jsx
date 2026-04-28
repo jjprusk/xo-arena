@@ -7,6 +7,8 @@ import { api } from '../lib/api.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import { evictModel, isModelCached } from '../lib/mlInference.js'
 import { getSocket } from '../lib/socket.js'
+import { useEventStream } from '../lib/useEventStream.js'
+import { viaSse } from '../lib/realtimeMode.js'
 import { useGuideStore } from '../store/guideStore.js'
 import TrainingCompletePopup from '../components/ui/TrainingCompletePopup.jsx'
 import { Skeleton } from '../components/ui/Skeleton.jsx'
@@ -156,7 +158,14 @@ export default function GymPage() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
   }, [])
 
+  // Page-wide ML toasts. Stays on the legacy Socket.io transport for now —
+  // these events live on dynamic per-session / per-model channels (e.g.
+  // `ml:session:<id>:curriculum_advance`) and we can't enumerate them at
+  // page load without loading every model the user owns. The active
+  // session's TrainTab subscribes via SSE; this page-wide listener is
+  // duplicate signal and acceptable to leave on socket until Phase 8.
   useEffect(() => {
+    if (viaSse('ml')) return
     const socket = getSocket()
     if (!socket.connected) socket.connect()
     socket.on('ml:regression_detected', ({ modelId }) => {

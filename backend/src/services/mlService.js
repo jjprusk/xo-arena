@@ -4,7 +4,11 @@
  *
  * Training runs as a background setImmediate loop, yielding every
  * BATCH_SIZE episodes so the event loop stays responsive. Progress
- * is broadcast via Socket.io to the room `ml:session:{id}`.
+ * is fanned out over both transports: legacy Socket.io to the
+ * `ml:session:{id}` room, and the SSE+POST stream on the matching
+ * channel prefix `ml:session:{id}:`. Phase 4 of the realtime migration
+ * (doc/Realtime_Migration_Plan.md) lets clients pick their transport
+ * via the `realtime.ml.via` flag.
  */
 
 import db from '../lib/db.js'
@@ -23,6 +27,7 @@ import {
 import logger from '../logger.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
+import { appendToStream } from '../lib/eventStream.js'
 
 // ─── Socket.io reference ────────────────────────────────────────────────────
 let _io = null
@@ -1668,8 +1673,21 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
   return { move: best, votes: actions }
 }
 
-function _emit(room, event, data) {
-  if (_io) _io.to(room).emit(event, data)
+/**
+ * Dual-emit a training event over both transports.
+ *
+ * `scope` is the legacy Socket.io room name (e.g. `ml:session:abc`); `topic`
+ * is the per-event suffix (e.g. `ml:progress`). For SSE we publish on
+ * `<scope>:<event-suffix>` so a client can subscribe to a single prefix
+ * (`ml:session:abc:`) and receive every event for that session.
+ */
+function _emit(scope, event, data) {
+  if (_io) _io.to(scope).emit(event, data)
+  // Strip the leading `ml:` from the Socket.io event so the SSE channel name
+  // is the more conventional `<scope>:<topic>` (e.g. `ml:session:abc:progress`)
+  // rather than the doubled-up `ml:session:abc:ml:progress`.
+  const topic = event.startsWith('ml:') ? event.slice(3) : event
+  appendToStream(`${scope}:${topic}`, data, { userId: '*' }).catch(() => {})
 }
 
 // ─── Player Profiling ─────────────────────────────────────────────────────────

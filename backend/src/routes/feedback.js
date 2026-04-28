@@ -11,6 +11,7 @@ import { optionalAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 import { thankYouTemplate, staffAlertTemplate } from '../lib/emailTemplates.js'
+import { appendToStream } from '../lib/eventStream.js'
 
 const router = Router()
 
@@ -87,16 +88,19 @@ router.post('/', feedbackLimiter, optionalAuth, async (req, res, next) => {
       }
     }
 
-    // 2. Emit Socket.io event to support room
-    const io = req.app.get('io')
-    if (io) {
-      io.to('support').emit('feedback:new', {
-        id:      feedback.id,
-        category: feedback.category,
-        appId:   feedbackAppId,
-        pageUrl: feedback.pageUrl,
-      })
+    // 2. Fan-out to support staff. Dual-emit: legacy Socket.io room +
+    //    SSE channel `support:feedback:new`. The /events/stream endpoint
+    //    gates `support:` prefix subscriptions by SUPPORT/ADMIN role so
+    //    only staff actually see the entries.
+    const feedbackPayload = {
+      id:       feedback.id,
+      category: feedback.category,
+      appId:    feedbackAppId,
+      pageUrl:  feedback.pageUrl,
     }
+    const io = req.app.get('io')
+    if (io) io.to('support').emit('feedback:new', feedbackPayload)
+    appendToStream('support:feedback:new', feedbackPayload, { userId: '*' }).catch(() => {})
 
     // 3. Staff alert emails to all ADMIN/SUPPORT users with verified emails
     if (resend) {

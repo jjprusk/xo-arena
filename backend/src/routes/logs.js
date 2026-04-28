@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import { getSystemConfig, setSystemConfig } from '../services/skillService.js'
+import { appendToStream } from '../lib/eventStream.js'
 
 const router = Router()
 
@@ -10,7 +11,9 @@ const VALID_LEVELS  = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
 const VALID_SOURCES = ['frontend', 'api', 'realtime', 'ai']
 const DEFAULT_MAX_ENTRIES = 10_000
 
-// Socket.io reference for live-tail push
+// Socket.io reference for the legacy live-tail push. Phase 4 of the realtime
+// migration also publishes each row to the SSE stream on `admin:logs:entry`;
+// the client picks the transport via `realtime.admin.via`.
 let _io = null
 export function setIO(io) { _io = io }
 
@@ -59,11 +62,13 @@ router.post('/', async (req, res, next) => {
 
     await db.log.createMany({ data: rows })
 
-    // Emit each entry to admins watching live tail
-    if (_io) {
-      for (const row of rows) {
-        _io.to('admin:logs').emit('log:entry', row)
-      }
+    // Live-tail fan-out for admins. Dual-emit: legacy Socket.io room +
+    // SSE channel. `admin:logs:entry` is broadcast to all SSE subscribers;
+    // the GET /events/stream endpoint already gates by admin role for
+    // anything under the `admin:` prefix, so unprivileged tabs never see it.
+    for (const row of rows) {
+      if (_io) _io.to('admin:logs').emit('log:entry', row)
+      appendToStream('admin:logs:entry', row, { userId: '*' }).catch(() => {})
     }
 
     // Prune asynchronously — don't block the response
