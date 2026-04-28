@@ -46,6 +46,74 @@ These are **bugs**, not future ideas. Listed here for tracking; should be picked
 
 ---
 
+### Idle-timeout subsystem retired in Phase 8 — never rebuilt for SSE+POST
+
+**Surfaced by:** Phase 8 QA (2026-04-28) — user stepped away from a live game with the browser tab open and was never warned, never auto-forfeited.
+
+**Symptom:** A signed-in user can leave a tab open mid-game indefinitely. No "Still there?" warning fires, no idle forfeit lands, no presence change. Cleared by `backend/src/realtime/socketHandler.js` (`resetIdleForUserInTable` + `clearAllIdleTimersForTable` are no-op stubs documented as "Idle subsystem retired in Phase 8"). The client still sends `/idle/pong` on `visibilitychange`/`focus` and `pagehide` forfeits, but there is nothing on the server to actually fire the warning or the kick.
+
+**Fix outline:**
+
+- Rebuild a per-`(tableId, sseSessionId)` idle timer keyed off `sseSessions` (we already track `joinedTables` per session).
+- Reset on every `/rt/tables/:slug/idle/pong`, on every game move POST, and on any session-touch (`sseSessions.touch`).
+- At 30 s, append `table:<id>:state` `{ kind: 'idle:warn', secondsRemaining }` so the existing client-side "Still there?" overlay surfaces.
+- At 60 s, treat as disconnect: route through `disconnectForfeitService.handleDisconnect` (same code path the `pagehide` forfeit goes through) and append the forfeit lifecycle.
+- Make sure session disposal cancels timers cleanly so a fresh tab in the same session inherits a clean slate.
+
+**Effort:** ~3–4 hours including unit + Playwright tests for warn-then-recover and warn-then-forfeit.
+
+---
+
+### Journey CTA targets need a reusable `<Spotlight />` component
+
+**Surfaced by:** Phase 8 QA (2026-04-28) — when the journey routes a user to `/bots/<id>?action=train-bot` (Curriculum step 4), the **Train your bot** button is a small outlined button buried below the bot header, ELO panel, Spar block, and Tournament availability. Users miss it.
+
+**Stop-gap landed in this branch:** when `?action=train-bot` is in the URL, `BotProfilePage` scrolls the Train button into view and applies a `xo-spotlight-pulse` glow animation for ~6 seconds. Functional but ad-hoc — every CTA target page would have to repeat the same wiring.
+
+**Proper fix:** a reusable `<Spotlight target={ref} duration={6000} />` overlay that:
+
+- accepts a DOM ref to the target element
+- draws a finger-pointer cursor (or a translucent ring) anchored to the target's bounding rect
+- pulses + scrolls into view
+- tears down on click of the target, on `?action` query change, or after `duration`
+- works on mobile (no hover-only cues)
+
+Then each journey-step destination just renders `<Spotlight target={...} />` when the matching `?action=*` query is present. Step 3 (`?action=quick-bot`) → wizard "Next" button. Step 4 (`?action=train-bot`) → Train button. Step 5 (`?action=spar`) → Spar tier picker / "Spar now". Step 6 (`?action=cup`) → Curriculum Cup card. Step 7 (`?action=cup-result`) → result row in tournament list.
+
+**Effort:** ~3–4 hours including the component, the five wiring sites, and a Playwright test that asserts the spotlight is present after each journey link click.
+
+---
+
+### 2.3 Bot names show as "Hots" / "O" rather than the actual name
+
+**Surfaced by:** Phase 8 QA (2026-04-28) — bots in some surfaces render their seat mark or a label like "Host" / "Hots" instead of `bot.displayName`.
+
+**Locations to audit (non-exhaustive — user observed in §2.3 of the V1 acceptance script):**
+
+- Seat-pod labels under the board (PlayPage / TableDetailPage's GameView).
+- Demo Table spectator view — the seat shows "Host" instead of the bot's display name (e.g. "Sparky").
+- Possibly the in-game scoreboard / spectator-side labels.
+
+**Fix outline:**
+
+- Walk every place that renders a seat label (`displayName`, `seat.displayName`, `mark`) and confirm it falls back through `seat.displayName → user.displayName → mark` in that order, never showing "Host" for a real bot.
+- For demo tables, the runner already names seats with `botA.displayName` / `botB.displayName` (`backend/src/routes/tables.js:469-470`) — verify that survives `sanitizeTable` extras and the client's seat extraction.
+- Add a Playwright check that the demo table's two seats render the curated bot names from `demoTableMatchups.js`, not "Host"/"Guest".
+
+**Effort:** ~1–2 hours.
+
+---
+
+### 3.7a.5 — see "builtin polish" item
+
+**Surfaced by:** Phase 8 QA (2026-04-28) — placeholder for the §3.7a.5 V1 acceptance item flagged "see builtin polish."
+
+**Action:** locate the `builtin polish` reference in the V1 acceptance / requirements docs and pull the concrete sub-items into this entry. Likely candidates: built-in (system) bot avatars, naming, tier badges, or display in the rankings — none of which were directly retested in the Phase 8 cut.
+
+**Effort:** unknown until the source item is unpacked.
+
+---
+
 ## Status snapshot (last reviewed 2026-04-23)
 
 | Item | Status |

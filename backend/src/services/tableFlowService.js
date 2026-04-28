@@ -672,7 +672,11 @@ export async function joinTable({ io, user, seatId, slug, role = 'player' }) {
 
   // ── Spectator path ──────────────────────────────────────────────────────
   if (role === 'spectator') {
-    if (table.isPrivate) {
+    // The Hook step 2 demo creates a private bot-vs-bot table with the human
+    // user as the spectator; their `seatId` (betterAuthId) matches
+    // `createdById`. Without this exception the demo flow 403s on its own
+    // table the moment GameView's join POST fires.
+    if (table.isPrivate && table.createdById !== seatId) {
       return { ok: false, code: 'PRIVATE_TABLE', message: 'Spectators not allowed in this room' }
     }
     return {

@@ -16,7 +16,7 @@ import AudioDebugOverlay from '../debug/AudioDebugOverlay.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
-import { useEventStream } from '../../lib/useEventStream.js'
+import { useEventStream, reopenSharedStream } from '../../lib/useEventStream.js'
 import { useHeartbeat } from '../../lib/useHeartbeat.js'
 import { TOTAL_STEPS } from '../guide/journeySteps.js'
 import { AppNav } from '@xo-arena/nav'
@@ -135,12 +135,32 @@ export default function AppLayout() {
   const myBaIdRef = useRef(null)
   useEffect(() => { myBaIdRef.current = user?.id ?? null }, [user?.id])
 
+  // When sign-in / sign-out / account-switch flips identity, the shared
+  // EventSource is still registered on the server with the *previous* user
+  // id (or null for guest). Personal channels (`guide:journeyStep`,
+  // `guide:hook_complete`, `user:<id>:idle`, …) are filtered by userId in
+  // sseBroker, so the new identity's events go to /dev/null until we open a
+  // fresh /events/stream that re-registers with the right id.
+  const prevUserIdRef = useRef(user?.id ?? null)
+  useEffect(() => {
+    const next = user?.id ?? null
+    if (prevUserIdRef.current !== next) {
+      prevUserIdRef.current = next
+      reopenSharedStream()
+    }
+  }, [user?.id])
+
   useJourneyAutoOpen(user?.id ?? null)
 
   // Track the previous pathname so we can detect /play → non-/play transitions
   // (i.e. "just finished playing"). Updated at the top of the navigation effect
   // below so downstream effects in the same tick still see the previous value.
   const prevPathRef = useRef(location.pathname)
+
+  // Last-seen completedSteps length, used by the missed-event recovery in the
+  // hydrate effect below. Starts at -1 so the very first hydrate after sign-in
+  // is recognized as growth and the panel opens for an in-progress journey.
+  const lastSeenStepCountRef = useRef(-1)
 
   // Close user dropdown and guide panel whenever the user navigates — unless
   // the user just left /play. After a game, the journey card almost always
@@ -182,7 +202,40 @@ export default function AppLayout() {
       }
     }
 
-    useGuideStore.getState().hydrate()
+    // After hydrate(), if the journey advanced since the last time we looked,
+    // open the panel. Catches missed `guide:journeyStep` events (e.g. an SSE
+    // reopen race during a bot-create POST swallowed the live event, but
+    // the server-side state did advance). We compare against a ref of the
+    // last seen completedSteps length — only opening on growth, never on
+    // mere navigation, so the panel doesn't pop on every route change.
+    //
+    // The very first hydrate of the session does NOT trigger an open: the
+    // user could be mid-flow (e.g. mid-demo on /tables/<id>) and a "you have
+    // 1 step done" pop is just noise, not a missed-event recovery. We only
+    // act on growth observed *after* a baseline is established.
+    //
+    // Suppressed when `?action=*` is present in the URL — that means the
+    // user is intentionally following a journey CTA (e.g. /profile?action=
+    // quick-bot to open the bot wizard) and the destination page has its
+    // own opinion about whether the panel should be open. The SSE listener
+    // below still updates `journeyProgress` in the store either way.
+    const hasActionParam = new URLSearchParams(location.search).has('action')
+    useGuideStore.getState().hydrate().then(() => {
+      const { journeyProgress } = useGuideStore.getState()
+      const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
+      const prevSeen   = lastSeenStepCountRef.current
+      const isBaseline = prevSeen === -1
+      lastSeenStepCountRef.current = completedSteps.length
+      if (
+        !hasActionParam
+        && !isBaseline
+        && !dismissedAt
+        && completedSteps.length > prevSeen
+        && completedSteps.length < TOTAL_STEPS
+      ) {
+        useGuideStore.getState().open()
+      }
+    })
   }, [location.pathname, session?.user?.id])
 
   // No socket pre-warm: empirically, an idle pre-warmed polling socket goes

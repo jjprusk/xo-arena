@@ -59,7 +59,31 @@ const BASE = import.meta.env.VITE_API_URL ?? ''
  * Path may start with `/rt/...` (we'll prepend `/api/v1`) or with a leading
  * `/api/...` for internal callers that want the full path explicit.
  */
-export async function rtFetch(path, { method = 'POST', body, headers: extraHeaders, sessionId: sessionIdOverride } = {}) {
+/**
+ * Wait up to `timeoutMs` for the in-memory SSE session id to change to a
+ * value different from `prevId`. Resolves with the new id, or `null` on
+ * timeout. Used by `rtFetch` to absorb the small window after an
+ * EventSource reopen during which the cache still holds the prior id.
+ */
+function waitForFreshSession(prevId, timeoutMs = 1500) {
+  if (_sseSessionId && _sseSessionId !== prevId) return Promise.resolve(_sseSessionId)
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (val) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      try { unsub() } catch {}
+      resolve(val)
+    }
+    const unsub = onSseSessionChange((id) => {
+      if (id && id !== prevId) finish(id)
+    })
+    const timer = setTimeout(() => finish(null), timeoutMs)
+  })
+}
+
+export async function rtFetch(path, { method = 'POST', body, headers: extraHeaders, sessionId: sessionIdOverride, _retried = false } = {}) {
   const token = await getToken().catch(() => null)
   // Override beats cache. Used when a feature must pin a specific SSE session
   // id across multiple POSTs (e.g. pong: the server keys players by the
@@ -79,13 +103,24 @@ export async function rtFetch(path, { method = 'POST', body, headers: extraHeade
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  // 409 used to clearSseSession() here; that races with multiple useEventStream
-  // callers — clearing the cache because of one stale-session POST then breaks
-  // every other component's POST until the next session frame arrives. The
-  // cache now turns over only when a new session frame is published; rtFetch
-  // just surfaces the 409 to the caller.
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({ error: res.statusText }))
+    // SSE-session race: a fresh EventSource was just opened (e.g. sign-in
+    // triggered reopenSharedStream) and our cached id is the prior, now-
+    // disposed one. Wait briefly for the new `session` frame to land and
+    // retry exactly once. This absorbs the tens-of-ms window between
+    // closeStream() and the new connection's session event.
+    if (
+      !_retried
+      && !sessionIdOverride
+      && res.status === 409
+      && (errBody?.code === 'SSE_SESSION_EXPIRED' || errBody?.code === 'SSE_SESSION_MISSING')
+    ) {
+      const fresh = await waitForFreshSession(sessionId)
+      if (fresh) {
+        return rtFetch(path, { method, body, headers: extraHeaders, _retried: true })
+      }
+    }
     const err = new Error(errBody?.error || 'Realtime request failed')
     err.status = res.status
     err.code   = errBody?.code ?? null

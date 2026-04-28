@@ -47,7 +47,11 @@ export default function ProfilePage() {
   const [bots, setBots] = useState([])
   const [limitInfo, setLimitInfo] = useState(null)
   const [provisionalThreshold, setProvisionalThreshold] = useState(5)
-  const [botsLoading, setBotsLoading] = useState(false)
+  // Starts `true` so effects that wait for the bot list (notably the
+  // ?action=train-bot redirect) don't fire on the initial empty `bots = []`
+  // and bounce a user with bots over to the QuickBotWizard. Cleared at the
+  // end of the load() Promise.allSettled below.
+  const [botsLoading, setBotsLoading] = useState(true)
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null)
@@ -111,6 +115,30 @@ export default function ProfilePage() {
     if (searchParams.get('section') !== 'bots') return
     useGuideStore.getState().close()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ?action=train-bot — Curriculum step 4. The journey CTA lands here. The
+  // actual Train button lives on the bot detail page, so once the bot list
+  // has loaded we forward the user there. With multiple bots we just expand
+  // the accordion and let them pick. With zero bots, defer to step 3.
+  //
+  // Gate on `!botsLoading` — that flag now starts `true` and clears only
+  // after the bots fetch resolves, so the effect can't fire with the initial
+  // empty `bots = []` and falsely bounce a returning user (who has bots)
+  // over to the QuickBotWizard.
+  useEffect(() => {
+    if (searchParams.get('action') !== 'train-bot') return
+    if (botsLoading) return
+    useGuideStore.getState().close()
+    if (bots.length === 1) {
+      navigate(`/bots/${bots[0].id}`, { replace: true })
+    } else if (bots.length === 0) {
+      navigate('/profile?action=quick-bot', { replace: true })
+    }
+    // Multiple bots: stay on /profile with My Bots open (lazy initializer
+    // already opens it because section/action gating doesn't include this
+    // case — we open it explicitly below).
+    setOpenSections(prev => ({ ...prev, bots: true }))
+  }, [searchParams, botsLoading, bots]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!clerkUser) return

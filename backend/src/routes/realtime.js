@@ -127,8 +127,11 @@ router.post('/tables/:slug/idle/pong', async (req, res) => {
     const { slug } = req.params
     // Idle keep-alive resets the per-user idle timer keyed by domain User.id;
     // a guest has no domain user, so the legacy socket idle path simply isn't
-    // engaged for them. Treat a guest call as a no-op.
-    if (!req.auth?.userId) return res.status(401).json({ error: 'Authentication required' })
+    // engaged for them. Treat a guest call as a no-op (200) — the client
+    // also gates this POST on auth, but the route stays tolerant so a stale
+    // `visibilitychange` ping after sign-out doesn't surface as a console
+    // error.
+    if (!req.auth?.userId) return res.json({ ok: true, skipped: 'guest' })
     // Resolve the domain User.id from the BA user id in req.auth.userId — the
     // service-layer code keys idle timers by domain id (same as the legacy
     // socket handler).

@@ -23,7 +23,7 @@
  *   })
  */
 import { useEffect, useRef } from 'react'
-import { setSseSession } from './rtSession.js'
+import { setSseSession, onSseSessionChange } from './rtSession.js'
 
 const STORAGE_KEY = 'aiarena_tier2_last_event_id'
 
@@ -39,12 +39,13 @@ function saveLastId(id) {
 // `_es`        — current EventSource (null when no callers are mounted)
 // `_callers`   — Set of registered caller records: { channels, eventTypes, handler }
 // `_listeners` — Map<eventType, fn> of currently-attached EventSource listeners.
-//   We keep a single `handle` per event type that fans out to every caller.
-// `_currentChannels` — sorted, deduped union of every caller's channels; used to
-//   decide whether a reopen is needed when a new caller arrives.
+//   We keep a single `handler` per event type that fans out to every caller.
+//
+// We do not track or apply a server-side channel filter. The connection is
+// opened once with no `channels=` query param; new callers only register
+// listeners and a per-caller channel list used for client-side dispatch.
 
 let _es = null
-let _currentChannels = []
 const _callers = new Set()
 const _listeners = new Map()
 
@@ -83,12 +84,6 @@ function detachAllListeners(es) {
   _listeners.clear()
 }
 
-function unionChannels() {
-  const set = new Set()
-  for (const c of _callers) for (const p of c.channels) set.add(p)
-  return [...set].sort()
-}
-
 function unionEventTypes() {
   const set = new Set(KNOWN_SSE_EVENT_TYPES)
   for (const c of _callers) for (const t of c.eventTypes) set.add(t)
@@ -96,9 +91,17 @@ function unionEventTypes() {
 }
 
 function openStream() {
-  const channels = unionChannels()
+  // We deliberately do NOT pass a `channels` filter to the server. The
+  // singleton already dispatches per-caller on the client (dispatchToCallers
+  // matches each event type against the caller's `channels` prefix list), so
+  // server-side filtering is only a bandwidth optimization — and a costly
+  // one, because changing it requires reopening the EventSource. A reopen
+  // mints a new SSE session id; any POST that fires in the gap before the
+  // new `session` frame arrives 409s with SSE_SESSION_EXPIRED. That's what
+  // killed "Play vs Bot" on a hard refresh: useGameSDK's table-create POST
+  // raced the reopen triggered by its own `table:` channel registration.
+  // Opening with no filter means new callers never trigger a reopen.
   const params = new URLSearchParams()
-  if (channels.length) params.set('channels', channels.join(','))
   const lastId = loadLastId()
   if (lastId) params.set('lastEventId', lastId)
 
@@ -110,6 +113,10 @@ function openStream() {
   es.onerror = () => console.warn('[useEventStream] SSE error — readyState=' + es.readyState)
 
   es.addEventListener('session', (e) => {
+    // Persist the id attached to the session frame (the server emits the
+    // current redis stream tail) so a reopen that happens before any real
+    // event arrives still has a Last-Event-ID resume cursor.
+    if (e.lastEventId) saveLastId(e.lastEventId)
     try {
       const { sseSessionId } = JSON.parse(e.data || '{}')
       if (sseSessionId) setSseSession(sseSessionId)
@@ -127,7 +134,6 @@ function openStream() {
   for (const t of unionEventTypes()) attachListener(es, t)
 
   _es = es
-  _currentChannels = channels
 }
 
 function closeStream() {
@@ -135,36 +141,77 @@ function closeStream() {
   detachAllListeners(_es)
   _es.close()
   _es = null
-  _currentChannels = []
 }
 
-function reopenIfFilterWidened() {
-  const next = unionChannels()
+function ensureStreamForCallers() {
   if (!_es) {
     if (_callers.size > 0) openStream()
     return
   }
-  // If the next filter is the same as current, reuse.
-  if (next.length === _currentChannels.length && next.every((p, i) => p === _currentChannels[i])) {
-    // Channels unchanged — but ensure named-event listeners are up to date.
-    for (const t of unionEventTypes()) attachListener(_es, t)
-    return
-  }
-  // Channels changed — must reopen with wider filter so new callers receive
-  // their topics. The session id may turn over; rtFetch handles that.
-  closeStream()
-  openStream()
+  // The connection has no server-side channel filter (see openStream), so a
+  // new caller never requires a reopen — we only need to make sure their
+  // named event types have listeners attached.
+  for (const t of unionEventTypes()) attachListener(_es, t)
 }
 
 function register(record) {
   _callers.add(record)
-  reopenIfFilterWidened()
+  ensureStreamForCallers()
   return () => {
     _callers.delete(record)
     if (_callers.size === 0) closeStream()
     // No reopen on unregister — narrower filter is fine; existing stream still
     // delivers a superset of what remaining callers need.
   }
+}
+
+/**
+ * Force the shared EventSource to reopen. Call this whenever the *server-side
+ * identity* of the connection has changed and we need a fresh `/events/stream`
+ * GET so the broker re-registers us with the new userId.
+ *
+ * Concrete trigger: a guest signs in (or signs out, or switches accounts).
+ * The pre-existing SSE was registered with the prior identity, so personal
+ * channels (`userId: <newId>` events) are silently dropped by the server's
+ * filter. Without this hook, `guide:journeyStep` for a freshly-signed-in
+ * user never reaches the AppLayout listener and the JourneyCard is stuck.
+ *
+ * Implemented as a *warm* reopen: we open the new EventSource first, swap
+ * over once its `session` frame lands, and only then close the old one.
+ * Without warm reopen, a guest disposal is immediate (sseSessions debounce
+ * skips the no-userId case) — any rt POST in flight using the cached old
+ * sessionId then 409s with SSE_SESSION_EXPIRED. The warm overlap keeps the
+ * old SSE session alive on the server for the few ms it takes the new
+ * connection's session frame to arrive.
+ */
+export function reopenSharedStream() {
+  if (!_es) return
+  if (_callers.size === 0) { closeStream(); return }
+
+  const oldEs = _es
+  const oldSessionId = _es && _listeners // sentinel — actual id is in rtSession's cache
+  // Stop the OLD ES from firing our handlers. We keep its connection open so
+  // the server-side session entry remains valid until the NEW ES takes over.
+  detachAllListeners(oldEs)
+  // openStream() creates the new ES, attaches listeners to it, and sets
+  // `_es = newEs`. Until its `session` frame arrives, the cached
+  // `_sseSessionId` (in rtSession) is still the OLD one, so any rt POST
+  // that fires during the swap continues to hit a live server session.
+  openStream()
+
+  // Subscribe to the next session-id flip; close the old ES once it lands.
+  // Hard timeout fallback: if no session frame arrives within 5 s, close
+  // the old ES anyway so we don't leak a connection.
+  let done = false
+  const finish = () => {
+    if (done) return
+    done = true
+    try { unsub() } catch {}
+    clearTimeout(timer)
+    try { oldEs.close() } catch {}
+  }
+  const unsub = onSseSessionChange(() => finish())
+  const timer = setTimeout(finish, 5000)
 }
 
 /**

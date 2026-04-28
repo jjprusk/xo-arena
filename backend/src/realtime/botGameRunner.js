@@ -123,10 +123,29 @@ class BotGameRunner {
       moves: [],  // compact move stream for replay
       isSpar,
       sparUserId,  // owner of bot1 — receives Hook step 5 credit on series completion
+      // tableId — populated below when a Table row exists for this slug (Demo
+      // Table macro and any future Spar/HvB-via-Table flow). The SSE state
+      // channel uses the Prisma `Table.id`, NOT the slug — useGameSDK on the
+      // client subscribes to `table:<tableId>:state`, so events emitted
+      // against `table:<slug>:state` are silently dropped by spectators.
+      tableId: null,
     }
 
     this._games.set(slug, game)
-    logger.info({ slug, bot1: bot1.displayName, bot2: bot2.displayName, tournamentMatchId }, 'Bot game started')
+
+    // Resolve the Table.id for this slug (Demo Table macro creates the row
+    // before calling startGame). Without this, the bot moves emit on
+    // `table:<slug>:state` and never reach the spectator's useGameSDK.
+    try {
+      const row = await db.table.findFirst({ where: { slug }, select: { id: true } })
+      if (row?.id) game.tableId = row.id
+    } catch (err) {
+      logger.warn({ err: err.message, slug }, 'botGameRunner: tableId lookup failed')
+    }
+    const channelKey = game.tableId ?? slug
+    game.channelKey = channelKey
+
+    logger.info({ slug, tableId: game.tableId, bot1: bot1.displayName, bot2: bot2.displayName, tournamentMatchId }, 'Bot game started')
 
     // Mark bots as in-tournament so they can't be trained mid-match
     if (tournamentMatchId) {
@@ -178,7 +197,7 @@ class BotGameRunner {
         bot1: { displayName: game.bot1.displayName, mark: 'X' },
         bot2: { displayName: game.bot2.displayName, mark: 'O' },
       }
-      appendToStream(`table:${slug}:state`, { kind: 'start', ...startPayload }, { userId: '*' }).catch(() => {})
+      appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'start', ...startPayload }, { userId: '*' }).catch(() => {})
 
       // Play until terminal state
       while (game.status === 'playing') {
@@ -208,7 +227,7 @@ class BotGameRunner {
               forfeit: true,
               scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
             }
-            appendToStream(`table:${slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+            appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
           }
           break
         }
@@ -243,7 +262,7 @@ class BotGameRunner {
             winLine: game.winLine,
             scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
           }
-          appendToStream(`table:${slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+          appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
         }
       }
 
@@ -295,8 +314,64 @@ class BotGameRunner {
     // Record the finished series
     await this._recordGame(slug).catch((err) => logger.warn({ err, slug }, 'Failed to record bot game'))
 
+    // Demo Table macro (§5.1) — fire the journey + bus side-effects RIGHT
+    // NOW, not after the 60 s in-memory grace window. Otherwise the user
+    // sees "O wins!" on a finished board with no progression for a full
+    // minute. The grace window only exists to let late-joining spectators
+    // observe the final position; it has nothing to do with journey state.
+    await this._finalizeDemoIfPresent(slug).catch((err) =>
+      logger.warn({ err: err.message, slug }, 'Demo finalize failed'),
+    )
+
+    // Spar series: credit Hook step 5 to the user who initiated the spar.
+    if (this._games.get(slug)?.isSpar && this._games.get(slug)?.sparUserId) {
+      try {
+        const { completeStep } = await import('../services/journeyService.js')
+        completeStep(this._games.get(slug).sparUserId, 5).catch(() => {})
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Spar: step-5 credit failed')
+      }
+    }
+
     // Clean up after a short delay (so late-joining spectators still see the result)
     setTimeout(() => this._closeGame(slug), 60_000)
+  }
+
+  /**
+   * If a Demo Table backs this bot-game slug, mark it COMPLETED, dispatch
+   * `table.released`, and credit Hook step 2 to current spectators. Pulled
+   * out of `_closeGame` so it can fire immediately at series end instead of
+   * waiting 60 s for the in-memory grace window.
+   *
+   * Idempotent: subsequent calls (from `_closeGame`) skip the COMPLETED
+   * branch but the journey credit is also idempotent at the journeyService
+   * layer, so repeated calls are safe.
+   */
+  async _finalizeDemoIfPresent(slug) {
+    const demoTable = await db.table.findFirst({
+      where:  { slug, isDemo: true },
+      select: { id: true, status: true, seats: true },
+    }).catch(() => null)
+    if (!demoTable) return
+
+    if (demoTable.status !== 'COMPLETED') {
+      await db.table.update({
+        where: { id: demoTable.id },
+        data:  { status: 'COMPLETED', seats: releaseSeats(demoTable.seats) },
+      }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
+      dispatchTableReleased(demoTable.id, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'demo-finish' })
+    }
+
+    try {
+      const { getPresence } = await import('./tablePresence.js')
+      const { completeStep } = await import('../services/journeyService.js')
+      const { userIds = [] } = getPresence(demoTable.id) ?? {}
+      for (const userId of userIds) {
+        completeStep(userId, 2).catch(() => {})
+      }
+    } catch (err) {
+      logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
+    }
   }
 
   async _recordGame(slug) {
@@ -363,51 +438,12 @@ class BotGameRunner {
       }).catch(err => logger.warn({ err }, 'Failed to clear botInTournament flag after tournament game'))
     }
 
-    // Demo Table macro (§5.1): if a Table row was created with this bot game's
-    // slug, mark it COMPLETED so the demo-table GC sweep can delete it after
-    // the 2-min grace window. No-op for tournament/free bot games that don't
-    // have a Table row.
-    const demoTable = await db.table.findFirst({
-      where:  { slug, isDemo: true },
-      select: { id: true, status: true, seats: true },
-    }).catch(() => null)
-
-    if (demoTable) {
-      if (demoTable.status !== 'COMPLETED') {
-        await db.table.update({
-          where: { id: demoTable.id },
-          data:  { status: 'COMPLETED', seats: releaseSeats(demoTable.seats) },
-        }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
-        dispatchTableReleased(demoTable.id, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'demo-finish' })
-      }
-
-      // "Spectated to completion" — credit Hook step 2 for any authenticated
-      // viewer currently watching, even if they haven't hit the 2-min mark
-      // yet. Lazy-imported to keep this module free of journey/service deps
-      // at module-eval time.
-      try {
-        const { getPresence } = await import('./tablePresence.js')
-        const { completeStep } = await import('../services/journeyService.js')
-        const { userIds = [] } = getPresence(demoTable.id) ?? {}
-        for (const userId of userIds) {
-          completeStep(userId, 2).catch(() => {})
-        }
-      } catch (err) {
-        logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
-      }
-    }
-
-    // Spar series: credit Hook step 5 to the user who initiated the spar.
-    // Lazy-imported to avoid pulling journeyService into this module's eval-
-    // time graph (mirrors the demo-table step-2 pattern above).
-    if (game.isSpar && game.sparUserId) {
-      try {
-        const { completeStep } = await import('../services/journeyService.js')
-        completeStep(game.sparUserId, 5).catch(() => {})
-      } catch (err) {
-        logger.warn({ err: err.message, slug }, 'Spar: step-5 credit failed')
-      }
-    }
+    // Demo Table macro (§5.1) finalize — moved to fire at series end (see
+    // _runGameLoop). Calling again here is a safe idempotent no-op for the
+    // late spectators who joined during the 60 s grace window.
+    await this._finalizeDemoIfPresent(slug).catch((err) =>
+      logger.warn({ err: err.message, slug }, 'Demo finalize (late) failed'),
+    )
 
     logger.info(
       { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null, isSpar: !!game.isSpar },

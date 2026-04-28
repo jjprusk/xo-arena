@@ -25,6 +25,7 @@ import { rtFetch } from '../lib/rtSession.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 import { GameView } from './PlayPage.jsx'
+import { useGuideStore } from '../store/guideStore.js'
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',   color: 'var(--color-amber-600)' },
@@ -92,6 +93,19 @@ export default function TableDetailPage() {
       const { type, payload: data } = payload ?? {}
       if (type === 'table.deleted' && data?.tableId === tableId) {
         navigate('/tables', { replace: true })
+        return
+      }
+      // When a demo table releases (Hook step 2), surface the guide panel so
+      // the user lands back on their next journey step. The fresh-account
+      // path also fires `guide:journeyStep` (which auto-opens the panel via
+      // AppLayout) — this branch covers the re-watch case where step 2 was
+      // already credited and no journeyStep event is emitted.
+      if (
+        type === 'table.released'
+        && data?.tableId === tableId
+        && data?.trigger === 'demo-finish'
+      ) {
+        useGuideStore.getState().open()
         return
       }
       if (!['player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.started'].includes(type)) return
@@ -244,6 +258,7 @@ export default function TableDetailPage() {
           authSession={session}
           botConfig={null}
           spectatingCount={spectatingCount}
+          spectate={!isSeated}
         />
         {isAdmin && (
           <div className="fixed bottom-4 right-4 z-50">

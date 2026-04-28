@@ -157,6 +157,7 @@ export function useGameSDK({
 
     idlePong() {
       if (!slugRef.current) return
+      if (!currentUserRef.current?.id) return
       rtFetch(`/rt/tables/${slugRef.current}/idle/pong`, { method: 'POST' }).catch(() => {})
     },
 
@@ -478,6 +479,7 @@ export function useGameSDK({
     function autoIdlePong() {
       if (phaseRef.current !== 'playing') return
       if (!slugRef.current) return
+      if (!currentUserRef.current?.id) return
       rtFetch(`/rt/tables/${slugRef.current}/idle/pong`).catch(() => {})
     }
     function onVisibilityShow() {

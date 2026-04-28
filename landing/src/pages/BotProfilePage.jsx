@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
@@ -15,6 +15,51 @@ const ALGORITHM_LABELS = {
   minimax: 'Minimax',
   mcts: 'MCTS',
   rule_based: 'Rule-Based',
+}
+
+/** Centered, prominent "Bot trained!" celebration with auto-dismiss. */
+function TrainedCelebration({ onDismiss }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 4500)
+    return () => clearTimeout(t)
+  }, [onDismiss])
+  return (
+    <div
+      role="dialog"
+      aria-live="polite"
+      onClick={onDismiss}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1200,
+        background: 'rgba(8,12,22,0.55)', backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1rem', cursor: 'pointer',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="rounded-2xl border p-6 text-center max-w-md"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--color-teal-400)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.35), 0 0 0 4px rgba(36,181,135,0.18)',
+          color: 'var(--text-primary)',
+        }}
+      >
+        <div style={{ fontSize: '3rem', lineHeight: 1, marginBottom: '0.5rem' }}>🧠</div>
+        <h3 className="text-xl font-bold" style={{ color: 'var(--color-teal-700)' }}>Bot trained!</h3>
+        <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>
+          Your bot is now at the intermediate tier — it'll block threats and take wins instead of playing random moves.
+        </p>
+        <button
+          onClick={onDismiss}
+          className="mt-4 px-4 py-2 rounded-lg text-sm font-semibold border hover:bg-[var(--bg-surface-hover)]"
+          style={{ borderColor: 'var(--color-teal-400)', color: 'var(--color-teal-700)' }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function BotProfilePage() {
@@ -40,6 +85,24 @@ export default function BotProfilePage() {
   const [sparTier,    setSparTier]    = useState('medium')
   const [sparStarting, setSparStarting] = useState(false)
   const [sparError,   setSparError]   = useState(null)
+
+  // Spotlight (§a) — when the journey routes the user here for step 4
+  // (?action=train-bot), pulse the Train button + scroll it into view.
+  // Lives until handleTrainQuick runs or the user clicks elsewhere.
+  const [searchParams] = useSearchParams()
+  const trainBtnRef    = React.useRef(null)
+  const [spotlightOn, setSpotlightOn] = useState(false)
+  useEffect(() => {
+    if (searchParams.get('action') !== 'train-bot') return
+    if (loading) return
+    if (!trainBtnRef.current) return
+    setSpotlightOn(true)
+    try {
+      trainBtnRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    } catch {}
+    const t = setTimeout(() => setSpotlightOn(false), 6000)
+    return () => clearTimeout(t)
+  }, [searchParams, loading])
 
   useEffect(() => {
     if (!id) return
@@ -120,7 +183,10 @@ export default function BotProfilePage() {
       const token = await getToken()
       if (!token) throw new Error('Sign in to spar.')
       const { slug } = await api.botGames.practice({ myBotId: id, opponentTier: sparTier }, token)
-      navigate(`/play?join=${encodeURIComponent(slug)}`)
+      // Spar is a bot-vs-bot match — both seats are bots, so we attach as a
+      // spectator. Without `watch=1`, /play would default to role=player and
+      // the server returns 409 ROOM_FULL because neither seat matches us.
+      navigate(`/play?join=${encodeURIComponent(slug)}&watch=1`)
     } catch (err) {
       setSparError(err.message || 'Could not start the spar match. Try again in a moment.')
     } finally {
@@ -254,9 +320,10 @@ export default function BotProfilePage() {
               <p role="alert" className="text-xs" style={{ color: 'var(--color-red-600)' }}>{trainQuickError}</p>
             )}
             <button
-              onClick={handleTrainQuick}
+              ref={trainBtnRef}
+              onClick={() => { setSpotlightOn(false); handleTrainQuick() }}
               disabled={trainingQuick}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50${spotlightOn ? ' xo-spotlight-pulse' : ''}`}
               style={{ borderColor: 'var(--color-amber-400)', color: 'var(--color-amber-700)' }}
             >
               {trainingQuick ? 'Training…' : 'Train your bot'}
@@ -265,15 +332,12 @@ export default function BotProfilePage() {
         </section>
       )}
 
-      {/* Post-training celebration — shown briefly after a successful bump. */}
+      {/* Post-training celebration — modal so the user sees it even after the
+          guide panel opens for the step-4 credit. Auto-dismisses; clicking
+          the backdrop also closes it. Without this, the inline banner used
+          to land *behind* the guide overlay and look like nothing happened. */}
       {trainQuickResult === 'trained' && (
-        <div
-          className="rounded-xl border p-4 text-sm"
-          role="status"
-          style={{ backgroundColor: 'rgba(36,181,135,0.07)', borderColor: 'var(--color-teal-400)', color: 'var(--color-teal-700)' }}
-        >
-          <strong>Trained!</strong> Your bot is now at the intermediate tier — blocking threats and taking wins.
-        </div>
+        <TrainedCelebration onDismiss={() => setTrainQuickResult(null)} />
       )}
 
       {/* Spar (Curriculum step 5 — §5.2). Owner-only. Tier picker → kicks off

@@ -81,6 +81,25 @@ export async function getStreamLength() {
 }
 
 /**
+ * Returns the redis stream id of the newest entry, or null if the stream is
+ * empty / Redis is unavailable. Used by /events/stream to attach an `id:`
+ * line to the very first SSE frame (the `session` event), so a client that
+ * reopens before any real event arrives still has a Last-Event-ID resume
+ * cursor and the replay window catches anything published in the gap.
+ */
+export async function getStreamTailId() {
+  const redis = getRedis()
+  if (!redis) return null
+  try {
+    const rows = await redis.xrevrange(STREAM_KEY, '+', '-', 'COUNT', '1')
+    return rows?.[0]?.[0] ?? null
+  } catch (err) {
+    logger.warn({ err }, 'Redis XREVRANGE (events stream) failed')
+    return null
+  }
+}
+
+/**
  * Hard-truncate the stream to at most `maxLen` entries. Used by the admin
  * "drain dev backlog" endpoint when a long-running dev environment has
  * accumulated more entries than the consumer is willing to walk through on

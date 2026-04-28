@@ -19,7 +19,7 @@
 import { Router } from 'express'
 import { nanoid } from 'nanoid'
 import { requireAuth } from '../middleware/auth.js'
-import { readStream } from '../lib/eventStream.js'
+import { readStream, getStreamTailId } from '../lib/eventStream.js'
 import * as sseBroker from '../lib/sseBroker.js'
 import * as sseSessions from '../realtime/sseSessions.js'
 import { auth } from '../lib/auth.js'
@@ -147,7 +147,15 @@ router.get('/stream', optionalSessionCookie, async (req, res) => {
   // echo this on every /api/v1/rt/* POST via the X-SSE-Session header so the
   // server can attribute the call to a live SSE connection — replaces
   // socket.id for the SSE+POST transport (see Realtime_Migration_Plan.md C1).
+  //
+  // We also attach an `id:` derived from the current redis stream tail so the
+  // client's EventSource stores a Last-Event-ID right away. Without this,
+  // a reopen that happens before any real event arrives starts the new
+  // connection with no resume cursor, and any event published in the gap
+  // (e.g. `guide:journeyStep` fired by a completing POST) is silently lost.
   const sseSessionId = nanoid(16)
+  const tailId = await getStreamTailId().catch(() => null)
+  if (tailId) res.write(`id: ${tailId}\n`)
   res.write(`event: session\ndata: ${JSON.stringify({ sseSessionId })}\n\n`)
   // Phase 5: when the session truly goes away (3-s debounce expires), drop
   // it from every table presence map it had joined and rebroadcast presence

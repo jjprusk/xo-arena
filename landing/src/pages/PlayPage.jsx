@@ -35,7 +35,7 @@ function Spinner() {
 // Inner component — only mounted once botConfig is resolved (or not needed).
 // Keeps all hook calls stable regardless of async bot fetch.
 // Exported so TableDetailPage can render a table-routed game without duplicating this logic.
-export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0 }) {
+export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0, spectate = false }) {
   const navigate = useNavigate()
 
   // Load game meta asynchronously — see comment at top of file. While null we
@@ -60,6 +60,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     currentUser,
     botUserId:  botConfig?.botUserId  ?? null,
     botSkillId: botConfig?.botSkillId ?? null,
+    spectate,
   })
 
   // Subscribe to move events to drive seat-pod states in the shell
@@ -298,6 +299,9 @@ export default function PlayPage() {
   const action            = searchParams.get('action')
   const botUserId         = searchParams.get('botUserId')
   const botSkillId        = searchParams.get('botSkillId')
+  // `?watch=1` joins as a spectator — required for bot-vs-bot games (Spar)
+  // where neither seat matches the caller.
+  const spectate          = searchParams.get('watch') === '1'
 
   // Key that changes when auth identity changes — forces GameView to fully
   // unmount and remount (new useGameSDK, new socket mapping, new game).
@@ -381,6 +385,7 @@ export default function PlayPage() {
       tournamentId={tournamentId}
       authSession={authSession}
       botConfig={resolvedBotConfig}
+      spectate={spectate}
     />
   )
 }
