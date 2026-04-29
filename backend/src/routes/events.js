@@ -193,6 +193,13 @@ router.get('/stream', optionalSessionCookie, async (req, res) => {
           const { handleDisconnect } = await import('../services/disconnectForfeitService.js')
           await handleDisconnect({ io, userId: uid, sessionId: sid, tablesGone })
         }
+        // Idle subsystem: disconnect-forfeit owns the next 60s of grace —
+        // any pending idle warn/forfeit on this user's tables would now be
+        // a duplicate (or stale, if the user reconnects on another node).
+        if (uid) {
+          const { cancelAllForUser } = await import('../realtime/idleTimers.js')
+          cancelAllForUser(uid)
+        }
       } catch (err) {
         logger.warn({ err: err.message, sessionId: sid }, 'sseSessions onDispose: cleanup failed')
       }

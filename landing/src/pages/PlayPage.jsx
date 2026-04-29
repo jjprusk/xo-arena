@@ -10,6 +10,7 @@ import { recordGuestHookStep1 } from '../lib/guestMode.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { deriveCurrentPhase } from '../components/guide/JourneyCard.jsx'
 import SignInModal from '../components/ui/SignInModal.jsx'
+import IdleWarnOverlay from '../components/play/IdleWarnOverlay.jsx'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 
@@ -231,6 +232,12 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
             <XOGame session={session} sdk={sdk} />
           )}
         </PlatformShell>
+
+        {/* "Still there?" overlay — surfaces when the server fires an idle
+            warn on user:<id>:idle, gives the player a chance to pong
+            before the auto-forfeit lands. Spectators don't pong/idle so
+            we skip mounting it for them. */}
+        {!spectate && <IdleWarnOverlay sdk={sdk} />}
 
         {showGuestSignupCta && (
           <div

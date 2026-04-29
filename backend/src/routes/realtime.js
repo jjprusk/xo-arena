@@ -35,6 +35,7 @@ import { appendToStream } from '../lib/eventStream.js'
 import * as pongRunner from '../realtime/pongRunner.js'
 import * as tableFlow from '../services/tableFlowService.js'
 import { cancelForfeitFor } from '../services/disconnectForfeitService.js'
+import * as idleTimers from '../realtime/idleTimers.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
@@ -143,7 +144,12 @@ router.post('/tables/:slug/idle/pong', async (req, res) => {
 
     const io = req.app.get('io')
     const result = await handleIdlePong({ io, userId: appUser.id, slug })
-    if (result.ok) return res.json({ ok: true })
+    if (result.ok) {
+      // Reset the idle warn/forfeit chain. result.tableId is set by
+      // handleIdlePong on success; arm is a no-op for falsy tableId.
+      idleTimers.arm({ userId: appUser.id, tableId: result.tableId, slug, io }).catch(() => {})
+      return res.json({ ok: true })
+    }
     if (result.reason === 'not-found') return res.status(404).json({ error: 'Table not found' })
     if (result.reason === 'not-active') return res.status(410).json({ error: 'Table not active' })
     if (result.reason === 'no-session') return res.status(409).json({ error: 'No active socket for this user/table' })
@@ -610,6 +616,19 @@ router.post('/tables/:slug/move', async (req, res) => {
       }
       return res.status(map[result.code] ?? 400).json({ error: result.message, code: result.code })
     }
+    // Reset the idle warn/forfeit timer for this player. A move proves the
+    // player is present even if their visibilitychange/focus pong missed.
+    // For COMPLETED games (final move just landed) `cancelAllForTable`
+    // below clears both seats so neither player gets a stray idle:warn.
+    if (caller.domainId) {
+      if (result.completed) {
+        idleTimers.cancelAllForTable(table.id)
+      } else {
+        idleTimers.arm({ userId: caller.domainId, tableId: table.id, slug: req.params.slug, io }).catch(() => {})
+      }
+    } else if (result.completed) {
+      idleTimers.cancelAllForTable(table.id)
+    }
     return res.json({ ok: true, completed: !!result.completed, mark: result.mark })
   } catch (err) {
     logger.error({ err, slug: req.params.slug }, 'POST /rt/tables/:slug/move failed')
@@ -629,6 +648,7 @@ router.post('/tables/:slug/forfeit', async (req, res) => {
       return res.status(map[result.code] ?? 400).json({ error: result.code })
     }
     sseSessions.leaveTable(caller.sessionId, table.id)
+    idleTimers.cancelAllForTable(table.id)
     return res.json({ ok: true, mark: result.mark, oppMark: result.oppMark })
   } catch (err) {
     logger.error({ err, slug: req.params.slug }, 'POST /rt/tables/:slug/forfeit failed')
@@ -651,6 +671,7 @@ router.post('/tables/:slug/leave', async (req, res) => {
       return res.status(map[result.code] ?? 400).json({ error: result.code })
     }
     sseSessions.leaveTable(caller.sessionId, table.id)
+    if (caller.domainId) idleTimers.cancel({ userId: caller.domainId, tableId: table.id })
     return res.json({ ok: true })
   } catch (err) {
     logger.error({ err, slug: req.params.slug }, 'POST /rt/tables/:slug/leave failed')

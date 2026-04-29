@@ -46,24 +46,6 @@ These are **bugs**, not future ideas. Listed here for tracking; should be picked
 
 ---
 
-### Idle-timeout subsystem retired in Phase 8 — never rebuilt for SSE+POST
-
-**Surfaced by:** Phase 8 QA (2026-04-28) — user stepped away from a live game with the browser tab open and was never warned, never auto-forfeited.
-
-**Symptom:** A signed-in user can leave a tab open mid-game indefinitely. No "Still there?" warning fires, no idle forfeit lands, no presence change. Cleared by `backend/src/realtime/socketHandler.js` (`resetIdleForUserInTable` + `clearAllIdleTimersForTable` are no-op stubs documented as "Idle subsystem retired in Phase 8"). The client still sends `/idle/pong` on `visibilitychange`/`focus` and `pagehide` forfeits, but there is nothing on the server to actually fire the warning or the kick.
-
-**Fix outline:**
-
-- Rebuild a per-`(tableId, sseSessionId)` idle timer keyed off `sseSessions` (we already track `joinedTables` per session).
-- Reset on every `/rt/tables/:slug/idle/pong`, on every game move POST, and on any session-touch (`sseSessions.touch`).
-- At 30 s, append `table:<id>:state` `{ kind: 'idle:warn', secondsRemaining }` so the existing client-side "Still there?" overlay surfaces.
-- At 60 s, treat as disconnect: route through `disconnectForfeitService.handleDisconnect` (same code path the `pagehide` forfeit goes through) and append the forfeit lifecycle.
-- Make sure session disposal cancels timers cleanly so a fresh tab in the same session inherits a clean slate.
-
-**Effort:** ~3–4 hours including unit + Playwright tests for warn-then-recover and warn-then-forfeit.
-
----
-
 ### Journey CTA targets need a reusable `<Spotlight />` component
 
 **Surfaced by:** Phase 8 QA (2026-04-28) — when the journey routes a user to `/bots/<id>?action=train-bot` (Curriculum step 4), the **Train your bot** button is a small outlined button buried below the bot header, ELO panel, Spar block, and Tournament availability. Users miss it.

@@ -40,6 +40,84 @@ const RECONNECT_WINDOW_MS = 60_000
 const _forfeitTimers = new Map()
 function timerKey(seatId, tableId) { return `${seatId}|${tableId}` }
 
+/**
+ * Apply the forfeit lifecycle to an ACTIVE table for a known seat — the
+ * shared body used by:
+ *
+ *   - the post-disconnect 60-second timer below (`reason: 'disconnect'`)
+ *   - the idle-timeout subsystem (`reason: 'idle'`) once the warn + grace
+ *     window expires for an inactive player
+ *
+ * No `userStillAtTable` short-circuit here: callers above this layer have
+ * already decided a forfeit is warranted. Returns `{ ok, code? }`.
+ */
+export async function applyForfeit({ io, seatId, tableId, mark, reason = 'disconnect' }) {
+  const t = await db.table.findUnique({ where: { id: tableId } })
+  if (!t || t.status !== 'ACTIVE') return { ok: false, code: 'NOT_ACTIVE' }
+
+  const tps     = { ...t.previewState }
+  const myMark  = mark || tps.marks?.[seatId]
+  if (!myMark) return { ok: false, code: 'NO_MARK' }
+  const oppMark = myMark === 'X' ? 'O' : 'X'
+  tps.winner = oppMark
+  tps.scores = { ...(tps.scores || {}) }
+  tps.scores[oppMark] = (tps.scores[oppMark] || 0) + 1
+
+  const updated = await db.table.update({
+    where: { id: tableId },
+    data:  {
+      status:       'COMPLETED',
+      previewState: tps,
+      seats:        releaseSeatForUser(t.seats, seatId),
+    },
+  })
+
+  const forfeitPayload = { forfeiterMark: myMark, winner: oppMark, scores: tps.scores, reason }
+  if (io) io.to(`table:${tableId}`).emit('game:forfeit', forfeitPayload)
+  appendToStream(
+    `table:${tableId}:state`,
+    { kind: 'forfeit', ...forfeitPayload },
+    { userId: '*' },
+  ).catch(() => {})
+
+  dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: `forfeit-${reason}` })
+
+  // Best-effort recordPvpGame — pulled lazily to avoid a circular import
+  // (socketHandler → sseSessions → disconnectForfeitService → socketHandler).
+  try {
+    const { recordPvpGame } = await import('../realtime/socketHandler.js')
+    recordPvpGame(updated, io).catch(err =>
+      logger.warn({ err: err.message }, `recordPvpGame after ${reason} forfeit failed`),
+    )
+  } catch (err) {
+    logger.warn({ err: err.message }, `recordPvpGame import failed in ${reason} forfeit`)
+  }
+
+  if (updated.createdById === 'anonymous') {
+    await db.table.delete({ where: { id: tableId } }).catch(() => {})
+  }
+  // Tear down any idle timers still armed against this table. The forfeiter's
+  // timer is usually already gone (this is being called from inside it, or
+  // from a disconnect path that fired cancelAllForUser); the *opponent*'s
+  // timer is the one that would otherwise fire later, find a COMPLETED
+  // table, and log a NOT_ACTIVE no-op. Cheaper to clear up-front.
+  try {
+    const { cancelAllForTable } = await import('../realtime/idleTimers.js')
+    cancelAllForTable(tableId)
+  } catch { /* idleTimers optional */ }
+  return { ok: true, mark: myMark, oppMark, scores: tps.scores }
+}
+
+/** Resolve the seat (BA id for signed-in, `guest:<sessionId>` for guests)
+ *  the given user holds at the table, or null. Exposed so other modules
+ *  (idleTimers) can run the forfeit path without re-implementing seat
+ *  resolution. */
+export async function resolveSeatIdForUser({ userId, sessionId = null, tableId }) {
+  const table = await db.table.findUnique({ where: { id: tableId } })
+  if (!table) return null
+  return resolveSeatId({ userId, sessionId, table })
+}
+
 /** Clear a pending forfeit timer for this seat at this table.
  *  Returns true if a timer was cancelled. */
 export function cancelForfeitFor({ seatId, tableId }) {
@@ -170,52 +248,7 @@ async function processTable({ io, userId, sessionId, tableId }) {
   const timerId = setTimeout(async () => {
     _forfeitTimers.delete(k)
     try {
-      const t = await db.table.findUnique({ where: { id: tableId } })
-      if (!t || t.status !== 'ACTIVE') return
-
-      const tps = { ...t.previewState }
-      const oppMark = myMark === 'X' ? 'O' : 'X'
-      tps.winner = oppMark
-      tps.scores[oppMark] = (tps.scores[oppMark] || 0) + 1
-
-      const updated = await db.table.update({
-        where: { id: tableId },
-        data:  {
-          status:       'COMPLETED',
-          previewState: tps,
-          seats:        releaseSeatForUser(t.seats, seatId),
-        },
-      })
-
-      const forfeitPayload = {
-        forfeiterMark: myMark,
-        winner:        oppMark,
-        scores:        tps.scores,
-        reason:        'disconnect',
-      }
-      if (io) io.to(`table:${tableId}`).emit('game:forfeit', forfeitPayload)
-      appendToStream(
-        `table:${tableId}:state`,
-        { kind: 'forfeit', ...forfeitPayload },
-        { userId: '*' },
-      ).catch(() => {})
-
-      dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.DISCONNECT, { trigger: 'sse-disconnect-forfeit-timer' })
-
-      // Best-effort recordPvpGame — pulled lazily to avoid a circular import
-      // (socketHandler → sseSessions → disconnectForfeitService → socketHandler).
-      try {
-        const { recordPvpGame } = await import('../realtime/socketHandler.js')
-        recordPvpGame(updated, io).catch(err =>
-          logger.warn({ err: err.message }, 'recordPvpGame after sse forfeit failed'),
-        )
-      } catch (err) {
-        logger.warn({ err: err.message }, 'recordPvpGame import failed in sse forfeit')
-      }
-
-      if (updated.createdById === 'anonymous') {
-        await db.table.delete({ where: { id: tableId } }).catch(() => {})
-      }
+      await applyForfeit({ io, seatId, tableId, mark: myMark, reason: 'disconnect' })
     } catch (err) {
       logger.warn({ err: err.message, tableId }, 'sse disconnect forfeit timer error')
     }
