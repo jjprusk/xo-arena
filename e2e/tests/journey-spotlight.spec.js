@@ -92,19 +92,13 @@ test.describe('Journey CTA spotlight', () => {
     await page.goto('/profile?action=train-bot')
     await page.waitForURL(/\/bots\/[^/?]+\?action=train-bot/, { timeout: 10_000 })
 
-    // The Train button must be lit and the scrim mounted. The scrim renders
-    // via createPortal(document.body), so a top-level locator is correct.
     const trainBtn = page.getByRole('button', { name: /train your bot/i })
     await expect(trainBtn).toBeVisible({ timeout: 10_000 })
     await expect(trainBtn).toHaveClass(/xo-spotlight-pulse/, { timeout: 6_000 })
-    await expect(page.locator('.xo-spotlight-scrim')).toBeVisible()
-
-    // Spotlight tears itself down after `duration` (6s default). Click the
-    // scrim to dismiss immediately so the next assertion isn't fighting the
-    // animation.
-    await page.locator('.xo-spotlight-scrim').click()
-    await expect(page.locator('.xo-spotlight-scrim')).toBeHidden({ timeout: 2_000 })
-    await expect(trainBtn).not.toHaveClass(/xo-spotlight-pulse/)
+    // Regression guard: the dimming-scrim was removed from <Spotlight> in
+    // favour of pulse-only since the bot detail page has too much context
+    // for a full-page dim. If a refactor reintroduces it, this fails.
+    await expect(page.locator('.xo-spotlight-scrim')).toHaveCount(0)
 
     // ── Step 5: ?action=spar ─────────────────────────────────────────────
     await page.goto('/profile?action=spar')
@@ -113,7 +107,7 @@ test.describe('Journey CTA spotlight', () => {
     const sparBtn = page.getByRole('button', { name: /^spar now$/i })
     await expect(sparBtn).toBeVisible({ timeout: 10_000 })
     await expect(sparBtn).toHaveClass(/xo-spotlight-pulse/, { timeout: 6_000 })
-    await expect(page.locator('.xo-spotlight-scrim')).toBeVisible()
+    await expect(page.locator('.xo-spotlight-scrim')).toHaveCount(0)
   })
 
   test('a non-spotlight URL leaves the bot page un-lit', async ({ page, context }) => {

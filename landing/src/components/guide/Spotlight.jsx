@@ -1,6 +1,5 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { useEffect } from 'react'
-import { createPortal } from 'react-dom'
 
 /**
  * Reusable spotlight overlay for journey CTAs.
@@ -10,22 +9,25 @@ import { createPortal } from 'react-dom'
  * the fold and visually identical to surrounding controls; users miss it.
  * This component:
  *
- *   - Dims the page with a `xo-spotlight-scrim` overlay (rendered via
- *     `createPortal(document.body)` so CSS `transform`/`overflow` ancestors
- *     don't break the fixed-position scrim — the ad-hoc inline-render
- *     pattern this replaces would silently fail inside any clipping
- *     ancestor).
  *   - Applies `xo-spotlight-pulse` to a caller-provided ref so the target
- *     element lifts above the scrim with an amber pulsing halo.
+ *     element gets an amber pulsing halo and reads as "the next thing to
+ *     do here" without competing with surrounding chrome.
  *   - Scrolls the target into view (`block: 'center'`, smooth) once.
- *   - Auto-dismisses after `duration` (default 6 s), or when the scrim is
- *     clicked, or when the parent flips `active` to false.
+ *   - Auto-dismisses after `duration` (default 6 s), or when the parent
+ *     flips `active` to false.
+ *
+ * Earlier revisions also rendered a fixed-position dimming scrim over the
+ * whole page so the spotlit CTA jumped out. In practice that scrim was
+ * heavier than the situation warranted (the bot-detail page in particular
+ * has lots of context the user wants to read alongside the CTA), so the
+ * scrim was removed in favour of the pulse-only treatment. The
+ * `xo-spotlight-scrim` CSS class still exists in `index.css` for any
+ * future caller that explicitly opts in.
  *
  * Parent owns `active` state and the dismiss reaction so there's exactly
  * one source of truth — set `active = false` and the component tears down
- * the class + scrim on the next effect tick. `onDismiss` is invoked on
- * scrim-click and timer expiry so the parent can mirror that into its own
- * state without polling.
+ * the class on the next effect tick. `onDismiss` is invoked on timer
+ * expiry so the parent can mirror that into its own state without polling.
  *
  * Notes:
  *   - The pulse class is mutated *imperatively* on the target element
@@ -56,15 +58,5 @@ export default function Spotlight({ active, target, duration = 6000, onDismiss }
     }
   }, [active, target, duration, onDismiss])
 
-  if (!active) return null
-  if (typeof document === 'undefined') return null   // SSR / test guard
-
-  return createPortal(
-    <div
-      className="xo-spotlight-scrim"
-      onClick={() => onDismiss?.()}
-      aria-hidden="true"
-    />,
-    document.body,
-  )
+  return null
 }

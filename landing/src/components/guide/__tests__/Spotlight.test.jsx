@@ -33,16 +33,26 @@ beforeEach(() => { vi.useFakeTimers() })
 afterEach(()  => { vi.useRealTimers() })
 
 describe('Spotlight', () => {
-  it('does nothing when active=false: no scrim, no pulse class', () => {
+  it('does nothing when active=false: no pulse class', () => {
     render(<Harness active={false} />)
     expect(screen.getByTestId('cta').classList.contains('xo-spotlight-pulse')).toBe(false)
-    expect(document.querySelector('.xo-spotlight-scrim')).toBeNull()
   })
 
-  it('adds pulse class to target and renders scrim when active=true', () => {
+  it('adds pulse class to target when active=true', () => {
     render(<Harness active={true} />)
     expect(screen.getByTestId('cta').classList.contains('xo-spotlight-pulse')).toBe(true)
-    expect(document.querySelector('.xo-spotlight-scrim')).not.toBeNull()
+  })
+
+  // The early dimming-scrim revision was rejected — too heavy for the
+  // bot-detail page where users need to read context alongside the CTA.
+  // This guard locks in "no fixed-position page-dimming overlay ever
+  // mounts from this component" so a later refactor can't silently
+  // reintroduce it.
+  it('never mounts a page-dimming scrim, regardless of active state', () => {
+    const { rerender } = render(<Harness active={true} />)
+    expect(document.querySelector('.xo-spotlight-scrim')).toBeNull()
+    rerender(<Harness active={false} />)
+    expect(document.querySelector('.xo-spotlight-scrim')).toBeNull()
   })
 
   it('auto-dismisses after duration via onDismiss', async () => {
@@ -53,22 +63,12 @@ describe('Spotlight', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('scrim click invokes onDismiss', () => {
-    const onDismiss = vi.fn()
-    render(<Harness active={true} onDismiss={onDismiss} />)
-    const scrim = document.querySelector('.xo-spotlight-scrim')
-    expect(scrim).not.toBeNull()
-    act(() => { scrim.click() })
-    expect(onDismiss).toHaveBeenCalledTimes(1)
-  })
-
-  it('removes pulse class + scrim when parent flips active back to false', () => {
+  it('removes pulse class when parent flips active back to false', () => {
     const { rerender } = render(<Harness active={true} />)
     expect(screen.getByTestId('cta').classList.contains('xo-spotlight-pulse')).toBe(true)
 
     rerender(<Harness active={false} />)
     expect(screen.getByTestId('cta').classList.contains('xo-spotlight-pulse')).toBe(false)
-    expect(document.querySelector('.xo-spotlight-scrim')).toBeNull()
   })
 
   it('cleanup on unmount: pulse class removed, no leaked timer firing', async () => {
