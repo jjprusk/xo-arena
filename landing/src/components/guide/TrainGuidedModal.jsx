@@ -108,27 +108,35 @@ export default function TrainGuidedModal({ botId, botName, onComplete, onClose }
   const startedRef = useRef(false)
 
   // ── Kick off the training session on mount ──────────────────────────────
+  // The startedRef gate dedupes StrictMode's double-mount in dev so we don't
+  // POST /train-guided twice. We deliberately do NOT pair it with a closure-
+  // scoped `cancelled` flag flipped from a cleanup return — under
+  // StrictMode that combo wedges the modal:
+  //   1) first mount: startedRef=true, async POST starts
+  //   2) cleanup: cancelled=true on the first closure
+  //   3) second mount: startedRef is already true → early return; the first
+  //      closure's cancelled is still true
+  //   4) POST resolves → `if (cancelled) return` skips setState forever
+  //      → modal stays at status='starting' "Preparing self-play episodes…"
+  // The backend's existingRunning check makes the POST idempotent, so even
+  // if it did fire twice the second call returns the same session row.
   useEffect(() => {
     if (startedRef.current) return
     startedRef.current = true
-    let cancelled = false
     ;(async () => {
       try {
         const token = await getToken()
         if (!token) throw new Error('Sign in to train your bot.')
         const res = await api.bots.trainGuided(botId, token)
-        if (cancelled) return
         setSessionId(res.sessionId)
         setSkillId(res.skillId)
         setChannelPrefix(res.channelPrefix)
         setStatus('training')
       } catch (err) {
-        if (cancelled) return
         setErrorMsg(err.message || 'Could not start training.')
         setStatus('error')
       }
     })()
-    return () => { cancelled = true }
   }, [botId])
 
   // ── Subscribe to the live training stream ───────────────────────────────
@@ -178,24 +186,32 @@ export default function TrainGuidedModal({ botId, botName, onComplete, onClose }
   })
 
   // ── Finalize once the training run completes ────────────────────────────
+  // Same StrictMode trap as the startup effect — a closure-scoped cancelled
+  // flag flipped from a cleanup return wedges the second mount because the
+  // first run's closure variable stays at `true`. Use a ref instead so the
+  // celebration timer can still no-op on a real unmount without leaking.
+  const finalizeStartedRef = useRef(false)
+  const unmountedRef       = useRef(false)
+  useEffect(() => () => { unmountedRef.current = true }, [])
+
   useEffect(() => {
     if (status !== 'finalizing') return
-    let cancelled = false
+    if (finalizeStartedRef.current) return
+    finalizeStartedRef.current = true
     ;(async () => {
       try {
         const token = await getToken()
         const res = await api.bots.trainGuidedFinalize(botId, { sessionId, skillId }, token)
-        if (cancelled) return
+        if (unmountedRef.current) return
         setStatus('done')
         // Brief celebration window before we call onComplete (~2.5s).
-        setTimeout(() => { if (!cancelled) onComplete?.(res) }, 2500)
+        setTimeout(() => { if (!unmountedRef.current) onComplete?.(res) }, 2500)
       } catch (err) {
-        if (cancelled) return
+        if (unmountedRef.current) return
         setErrorMsg(err.message || 'Could not save the trained bot.')
         setStatus('error')
       }
     })()
-    return () => { cancelled = true }
   }, [status, botId, sessionId, skillId, onComplete])
 
   const progressPct = totalEpisodes > 0 && latest
