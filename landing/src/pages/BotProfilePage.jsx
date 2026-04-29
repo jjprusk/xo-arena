@@ -5,6 +5,7 @@ import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import TrainGuidedModal from '../components/guide/TrainGuidedModal.jsx'
+import Spotlight from '../components/guide/Spotlight.jsx'
 
 const ALGORITHM_LABELS = {
   Q_LEARNING: 'Q-Learning',
@@ -42,22 +43,21 @@ export default function BotProfilePage() {
   const [sparStarting, setSparStarting] = useState(false)
   const [sparError,   setSparError]   = useState(null)
 
-  // Spotlight (§a) — when the journey routes the user here for step 4
-  // (?action=train-bot), pulse the Train button + scroll it into view.
-  // Lives until handleTrainQuick runs or the user clicks elsewhere.
+  // Journey-CTA spotlights — when the user lands here from a journey step
+  // (e.g. /profile?action=train-bot → forwarded to /bots/<id>?action=train-bot
+  // by ProfilePage), pulse the matching CTA so it stands out from the
+  // surrounding controls. The reusable <Spotlight> component owns the scrim
+  // + class application; we just track which CTA is lit.
   const [searchParams] = useSearchParams()
-  const trainBtnRef    = React.useRef(null)
-  const [spotlightOn, setSpotlightOn] = useState(false)
+  const trainBtnRef = React.useRef(null)
+  const sparBtnRef  = React.useRef(null)
+  const [trainSpotlightOn, setTrainSpotlightOn] = useState(false)
+  const [sparSpotlightOn,  setSparSpotlightOn]  = useState(false)
   useEffect(() => {
-    if (searchParams.get('action') !== 'train-bot') return
     if (loading) return
-    if (!trainBtnRef.current) return
-    setSpotlightOn(true)
-    try {
-      trainBtnRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    } catch {}
-    const t = setTimeout(() => setSpotlightOn(false), 6000)
-    return () => clearTimeout(t)
+    const action = searchParams.get('action')
+    if (action === 'train-bot') setTrainSpotlightOn(true)
+    if (action === 'spar')      setSparSpotlightOn(true)
   }, [searchParams, loading])
 
   useEffect(() => {
@@ -173,16 +173,18 @@ export default function BotProfilePage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      {/* Spotlight scrim — dims the page while the Train button is spotlit so
-          it actually stands out. The button itself uses .xo-spotlight-pulse
-          with a higher z-index so it lifts above the scrim. Click to dismiss. */}
-      {spotlightOn && (
-        <div
-          className="xo-spotlight-scrim"
-          onClick={() => setSpotlightOn(false)}
-          aria-hidden="true"
-        />
-      )}
+      {/* Journey CTA spotlights (Curriculum steps 4 + 5). Mounted unconditionally;
+          Spotlight no-ops when active=false. */}
+      <Spotlight
+        active={trainSpotlightOn}
+        target={trainBtnRef}
+        onDismiss={() => setTrainSpotlightOn(false)}
+      />
+      <Spotlight
+        active={sparSpotlightOn}
+        target={sparBtnRef}
+        onDismiss={() => setSparSpotlightOn(false)}
+      />
 
       {/* Back link */}
       <Link to="/profile" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
@@ -274,9 +276,9 @@ export default function BotProfilePage() {
             </p>
             <button
               ref={trainBtnRef}
-              onClick={() => { setSpotlightOn(false); setTrainOpen(true) }}
+              onClick={() => { setTrainSpotlightOn(false); setTrainOpen(true) }}
               disabled={trainOpen}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50${spotlightOn ? ' xo-spotlight-pulse' : ''}`}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
               style={{ borderColor: 'var(--color-amber-400)', color: 'var(--color-amber-700)' }}
             >
               Train your bot
@@ -333,7 +335,8 @@ export default function BotProfilePage() {
               <p role="alert" className="text-xs" style={{ color: 'var(--color-red-600)' }}>{sparError}</p>
             )}
             <button
-              onClick={handleSpar}
+              ref={sparBtnRef}
+              onClick={() => { setSparSpotlightOn(false); handleSpar() }}
               disabled={sparStarting || bot.botInTournament}
               className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
               style={{ borderColor: 'var(--color-blue-400)', color: 'var(--color-blue-700)' }}

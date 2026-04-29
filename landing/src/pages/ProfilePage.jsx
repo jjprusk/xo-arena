@@ -125,12 +125,17 @@ export default function ProfilePage() {
   // after the bots fetch resolves, so the effect can't fire with the initial
   // empty `bots = []` and falsely bounce a returning user (who has bots)
   // over to the QuickBotWizard.
+  //
+  // ?action=spar (Curriculum step 5) follows the same shape — same target
+  // (bot detail page), different spotlight target on arrival. We forward
+  // the action= query through so BotProfilePage can light the right CTA.
   useEffect(() => {
-    if (searchParams.get('action') !== 'train-bot') return
+    const action = searchParams.get('action')
+    if (action !== 'train-bot' && action !== 'spar') return
     if (botsLoading) return
     useGuideStore.getState().close()
     if (bots.length === 1) {
-      navigate(`/bots/${bots[0].id}`, { replace: true })
+      navigate(`/bots/${bots[0].id}?action=${action}`, { replace: true })
     } else if (bots.length === 0) {
       navigate('/profile?action=quick-bot', { replace: true })
     }

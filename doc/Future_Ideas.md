@@ -3,27 +3,20 @@
 
 Deferred features and improvements that are worth revisiting but not currently prioritized.
 
-## Known bugs (must fix — not deferred)
+## Journey CTA spotlight — wiring leftovers
 
-These are **bugs**, not future ideas. Listed here for tracking; should be picked up before the next ship cycle.
+The reusable `<Spotlight target={ref} active={...} onDismiss={...} />` component shipped on 2026-04-29 (`landing/src/components/guide/Spotlight.jsx`) and replaces the ad-hoc per-page `xo-spotlight-pulse` toggle. Wired so far:
 
-### Journey CTA targets need a reusable `<Spotlight />` component
+- **Step 4 (`?action=train-bot`)** — `BotProfilePage` Train button. ✅
+- **Step 5 (`?action=spar`)** — `BotProfilePage` Spar block; `ProfilePage` forwards the action to the bot detail page same way it does for `train-bot`. ✅
 
-**Surfaced by:** Phase 8 QA (2026-04-28) — when the journey routes a user to `/bots/<id>?action=train-bot` (Curriculum step 4), the **Train your bot** button is a small outlined button buried below the bot header, ELO panel, Spar block, and Tournament availability. Users miss it.
+Not yet wired (each one is one `<Spotlight>` render line + a small destination handler):
 
-**Stop-gap landed in this branch:** when `?action=train-bot` is in the URL, `BotProfilePage` scrolls the Train button into view and applies a `xo-spotlight-pulse` glow animation for ~6 seconds. Functional but ad-hoc — every CTA target page would have to repeat the same wiring.
+- **Step 3 (`?action=quick-bot`)** — `QuickBotWizard` "Next" button. The wizard is already a focused modal so the spotlight is lower-value here; skip unless usability tests show the Next button blends in.
+- **Step 6 (`?action=cup`)** — Curriculum Cup card. No `?action=cup` handler exists on `ProfilePage` (or anywhere else), and there's no Cup-card destination element to ref. Needs the destination feature first.
+- **Step 7 (`?action=cup-result`)** — result row in the tournament list. Same as step 6 — destination doesn't exist yet.
 
-**Proper fix:** a reusable `<Spotlight target={ref} duration={6000} />` overlay that:
-
-- accepts a DOM ref to the target element
-- draws a finger-pointer cursor (or a translucent ring) anchored to the target's bounding rect
-- pulses + scrolls into view
-- tears down on click of the target, on `?action` query change, or after `duration`
-- works on mobile (no hover-only cues)
-
-Then each journey-step destination just renders `<Spotlight target={...} />` when the matching `?action=*` query is present. Step 3 (`?action=quick-bot`) → wizard "Next" button. Step 4 (`?action=train-bot`) → Train button. Step 5 (`?action=spar`) → Spar tier picker / "Spar now". Step 6 (`?action=cup`) → Curriculum Cup card. Step 7 (`?action=cup-result`) → result row in tournament list.
-
-**Effort:** ~3–4 hours including the component, the five wiring sites, and a Playwright test that asserts the spotlight is present after each journey link click.
+Effort: ~30 minutes per remaining wiring site once the destination handler is in place.
 
 ---
 
