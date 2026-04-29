@@ -631,38 +631,58 @@ export async function createHvbTable({
  *  client renders the literal "Host"/"Guest" string in the seat-pod label.
  */
 async function buildExtras(hostSeat, guestSeat, guestUserDomainId) {
-  let hostUserElo = null
-  let hostUserName = hostSeat?.displayName ?? null
-  const hostBaId = hostSeat?.userId
-  if (hostBaId) {
-    const hostUser = await db.user.findUnique({
-      where:  { betterAuthId: hostBaId },
-      select: { id: true, displayName: true },
-    })
-    if (hostUser) {
-      if (!hostUserName) hostUserName = hostUser.displayName ?? null
-      const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: hostUser.id, gameId: 'xo' } } })
-      hostUserElo = eloRow?.rating ?? null
-    }
-  }
-  let guestUserElo = null
-  let guestUserName = guestSeat?.displayName ?? null
-  if (guestUserDomainId) {
-    if (!guestUserName) {
-      const guestUser = await db.user.findUnique({
-        where:  { id: guestUserDomainId },
-        select: { displayName: true },
+  // Per-seat resolver. Seats can hold either a betterAuthId (human PvP) or a
+  // domain User.id (bots — bots have no BetterAuth row). Try both shapes so
+  // the spar/demo bot-vs-bot spectator path resolves bot ownership without
+  // breaking the pre-existing human PvP lookup.
+  async function lookupSeat(seat, fallbackDomainId) {
+    let displayName = seat?.displayName ?? null
+    const seatId = seat?.userId ?? null
+    let userRow = null
+    if (seatId) {
+      // Seat IDs hold either a BetterAuth id (humans at PvP tables) or a
+      // domain User.id (bots — bots have no BetterAuth row). Try both.
+      userRow = await db.user.findUnique({
+        where:  { betterAuthId: seatId },
+        select: { id: true, displayName: true, isBot: true, botOwnerId: true },
       })
-      guestUserName = guestUser?.displayName ?? null
+      if (!userRow) {
+        userRow = await db.user.findUnique({
+          where:  { id: seatId },
+          select: { id: true, displayName: true, isBot: true, botOwnerId: true },
+        })
+      }
+    } else if (fallbackDomainId) {
+      userRow = await db.user.findUnique({
+        where:  { id: fallbackDomainId },
+        select: { id: true, displayName: true, isBot: true, botOwnerId: true },
+      })
     }
-    const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: guestUserDomainId, gameId: 'xo' } } })
-    guestUserElo = eloRow?.rating ?? null
+    if (!userRow) return { displayName, elo: null, isBot: false, ownerBaId: null }
+    if (!displayName) displayName = userRow.displayName ?? null
+    const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: userRow.id, gameId: 'xo' } } })
+    let ownerBaId = null
+    if (userRow.isBot && userRow.botOwnerId) {
+      const owner = await db.user.findUnique({
+        where:  { id: userRow.botOwnerId },
+        select: { betterAuthId: true },
+      })
+      ownerBaId = owner?.betterAuthId ?? null
+    }
+    return { displayName, elo: eloRow?.rating ?? null, isBot: !!userRow.isBot, ownerBaId }
   }
+
+  const host  = await lookupSeat(hostSeat,  null)
+  const guest = await lookupSeat(guestSeat, guestUserDomainId)
   return {
-    hostUserDisplayName:  hostUserName,
-    hostUserElo,
-    guestUserDisplayName: guestUserName,
-    guestUserElo,
+    hostUserDisplayName:  host.displayName,
+    hostUserElo:          host.elo,
+    hostUserIsBot:        host.isBot,
+    hostUserOwnerBaId:    host.ownerBaId,
+    guestUserDisplayName: guest.displayName,
+    guestUserElo:         guest.elo,
+    guestUserIsBot:       guest.isBot,
+    guestUserOwnerBaId:   guest.ownerBaId,
   }
 }
 

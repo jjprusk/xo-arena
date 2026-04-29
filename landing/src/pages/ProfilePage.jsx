@@ -110,6 +110,48 @@ export default function ProfilePage() {
     setShowQuickBot(true)
   }, [searchParams])
 
+  // ?action=cup — Curriculum step 6 entry point. Calls the tournament-service
+  // clone endpoint, which spawns a fresh 4-bot single-elim Curriculum Cup,
+  // registers the user's bot, and starts the bracket immediately. Step 6
+  // fires server-side via `tournament:participant:joined`. We then route the
+  // user to the cup detail page so they can watch their bot's matches —
+  // landing on /profile with no follow-up was a flat dead-end.
+  //
+  // Gate on `!botsLoading` for the same reason train-bot/spar do — the
+  // service auto-picks the user's most-recent bot, but we want to bounce
+  // them to the bot wizard if they somehow have zero bots.
+  const [cupBusy,  setCupBusy]  = useState(false)
+  const [cupError, setCupError] = useState(null)
+  useEffect(() => {
+    if (searchParams.get('action') !== 'cup') return
+    if (botsLoading) return
+    if (cupBusy) return
+    if (bots.length === 0) {
+      navigate('/profile?action=quick-bot', { replace: true })
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setCupBusy(true)
+      setCupError(null)
+      try {
+        const token = await getToken()
+        const res = await tournamentApi.cloneCurriculumCup(token, {})
+        if (cancelled) return
+        const tid = res?.tournament?.id
+        if (!tid) throw new Error('No tournament id in response')
+        useGuideStore.getState().close()
+        navigate(`/tournaments/${tid}`, { replace: true })
+      } catch (err) {
+        if (cancelled) return
+        setCupError(err?.message || 'Could not start the Curriculum Cup')
+      } finally {
+        if (!cancelled) setCupBusy(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [searchParams, botsLoading, bots.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ?section=bots — close guide, bots accordion already open via lazy initializer
   useEffect(() => {
     if (searchParams.get('section') !== 'bots') return
@@ -492,6 +534,33 @@ export default function ProfilePage() {
   return (
     <div className="max-w-lg mx-auto space-y-2">
       <PageHeader title="Profile" />
+
+      {/* Curriculum Cup status — only renders while we're starting the cup
+          (`?action=cup`) or if the start failed. Success-path navigates away
+          before this can render, so users normally never see this banner. */}
+      {(cupBusy || cupError) && (
+        <div
+          role={cupError ? 'alert' : 'status'}
+          aria-live="polite"
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={{
+            background:    cupError ? 'rgba(220, 38, 38, 0.07)' : 'rgba(212, 137, 30, 0.07)',
+            borderColor:   cupError ? 'rgba(220, 38, 38, 0.35)' : 'rgba(212, 137, 30, 0.35)',
+            color:         'var(--text-primary)',
+          }}
+        >
+          {cupError
+            ? <>Couldn't start the Curriculum Cup: {cupError}.{' '}
+                <button
+                  type="button"
+                  onClick={() => { setCupError(null); navigate('/profile?action=cup', { replace: true }) }}
+                  className="underline font-semibold"
+                  style={{ color: 'var(--color-amber-700)' }}
+                >Try again</button>
+              </>
+            : 'Starting your Curriculum Cup… spawning opponents and seeding the bracket.'}
+        </div>
+      )}
 
       {/* ── Create Bot Panel ─────────────────────────────────────────────── */}
       <div

@@ -173,10 +173,17 @@ export default function AppLayout() {
   // has something fresh to show (step 3 advance, badge), so keep the Guide
   // visible. The re-hydrate effect below picks an open/stay-closed decision
   // based on journey state.
+  //
+  // Exception within the exception: /play → /tables/ is the watch-demo
+  // redirect path; the panel's backdrop scrim dims the demo board, so close
+  // here. The TableDetailPage's `table.released / trigger=demo-finish`
+  // handler reopens the panel once the demo ends.
   useEffect(() => {
     setUserMenuOpen(false)
     const prevPath = prevPathRef.current
-    if (!prevPath.startsWith('/play')) {
+    const currPath = location.pathname
+    const keepOpenAfterPlay = prevPath.startsWith('/play') && !currPath.startsWith('/tables/')
+    if (!keepOpenAfterPlay) {
       useGuideStore.getState().close()
     }
   }, [location.pathname])
@@ -329,7 +336,16 @@ export default function AppLayout() {
       }
       if (channel === 'guide:journeyStep') {
         useGuideStore.getState().applyJourneyStep({ completedSteps: payload?.completedSteps })
-        useGuideStore.getState().open()
+        // Don't auto-open while the user is mid-content — the Guide drawer
+        // mounts a backdrop scrim that dims the page and the user is here
+        // to watch/play, not to see Hook progress they already triggered.
+        // Hook step 2 (demo watch) reopens via TableDetailPage's
+        // `table.released` (`trigger=demo-finish`) handler when the demo
+        // ends; navigation to any non-table route reopens via the path
+        // effect's growth check.
+        const path = window.location.pathname
+        const onContent = path.startsWith('/play') || path.startsWith('/tables/')
+        if (!onContent) useGuideStore.getState().open()
         return
       }
       if (channel === 'presence:changed') {

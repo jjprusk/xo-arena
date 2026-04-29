@@ -516,6 +516,36 @@ body {
   color: var(--color-teal-500);
 }
 
+/* "Your bot" treatment for spectator-side spar/demo views — gold glow on the
+   avatar plus a YOUR BOT pill so the user can pick out which seat is theirs
+   when both players are bots. */
+.seat__avatar--your-bot {
+  box-shadow: 0 0 0 3px rgba(212, 137, 30, 0.85),
+              0 0 0 6px rgba(212, 137, 30, 0.25),
+              0 0 14px 4px rgba(212, 137, 30, 0.45);
+  animation: seat-your-bot-pulse 2.4s ease-in-out infinite;
+}
+@keyframes seat-your-bot-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(212, 137, 30, 0.85),
+                0 0 0 6px rgba(212, 137, 30, 0.25),
+                0 0 14px 4px rgba(212, 137, 30, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(212, 137, 30, 0.95),
+                0 0 0 8px rgba(212, 137, 30, 0.18),
+                0 0 22px 6px rgba(212, 137, 30, 0.55);
+  }
+}
+.seat__bot-tag--your {
+  background: rgba(212, 137, 30, 0.18);
+  color: var(--color-amber-700, #B97612);
+}
+.dark .seat__bot-tag--your {
+  background: rgba(212, 137, 30, 0.25);
+  color: #F0C56A;
+}
+
 /* Seat state modifiers */
 .seat--turn .seat__avatar {
   animation: seat-turn-pulse 1.8s ease-in-out infinite;

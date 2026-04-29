@@ -316,14 +316,16 @@ export function useGameSDK({
 
       const cu = currentUserRef.current
       const hostPlayer = {
-        id:          hostId,
-        displayName: room?.hostUserDisplayName ?? 'Host',
-        isBot:       false,
+        id:            hostId,
+        displayName:   room?.hostUserDisplayName ?? 'Host',
+        isBot:         !!room?.hostUserIsBot,
+        ownerUserId:   room?.hostUserOwnerBaId ?? null,
       }
       const guestPlayer = guestId ? {
-        id:          guestId,
-        displayName: room?.guestUserDisplayName ?? cu?.displayName ?? 'Guest',
-        isBot:       false,
+        id:            guestId,
+        displayName:   room?.guestUserDisplayName ?? cu?.displayName ?? 'Guest',
+        isBot:         !!room?.guestUserIsBot,
+        ownerUserId:   room?.guestUserOwnerBaId ?? null,
       } : null
       playersRef.current = guestPlayer ? [hostPlayer, guestPlayer] : [hostPlayer]
       settingsRef.current = {

@@ -87,9 +87,13 @@ export function sanitizeTable(table, extras = {}) {
     hostUserId: seats[0]?.userId ?? null,
     hostUserDisplayName: extras.hostUserDisplayName ?? seats[0]?.displayName ?? null,
     hostUserElo: extras.hostUserElo ?? null,
+    hostUserIsBot: extras.hostUserIsBot ?? false,
+    hostUserOwnerBaId: extras.hostUserOwnerBaId ?? null,
     guestUserId: seats[1]?.userId ?? null,
     guestUserDisplayName: extras.guestUserDisplayName ?? seats[1]?.displayName ?? null,
     guestUserElo: extras.guestUserElo ?? null,
+    guestUserIsBot: extras.guestUserIsBot ?? false,
+    guestUserOwnerBaId: extras.guestUserOwnerBaId ?? null,
   }
 }
 

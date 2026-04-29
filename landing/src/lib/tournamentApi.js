@@ -70,6 +70,11 @@ export const tournamentApi = {
   getClassificationConfig:(token) => request('GET',  '/api/classification/config', undefined, token),
   updateClassificationConfig:(updates, token) => request('PATCH', '/api/classification/config', updates, token),
 
+  // Curriculum Cup (Intelligent Guide §5.4) — clone a fresh 4-bot single-elim
+  // bracket for the calling user. Body { myBotId? } is optional; the service
+  // auto-picks the user's most-recent bot when absent.
+  cloneCurriculumCup: (token, body = {}) => request('POST', '/api/tournaments/curriculum-cup/clone', body, token),
+
   recurringRegister:            (templateId, token) => request('POST',   `/api/recurring/${templateId}/register`, {}, token),
   recurringWithdraw:            (templateId, token) => request('DELETE', `/api/recurring/${templateId}/register`, undefined, token),
   listRecurringRegistrations:   (templateId, token) => request('GET',    `/api/recurring/${templateId}/registrations`, undefined, token),
