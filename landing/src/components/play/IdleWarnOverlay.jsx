@@ -16,12 +16,21 @@
  */
 import { useEffect, useRef, useState } from 'react'
 
+// Ignore dismiss attempts that arrive in the first ~250ms after the overlay
+// opens. Without this guard, a stale pointer/click event left over from the
+// move that armed the timer (or any click anywhere on the page right when
+// the warn arrives) gets caught by the full-screen `onClick={() => dismiss}`
+// and pongs the server before the user has a chance to *see* the prompt.
+const CLICK_ARM_MS = 250
+
 export default function IdleWarnOverlay({ sdk }) {
   const [open, setOpen]               = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(0)
-  const tickRef = useRef(null)
+  const tickRef    = useRef(null)
+  const openedAtRef = useRef(0)
 
   function dismiss(pong = false) {
+    if (Date.now() - openedAtRef.current < CLICK_ARM_MS) return
     if (pong) {
       try { sdk?.idlePong?.() } catch {}
     }
@@ -32,9 +41,10 @@ export default function IdleWarnOverlay({ sdk }) {
 
   useEffect(() => {
     if (!sdk?.onIdleWarning) return
-    return sdk.onIdleWarning(({ secondsRemaining }) => {
+    const unsub = sdk.onIdleWarning(({ secondsRemaining }) => {
       const s = Math.max(1, Number(secondsRemaining) || 60)
       setSecondsLeft(s)
+      openedAtRef.current = Date.now()
       setOpen(true)
       if (tickRef.current) clearInterval(tickRef.current)
       tickRef.current = setInterval(() => {
@@ -50,6 +60,7 @@ export default function IdleWarnOverlay({ sdk }) {
         })
       }, 1000)
     })
+    return () => { try { unsub?.() } catch {} }
   }, [sdk])
 
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current) }, [])

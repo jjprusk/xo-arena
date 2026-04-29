@@ -31,6 +31,7 @@
  * the time it fires, or the user will have re-pinged the new node).
  */
 import logger from '../logger.js'
+import db from '../lib/db.js'
 import { appendToStream } from '../lib/eventStream.js'
 import { getSystemConfig } from '../services/skillService.js'
 import {
@@ -65,6 +66,12 @@ function _clearEntry(entry) {
 /**
  * Arm (or reset) the idle timers for `(userId, tableId)`. Safe to call on
  * every pong/move — re-entrant. No-ops for falsy userId (guest paths).
+ *
+ * `userId` is the application User.id (cuid). The per-user SSE channel
+ * uses the BetterAuth id (`user:<BA_ID>:idle`) because that's the id the
+ * client has from `authSession.user.id`. We resolve once at arm time and
+ * cache it on the timer entry — the SSE broker filter still keys off the
+ * application User.id (carried in the `userId` arg to appendToStream).
  */
 export async function arm({ userId, tableId, slug = null, io = null }) {
   if (!userId || !tableId) return
@@ -73,25 +80,40 @@ export async function arm({ userId, tableId, slug = null, io = null }) {
   _clearEntry(prev)
 
   const { warnMs, graceMs } = await _readConfig()
-  const entry = { warnTimer: null, forfeitTimer: null, slug }
+  const baId = prev?.baId ?? await _resolveBaId(userId)
+  const entry = { warnTimer: null, forfeitTimer: null, slug, baId }
 
-  entry.warnTimer = setTimeout(() => _onWarn({ userId, tableId, slug, io, graceMs, entry, k }), warnMs)
+  entry.warnTimer = setTimeout(() => _onWarn({ userId, baId, tableId, slug, io, graceMs, entry, k }), warnMs)
   _timers.set(k, entry)
 }
 
-function _onWarn({ userId, tableId, slug, io, graceMs, entry, k }) {
+async function _resolveBaId(userId) {
+  try {
+    const u = await db.user.findUnique({ where: { id: userId }, select: { betterAuthId: true } })
+    return u?.betterAuthId ?? null
+  } catch {
+    return null
+  }
+}
+
+function _onWarn({ userId, baId, tableId, slug, io, graceMs, entry, k }) {
   const secondsRemaining = Math.round(graceMs / 1000)
   appendToStream(
     `table:${tableId}:state`,
     { kind: 'idle:warn', userId, slug, secondsRemaining },
     { userId: '*' },
   ).catch(() => {})
-  appendToStream(
-    `user:${userId}:idle`,
-    { kind: 'warning', tableId, slug, secondsRemaining },
-    { userId },
-  ).catch(() => {})
-  logger.info({ userId, tableId, secondsRemaining }, 'idle warn fired')
+  // Channel uses BA id so it matches `useGameSDK.idleChannel` (built from
+  // `authSession.user.id`); broker filter still uses the application
+  // User.id so security/routing is unchanged.
+  if (baId) {
+    appendToStream(
+      `user:${baId}:idle`,
+      { kind: 'warning', tableId, slug, secondsRemaining },
+      { userId },
+    ).catch(() => {})
+  }
+  logger.info({ userId, baId, tableId, secondsRemaining }, 'idle warn fired')
 
   // Schedule the forfeit; if the user pongs in the grace window, `arm`
   // reruns and clears these timers before this fires.

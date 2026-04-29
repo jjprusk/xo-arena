@@ -7,7 +7,9 @@
  *   Step 1 — Hook: PvAI to end                        (~30s)
  *   Step 2 — Hook: demo-table watch + +20 TC           (~30-60s)
  *   Step 3 — Curriculum: Quick Bot create              (instant)
- *   Step 4 — Curriculum: Quick Train (tier flip)       (~2s)
+ *   Step 4 — Curriculum: Train Guided — real Q-Learning
+ *            ~30k-episode run + finalize (botModelType
+ *            flips minimax → qlearning)                (~5-10s)
  *   Step 5 — Curriculum: Spar (easy tier)              (~5s)
  *   Step 6 — Curriculum: Curriculum Cup clone          (~5s)
  *   Step 7 — Curriculum: Cup completes + +50 TC reward (~30-60s)
@@ -144,6 +146,40 @@ async function quickTrain(request, token, botId) {
   return await res.json()
 }
 
+/**
+ * Step 4 — real Q-Learning training. POST /train-guided to kick off, then
+ * poll-finalize until the trainingSession reaches COMPLETED (returns 409
+ * SESSION_NOT_COMPLETE while still running). On success the backend swaps
+ * `bot.botModelId` to the new skill UUID and `botModelType` to 'qlearning',
+ * then fires `completeStep(caller.id, 4)`. ~5-10s in dev.
+ */
+async function trainGuided(request, token, botId) {
+  const startRes = await request.post(`${BACKEND_URL}/api/v1/bots/${botId}/train-guided`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!startRes.ok()) throw new Error(`train-guided start failed: ${startRes.status()} ${await startRes.text()}`)
+  const { sessionId, skillId } = await startRes.json()
+  if (!sessionId || !skillId) throw new Error('train-guided returned no sessionId/skillId')
+
+  const deadline = Date.now() + 60_000
+  let lastErr = null
+  while (Date.now() < deadline) {
+    const finRes = await request.post(`${BACKEND_URL}/api/v1/bots/${botId}/train-guided/finalize`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data:    { sessionId, skillId },
+    })
+    if (finRes.ok()) return await finRes.json()
+    if (finRes.status() === 409) {
+      // SESSION_NOT_COMPLETE — keep polling.
+      lastErr = `${finRes.status()} ${await finRes.text()}`
+      await new Promise(r => setTimeout(r, 1500))
+      continue
+    }
+    throw new Error(`train-guided finalize failed: ${finRes.status()} ${await finRes.text()}`)
+  }
+  throw new Error(`train-guided finalize never completed within 60s; last: ${lastErr}`)
+}
+
 async function spar(request, token, botId) {
   const res = await request.post(`${BACKEND_URL}/api/v1/bot-games/practice`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -255,6 +291,9 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
         const botIds = ownedBots.map(b => b.id)
         if (botIds.length) {
           await db.game.deleteMany({ where: { OR: [{ player1Id: { in: botIds } }, { player2Id: { in: botIds } }] } }).catch(()=>{})
+          // BotSkill.botId is a soft FK — clear bound skills (cascades training_sessions)
+          // before deleting the bot user, otherwise rows leak between runs.
+          await db.botSkill.deleteMany({ where: { botId: { in: botIds } } }).catch(()=>{})
           await db.user.deleteMany({ where: { id: { in: botIds } } }).catch(()=>{})
         }
         await db.user.deleteMany({ where: { id: { in: onbIds } } }).catch(()=>{})
@@ -288,6 +327,10 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
       const cupCount = await db.user.deleteMany({ where: { username: { startsWith: 'bot-cup-' } } });
       console.log('teardown — cup-bots removed', cupCount.count);
       ${botId ? `await db.game.deleteMany({ where: { OR: [{ player1Id: '${botId}' }, { player2Id: '${botId}' }] } }).catch(()=>{});
+        // Drop BotSkill rows + cascaded TrainingSession rows the train-guided
+        // step bound to this bot. BotSkill.botId is a soft FK (no @relation),
+        // so User deletion would otherwise leak orphan skill rows.
+        await db.botSkill.deleteMany({ where: { botId: '${botId}' } }).catch(()=>{});
         await db.user.delete({ where: { id: '${botId}' } }).catch(()=>{});` : ''}
       ${userId ? `await db.game.deleteMany({ where: { OR: [{ player1Id: '${userId}' }, { player2Id: '${userId}' }] } }).catch(()=>{});
         await db.user.delete({ where: { id: '${userId}' } }).catch(()=>{});` : ''}
@@ -357,8 +400,15 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
     completed = await pollForStep(context.request, token, 3, 30_000)
     expect(completed).toEqual(expect.arrayContaining([1, 2, 3]))
 
-    // ── Step 4: Quick Train (tier flip) ───────────────────────────────
-    await quickTrain(context.request, token, bot.id)
+    // ── Step 4: Train Guided — real Q-Learning + finalize ─────────────
+    // The user-facing journey-step-4 flow opens TrainGuidedModal which posts
+    // /train-guided, watches the SSE win-rate sparkline climb, then posts
+    // /train-guided/finalize on ml:complete. trainGuided() walks the same
+    // server-side sequence (no UI assertions on the live chart — that's
+    // covered separately in TrainGuidedModal unit tests).
+    const finalizeRes = await trainGuided(context.request, token, bot.id)
+    expect(finalizeRes?.bot?.botModelType).toBe('qlearning')
+    expect(finalizeRes?.bot?.botModelId).not.toMatch(/^builtin:|^user:/)
     completed = await pollForStep(context.request, token, 4, 30_000)
     expect(completed).toEqual(expect.arrayContaining([1, 2, 3, 4]))
 

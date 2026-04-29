@@ -25,6 +25,17 @@ vi.mock('../../services/disconnectForfeitService.js', () => ({
   resolveSeatIdForUser:  vi.fn().mockResolvedValue('ba_user_1'),
 }))
 
+// arm() now resolves the BetterAuth id from User.findUnique so the per-user
+// channel name matches what the SSE client subscribes to. Stub the lookup so
+// the warn path emits on `user:ba_<userId>:idle`.
+vi.mock('../../lib/db.js', () => ({
+  default: {
+    user: {
+      findUnique: vi.fn(({ where: { id } }) => Promise.resolve({ betterAuthId: `ba_${id}` })),
+    },
+  },
+}))
+
 const { arm, reset, cancel, cancelAllForUser, cancelAllForTable, _hasTimer, _resetForTests }
   = await import('../idleTimers.js')
 const { appendToStream } = await import('../../lib/eventStream.js')
@@ -61,11 +72,14 @@ describe('arm()', () => {
     expect(appendToStream).not.toHaveBeenCalled()
     expect(applyForfeit).not.toHaveBeenCalled()
 
-    // Cross the warn boundary — warn events fire on both channels.
+    // Cross the warn boundary — warn events fire on both channels. The
+    // user-channel name uses the BetterAuth id (looked up from User), not
+    // the application User.id, so the SSE client's `user:<authSession.user.id>:idle`
+    // subscription matches.
     await vi.advanceTimersByTimeAsync(1100)
     const channels = appendToStream.mock.calls.map(c => c[0])
     expect(channels).toContain(`table:${tableId}:state`)
-    expect(channels).toContain(`user:${userId}:idle`)
+    expect(channels).toContain(`user:ba_${userId}:idle`)
     expect(applyForfeit).not.toHaveBeenCalled()
 
     // Cross the grace boundary — forfeit fires.
@@ -149,8 +163,8 @@ describe('cancelAllForUser', () => {
     await vi.advanceTimersByTimeAsync(2200)
     expect(applyForfeit).not.toHaveBeenCalled()
     const channels = appendToStream.mock.calls.map(c => c[0])
-    expect(channels.filter(c => c.includes(`user:${userId}:`))).toHaveLength(0)
-    expect(channels.filter(c => c.includes('user:usr_other:'))).toHaveLength(1)
+    expect(channels.filter(c => c.includes(`user:ba_${userId}:`))).toHaveLength(0)
+    expect(channels.filter(c => c.includes('user:ba_usr_other:'))).toHaveLength(1)
   })
 })
 

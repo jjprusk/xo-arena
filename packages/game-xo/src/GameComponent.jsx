@@ -40,7 +40,6 @@ export default function GameComponent({ session, sdk }) {
   const [incomingReaction, setReaction]   = useState(null)
   const [showReactions, setShowReactions] = useState(false)
   const [showForfeit, setShowForfeit]     = useState(false)
-  const [idleWarning, setIdleWarning]     = useState(null)
   const [lastCell, setLastCell]           = useState(null)
   const [error, setError]                 = useState(null)
 
@@ -89,11 +88,6 @@ export default function GameComponent({ session, sdk }) {
       reactionTimer.current = setTimeout(() => setReaction(null), 2500)
     })
     return () => { unsub?.(); clearTimeout(reactionTimer.current) }
-  }, [sdk])
-
-  useEffect(() => {
-    if (!sdk.onIdleWarning) return
-    return sdk.onIdleWarning(({ secondsRemaining }) => setIdleWarning({ secondsRemaining }))
   }, [sdk])
 
   // ── Move event handler ─────────────────────────────────────────────────────
@@ -194,11 +188,6 @@ export default function GameComponent({ session, sdk }) {
   function handleReaction(emoji) {
     sdk.sendReaction?.(emoji)
     setShowReactions(false)
-  }
-
-  function handleIdlePong() {
-    sdk.idlePong?.()
-    setIdleWarning(null)
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -358,27 +347,6 @@ export default function GameComponent({ session, sdk }) {
                 Leave
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Idle warning popup — platform prompts the player before closing the room */}
-      {idleWarning && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div
-            className="rounded-2xl p-6 w-full max-w-xs space-y-4 text-center"
-            style={{ backgroundColor: 'var(--bg-surface)' }}
-          >
-            <div className="text-4xl">💤</div>
-            <h2 className="font-bold text-lg" style={{ fontFamily: 'var(--font-display)' }}>
-              Still there?
-            </h2>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {idleWarning.secondsRemaining}s before the table closes.
-            </p>
-            <button onClick={handleIdlePong} className="btn btn-primary w-full py-3 rounded-xl">
-              I'm here
-            </button>
           </div>
         </div>
       )}
