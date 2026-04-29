@@ -319,7 +319,7 @@ class BotGameRunner {
     // sees "O wins!" on a finished board with no progression for a full
     // minute. The grace window only exists to let late-joining spectators
     // observe the final position; it has nothing to do with journey state.
-    await this._finalizeDemoIfPresent(slug).catch((err) =>
+    await this._finalizeBackingTableIfPresent(slug).catch((err) =>
       logger.warn({ err: err.message, slug }, 'Demo finalize failed'),
     )
 
@@ -338,39 +338,49 @@ class BotGameRunner {
   }
 
   /**
-   * If a Demo Table backs this bot-game slug, mark it COMPLETED, dispatch
-   * `table.released`, and credit Hook step 2 to current spectators. Pulled
-   * out of `_closeGame` so it can fire immediately at series end instead of
-   * waiting 60 s for the in-memory grace window.
+   * If any Table row backs this bot-game slug (Hook demo or Curriculum
+   * spar), mark it COMPLETED + dispatch `table.released`. Pulled out of
+   * `_closeGame` so it fires immediately at series end instead of waiting
+   * 60 s for the in-memory grace window.
+   *
+   * Demo tables additionally credit Hook step 2 to all current spectators;
+   * spar tables don't (step 5 is already credited via the spar-specific
+   * `_creditSparStepIfApplicable` path that runs as the series ends).
    *
    * Idempotent: subsequent calls (from `_closeGame`) skip the COMPLETED
    * branch but the journey credit is also idempotent at the journeyService
    * layer, so repeated calls are safe.
    */
-  async _finalizeDemoIfPresent(slug) {
-    const demoTable = await db.table.findFirst({
-      where:  { slug, isDemo: true },
-      select: { id: true, status: true, seats: true },
+  async _finalizeBackingTableIfPresent(slug) {
+    const backingTable = await db.table.findFirst({
+      where:  { slug },
+      select: { id: true, status: true, seats: true, isDemo: true },
     }).catch(() => null)
-    if (!demoTable) return
+    if (!backingTable) return
 
-    if (demoTable.status !== 'COMPLETED') {
+    if (backingTable.status !== 'COMPLETED') {
       await db.table.update({
-        where: { id: demoTable.id },
-        data:  { status: 'COMPLETED', seats: releaseSeats(demoTable.seats) },
-      }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
-      dispatchTableReleased(demoTable.id, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'demo-finish' })
+        where: { id: backingTable.id },
+        data:  { status: 'COMPLETED', seats: releaseSeats(backingTable.seats) },
+      }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark backing table COMPLETED'))
+      dispatchTableReleased(backingTable.id, TABLE_RELEASED_REASONS.GAME_END, {
+        trigger: backingTable.isDemo ? 'demo-finish' : 'game-end',
+      })
     }
 
-    try {
-      const { getPresence } = await import('./tablePresence.js')
-      const { completeStep } = await import('../services/journeyService.js')
-      const { userIds = [] } = getPresence(demoTable.id) ?? {}
-      for (const userId of userIds) {
-        completeStep(userId, 2).catch(() => {})
+    if (backingTable.isDemo) {
+      // Hook step 2 — only for demo tables. Spar uses the dedicated
+      // step-5 credit path on the bot-game runner side.
+      try {
+        const { getPresence } = await import('./tablePresence.js')
+        const { completeStep } = await import('../services/journeyService.js')
+        const { userIds = [] } = getPresence(backingTable.id) ?? {}
+        for (const userId of userIds) {
+          completeStep(userId, 2).catch(() => {})
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
       }
-    } catch (err) {
-      logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
     }
   }
 
@@ -441,7 +451,7 @@ class BotGameRunner {
     // Demo Table macro (§5.1) finalize — moved to fire at series end (see
     // _runGameLoop). Calling again here is a safe idempotent no-op for the
     // late spectators who joined during the 60 s grace window.
-    await this._finalizeDemoIfPresent(slug).catch((err) =>
+    await this._finalizeBackingTableIfPresent(slug).catch((err) =>
       logger.warn({ err: err.message, slug }, 'Demo finalize (late) failed'),
     )
 
