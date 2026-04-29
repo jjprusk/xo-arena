@@ -22,6 +22,7 @@ function makeTx() {
       updateMany: trace('game.updateMany'),
       deleteMany: trace('game.deleteMany'),
     },
+    tournamentParticipant: { deleteMany: trace('tournamentParticipant.deleteMany') },
   }
 }
 
@@ -55,11 +56,12 @@ describe('deleteBot', () => {
 
     const labels = tx.calls.map(c => c[0])
     expect(labels).toEqual([
-      'game.updateMany',          // player2Id → null
-      'game.updateMany',          // winnerId  → null
-      'game.deleteMany',          // player1Id rows
-      'botSkill.deleteMany',      // by botId
-      'botSkill.deleteMany',      // by id == botModelId (legacy)
+      'game.updateMany',                 // player2Id → null
+      'game.updateMany',                 // winnerId  → null
+      'game.deleteMany',                 // player1Id rows
+      'botSkill.deleteMany',             // by botId
+      'botSkill.deleteMany',             // by id == botModelId (legacy)
+      'tournamentParticipant.deleteMany',// cup-clone bot's participant rows (no cascade FK)
       'baUser.delete',
       'user.delete',
     ])
@@ -68,8 +70,9 @@ describe('deleteBot', () => {
     expect(tx.calls[2][1]).toEqual({ where: { player1Id: 'bot_1' } })
     expect(tx.calls[3][1]).toEqual({ where: { botId: 'bot_1' } })
     expect(tx.calls[4][1]).toEqual({ where: { id: 'skill_legacy' } })
-    expect(tx.calls[5][1]).toEqual({ where: { id: 'ba_bot_1' } })
-    expect(tx.calls[6][1]).toEqual({ where: { id: 'bot_1' } })
+    expect(tx.calls[5][1]).toEqual({ where: { userId: 'bot_1' } })
+    expect(tx.calls[6][1]).toEqual({ where: { id: 'ba_bot_1' } })
+    expect(tx.calls[7][1]).toEqual({ where: { id: 'bot_1' } })
   })
 
   it('skips legacy botModelId cleanup when bot has none', async () => {
@@ -115,7 +118,7 @@ describe('deleteUserWithBots', () => {
     expect(humanGameDeleteIdx).toBeLessThan(humanUserIdx)
   })
 
-  it('handles the no-bots case (just the human + their games + BaUser)', async () => {
+  it('handles the no-bots case (just the human + their games + tournament participant rows + BaUser)', async () => {
     const tx = makeTx()
     const db = makeDb(tx)
     await deleteUserWithBots(db, { id: 'u', username: 'solo', betterAuthId: 'ba_u' }, [])
@@ -123,6 +126,7 @@ describe('deleteUserWithBots', () => {
     const labels = tx.calls.map(c => c[0])
     expect(labels).toEqual([
       'game.updateMany', 'game.updateMany', 'game.deleteMany',
+      'tournamentParticipant.deleteMany',
       'baUser.delete', 'user.delete',
     ])
   })

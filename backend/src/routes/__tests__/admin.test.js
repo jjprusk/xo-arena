@@ -62,10 +62,11 @@ vi.mock('../../lib/db.js', () => {
     count:    vi.fn(),
     findMany: vi.fn(),
   }
+  const tournamentParticipant = { deleteMany: vi.fn(async () => ({ count: 0 })) }
   return {
     default: {
-      user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig, tournamentAutoDrop,
-      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount, botSkill })),
+      user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig, tournamentAutoDrop, tournamentParticipant,
+      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount, botSkill, tournamentParticipant })),
     },
   }
 })

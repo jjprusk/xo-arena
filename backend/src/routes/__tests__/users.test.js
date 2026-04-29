@@ -46,9 +46,10 @@ vi.mock('../../lib/db.js', () => {
     delete:     vi.fn(async () => ({})),
   }
   const botSkill = { deleteMany: vi.fn(async () => ({ count: 0 })) }
+  const tournamentParticipant = { deleteMany: vi.fn(async () => ({ count: 0 })) }
   return {
     default: {
-      baUser, user, game, botSkill,
+      baUser, user, game, botSkill, tournamentParticipant,
       userEloHistory: { findMany: vi.fn(async () => []) },
       gameElo:        { findUnique: vi.fn(async () => ({ rating: 1200 })) },
       mLPlayerProfile:{ findMany: vi.fn(async () => []) },
@@ -56,7 +57,7 @@ vi.mock('../../lib/db.js', () => {
         findMany: vi.fn(async () => []),
         updateMany: vi.fn(async () => ({ count: 0 })),
       },
-      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, botSkill })),
+      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, botSkill, tournamentParticipant })),
     },
   }
 })

@@ -8,7 +8,13 @@
 // `User.botOwnerId` and `BotSkill.botId` — so deleting a user does not
 // auto-cascade to their bots or those bots' skills. `Game.player1Id` is also
 // NOT NULL with no `onDelete: Cascade`, so we have to nullify player2/winner
-// and delete player1 games before the user row goes.
+// and delete player1 games before the user row goes. `TournamentParticipant
+// .userId` is FK-restricted with no cascade, so we also have to wipe those
+// rows before the user — otherwise the cup we just spawned for the user
+// (Curriculum step 6) blocks the delete with a P2003 from
+// `tournament_participants_userId_fkey` (TournamentMatch's
+// participant1Id/participant2Id are plain String columns and naturally
+// orphan when the participant row goes).
 
 const BUILTIN_BOT_USERNAMES = new Set([
   'bot-rusty',
@@ -67,6 +73,10 @@ export async function deleteBotInTx(tx, bot) {
   if (bot.botModelId) {
     await tx.botSkill.deleteMany({ where: { id: bot.botModelId } })
   }
+  // TournamentParticipant.userId is FK-restricted (no cascade). Cup-clone
+  // bots get registered as participants, so this clears them before the
+  // user row goes. Idempotent — deleteMany is a no-op if nothing matches.
+  await tx.tournamentParticipant.deleteMany({ where: { userId: bot.id } })
   if (bot.betterAuthId) {
     // BaSession + BaAccount cascade via onDelete: Cascade on BaUser.
     await tx.baUser.delete({ where: { id: bot.betterAuthId } }).catch(() => {})
@@ -103,6 +113,9 @@ export async function deleteUserWithBots(db, user, bots) {
     await tx.game.updateMany({ where: { player2Id: user.id }, data: { player2Id: null } })
     await tx.game.updateMany({ where: { winnerId:  user.id }, data: { winnerId:  null } })
     await tx.game.deleteMany({ where: { player1Id: user.id } })
+    // Same FK gap as in deleteBotInTx — humans can register for tournaments
+    // (Curriculum Cup is the common case) and those rows have no cascade.
+    await tx.tournamentParticipant.deleteMany({ where: { userId: user.id } })
     if (user.betterAuthId) {
       await tx.baUser.delete({ where: { id: user.betterAuthId } }).catch(() => {})
     }
