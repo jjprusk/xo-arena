@@ -37,6 +37,13 @@ import { writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fetchAuthToken } from './helpers.js'
+import { netCleanupByEmailPrefix } from './dbScript.js'
+import { snapshotJourney, assertJourneyTransition } from './journeyAssert.js'
+
+// Email prefix for every test user this spec creates. The afterAll net
+// cleanup sweeps anything left over by this prefix — even runs where
+// afterEach errored mid-tear-down won't accumulate orphan rows.
+const EMAIL_PREFIX = 'onb+'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
@@ -246,8 +253,8 @@ function runCleanupScript(body) {
 test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', () => {
   // 7 sequential phases × DB polls + bot games + cup completion. Generous
   // upper bound so a slow CI box still finishes; real wall time on local
-  // dev is 3-4 minutes.
-  test.setTimeout(480_000)
+  // dev is 4-5 minutes (cup completion via the sweeper is the long pole).
+  test.setTimeout(600_000)
 
   // Track the per-run state we have to clean up so the test is re-runnable
   // and doesn't leak rows. afterEach reads these.
@@ -303,6 +310,14 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
       }
       console.log('beforeAll cleanup — cups', cupTournIds.length, 'cup-bots', cupCount.count, 'onb users', onbIds.length)
     `)
+  })
+
+  // Final net-sweep — drops any artifact a test in this spec might have
+  // created (users, bots, cup tournaments, demo tables, BotSkill rows,
+  // notifications, ELO history, etc.) keyed on the BaUser email prefix.
+  // Belt-and-suspenders against an `afterEach` that errored mid-cleanup.
+  test.afterAll(() => {
+    netCleanupByEmailPrefix(EMAIL_PREFIX, { tag: 'onb-after' })
   })
 
   // Tear down everything the test created. The order matters: tournament
@@ -367,89 +382,92 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
     const syncBody = await syncRes.json()
     created.userId = syncBody?.user?.id ?? null
 
-    const tcAtStart = await fetchCreditsTc(context.request, token, created.userId)
+    // Snapshot helpers — `snap` captures progress + credits + owned bots in a
+    // single API call; `step(label, fn, expected)` snaps before, runs the
+    // action, polls until the named step lands, snaps after, and asserts the
+    // transition is consistent (monotonic, expected step landed, credit delta,
+    // phase, bot side-effects). Catches: step regression, future-step leak,
+    // wrong reward firing, train-guided "succeeded" but no model swap, etc.
+    const snapCtx = { backendUrl: BACKEND_URL, token, userId: created.userId }
+    const snap = () => snapshotJourney(context.request, snapCtx)
+
+    let prev = await snap()
+
+    async function step(label, action, expected) {
+      const res = await action()
+      // Wait for the expected step to actually land server-side. The deadline
+      // mirrors what each phase needs in the wild — generous enough that a
+      // slow CI box doesn't false-fail.
+      await pollForStep(context.request, token, expected.stepDone, expected.deadlineMs ?? 60_000)
+      const next = await snap()
+      assertJourneyTransition({ prev, next, label, ...expected })
+      prev = next
+      return res
+    }
 
     // ── Step 1: Phase 0 PvAI credit ───────────────────────────────────
     // Belt-and-suspenders: SignInModal *should* fire guest-credit on signup
     // when localStorage has hookStep1CompletedAt, but it depends on UI timing.
     // Hit the backend directly so the test is deterministic.
-    const guestCreditRes = await context.request.post(`${BACKEND_URL}/api/v1/guide/guest-credit`, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data:    { hookStep1CompletedAt: new Date().toISOString() },
-    })
-    expect(guestCreditRes.ok()).toBeTruthy()
-    let completed = await pollForStep(context.request, token, 1, 15_000)
-    expect(completed).toEqual(expect.arrayContaining([1]))
+    await step('step1: guest-credit', async () => {
+      const r = await context.request.post(`${BACKEND_URL}/api/v1/guide/guest-credit`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data:    { hookStep1CompletedAt: new Date().toISOString() },
+      })
+      expect(r.ok()).toBeTruthy()
+    }, { stepDone: 1, tcDelta: 0, phase: 'hook', botsDelta: 0, deadlineMs: 15_000 })
 
     // ── Step 2: demo-table watch + Hook reward (+20 TC) ───────────────
-    const { tableId } = await createDemoTable(context.request, token)
-    created.demoTableId = tableId
-    await page.goto(`/tables/${tableId}`)
-    completed = await pollForStep(context.request, token, 2, 120_000)
-    expect(completed).toEqual(expect.arrayContaining([1, 2]))
-    // Hook reward — TC should bump by guide.rewards.hookComplete (default 20).
-    const tcAfterHook = await fetchCreditsTc(context.request, token, created.userId)
-    if (tcAtStart != null && tcAfterHook != null) {
-      // Allow exact 20 or higher (tester may pre-tune); the gate is "increased".
-      expect(tcAfterHook).toBeGreaterThanOrEqual((tcAtStart ?? 0) + 20)
-    }
+    await step('step2: demo-table watch + hook reward', async () => {
+      const { tableId } = await createDemoTable(context.request, token)
+      created.demoTableId = tableId
+      await page.goto(`/tables/${tableId}`)
+    }, { stepDone: 2, tcDelta: 20, phase: 'curriculum', botsDelta: 0, deadlineMs: 120_000 })
 
-    // ── Step 3: Quick Bot create ──────────────────────────────────────
-    const bot = await createQuickBot(context.request, token, `QB ${Math.random().toString(36).slice(2, 8)}`)
-    created.botId = bot.id
-    completed = await pollForStep(context.request, token, 3, 30_000)
-    expect(completed).toEqual(expect.arrayContaining([1, 2, 3]))
+    // ── Step 3: Quick Bot create — owned-bot count must grow by 1 ─────
+    let bot
+    await step('step3: quick-bot create', async () => {
+      bot = await createQuickBot(context.request, token, `QB ${Math.random().toString(36).slice(2, 8)}`)
+      created.botId = bot.id
+    }, { stepDone: 3, tcDelta: 0, phase: 'curriculum', botsDelta: 1, deadlineMs: 30_000 })
 
     // ── Step 4: Train Guided — real Q-Learning + finalize ─────────────
-    // The user-facing journey-step-4 flow opens TrainGuidedModal which posts
-    // /train-guided, watches the SSE win-rate sparkline climb, then posts
-    // /train-guided/finalize on ml:complete. trainGuided() walks the same
-    // server-side sequence (no UI assertions on the live chart — that's
-    // covered separately in TrainGuidedModal unit tests).
-    const finalizeRes = await trainGuided(context.request, token, bot.id)
-    expect(finalizeRes?.bot?.botModelType).toBe('qlearning')
-    expect(finalizeRes?.bot?.botModelId).not.toMatch(/^builtin:|^user:/)
-    completed = await pollForStep(context.request, token, 4, 30_000)
-    expect(completed).toEqual(expect.arrayContaining([1, 2, 3, 4]))
+    // qlearningBot=bot.id asserts the model swap landed: botModelType flips
+    // minimax → qlearning and botModelId becomes a BotSkill UUID (not the
+    // builtin: / user: minimax form).
+    await step('step4: train-guided', async () => {
+      const finalizeRes = await trainGuided(context.request, token, bot.id)
+      expect(finalizeRes?.bot?.botModelType).toBe('qlearning')
+      expect(finalizeRes?.bot?.botModelId).not.toMatch(/^builtin:|^user:/)
+    }, { stepDone: 4, tcDelta: 0, phase: 'curriculum', botsDelta: 0, qlearningBot: bot.id, deadlineMs: 30_000 })
 
     // ── Step 5: Spar (easy tier) ──────────────────────────────────────
-    await spar(context.request, token, bot.id)
-    completed = await pollForStep(context.request, token, 5, 60_000)
-    expect(completed).toEqual(expect.arrayContaining([1, 2, 3, 4, 5]))
+    await step('step5: spar', async () => {
+      await spar(context.request, token, bot.id)
+    }, { stepDone: 5, tcDelta: 0, phase: 'curriculum', botsDelta: 0, deadlineMs: 60_000 })
 
     // ── Step 6: Curriculum Cup clone (participant:joined → step 6) ────
-    const cupRes = await cloneCup(context.request, token, bot.id)
-    expect(cupRes.tournament?.name).toMatch(/Curriculum Cup/i)
-    expect(cupRes.participants).toHaveLength(4)
-    expect(cupRes.participants[0].isCallerBot).toBe(true)
-    completed = await pollForStep(context.request, token, 6, 30_000)
-    expect(completed).toEqual(expect.arrayContaining([1, 2, 3, 4, 5, 6]))
+    let cupRes
+    await step('step6: cup clone', async () => {
+      cupRes = await cloneCup(context.request, token, bot.id)
+      expect(cupRes.tournament?.name).toMatch(/Curriculum Cup/i)
+      expect(cupRes.participants).toHaveLength(4)
+      expect(cupRes.participants[0].isCallerBot).toBe(true)
+      created.tournamentId = cupRes.tournament.id
+    }, { stepDone: 6, tcDelta: 0, phase: 'curriculum', botsDelta: 0, deadlineMs: 30_000 })
 
     // ── Step 7: Cup completion + Curriculum reward (+50 TC) ───────────
-    const tournamentId = cupRes.tournament.id
-    created.tournamentId = tournamentId
-    completed = await pollForStep(context.request, token, 7, 240_000)
-    expect(completed).toEqual(expect.arrayContaining([1, 2, 3, 4, 5, 6, 7]))
+    await step('step7: cup completion + curriculum reward', async () => {
+      // No client action — the cup runs server-side and step 7 fires when the
+      // bracket reports COMPLETED. The pollForStep deadline below covers it.
+    }, { stepDone: 7, tcDelta: 50, phase: 'specialize', botsDelta: 0, deadlineMs: 360_000 })
 
-    // Tournament itself reached COMPLETED.
-    const tRes = await context.request.get(`${LANDING_URL}/api/tournaments/${tournamentId}`, {
+    // Tournament itself must have reached COMPLETED — sanity check that
+    // the journey transition wasn't faked by a misfired completeStep.
+    const tRes = await context.request.get(`${LANDING_URL}/api/tournaments/${created.tournamentId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(tRes.ok()).toBeTruthy()
     expect((await tRes.json()).tournament.status).toBe('COMPLETED')
-
-    // Curriculum-complete reward — +50 TC on top of the prior balance
-    // (default guide.rewards.curriculumComplete; tolerate higher if tuned).
-    const tcAtEnd = await fetchCreditsTc(context.request, token, created.userId)
-    if (tcAfterHook != null && tcAtEnd != null) {
-      expect(tcAtEnd).toBeGreaterThanOrEqual(tcAfterHook + 50)
-    }
-
-    // ── Phase derivation — should now be 'specialize' ─────────────────
-    // (deriveCurrentPhase: step 7 done → 'specialize'). We surface this via
-    // /guide/preferences indirectly — completedSteps includes 7 above is
-    // the same condition. Final defensive read.
-    const final = await fetchProgress(context.request, token)
-    expect(final.completedSteps).toEqual(expect.arrayContaining([1, 2, 3, 4, 5, 6, 7]))
   })
 })

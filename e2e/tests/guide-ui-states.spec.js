@@ -26,6 +26,12 @@ import { writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fetchAuthToken } from './helpers.js'
+import { netCleanupByEmailPrefix } from './dbScript.js'
+import { snapshotJourney, assertJourneyTransition } from './journeyAssert.js'
+
+// Email prefix for every test user this spec creates. The afterAll net
+// cleanup sweeps anything left over by this prefix.
+const EMAIL_PREFIX = 'gui+'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
@@ -225,6 +231,13 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     `)
   })
 
+  // Final net-sweep across every artifact a test in this spec might have
+  // created. Belt-and-suspenders — afterEach handles the happy-path; this
+  // catches anything that leaked when afterEach itself errored mid-cleanup.
+  test.afterAll(() => {
+    netCleanupByEmailPrefix(EMAIL_PREFIX, { tag: 'gui-after' })
+  })
+
   test.afterEach(() => {
     const { userId, email, tournamentId, demoTableId, botId } = created
     runCleanupScript(`
@@ -265,6 +278,13 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     expect(sync.ok()).toBeTruthy()
     created.userId = (await sync.json())?.user?.id ?? null
 
+    // DB-consistency tracking. snapshotJourney captures completedSteps,
+    // creditsTc, owned-bot list, derived phase. We snap before+after every
+    // step and call assertJourneyTransition between them — catches step
+    // regression, future-step leak, missing/duplicate Hook reward, etc.
+    const snapCtx = { backendUrl: BACKEND_URL, token, userId: created.userId }
+    let prevSnap = await snapshotJourney(context.request, snapCtx)
+
     // ── Phase 0 → Hook ─────────────────────────────────────────────────────
     // Belt-and-suspenders: post the guest-credit explicitly so step 1 lands.
     await context.request.post(`${BACKEND_URL}/api/v1/guide/guest-credit`, {
@@ -272,6 +292,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
       data:    { hookStep1CompletedAt: new Date().toISOString() },
     })
     await pollForStep(context.request, token, 1, 15_000)
+    {
+      const next = await snapshotJourney(context.request, snapCtx)
+      assertJourneyTransition({ prev: prevSnap, next, label: 'step1: guest-credit',
+        stepDone: 1, tcDelta: 0, phase: 'hook', botsDelta: 0 })
+      prevSnap = next
+    }
 
     // Guide must auto-open on / with the Hook card visible. Step 1 done →
     // Hook hero shows step 2 ("Watch two bots battle") as the next CTA.
@@ -285,6 +311,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     created.demoTableId = tableId
     await page.goto(`/tables/${tableId}`)
     await pollForStep(context.request, token, 2, 120_000)
+    {
+      const next = await snapshotJourney(context.request, snapCtx)
+      assertJourneyTransition({ prev: prevSnap, next, label: 'step2: demo-watch + hook reward',
+        stepDone: 2, tcDelta: 20, phase: 'curriculum', botsDelta: 0 })
+      prevSnap = next
+    }
 
     // The RewardPopup listens to `guide:hook_complete` SSE and renders
     // top-center with `data-testid="reward-popup"`. It auto-dismisses on
@@ -306,6 +338,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     const bot = await createQuickBot(context.request, token, `QB ${Math.random().toString(36).slice(2, 8)}`)
     created.botId = bot.id
     await pollForStep(context.request, token, 3, 30_000)
+    {
+      const next = await snapshotJourney(context.request, snapCtx)
+      assertJourneyTransition({ prev: prevSnap, next, label: 'step3: quick-bot create',
+        stepDone: 3, tcDelta: 0, phase: 'curriculum', botsDelta: 1 })
+      prevSnap = next
+    }
 
     await navigateAndHydrate(page)
     await expectGuideOpenInPhase(page, 'curriculum')
@@ -315,6 +353,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     const finalizeRes = await trainGuided(context.request, token, bot.id)
     expect(finalizeRes?.bot?.botModelType).toBe('qlearning')
     await pollForStep(context.request, token, 4, 30_000)
+    {
+      const next = await snapshotJourney(context.request, snapCtx)
+      assertJourneyTransition({ prev: prevSnap, next, label: 'step4: train-guided',
+        stepDone: 4, tcDelta: 0, phase: 'curriculum', botsDelta: 0, qlearningBot: bot.id })
+      prevSnap = next
+    }
 
     await navigateAndHydrate(page)
     await expectGuideOpenInPhase(page, 'curriculum')
@@ -323,6 +367,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     // ── Step 5: Spar ──────────────────────────────────────────────────────
     await spar(context.request, token, bot.id)
     await pollForStep(context.request, token, 5, 60_000)
+    {
+      const next = await snapshotJourney(context.request, snapCtx)
+      assertJourneyTransition({ prev: prevSnap, next, label: 'step5: spar',
+        stepDone: 5, tcDelta: 0, phase: 'curriculum', botsDelta: 0 })
+      prevSnap = next
+    }
 
     await navigateAndHydrate(page)
     await expectGuideOpenInPhase(page, 'curriculum')
@@ -332,6 +382,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     const cupRes = await cloneCup(context.request, token, bot.id)
     created.tournamentId = cupRes.tournament.id
     await pollForStep(context.request, token, 6, 30_000)
+    {
+      const next = await snapshotJourney(context.request, snapCtx)
+      assertJourneyTransition({ prev: prevSnap, next, label: 'step6: cup clone',
+        stepDone: 6, tcDelta: 0, phase: 'curriculum', botsDelta: 0 })
+      prevSnap = next
+    }
 
     await navigateAndHydrate(page)
     await expectGuideOpenInPhase(page, 'curriculum')
@@ -339,6 +395,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
 
     // ── Step 7: Cup completes → Curriculum reward (+50 TC popup) ──────────
     await pollForStep(context.request, token, 7, 240_000)
+    {
+      const next = await snapshotJourney(context.request, snapCtx)
+      assertJourneyTransition({ prev: prevSnap, next, label: 'step7: cup completion + curriculum reward',
+        stepDone: 7, tcDelta: 50, phase: 'specialize', botsDelta: 0 })
+      prevSnap = next
+    }
 
     // Landing on / after step 7 must auto-open the panel and surface the
     // Specialize celebration card. The growth-detect path in AppLayout opens

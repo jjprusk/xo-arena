@@ -32,6 +32,11 @@ import { writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fetchAuthToken } from './helpers.js'
+import { netCleanupByEmailPrefix } from './dbScript.js'
+
+// Email prefix for every test user this spec creates. The afterAll net
+// cleanup sweeps anything left over by this prefix.
+const EMAIL_PREFIX = 'idle+'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
@@ -155,6 +160,9 @@ test.describe('Idle timeout — warn + pong + forfeit', () => {
         where: { key: { in: ['game.idleWarnSeconds', 'game.idleGraceSeconds'] } },
       }).catch(()=>{})
     `)
+    // Net-sweep across every artifact this spec might have created. Backstop
+    // for an afterEach that errored mid-tear-down.
+    netCleanupByEmailPrefix(EMAIL_PREFIX, { tag: 'idle-after' })
   })
 
   test.afterEach(() => {
