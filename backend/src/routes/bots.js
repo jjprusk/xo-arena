@@ -8,6 +8,7 @@ import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
 import { completeStep } from '../services/journeyService.js'
 import { deleteBot as deleteBotCascade, BuiltinBotProtectedError } from '../services/userDeletionService.js'
+import * as mlSvc from '../services/mlService.js'
 import cache from '../utils/cache.js'
 
 const BOTS_CACHE_KEY = 'bots:public'
@@ -302,6 +303,153 @@ router.post('/:id/train-quick', requireAuth, async (req, res, next) => {
     completeStep(caller.id, 4).catch(() => {})
 
     res.json({ bot: updated, alreadyTrained: false })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/bots/:id/train-guided
+ *
+ * Journey step 4 — real Q-Learning training. Replaces the cosmetic tier bump
+ * from `train-quick` with a genuine ~5s training run:
+ *
+ *   1. Creates (or reuses) a Q-Learning BotSkill bound to this bot.
+ *   2. Calls mlService.startTraining — emits ml:progress / ml:complete on
+ *      SSE channel `ml:session:<sessionId>:`. The browser subscribes and
+ *      renders a live win-rate curve.
+ *   3. Returns { sessionId, skillId, channelPrefix } so the client knows
+ *      which session to listen for.
+ *
+ * Step 4 is NOT credited here — it fires from `/finalize` after the user has
+ * actually seen training complete and we've swapped the bot's primary skill.
+ * That avoids crediting drive-by clicks and keeps the celebration moment
+ * tied to a real state change.
+ *
+ * Owner-only. Idempotent on rapid-fire clicks: if a session is already
+ * running for the skill, returns the existing one instead of queuing a
+ * second.
+ */
+router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
+  try {
+    const result = await loadBotAndAuthorize(req, res)
+    if (!result) return
+    const { bot, caller } = result
+
+    if (bot.botModelType !== 'minimax') {
+      return res.status(400).json({ error: 'Guided training only applies to fresh Quick Bots', code: 'NOT_QUICK_BOT' })
+    }
+
+    let skill = await db.botSkill.findFirst({
+      where:   { botId: bot.id, gameId: 'xo', algorithm: 'Q_LEARNING' },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!skill) {
+      const created = await mlSvc.createModel({
+        name:        `${bot.displayName} XO`,
+        algorithm:   'Q_LEARNING',
+        config:      {},
+        createdBy:   caller.betterAuthId ?? null,
+      })
+      skill = await db.botSkill.update({
+        where: { id: created.id },
+        data:  { botId: bot.id, gameId: 'xo' },
+      })
+    }
+
+    const existingRunning = await db.trainingSession.findFirst({
+      where:   { modelId: skill.id, status: { in: ['PENDING', 'RUNNING'] } },
+      orderBy: { startedAt: 'desc' },
+    })
+    if (existingRunning) {
+      return res.json({
+        sessionId:     existingRunning.id,
+        skillId:       skill.id,
+        channelPrefix: `ml:session:${existingRunning.id}:`,
+        reused:        true,
+      })
+    }
+
+    const iterations = await getSystemConfig('guide.training.iterations', 1500)
+    const session = await mlSvc.startTraining(skill.id, {
+      mode:       'SELF_PLAY',
+      iterations,
+      config:     {},
+    })
+
+    res.json({
+      sessionId:     session.id,
+      skillId:       skill.id,
+      channelPrefix: `ml:session:${session.id}:`,
+      reused:        false,
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/bots/:id/train-guided/finalize
+ *
+ * Body: { sessionId, skillId }
+ *
+ * Called by the client once the SSE `ml:complete` event arrives (i.e., the
+ * user has actually watched their bot finish training). We:
+ *
+ *   1. Verify the session belongs to a skill bound to this bot and finished
+ *      successfully.
+ *   2. Swap `bot.botModelId` from the minimax tier label to the new skill
+ *      UUID + flip `botModelType` to `qlearning` so the bot now plays as an
+ *      ML bot in real games.
+ *   3. Fire `completeStep(caller.id, 4)` to credit journey step 4.
+ *
+ * Idempotent — if the bot is already pointing at the skill, just re-fires
+ * step 4 (in case the original credit didn't land) and returns 200.
+ */
+router.post('/:id/train-guided/finalize', requireAuth, async (req, res, next) => {
+  try {
+    const result = await loadBotAndAuthorize(req, res)
+    if (!result) return
+    const { bot, caller } = result
+
+    const { sessionId, skillId } = req.body ?? {}
+    if (!sessionId || !skillId) {
+      return res.status(400).json({ error: 'sessionId and skillId are required', code: 'INVALID_BODY' })
+    }
+
+    const skill = await db.botSkill.findUnique({ where: { id: skillId } })
+    if (!skill || skill.botId !== bot.id) {
+      return res.status(404).json({ error: 'Skill not found for this bot', code: 'SKILL_NOT_FOUND' })
+    }
+
+    const session = await db.trainingSession.findUnique({ where: { id: sessionId } })
+    if (!session || session.modelId !== skillId) {
+      return res.status(404).json({ error: 'Session not found for this skill', code: 'SESSION_NOT_FOUND' })
+    }
+    if (session.status !== 'COMPLETED') {
+      return res.status(409).json({ error: `Training is ${session.status.toLowerCase()}`, code: 'SESSION_NOT_COMPLETE' })
+    }
+
+    if (bot.botModelId !== skillId) {
+      await db.user.update({
+        where: { id: bot.id },
+        data:  { botModelId: skillId, botModelType: 'qlearning' },
+      })
+      cache.invalidate(BOTS_CACHE_KEY)
+    }
+
+    completeStep(caller.id, 4).catch(() => {})
+
+    const updated = await db.user.findUnique({
+      where: { id: bot.id },
+      select: {
+        id: true, displayName: true,
+        botModelId: true, botModelType: true,
+      },
+    })
+
+    res.json({ bot: updated, summary: session.summary ?? null })
   } catch (err) {
     next(err)
   }

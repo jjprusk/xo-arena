@@ -153,6 +153,8 @@ export const api = {
     delete:     (id, token)         => request('DELETE', `/bots/${id}`, null, token),
     resetElo:   (id, token)         => request('POST',   `/bots/${id}/reset-elo`, {}, token),
     trainQuick: (id, token)         => request('POST',   `/bots/${id}/train-quick`, {}, token),
+    trainGuided:        (id, token)             => request('POST',   `/bots/${id}/train-guided`, {}, token),
+    trainGuidedFinalize:(id, body, token)       => request('POST',   `/bots/${id}/train-guided/finalize`, body, token),
   },
 
   botGames: {

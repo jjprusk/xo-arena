@@ -160,24 +160,47 @@ body {
   animation: guide-pulse 1.8s ease-in-out infinite;
 }
 
-/* Spotlight pulse — used to draw attention to a journey CTA target like the
-   "Train your bot" button when the user lands on /bots/<id>?action=train-bot.
-   Stronger glow than guide-pulse so it stands out on a busy page. */
+/* Spotlight scrim + pulse — used to draw attention to a journey CTA target
+   like the "Train your bot" button when the user lands on
+   /bots/<id>?action=train-bot. The scrim dims everything else on the page
+   while the button itself goes from outlined to filled amber + larger size +
+   strong pulse halo. Clicking the scrim dismisses the spotlight. */
+.xo-spotlight-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 12, 22, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 900;
+  cursor: pointer;
+  animation: xo-spotlight-scrim-in 200ms ease-out;
+}
+@keyframes xo-spotlight-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 @keyframes xo-spotlight-pulse {
   0%, 100% {
     box-shadow:
-      0 0 0 0 rgba(212, 137, 30, 0.65),
-      0 0 12px 4px rgba(212, 137, 30, 0.55);
+      0 0 0 0 rgba(245, 158, 11, 0.7),
+      0 4px 16px 4px rgba(234, 88, 12, 0.5);
     transform: scale(1);
   }
   50% {
     box-shadow:
-      0 0 0 10px rgba(212, 137, 30, 0),
-      0 0 20px 8px rgba(212, 137, 30, 0.7);
-    transform: scale(1.05);
+      0 0 0 16px rgba(245, 158, 11, 0),
+      0 6px 24px 12px rgba(234, 88, 12, 0.7);
+    transform: scale(1.10);
   }
 }
 .xo-spotlight-pulse {
+  position: relative;
+  z-index: 1000;
+  padding: 0.875rem 1.75rem !important;
+  font-size: 1rem !important;
+  background-image: linear-gradient(135deg, #f59e0b, #ea580c) !important;
+  color: white !important;
+  border-color: transparent !important;
   animation: xo-spotlight-pulse 1.2s ease-in-out infinite;
 }
 

@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import TrainGuidedModal from '../components/guide/TrainGuidedModal.jsx'
 
 const ALGORITHM_LABELS = {
   Q_LEARNING: 'Q-Learning',
@@ -15,51 +16,6 @@ const ALGORITHM_LABELS = {
   minimax: 'Minimax',
   mcts: 'MCTS',
   rule_based: 'Rule-Based',
-}
-
-/** Centered, prominent "Bot trained!" celebration with auto-dismiss. */
-function TrainedCelebration({ onDismiss }) {
-  useEffect(() => {
-    const t = setTimeout(onDismiss, 4500)
-    return () => clearTimeout(t)
-  }, [onDismiss])
-  return (
-    <div
-      role="dialog"
-      aria-live="polite"
-      onClick={onDismiss}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1200,
-        background: 'rgba(8,12,22,0.55)', backdropFilter: 'blur(2px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '1rem', cursor: 'pointer',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="rounded-2xl border p-6 text-center max-w-md"
-        style={{
-          backgroundColor: 'var(--bg-surface)',
-          borderColor: 'var(--color-teal-400)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.35), 0 0 0 4px rgba(36,181,135,0.18)',
-          color: 'var(--text-primary)',
-        }}
-      >
-        <div style={{ fontSize: '3rem', lineHeight: 1, marginBottom: '0.5rem' }}>🧠</div>
-        <h3 className="text-xl font-bold" style={{ color: 'var(--color-teal-700)' }}>Bot trained!</h3>
-        <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>
-          Your bot is now at the intermediate tier — it'll block threats and take wins instead of playing random moves.
-        </p>
-        <button
-          onClick={onDismiss}
-          className="mt-4 px-4 py-2 rounded-lg text-sm font-semibold border hover:bg-[var(--bg-surface-hover)]"
-          style={{ borderColor: 'var(--color-teal-400)', color: 'var(--color-teal-700)' }}
-        >
-          Got it
-        </button>
-      </div>
-    </div>
-  )
 }
 
 export default function BotProfilePage() {
@@ -75,11 +31,11 @@ export default function BotProfilePage() {
   const [availError, setAvailError] = useState(null)
   const [sessions, setSessions] = useState([])
   const [selectedSession, setSelectedSession] = useState('')
-  // Quick Bot training (§5.3) — bumps a fresh Quick Bot from novice to
-  // intermediate tier. Hides itself once the bot is trained.
-  const [trainingQuick,    setTrainingQuick]    = useState(false)
-  const [trainQuickError,  setTrainQuickError]  = useState(null)
-  const [trainQuickResult, setTrainQuickResult] = useState(null)
+  // Guided training (§5.3) — opens TrainGuidedModal which runs a real
+  // ~5s Q-Learning self-play session. The modal handles starting the run,
+  // streaming live progress over SSE, finalising the bot's primary skill,
+  // and crediting journey step 4.
+  const [trainOpen, setTrainOpen] = useState(false)
   // Spar (§5.2) — pit this bot against a system bot at the chosen tier.
   // Curriculum step 5 fires when the spar match completes server-side.
   const [sparTier,    setSparTier]    = useState('medium')
@@ -160,20 +116,9 @@ export default function BotProfilePage() {
 
   const isOwner = session?.user?.id && bot.ownerBetterAuthId && session.user.id === bot.ownerBetterAuthId
 
-  async function handleTrainQuick() {
-    setTrainQuickError(null)
-    setTrainingQuick(true)
-    try {
-      const token = await getToken()
-      if (!token) throw new Error('Sign in to train your bot.')
-      const { bot: updated, alreadyTrained } = await api.bots.trainQuick(id, token)
-      setBot(prev => ({ ...prev, ...updated }))
-      setTrainQuickResult(alreadyTrained ? 'already' : 'trained')
-    } catch (err) {
-      setTrainQuickError(err.message || 'Could not train your bot. Try again in a moment.')
-    } finally {
-      setTrainingQuick(false)
-    }
+  function handleTrainGuidedComplete(res) {
+    setTrainOpen(false)
+    if (res?.bot) setBot(prev => ({ ...prev, ...res.bot }))
   }
 
   async function handleSpar() {
@@ -228,6 +173,17 @@ export default function BotProfilePage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
+      {/* Spotlight scrim — dims the page while the Train button is spotlit so
+          it actually stands out. The button itself uses .xo-spotlight-pulse
+          with a higher z-index so it lifts above the scrim. Click to dismiss. */}
+      {spotlightOn && (
+        <div
+          className="xo-spotlight-scrim"
+          onClick={() => setSpotlightOn(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Back link */}
       <Link to="/profile" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
         ← Back to profile
@@ -314,30 +270,33 @@ export default function BotProfilePage() {
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
           >
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Right now your bot plays random valid moves. The first training run sharpens it to block threats and take wins.
+              Right now your bot plays random valid moves. Watch it actually learn — a few seconds of self-play and it'll start blocking threats and taking wins.
             </p>
-            {trainQuickError && (
-              <p role="alert" className="text-xs" style={{ color: 'var(--color-red-600)' }}>{trainQuickError}</p>
-            )}
             <button
               ref={trainBtnRef}
-              onClick={() => { setSpotlightOn(false); handleTrainQuick() }}
-              disabled={trainingQuick}
+              onClick={() => { setSpotlightOn(false); setTrainOpen(true) }}
+              disabled={trainOpen}
               className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50${spotlightOn ? ' xo-spotlight-pulse' : ''}`}
               style={{ borderColor: 'var(--color-amber-400)', color: 'var(--color-amber-700)' }}
             >
-              {trainingQuick ? 'Training…' : 'Train your bot'}
+              Train your bot
             </button>
           </div>
         </section>
       )}
 
-      {/* Post-training celebration — modal so the user sees it even after the
-          guide panel opens for the step-4 credit. Auto-dismisses; clicking
-          the backdrop also closes it. Without this, the inline banner used
-          to land *behind* the guide overlay and look like nothing happened. */}
-      {trainQuickResult === 'trained' && (
-        <TrainedCelebration onDismiss={() => setTrainQuickResult(null)} />
+      {/* Guided training modal — owns the entire training experience: live
+          win-rate sparkline, ε decay, phase callouts, and the in-modal
+          "Bot trained!" celebration. Closes via its own onComplete after
+          finalisation; we then update the local bot state so the section
+          self-hides (botModelType has flipped from minimax → qlearning). */}
+      {trainOpen && (
+        <TrainGuidedModal
+          botId={bot.id}
+          botName={bot.displayName}
+          onComplete={handleTrainGuidedComplete}
+          onClose={() => setTrainOpen(false)}
+        />
       )}
 
       {/* Spar (Curriculum step 5 — §5.2). Owner-only. Tier picker → kicks off
