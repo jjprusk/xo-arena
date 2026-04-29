@@ -132,6 +132,11 @@ export default function SignInModal({ onClose, onSuccess, defaultView = 'sign-in
           try {
             const token = await getToken()
             if (!token) return
+            // Ensure the domain User row exists before crediting Hook
+            // progress — otherwise this races the AppLayout sign-in effect
+            // and the credit POST 404's on a fresh signup with guest
+            // progress. sync() is idempotent and cheap.
+            await api.users.sync(token).catch(() => {})
             const journey = readGuestJourney()
             await api.guide.guestCredit(journey, token)
             clearGuestJourney()

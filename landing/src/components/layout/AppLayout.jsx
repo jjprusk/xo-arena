@@ -4,6 +4,7 @@ import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-do
 import { useOptimisticSession, clearSessionCache, triggerSessionRefresh } from '../../lib/useOptimisticSession.js'
 import { signOut } from '../../lib/auth-client.js'
 import { getToken, clearTokenCache } from '../../lib/getToken.js'
+import { api } from '../../lib/api.js'
 import { perfMark } from '../../lib/perfLog.js'
 import { setLogUserId } from '../../lib/frontendLogger.js'
 import SignInModal from '../ui/SignInModal.jsx'
@@ -272,12 +273,27 @@ export default function AppLayout() {
     setLogUserId(session?.user?.id ?? null)
     if (session?.user?.id) {
       perfMark('AppLayout:session-resolved', session.user.id)
-      // Skip guide hydrate on /play — the panel is suppressed on that route,
-      // so the extra /api/v1/guide/preferences round trip is pure waste on
-      // the game hot path. Other routes hydrate as before.
-      const onPlayRoute = window.location.pathname.startsWith('/play')
-      if (!onPlayRoute) {
-        useGuideStore.getState().hydrate().then(() => {
+
+      // /users/sync is the authoritative "create domain User row from BA
+      // identity" endpoint. Per-page calls (ProfilePage, GymPage, …) only
+      // run when the user navigates there — meaning a fresh sign-in that
+      // lands on /tables/<id> or /play would fire several authed endpoints
+      // (guide/preferences, users/me/notifications, guide/guest-credit)
+      // before any User row exists, which all then 404 with "User not
+      // found". Run sync once here so every authed effect downstream sees
+      // a hydrated row. Awaited so hydrate() lands after.
+      ;(async () => {
+        try {
+          const token = await getToken()
+          if (token) await api.users.sync(token).catch(() => {})
+        } catch { /* non-fatal — endpoints will fall back to per-page sync */ }
+
+        // Skip guide hydrate on /play — the panel is suppressed on that route,
+        // so the extra /api/v1/guide/preferences round trip is pure waste on
+        // the game hot path. Other routes hydrate as before.
+        const onPlayRoute = window.location.pathname.startsWith('/play')
+        if (!onPlayRoute) {
+          await useGuideStore.getState().hydrate()
           perfMark('AppLayout:hydrate-done')
           const { journeyProgress } = useGuideStore.getState()
           const { dismissedAt } = journeyProgress ?? {}
@@ -287,8 +303,8 @@ export default function AppLayout() {
           if (!dismissedAt) {
             useGuideStore.getState().open()
           }
-        })
-      }
+        }
+      })()
     } else {
       useGuideStore.getState().reset()
     }
@@ -416,6 +432,12 @@ export default function AppLayout() {
       try {
         const token = await getToken()
         if (!token || cancelled) return
+        // Ensure the domain User row exists before fetching its notifications
+        // — otherwise this races the sign-in sync effect above and 404's on
+        // first run after sign-in. sync() is idempotent and the token call is
+        // cached, so this is cheap.
+        await api.users.sync(token).catch(() => {})
+        if (cancelled) return
         const res = await fetch('/api/v1/users/me/notifications', {
           headers: { Authorization: `Bearer ${token}` },
         })
