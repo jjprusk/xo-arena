@@ -117,6 +117,13 @@ export default function ProfilePage() {
   // user to the cup detail page so they can watch their bot's matches —
   // landing on /profile with no follow-up was a flat dead-end.
   //
+  // Append `?follow=<callerBotId>` so TournamentDetailPage's follow effect
+  // auto-opens the live spectate modal on the user's round-1 match. The
+  // bracket-only landing was technically per-spec but in practice bot
+  // matches finish in 5-10 s — by the time the user oriented on the
+  // bracket page, both round-1 matches were already done and the cup
+  // experience felt skipped. Following puts them inside the live game.
+  //
   // Gate on `!botsLoading` for the same reason train-bot/spar do — the
   // service auto-picks the user's most-recent bot, but we want to bounce
   // them to the bot wizard if they somehow have zero bots.
@@ -140,8 +147,10 @@ export default function ProfilePage() {
         if (cancelled) return
         const tid = res?.tournament?.id
         if (!tid) throw new Error('No tournament id in response')
+        const callerBot = (res?.participants ?? []).find(p => p.isCallerBot)
+        const followQs  = callerBot?.userId ? `?follow=${encodeURIComponent(callerBot.userId)}` : ''
         useGuideStore.getState().close()
-        navigate(`/tournaments/${tid}`, { replace: true })
+        navigate(`/tournaments/${tid}${followQs}`, { replace: true })
       } catch (err) {
         if (cancelled) return
         setCupError(err?.message || 'Could not start the Curriculum Cup')

@@ -135,11 +135,16 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
 
     await page.goto('/profile?action=cup')
 
-    // The handler POSTs the clone, then navigate('/tournaments/<id>',
-    // {replace:true}). 15s of slack — clone takes a moment because it
-    // creates 3 ownerless bot User rows + bracket + initial publishes.
-    // Pre-fix, this assertion timed out inside 15s and surfaced the bug.
-    await page.waitForURL(/\/tournaments\/[^/?]+(\?|$)/, { timeout: 15_000 })
+    // The handler POSTs the clone, then navigate('/tournaments/<id>?follow=
+    // <callerBotId>', {replace:true}). 15s of slack — clone takes a moment
+    // because it creates 3 ownerless bot User rows + bracket + initial
+    // publishes. The `follow=<id>` query is what makes TournamentDetailPage
+    // auto-open the live spectate modal on the user's round-1 match. Pre-
+    // follow-fix, the user landed on a static bracket page; bot games
+    // finish in 5-10 s so the round-1 matches were already done by the time
+    // the user oriented — the cup felt skipped. The assertion below
+    // requires the follow param specifically; bare /tournaments/<id> fails.
+    await page.waitForURL(/\/tournaments\/[^/?]+\?follow=/, { timeout: 15_000 })
 
     await expect(page.getByRole('heading', { name: /Curriculum Cup/i })).toBeVisible({ timeout: 10_000 })
 
@@ -148,6 +153,15 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     // a future regression that swallows the error and soft-navigates would
     // get caught here.
     await expect(page.getByText(/Couldn't start the Curriculum Cup/i)).toBeHidden()
+
+    // The follow effect should have opened the spectate modal on the
+    // caller bot's round-1 match. The modal renders a "Following: <name>"
+    // header. Pre-fix (when we navigated to bare /tournaments/<id>), no
+    // modal opened and this assertion would time out. The mode may flip
+    // from 'live' → 'ended' if the test arrives after the match completes
+    // (1s pace, ~5 moves), so we only assert the Following header — which
+    // is present in any of live / waiting / ended modes.
+    await expect(page.getByText(/^Following:/)).toBeVisible({ timeout: 15_000 })
 
     // Step 6 fires server-side via tournament:participant:joined. Bridge
     // is fire-and-forget so allow a small grace window.
@@ -213,9 +227,12 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const before = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
     await cupLink.click()
 
-    await page.waitForURL(/\/tournaments\/[^/?]+(\?|$)/, { timeout: 15_000 })
+    await page.waitForURL(/\/tournaments\/[^/?]+\?follow=/, { timeout: 15_000 })
     await expect(page.getByRole('heading', { name: /Curriculum Cup/i })).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText(/Couldn't start the Curriculum Cup/i)).toBeHidden()
+    // Spectate modal opened on the caller bot's match — same assertion as
+    // test 1, applied here so the Guide-CTA path is also covered.
+    await expect(page.getByText(/^Following:/)).toBeVisible({ timeout: 15_000 })
 
     const completed6 = await pollForStep(context.request, token, 6, 30_000)
     expect(completed6).toEqual(expect.arrayContaining([6]))

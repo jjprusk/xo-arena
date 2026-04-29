@@ -72,19 +72,17 @@ async function cloneCupOpponent({ builtinUsername, displayName }) {
   try {
     return await db.user.create({ data: { ...baseData, displayName }, select })
   } catch (err) {
-    // P2002 = unique constraint violation. Only retry on the displayName
-    // index — any other constraint failure is a genuine bug we want to
-    // surface, not paper over with a suffix.
-    const isDisplayNameClash = err?.code === 'P2002'
-      && Array.isArray(err?.meta?.target)
-      && err.meta.target.some(t => /displayname|displayName/i.test(String(t)))
-    if (!isDisplayNameClash && err?.code === 'P2002') {
-      // Some Prisma drivers expose target as a string ("users_bot_displayname_unowned_key").
-      const targetStr = typeof err?.meta?.target === 'string' ? err.meta.target : ''
-      if (!/displayname/i.test(targetStr)) throw err
-    } else if (err?.code !== 'P2002') {
-      throw err
-    }
+    // P2002 = unique constraint violation. Username and email both already
+    // include the random `suffix`, so realistic collisions in this row
+    // can only come from the `LOWER(displayName)` partial unique index.
+    // Earlier we narrowed by sniffing err.meta.target, but Prisma's driver
+    // exposes it inconsistently for expression-based indexes (sometimes
+    // `'lower("displayName"'`, sometimes a constraint name like
+    // `users_bot_displayname_unowned_key`, sometimes absent entirely),
+    // and our regex was missing the no-target case — so a real-user cup
+    // clone 500'd with "Internal Server Error". Just retry on any P2002
+    // once with a suffixed displayName; if the retry also fails we throw.
+    if (err?.code !== 'P2002') throw err
     return await db.user.create({
       data: { ...baseData, displayName: `${displayName} #${suffix.slice(0, 4)}` },
       select,

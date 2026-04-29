@@ -292,8 +292,40 @@ describe('cloneCurriculumCup — displayName collision retry', () => {
     expect(r.status).toBe(201)
   })
 
-  it('rethrows P2002 on a non-displayName index (e.g. username collision) — never silently swallowed', async () => {
-    mockDb.user.create.mockRejectedValueOnce(p2002('users_username_key'))
+  it('retries when meta.target is missing entirely (the actual prod bug)', async () => {
+    // Prisma's adapter for expression-based unique indexes doesn't always
+    // populate err.meta.target — the message text says "Unique constraint
+    // failed on the fields: (`lower(\"displayName\"`)" but err.meta is
+    // undefined. The previous retry logic treated "no target" as "not the
+    // displayName index" and threw, so a real user's first cup clone 500'd.
+    let firstAttempt = true
+    mockDb.user.create.mockImplementation(({ data }) => {
+      if (firstAttempt) {
+        firstAttempt = false
+        const e = new Error('Unique constraint failed')
+        e.code = 'P2002'
+        // Intentionally no meta.target — the regression scenario.
+        return Promise.reject(e)
+      }
+      return Promise.resolve({ id: 'cup-clone-y', displayName: data.displayName,
+        botModelId: data.botModelId, isBot: data.isBot })
+    })
+    const r = await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine', rng: () => 0 })
+    expect(r.status).toBe(201)
+  })
+
+  it('rethrows on a non-displayName P2002 once the suffixed retry also fails — never silently swallowed', async () => {
+    // Username/email both already include a random base36 suffix at row
+    // build, so a real-world non-displayName P2002 here is astronomically
+    // unlikely. We previously narrowed the retry to displayName only, but
+    // Prisma exposes meta.target inconsistently for expression indexes
+    // (sometimes `'lower("displayName"'`, sometimes a constraint name,
+    // sometimes nothing at all), and the no-target branch wrongly threw
+    // — breaking real cup clones. The clone now retries once on any P2002
+    // with a suffixed displayName; if the retry also collides (e.g. a
+    // genuine username clash), the error propagates here and surfaces
+    // server-side.
+    mockDb.user.create.mockRejectedValue(p2002('users_username_key'))
     await expect(cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine', rng: () => 0 }))
       .rejects.toMatchObject({ code: 'P2002', meta: { target: 'users_username_key' } })
   })
