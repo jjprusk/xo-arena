@@ -28,6 +28,16 @@ function randomSuffix() {
  * Create a fresh ownerless bot User row cloned from the named built-in
  * persona, with the chosen displayName drawn from the cup's name pool.
  * Returns the new User row.
+ *
+ * Display-name uniqueness: the schema has a partial unique index on
+ * `LOWER(displayName)` for unowned bots (`isBot AND botOwnerId IS NULL`).
+ * Each tier's pool only has 8 names and cup-clone rows survive 30 days
+ * (per the GC sweep), so reusing pool entries across cups collides
+ * routinely once a few users have run the curriculum. The first attempt
+ * uses the bare pool name (clean UX); on P2002 we retry with a short
+ * base36 suffix appended ("Tarnished Bolt #7af2"). The bare-name path
+ * stays the common case so spectators keep seeing canonical names
+ * whenever the pool entry is free.
  */
 async function cloneCupOpponent({ builtinUsername, displayName }) {
   const persona = await db.user.findUnique({
@@ -46,21 +56,40 @@ async function cloneCupOpponent({ builtinUsername, displayName }) {
     ? `${persona.botModelId}:cup:${suffix}`
     : `builtin:${persona.botModelType ?? 'minimax'}:novice:cup:${suffix}`
 
-  return db.user.create({
-    data: {
-      username, email,
-      displayName,
-      avatarUrl:      persona.avatarUrl ?? null,
-      isBot:          true,
-      botOwnerId:     null,
-      botModelType:   persona.botModelType,
-      botModelId,
-      botActive:      true,
-      botCompetitive: false,
-      botAvailable:   false,   // cup-only — not eligible for general bracket fills
-    },
-    select: { id: true, displayName: true, botModelId: true, isBot: true },
-  })
+  const baseData = {
+    username, email,
+    avatarUrl:      persona.avatarUrl ?? null,
+    isBot:          true,
+    botOwnerId:     null,
+    botModelType:   persona.botModelType,
+    botModelId,
+    botActive:      true,
+    botCompetitive: false,
+    botAvailable:   false,   // cup-only — not eligible for general bracket fills
+  }
+  const select = { id: true, displayName: true, botModelId: true, isBot: true }
+
+  try {
+    return await db.user.create({ data: { ...baseData, displayName }, select })
+  } catch (err) {
+    // P2002 = unique constraint violation. Only retry on the displayName
+    // index — any other constraint failure is a genuine bug we want to
+    // surface, not paper over with a suffix.
+    const isDisplayNameClash = err?.code === 'P2002'
+      && Array.isArray(err?.meta?.target)
+      && err.meta.target.some(t => /displayname|displayName/i.test(String(t)))
+    if (!isDisplayNameClash && err?.code === 'P2002') {
+      // Some Prisma drivers expose target as a string ("users_bot_displayname_unowned_key").
+      const targetStr = typeof err?.meta?.target === 'string' ? err.meta.target : ''
+      if (!/displayname/i.test(targetStr)) throw err
+    } else if (err?.code !== 'P2002') {
+      throw err
+    }
+    return await db.user.create({
+      data: { ...baseData, displayName: `${displayName} #${suffix.slice(0, 4)}` },
+      select,
+    })
+  }
 }
 
 /**
