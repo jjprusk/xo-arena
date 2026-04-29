@@ -37,13 +37,15 @@ vi.mock('../services/skillService.js', () => ({
   getMoveForModel: vi.fn().mockResolvedValue(0),
 }))
 
-const { mockTournamentMatchUpdate } = vi.hoisted(() => ({
+const { mockTournamentMatchUpdate, mockTableCreate, mockTableFindFirst } = vi.hoisted(() => ({
   mockTournamentMatchUpdate: vi.fn().mockResolvedValue({}),
+  mockTableCreate:           vi.fn().mockResolvedValue({ id: 'tbl-created' }),
+  mockTableFindFirst:        vi.fn().mockResolvedValue(null),
 }))
 vi.mock('../../lib/db.js', () => ({
   default: {
     user:            { updateMany: vi.fn().mockResolvedValue({}) },
-    table:           { findFirst: vi.fn().mockResolvedValue(null) },
+    table:           { findFirst: mockTableFindFirst, create: mockTableCreate },
     tournamentMatch: { update: mockTournamentMatchUpdate },
   },
 }))
@@ -87,6 +89,10 @@ beforeEach(() => {
   botGameRunner._socketToGame.clear()
   mockAppendToStream.mockClear()
   mockTournamentMatchUpdate.mockClear()
+  mockTableCreate.mockClear()
+  mockTableFindFirst.mockClear()
+  mockTableFindFirst.mockResolvedValue(null)
+  mockTableCreate.mockResolvedValue({ id: 'tbl-created' })
 })
 
 // ---------------------------------------------------------------------------
@@ -248,6 +254,56 @@ describe('startGame', () => {
       where: { id: 'm1' },
       data:  { status: 'IN_PROGRESS' },
     })
+  })
+
+  it('mints a backing Table for tournament bot matches when none exists', async () => {
+    // Without a Table row, the standard /rt/tables/:slug/join path 404s
+    // (TABLE_NOT_FOUND) when a cup spectator follows their bot, even though
+    // the bot game is running in memory.
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'cup-match-2',
+      moveDelayMs: 9_999_999,
+      tournamentId: 't1',
+      tournamentMatchId: 'm1',
+      bestOfN: 1,
+    })
+
+    expect(mockTableCreate).toHaveBeenCalledTimes(1)
+    const args = mockTableCreate.mock.calls[0][0]
+    expect(args.data).toMatchObject({
+      gameId:            'xo',
+      slug:              'cup-match-2',
+      isTournament:      true,
+      tournamentMatchId: 'm1',
+      tournamentId:      't1',
+      status:            'ACTIVE',
+    })
+    expect(args.data.seats).toHaveLength(2)
+  })
+
+  it('does not create a backing Table when one already exists for the slug (spar/demo path)', async () => {
+    mockTableFindFirst.mockResolvedValueOnce({ id: 'pre-existing-tbl' })
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'demo-existing',
+      moveDelayMs: 9_999_999,
+      tournamentId: 't1',
+      tournamentMatchId: 'm1',
+    })
+    expect(mockTableCreate).not.toHaveBeenCalled()
+  })
+
+  it('does not create a backing Table for non-tournament bot games', async () => {
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'free-bot-no-table',
+      moveDelayMs: 9_999_999,
+    })
+    expect(mockTableCreate).not.toHaveBeenCalled()
   })
 
   it('does not call tournamentMatch.update for non-tournament bot games', async () => {

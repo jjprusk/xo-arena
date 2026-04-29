@@ -133,14 +133,50 @@ class BotGameRunner {
 
     this._games.set(slug, game)
 
-    // Resolve the Table.id for this slug (Demo Table macro creates the row
-    // before calling startGame). Without this, the bot moves emit on
-    // `table:<slug>:state` and never reach the spectator's useGameSDK.
+    // Resolve the Table.id for this slug. Spar/demo flows create the Table
+    // row before calling startGame so we just look it up. Tournament bot
+    // matches arrive without a Table — we mint one here so the standard
+    // spectator join path (`/rt/tables/:slug/join`) resolves. Without it
+    // the cup follow-modal 404'd on TABLE_NOT_FOUND once the match flipped
+    // to live.
     try {
-      const row = await db.table.findFirst({ where: { slug }, select: { id: true } })
+      let row = await db.table.findFirst({ where: { slug }, select: { id: true } })
+      if (!row && tournamentMatchId) {
+        row = await db.table.create({
+          data: {
+            gameId,
+            slug,
+            createdById:      bot1.id,
+            minPlayers:       2,
+            maxPlayers:       2,
+            isPrivate:        false,
+            isTournament:     true,
+            tournamentMatchId,
+            tournamentId,
+            bestOfN,
+            status:           'ACTIVE',
+            seats: [
+              { userId: bot1.id, status: 'occupied', displayName: bot1.displayName },
+              { userId: bot2.id, status: 'occupied', displayName: bot2.displayName },
+            ],
+            previewState: {
+              board:       Array(9).fill(null),
+              currentTurn: 'X',
+              scores:      { X: 0, O: 0 },
+              round:       1,
+              winner:      null,
+              winLine:     null,
+              marks:       { [bot1.id]: 'X', [bot2.id]: 'O' },
+              botMark:     null,
+              moves:       [],
+            },
+          },
+          select: { id: true },
+        })
+      }
       if (row?.id) game.tableId = row.id
     } catch (err) {
-      logger.warn({ err: err.message, slug }, 'botGameRunner: tableId lookup failed')
+      logger.warn({ err: err.message, slug, tournamentMatchId }, 'botGameRunner: tableId resolve/create failed')
     }
     const channelKey = game.tableId ?? slug
     game.channelKey = channelKey
