@@ -21,15 +21,19 @@ import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 import { useEventStream } from '../../lib/useEventStream.js'
 
+// Phase labels are progress-driven, not ε-driven. The default Q-Learning
+// schedule decays ε from 1.0 to 0.05 within the first ~5% of episodes, so
+// ε ranges all collapse to "Polishing" by the time the first progress tick
+// reaches the browser. Progress percentage is the honest signal users see.
 const PHASE_LABELS = [
-  { minEpsilon: 0.7,  label: 'Exploring openings…' },
-  { minEpsilon: 0.4,  label: 'Learning threats…' },
-  { minEpsilon: 0.15, label: 'Refining strategy…' },
-  { minEpsilon: 0.0,  label: 'Polishing…' },
+  { maxPct: 0.25, label: 'Exploring openings…' },
+  { maxPct: 0.50, label: 'Learning threats…' },
+  { maxPct: 0.80, label: 'Refining strategy…' },
+  { maxPct: 1.01, label: 'Polishing…' },
 ]
 
-function phaseFor(epsilon) {
-  for (const p of PHASE_LABELS) if (epsilon >= p.minEpsilon) return p.label
+function phaseFor(pct) {
+  for (const p of PHASE_LABELS) if (pct < p.maxPct) return p.label
   return PHASE_LABELS[PHASE_LABELS.length - 1].label
 }
 
@@ -158,7 +162,8 @@ export default function TrainGuidedModal({ botId, botName, onComplete, onClose }
         }
         setPoints(prev => prev.length > 0 && prev[prev.length - 1].episode >= next.episode ? prev : [...prev, next])
         setLatest(next)
-        setPhase(phaseFor(next.epsilon))
+        const total = Number(payload.totalEpisodes) || totalEpisodes || next.episode
+        setPhase(phaseFor(total > 0 ? next.episode / total : 0))
       } else if (channel.endsWith(':complete')) {
         setSummary(payload.summary || null)
         setStatus('finalizing')

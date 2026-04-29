@@ -371,11 +371,17 @@ router.post('/:id/train-guided', requireAuth, async (req, res, next) => {
       })
     }
 
-    const iterations = await getSystemConfig('guide.training.iterations', 1500)
+    // Empirically tuned for the journey-step-4 modal: VS_MINIMAX easy
+    // produces a satisfying winRate climb from ~33% (random) to ~78% across
+    // 30k episodes in ~5s. SELF_PLAY produces ~67% draws and a flat winRate
+    // line — useless for a chart that's supposed to visibly *go up*.
+    const iterations = await getSystemConfig('guide.training.iterations', 30000)
+    const mode       = await getSystemConfig('guide.training.mode',       'VS_MINIMAX')
+    const difficulty = await getSystemConfig('guide.training.difficulty', 'easy')
     const session = await mlSvc.startTraining(skill.id, {
-      mode:       'SELF_PLAY',
+      mode,
       iterations,
-      config:     {},
+      config: { difficulty },
     })
 
     res.json({

@@ -144,8 +144,9 @@ describe('POST /api/v1/bots/:id/train-guided', () => {
       createdBy: 'ba_user_1',
     }))
     expect(mlSvc.startTraining).toHaveBeenCalledWith('sk_new', expect.objectContaining({
-      mode:       'SELF_PLAY',
-      iterations: 1500,
+      mode:       'VS_MINIMAX',
+      iterations: 30000,
+      config:     { difficulty: 'easy' },
     }))
   })
 
