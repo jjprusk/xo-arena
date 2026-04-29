@@ -153,6 +153,17 @@ class BotGameRunner {
         where: { id: { in: [bot1.id, bot2.id] } },
         data: { botInTournament: true },
       }).catch(err => logger.warn({ err }, 'Failed to set botInTournament flag'))
+
+      // Flip the tournament match to IN_PROGRESS so spectator UI (e.g. the
+      // Curriculum Cup follow-modal) can detect that the game is live.
+      // Without this, bot matches stayed PENDING for their entire run and
+      // a follower watching their bot was stuck on "waiting" until the
+      // match completed — by which time the next match was already gone.
+      // PvP matches get the same flip mid-series in socketHandler.js.
+      await db.tournamentMatch.update({
+        where: { id: tournamentMatchId },
+        data:  { status: 'IN_PROGRESS' },
+      }).catch(err => logger.warn({ err, tournamentMatchId }, 'Failed to set tournamentMatch IN_PROGRESS'))
     }
 
     // Run the game loop asynchronously

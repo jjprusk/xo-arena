@@ -37,8 +37,15 @@ vi.mock('../services/skillService.js', () => ({
   getMoveForModel: vi.fn().mockResolvedValue(0),
 }))
 
-vi.mock('../lib/db.js', () => ({
-  default: { user: { updateMany: vi.fn() } },
+const { mockTournamentMatchUpdate } = vi.hoisted(() => ({
+  mockTournamentMatchUpdate: vi.fn().mockResolvedValue({}),
+}))
+vi.mock('../../lib/db.js', () => ({
+  default: {
+    user:            { updateMany: vi.fn().mockResolvedValue({}) },
+    table:           { findFirst: vi.fn().mockResolvedValue(null) },
+    tournamentMatch: { update: mockTournamentMatchUpdate },
+  },
 }))
 
 const { mockAppendToStream } = vi.hoisted(() => ({
@@ -79,6 +86,7 @@ beforeEach(() => {
   botGameRunner._games.clear()
   botGameRunner._socketToGame.clear()
   mockAppendToStream.mockClear()
+  mockTournamentMatchUpdate.mockClear()
 })
 
 // ---------------------------------------------------------------------------
@@ -221,6 +229,35 @@ describe('startGame', () => {
     })
 
     expect(result.slug).toBe('demo-xyz')
+  })
+
+  it('flips tournamentMatch.status to IN_PROGRESS when starting a tournament bot match', async () => {
+    // Without this flip, the cup follow-modal stays in "waiting" mode for
+    // the entire match: it polls tournament.rounds[*].matches[*].status
+    // and only switches to live when a match is IN_PROGRESS.
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'cup-match-1',
+      moveDelayMs: 9_999_999,
+      tournamentId: 't1',
+      tournamentMatchId: 'm1',
+    })
+
+    expect(mockTournamentMatchUpdate).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data:  { status: 'IN_PROGRESS' },
+    })
+  })
+
+  it('does not call tournamentMatch.update for non-tournament bot games', async () => {
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'free-bot-game',
+      moveDelayMs: 9_999_999,
+    })
+    expect(mockTournamentMatchUpdate).not.toHaveBeenCalled()
   })
 
   it('emits a kind=start frame on table:<slug>:state for SSE spectators', async () => {
