@@ -18,7 +18,6 @@ import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 import { useEventStream, reopenSharedStream } from '../../lib/useEventStream.js'
 import { useHeartbeat } from '../../lib/useHeartbeat.js'
-import { TOTAL_STEPS } from '../guide/journeySteps.js'
 import { AppNav } from '@xo-arena/nav'
 
 // Kick off the game-xo chunk download immediately on app load — by the time
@@ -196,8 +195,12 @@ export default function AppLayout() {
 
     if (prevPath.startsWith('/play') && currPath === '/') {
       const { journeyProgress } = useGuideStore.getState()
-      const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-      if (!dismissedAt && completedSteps.length < TOTAL_STEPS) {
+      const { dismissedAt } = journeyProgress ?? {}
+      // Open if the journey hasn't been actively dismissed. Includes
+      // graduates (length === TOTAL_STEPS) who haven't clicked Continue
+      // — the Specialize celebration card is the whole reward and they
+      // should see it land when they navigate home from /play.
+      if (!dismissedAt) {
         useGuideStore.getState().open()
       }
     }
@@ -226,12 +229,16 @@ export default function AppLayout() {
       const prevSeen   = lastSeenStepCountRef.current
       const isBaseline = prevSeen === -1
       lastSeenStepCountRef.current = completedSteps.length
+      // Growth from prevSeen → current (incl. 6 → 7 graduation) opens the
+      // panel exactly once. The `> prevSeen` check naturally bounds this to
+      // the moment of transition — no upper bound on completedSteps.length
+      // is needed, and adding one (e.g. `< TOTAL_STEPS`) would suppress the
+      // Specialize celebration that lands the moment step 7 fires.
       if (
         !hasActionParam
         && !isBaseline
         && !dismissedAt
         && completedSteps.length > prevSeen
-        && completedSteps.length < TOTAL_STEPS
       ) {
         useGuideStore.getState().open()
       }
@@ -255,8 +262,11 @@ export default function AppLayout() {
         useGuideStore.getState().hydrate().then(() => {
           perfMark('AppLayout:hydrate-done')
           const { journeyProgress } = useGuideStore.getState()
-          const { completedSteps = [], dismissedAt } = journeyProgress ?? {}
-          if (!dismissedAt && completedSteps.length < TOTAL_STEPS) {
+          const { dismissedAt } = journeyProgress ?? {}
+          // Open whenever the journey isn't actively dismissed — covers
+          // mid-flow users AND undismissed graduates (Specialize card has
+          // its own "Continue" CTA that flips dismissedAt).
+          if (!dismissedAt) {
             useGuideStore.getState().open()
           }
         })
