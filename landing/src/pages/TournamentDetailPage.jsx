@@ -691,6 +691,15 @@ function MatchSpectateModal({ matchId, matchLabel, followedName, mode = 'live', 
             <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
               {statusMessage ?? (mode === 'ended' ? 'Match run is over.' : 'Waiting for the next match…')}
             </p>
+            {mode === 'waiting' && (
+              // Without this hint the modal looks frozen — the user has no
+              // way to know the polling effect (~3 s tick) will swap them
+              // into the live game the moment it starts. They sit on a
+              // hourglass and either wait blind or close out of the cup.
+              <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                We'll switch you into the live game automatically when it starts.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -2004,12 +2013,14 @@ export default function TournamentDetailPage() {
   }, [watchMatch, followUserId, id, token])
 
   // Phase 2b — while the follow modal is in 'waiting' mode, poll every
-  // 10s. Waiting means the user's next match hasn't started yet, so there's
+  // 3 s. Waiting means the user's next match hasn't started yet, so there's
   // no game socket to fire an end signal. Without this, Waiting is a
-  // dead-end.
+  // dead-end. The Curriculum Cup runs at 3 s/move with ~5-move matches,
+  // so a 10 s poll could miss the start of the next match entirely; 3 s
+  // matches the cadence and keeps the auto-flip feeling immediate.
   useEffect(() => {
     if (watchMatch?.mode !== 'waiting') return
-    const timerId = setInterval(() => { handleGameEnd() }, 10_000)
+    const timerId = setInterval(() => { handleGameEnd() }, 3_000)
     return () => clearInterval(timerId)
   }, [watchMatch?.mode, handleGameEnd])
 
