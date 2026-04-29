@@ -387,8 +387,14 @@ function TableContextSidebar({ gameMeta, session, phase, table, spectatorCount, 
             Seated
           </p>
           <ul className="space-y-1">
-            {players.map(p => (
-              <li key={p.id} className="text-sm flex items-center gap-2">
+            {/* Key by index, not p.id — Hook step-2 demo tables route the
+                SAME bot to both seats (e.g. Sterling vs Sterling, the
+                "high-tier draw stalemate" curated matchup), so two seats
+                share the same userId and React's duplicate-key warning
+                fires. Index is the natural unique identifier for a seat
+                row anyway. */}
+            {players.map((p, i) => (
+              <li key={i} className="text-sm flex items-center gap-2">
                 <span
                   className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
                   style={{ background: 'var(--color-teal-600)' }}
