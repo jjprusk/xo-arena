@@ -186,14 +186,14 @@ export default function TrainGuidedModal({ botId, botName, onComplete, onClose }
   })
 
   // ── Finalize once the training run completes ────────────────────────────
-  // Same StrictMode trap as the startup effect — a closure-scoped cancelled
-  // flag flipped from a cleanup return wedges the second mount because the
-  // first run's closure variable stays at `true`. Use a ref instead so the
-  // celebration timer can still no-op on a real unmount without leaking.
+  // Closure-scoped guards (whether `cancelled = true` set from a cleanup or
+  // an "unmounted" ref maintained via an empty-deps cleanup) BOTH wedge
+  // under <StrictMode>: the simulated unmount-then-remount fires the
+  // cleanup once, flipping the flag to `true`, and the next mount inherits
+  // that stale `true` so every state setter short-circuits. The dedicated
+  // dedupe (finalizeStartedRef) is enough; modern React tolerates state
+  // updates on a truly-unmounted component (it just no-ops).
   const finalizeStartedRef = useRef(false)
-  const unmountedRef       = useRef(false)
-  useEffect(() => () => { unmountedRef.current = true }, [])
-
   useEffect(() => {
     if (status !== 'finalizing') return
     if (finalizeStartedRef.current) return
@@ -202,12 +202,10 @@ export default function TrainGuidedModal({ botId, botName, onComplete, onClose }
       try {
         const token = await getToken()
         const res = await api.bots.trainGuidedFinalize(botId, { sessionId, skillId }, token)
-        if (unmountedRef.current) return
         setStatus('done')
         // Brief celebration window before we call onComplete (~2.5s).
-        setTimeout(() => { if (!unmountedRef.current) onComplete?.(res) }, 2500)
+        setTimeout(() => onComplete?.(res), 2500)
       } catch (err) {
-        if (unmountedRef.current) return
         setErrorMsg(err.message || 'Could not save the trained bot.')
         setStatus('error')
       }
