@@ -86,16 +86,6 @@ Then each journey-step destination just renders `<Spotlight target={...} />` whe
 
 ---
 
-### 3.7a.5 — see "builtin polish" item
-
-**Surfaced by:** Phase 8 QA (2026-04-28) — placeholder for the §3.7a.5 V1 acceptance item flagged "see builtin polish."
-
-**Action:** locate the `builtin polish` reference in the V1 acceptance / requirements docs and pull the concrete sub-items into this entry. Likely candidates: built-in (system) bot avatars, naming, tier badges, or display in the rankings — none of which were directly retested in the Phase 8 cut.
-
-**Effort:** unknown until the source item is unpacked.
-
----
-
 ## Status snapshot (last reviewed 2026-04-23)
 
 | Item | Status |
