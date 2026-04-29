@@ -621,26 +621,47 @@ export async function createHvbTable({
   }
 }
 
-/** Internal — ELO + display name lookup for `sanitizeTable` extras. */
+/** Internal — ELO + display name lookup for `sanitizeTable` extras.
+ *
+ *  Hydrates seat displayName from the User table when the seat itself doesn't
+ *  carry one. Older REST seat-creation paths (`POST /api/v1/tables/:id/join`
+ *  before 2026-04-29) wrote `{ userId, status }` without a displayName field
+ *  — those rows still exist in dev/staging DBs, and without this fallback
+ *  the rt host_reattach path returns `hostUserDisplayName: null` and the
+ *  client renders the literal "Host"/"Guest" string in the seat-pod label.
+ */
 async function buildExtras(hostSeat, guestSeat, guestUserDomainId) {
   let hostUserElo = null
+  let hostUserName = hostSeat?.displayName ?? null
   const hostBaId = hostSeat?.userId
   if (hostBaId) {
-    const hostUser = await db.user.findUnique({ where: { betterAuthId: hostBaId }, select: { id: true } })
+    const hostUser = await db.user.findUnique({
+      where:  { betterAuthId: hostBaId },
+      select: { id: true, displayName: true },
+    })
     if (hostUser) {
+      if (!hostUserName) hostUserName = hostUser.displayName ?? null
       const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: hostUser.id, gameId: 'xo' } } })
       hostUserElo = eloRow?.rating ?? null
     }
   }
   let guestUserElo = null
+  let guestUserName = guestSeat?.displayName ?? null
   if (guestUserDomainId) {
+    if (!guestUserName) {
+      const guestUser = await db.user.findUnique({
+        where:  { id: guestUserDomainId },
+        select: { displayName: true },
+      })
+      guestUserName = guestUser?.displayName ?? null
+    }
     const eloRow = await db.gameElo.findUnique({ where: { userId_gameId: { userId: guestUserDomainId, gameId: 'xo' } } })
     guestUserElo = eloRow?.rating ?? null
   }
   return {
-    hostUserDisplayName:  hostSeat?.displayName  ?? null,
+    hostUserDisplayName:  hostUserName,
     hostUserElo,
-    guestUserDisplayName: guestSeat?.displayName ?? null,
+    guestUserDisplayName: guestUserName,
     guestUserElo,
   }
 }
@@ -679,10 +700,26 @@ export async function joinTable({ io, user, seatId, slug, role = 'player' }) {
     if (table.isPrivate && table.createdById !== seatId) {
       return { ok: false, code: 'PRIVATE_TABLE', message: 'Spectators not allowed in this room' }
     }
+    // Without a room payload the client falls back to the literal "Host"/
+    // "Guest" strings at useGameSDK applyJoinResult — the demo bot names
+    // (Rusty/Copper/...) never reach the seat-pod labels. Build it from the
+    // seats already hydrated by withSeatDisplay (or seeded directly for demo
+    // tables, which don't have BetterAuth identities to look up).
+    const extras = await buildExtras(seats[0], seats[1], null)
+    const { sanitizeTable } = await getSocketHandlerHelpers()
+    const ps = table.previewState || {}
     return {
       ok:     true,
       action: 'spectated_pvp',
       table,
+      room:   sanitizeTable(table, extras),
+      ...(ps.board ? {
+        startPayload: {
+          board:       ps.board,
+          currentTurn: ps.currentTurn ?? 'X',
+          round:       ps.round ?? 1,
+        },
+      } : {}),
     }
   }
 

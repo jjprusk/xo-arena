@@ -165,10 +165,20 @@ export default function TablesPage() {
   // Small events stream, so a full re-fetch is simpler and correct vs.
   // reconciling individual mutations. Coalesces bursts into a single fetch
   // via a short debounce.
+  //
+  // `table.released` is the canonical "this table left the active list"
+  // signal — fired by every game-end path (forfeit, natural game-end,
+  // GC sweep, admin stop, demo finish, leave-while-FORMING). Without it
+  // the survivor of a forfeit kept seeing the table in the default
+  // `FORMING + ACTIVE` filter even though the row had already flipped to
+  // COMPLETED. `table.completed` is registered in the bus but never
+  // actually dispatched anywhere — keep it for forward-compat with whatever
+  // future producer wires it, but it's `table.released` that does the work.
   const debounceRef = useRef(null)
   const TABLE_EVENT_TYPES = new Set([
     'table.created', 'player.joined', 'player.left',
     'spectator.joined', 'table.empty', 'table.completed', 'table.deleted',
+    'table.released',
   ])
   useEventStream({
     channels: ['guide:notification'],

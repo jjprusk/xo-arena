@@ -15,7 +15,7 @@
  * render.
  */
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
@@ -47,6 +47,15 @@ export default function TableDetailPage() {
   const [table, setTable] = useState(null)   // null = loading
   const [error, setError] = useState(null)
   const [busy,  setBusy]  = useState(false)
+
+  // Once a GameView has been mounted (table was ACTIVE on at least one render),
+  // keep mounting it through the transition to COMPLETED so the survivor of
+  // a forfeit / opponent disconnect actually *sees* useGameSDK's win screen +
+  // Rematch. Without this, any refetch (e.g. from a `playerDisconnected`
+  // lifecycle event mid-forfeit) flips the parent into the seat-list branch
+  // and unmounts GameView before the user can react. Resets implicitly when
+  // the user navigates to a different table (component remount).
+  const hasMountedGameViewRef = useRef(false)
 
   const load = useCallback(async () => {
     try {
@@ -137,8 +146,19 @@ export default function TableDetailPage() {
         return
       }
       if (channel === `table:${tableId}:lifecycle`) {
-        // Cancelled / abandoned: navigate away — the table is gone.
+        // Cancelled / abandoned: navigate away — the table is gone. EXCEPT
+        // when a GameView has already mounted: in that case the survivor of
+        // a forfeit / opponent-disconnect needs to see the win screen +
+        // Rematch driven by useGameSDK's `state:forfeit` handler. Bouncing
+        // them to /tables here is what the §1 known-bug entry in
+        // Future_Ideas.md called out.
         if (data?.kind === 'cancelled' || data?.kind === 'abandoned') {
+          if (hasMountedGameViewRef.current) {
+            // Still useful to refresh seat/status data for the page chrome
+            // around the GameView; GameView itself drives the result UI.
+            load()
+            return
+          }
           navigate('/tables', { replace: true })
           return
         }
@@ -244,7 +264,15 @@ export default function TableDetailPage() {
   // seated players, spectator count, Gym/Puzzles tabs), and a placeholder
   // sits where the live game component will load once Phase 3.4 bridges
   // Tables to the realtime session layer.
-  if (table.status === 'ACTIVE') {
+  //
+  // Forfeit-survival: once we've shown a GameView, keep showing it through
+  // COMPLETED so useGameSDK's `state:forfeit` handler (sets phase=finished,
+  // emits the win/loss event) actually paints the result screen. Otherwise
+  // the parent unmounts GameView the moment a refetch surfaces COMPLETED
+  // and the user lands on a stale seat list with no Rematch button.
+  if (table.status === 'ACTIVE') hasMountedGameViewRef.current = true
+  const renderGameView = table.status === 'ACTIVE' || hasMountedGameViewRef.current
+  if (renderGameView) {
     const gameKey = session?.user?.id ?? 'guest'
     // Spectating count is tracked independently by the backend via _spectatorSockets
     // (populated when room:join fires with role:'spectator'), so it's accurate even

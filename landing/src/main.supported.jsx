@@ -11,8 +11,14 @@ import './index.css'
 import App from './App.jsx'
 import { getToken } from './lib/getToken.js'
 import { perfMark } from './lib/perfLog.js'
+import { installGlobalErrorHandlers } from './lib/frontendLogger.js'
 
 perfMark('main:module-evaluated')
+
+// Hook window.onerror + unhandledrejection so failures land in the admin Log
+// Viewer instead of vanishing into the browser console. Idempotent — safe
+// to call once per page lifetime.
+installGlobalErrorHandlers()
 
 // Pre-fetch token in parallel with React rendering when session cache shows a signed-in user.
 // Eliminates the sequential /api/token → /api/<page-data> waterfall on hard reload.

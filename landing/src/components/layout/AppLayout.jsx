@@ -5,6 +5,7 @@ import { useOptimisticSession, clearSessionCache, triggerSessionRefresh } from '
 import { signOut } from '../../lib/auth-client.js'
 import { getToken, clearTokenCache } from '../../lib/getToken.js'
 import { perfMark } from '../../lib/perfLog.js'
+import { setLogUserId } from '../../lib/frontendLogger.js'
 import SignInModal from '../ui/SignInModal.jsx'
 import EmailVerifyBanner from '../ui/EmailVerifyBanner.jsx'
 import GuideOrb from '../guide/GuideOrb.jsx'
@@ -31,7 +32,7 @@ const APP_URLS    = { landing: LANDING_URL, xo: LANDING_URL }
  * Map a raw bus notification { type, payload } to the shape NotificationCard expects:
  * { id, type (UI category), uiType, title, body, href }
  */
-function normalizeBusNotification(type, payload = {}, expiresAt = null) {
+export function normalizeBusNotification(type, payload = {}, expiresAt = null) {
   const id = `${type}_${Date.now()}_${Math.random().toString(36).slice(2)}`
   const tid = payload.tournamentId
   const tname = payload.name ?? 'Tournament'
@@ -72,12 +73,18 @@ function normalizeBusNotification(type, payload = {}, expiresAt = null) {
     // strips. Suppressed from the notification stack — the relevant UI
     // already reflects the state, and broadcasting these to every
     // connected user would be noisy.
+    //
+    // `table.released` is telemetry-only (admin /health/tables histogram) —
+    // it broadcasts to every connected user on every game-end, so without
+    // this case it would slip into the `default` branch below and surface
+    // as a generic "table.released" admin toast for everyone on the site.
     case 'table.created':
     case 'spectator.joined':
     case 'table.empty':
     case 'table.started':
     case 'table.completed':
     case 'table.deleted':
+    case 'table.released':
       return null
     // Seat changes ARE surfaced, but only for stakeholders (creator or
     // currently seated). The upstream handler in onGuideNotification filters
@@ -252,6 +259,9 @@ export default function AppLayout() {
 
   // Connect socket and hydrate guide on sign-in; open panel if journey is incomplete; reset on sign-out.
   useEffect(() => {
+    // Tag every subsequent log entry with the resolved userId (or null on
+    // sign-out) so the admin Log Viewer "User ID" filter actually works.
+    setLogUserId(session?.user?.id ?? null)
     if (session?.user?.id) {
       perfMark('AppLayout:session-resolved', session.user.id)
       // Skip guide hydrate on /play — the panel is suppressed on that route,

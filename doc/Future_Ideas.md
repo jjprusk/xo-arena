@@ -7,45 +7,6 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 These are **bugs**, not future ideas. Listed here for tracking; should be picked up before the next ship cycle.
 
-### Disconnect-forfeit UX — survivor bounced to `/tables` instead of seeing a "you win" screen
-
-**Surfaced by:** Phase 8 SSE+POST migration QA (see `Realtime_Migration_Postmortem.md`).
-
-**Symptom:** When one player closes their tab mid-game, the server-side disconnect detection fires correctly: `pagehide` POSTs the forfeit, the table flips to COMPLETED, and `dispatchTableReleased` emits a `table.released` bus event. The surviving player's tab receives the event but `TableDetailPage` treats `lifecycle: cancelled` / `abandoned` by navigating to `/tables`. Net effect: the survivor sees a "table released" toast in the guide drawer and lands on the Tables list, with no "Opponent forfeited — you win" celebration screen and no Rematch button.
-
-**Why it's user-visible:** the realtime path is doing its job — seat freed, ELO updates, tournament series progresses — but the survivor's view of the moment is wrong. Looks abrupt and broken.
-
-**Fix outline:**
-
-- In `useGameSDK.js`, the `kind: 'forfeit'` SSE state already sets `phase = 'finished'` and emits a synthetic move event with `winner` populated. The XO game component should already render the win/loss screen — verify it does.
-- The bounce comes from `TableDetailPage`'s `useEventStream({ channels: [`table:${id}:lifecycle`] })` handler reacting to `kind === 'cancelled'` with `navigate('/tables')`. When the table was ACTIVE before the forfeit, suppress the navigation — let the `state` channel's `kind: 'forfeit'` drive the UI to the win screen and offer Rematch.
-- Server side, consider whether forfeit *should* be emitted as a lifecycle `cancelled` at all, or only as a `state` `forfeit`. Likely: drop the `dispatchTableReleased` call in the forfeit path on free-play tables (keep it for tournament/admin), so the survivor isn't fighting two competing event shapes.
-
-**Effort:** ~1–2 hours. Touch points: `landing/src/pages/TableDetailPage.jsx` (lifecycle handler), `backend/src/services/tableFlowService.js::forfeitGame` (release-event semantics), and the XO game component's finished-state render path. Add a Playwright test that closes one tab mid-game and asserts the survivor lands on the win screen.
-
-### Admin log viewer — empty even with traffic
-
-**Surfaced by:** Phase 8 QA — pre-existing, not caused by the realtime migration.
-
-**Symptom:** `/admin/logs` renders the filter UI and the empty-state message, but no entries appear even when toggling **Live tail** and generating backend log activity in another tab. The "this was always broken" entry — never landed correctly.
-
-**Likely causes (need to dig):**
-
-- The REST list endpoint may be filtering by a default `level` set that excludes everything actually being logged.
-- The pruner may be running aggressively and deleting rows faster than the page can fetch them.
-- The frontend's `useEventStream` subscription for `admin:logs:entry` may not be matching what `routes/logs.js` actually appends. Phase 8 confirmed the server side is publishing on `admin:logs:entry`; verify the page's `eventTypes` list contains that exact name and the `onEvent` handler routes it to the list state.
-- Live-tail toggle may be wired to the legacy SystemConfig `realtime.admin.via` flag whose default no longer matters post-Phase-8.
-
-**Fix outline:**
-
-- Check the `/api/v1/logs` GET in dev with admin auth and a wide level filter — confirm rows exist in the DB.
-- If rows exist, the issue is purely client-side: walk the LogViewerPage subscription against the channel/event-type names emitted by `routes/logs.js`.
-- Add a Playwright test that posts a synthetic log entry (via the public POST `/api/v1/logs`) and asserts a row appears in the admin viewer within 2 s.
-
-**Effort:** ~2–3 hours including the test.
-
----
-
 ### Journey CTA targets need a reusable `<Spotlight />` component
 
 **Surfaced by:** Phase 8 QA (2026-04-28) — when the journey routes a user to `/bots/<id>?action=train-bot` (Curriculum step 4), the **Train your bot** button is a small outlined button buried below the bot header, ELO panel, Spar block, and Tournament availability. Users miss it.
@@ -63,26 +24,6 @@ These are **bugs**, not future ideas. Listed here for tracking; should be picked
 Then each journey-step destination just renders `<Spotlight target={...} />` when the matching `?action=*` query is present. Step 3 (`?action=quick-bot`) → wizard "Next" button. Step 4 (`?action=train-bot`) → Train button. Step 5 (`?action=spar`) → Spar tier picker / "Spar now". Step 6 (`?action=cup`) → Curriculum Cup card. Step 7 (`?action=cup-result`) → result row in tournament list.
 
 **Effort:** ~3–4 hours including the component, the five wiring sites, and a Playwright test that asserts the spotlight is present after each journey link click.
-
----
-
-### 2.3 Bot names show as "Hots" / "O" rather than the actual name
-
-**Surfaced by:** Phase 8 QA (2026-04-28) — bots in some surfaces render their seat mark or a label like "Host" / "Hots" instead of `bot.displayName`.
-
-**Locations to audit (non-exhaustive — user observed in §2.3 of the V1 acceptance script):**
-
-- Seat-pod labels under the board (PlayPage / TableDetailPage's GameView).
-- Demo Table spectator view — the seat shows "Host" instead of the bot's display name (e.g. "Sparky").
-- Possibly the in-game scoreboard / spectator-side labels.
-
-**Fix outline:**
-
-- Walk every place that renders a seat label (`displayName`, `seat.displayName`, `mark`) and confirm it falls back through `seat.displayName → user.displayName → mark` in that order, never showing "Host" for a real bot.
-- For demo tables, the runner already names seats with `botA.displayName` / `botB.displayName` (`backend/src/routes/tables.js:469-470`) — verify that survives `sanitizeTable` extras and the client's seat extraction.
-- Add a Playwright check that the demo table's two seats render the curated bot names from `demoTableMatchups.js`, not "Host"/"Guest".
-
-**Effort:** ~1–2 hours.
 
 ---
 
@@ -181,17 +122,18 @@ Also folded into Phase 3.7a for the same "easier empty than later" reason (not i
 
 ## Backend Logs in Admin Log Viewer
 
-**What:** Route backend (pino) logs into the database so the admin Log Viewer shows all four sources — `frontend`, `api`, `realtime`, and `ai` — instead of only frontend entries. Currently pino writes to stdout (visible in Railway's log stream) but never reaches the `logs` table, so the viewer is nearly empty in normal operation.
+> **Status update (2026-04-29):** the frontend half landed — `landing/src/lib/frontendLogger.js` batches errors / warnings to `POST /api/v1/logs` and the admin Log Viewer now actually populates with `source: frontend` rows. `setLogUserId` is wired through AppLayout so user context is captured. Backend pino → DB is the remaining piece; the rest of this entry covers what's left.
 
-**Why deferred:** stdout logs are accessible via Railway's dashboard for now. The viewer is still useful for frontend errors. Wiring pino to the DB adds write pressure on every request.
+**What:** Route backend (pino) logs into the database so the admin Log Viewer shows all four sources — `api`, `realtime`, and `ai` — alongside the frontend rows already flowing in. Currently pino writes to stdout (visible in the Fly.io log stream) but never reaches the `logs` table.
+
+**Why deferred:** stdout logs are accessible via Fly.io / `docker compose logs` for now. The viewer is already useful for frontend errors. Wiring pino to the DB adds write pressure on every request.
 
 **What it would take:**
 - **Pino DB transport:** a custom pino transport (or `pino-transport` wrapper) that batches log entries and inserts them into the `logs` table, respecting the existing `pruneIfNeeded` limit. Use `source: 'api'`, `'realtime'`, or `'ai'` depending on origin.
 - **Log level threshold:** only write INFO and above from the backend to avoid flooding the table with debug noise. DEBUG can remain stdout-only.
-- **`setLogUserId` fix:** the current frontend logger has a broken `setLogUserId` (line 79 of `logger.js` does `Object.assign` on a string, which is a no-op) — userId is always null on log entries. Fix this so user context is captured.
-- **Live tail:** backend log entries would flow through the existing `_io.to('admin:logs').emit('log:entry', ...)` path automatically once they're written to the DB.
+- **Live tail:** backend log entries flow through the existing `appendToStream('admin:logs:entry', ...)` path automatically once they're written via the same POST handler the frontend logger uses (or via a direct stream emit from the transport).
 
-**Complexity:** Small-to-medium (~half a day). The DB schema, ingestion endpoint, pruning, and live-tail socket are already in place — the missing piece is just the pino → DB bridge and the userId fix.
+**Complexity:** Small-to-medium (~half a day). The DB schema, ingestion endpoint, pruning, frontend logger, and live-tail SSE are all in place — the missing piece is just the pino → DB bridge.
 
 ---
 

@@ -167,6 +167,42 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
     await waitFor(() => expect(result.current.abandoned).toEqual({ reason: 'cancelled' }))
   })
 
+  it('translates table:<id>:state kind=forfeit into a finished event carrying forfeiterMark + reason', async () => {
+    rtFetchMock
+      .mockResolvedValueOnce({ slug: 'abc', label: 'A', mark: 'O', action: 'created' })
+      .mockResolvedValueOnce({ tableId: 'tbl_1', mark: 'O', action: 'host_reattach' })
+
+    const { result } = renderHook(() =>
+      useGameSDK({ gameId: 'xo', currentUser: { id: 'u1' } }),
+    )
+    await waitFor(() => expect(eventStreamRegistry.latest?.enabled).toBe(true))
+
+    const handler = vi.fn()
+    act(() => { result.current.sdk.onMove(handler) })
+
+    dispatch('table:tbl_1:state', {
+      kind: 'forfeit',
+      forfeiterMark: 'X',
+      winner:        'O',
+      scores:        { X: 0, O: 1 },
+      reason:        'disconnect',
+    })
+
+    // The synthetic finished event must carry the forfeit context the game
+    // component needs to render an "Opponent forfeited (left the game)"
+    // pill instead of a generic "Opponent wins!" — the user-visible bug
+    // that surfaced after the disconnect-survival fix landed.
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        status:        'finished',
+        winner:        'O',
+        endReason:     'forfeit',
+        forfeiterMark: 'X',
+        forfeitReason: 'disconnect',
+      }),
+    }))
+  })
+
   it('translates table:<id>:reaction into reaction handlers (and filters self)', async () => {
     rtFetchMock
       .mockResolvedValueOnce({ slug: 'abc', label: 'A', mark: 'X', action: 'created' })

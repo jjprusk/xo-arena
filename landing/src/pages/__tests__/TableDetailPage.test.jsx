@@ -27,6 +27,23 @@ vi.mock('../../lib/socket.js', () => ({
   disconnectSocket: vi.fn(),
 }))
 
+// Capture each useEventStream() subscription so individual tests can drive
+// onEvent(channel, payload) directly. The real hook silently no-ops in
+// jsdom (no EventSource), so without a stand-in we can't observe how
+// TableDetailPage reacts to lifecycle events.
+const eventStreamSubs = []
+vi.mock('../../lib/useEventStream.js', () => ({
+  useEventStream: (opts) => { eventStreamSubs.push(opts) },
+}))
+
+// Capture navigate() calls without breaking the rest of react-router-dom
+// (we still need MemoryRouter, Routes, Route, useParams to behave normally).
+const navigateMock = vi.fn()
+vi.mock('react-router-dom', async (importActual) => {
+  const actual = await importActual()
+  return { ...actual, useNavigate: () => navigateMock }
+})
+
 import TableDetailPage from '../TableDetailPage.jsx'
 import { api } from '../../lib/api.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
@@ -56,8 +73,19 @@ const baseTable = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  eventStreamSubs.length = 0
+  navigateMock.mockReset()
   useOptimisticSession.mockReturnValue({ data: { user: { id: 'u1' } }, isPending: false })
 })
+
+/** Find the lifecycle subscription and fire a synthetic event into it. */
+function fireLifecycle(tableId, payload) {
+  const sub = eventStreamSubs.find(s =>
+    Array.isArray(s.channels) && s.channels.includes(`table:${tableId}:lifecycle`),
+  )
+  expect(sub).toBeTruthy()
+  sub.onEvent(`table:${tableId}:lifecycle`, payload)
+}
 
 describe('TableDetailPage', () => {
   it('renders the table heading and seat list', async () => {
@@ -176,5 +204,78 @@ describe('TableDetailPage', () => {
     // Seat-browsing UI is NOT rendered when GameView takes over
     expect(screen.queryByText(/empty seat/i)).toBeNull()
     expect(screen.queryByRole('button', { name: /take a seat/i })).toBeNull()
+  })
+
+  // ── Disconnect-forfeit survival (Future_Ideas.md Known Bugs §1) ──────────
+  //
+  // When the survivor's tab refetches the table after their opponent
+  // forfeits, the row is COMPLETED. Without the hasMountedGameView ref the
+  // page would unmount GameView and bounce to the seat list — losing the
+  // useGameSDK win screen + Rematch button that the spec promises.
+
+  it('keeps GameView mounted when ACTIVE flips to COMPLETED (forfeit survival)', async () => {
+    const activeTable = {
+      ...baseTable,
+      status: 'ACTIVE',
+      seats: [
+        { userId: 'u1', status: 'occupied' },
+        { userId: 'u2', status: 'occupied' },
+      ],
+    }
+    const completedTable = {
+      ...activeTable,
+      status: 'COMPLETED',
+      seats: [
+        { userId: 'u1', status: 'occupied' },        // survivor stays seated
+        { userId: null, status: 'empty'    },        // forfeiter's seat freed
+      ],
+    }
+    api.tables.get.mockResolvedValue({ table: activeTable })
+    renderAt('/tables/tbl_1')
+    await waitFor(() => expect(document.querySelector('.animate-spin')).not.toBeNull())
+
+    // Now simulate the lifecycle wave that would normally reload state +
+    // surface COMPLETED — fire `playerDisconnected`, swap the api response.
+    api.tables.get.mockResolvedValue({ table: completedTable })
+    const { act } = await import('react')
+    await act(async () => { fireLifecycle('tbl_1', { kind: 'playerDisconnected', mark: 'O' }) })
+
+    // The page must NOT regress to the seat-browsing UI; GameView stays.
+    await waitFor(() => expect(screen.queryByText(/empty seat/i)).toBeNull())
+    expect(screen.queryByRole('button', { name: /take a seat/i })).toBeNull()
+  })
+
+  it('lifecycle:cancelled does NOT bounce after a GameView mounted', async () => {
+    api.tables.get.mockResolvedValue({
+      table: {
+        ...baseTable,
+        status: 'ACTIVE',
+        seats: [
+          { userId: 'u1', status: 'occupied' },
+          { userId: 'u2', status: 'occupied' },
+        ],
+      },
+    })
+    renderAt('/tables/tbl_1')
+    await waitFor(() => expect(document.querySelector('.animate-spin')).not.toBeNull())
+
+    const { act } = await import('react')
+    await act(async () => { fireLifecycle('tbl_1', { kind: 'cancelled' }) })
+
+    // Forfeit survival: no /tables bounce when the game already started.
+    expect(navigateMock).not.toHaveBeenCalledWith('/tables', expect.anything())
+  })
+
+  it('lifecycle:cancelled DOES bounce when no GameView ever mounted (FORMING-time host cancel)', async () => {
+    api.tables.get.mockResolvedValue({ table: baseTable })  // FORMING
+    renderAt('/tables/tbl_1')
+    await waitFor(() => expect(screen.getByText(/xo \(tic-tac-toe\)/i)).toBeInTheDocument())
+
+    const { act } = await import('react')
+    await act(async () => { fireLifecycle('tbl_1', { kind: 'cancelled' }) })
+
+    // No GameView was ever shown — the survival exception doesn't apply, so
+    // the legacy "table is gone" navigate fires as before.
+    expect(navigateMock).toHaveBeenCalledWith('/tables', { replace: true })
   })
 })

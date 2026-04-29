@@ -376,7 +376,10 @@ describe('POST /api/v1/tables/:id/join', () => {
       where: { id: 'tbl_1' },
       data: {
         seats: [
-          { userId: 'ba_user_1', status: 'occupied' },
+          // displayName is hydrated at write-time so the rt host_reattach path
+          // doesn't have to fall back to the literal "Host" / "Guest" string.
+          // null here because the User-row mock doesn't return a displayName.
+          { userId: 'ba_user_1', status: 'occupied', displayName: null },
           { userId: null, status: 'empty' },
         ],
       },
@@ -399,6 +402,27 @@ describe('POST /api/v1/tables/:id/join', () => {
     })
   })
 
+  it('hydrates the joiner displayName onto the seat at write time', async () => {
+    // Without this, the rt /rt/tables/:slug/join host_reattach branch finds
+    // no seat displayName, sanitizeTable returns null for hostUserDisplayName,
+    // and the client falls back to the literal "Host" string in seat-pod
+    // labels (the bug visible after Joe joined a public PvP table).
+    db.table.findUnique.mockResolvedValue(baseTable)
+    db.user.findUnique.mockResolvedValueOnce({ displayName: 'Alice' })  // joiner
+    db.table.update.mockImplementation(({ data }) => Promise.resolve({ ...baseTable, ...data }))
+    const app = makeApp()
+    const res = await request(app).post('/api/v1/tables/tbl_1/join')
+    expect(res.status).toBe(200)
+    expect(db.table.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        seats: [
+          { userId: 'ba_user_1', status: 'occupied', displayName: 'Alice' },
+          { userId: null, status: 'empty' },
+        ],
+      }),
+    }))
+  })
+
   it('seats the caller at the requested seatIndex when provided', async () => {
     db.table.findUnique.mockResolvedValue({
       ...baseTable,
@@ -418,7 +442,7 @@ describe('POST /api/v1/tables/:id/join', () => {
         seats: [
           { userId: null, status: 'empty' },
           { userId: null, status: 'empty' },
-          { userId: 'ba_user_1', status: 'occupied' },
+          { userId: 'ba_user_1', status: 'occupied', displayName: null },
         ],
       },
     }))

@@ -52,6 +52,12 @@ export default function GameComponent({ session, sdk }) {
   const pendingMoveRef = useRef(null)
 
   const { board, currentTurn, status, winner, winLine, scores, round } = gameState
+  // Forfeit context (set by useGameSDK on a `state:forfeit` event) lets the
+  // status pill explain *why* the game ended — generic "Opponent wins!" is
+  // confusing when the opponent vanished mid-game. null on natural endings.
+  const endReason     = gameState.endReason     ?? null
+  const forfeiterMark = gameState.forfeiterMark ?? null
+  const forfeitReason = gameState.forfeitReason ?? null
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -210,6 +216,9 @@ export default function GameComponent({ session, sdk }) {
         round={round}
         scoreX={scores.X}
         scoreO={scores.O}
+        endReason={endReason}
+        forfeiterMark={forfeiterMark}
+        forfeitReason={forfeitReason}
       />
 
       {/* Error banner — shown when the server rejects a move */}
@@ -363,7 +372,10 @@ export default function GameComponent({ session, sdk }) {
  * Replaces the former three-stack of PlayerStrip / ScorePill-row / turn label
  * that ate ~100px of vertical space on mobile.
  */
-function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn, round, scoreX, scoreO }) {
+function StatusLine({
+  status, winner, isSpectator, isMyTurn, myMark, currentTurn, round, scoreX, scoreO,
+  endReason = null, forfeiterMark = null, forfeitReason = null,
+}) {
   // Left segment: turn indicator OR result label.
   let turnNode
   if (status === 'playing') {
@@ -380,11 +392,20 @@ function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn
       </span>
     )
   } else if (status === 'finished' && winner) {
-    const youWon = !isSpectator && winner === myMark
+    const youWon  = !isSpectator && winner === myMark
     const variant = isSpectator ? 'win' : (youWon ? 'win' : 'lose')
-    const label = isSpectator
-      ? `${winner} wins!`
-      : youWon ? 'You win! 🎉' : 'Opponent wins!'
+    const isForfeit       = endReason === 'forfeit' && !!forfeiterMark
+    const youForfeited    = isForfeit && !isSpectator && forfeiterMark === myMark
+    const oppForfeited    = isForfeit && !isSpectator && forfeiterMark !== myMark
+    const reasonSuffix    = forfeitReason === 'idle'       ? ' (timed out)'
+                          : forfeitReason === 'disconnect' ? ' (left the game)'
+                          : ''
+    const label =
+        isSpectator   ? (isForfeit ? `${forfeiterMark} forfeited — ${winner} wins` : `${winner} wins!`)
+      : oppForfeited  ? `Opponent forfeited${reasonSuffix} — you win 🎉`
+      : youForfeited  ? `You forfeited${reasonSuffix}`
+      : youWon        ? 'You win! 🎉'
+      :                 'Opponent wins!'
     turnNode = (
       <span className={`result-pill result-pill--${variant}`} role="status">
         {label}

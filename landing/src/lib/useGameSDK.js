@@ -572,7 +572,7 @@ export function useGameSDK({
           return
         }
         if (kind === 'forfeit') {
-          const { winner, scores } = payload
+          const { winner, scores, forfeiterMark, reason } = payload
           const event = {
             playerId: null,
             move:     null,
@@ -585,6 +585,13 @@ export function useGameSDK({
               scores:      scores ?? { X: 0, O: 0 },
               round:       null,
               marks:       { ...marksRef.current },
+              // Pass forfeit context through so the game component can render
+              // a "you win — opponent left" / "opponent disconnected" label
+              // instead of a generic "Opponent wins!" pill that hides *why*
+              // the game ended (Future_Ideas Known-Bugs §1 follow-up).
+              endReason:     'forfeit',
+              forfeiterMark: forfeiterMark ?? null,
+              forfeitReason: reason        ?? null,
             },
             timestamp: new Date().toISOString(),
           }
