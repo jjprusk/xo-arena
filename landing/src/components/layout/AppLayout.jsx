@@ -343,9 +343,17 @@ export default function AppLayout() {
         // `table.released` (`trigger=demo-finish`) handler when the demo
         // ends; navigation to any non-table route reopens via the path
         // effect's growth check.
-        const path = window.location.pathname
+        //
+        // Exception: step 5 (Curriculum spar) fires only on series
+        // completion, so by definition the spar is over when this lands —
+        // there's nothing live to dim. The spar spectator sits on /play
+        // (not /tables), where there's no per-page table.released handler
+        // to reopen the panel, so without this carve-out the user gets
+        // stuck on a finished board with no nudge toward step 6.
+        const path     = window.location.pathname
         const onContent = path.startsWith('/play') || path.startsWith('/tables/')
-        if (!onContent) useGuideStore.getState().open()
+        const sparDone  = payload?.step === 5
+        if (!onContent || sparDone) useGuideStore.getState().open()
         return
       }
       if (channel === 'presence:changed') {

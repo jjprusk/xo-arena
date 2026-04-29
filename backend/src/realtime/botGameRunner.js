@@ -364,7 +364,11 @@ class BotGameRunner {
         data:  { status: 'COMPLETED', seats: releaseSeats(backingTable.seats) },
       }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark backing table COMPLETED'))
       dispatchTableReleased(backingTable.id, TABLE_RELEASED_REASONS.GAME_END, {
-        trigger: backingTable.isDemo ? 'demo-finish' : 'game-end',
+        // Distinguish backing-table flavors so the client can react
+        // differently. Demo (Hook step 2) and spar (Curriculum step 5)
+        // both want the guide panel to reopen on finish so the next-step
+        // CTA is visible — TableDetailPage matches on these triggers.
+        trigger: backingTable.isDemo ? 'demo-finish' : 'spar-finish',
       })
     }
 

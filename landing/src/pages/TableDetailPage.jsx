@@ -104,15 +104,17 @@ export default function TableDetailPage() {
         navigate('/tables', { replace: true })
         return
       }
-      // When a demo table releases (Hook step 2), surface the guide panel so
-      // the user lands back on their next journey step. The fresh-account
-      // path also fires `guide:journeyStep` (which auto-opens the panel via
-      // AppLayout) — this branch covers the re-watch case where step 2 was
-      // already credited and no journeyStep event is emitted.
+      // When a demo (Hook step 2) or spar (Curriculum step 5) backing table
+      // releases, surface the guide panel so the user lands back on their
+      // next journey step. AppLayout's `guide:journeyStep` handler suppresses
+      // auto-open while the user is on /tables/* (the scrim would dim the
+      // live board) — this branch is the trigger for reopening once the
+      // game actually finishes. Re-watch / re-spar also work because the
+      // step is already credited but the trigger still fires.
       if (
         type === 'table.released'
         && data?.tableId === tableId
-        && data?.trigger === 'demo-finish'
+        && (data?.trigger === 'demo-finish' || data?.trigger === 'spar-finish')
       ) {
         useGuideStore.getState().open()
         return
