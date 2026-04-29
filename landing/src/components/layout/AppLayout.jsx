@@ -15,6 +15,7 @@ import CoachingCard from '../guide/CoachingCard.jsx'
 import FeedbackButton from '../feedback/FeedbackButton.jsx'
 import AudioDebugOverlay from '../debug/AudioDebugOverlay.jsx'
 import { useGuideStore } from '../../store/guideStore.js'
+import { shouldOpenGuideOnJourneyStep } from './guideAutoOpen.js'
 import { useNotifSoundStore } from '../../store/notifSoundStore.js'
 import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 import { useEventStream, reopenSharedStream } from '../../lib/useEventStream.js'
@@ -350,10 +351,19 @@ export default function AppLayout() {
         // (not /tables), where there's no per-page table.released handler
         // to reopen the panel, so without this carve-out the user gets
         // stuck on a finished board with no nudge toward step 6.
-        const path     = window.location.pathname
-        const onContent = path.startsWith('/play') || path.startsWith('/tables/')
-        const sparDone  = payload?.step === 5
-        if (!onContent || sparDone) useGuideStore.getState().open()
+        //
+        // Same idea for the Curriculum Cup: while spectating their bot's
+        // cup matches at /tournaments/<id>?follow=<userId>, the Guide
+        // drawer's scrim crowds out the live game. Suppress auto-open
+        // until step 7 (cup complete) lands — that's the cup-end signal
+        // and the user is ready for the result/coaching card.
+        if (shouldOpenGuideOnJourneyStep({
+          pathname: window.location.pathname,
+          search:   window.location.search,
+          step:     payload?.step,
+        })) {
+          useGuideStore.getState().open()
+        }
         return
       }
       if (channel === 'presence:changed') {

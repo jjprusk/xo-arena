@@ -12,6 +12,7 @@ import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.js
 import { useReplaySDK } from '../lib/useReplaySDK.js'
 import { meta as xoMeta } from '@callidity/game-xo'
 import { useSoundStore } from '../store/soundStore.js'
+import { useGuideStore } from '../store/guideStore.js'
 
 const XOGame = lazy(() => import('@callidity/game-xo'))
 
@@ -1894,6 +1895,10 @@ export default function TournamentDetailPage() {
     }
     if (live) {
       setWatchMatch({ id: live.id, label: labelOf(live), followedName: displayName, mode: 'live' })
+      // Cup spectate: hide the Guide drawer so the live game is the focal
+      // element. The step-7 SSE event reopens it on cup completion (see
+      // AppLayout's guide:journeyStep handler — `cupDone` carve-out).
+      useGuideStore.getState().close()
       return
     }
     if (pending) {
@@ -1906,6 +1911,7 @@ export default function TournamentDetailPage() {
         mode: 'waiting',
         statusMessage: `Waiting for ${displayName}'s next match — vs ${opponentName}.`,
       })
+      useGuideStore.getState().close()
       return
     }
     // No live or pending match — eliminated / champion / tournament not started yet.
