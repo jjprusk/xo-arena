@@ -219,6 +219,8 @@ export default function GameComponent({ session, sdk }) {
         endReason={endReason}
         forfeiterMark={forfeiterMark}
         forfeitReason={forfeitReason}
+        players={session?.players ?? []}
+        marks={session?.settings?.marks ?? {}}
       />
 
       {/* Error banner — shown when the server rejects a move */}
@@ -375,7 +377,21 @@ export default function GameComponent({ session, sdk }) {
 function StatusLine({
   status, winner, isSpectator, isMyTurn, myMark, currentTurn, round, scoreX, scoreO,
   endReason = null, forfeiterMark = null, forfeitReason = null,
+  players = [], marks = {},
 }) {
+  // Mark → display name resolver. Spectators see "Copper wins!" instead of
+  // generic mark-side jargon ("X wins!"); active players keep "You / Opponent"
+  // since that's still more personal than their own bot's name. Falls back
+  // to the bare mark when the lookup misses (legacy session payloads with
+  // no `marks` map, or the brief race before mark assignment lands).
+  const nameForMark = (mark) => {
+    if (!mark) return mark
+    const userId = Object.entries(marks).find(([, m]) => m === mark)?.[0]
+    if (!userId) return mark
+    const p = players.find(pp => pp.id === userId)
+    return p?.displayName || mark
+  }
+
   // Left segment: turn indicator OR result label.
   let turnNode
   if (status === 'playing') {
@@ -386,7 +402,7 @@ function StatusLine({
         </span>
         <span style={{ color: 'var(--text-secondary)' }}>
           {isSpectator
-            ? `${currentTurn}'s turn`
+            ? `${nameForMark(currentTurn)}'s turn`
             : isMyTurn ? 'Your turn' : "Opponent's turn"}
         </span>
       </span>
@@ -401,7 +417,9 @@ function StatusLine({
                           : forfeitReason === 'disconnect' ? ' (left the game)'
                           : ''
     const label =
-        isSpectator   ? (isForfeit ? `${forfeiterMark} forfeited — ${winner} wins` : `${winner} wins!`)
+        isSpectator   ? (isForfeit
+                          ? `${nameForMark(forfeiterMark)} forfeited — ${nameForMark(winner)} wins`
+                          : `${nameForMark(winner)} wins!`)
       : oppForfeited  ? `Opponent forfeited${reasonSuffix} — you win 🎉`
       : youForfeited  ? `You forfeited${reasonSuffix}`
       : youWon        ? 'You win! 🎉'
