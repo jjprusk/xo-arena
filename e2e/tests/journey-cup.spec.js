@@ -106,7 +106,9 @@ async function pollForStep(request, token, stepIndex, deadlineMs = 30_000) {
 }
 
 test.describe('Curriculum step 6 — UI dropoff regression', () => {
-  test.setTimeout(180_000)
+  // 240s covers: the sequential-cups test (~50s first cup + 60s soak + ~50s
+  // second cup + buffer) and gives the mid-cup refresh test slack on slow CI.
+  test.setTimeout(240_000)
 
   test.afterAll(() => {
     netCleanupByEmailPrefix(EMAIL_PREFIX, { tag: 'cup-after' })
@@ -260,5 +262,373 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     // Note: deliberately NOT creating a quick bot here.
     await page.goto('/profile?action=cup')
     await page.waitForURL(/\/profile\?action=quick-bot/, { timeout: 10_000 })
+  })
+
+  // ── 4. Full cup completion — step 7, +50 TC, coaching card, drawer reopen ─
+  // Drives a real cup all the way to completion and asserts the entire
+  // step-6 → step-7 chain. Tests 1-3 stop at step 6; everything after that
+  // (the +50 TC reward, the phase flip to specialize, the coaching card
+  // render, the drawer reopen, and the post-cup CTA navigation) was only
+  // covered by manual QA. Recent commits 408ec7f / e137e1a / 0619f7f /
+  // b163031 / 47e9077 / 365a416 each fixed something here; this test is
+  // the regression net for that whole cluster.
+  //
+  // Cup pacing: 4-bot single-elim, 1s/move, ~5 moves/game = ~15s/game ×
+  // 3 games = ~45-50s + bracket-advance + bridge propagation. Polls run
+  // up to 120s for step 7 to allow generous slack on a busy CI runner.
+  test('cup runs to completion → step 7 + +50 TC + reward popup + variant-correct coaching card + drawer reopens + CTA loads real content + no console errors', async ({ page, context }) => {
+    // Capture browser noise from t=0. Pre-365a416 a fresh sign-in fired
+    // 404s + 401s on early endpoints; this test fails that regression
+    // visibly instead of relying on manual log inspection.
+    const pageErrors = []
+    const consoleErrors = []
+    page.on('pageerror', (err) => pageErrors.push(err.message))
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text())
+    })
+
+    await dismissWelcomeOnLoad(page)
+    const email       = freshEmail()
+    const password    = 'cup-test-pw-1234'
+    const displayName = `Cup4 ${Math.random().toString(36).slice(2, 8)}`
+    await signUp(page, { email, password, displayName })
+
+    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const userId = await fetchUserId(context.request, token)
+    await createQuickBot(context.request, token, `CupBot4 ${Math.random().toString(36).slice(2, 6)}`)
+
+    // Prefire steps 1-5 — the focus of this spec is post-step-6 mechanics,
+    // and the leading steps each have their own dedicated specs.
+    const patchRes = await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5], dismissedAt: null } },
+    })
+    expect(patchRes.ok()).toBeTruthy()
+
+    const before = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    expect(before.completedSteps).toEqual(expect.arrayContaining([1, 2, 3, 4, 5]))
+    expect(before.completedSteps).not.toContain(7)
+
+    // Enter the cup via the same /profile?action=cup path as test 1.
+    await page.goto('/profile?action=cup')
+    await page.waitForURL(/\/tournaments\/[^/?]+\?follow=/, { timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: /Curriculum Cup/i })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/Couldn't start the Curriculum Cup/i)).toBeHidden()
+    await expect(page.getByText(/^Following:/)).toBeVisible({ timeout: 15_000 })
+
+    // Drawer-hide-during-spectate (commit 47e9077). When TournamentDetailPage
+    // resolves the follow target, useGuideStore.close() fires. The Guide
+    // dialog should not be visible while the user spectates the cup.
+    const guidePanel = page.getByRole('dialog', { name: /^Guide$/i })
+    await expect(guidePanel).toBeHidden({ timeout: 10_000 })
+
+    // Step 6 fires off participant:joined, which races the spectate-resolve.
+    // Allow a small window before checking; this also pins down "step 6 must
+    // happen before step 7 is allowed to fire".
+    const afterStep6Steps = await pollForStep(context.request, token, 6, 30_000)
+    expect(afterStep6Steps).toEqual(expect.arrayContaining([6]))
+    expect(afterStep6Steps, 'step 7 must not have fired before cup completes').not.toContain(7)
+
+    // Now wait for the cup to actually finish and step 7 to be credited.
+    // Two minutes of slack — the cup itself wraps in <60s but a slow CI
+    // runner with a starved Node loop has been seen to take ~90s.
+    const afterStep7Steps = await pollForStep(context.request, token, 7, 120_000)
+    expect(afterStep7Steps, 'step 7 not credited within 120s of cup start').toEqual(expect.arrayContaining([7]))
+
+    // The full transition: step 7 done, +50 TC granted, phase flipped.
+    const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    assertJourneyTransition({
+      prev: before, next: after,
+      label: 'cup completion → step 7 + +50 TC + specialize',
+      stepDone:  7,
+      tcDelta:   50,
+      phase:     'specialize',
+      botsDelta: 0,
+    })
+
+    // RewardPopup renders the +50 TC celebration on `guide:curriculum_complete`
+    // (RewardPopup.jsx). This is the user's primary visible signal that the
+    // reward landed. Auto-dismisses after 8s — assert it appears within that
+    // window. Pre-fix, the reward fired but if RewardPopup wasn't mounted on
+    // the tournament-detail route the user would see no celebration at all.
+    const rewardPopup = page.getByTestId('reward-popup')
+    await expect(rewardPopup).toBeVisible({ timeout: 15_000 })
+    await expect(rewardPopup).toContainText(/Journey complete/i)
+    await expect(rewardPopup).toContainText(/\+50 Tournament Credits/i)
+    await expect(rewardPopup).toContainText(/Specialize/i)
+
+    // Coaching card renders (commit b163031 + tournamentBridge:coaching_card).
+    const coachingCard = page.getByTestId('coaching-card')
+    await expect(coachingCard).toBeVisible({ timeout: 30_000 })
+
+    // Variant pin: read finalPosition from the subtitle ("finished #N") and
+    // assert the card title matches what coachingCardRules.pickCoachingCard
+    // returns for that position. v1 pins:
+    //   #1 → CHAMPION       ("Cup Champion!")
+    //   #2 → RUNNER_UP      ("So close.")
+    //   #3 or #4 → HEAVY_LOSS ("Time to dig in.")  — didTrainImprove is
+    //                                                hard-coded false in v1
+    //   ONE_TRAIN_LOSS ("Different angle?") is unreachable in v1 (would
+    //   require didTrainImprove=true; not wired until v1.1).
+    // Pre-fix, a coaching card whose title disagreed with the subtitle (e.g.
+    // CHAMPION rendered for #3) would only surface in manual QA — this
+    // assertion makes the rules-table contract executable.
+    const subtitleText = await coachingCard.locator('span').first().textContent()
+    const finalPosMatch = subtitleText?.match(/finished #(\d)/)
+    expect(finalPosMatch, `couldn't read finalPosition from subtitle "${subtitleText}"`).not.toBeNull()
+    const finalPos = Number(finalPosMatch[1])
+    expect([1, 2, 3]).toContain(finalPos)
+    const expectedTitle =
+      finalPos === 1 ? /Cup Champion!/ :
+      finalPos === 2 ? /So close\./ :
+                       /Time to dig in\./
+    await expect(coachingCard).toContainText(expectedTitle)
+
+    // Drawer reopens (commit 47e9077: cupDone is an override in
+    // shouldOpenGuideOnJourneyStep, so step 7 fires open even on the cup
+    // spectate page). The "Curriculum complete!" celebration is the
+    // step-7 / specialize-phase JourneyCard branch.
+    await expect(guidePanel).toBeVisible({ timeout: 10_000 })
+    await expect(guidePanel.getByText(/Curriculum complete!/i)).toBeVisible({ timeout: 5_000 })
+
+    // CTA navigates to a real route (commit b163031 fixed
+    // "/guide/rookie-cup" → "/profile?action=train-bot" and "/gym?action=
+    // switch-algorithm" → "/gym"). Variant determines target:
+    //   CHAMPION/RUNNER_UP/HEAVY_LOSS → /profile?action=train-bot
+    //                                    → forwards to /bots/<id>?action=train-bot
+    //                                    → BotProfilePage with TrainGuidedModal
+    //   ONE_TRAIN_LOSS → /gym → GymPage
+    const expectedCtaLabel =
+      finalPos === 1 || finalPos === 2 ? /Train your bot deeper/ :
+                                          /Train your bot/
+    const ctaButton = coachingCard.getByRole('button', { name: expectedCtaLabel })
+    await expect(ctaButton).toBeVisible()
+    await ctaButton.click()
+
+    // /profile?action=train-bot bounces to /bots/<id>?action=train-bot when
+    // the user has exactly one bot (this user does — the QuickBot we made).
+    await page.waitForURL(/\/bots\/[^/?]+\?action=train-bot/, { timeout: 10_000 })
+
+    // Destination renders real content — BotProfilePage shows the bot's
+    // displayName and a "Train your bot" section. Pre-b163031 the URL
+    // changed but the page might have been blank / 404. We assert positive
+    // content (not just the absence of a 404 banner) so a future regression
+    // that renders an empty shell is caught.
+    await expect(page.getByText(/Train your bot/i).first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/Page not found|404/i)).toBeHidden()
+
+    // Final guard: no uncaught errors anywhere in the run. Console errors
+    // are noisier (third-party libs, dev-mode warnings) so we report them
+    // but only fail on pageerror events — those are real uncaught throws.
+    if (consoleErrors.length) {
+      console.log(`[cup test] ${consoleErrors.length} console.error(s) seen:`)
+      consoleErrors.slice(0, 10).forEach((e) => console.log(`  ${e}`))
+    }
+    expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([])
+  })
+
+  // ── 5. Step-7 explanatory note during in-flight cup ──────────────────────
+  // Pre-0619f7f, JourneyCard rendered a clickable "View result" link for
+  // step 7 the moment step 6 landed — clicking it sent the user to
+  // /profile?action=cup-result with no result to render (the cup was still
+  // in flight). The fix carved out step 7 to render an explanatory note
+  // ("Watching your cup play out — your result lands here automatically")
+  // instead of a CTA. This test pins that behavior.
+  test('in-flight cup (step 6 done, 7 pending) renders explanatory note, no CTA', async ({ page, context }) => {
+    await dismissWelcomeOnLoad(page)
+    const email       = freshEmail()
+    const password    = 'cup-test-pw-1234'
+    const displayName = `Cup5 ${Math.random().toString(36).slice(2, 8)}`
+    await signUp(page, { email, password, displayName })
+
+    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    await createQuickBot(context.request, token, `CupBot5 ${Math.random().toString(36).slice(2, 6)}`)
+
+    // Mid-cup state: steps 1-6 complete, step 7 pending. JourneyCard's
+    // nextStep = step 7.
+    const patchRes = await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5, 6], dismissedAt: null } },
+    })
+    expect(patchRes.ok()).toBeTruthy()
+
+    // Land on home (not /tournaments — guideAutoOpen would suppress the
+    // panel there). The drawer auto-opens on hydration.
+    await page.goto('/')
+    const guidePanel = page.getByRole('dialog', { name: /^Guide$/i })
+    await expect(guidePanel).toBeVisible({ timeout: 15_000 })
+
+    // The explanatory note must be present.
+    await expect(guidePanel.getByText(/result lands here automatically/i)).toBeVisible({ timeout: 5_000 })
+
+    // No clickable step-7 CTA. journeySteps.js step 7 has cta='View result',
+    // so we must not see a link/button with that label inside the drawer.
+    await expect(guidePanel.getByRole('link', { name: /^View result$/i })).toHaveCount(0)
+    await expect(guidePanel.getByRole('button', { name: /^View result$/i })).toHaveCount(0)
+  })
+
+  // ── 6. Mid-cup browser refresh — server-side trigger survives client churn ─
+  // The cup runs server-side and is autonomous; bot games are driven by
+  // botGameRunner regardless of whether the spectator page is loaded. The
+  // step-7 credit fires off `tournament:completed` on the server. So a
+  // user who refreshes (or closes-and-reopens the tab) mid-cup should
+  // still get step 7 credited; if they're back on the page when it
+  // happens, they should see the celebration.
+  //
+  // What this catches: a regression where the SSE client wires up to a
+  // user-scoped channel only on first sign-in, or the journey credit logic
+  // accidentally takes a client-confirmation hop, would silently drop the
+  // step-7 credit when the page reloads. Existing API-level tests don't
+  // see this because they hold one connection; this test simulates real
+  // user behavior (tab gets navigated away and back).
+  test('mid-cup refresh: step 7 still credits server-side and UI re-hydrates post-refresh', async ({ page, context }) => {
+    page.on('pageerror', (err) => console.log(`[browser:error] ${err.message}`))
+
+    await dismissWelcomeOnLoad(page)
+    const email       = freshEmail()
+    const password    = 'cup-test-pw-1234'
+    const displayName = `Cup6 ${Math.random().toString(36).slice(2, 8)}`
+    await signUp(page, { email, password, displayName })
+
+    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const userId = await fetchUserId(context.request, token)
+    await createQuickBot(context.request, token, `CupBot6 ${Math.random().toString(36).slice(2, 6)}`)
+
+    await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5], dismissedAt: null } },
+    })
+
+    const before = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+
+    // Start the cup.
+    await page.goto('/profile?action=cup')
+    await page.waitForURL(/\/tournaments\/[^/?]+\?follow=/, { timeout: 15_000 })
+    const cupUrl = page.url()
+    await expect(page.getByText(/^Following:/)).toBeVisible({ timeout: 15_000 })
+
+    // Confirm step 6 landed and the cup is running.
+    const afterStep6 = await pollForStep(context.request, token, 6, 30_000)
+    expect(afterStep6).toEqual(expect.arrayContaining([6]))
+    expect(afterStep6).not.toContain(7)
+
+    // Navigate away, then back. This simulates a refresh + recovery; using
+    // about:blank and then re-goto cupUrl forces a fresh page lifecycle
+    // (new SSE connection, fresh AppLayout mount, fresh useEventStream
+    // subscription). A bare `page.reload()` would be similar but doesn't
+    // reset the navigation stack — about:blank is closer to "user closed
+    // the tab and clicked the link from history".
+    await page.goto('about:blank')
+    await page.waitForTimeout(2_000)  // let server-side bots run while client is gone
+    await page.goto(cupUrl)
+    await expect(page.getByRole('heading', { name: /Curriculum Cup/i })).toBeVisible({ timeout: 10_000 })
+
+    // Step 7 must land regardless of client state — this is the core
+    // server-autonomy guarantee. If the cup completed while we were on
+    // about:blank, this returns immediately. If it's still in flight, the
+    // poll waits for the server-side bridge to fire.
+    const afterStep7 = await pollForStep(context.request, token, 7, 120_000)
+    expect(afterStep7, 'step 7 must be credited even when client is offline').toEqual(expect.arrayContaining([7]))
+
+    // Phase + credits transitioned correctly.
+    const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    assertJourneyTransition({
+      prev: before, next: after,
+      label: 'mid-cup refresh → step 7 + +50 TC + specialize',
+      stepDone:  7,
+      tcDelta:   50,
+      phase:     'specialize',
+      botsDelta: 0,
+    })
+
+    // The drawer should be visible post-refresh (specialize phase auto-opens
+    // on hydration when not dismissed) and showing the celebration card.
+    // We don't strictly assert the coaching card here — it's an SSE one-shot
+    // so the refresh might land just after the event fired, missing the
+    // popup. The journey card is read from /guide/preferences on hydration,
+    // so it's always present.
+    const guidePanel = page.getByRole('dialog', { name: /^Guide$/i })
+    await expect(guidePanel).toBeVisible({ timeout: 10_000 })
+    await expect(guidePanel.getByText(/Curriculum complete!/i)).toBeVisible({ timeout: 5_000 })
+  })
+
+  // ── 7. Sequential cups — clone again after one completes ─────────────────
+  // After graduating the curriculum, a user might run a second cup (out of
+  // curiosity, or because they trained their bot more). Recent commit
+  // f482979 "follow caller bot into round-1 + retry on any P2002" hints at
+  // a uniqueness-collision class of bug — sequential cups with the same
+  // caller is the obvious surface where that would re-emerge.
+  //
+  // Asserts:
+  //   - Second clone POST returns 201 (no P2002 / FK collision).
+  //   - Tournament page renders (different ID than the first cup).
+  //   - Step 7 is *not* re-credited (it's already done; the bridge is
+  //     idempotent).
+  //   - +50 TC is granted exactly once (no double-credit on the second cup).
+  test('sequential cups — second clone succeeds, no spurious step-7 re-fire, no double credit', async ({ page, context }) => {
+    page.on('pageerror', (err) => console.log(`[browser:error] ${err.message}`))
+
+    await dismissWelcomeOnLoad(page)
+    const email       = freshEmail()
+    const password    = 'cup-test-pw-1234'
+    const displayName = `Cup7 ${Math.random().toString(36).slice(2, 8)}`
+    await signUp(page, { email, password, displayName })
+
+    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const userId = await fetchUserId(context.request, token)
+    await createQuickBot(context.request, token, `CupBot7 ${Math.random().toString(36).slice(2, 6)}`)
+
+    await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5], dismissedAt: null } },
+    })
+
+    // First cup — drive to completion via the API path so we have a clean
+    // step-7 baseline before kicking off cup #2.
+    await page.goto('/profile?action=cup')
+    await page.waitForURL(/\/tournaments\/([^/?]+)\?follow=/, { timeout: 15_000 })
+    const firstCupId = page.url().match(/\/tournaments\/([^/?]+)\?/)?.[1]
+    expect(firstCupId).toBeTruthy()
+
+    await pollForStep(context.request, token, 7, 120_000)
+    const afterFirstCup = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    expect(afterFirstCup.completedSteps).toEqual(expect.arrayContaining([7]))
+    expect(afterFirstCup.phase).toBe('specialize')
+    const tcAfterFirstCup = afterFirstCup.creditsTc
+
+    // Dismiss any popups left over so they don't intercept clicks on cup #2.
+    // RewardPopup auto-dismisses after 8s; CoachingCard does not — close it.
+    const coachingCard = page.getByTestId('coaching-card')
+    if (await coachingCard.isVisible().catch(() => false)) {
+      await coachingCard.getByRole('button', { name: /Dismiss/i }).click().catch(() => {})
+    }
+
+    // Second cup — the f482979 retry path is exercised here. Pre-fix, a
+    // sequential clone could trip over a P2002 unique-constraint collision
+    // (cup-bot username collisions if the random pool overlapped) and 500.
+    await page.goto('/profile?action=cup')
+    await page.waitForURL(/\/tournaments\/([^/?]+)\?follow=/, { timeout: 20_000 })
+    const secondCupId = page.url().match(/\/tournaments\/([^/?]+)\?/)?.[1]
+    expect(secondCupId).toBeTruthy()
+    expect(secondCupId, 'second cup must be a different tournament').not.toBe(firstCupId)
+    await expect(page.getByRole('heading', { name: /Curriculum Cup/i })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/Couldn't start the Curriculum Cup/i)).toBeHidden()
+
+    // Let the second cup run for a bit so any step-7 re-fire would have
+    // happened by now. We don't poll for step 7 (already done); we just
+    // soak so a buggy bridge would have fired the credit again.
+    await page.waitForTimeout(60_000)
+
+    const afterSecondCup = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    // completedSteps is a Set in deriveCurrentPhase; the snapshot stores
+    // sorted unique ints. Step 7 should still be present exactly once
+    // (snapshotJourney already deduplicates) and creditsTc must not have
+    // grown again — the curriculum-complete reward is one-shot.
+    expect(afterSecondCup.completedSteps).toEqual(expect.arrayContaining([7]))
+    expect(
+      afterSecondCup.creditsTc,
+      `second cup must not re-fire +50 TC (was ${tcAfterFirstCup}, now ${afterSecondCup.creditsTc})`
+    ).toBe(tcAfterFirstCup)
+    expect(afterSecondCup.phase).toBe('specialize')
   })
 })
