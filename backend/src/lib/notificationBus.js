@@ -8,10 +8,6 @@ import { appendToStream } from './eventStream.js'
 import { sendToUser as pushToUser, buildPushPayload } from './pushService.js'
 import * as sseBroker from './sseBroker.js'
 
-let _io = null
-export function initBus(io) { _io = io }
-export function emitToRoom(room, event, payload) { if (_io) _io.to(room).emit(event, payload) }
-
 // ── Dispatch counters (for monitoring) ───────────────────────────────────────
 const _dispatchCounters = {}
 export function getDispatchCounters() { return { ..._dispatchCounters } }
@@ -48,6 +44,12 @@ const REGISTRY = {
   'table.started':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // all seats filled, game beginning — clients clear stale seat-change notifs
   'table.completed':                 { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // game finished (normal end or idle timeout) — remove from active list
   'table.deleted':                   { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null }, // creator deleted; remove from list
+  // Telemetry-only: emitted by every table-completion path with a `reason` so
+  // admin dashboards (and the per-reason distribution in /admin/health/tables)
+  // can update live. No user-facing surface; broadcast just to clear the bus
+  // gate. Why: chunk-3 wired dispatchTableReleased() but dispatch() rejected
+  // unknown types — the increment ran, the fanout was silently dropped.
+  'table.released':                  { mode: 'broadcast', persist: 'ephemeral',  email: false, ttlMs: null },
 }
 
 // ── Default preferences (used when no NotificationPreference row exists) ──────

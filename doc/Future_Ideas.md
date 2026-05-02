@@ -3,6 +3,23 @@
 
 Deferred features and improvements that are worth revisiting but not currently prioritized.
 
+## Journey CTA spotlight — wiring leftovers
+
+The reusable `<Spotlight target={ref} active={...} onDismiss={...} />` component shipped on 2026-04-29 (`landing/src/components/guide/Spotlight.jsx`) and replaces the ad-hoc per-page `xo-spotlight-pulse` toggle. Wired so far:
+
+- **Step 4 (`?action=train-bot`)** — `BotProfilePage` Train button. ✅
+- **Step 5 (`?action=spar`)** — `BotProfilePage` Spar block; `ProfilePage` forwards the action to the bot detail page same way it does for `train-bot`. ✅
+
+Not yet wired (each one is one `<Spotlight>` render line + a small destination handler):
+
+- **Step 3 (`?action=quick-bot`)** — `QuickBotWizard` "Next" button. The wizard is already a focused modal so the spotlight is lower-value here; skip unless usability tests show the Next button blends in.
+- **Step 6 (`?action=cup`)** — Curriculum Cup card. No `?action=cup` handler exists on `ProfilePage` (or anywhere else), and there's no Cup-card destination element to ref. Needs the destination feature first.
+- **Step 7 (`?action=cup-result`)** — result row in the tournament list. Same as step 6 — destination doesn't exist yet.
+
+Effort: ~30 minutes per remaining wiring site once the destination handler is in place.
+
+---
+
 ## Status snapshot (last reviewed 2026-04-23)
 
 | Item | Status |
@@ -18,6 +35,7 @@ Deferred features and improvements that are worth revisiting but not currently p
 | Multi-Game Architecture | ✅ Largely done as the Game SDK (Phases 1.1–1.4) — remaining games are their own phases |
 | Tier 2/3 instrumentation | 🟡 Partly done (3 counters live; rest in `doc/Observability_Plan.md`) |
 | Recurring tournaments refactor (now Phase 3.7a) | 🚧 In-plan (scheduled as Phase 3.7a of the Implementation Plan, pre-prod window) |
+| `table.released` per-reason soak monitor | ⏳ Open (post-prod-launch — needs real traffic to be meaningful) |
 
 ## Migration-sensitivity audit (2026-04-23)
 
@@ -97,17 +115,18 @@ Also folded into Phase 3.7a for the same "easier empty than later" reason (not i
 
 ## Backend Logs in Admin Log Viewer
 
-**What:** Route backend (pino) logs into the database so the admin Log Viewer shows all four sources — `frontend`, `api`, `realtime`, and `ai` — instead of only frontend entries. Currently pino writes to stdout (visible in Railway's log stream) but never reaches the `logs` table, so the viewer is nearly empty in normal operation.
+> **Status update (2026-04-29):** the frontend half landed — `landing/src/lib/frontendLogger.js` batches errors / warnings to `POST /api/v1/logs` and the admin Log Viewer now actually populates with `source: frontend` rows. `setLogUserId` is wired through AppLayout so user context is captured. Backend pino → DB is the remaining piece; the rest of this entry covers what's left.
 
-**Why deferred:** stdout logs are accessible via Railway's dashboard for now. The viewer is still useful for frontend errors. Wiring pino to the DB adds write pressure on every request.
+**What:** Route backend (pino) logs into the database so the admin Log Viewer shows all four sources — `api`, `realtime`, and `ai` — alongside the frontend rows already flowing in. Currently pino writes to stdout (visible in the Fly.io log stream) but never reaches the `logs` table.
+
+**Why deferred:** stdout logs are accessible via Fly.io / `docker compose logs` for now. The viewer is already useful for frontend errors. Wiring pino to the DB adds write pressure on every request.
 
 **What it would take:**
 - **Pino DB transport:** a custom pino transport (or `pino-transport` wrapper) that batches log entries and inserts them into the `logs` table, respecting the existing `pruneIfNeeded` limit. Use `source: 'api'`, `'realtime'`, or `'ai'` depending on origin.
 - **Log level threshold:** only write INFO and above from the backend to avoid flooding the table with debug noise. DEBUG can remain stdout-only.
-- **`setLogUserId` fix:** the current frontend logger has a broken `setLogUserId` (line 79 of `logger.js` does `Object.assign` on a string, which is a no-op) — userId is always null on log entries. Fix this so user context is captured.
-- **Live tail:** backend log entries would flow through the existing `_io.to('admin:logs').emit('log:entry', ...)` path automatically once they're written to the DB.
+- **Live tail:** backend log entries flow through the existing `appendToStream('admin:logs:entry', ...)` path automatically once they're written via the same POST handler the frontend logger uses (or via a direct stream emit from the transport).
 
-**Complexity:** Small-to-medium (~half a day). The DB schema, ingestion endpoint, pruning, and live-tail socket are already in place — the missing piece is just the pino → DB bridge and the userId fix.
+**Complexity:** Small-to-medium (~half a day). The DB schema, ingestion endpoint, pruning, frontend logger, and live-tail SSE are all in place — the missing piece is just the pino → DB bridge.
 
 ---
 
@@ -330,5 +349,24 @@ This works and ships, but is awkward:
 - `GET /api/tournaments` filters stay on `Tournament`; `GET /api/templates` becomes the admin view.
 
 **Effort:** ~4–6 hours. Schema migration + data backfill (split existing templates into their config rows + preserved-as-occurrence rows) + rewriting the sweep + updating 3-4 UI surfaces. No functional gain for users in isolation — only worth doing when the current model actively causes a bug or a planned feature requires separating config from history.
+
+---
+
+## `table.released` per-reason soak monitor — ⏳ OPEN (defer until prod has traffic)
+
+**Background:** Chunk 3 of the table-fixes sweep added a per-reason `table.released` counter to `/api/v1/admin/health/tables` (reasons: `disconnect`, `leave`, `game-end`, `gc-stale`, `gc-idle`, `admin`, `guest-cleanup`, plus `OTHER` catch-all). The shape of the per-reason histogram is the V1-acceptance success metric for "where do tables actually die" — does the disconnect bucket dominate (Safari hang regression) vs. the game-end bucket (healthy completion), is the `OTHER` bucket nonzero (typo'd reason at a call site), is `gc-idle` climbing (idle abandonment runaway), etc.
+
+**Why deferred:** On staging the only traffic is manual QA — the per-reason distribution reflects the tester's clicks, not real user behaviour. Running a soak there would just measure the test, not the system. The metric's value scales with traffic.
+
+**What to do post-prod:**
+
+- Schedule a periodic poll of `/api/v1/admin/health/tables` (e.g. hourly via the same scheduler used for tournament sweeps, or a cron-driven Slack/Linear post). Diff against the previous reading and post the per-reason deltas.
+- Alert thresholds (rough first cuts; tune from data):
+  - `OTHER > 0` for any window → call-site typo, page on-call.
+  - `disconnect / game-end > 0.5` over a 1-h window → Safari/network regression suspected; page on-call.
+  - `gc-idle` rising > 5/hour while active sessions are non-zero → idle threshold misconfigured.
+- Cross-reference with `tableCreateErrors.P2002` (should be ~0 post-chunk-1) and `gc.secondsSinceLastSuccess` (should be < 600s).
+
+**Effort:** ~2 hours. Reuse the existing scheduler + a small `lib/healthDiff.js` to compute deltas. Pairs naturally with the rest of the Tier 2/3 instrumentation work (see entry above).
 
 ---

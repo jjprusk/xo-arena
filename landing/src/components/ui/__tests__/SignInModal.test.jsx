@@ -21,7 +21,12 @@ vi.mock('../../../lib/getToken.js', () => ({
 }))
 
 vi.mock('../../../lib/api.js', () => ({
-  api: { guide: { guestCredit: vi.fn(() => Promise.resolve({})) } },
+  api: {
+    guide: { guestCredit: vi.fn(() => Promise.resolve({})) },
+    // sync is awaited before guestCredit to ensure the domain User row
+    // exists; the credit endpoint 404s otherwise.
+    users: { sync:        vi.fn(() => Promise.resolve({ user: { id: 'u1' } })) },
+  },
 }))
 
 // Social buttons: rendered as inert stubs so we don't have to model their internals.
@@ -116,6 +121,31 @@ describe('SignInModal — deferred email verification on signup', () => {
 
     // localStorage cleared after successful credit
     await waitFor(() => expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull())
+  })
+
+  it('calls users.sync before guestCredit so the domain User row exists', async () => {
+    // Without sync, guestCredit 404'd on a fresh signup because the
+    // backend's /guide/guest-credit handler returns 404 when the User row
+    // hasn't been created yet. sync() upserts it; guestCredit must wait.
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      hookStep1CompletedAt: '2026-04-24T12:00:00.000Z',
+    }))
+    signUp.email.mockResolvedValueOnce({ user: { id: 'u1', emailVerified: false } })
+
+    render(<SignInModal onClose={vi.fn()} defaultView="sign-up" />)
+    bypassSubmitDelayGuard()
+
+    fillSignupForm({ email: 'guest@example.com', password: 'password123' })
+    fireEvent.submit(screen.getByRole('button', { name: /create account/i }).closest('form'))
+
+    await waitFor(() => expect(api.guide.guestCredit).toHaveBeenCalled())
+    // Both must have been called, and sync's invocation order must precede
+    // guestCredit's (vi.fn().mock.invocationCallOrder is monotonic across
+    // all mocks in the run).
+    expect(api.users.sync).toHaveBeenCalled()
+    const syncOrder    = api.users.sync.mock.invocationCallOrder[0]
+    const creditOrder  = api.guide.guestCredit.mock.invocationCallOrder[0]
+    expect(syncOrder).toBeLessThan(creditOrder)
   })
 
   it('does not call guestCredit when no guest progress was recorded', async () => {

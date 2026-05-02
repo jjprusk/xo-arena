@@ -272,6 +272,7 @@ function TableSurface({ phase, session, gameState, spectatorCount, children }) {
           position="top"
           state={getSeatState(topPlayer, session, gameState, phase)}
           isYou={!isSpectator && topPlayer.id === currentUserId}
+          isYourBot={!!currentUserId && topPlayer.isBot && topPlayer.ownerUserId === currentUserId}
         />
       )}
       {bottomPlayer && (
@@ -280,13 +281,14 @@ function TableSurface({ phase, session, gameState, spectatorCount, children }) {
           position="bottom"
           state={getSeatState(bottomPlayer, session, gameState, phase)}
           isYou={!isSpectator && bottomPlayer.id === currentUserId}
+          isYourBot={!!currentUserId && bottomPlayer.isBot && bottomPlayer.ownerUserId === currentUserId}
         />
       )}
     </div>
   )
 }
 
-function SeatPod({ player, position, state, isYou }) {
+function SeatPod({ player, position, state, isYou, isYourBot }) {
   const initials = (player.displayName ?? '?')[0].toUpperCase()
   const stateClass = state === 'idle' ? '' : `seat--${state}`
   // Render the meta row ALWAYS — with an invisible spacer for non-bots — so
@@ -295,17 +297,22 @@ function SeatPod({ player, position, state, isYou }) {
   // math goes asymmetric (top straddles the rim, bottom ends up mostly
   // inside). The extra row costs a few invisible pixels on the human side.
   return (
-    <div className={['seat', `seat--${position}`, stateClass].filter(Boolean).join(' ')}>
-      <div className={`seat__avatar${player.isBot ? ' seat__avatar--bot' : ''}`}>
+    <div
+      className={['seat', `seat--${position}`, stateClass, isYourBot ? 'seat--your-bot' : ''].filter(Boolean).join(' ')}
+      aria-label={isYourBot ? `${player.displayName ?? 'Bot'} (your bot)` : undefined}
+    >
+      <div className={`seat__avatar${player.isBot ? ' seat__avatar--bot' : ''}${isYourBot ? ' seat__avatar--your-bot' : ''}`}>
         {initials}
       </div>
       <div className="seat__name">
         {isYou ? 'You' : (player.displayName ?? '—')}
       </div>
-      <div className="seat__meta" aria-hidden={player.isBot ? undefined : 'true'}>
-        {player.isBot
-          ? <span className="seat__bot-tag">BOT</span>
-          : <span className="seat__bot-tag" style={{ visibility: 'hidden' }}>BOT</span>}
+      <div className="seat__meta" aria-hidden={player.isBot && !isYourBot ? undefined : 'true'}>
+        {isYourBot
+          ? <span className="seat__bot-tag seat__bot-tag--your">YOUR BOT</span>
+          : player.isBot
+            ? <span className="seat__bot-tag">BOT</span>
+            : <span className="seat__bot-tag" style={{ visibility: 'hidden' }}>BOT</span>}
       </div>
     </div>
   )
@@ -387,8 +394,14 @@ function TableContextSidebar({ gameMeta, session, phase, table, spectatorCount, 
             Seated
           </p>
           <ul className="space-y-1">
-            {players.map(p => (
-              <li key={p.id} className="text-sm flex items-center gap-2">
+            {/* Key by index, not p.id — Hook step-2 demo tables route the
+                SAME bot to both seats (e.g. Sterling vs Sterling, the
+                "high-tier draw stalemate" curated matchup), so two seats
+                share the same userId and React's duplicate-key warning
+                fires. Index is the natural unique identifier for a seat
+                row anyway. */}
+            {players.map((p, i) => (
+              <li key={i} className="text-sm flex items-center gap-2">
                 <span
                   className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
                   style={{ background: 'var(--color-teal-600)' }}

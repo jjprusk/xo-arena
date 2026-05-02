@@ -1,5 +1,5 @@
 import React from 'react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import PlatformShell, { selectDefaultMode, resolveThemeVars } from '../PlatformShell.jsx'
@@ -118,6 +118,45 @@ describe('PlatformShell — sidebar content', () => {
     expect(sidebar).toHaveTextContent(/Alice/)
     expect(sidebar).toHaveTextContent(/Bob-Bot/)
     expect(sidebar).toHaveTextContent(/BOT/)
+  })
+
+  // Demo tables (Hook step 2) include curated bot-vs-bot matchups where the
+  // SAME bot plays both sides — e.g. "Sterling vs Sterling" for the high-tier
+  // draw stalemate. Both seats arrive at PlatformShell with the same userId
+  // (the bot's User row). Pre-fix, the seat list keyed by `p.id` and React
+  // logged `Encountered two children with the same key 'cmn7…'` which broke
+  // the watch-demo experience.
+  it('renders both seats when two players share an id (bot-vs-self demo) — no duplicate-key warning', () => {
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {})
+    wrap(
+      <PlatformShell
+        gameMeta={xoMeta}
+        phase="playing"
+        session={{
+          isSpectator: true,
+          players: [
+            { id: 'sterling', displayName: 'Sterling', isBot: true },
+            { id: 'sterling', displayName: 'Sterling', isBot: true },
+          ],
+        }}
+        table={{ status: 'ACTIVE' }}
+      >
+        <div data-testid="game">BOARD</div>
+      </PlatformShell>,
+    )
+    // Scope to the sidebar seat list — the GameComponent under PlatformShell
+    // also renders the bot names above/below the board.
+    const sidebar = screen.getByRole('complementary', { name: /table context/i })
+    const sidebarSterling = Array.from(sidebar.querySelectorAll('li')).filter(li =>
+      /Sterling/.test(li.textContent ?? ''),
+    )
+    expect(sidebarSterling).toHaveLength(2)
+    // No "same key" warning was emitted by React.
+    const dupKeyCalls = warn.mock.calls.filter(args =>
+      typeof args[0] === 'string' && args[0].includes('the same key'),
+    )
+    expect(dupKeyCalls).toEqual([])
+    warn.mockRestore()
   })
 
   it('renders Gym and Puzzles tab links based on meta flags', () => {

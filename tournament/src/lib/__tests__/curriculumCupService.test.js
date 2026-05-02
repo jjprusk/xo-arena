@@ -204,6 +204,30 @@ describe('cloneCurriculumCup — happy path', () => {
     // First two from rusty pool, then first from copper pool (in pool-declared order)
     expect(oppNames).toEqual(['Tarnished Bolt', 'Rusted Hinge', 'Copper Coil'])
   })
+
+  it('uses default 3000ms pace for real (non-test) users', async () => {
+    mockDb.user.findUnique.mockImplementation(({ where }) => {
+      if (where.id === CALLER_ID)        return Promise.resolve({ isTestUser: false })
+      if (where.id === 'bot-mine')       return Promise.resolve(CALLER_BOT)
+      if (where.username === 'bot-rusty')  return Promise.resolve(RUSTY)
+      if (where.username === 'bot-copper') return Promise.resolve(COPPER)
+      return Promise.resolve(null)
+    })
+    await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine' })
+    expect(mockDb.tournament.create.mock.calls[0][0].data.paceMs).toBe(3000)
+  })
+
+  it('drops pace to 50ms for isTestUser=true callers so e2e cups complete fast', async () => {
+    mockDb.user.findUnique.mockImplementation(({ where }) => {
+      if (where.id === CALLER_ID)        return Promise.resolve({ isTestUser: true })
+      if (where.id === 'bot-mine')       return Promise.resolve(CALLER_BOT)
+      if (where.username === 'bot-rusty')  return Promise.resolve(RUSTY)
+      if (where.username === 'bot-copper') return Promise.resolve(COPPER)
+      return Promise.resolve(null)
+    })
+    await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine' })
+    expect(mockDb.tournament.create.mock.calls[0][0].data.paceMs).toBe(50)
+  })
 })
 
 // ─── cloneCurriculumCup error paths ─────────────────────────────────────────
@@ -229,5 +253,112 @@ describe('cloneCurriculumCup — guards', () => {
     })
     await expect(cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine' }))
       .rejects.toThrow(/persona.*missing/i)
+  })
+})
+
+// ─── cloneCupOpponent — displayName collision retry ────────────────────────
+// The schema's partial unique index `users_bot_displayname_unowned_key`
+// (LOWER(displayName) WHERE isBot AND botOwnerId IS NULL) exhausts each
+// 8-name tier pool after ~3 cups. Pre-fix, the second cup that drew the
+// same pool entry 500'd at db.user.create with P2002. The clone now
+// retries the create with a hex-suffixed displayName on that specific
+// collision so the cup boots normally — without papering over other
+// constraint failures (different P2002 targets re-throw verbatim).
+describe('cloneCurriculumCup — displayName collision retry', () => {
+  function p2002(target) {
+    const e = new Error('Unique constraint failed')
+    e.code = 'P2002'
+    e.meta = { target }
+    return e
+  }
+
+  it('retries with " #<suffix>" when the bare pool name clashes on the displayName index (string target)', async () => {
+    let cloneCounter = 0
+    // Fail bare-name attempts (no " #" suffix) with the displayName-index
+    // P2002; let suffixed retries through. Mirrors the prod state where a
+    // prior cup already grabbed the pool entry.
+    mockDb.user.create.mockImplementation(({ data }) => {
+      const isSuffixed = / #[0-9a-z]+$/.test(data.displayName)
+      if (!isSuffixed) {
+        return Promise.reject(p2002('users_bot_displayname_unowned_key'))
+      }
+      cloneCounter++
+      return Promise.resolve({
+        id: `cup-clone-${cloneCounter}`, displayName: data.displayName,
+        botModelId: data.botModelId, isBot: data.isBot,
+      })
+    })
+
+    const r = await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine', rng: () => 0 })
+    expect(r.status).toBe(201)
+    // Each opponent did 2 creates: bare → P2002, then suffixed → ok.
+    expect(mockDb.user.create).toHaveBeenCalledTimes(6)
+    const oppNames = r.body.participants.slice(1).map(p => p.displayName)
+    // All three end up suffixed because the test forced collision on every bare attempt.
+    expect(oppNames.every(n => / #[0-9a-z]{4}$/.test(n))).toBe(true)
+  })
+
+  it('retries when target is provided as an array (covers both Prisma driver shapes)', async () => {
+    let firstAttempt = true
+    mockDb.user.create.mockImplementation(({ data }) => {
+      if (firstAttempt) {
+        firstAttempt = false
+        return Promise.reject(p2002(['displayName']))
+      }
+      return Promise.resolve({ id: 'cup-clone-x', displayName: data.displayName,
+        botModelId: data.botModelId, isBot: data.isBot })
+    })
+    // Drive a single-opponent path by aborting after one create; we just need
+    // to prove the retry wired up. Easier: call cloneCurriculumCup, expect 201.
+    // First clone retries; second & third succeed on first attempt because
+    // firstAttempt was already flipped.
+    const r = await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine', rng: () => 0 })
+    expect(r.status).toBe(201)
+  })
+
+  it('retries when meta.target is missing entirely (the actual prod bug)', async () => {
+    // Prisma's adapter for expression-based unique indexes doesn't always
+    // populate err.meta.target — the message text says "Unique constraint
+    // failed on the fields: (`lower(\"displayName\"`)" but err.meta is
+    // undefined. The previous retry logic treated "no target" as "not the
+    // displayName index" and threw, so a real user's first cup clone 500'd.
+    let firstAttempt = true
+    mockDb.user.create.mockImplementation(({ data }) => {
+      if (firstAttempt) {
+        firstAttempt = false
+        const e = new Error('Unique constraint failed')
+        e.code = 'P2002'
+        // Intentionally no meta.target — the regression scenario.
+        return Promise.reject(e)
+      }
+      return Promise.resolve({ id: 'cup-clone-y', displayName: data.displayName,
+        botModelId: data.botModelId, isBot: data.isBot })
+    })
+    const r = await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine', rng: () => 0 })
+    expect(r.status).toBe(201)
+  })
+
+  it('rethrows on a non-displayName P2002 once the suffixed retry also fails — never silently swallowed', async () => {
+    // Username/email both already include a random base36 suffix at row
+    // build, so a real-world non-displayName P2002 here is astronomically
+    // unlikely. We previously narrowed the retry to displayName only, but
+    // Prisma exposes meta.target inconsistently for expression indexes
+    // (sometimes `'lower("displayName"'`, sometimes a constraint name,
+    // sometimes nothing at all), and the no-target branch wrongly threw
+    // — breaking real cup clones. The clone now retries once on any P2002
+    // with a suffixed displayName; if the retry also collides (e.g. a
+    // genuine username clash), the error propagates here and surfaces
+    // server-side.
+    mockDb.user.create.mockRejectedValue(p2002('users_username_key'))
+    await expect(cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine', rng: () => 0 }))
+      .rejects.toMatchObject({ code: 'P2002', meta: { target: 'users_username_key' } })
+  })
+
+  it('rethrows non-P2002 errors verbatim (DB connection failure, schema drift, etc.)', async () => {
+    const boom = new Error('connection refused')
+    boom.code = 'P1001'
+    mockDb.user.create.mockRejectedValueOnce(boom)
+    await expect(cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine', rng: () => 0 }))
+      .rejects.toMatchObject({ code: 'P1001' })
   })
 })

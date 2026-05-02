@@ -5,6 +5,7 @@ import { publish } from '../lib/redis.js'
 import { optionalAuth, requireAuth, requireTournamentAdmin, isTournamentAdmin } from '../middleware/auth.js'
 import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import { checkRecurringOccurrences } from '../lib/recurringScheduler.js'
+import { computeTemplateEndDate } from '../lib/templateDefaults.js'
 import { cloneAndSeedPersona, seedExistingSystemBot, syncTemplateSeedsToTournament } from '../lib/seedBotService.js'
 import { cloneCurriculumCup } from '../lib/curriculumCupService.js'
 import { expectedGameCount } from '../lib/bracketMath.js'
@@ -147,7 +148,10 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       include: {
         participants: {
           include: {
-            user: { select: { id: true, betterAuthId: true, displayName: true, avatarUrl: true, isBot: true } },
+            // botOwnerId is exposed so the UI can flag "this bot is yours" in
+            // bracket / participants list / spectate header — a Curriculum Cup
+            // shows 4 bots and the user has no other way to spot theirs.
+            user: { select: { id: true, betterAuthId: true, displayName: true, avatarUrl: true, isBot: true, botOwnerId: true } },
           },
         },
         rounds: {
@@ -1078,7 +1082,9 @@ router.post('/:id/admin/force-complete', requireTournamentAdmin, async (req, res
 // and as an admin "kick" if the scheduler appears stuck.
 router.post('/admin/scheduler/check-recurring', requireTournamentAdmin, async (req, res, next) => {
   try {
-    const summary = await checkRecurringOccurrences()
+    // Manual admin trigger processes test-flagged templates too — QA specs
+    // rely on this to spawn occurrences on demand without waiting 60s.
+    const summary = await checkRecurringOccurrences({ includeTest: true })
     res.json(summary)
   } catch (e) {
     next(e)
@@ -1176,6 +1182,13 @@ router.post('/admin/templates', requireTournamentAdmin, async (req, res, next) =
       return res.status(400).json({ error: 'bestOfN must be a positive odd number (1, 3, 5, ...)' })
     }
 
+    // Test-flagged templates auto-expire 24h after their start anchor unless
+    // the caller specified an explicit end date. Belt-and-suspenders TTL: a
+    // crashed spec that never runs cleanup still can't leak a daily template
+    // forever — the scheduler honours recurrenceEndDate already.
+    const explicitEnd = recurrenceEndDate !== undefined ? toDate(recurrenceEndDate) : undefined
+    const effectiveEnd = computeTemplateEndDate(anchor, !!isTest, explicitEnd)
+
     const templateData = {
       name: name.trim(),
       description, game, mode, format, bracketType,
@@ -1192,7 +1205,7 @@ router.post('/admin/templates', requireTournamentAdmin, async (req, res, next) =
       ...(durationMinutes !== undefined && { durationMinutes }),
       ...(paceMs !== undefined && { paceMs }),
       ...(startMode !== undefined && { startMode }),
-      ...(recurrenceEndDate !== undefined  && { recurrenceEndDate:  toDate(recurrenceEndDate) }),
+      ...(effectiveEnd !== undefined && { recurrenceEndDate: effectiveEnd }),
       ...(registrationOpenAt !== undefined  && { registrationOpenAt:  toDate(registrationOpenAt) }),
       ...(registrationCloseAt !== undefined && { registrationCloseAt: toDate(registrationCloseAt) }),
       ...(paused !== undefined && { paused: !!paused }),

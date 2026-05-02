@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.3.0-alpha-8.0",
+    "date": "2026-05-01",
+    "description": "Journey fixes — cup step 7 credits round-1 losers, broken render loop blocking post-cup CTA, isTest template/scheduler guards, faster cup pace for e2e"
+  },
+  {
     "version": "1.3.0-alpha-4.0",
     "date": "2026-04-27",
     "description": "Table fixes — slug redesign, seat-release on every COMPLETED transition, Safari pagehide graceful close, table.released telemetry"

@@ -50,4 +50,32 @@ describe('COACHING_CARDS — every branch has a complete card', () => {
       expect(card.ctaHref).toMatch(/^\//)
     })
   }
+
+  // Regression guard: every coaching-card CTA must point to a route that
+  // actually exists in `landing/src/main.supported.jsx` AND use an action
+  // key that the destination page handles. These specific bad values were
+  // shipped previously and turned the post-cup card into a dead end:
+  //   - `/guide/rookie-cup`     — route doesn't exist (v1.1 Sprint 8)
+  //   - `/profile?action=train` — handler is `train-bot`, not `train`
+  //   - `/gym?action=switch-algorithm` — Gym handles `start-training` only
+  // Lock the known-good values so a future copy/paste can't quietly revert
+  // them without a deliberate test update.
+  const EXPECTED_HREFS = {
+    CHAMPION:       '/profile?action=train-bot',
+    RUNNER_UP:      '/profile?action=train-bot',
+    ONE_TRAIN_LOSS: '/gym',
+    HEAVY_LOSS:     '/profile?action=train-bot',
+  }
+  for (const [key, expected] of Object.entries(EXPECTED_HREFS)) {
+    it(`${key} ctaHref is the known-good destination (${expected})`, () => {
+      expect(COACHING_CARDS[key].ctaHref).toBe(expected)
+    })
+  }
+  for (const [key, card] of Object.entries(COACHING_CARDS)) {
+    it(`${key} does not link to known-broken destinations`, () => {
+      expect(card.ctaHref).not.toBe('/guide/rookie-cup')
+      expect(card.ctaHref).not.toBe('/profile?action=train')
+      expect(card.ctaHref).not.toBe('/gym?action=switch-algorithm')
+    })
+  }
 })

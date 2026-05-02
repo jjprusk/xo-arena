@@ -10,6 +10,7 @@ import { recordGuestHookStep1 } from '../lib/guestMode.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { deriveCurrentPhase } from '../components/guide/JourneyCard.jsx'
 import SignInModal from '../components/ui/SignInModal.jsx'
+import IdleWarnOverlay from '../components/play/IdleWarnOverlay.jsx'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 
@@ -35,7 +36,7 @@ function Spinner() {
 // Inner component — only mounted once botConfig is resolved (or not needed).
 // Keeps all hook calls stable regardless of async bot fetch.
 // Exported so TableDetailPage can render a table-routed game without duplicating this logic.
-export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0 }) {
+export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0, spectate = false }) {
   const navigate = useNavigate()
 
   // Load game meta asynchronously — see comment at top of file. While null we
@@ -60,6 +61,7 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     currentUser,
     botUserId:  botConfig?.botUserId  ?? null,
     botSkillId: botConfig?.botSkillId ?? null,
+    spectate,
   })
 
   // Subscribe to move events to drive seat-pod states in the shell
@@ -231,6 +233,12 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
           )}
         </PlatformShell>
 
+        {/* "Still there?" overlay — surfaces when the server fires an idle
+            warn on user:<id>:idle, gives the player a chance to pong
+            before the auto-forfeit lands. Spectators don't pong/idle so
+            we skip mounting it for them. */}
+        {!spectate && <IdleWarnOverlay sdk={sdk} />}
+
         {showGuestSignupCta && (
           <div
             className={`fixed left-0 right-0 z-40 px-3 sm:px-4 pointer-events-none transition-opacity duration-700 animate-fade-up ${ctaFaded ? 'opacity-50 hover:opacity-100' : 'opacity-100'}`}
@@ -298,6 +306,9 @@ export default function PlayPage() {
   const action            = searchParams.get('action')
   const botUserId         = searchParams.get('botUserId')
   const botSkillId        = searchParams.get('botSkillId')
+  // `?watch=1` joins as a spectator — required for bot-vs-bot games (Spar)
+  // where neither seat matches the caller.
+  const spectate          = searchParams.get('watch') === '1'
 
   // Key that changes when auth identity changes — forces GameView to fully
   // unmount and remount (new useGameSDK, new socket mapping, new game).
@@ -381,6 +392,7 @@ export default function PlayPage() {
       tournamentId={tournamentId}
       authSession={authSession}
       botConfig={resolvedBotConfig}
+      spectate={spectate}
     />
   )
 }

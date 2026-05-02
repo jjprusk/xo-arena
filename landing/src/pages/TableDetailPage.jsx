@@ -15,16 +15,17 @@
  * render.
  */
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import { getSocket } from '../lib/socket.js'
 import { useEventStream } from '../lib/useEventStream.js'
+import { rtFetch } from '../lib/rtSession.js'
 import PlatformShell from '../components/platform/PlatformShell.jsx'
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 import { GameView } from './PlayPage.jsx'
+import { useGuideStore } from '../store/guideStore.js'
 
 const STATUS_META = {
   FORMING:   { label: 'Forming',   color: 'var(--color-amber-600)' },
@@ -47,6 +48,15 @@ export default function TableDetailPage() {
   const [error, setError] = useState(null)
   const [busy,  setBusy]  = useState(false)
 
+  // Once a GameView has been mounted (table was ACTIVE on at least one render),
+  // keep mounting it through the transition to COMPLETED so the survivor of
+  // a forfeit / opponent disconnect actually *sees* useGameSDK's win screen +
+  // Rematch. Without this, any refetch (e.g. from a `playerDisconnected`
+  // lifecycle event mid-forfeit) flips the parent into the seat-list branch
+  // and unmounts GameView before the user can react. Resets implicitly when
+  // the user navigates to a different table (component remount).
+  const hasMountedGameViewRef = useRef(false)
+
   const load = useCallback(async () => {
     try {
       const token = await getToken().catch(() => null)
@@ -61,47 +71,30 @@ export default function TableDetailPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Presence: tell the backend we're watching this table. Re-emits on
-  // reconnect via the 'connect' listener so counts stay accurate even after
-  // a network hiccup. Guests can watch too (just don't fire spectator.joined
-  // on the server side — see tablePresence.js).
-  //
-  // We also fire `table:unwatch` on `pagehide`, because the React cleanup
-  // return is NOT guaranteed to run on tab close / navigation-away — and
-  // without it the server only detects the disconnect when the polling
-  // transport times out (~45s on default settings), leaving a stale
-  // watcher in the count. `pagehide` fires reliably on close + refresh.
+  // Presence: POST /rt/tables/:tableId/watch with the X-SSE-Session header
+  // (rtFetch wires it). Re-POST is idempotent for the same (tableId,
+  // sessionId). On pagehide we DELETE as a latency optimization — the SSE
+  // session dispose callback is the correctness backstop when the
+  // EventSource closes.
   useEffect(() => {
-    const socket = getSocket()
     let cancelled = false
-
-    async function emitWatch() {
-      const token = await getToken().catch(() => null)
-      if (cancelled) return
-      socket.emit('table:watch', { tableId, authToken: token ?? null })
+    async function postWatch() {
+      try { await rtFetch(`/rt/tables/${tableId}/watch`, { method: 'POST' }) } catch {}
     }
-    function emitUnwatch() {
-      // socket.emit during pagehide is best-effort over polling — the XHR
-      // may or may not flush. The server still catches orphans on socket
-      // timeout, so this is a latency optimization, not a correctness fix.
-      try { socket.emit('table:unwatch', { tableId }) } catch {}
+    function deleteWatchBeacon() {
+      rtFetch(`/rt/tables/${tableId}/watch`, { method: 'DELETE' }).catch(() => {})
     }
-
-    emitWatch()
-    socket.on('connect', emitWatch)
-    window.addEventListener('pagehide', emitUnwatch)
-
+    postWatch()
+    window.addEventListener('pagehide', deleteWatchBeacon)
     return () => {
       cancelled = true
-      socket.off('connect', emitWatch)
-      window.removeEventListener('pagehide', emitUnwatch)
-      emitUnwatch()
+      window.removeEventListener('pagehide', deleteWatchBeacon)
+      deleteWatchBeacon()
     }
   }, [tableId])
 
   // Real-time: table.* bus events via SSE trigger a refetch when this table
-  // is affected. table:presence stays on the socket — it's a per-table room
-  // broadcast, not a Tier 2 SSE channel.
+  // is affected.
   const [presence, setPresence] = useState({ count: 0, userIds: [], spectatingCount: 0 })
   useEventStream({
     channels: ['guide:notification'],
@@ -111,20 +104,71 @@ export default function TableDetailPage() {
         navigate('/tables', { replace: true })
         return
       }
+      // When a demo (Hook step 2) or spar (Curriculum step 5) backing table
+      // releases, surface the guide panel so the user lands back on their
+      // next journey step. AppLayout's `guide:journeyStep` handler suppresses
+      // auto-open while the user is on /tables/* (the scrim would dim the
+      // live board) — this branch is the trigger for reopening once the
+      // game actually finishes. Re-watch / re-spar also work because the
+      // step is already credited but the trigger still fires.
+      if (
+        type === 'table.released'
+        && data?.tableId === tableId
+        && (data?.trigger === 'demo-finish' || data?.trigger === 'spar-finish')
+      ) {
+        useGuideStore.getState().open()
+        return
+      }
       if (!['player.joined', 'player.left', 'spectator.joined', 'table.empty', 'table.started'].includes(type)) return
       if (data?.tableId && data.tableId !== tableId) return
       load()
     },
   })
-  useEffect(() => {
-    const socket = getSocket()
-    function onPresence(data) {
-      if (data?.tableId !== tableId) return
-      setPresence({ count: data.count ?? 0, userIds: data.userIds ?? [], spectatingCount: data.spectatingCount ?? 0 })
-    }
-    socket.on('table:presence', onPresence)
-    return () => socket.off('table:presence', onPresence)
-  }, [tableId])
+
+  // Per-table presence + lifecycle. EventSource requires explicit event-type
+  // registration for named events. Lifecycle events (guestJoined, cancelled,
+  // abandoned, playerDisconnected/Reconnected, spectatorJoined) trigger a
+  // refetch.
+  useEventStream({
+    enabled:    !!tableId,
+    channels:   tableId
+      ? [`table:${tableId}:presence`, `table:${tableId}:lifecycle`]
+      : [],
+    eventTypes: tableId
+      ? [`table:${tableId}:presence`, `table:${tableId}:lifecycle`]
+      : [],
+    onEvent: (channel, data) => {
+      if (channel === `table:${tableId}:presence`) {
+        if (data?.tableId !== tableId) return
+        setPresence({
+          count:           data.count           ?? 0,
+          userIds:         data.userIds         ?? [],
+          spectatingCount: data.spectatingCount ?? 0,
+        })
+        return
+      }
+      if (channel === `table:${tableId}:lifecycle`) {
+        // Cancelled / abandoned: navigate away — the table is gone. EXCEPT
+        // when a GameView has already mounted: in that case the survivor of
+        // a forfeit / opponent-disconnect needs to see the win screen +
+        // Rematch driven by useGameSDK's `state:forfeit` handler. Bouncing
+        // them to /tables here is what the §1 known-bug entry in
+        // Future_Ideas.md called out.
+        if (data?.kind === 'cancelled' || data?.kind === 'abandoned') {
+          if (hasMountedGameViewRef.current) {
+            // Still useful to refresh seat/status data for the page chrome
+            // around the GameView; GameView itself drives the result UI.
+            load()
+            return
+          }
+          navigate('/tables', { replace: true })
+          return
+        }
+        // Otherwise refetch table state so seats / status are current.
+        load()
+      }
+    },
+  })
 
   const mySeatIndex = table?.seats?.findIndex?.(s => s.userId && s.userId === currentUserId) ?? -1
   const isSeated    = mySeatIndex !== -1
@@ -222,7 +266,15 @@ export default function TableDetailPage() {
   // seated players, spectator count, Gym/Puzzles tabs), and a placeholder
   // sits where the live game component will load once Phase 3.4 bridges
   // Tables to the realtime session layer.
-  if (table.status === 'ACTIVE') {
+  //
+  // Forfeit-survival: once we've shown a GameView, keep showing it through
+  // COMPLETED so useGameSDK's `state:forfeit` handler (sets phase=finished,
+  // emits the win/loss event) actually paints the result screen. Otherwise
+  // the parent unmounts GameView the moment a refetch surfaces COMPLETED
+  // and the user lands on a stale seat list with no Rematch button.
+  if (table.status === 'ACTIVE') hasMountedGameViewRef.current = true
+  const renderGameView = table.status === 'ACTIVE' || hasMountedGameViewRef.current
+  if (renderGameView) {
     const gameKey = session?.user?.id ?? 'guest'
     // Spectating count is tracked independently by the backend via _spectatorSockets
     // (populated when room:join fires with role:'spectator'), so it's accurate even
@@ -236,6 +288,7 @@ export default function TableDetailPage() {
           authSession={session}
           botConfig={null}
           spectatingCount={spectatingCount}
+          spectate={!isSeated}
         />
         {isAdmin && (
           <div className="fixed bottom-4 right-4 z-50">

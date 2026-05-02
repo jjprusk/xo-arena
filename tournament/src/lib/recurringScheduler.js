@@ -85,12 +85,20 @@ function advanceBy(date, interval, steps) {
  * Run one pass. Returns a small summary that the admin endpoint can echo.
  * Always resolves (errors are caught per-template so a single bad row
  * doesn't stall the whole sweep).
+ *
+ * `includeTest` (default false) controls whether `isTest=true` templates
+ * are processed. The 60s background sweep passes false so a leaked test
+ * template can't drive load forever; the admin endpoint passes true so
+ * QA can manually trigger occurrence creation for a specific test row.
  */
-export async function checkRecurringOccurrences() {
+export async function checkRecurringOccurrences({ includeTest = false } = {}) {
   const summary = { templatesChecked: 0, occurrencesCreated: 0, errors: 0 }
   try {
     const templates = await db.tournamentTemplate.findMany({
-      where: { paused: false },
+      where: {
+        paused: false,
+        ...(includeTest ? {} : { isTest: false }),
+      },
     })
     summary.templatesChecked = templates.length
 

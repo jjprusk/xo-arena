@@ -40,7 +40,6 @@ export default function GameComponent({ session, sdk }) {
   const [incomingReaction, setReaction]   = useState(null)
   const [showReactions, setShowReactions] = useState(false)
   const [showForfeit, setShowForfeit]     = useState(false)
-  const [idleWarning, setIdleWarning]     = useState(null)
   const [lastCell, setLastCell]           = useState(null)
   const [error, setError]                 = useState(null)
 
@@ -53,6 +52,12 @@ export default function GameComponent({ session, sdk }) {
   const pendingMoveRef = useRef(null)
 
   const { board, currentTurn, status, winner, winLine, scores, round } = gameState
+  // Forfeit context (set by useGameSDK on a `state:forfeit` event) lets the
+  // status pill explain *why* the game ended — generic "Opponent wins!" is
+  // confusing when the opponent vanished mid-game. null on natural endings.
+  const endReason     = gameState.endReason     ?? null
+  const forfeiterMark = gameState.forfeiterMark ?? null
+  const forfeitReason = gameState.forfeitReason ?? null
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -89,11 +94,6 @@ export default function GameComponent({ session, sdk }) {
       reactionTimer.current = setTimeout(() => setReaction(null), 2500)
     })
     return () => { unsub?.(); clearTimeout(reactionTimer.current) }
-  }, [sdk])
-
-  useEffect(() => {
-    if (!sdk.onIdleWarning) return
-    return sdk.onIdleWarning(({ secondsRemaining }) => setIdleWarning({ secondsRemaining }))
   }, [sdk])
 
   // ── Move event handler ─────────────────────────────────────────────────────
@@ -196,11 +196,6 @@ export default function GameComponent({ session, sdk }) {
     setShowReactions(false)
   }
 
-  function handleIdlePong() {
-    sdk.idlePong?.()
-    setIdleWarning(null)
-  }
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -221,6 +216,11 @@ export default function GameComponent({ session, sdk }) {
         round={round}
         scoreX={scores.X}
         scoreO={scores.O}
+        endReason={endReason}
+        forfeiterMark={forfeiterMark}
+        forfeitReason={forfeitReason}
+        players={session?.players ?? []}
+        marks={session?.settings?.marks ?? {}}
       />
 
       {/* Error banner — shown when the server rejects a move */}
@@ -362,27 +362,6 @@ export default function GameComponent({ session, sdk }) {
         </div>
       )}
 
-      {/* Idle warning popup — platform prompts the player before closing the room */}
-      {idleWarning && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div
-            className="rounded-2xl p-6 w-full max-w-xs space-y-4 text-center"
-            style={{ backgroundColor: 'var(--bg-surface)' }}
-          >
-            <div className="text-4xl">💤</div>
-            <h2 className="font-bold text-lg" style={{ fontFamily: 'var(--font-display)' }}>
-              Still there?
-            </h2>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {idleWarning.secondsRemaining}s before the table closes.
-            </p>
-            <button onClick={handleIdlePong} className="btn btn-primary w-full py-3 rounded-xl">
-              I'm here
-            </button>
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }
@@ -395,7 +374,24 @@ export default function GameComponent({ session, sdk }) {
  * Replaces the former three-stack of PlayerStrip / ScorePill-row / turn label
  * that ate ~100px of vertical space on mobile.
  */
-function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn, round, scoreX, scoreO }) {
+function StatusLine({
+  status, winner, isSpectator, isMyTurn, myMark, currentTurn, round, scoreX, scoreO,
+  endReason = null, forfeiterMark = null, forfeitReason = null,
+  players = [], marks = {},
+}) {
+  // Mark → display name resolver. Spectators see "Copper wins!" instead of
+  // generic mark-side jargon ("X wins!"); active players keep "You / Opponent"
+  // since that's still more personal than their own bot's name. Falls back
+  // to the bare mark when the lookup misses (legacy session payloads with
+  // no `marks` map, or the brief race before mark assignment lands).
+  const nameForMark = (mark) => {
+    if (!mark) return mark
+    const userId = Object.entries(marks).find(([, m]) => m === mark)?.[0]
+    if (!userId) return mark
+    const p = players.find(pp => pp.id === userId)
+    return p?.displayName || mark
+  }
+
   // Left segment: turn indicator OR result label.
   let turnNode
   if (status === 'playing') {
@@ -406,17 +402,28 @@ function StatusLine({ status, winner, isSpectator, isMyTurn, myMark, currentTurn
         </span>
         <span style={{ color: 'var(--text-secondary)' }}>
           {isSpectator
-            ? `${currentTurn}'s turn`
+            ? `${nameForMark(currentTurn)}'s turn`
             : isMyTurn ? 'Your turn' : "Opponent's turn"}
         </span>
       </span>
     )
   } else if (status === 'finished' && winner) {
-    const youWon = !isSpectator && winner === myMark
+    const youWon  = !isSpectator && winner === myMark
     const variant = isSpectator ? 'win' : (youWon ? 'win' : 'lose')
-    const label = isSpectator
-      ? `${winner} wins!`
-      : youWon ? 'You win! 🎉' : 'Opponent wins!'
+    const isForfeit       = endReason === 'forfeit' && !!forfeiterMark
+    const youForfeited    = isForfeit && !isSpectator && forfeiterMark === myMark
+    const oppForfeited    = isForfeit && !isSpectator && forfeiterMark !== myMark
+    const reasonSuffix    = forfeitReason === 'idle'       ? ' (timed out)'
+                          : forfeitReason === 'disconnect' ? ' (left the game)'
+                          : ''
+    const label =
+        isSpectator   ? (isForfeit
+                          ? `${nameForMark(forfeiterMark)} forfeited — ${nameForMark(winner)} wins`
+                          : `${nameForMark(winner)} wins!`)
+      : oppForfeited  ? `Opponent forfeited${reasonSuffix} — you win 🎉`
+      : youForfeited  ? `You forfeited${reasonSuffix}`
+      : youWon        ? 'You win! 🎉'
+      :                 'Opponent wins!'
     turnNode = (
       <span className={`result-pill result-pill--${variant}`} role="status">
         {label}

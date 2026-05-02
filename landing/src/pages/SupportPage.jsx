@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from '../lib/auth-client.js'
-import { disconnectSocket } from '../lib/socket.js'
 import { clearSessionCache, triggerSessionRefresh } from '../lib/useOptimisticSession.js'
 import { clearTokenCache, getToken } from '../lib/getToken.js'
 import FeedbackInbox from '../components/feedback/FeedbackInbox.jsx'
@@ -194,7 +193,6 @@ export default function SupportPage() {
     Object.keys(sessionStorage)
       .filter(k => k.startsWith('xo_dbuser_'))
       .forEach(k => sessionStorage.removeItem(k))
-    disconnectSocket()
     await signOut()
     triggerSessionRefresh()  // update useOptimisticSession state immediately
     navigate('/')

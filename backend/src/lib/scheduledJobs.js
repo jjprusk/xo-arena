@@ -11,9 +11,6 @@ const DISPATCH_INTERVAL_MS = 30_000
 let _lastTickAt = null
 
 export function getDispatcherHeartbeat() { return _lastTickAt }
-// Retained for index.js compat — scheduledJobs no longer uses socket.io directly
-// since the 15-min warning moved to the SSE stream (dispatcher appends per-user).
-export function setIO() {}
 
 // ── Job handlers ──────────────────────────────────────────────────────────────
 // Each handler receives job.payload and should return a Promise.

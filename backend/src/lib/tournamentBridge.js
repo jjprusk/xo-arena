@@ -1,22 +1,25 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Tournament bridge — subscribes to Redis tournament events and:
- * 1. Emits Socket.io events to user-specific rooms
- * 2. Persists UserNotification rows for in-app delivery
+ * 1. Appends events to the SSE stream for live UI updates
+ * 2. Persists UserNotification rows via notificationBus.dispatch
  */
 import Redis from 'ioredis'
 import db from './db.js'
 import logger from '../logger.js'
 import { dispatch } from './notificationBus.js'
+import { appendToStream } from './eventStream.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { completeStep as completeJourneyStep } from '../services/journeyService.js'
 import { grantDiscoveryReward } from '../services/discoveryRewardsService.js'
 import { pickCoachingCard } from '../config/coachingCardRules.js'
 
 // ─── Pending PVP match registry ───────────────────────────────────────────────
-// Stores state for PVP tournament matches waiting for players to join a room.
-// matchId → { tournamentId, participant1UserId, participant2UserId, bestOfN, slug, expiresAt }
-// "slug" is null until the first player requests the room via tournament:room:join.
+// Stores state for PVP tournament matches waiting for players to join the
+// match table. matchId → { tournamentId, participant1UserId, participant2UserId,
+// bestOfN, slug, expiresAt }. "slug" is null until the first player requests
+// the match table via `tournament:table:join` (legacy: `tournament:room:join`)
+// or POST /api/v1/rt/tournaments/matches/:id/table.
 // Entries expire after PENDING_MATCH_TTL_MS to prevent unbounded growth.
 
 const _pendingPvpMatches = new Map()
@@ -72,11 +75,10 @@ const CHANNELS = [
 ]
 
 /**
- * Start subscribing to tournament Redis channels.
- * Call this after the Socket.io server is ready.
- * @param {import('socket.io').Server} io
+ * Start subscribing to tournament Redis channels. The `_io` arg is kept
+ * so index.js can call this without changes; it is unused.
  */
-export function startTournamentBridge(io) {
+export function startTournamentBridge(_io) {
   if (!process.env.REDIS_URL) {
     logger.warn('REDIS_URL not set — tournament bridge disabled')
     return
@@ -93,7 +95,7 @@ export function startTournamentBridge(io) {
   sub.on('message', async (channel, message) => {
     try {
       const data = JSON.parse(message)
-      await handleEvent(io, channel, data)
+      await handleEvent(null, channel, data)
     } catch (err) {
       logger.error({ err, channel }, 'Tournament bridge message error')
     }
@@ -105,7 +107,7 @@ export function startTournamentBridge(io) {
   pruneTimer.unref()
 }
 
-export async function handleEvent(io, channel, data) {
+export async function handleEvent(_io, channel, data) {
   switch (channel) {
     case 'tournament:published': {
       const { tournamentId, name, format, mode, startTime, registrationCloseAt } = data
@@ -332,19 +334,28 @@ export async function handleEvent(io, channel, data) {
         }
       }
 
-      // Also include participants not in finalStandings (eliminated early)
+      // Also include participants not in finalStandings (eliminated early).
+      // Pull finalPosition from the DB — finalStandings only contains the
+      // top two slots, but eliminated bots have a real finalPosition set on
+      // their TournamentParticipant row by the round-advance code. Without
+      // this read, a user whose cup bot lost in round 1 would get
+      // position:null and journey step 7 would never fire (gated below on
+      // position != null).
       try {
         const allParticipants = await db.tournamentParticipant.findMany({
-          where: { tournamentId },
-          select: { userId: true },
+          where:  { tournamentId },
+          select: { userId: true, finalPosition: true },
         })
         const standingUserIds = new Set(finalStandings.map(s => s.userId))
-        for (const { userId } of allParticipants) {
+        for (const { userId, finalPosition } of allParticipants) {
           if (standingUserIds.has(userId)) continue
           const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
           const notifyUserId = botUser?.isBot && botUser.botOwnerId ? botUser.botOwnerId : userId
-          if (!ownerPositionMap.has(notifyUserId)) {
-            ownerPositionMap.set(notifyUserId, null)
+          const current = ownerPositionMap.get(notifyUserId)
+          // Keep the best (lowest) finalPosition across the owner's bots.
+          if (current === undefined ||
+              (finalPosition != null && (current == null || finalPosition < current))) {
+            ownerPositionMap.set(notifyUserId, finalPosition ?? null)
           }
         }
       } catch (err) {
@@ -362,32 +373,30 @@ export async function handleEvent(io, channel, data) {
           completeJourneyStep(notifyUserId, 7).catch(() => {})
         }
 
-        // Intelligent Guide v1 — Discovery reward §5.7 "first non-Curriculum
-        // tournament win". Position 1 only; cup wins are explicitly excluded
-        // (the Curriculum Cup is a guided funnel step, not an open win).
-        // grantDiscoveryReward dedupes — second open-cup win is a no-op.
+        // Discovery reward §5.7 "first non-Curriculum tournament win". Position 1
+        // only; cup wins are excluded (Curriculum Cup is a guided funnel step).
         if (position === 1 && !isCupCompletion) {
-          grantDiscoveryReward(notifyUserId, 'firstRealTournamentWin', io).catch(() => {})
+          grantDiscoveryReward(notifyUserId, 'firstRealTournamentWin').catch(() => {})
         }
 
-        // Coaching card (§5.5) — only emitted for cup completions, only for
-        // users with a real finalPosition. v1 passes didTrainImprove=false
-        // (placeholder); v1.1 will compute it from ML model history. The
-        // bracket size lets the rules distinguish lost-in-semis from
-        // lost-earlier in larger brackets.
-        if (isCupCompletion && position != null && io) {
+        // Coaching card (§5.5) — only for cup completions with a real
+        // finalPosition. v1 passes didTrainImprove=false (placeholder); v1.1
+        // will compute it from ML model history.
+        if (isCupCompletion && position != null) {
           const card = pickCoachingCard({
             finalPosition:    position,
             lostInSemis:      cupTotalParticipants > 2 && position > 2,
             didTrainImprove:  false,
           })
           if (card) {
-            io.to(`user:${notifyUserId}`).emit('guide:coaching_card', {
+            const cardPayload = {
               tournamentId,
               tournamentName: name,
               finalPosition:  position,
               card,
-            })
+            }
+            appendToStream('guide:coaching_card', cardPayload, { userId: notifyUserId })
+              .catch(() => {})
           }
         }
       }

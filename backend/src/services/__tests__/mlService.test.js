@@ -37,6 +37,10 @@ vi.mock('../../services/userService.js', () => ({
   resetBotElo: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('../../lib/eventStream.js', () => ({
+  appendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+
 vi.mock('@xo-arena/ai', () => ({
   DEFAULT_CONFIG: {
     learningRate: 0.1,

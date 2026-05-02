@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getToken } from '../../lib/getToken.js'
 import { api } from '../../lib/api.js'
-import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
 
 const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
 const SOURCES = ['frontend', 'api', 'realtime', 'ai']
@@ -55,13 +55,14 @@ export default function LogViewerPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => {
-    if (!liveTail) return
-    const socket = getSocket()
-    const handler = (entry) => setLogs((prev) => [entry, ...prev.slice(0, 999)])
-    socket.on('log:entry', handler)
-    return () => socket.off('log:entry', handler)
-  }, [liveTail])
+  useEventStream({
+    channels:   ['admin:logs:'],
+    eventTypes: ['admin:logs:entry'],
+    enabled:    liveTail,
+    onEvent: (channel, payload) => {
+      if (channel === 'admin:logs:entry') setLogs((prev) => [payload, ...prev.slice(0, 999)])
+    },
+  })
 
   const filtered = logs.filter((log) => {
     if (!activeLevels.has(log.level)) return false

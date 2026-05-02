@@ -10,13 +10,19 @@
  */
 
 import { createGameState, tick, setPaddleDir, TICK_MS } from './pongPhysics.js'
+import { appendToStream } from '../lib/eventStream.js'
 import logger from '../logger.js'
 
-// Re-export physics constants so socketHandler can import them from one place
+// Re-export physics constants — same place external modules look for them.
 export { BOARD_W, BOARD_H, P1_X, P2_X, PADDLE_W, PADDLE_H, BALL_R } from './pongPhysics.js'
 
-let _io = null
-export function setIO(io) { _io = io }
+// Fan tick / lifecycle events out via SSE channels.
+function dualEmitState(slug, payload) {
+  appendToStream(`pong:${slug}:state`, payload, { userId: '*' }).catch(() => {})
+}
+function dualEmitLifecycle(slug, kind, payload = {}) {
+  appendToStream(`pong:${slug}:lifecycle`, { kind, ...payload }, { userId: '*' }).catch(() => {})
+}
 
 /**
  * Active rooms: slug → RoomEntry
@@ -100,8 +106,8 @@ export function removeSocket(socketId) {
     if (idx !== -1) {
       room.players[idx] = null
       stopLoop(room)
-      // Notify remaining sockets
-      if (_io) _io.to(slug).emit('pong:abandoned', { reason: 'disconnect' })
+      // Notify remaining participants on both transports
+      dualEmitLifecycle(slug, 'abandoned', { reason: 'disconnect' })
       rooms.delete(slug)
       logger.info({ slug, socketId, playerIndex: idx }, 'pong room closed — player disconnected')
       return
@@ -130,9 +136,7 @@ function startLoop(room) {
   room.startedAt  = Date.now()
   room.state      = createGameState()   // fresh state when both players are ready
 
-  if (_io) {
-    _io.to(room.slug).emit('pong:started', { state: room.state })
-  }
+  dualEmitLifecycle(room.slug, 'started', { state: room.state })
 
   room.intervalId = setInterval(() => tickRoom(room), TICK_MS)
   logger.info({ slug: room.slug }, 'pong game loop started')
@@ -148,10 +152,9 @@ function stopLoop(room) {
 function tickRoom(room) {
   room.state = tick(room.state)
 
-  if (!_io) return
-
-  // Embed sentAt so the client can measure RTT
-  _io.to(room.slug).emit('pong:state', {
+  // Embed sentAt so the client can measure RTT. Dual-emit fans this out to
+  // both the Socket.io room and the SSE `pong:<slug>:state` channel.
+  dualEmitState(room.slug, {
     state:  room.state,
     sentAt: performance.now(),
   })

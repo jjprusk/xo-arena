@@ -375,8 +375,18 @@ Deferred to prod-bringup day. No code change in this phase.
 
 ### 3.7a.5 Seeded built-in bot polish
 
-- [ ] Built-in bots (Rusty/Copper/Sterling/Magnus) currently seed with default avatars and generic bios. Before prod launch: finalize per-bot avatar URLs, one-line bios, and starting ELO offsets (if we want Rusty < Copper < Sterling < Magnus as a recognizable skill ladder).
-- [ ] Low value / cosmetic — do only if a product pass surfaces something specific.
+> **Concrete sub-items** (unpacked 2026-04-29 from the placeholder that previously lived in `Future_Ideas.md`):
+>
+> - **Avatars** — `User.avatarUrl` exists but `backend/prisma/seed.js` does not set it for any built-in bot, so all four fall back to the generic UI default. Pick four images (commit under `landing/public/bots/<name>.png` or similar), set `avatarUrl` in the seed's create branch, and add it to the upsert's `update` branch so re-seeds repaint stale rows.
+> - **Bios** — there is **no bio/tagline field on `User`**. Adding one requires either (a) a small schema migration to add `User.tagline String?` (cleanest, also reusable for human accounts later), or (b) repurposing `BotSkill.description` — but that is per-skill, not per-bot, so it doesn't fit a "Rusty's character" line shown on a profile. Recommend (a).
+> - **Starting ELO offsets** — `GameElo` rows are created lazily on first match; nothing in the seed pre-creates them. Today the Rusty/Copper/Sterling/Magnus ladder is conveyed *only* by minimax tier (search depth), not by displayed ELO. To get a visible ladder before any user has played, the seed should `upsert` a `GameElo` row per bot for `gameId='xo'` with offsets like 1000/1200/1400/1600. Idempotent: only create if missing so re-seeds don't stomp live ELO.
+>
+> **Verdict:** still low-value / cosmetic. No user has complained that the four bots look samey. Defer until a product pass surfaces something specific (or a marketing screenshot needs them differentiated).
+
+- [ ] Add per-bot `avatarUrl` to `BUILT_IN_BOTS` in `backend/prisma/seed.js`. Source images live under `landing/public/bots/`.
+- [ ] Schema: add `User.tagline String?` migration; populate per-bot taglines in seed.
+- [ ] Seed `GameElo` rows for `(botId, gameId='xo')` with a Rusty < Copper < Sterling < Magnus offset ladder. Create-if-missing only.
+- [ ] Manual pass: open each bot's public profile + the rankings page; confirm the four are visibly differentiated.
 
 ### 3.7a.6 Admin metric — tournaments auto-dropped per period — done
 

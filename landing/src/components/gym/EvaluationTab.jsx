@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
-import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
 import {
   Card, SectionLabel, MiniStat, ChartPanel, Btn, Spinner, tooltipStyle, playerLabel,
 } from './gymShared.jsx'
@@ -17,7 +17,6 @@ function BenchmarkPanel({ model }) {
   const [benchmarks, setBenchmarks] = useState([])
   const [running, setRunning] = useState(false)
   const [activeBid, setActiveBid] = useState(null)
-  const socketRef = useRef(null)
 
   useEffect(() => {
     api.ml.listBenchmarks(model.id).then(r => setBenchmarks(r.benchmarks))
@@ -284,7 +283,7 @@ function TournamentPanel({ models }) {
   const [running, setRunning] = useState(false)
   const [tournament, setTournament] = useState(null)
   const [history, setHistory] = useState([])
-  const socketRef = useRef(null)
+  const tournamentIdRef = useRef(null)
 
   useEffect(() => {
     api.ml.listTournaments().then(r => setHistory(r.tournaments))
@@ -294,26 +293,32 @@ function TournamentPanel({ models }) {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
+  function handleTournamentComplete(tournamentId) {
+    if (tournamentId !== tournamentIdRef.current) return
+    api.ml.getTournament(tournamentId).then(r => {
+      setTournament(r.tournament)
+      setRunning(false)
+      setHistory(prev => [r.tournament, ...prev.filter(x => x.id !== r.tournament.id)])
+    })
+  }
+
+  useEventStream({
+    channels:   ['ml:tournament:'],
+    eventTypes: ['ml:tournament:tournament_complete'],
+    enabled:    running,
+    onEvent: (channel, payload) => {
+      if (channel === 'ml:tournament:tournament_complete') handleTournamentComplete(payload?.tournamentId)
+    },
+  })
+
   async function handleRun() {
     if (selected.length < 2) return
     setRunning(true)
     const token = await getToken()
     try {
       const { tournament: t } = await api.ml.startTournament({ modelIds: selected, gamesPerPair }, token)
+      tournamentIdRef.current = t.id
       setTournament({ ...t, status: 'RUNNING' })
-
-      const socket = getSocket()
-      if (!socket.connected) socket.connect()
-      socketRef.current = socket
-      socket.on('ml:tournament_complete', (data) => {
-        if (data.tournamentId !== t.id) return
-        api.ml.getTournament(t.id).then(r => {
-          setTournament(r.tournament)
-          setRunning(false)
-          setHistory(prev => [r.tournament, ...prev.filter(x => x.id !== r.tournament.id)])
-        })
-        socket.off('ml:tournament_complete')
-      })
     } catch (err) {
       alert(err.message)
       setRunning(false)

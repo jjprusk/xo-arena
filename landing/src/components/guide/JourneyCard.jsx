@@ -173,7 +173,7 @@ export default function JourneyCard({ phase: phaseProp } = {}) {
             <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem', lineHeight: 1.35 }}>
               {nextStep.title}
             </div>
-            {nextStep.href && (
+            {nextStep.href && nextStep.index !== 7 && (
               <Link to={nextStep.href} onClick={close}
                 style={{ display: 'block', width: '100%', textAlign: 'center', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
                 {nextStep.cta}
@@ -205,12 +205,26 @@ export default function JourneyCard({ phase: phaseProp } = {}) {
         </div>
       )}
 
-      {nextStep?.href && (
+      {/* Step 7 (See your bot's first result) intentionally has NO clickable
+          CTA: the step fires server-side only after the cup completes, so
+          while it's the "next step" the cup is still in flight and there
+          is literally nothing to view yet. The CoachingCard auto-appears
+          on completion (§5.5), so a manual entry point is also redundant.
+          Pre-fix, clicking "View result" while the cup ran sent the user
+          to /profile?action=cup-result with no result to render — a flat
+          dead end. We render an explanatory note instead so the panel
+          isn't bare. */}
+      {nextStep?.href && nextStep?.index !== 7 && (
         <div style={{ margin: '0.5rem 0.75rem 0.75rem' }}>
           <Link to={nextStep.href} onClick={close}
             style={{ display: 'block', width: '100%', textAlign: 'center', padding: '0.4375rem', borderRadius: '0.4375rem', background: 'var(--color-amber-500)', color: 'white', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
             {nextStep.cta}
           </Link>
+        </div>
+      )}
+      {nextStep?.index === 7 && (
+        <div style={{ margin: '0.5rem 0.75rem 0.75rem', padding: '0.5rem 0.625rem', borderRadius: '0.4375rem', background: 'var(--bg-surface-hover)', fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.4, textAlign: 'center' }}>
+          🏅 Watching your cup play out — your result lands here automatically when it wraps.
         </div>
       )}
 

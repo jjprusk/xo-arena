@@ -16,6 +16,7 @@ import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
 import { releaseSeats } from '../lib/tableSeats.js'
 import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
+import { appendToStream } from '../lib/eventStream.js'
 import logger from '../logger.js'
 
 const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
@@ -76,12 +77,6 @@ class BotGameRunner {
     this._games = new Map()
     /** @type {Map<string, string>} socketId → slug */
     this._socketToGame = new Map()
-    /** @type {import('socket.io').Server|null} */
-    this._io = null
-  }
-
-  setIO(io) {
-    this._io = io
   }
 
   /**
@@ -128,10 +123,65 @@ class BotGameRunner {
       moves: [],  // compact move stream for replay
       isSpar,
       sparUserId,  // owner of bot1 — receives Hook step 5 credit on series completion
+      // tableId — populated below when a Table row exists for this slug (Demo
+      // Table macro and any future Spar/HvB-via-Table flow). The SSE state
+      // channel uses the Prisma `Table.id`, NOT the slug — useGameSDK on the
+      // client subscribes to `table:<tableId>:state`, so events emitted
+      // against `table:<slug>:state` are silently dropped by spectators.
+      tableId: null,
     }
 
     this._games.set(slug, game)
-    logger.info({ slug, bot1: bot1.displayName, bot2: bot2.displayName, tournamentMatchId }, 'Bot game started')
+
+    // Resolve the Table.id for this slug. Spar/demo flows create the Table
+    // row before calling startGame so we just look it up. Tournament bot
+    // matches arrive without a Table — we mint one here so the standard
+    // spectator join path (`/rt/tables/:slug/join`) resolves. Without it
+    // the cup follow-modal 404'd on TABLE_NOT_FOUND once the match flipped
+    // to live.
+    try {
+      let row = await db.table.findFirst({ where: { slug }, select: { id: true } })
+      if (!row && tournamentMatchId) {
+        row = await db.table.create({
+          data: {
+            gameId,
+            slug,
+            createdById:      bot1.id,
+            minPlayers:       2,
+            maxPlayers:       2,
+            isPrivate:        false,
+            isTournament:     true,
+            tournamentMatchId,
+            tournamentId,
+            bestOfN,
+            status:           'ACTIVE',
+            seats: [
+              { userId: bot1.id, status: 'occupied', displayName: bot1.displayName },
+              { userId: bot2.id, status: 'occupied', displayName: bot2.displayName },
+            ],
+            previewState: {
+              board:       Array(9).fill(null),
+              currentTurn: 'X',
+              scores:      { X: 0, O: 0 },
+              round:       1,
+              winner:      null,
+              winLine:     null,
+              marks:       { [bot1.id]: 'X', [bot2.id]: 'O' },
+              botMark:     null,
+              moves:       [],
+            },
+          },
+          select: { id: true },
+        })
+      }
+      if (row?.id) game.tableId = row.id
+    } catch (err) {
+      logger.warn({ err: err.message, slug, tournamentMatchId }, 'botGameRunner: tableId resolve/create failed')
+    }
+    const channelKey = game.tableId ?? slug
+    game.channelKey = channelKey
+
+    logger.info({ slug, tableId: game.tableId, bot1: bot1.displayName, bot2: bot2.displayName, tournamentMatchId }, 'Bot game started')
 
     // Mark bots as in-tournament so they can't be trained mid-match
     if (tournamentMatchId) {
@@ -139,6 +189,17 @@ class BotGameRunner {
         where: { id: { in: [bot1.id, bot2.id] } },
         data: { botInTournament: true },
       }).catch(err => logger.warn({ err }, 'Failed to set botInTournament flag'))
+
+      // Flip the tournament match to IN_PROGRESS so spectator UI (e.g. the
+      // Curriculum Cup follow-modal) can detect that the game is live.
+      // Without this, bot matches stayed PENDING for their entire run and
+      // a follower watching their bot was stuck on "waiting" until the
+      // match completed — by which time the next match was already gone.
+      // PvP matches get the same flip mid-series in socketHandler.js.
+      await db.tournamentMatch.update({
+        where: { id: tournamentMatchId },
+        data:  { status: 'IN_PROGRESS' },
+      }).catch(err => logger.warn({ err, tournamentMatchId }, 'Failed to set tournamentMatch IN_PROGRESS'))
     }
 
     // Run the game loop asynchronously
@@ -173,15 +234,17 @@ class BotGameRunner {
       game.moves = []
       const gameStartedAt = new Date(game.createdAt)
 
-      // Emit game:start for each game in the series
-      this._io?.to(slug).emit('game:start', {
+      // Emit per-round opening state on the SSE table:<slug>:state channel
+      // so spectators see each round of the series.
+      const startPayload = {
         board: game.board,
         currentTurn: game.currentTurn,
         round: game.seriesGamesPlayed + 1,
         scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
         bot1: { displayName: game.bot1.displayName, mark: 'X' },
         bot2: { displayName: game.bot2.displayName, mark: 'O' },
-      })
+      }
+      appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'start', ...startPayload }, { userId: '*' }).catch(() => {})
 
       // Play until terminal state
       while (game.status === 'playing') {
@@ -200,16 +263,19 @@ class BotGameRunner {
           logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
           game.winner = game.currentTurn === 'X' ? 'O' : 'X'
           game.status = 'finished'
-          this._io?.to(slug).emit('game:moved', {
-            cellIndex: null,
-            board: game.board,
-            currentTurn: game.currentTurn,
-            status: game.status,
-            winner: game.winner,
-            winLine: null,
-            forfeit: true,
-            scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
-          })
+          {
+            const movedPayload = {
+              cellIndex: null,
+              board: game.board,
+              currentTurn: game.currentTurn,
+              status: game.status,
+              winner: game.winner,
+              winLine: null,
+              forfeit: true,
+              scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
+            }
+            appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+          }
           break
         }
 
@@ -233,15 +299,18 @@ class BotGameRunner {
           game.currentTurn = game.currentTurn === 'X' ? 'O' : 'X'
         }
 
-        this._io?.to(slug).emit('game:moved', {
-          cellIndex,
-          board: game.board,
-          currentTurn: game.currentTurn,
-          status: game.status,
-          winner: game.winner,
-          winLine: game.winLine,
-          scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
-        })
+        {
+          const movedPayload = {
+            cellIndex,
+            board: game.board,
+            currentTurn: game.currentTurn,
+            status: game.status,
+            winner: game.winner,
+            winLine: game.winLine,
+            scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
+          }
+          appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+        }
       }
 
       // Save a DB record for this individual game in the series
@@ -292,8 +361,78 @@ class BotGameRunner {
     // Record the finished series
     await this._recordGame(slug).catch((err) => logger.warn({ err, slug }, 'Failed to record bot game'))
 
+    // Demo Table macro (§5.1) — fire the journey + bus side-effects RIGHT
+    // NOW, not after the 60 s in-memory grace window. Otherwise the user
+    // sees "O wins!" on a finished board with no progression for a full
+    // minute. The grace window only exists to let late-joining spectators
+    // observe the final position; it has nothing to do with journey state.
+    await this._finalizeBackingTableIfPresent(slug).catch((err) =>
+      logger.warn({ err: err.message, slug }, 'Demo finalize failed'),
+    )
+
+    // Spar series: credit Hook step 5 to the user who initiated the spar.
+    if (this._games.get(slug)?.isSpar && this._games.get(slug)?.sparUserId) {
+      try {
+        const { completeStep } = await import('../services/journeyService.js')
+        completeStep(this._games.get(slug).sparUserId, 5).catch(() => {})
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Spar: step-5 credit failed')
+      }
+    }
+
     // Clean up after a short delay (so late-joining spectators still see the result)
     setTimeout(() => this._closeGame(slug), 60_000)
+  }
+
+  /**
+   * If any Table row backs this bot-game slug (Hook demo or Curriculum
+   * spar), mark it COMPLETED + dispatch `table.released`. Pulled out of
+   * `_closeGame` so it fires immediately at series end instead of waiting
+   * 60 s for the in-memory grace window.
+   *
+   * Demo tables additionally credit Hook step 2 to all current spectators;
+   * spar tables don't (step 5 is already credited via the spar-specific
+   * `_creditSparStepIfApplicable` path that runs as the series ends).
+   *
+   * Idempotent: subsequent calls (from `_closeGame`) skip the COMPLETED
+   * branch but the journey credit is also idempotent at the journeyService
+   * layer, so repeated calls are safe.
+   */
+  async _finalizeBackingTableIfPresent(slug) {
+    const backingTable = await db.table.findFirst({
+      where:  { slug },
+      select: { id: true, status: true, seats: true, isDemo: true },
+    }).catch(() => null)
+    if (!backingTable) return
+
+    if (backingTable.status !== 'COMPLETED') {
+      await db.table.update({
+        where: { id: backingTable.id },
+        data:  { status: 'COMPLETED', seats: releaseSeats(backingTable.seats) },
+      }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark backing table COMPLETED'))
+      dispatchTableReleased(backingTable.id, TABLE_RELEASED_REASONS.GAME_END, {
+        // Distinguish backing-table flavors so the client can react
+        // differently. Demo (Hook step 2) and spar (Curriculum step 5)
+        // both want the guide panel to reopen on finish so the next-step
+        // CTA is visible — TableDetailPage matches on these triggers.
+        trigger: backingTable.isDemo ? 'demo-finish' : 'spar-finish',
+      })
+    }
+
+    if (backingTable.isDemo) {
+      // Hook step 2 — only for demo tables. Spar uses the dedicated
+      // step-5 credit path on the bot-game runner side.
+      try {
+        const { getPresence } = await import('./tablePresence.js')
+        const { completeStep } = await import('../services/journeyService.js')
+        const { userIds = [] } = getPresence(backingTable.id) ?? {}
+        for (const userId of userIds) {
+          completeStep(userId, 2).catch(() => {})
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
+      }
+    }
   }
 
   async _recordGame(slug) {
@@ -360,51 +499,12 @@ class BotGameRunner {
       }).catch(err => logger.warn({ err }, 'Failed to clear botInTournament flag after tournament game'))
     }
 
-    // Demo Table macro (§5.1): if a Table row was created with this bot game's
-    // slug, mark it COMPLETED so the demo-table GC sweep can delete it after
-    // the 2-min grace window. No-op for tournament/free bot games that don't
-    // have a Table row.
-    const demoTable = await db.table.findFirst({
-      where:  { slug, isDemo: true },
-      select: { id: true, status: true, seats: true },
-    }).catch(() => null)
-
-    if (demoTable) {
-      if (demoTable.status !== 'COMPLETED') {
-        await db.table.update({
-          where: { id: demoTable.id },
-          data:  { status: 'COMPLETED', seats: releaseSeats(demoTable.seats) },
-        }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark demo table COMPLETED'))
-        dispatchTableReleased(demoTable.id, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'demo-finish' })
-      }
-
-      // "Spectated to completion" — credit Hook step 2 for any authenticated
-      // viewer currently watching, even if they haven't hit the 2-min mark
-      // yet. Lazy-imported to keep this module free of journey/service deps
-      // at module-eval time.
-      try {
-        const { getPresence } = await import('./tablePresence.js')
-        const { completeStep } = await import('../services/journeyService.js')
-        const { userIds = [] } = getPresence(demoTable.id) ?? {}
-        for (const userId of userIds) {
-          completeStep(userId, 2).catch(() => {})
-        }
-      } catch (err) {
-        logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
-      }
-    }
-
-    // Spar series: credit Hook step 5 to the user who initiated the spar.
-    // Lazy-imported to avoid pulling journeyService into this module's eval-
-    // time graph (mirrors the demo-table step-2 pattern above).
-    if (game.isSpar && game.sparUserId) {
-      try {
-        const { completeStep } = await import('../services/journeyService.js')
-        completeStep(game.sparUserId, 5).catch(() => {})
-      } catch (err) {
-        logger.warn({ err: err.message, slug }, 'Spar: step-5 credit failed')
-      }
-    }
+    // Demo Table macro (§5.1) finalize — moved to fire at series end (see
+    // _runGameLoop). Calling again here is a safe idempotent no-op for the
+    // late spectators who joined during the 60 s grace window.
+    await this._finalizeBackingTableIfPresent(slug).catch((err) =>
+      logger.warn({ err: err.message, slug }, 'Demo finalize (late) failed'),
+    )
 
     logger.info(
       { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null, isSpar: !!game.isSpar },

@@ -198,10 +198,10 @@ export default function QuickBotWizard({ onCreated, onCancel, getToken }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
             <div><span style={{ color: 'var(--text-muted)' }}>Name:</span> <strong>{name.trim()}</strong></div>
             <div><span style={{ color: 'var(--text-muted)' }}>Persona:</span> <strong>{selected?.label}</strong></div>
-            <div><span style={{ color: 'var(--text-muted)' }}>Algorithm:</span> Minimax (novice tier — strengthens after first training)</div>
+            <div><span style={{ color: 'var(--text-muted)' }}>Algorithm:</span> Random play to start — flips to Q-Learning on first training</div>
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Your bot starts at the same skill as Rusty — random valid moves. The first training run will visibly transform it.
+            Your bot starts at the same skill as Rusty — random valid moves. The first training run swaps it to a real Q-Learning model trained from self-play; you'll watch the win-rate climb live.
           </p>
         </>
       )}

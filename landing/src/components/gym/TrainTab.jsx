@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
-import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
 import { runTrainingSession } from '../../services/trainingService.js'
 import { useGymStore } from '../../store/gymStore.js'
 import {
@@ -53,11 +53,36 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
   const [progress, setProgress]             = useState(null)
   const [chartData, setChartData]           = useState([])
   const [curriculumDifficulty, setCurriculumDifficulty] = useState(null)
-  const socketRef   = useRef(null)
-  const cleanupRef  = useRef(null)
-  const cancelRef   = useRef(false)
+  const cleanupRef   = useRef(null)
+  const cancelRef    = useRef(false)
+  // Set by the resume-watch effect when a backend-driven session is running.
+  // The hook below subscribes to its progress channel.
+  const handlersRef  = useRef(null)
+  const [watchedSessionId, setWatchedSessionId] = useState(null)
 
-  // Clean up on unmount: tear down socket listeners and stop any running frontend loop
+  useEventStream({
+    channels:   watchedSessionId ? [`ml:session:${watchedSessionId}:`] : [],
+    eventTypes: watchedSessionId
+      ? [
+          `ml:session:${watchedSessionId}:progress`,
+          `ml:session:${watchedSessionId}:curriculum_advance`,
+          `ml:session:${watchedSessionId}:complete`,
+          `ml:session:${watchedSessionId}:cancelled`,
+          `ml:session:${watchedSessionId}:error`,
+        ]
+      : [],
+    enabled: !!watchedSessionId,
+    onEvent: (channel, payload) => {
+      const h = handlersRef.current
+      if (!h) return
+      if (channel.endsWith(':progress'))            h.onProgress(payload)
+      else if (channel.endsWith(':curriculum_advance')) h.onCurriculumAdvance(payload)
+      else if (channel.endsWith(':complete'))       h.onComplete()
+      else if (channel.endsWith(':cancelled'))      h.onCancelled()
+      else if (channel.endsWith(':error'))          h.onError(payload)
+    },
+  })
+
   useEffect(() => {
     return () => {
       cleanupRef.current?.()
@@ -92,11 +117,6 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
       setChartData([])
       setCurriculumDifficulty(runningSession.config?.difficulty ?? null)
 
-      const socket = getSocket()
-      if (!socket.connected) socket.connect()
-      socketRef.current = socket
-      socket.emit('ml:watch', { sessionId: runningSession.id })
-
       const onProgress = (data) => {
         if (data.sessionId !== runningSession.id) return
         setProgress(data)
@@ -109,33 +129,23 @@ export default function TrainTab({ model, sessions, onSessionsChange, onComplete
           qDelta: data.avgQDelta,
         }])
       }
-
       const onCurriculumAdvance = (data) => {
         if (data.sessionId !== runningSession.id) return
         setCurriculumDifficulty(data.difficulty)
       }
+      const onComplete_  = () => { stopRunning(); cleanupRef.current?.(); onComplete() }
+      const onCancelled  = () => { stopRunning(); cleanupRef.current?.(); onComplete() }
+      const onError      = (d) => { stopRunning(); alert(`Training failed: ${d?.error}`); cleanupRef.current?.() }
 
-      const teardown = () => {
-        socket.emit('ml:unwatch', { sessionId: runningSession.id })
-        socket.off('ml:progress',           onProgress)
-        socket.off('ml:curriculum_advance',  onCurriculumAdvance)
-        socket.off('ml:complete',           onComplete_)
-        socket.off('ml:cancelled',          onCancelled)
-        socket.off('ml:error',              onError)
+      // Stash for the SSE useEventStream subscription above to invoke.
+      handlersRef.current = { onProgress, onCurriculumAdvance, onComplete: onComplete_, onCancelled, onError }
+
+      setWatchedSessionId(runningSession.id)
+      cleanupRef.current = () => {
+        setWatchedSessionId(null)
+        handlersRef.current = null
         cleanupRef.current = null
       }
-
-      const onComplete_  = () => { stopRunning(); teardown(); onComplete() }
-      const onCancelled  = () => { stopRunning(); teardown(); onComplete() }
-      const onError      = (d) => { stopRunning(); alert(`Training failed: ${d.error}`); teardown() }
-
-      socket.on('ml:progress',           onProgress)
-      socket.on('ml:curriculum_advance',  onCurriculumAdvance)
-      socket.once('ml:complete',           onComplete_)
-      socket.once('ml:cancelled',          onCancelled)
-      socket.once('ml:error',              onError)
-
-      cleanupRef.current = teardown
     }).catch(() => {})
 
     return () => { cancelled = true }

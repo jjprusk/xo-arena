@@ -95,6 +95,9 @@ describe('GET /api/v1/admin/health/tables', () => {
       },
       gc: { failures: 0, lastSuccessAt: null, secondsSinceLastSuccess: null },
     })
+    // socketAdapter reports the realtime transport. Phase 8 cut socket.io;
+    // the only legal value is now 'sse'.
+    expect(res.body.socketAdapter).toBe('sse')
     expect(typeof res.body.uptime).toBe('number')
   })
 

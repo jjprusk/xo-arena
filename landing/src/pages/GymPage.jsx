@@ -6,7 +6,7 @@ import { getToken } from '../lib/getToken.js'
 import { api } from '../lib/api.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import { evictModel, isModelCached } from '../lib/mlInference.js'
-import { getSocket } from '../lib/socket.js'
+import { useEventStream } from '../lib/useEventStream.js'
 import { useGuideStore } from '../store/guideStore.js'
 import TrainingCompletePopup from '../components/ui/TrainingCompletePopup.jsx'
 import { Skeleton } from '../components/ui/Skeleton.jsx'
@@ -156,24 +156,9 @@ export default function GymPage() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
   }, [])
 
-  useEffect(() => {
-    const socket = getSocket()
-    if (!socket.connected) socket.connect()
-    socket.on('ml:regression_detected', ({ modelId }) => {
-      setRegressions(prev => new Set([...prev, modelId]))
-    })
-    socket.on('ml:curriculum_advance', ({ difficulty }) => {
-      addToast(`Curriculum advanced! Now training at: ${difficulty}`, 'teal')
-    })
-    socket.on('ml:early_stop', () => {
-      addToast('Early stopping triggered', 'amber')
-    })
-    return () => {
-      socket.off('ml:regression_detected')
-      socket.off('ml:curriculum_advance')
-      socket.off('ml:early_stop')
-    }
-  }, [addToast])
+  // Page-wide ML toasts now ride the SSE per-session channels covered by
+  // the active model's TrainTab; this page-wide listener was a duplicate of
+  // those signals and was retired with the socket cut.
 
   const refreshModel = useCallback(async (botId, modelId) => {
     const { model } = await api.ml.getModel(modelId)

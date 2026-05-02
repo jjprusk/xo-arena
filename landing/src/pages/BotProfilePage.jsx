@@ -1,9 +1,11 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import TrainGuidedModal from '../components/guide/TrainGuidedModal.jsx'
+import Spotlight from '../components/guide/Spotlight.jsx'
 
 const ALGORITHM_LABELS = {
   Q_LEARNING: 'Q-Learning',
@@ -30,16 +32,33 @@ export default function BotProfilePage() {
   const [availError, setAvailError] = useState(null)
   const [sessions, setSessions] = useState([])
   const [selectedSession, setSelectedSession] = useState('')
-  // Quick Bot training (§5.3) — bumps a fresh Quick Bot from novice to
-  // intermediate tier. Hides itself once the bot is trained.
-  const [trainingQuick,    setTrainingQuick]    = useState(false)
-  const [trainQuickError,  setTrainQuickError]  = useState(null)
-  const [trainQuickResult, setTrainQuickResult] = useState(null)
+  // Guided training (§5.3) — opens TrainGuidedModal which runs a real
+  // ~5s Q-Learning self-play session. The modal handles starting the run,
+  // streaming live progress over SSE, finalising the bot's primary skill,
+  // and crediting journey step 4.
+  const [trainOpen, setTrainOpen] = useState(false)
   // Spar (§5.2) — pit this bot against a system bot at the chosen tier.
   // Curriculum step 5 fires when the spar match completes server-side.
   const [sparTier,    setSparTier]    = useState('medium')
   const [sparStarting, setSparStarting] = useState(false)
   const [sparError,   setSparError]   = useState(null)
+
+  // Journey-CTA spotlights — when the user lands here from a journey step
+  // (e.g. /profile?action=train-bot → forwarded to /bots/<id>?action=train-bot
+  // by ProfilePage), pulse the matching CTA so it stands out from the
+  // surrounding controls. The reusable <Spotlight> component owns the scrim
+  // + class application; we just track which CTA is lit.
+  const [searchParams] = useSearchParams()
+  const trainBtnRef = React.useRef(null)
+  const sparBtnRef  = React.useRef(null)
+  const [trainSpotlightOn, setTrainSpotlightOn] = useState(false)
+  const [sparSpotlightOn,  setSparSpotlightOn]  = useState(false)
+  useEffect(() => {
+    if (loading) return
+    const action = searchParams.get('action')
+    if (action === 'train-bot') setTrainSpotlightOn(true)
+    if (action === 'spar')      setSparSpotlightOn(true)
+  }, [searchParams, loading])
 
   useEffect(() => {
     if (!id) return
@@ -97,20 +116,9 @@ export default function BotProfilePage() {
 
   const isOwner = session?.user?.id && bot.ownerBetterAuthId && session.user.id === bot.ownerBetterAuthId
 
-  async function handleTrainQuick() {
-    setTrainQuickError(null)
-    setTrainingQuick(true)
-    try {
-      const token = await getToken()
-      if (!token) throw new Error('Sign in to train your bot.')
-      const { bot: updated, alreadyTrained } = await api.bots.trainQuick(id, token)
-      setBot(prev => ({ ...prev, ...updated }))
-      setTrainQuickResult(alreadyTrained ? 'already' : 'trained')
-    } catch (err) {
-      setTrainQuickError(err.message || 'Could not train your bot. Try again in a moment.')
-    } finally {
-      setTrainingQuick(false)
-    }
+  function handleTrainGuidedComplete(res) {
+    setTrainOpen(false)
+    if (res?.bot) setBot(prev => ({ ...prev, ...res.bot }))
   }
 
   async function handleSpar() {
@@ -120,7 +128,10 @@ export default function BotProfilePage() {
       const token = await getToken()
       if (!token) throw new Error('Sign in to spar.')
       const { slug } = await api.botGames.practice({ myBotId: id, opponentTier: sparTier }, token)
-      navigate(`/play?join=${encodeURIComponent(slug)}`)
+      // Spar is a bot-vs-bot match — both seats are bots, so we attach as a
+      // spectator. Without `watch=1`, /play would default to role=player and
+      // the server returns 409 ROOM_FULL because neither seat matches us.
+      navigate(`/play?join=${encodeURIComponent(slug)}&watch=1`)
     } catch (err) {
       setSparError(err.message || 'Could not start the spar match. Try again in a moment.')
     } finally {
@@ -161,7 +172,24 @@ export default function BotProfilePage() {
     : null
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
+    // Mobile: 1rem horizontal padding so section labels ("TRAIN YOUR BOT",
+    // "SPAR YOUR BOT") don't run into the viewport edge — uppercase +
+    // tracking-widest had them visually cut off on narrow phones. Desktop:
+    // padding collapses (px-0) since max-w-lg already centres with margin.
+    <div className="max-w-lg mx-auto space-y-6 px-4 sm:px-0">
+      {/* Journey CTA spotlights (Curriculum steps 4 + 5). Mounted unconditionally;
+          Spotlight no-ops when active=false. */}
+      <Spotlight
+        active={trainSpotlightOn}
+        target={trainBtnRef}
+        onDismiss={() => setTrainSpotlightOn(false)}
+      />
+      <Spotlight
+        active={sparSpotlightOn}
+        target={sparBtnRef}
+        onDismiss={() => setSparSpotlightOn(false)}
+      />
+
       {/* Back link */}
       <Link to="/profile" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
         ← Back to profile
@@ -248,32 +276,33 @@ export default function BotProfilePage() {
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
           >
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Right now your bot plays random valid moves. The first training run sharpens it to block threats and take wins.
+              Right now your bot plays random valid moves. Watch it actually learn — a few seconds of self-play and it'll start blocking threats and taking wins.
             </p>
-            {trainQuickError && (
-              <p role="alert" className="text-xs" style={{ color: 'var(--color-red-600)' }}>{trainQuickError}</p>
-            )}
             <button
-              onClick={handleTrainQuick}
-              disabled={trainingQuick}
+              ref={trainBtnRef}
+              onClick={() => { setTrainSpotlightOn(false); setTrainOpen(true) }}
+              disabled={trainOpen}
               className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
               style={{ borderColor: 'var(--color-amber-400)', color: 'var(--color-amber-700)' }}
             >
-              {trainingQuick ? 'Training…' : 'Train your bot'}
+              Train your bot
             </button>
           </div>
         </section>
       )}
 
-      {/* Post-training celebration — shown briefly after a successful bump. */}
-      {trainQuickResult === 'trained' && (
-        <div
-          className="rounded-xl border p-4 text-sm"
-          role="status"
-          style={{ backgroundColor: 'rgba(36,181,135,0.07)', borderColor: 'var(--color-teal-400)', color: 'var(--color-teal-700)' }}
-        >
-          <strong>Trained!</strong> Your bot is now at the intermediate tier — blocking threats and taking wins.
-        </div>
+      {/* Guided training modal — owns the entire training experience: live
+          win-rate sparkline, ε decay, phase callouts, and the in-modal
+          "Bot trained!" celebration. Closes via its own onComplete after
+          finalisation; we then update the local bot state so the section
+          self-hides (botModelType has flipped from minimax → qlearning). */}
+      {trainOpen && (
+        <TrainGuidedModal
+          botId={bot.id}
+          botName={bot.displayName}
+          onComplete={handleTrainGuidedComplete}
+          onClose={() => setTrainOpen(false)}
+        />
       )}
 
       {/* Spar (Curriculum step 5 — §5.2). Owner-only. Tier picker → kicks off
@@ -310,7 +339,8 @@ export default function BotProfilePage() {
               <p role="alert" className="text-xs" style={{ color: 'var(--color-red-600)' }}>{sparError}</p>
             )}
             <button
-              onClick={handleSpar}
+              ref={sparBtnRef}
+              onClick={() => { setSparSpotlightOn(false); handleSpar() }}
               disabled={sparStarting || bot.botInTournament}
               className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--bg-surface-hover)] disabled:opacity-50"
               style={{ borderColor: 'var(--color-blue-400)', color: 'var(--color-blue-700)' }}

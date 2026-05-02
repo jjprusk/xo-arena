@@ -19,7 +19,17 @@ vi.mock('../../realtime/botGameRunner.js', () => ({
   },
 }))
 vi.mock('../../lib/db.js', () => ({
-  default: { user: { findUnique: vi.fn() } },
+  default: {
+    user:  { findUnique: vi.fn() },
+    table: { delete: vi.fn().mockResolvedValue({}) },
+  },
+}))
+// createTableTracked is the wrapper around db.table.create — mocked here so
+// the spar route's new "create a Table row up-front" step doesn't need a
+// real DB. Returns a deterministic row that mirrors the schema shape the
+// route's response leans on.
+vi.mock('../../lib/createTableTracked.js', () => ({
+  createTableTracked: vi.fn(async ({ data }) => ({ id: 'tbl_spar', ...data })),
 }))
 vi.mock('../../utils/roles.js', () => ({
   hasRole: vi.fn(() => false),
@@ -201,7 +211,51 @@ describe('POST /practice — happy path response shape', () => {
   it('returns 201 with slug, displayName, opponentTier echoed', async () => {
     const res = await request(buildApp()).post('/practice').send({ myBotId: 'bot-mine', opponentTier: 'medium' })
     expect(res.status).toBe(201)
-    expect(res.body).toEqual({ slug: 'spar-slug', displayName: 'My Bot vs Rusty', opponentTier: 'medium' })
+    // tableId is the new field — the route now allocates a Table row up-front
+    // so the spectator's /rt/tables/:slug/join doesn't 404.
+    expect(res.body).toEqual({
+      slug:         'spar-slug',
+      displayName:  'My Bot vs Rusty',
+      opponentTier: 'medium',
+      tableId:      'tbl_spar',
+    })
+  })
+
+  // ── Table-row backing (regression for "Table closed due to inactivity") ──
+  // Before this fix, /practice called botGameRunner.startGame() but never
+  // created a Table row. The spectator's /rt/tables/:slug/join then 404'd,
+  // useGameSDK mapped that to setAbandoned({reason:'stale'}), and PlayPage
+  // rendered "Table closed due to inactivity" — even though the bot game
+  // was running fine. Locking it down so a refactor can't drop the row.
+  it('creates a Table row up-front so the spectator join lands somewhere', async () => {
+    const { createTableTracked } = await import('../../lib/createTableTracked.js')
+    await request(buildApp()).post('/practice').send({ myBotId: 'bot-mine', opponentTier: 'easy' })
+
+    expect(createTableTracked).toHaveBeenCalledTimes(1)
+    const call = createTableTracked.mock.calls[0][0]
+    expect(call.data).toMatchObject({
+      gameId:       'xo',
+      isPrivate:    true,
+      isTournament: false,
+      status:       'ACTIVE',
+      createdById:  'ba-caller',
+      seats: [
+        expect.objectContaining({ userId: 'bot-mine',     status: 'occupied', displayName: 'My Bot' }),
+        expect.objectContaining({ userId: 'sysbot-rusty', status: 'occupied', displayName: 'Rusty'  }),
+      ],
+    })
+    // Slug must be the same one passed to botGameRunner.startGame so the
+    // bot moves emit on the table:<id>:state channel the client subscribes
+    // to (botGameRunner resolves Table.id from this slug at startGame time).
+    expect(typeof call.data.slug).toBe('string')
+    expect(botGameRunner.startGame).toHaveBeenCalledWith(expect.objectContaining({ slug: call.data.slug }))
+  })
+
+  it('rolls back the Table row when botGameRunner.startGame throws', async () => {
+    botGameRunner.startGame.mockRejectedValueOnce(new Error('no slot'))
+    const res = await request(buildApp()).post('/practice').send({ myBotId: 'bot-mine', opponentTier: 'easy' })
+    expect(res.status).toBe(503)
+    expect(db.table.delete).toHaveBeenCalledWith({ where: { id: 'tbl_spar' } })
   })
 
   it('passes moveDelayMs through when provided', async () => {

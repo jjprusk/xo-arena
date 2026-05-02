@@ -580,9 +580,27 @@ router.post('/:id/join', requireAuth, async (req, res, next) => {
       if (idx === -1) return res.status(409).json({ error: 'Table is full' })
     }
 
+    // Resolve the joiner's displayName so the seat carries it forward — every
+    // other seat-creation path in tableFlowService stores displayName at write
+    // time (see `tableFlowService.createPvpTable` / `joinTable`). Without it,
+    // the rt `/rt/tables/:slug/join` path that GameView calls a moment later
+    // hits the `host_reattach` branch, finds no seat displayName,
+    // `sanitizeTable` returns null for hostUserDisplayName, and the client
+    // renders the literal "Host" / "Guest" fallback in the seat-pod label.
+    let joinerName = null
+    try {
+      const u = await db.user.findUnique({
+        where:  { betterAuthId: req.auth.userId },
+        select: { displayName: true },
+      })
+      joinerName = u?.displayName ?? null
+    } catch { /* fall through with null — withSeatDisplay still hydrates on read */ }
+
     // Build a fresh seats array — never mutate the value returned from findUnique.
     const seats = table.seats.map((s, i) =>
-      i === idx ? { userId: req.auth.userId, status: 'occupied' } : s
+      i === idx
+        ? { userId: req.auth.userId, status: 'occupied', displayName: joinerName }
+        : s
     )
 
     // If this join fills the last seat, auto-transition FORMING → ACTIVE and

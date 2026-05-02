@@ -16,23 +16,52 @@
  * card out from under them.
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
+
+// Sequencing delay: the RewardPopup auto-dismisses after 8 s. The cup
+// completion fires `guide:curriculum_complete` (popup) and
+// `guide:coaching_card` (this component) within milliseconds of each other,
+// so without this delay both anchor near the top of the viewport and
+// visually collide on the user's first cup completion. Render the coaching
+// card 200 ms after the popup is gone — long enough that the card animates
+// in cleanly on its own, short enough that it doesn't feel like the flow
+// stalled.
+const REWARD_POPUP_DURATION_MS = 8_000
+const COACHING_CARD_DELAY_MS   = REWARD_POPUP_DURATION_MS + 200
 
 export default function CoachingCard() {
-  const [active, setActive] = useState(null)
+  // pending: payload received but not yet shown (we're sequencing behind
+  // the RewardPopup). active: payload being rendered now.
+  const [active, setActive]   = useState(null)
+  const [pending, setPending] = useState(null)
+  const timerRef = useRef(null)
   const navigate = useNavigate()
 
-  useEffect(() => {
-    const socket = getSocket()
-    function onCoachingCard(payload) {
+  useEventStream({
+    channels: ['guide:'],
+    onEvent: (channel, payload) => {
+      if (channel !== 'guide:coaching_card') return
       if (!payload?.card) return
-      setActive(payload)
+      setPending(payload)
+    },
+  })
+
+  // Move pending → active after the delay. Re-running the effect when a
+  // new pending lands resets the timer so back-to-back events don't stack.
+  useEffect(() => {
+    if (!pending) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      setActive(pending)
+      setPending(null)
+      timerRef.current = null
+    }, COACHING_CARD_DELAY_MS)
+    return () => {
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
     }
-    socket.on('guide:coaching_card', onCoachingCard)
-    return () => { socket.off('guide:coaching_card', onCoachingCard) }
-  }, [])
+  }, [pending])
 
   if (!active) return null
   const { card, tournamentName, finalPosition } = active

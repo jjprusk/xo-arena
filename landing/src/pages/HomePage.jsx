@@ -164,30 +164,38 @@ export default function HomePage() {
           <DemoArena key={demoKey} />
         </div>
 
-        {/* Progressive CTA ladder */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap max-w-lg mx-auto">
-          <button
-            onClick={() => setDemoKey(k => k + 1)}
-            className="btn btn-tertiary btn-sm"
-            type="button"
-            aria-label="Watch another bot match"
-          >
-            ↻ Watch another match
-          </button>
-          <Link
-            to="/play?action=vs-community-bot"
-            className={playClass}
-          >
-            Play against a bot
-          </Link>
+        {/* Progressive CTA ladder.
+            Layout — the two top-row "action" buttons (Watch / Play) sit in a
+            2-column grid so they line up cleanly even on a narrow phone
+            viewport (the prior `flex-wrap` reflowed them at uneven heights and
+            mismatched styles, looking haphazard). The conversion CTA "Build
+            your own bot" gets its own full-width row below — it's the
+            funnel-defining moment and benefits from the visual emphasis. */}
+        <div className="max-w-lg mx-auto space-y-2 sm:space-y-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <button
+              onClick={() => setDemoKey(k => k + 1)}
+              className="btn btn-secondary btn-sm w-full"
+              type="button"
+              aria-label="Watch another bot match"
+            >
+              ↻ Watch another match
+            </button>
+            <Link
+              to="/play?action=vs-community-bot"
+              className={`${playClass} w-full`}
+            >
+              Play against a bot
+            </Link>
+          </div>
           {user ? (
-            <Link to="/gym" className={buildClass}>
+            <Link to="/gym" className={`${buildClass} w-full`}>
               Build your own bot →
             </Link>
           ) : (
             <button
               onClick={() => setSignupOpen(true)}
-              className={buildClass}
+              className={`${buildClass} w-full`}
               type="button"
               data-cta="build-your-own-bot"
             >

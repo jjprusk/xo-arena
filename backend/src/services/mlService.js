@@ -4,7 +4,11 @@
  *
  * Training runs as a background setImmediate loop, yielding every
  * BATCH_SIZE episodes so the event loop stays responsive. Progress
- * is broadcast via Socket.io to the room `ml:session:{id}`.
+ * is fanned out over both transports: legacy Socket.io to the
+ * `ml:session:{id}` room, and the SSE+POST stream on the matching
+ * channel prefix `ml:session:{id}:`. Phase 4 of the realtime migration
+ * (doc/Realtime_Migration_Plan.md) lets clients pick their transport
+ * via the `realtime.ml.via` flag.
  */
 
 import db from '../lib/db.js'
@@ -23,10 +27,7 @@ import {
 import logger from '../logger.js'
 import { completeStep as completeJourneyStep } from './journeyService.js'
 import { grantDiscoveryReward } from './discoveryRewardsService.js'
-
-// ─── Socket.io reference ────────────────────────────────────────────────────
-let _io = null
-export function setIO(io) { _io = io }
+import { appendToStream } from '../lib/eventStream.js'
 
 // ─── In-memory caches ───────────────────────────────────────────────────────
 
@@ -1668,8 +1669,20 @@ export async function ensembleMove(modelIds, method, weights, board, mark) {
   return { move: best, votes: actions }
 }
 
-function _emit(room, event, data) {
-  if (_io) _io.to(room).emit(event, data)
+/**
+ * Dual-emit a training event over both transports.
+ *
+ * `scope` is the legacy Socket.io room name (e.g. `ml:session:abc`); `topic`
+ * is the per-event suffix (e.g. `ml:progress`). For SSE we publish on
+ * `<scope>:<event-suffix>` so a client can subscribe to a single prefix
+ * (`ml:session:abc:`) and receive every event for that session.
+ */
+function _emit(scope, event, data) {
+  // SSE channel name = `<scope>:<topic>` so a client can subscribe to a
+  // single prefix (e.g. `ml:session:abc:`) and receive every event for
+  // that scope. Strip the leading `ml:` from the event name.
+  const topic = event.startsWith('ml:') ? event.slice(3) : event
+  appendToStream(`${scope}:${topic}`, data, { userId: '*' }).catch(() => {})
 }
 
 // ─── Player Profiling ─────────────────────────────────────────────────────────

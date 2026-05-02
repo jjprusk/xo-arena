@@ -28,6 +28,16 @@ function randomSuffix() {
  * Create a fresh ownerless bot User row cloned from the named built-in
  * persona, with the chosen displayName drawn from the cup's name pool.
  * Returns the new User row.
+ *
+ * Display-name uniqueness: the schema has a partial unique index on
+ * `LOWER(displayName)` for unowned bots (`isBot AND botOwnerId IS NULL`).
+ * Each tier's pool only has 8 names and cup-clone rows survive 30 days
+ * (per the GC sweep), so reusing pool entries across cups collides
+ * routinely once a few users have run the curriculum. The first attempt
+ * uses the bare pool name (clean UX); on P2002 we retry with a short
+ * base36 suffix appended ("Tarnished Bolt #7af2"). The bare-name path
+ * stays the common case so spectators keep seeing canonical names
+ * whenever the pool entry is free.
  */
 async function cloneCupOpponent({ builtinUsername, displayName }) {
   const persona = await db.user.findUnique({
@@ -46,21 +56,38 @@ async function cloneCupOpponent({ builtinUsername, displayName }) {
     ? `${persona.botModelId}:cup:${suffix}`
     : `builtin:${persona.botModelType ?? 'minimax'}:novice:cup:${suffix}`
 
-  return db.user.create({
-    data: {
-      username, email,
-      displayName,
-      avatarUrl:      persona.avatarUrl ?? null,
-      isBot:          true,
-      botOwnerId:     null,
-      botModelType:   persona.botModelType,
-      botModelId,
-      botActive:      true,
-      botCompetitive: false,
-      botAvailable:   false,   // cup-only — not eligible for general bracket fills
-    },
-    select: { id: true, displayName: true, botModelId: true, isBot: true },
-  })
+  const baseData = {
+    username, email,
+    avatarUrl:      persona.avatarUrl ?? null,
+    isBot:          true,
+    botOwnerId:     null,
+    botModelType:   persona.botModelType,
+    botModelId,
+    botActive:      true,
+    botCompetitive: false,
+    botAvailable:   false,   // cup-only — not eligible for general bracket fills
+  }
+  const select = { id: true, displayName: true, botModelId: true, isBot: true }
+
+  try {
+    return await db.user.create({ data: { ...baseData, displayName }, select })
+  } catch (err) {
+    // P2002 = unique constraint violation. Username and email both already
+    // include the random `suffix`, so realistic collisions in this row
+    // can only come from the `LOWER(displayName)` partial unique index.
+    // Earlier we narrowed by sniffing err.meta.target, but Prisma's driver
+    // exposes it inconsistently for expression-based indexes (sometimes
+    // `'lower("displayName"'`, sometimes a constraint name like
+    // `users_bot_displayname_unowned_key`, sometimes absent entirely),
+    // and our regex was missing the no-target case — so a real-user cup
+    // clone 500'd with "Internal Server Error". Just retry on any P2002
+    // once with a suffixed displayName; if the retry also fails we throw.
+    if (err?.code !== 'P2002') throw err
+    return await db.user.create({
+      data: { ...baseData, displayName: `${displayName} #${suffix.slice(0, 4)}` },
+      select,
+    })
+  }
 }
 
 /**
@@ -149,6 +176,18 @@ export async function cloneCurriculumCup({ callerId, myBotId, rng = Math.random 
   if (sel.error) return { status: sel.error.status, body: { error: sel.error.message } }
   const callerBot = sel.bot
 
+  // Test-user pace override. Real users keep the 3s/move cadence so the
+  // cup is human-watchable; isTestUser=true callers (e2e specs) get a
+  // ~50ms cadence so a 3-match cup completes in seconds instead of
+  // minutes. Lets the playwright suite assert step-7 credit on a slow
+  // docker host without bumping wall-clock timeouts.
+  const TEST_USER_CUP_PACE_MS = 50
+  const caller = await db.user.findUnique({
+    where:  { id: callerId },
+    select: { isTestUser: true },
+  })
+  const paceMs = caller?.isTestUser ? TEST_USER_CUP_PACE_MS : CURRICULUM_CUP_CONFIG.paceMs
+
   // Draw opponent display names per the cup config.
   const slotsByTier = CURRICULUM_CUP_CONFIG.opponentSlots.reduce((acc, s) => {
     acc[s.tier] = (acc[s.tier] ?? 0) + 1
@@ -183,7 +222,7 @@ export async function cloneCurriculumCup({ callerId, myBotId, rng = Math.random 
       minParticipants:     CURRICULUM_CUP_CONFIG.minParticipants,
       maxParticipants:     CURRICULUM_CUP_CONFIG.maxParticipants,
       bestOfN:             CURRICULUM_CUP_CONFIG.bestOfN,
-      paceMs:              CURRICULUM_CUP_CONFIG.paceMs,
+      paceMs,
       status:              'IN_PROGRESS',
       isCup:               true,
       seedingMode:         'deterministic',

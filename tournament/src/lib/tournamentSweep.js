@@ -21,6 +21,7 @@ import db from './db.js'
 import { publish } from './redis.js'
 import { buildBotMatchReadyPayload } from './publishPayloads.js'
 import { expectedGameCount, RUNAWAY_CANCEL_RATIO } from './bracketMath.js'
+import { sweepStaleTestRows } from './testJanitor.js'
 import logger from '../logger.js'
 
 const SWEEP_INTERVAL_MS = 60_000
@@ -42,6 +43,11 @@ let _lastAutoDropPruneAt = 0
 const DEFAULT_CUP_RETENTION_DAYS = 30
 const CUP_SWEEP_INTERVAL_MS      = 60 * 60 * 1000
 let _lastCupSweepAt = 0
+
+// Stale-test-row janitor (Guard B). Runs hourly out-of-band — TTL is 24h on
+// the row's updatedAt, so a coarser cadence is fine.
+const TEST_JANITOR_INTERVAL_MS = 60 * 60 * 1000
+let _lastTestJanitorAt = 0
 
 export function startTournamentSweep() {
   logger.info('Tournament sweep job started (60s interval)')
@@ -134,6 +140,15 @@ export async function sweep() {
       }
     }).catch(err => {
       logger.warn({ err: err.message }, 'Tournament sweep — cup retention failed')
+    })
+  }
+
+  // Hourly sweep of stale isTest rows (Guard B). Backstop for crashed specs
+  // that never reached afterAll cleanup.
+  if (now.getTime() - _lastTestJanitorAt > TEST_JANITOR_INTERVAL_MS) {
+    _lastTestJanitorAt = now.getTime()
+    sweepStaleTestRows(now).catch(err => {
+      logger.warn({ err: err.message }, 'Tournament sweep — test janitor failed')
     })
   }
 

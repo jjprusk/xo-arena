@@ -6,7 +6,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { signOut } from '../lib/auth-client.js'
-import { disconnectSocket } from '../lib/socket.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
@@ -48,7 +47,11 @@ export default function ProfilePage() {
   const [bots, setBots] = useState([])
   const [limitInfo, setLimitInfo] = useState(null)
   const [provisionalThreshold, setProvisionalThreshold] = useState(5)
-  const [botsLoading, setBotsLoading] = useState(false)
+  // Starts `true` so effects that wait for the bot list (notably the
+  // ?action=train-bot redirect) don't fire on the initial empty `bots = []`
+  // and bounce a user with bots over to the QuickBotWizard. Cleared at the
+  // end of the load() Promise.allSettled below.
+  const [botsLoading, setBotsLoading] = useState(true)
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null)
@@ -107,11 +110,91 @@ export default function ProfilePage() {
     setShowQuickBot(true)
   }, [searchParams])
 
+  // ?action=cup — Curriculum step 6 entry point. Calls the tournament-service
+  // clone endpoint, which spawns a fresh 4-bot single-elim Curriculum Cup,
+  // registers the user's bot, and starts the bracket immediately. Step 6
+  // fires server-side via `tournament:participant:joined`. We then route the
+  // user to the cup detail page so they can watch their bot's matches —
+  // landing on /profile with no follow-up was a flat dead-end.
+  //
+  // Append `?follow=<callerBotId>` so TournamentDetailPage's follow effect
+  // auto-opens the live spectate modal on the user's round-1 match. The
+  // bracket-only landing was technically per-spec but in practice bot
+  // matches finish in 5-10 s — by the time the user oriented on the
+  // bracket page, both round-1 matches were already done and the cup
+  // experience felt skipped. Following puts them inside the live game.
+  //
+  // Gate on `!botsLoading` for the same reason train-bot/spar do — the
+  // service auto-picks the user's most-recent bot, but we want to bounce
+  // them to the bot wizard if they somehow have zero bots.
+  const [cupBusy,  setCupBusy]  = useState(false)
+  const [cupError, setCupError] = useState(null)
+  useEffect(() => {
+    if (searchParams.get('action') !== 'cup') return
+    if (botsLoading) return
+    if (cupBusy) return
+    if (bots.length === 0) {
+      navigate('/profile?action=quick-bot', { replace: true })
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setCupBusy(true)
+      setCupError(null)
+      try {
+        const token = await getToken()
+        const res = await tournamentApi.cloneCurriculumCup(token, {})
+        if (cancelled) return
+        const tid = res?.tournament?.id
+        if (!tid) throw new Error('No tournament id in response')
+        const callerBot = (res?.participants ?? []).find(p => p.isCallerBot)
+        const followQs  = callerBot?.userId ? `?follow=${encodeURIComponent(callerBot.userId)}` : ''
+        useGuideStore.getState().close()
+        navigate(`/tournaments/${tid}${followQs}`, { replace: true })
+      } catch (err) {
+        if (cancelled) return
+        setCupError(err?.message || 'Could not start the Curriculum Cup')
+      } finally {
+        if (!cancelled) setCupBusy(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [searchParams, botsLoading, bots.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ?section=bots — close guide, bots accordion already open via lazy initializer
   useEffect(() => {
     if (searchParams.get('section') !== 'bots') return
     useGuideStore.getState().close()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ?action=train-bot — Curriculum step 4. The journey CTA lands here. The
+  // actual Train button lives on the bot detail page, so once the bot list
+  // has loaded we forward the user there. With multiple bots we just expand
+  // the accordion and let them pick. With zero bots, defer to step 3.
+  //
+  // Gate on `!botsLoading` — that flag now starts `true` and clears only
+  // after the bots fetch resolves, so the effect can't fire with the initial
+  // empty `bots = []` and falsely bounce a returning user (who has bots)
+  // over to the QuickBotWizard.
+  //
+  // ?action=spar (Curriculum step 5) follows the same shape — same target
+  // (bot detail page), different spotlight target on arrival. We forward
+  // the action= query through so BotProfilePage can light the right CTA.
+  useEffect(() => {
+    const action = searchParams.get('action')
+    if (action !== 'train-bot' && action !== 'spar') return
+    if (botsLoading) return
+    useGuideStore.getState().close()
+    if (bots.length === 1) {
+      navigate(`/bots/${bots[0].id}?action=${action}`, { replace: true })
+    } else if (bots.length === 0) {
+      navigate('/profile?action=quick-bot', { replace: true })
+    }
+    // Multiple bots: stay on /profile with My Bots open (lazy initializer
+    // already opens it because section/action gating doesn't include this
+    // case — we open it explicitly below).
+    setOpenSections(prev => ({ ...prev, bots: true }))
+  }, [searchParams, botsLoading, bots]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!clerkUser) return
@@ -357,7 +440,6 @@ export default function ProfilePage() {
         .forEach(k => sessionStorage.removeItem(k))
       clearSessionCache()
       clearTokenCache()
-      disconnectSocket()
       await signOut()
       triggerSessionRefresh()  // update useOptimisticSession state immediately
       navigate('/')
@@ -461,6 +543,33 @@ export default function ProfilePage() {
   return (
     <div className="max-w-lg mx-auto space-y-2">
       <PageHeader title="Profile" />
+
+      {/* Curriculum Cup status — only renders while we're starting the cup
+          (`?action=cup`) or if the start failed. Success-path navigates away
+          before this can render, so users normally never see this banner. */}
+      {(cupBusy || cupError) && (
+        <div
+          role={cupError ? 'alert' : 'status'}
+          aria-live="polite"
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={{
+            background:    cupError ? 'rgba(220, 38, 38, 0.07)' : 'rgba(212, 137, 30, 0.07)',
+            borderColor:   cupError ? 'rgba(220, 38, 38, 0.35)' : 'rgba(212, 137, 30, 0.35)',
+            color:         'var(--text-primary)',
+          }}
+        >
+          {cupError
+            ? <>Couldn't start the Curriculum Cup: {cupError}.{' '}
+                <button
+                  type="button"
+                  onClick={() => { setCupError(null); navigate('/profile?action=cup', { replace: true }) }}
+                  className="underline font-semibold"
+                  style={{ color: 'var(--color-amber-700)' }}
+                >Try again</button>
+              </>
+            : 'Starting your Curriculum Cup… spawning opponents and seeding the bracket.'}
+        </div>
+      )}
 
       {/* ── Create Bot Panel ─────────────────────────────────────────────── */}
       <div

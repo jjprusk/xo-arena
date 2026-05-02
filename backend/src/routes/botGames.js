@@ -9,11 +9,14 @@
  */
 
 import { Router } from 'express'
+import { nanoid } from 'nanoid'
 import { requireAuth } from '../middleware/auth.js'
 import { botGameRunner } from '../realtime/botGameRunner.js'
 import { hasRole } from '../utils/roles.js'
 import { isValidSparTier, botUsernameForTier, SPAR_TIERS } from '../config/sparTiers.js'
+import { createTableTracked } from '../lib/createTableTracked.js'
 import db from '../lib/db.js'
+import logger from '../logger.js'
 
 const router = Router()
 
@@ -114,15 +117,74 @@ router.post('/practice', requireAuth, async (req, res, next) => {
     const existingSlug = botGameRunner.findActiveSparForBot(myBot.id)
     if (existingSlug) botGameRunner.closeGameBySlug(existingSlug)
 
-    const { slug, displayName } = await botGameRunner.startGame({
-      bot1: myBot,
-      bot2: opponentBot,
-      moveDelayMs: moveDelayMs ? Number(moveDelayMs) : undefined,
-      isSpar: true,
-      sparUserId: caller.id,
-    })
+    // Allocate a slug + create a Table row up-front so the spectator's
+    // /rt/tables/:slug/join (called by useGameSDK on /play?join=<slug>)
+    // resolves to a real row and returns a sanitized room payload. Without
+    // this, the join 404s and the client maps it to setAbandoned({reason:
+    // 'stale'}) → "Table closed due to inactivity" — false-positive UX
+    // because the actual game runs fine, but the spectator never connects.
+    let table
+    let slug
+    let lastErr
+    for (let attempt = 0; attempt < 3; attempt++) {
+      slug = nanoid(8)
+      try {
+        table = await createTableTracked({
+          data: {
+            gameId:       'xo',
+            slug,
+            createdById:  req.auth.userId,
+            minPlayers:   2,
+            maxPlayers:   2,
+            isPrivate:    true,
+            isTournament: false,
+            status:       'ACTIVE',
+            seats: [
+              { userId: myBot.id,       status: 'occupied', displayName: myBot.displayName },
+              { userId: opponentBot.id, status: 'occupied', displayName: opponentBot.displayName },
+            ],
+            previewState: {
+              board:       Array(9).fill(null),
+              currentTurn: 'X',
+              scores:      { X: 0, O: 0 },
+              round:       1,
+              winner:      null,
+              winLine:     null,
+              marks:       { [myBot.id]: 'X', [opponentBot.id]: 'O' },
+              botMark:     null,
+              moves:       [],
+            },
+          },
+        })
+        break
+      } catch (err) {
+        lastErr = err
+        if (err?.code === 'P2002') continue
+        throw err
+      }
+    }
+    if (!table) {
+      logger.warn({ err: lastErr?.message }, 'Spar: could not allocate slug')
+      return res.status(503).json({ error: 'Could not allocate spar slug' })
+    }
 
-    res.status(201).json({ slug, displayName, opponentTier })
+    try {
+      const { slug: gameSlug, displayName } = await botGameRunner.startGame({
+        bot1: myBot,
+        bot2: opponentBot,
+        slug,                                         // bind the bot game to the Table row
+        moveDelayMs: moveDelayMs ? Number(moveDelayMs) : undefined,
+        isSpar:    true,
+        sparUserId: caller.id,
+      })
+      res.status(201).json({ slug: gameSlug, displayName, opponentTier, tableId: table.id })
+    } catch (err) {
+      // Roll back the Table row if the runner couldn't start — leaves no
+      // ghost row that would 404 a navigation.
+      logger.warn({ err: err.message, slug }, 'Spar: bot game failed to start; rolling back')
+      await db.table.delete({ where: { id: table.id } }).catch(() => {})
+      return res.status(503).json({ error: 'Could not start spar match' })
+    }
   } catch (err) {
     next(err)
   }

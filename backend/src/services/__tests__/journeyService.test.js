@@ -18,6 +18,13 @@ vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../../lib/eventStream.js', () => ({
+  appendToStream: mockAppendToStream,
+}))
+
 import db from '../../lib/db.js'
 import {
   TOTAL_STEPS,
@@ -195,19 +202,30 @@ describe('completeStep — basic behavior', () => {
     expect(await completeStep(mockUserId, 1)).toBe(false)
   })
 
-  it('emits guide:journeyStep with phase on successful completion', async () => {
+  it('appends guide:journeyStep with phase on successful completion', async () => {
     db.user.findUnique.mockResolvedValue(mockUserWithProgress([]))
-    const io = mockIo()
 
-    await completeStep(mockUserId, 1, io)
+    await completeStep(mockUserId, 1)
 
-    expect(io.to).toHaveBeenCalledWith(`user:${mockUserId}`)
-    expect(io.roomEmit).toHaveBeenCalledWith('guide:journeyStep', expect.objectContaining({
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:journeyStep')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[1]).toMatchObject({
       step: 1,
       completedSteps: [1],
       totalSteps: 7,
       phase: 'hook',
-    }))
+    })
+    expect(sseCall[2]).toEqual({ userId: mockUserId })
+  })
+
+  it('emits guide:journeyStep on SSE even when no io is provided (offline tab)', async () => {
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([]))
+
+    await completeStep(mockUserId, 1)
+
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:journeyStep')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[2]).toEqual({ userId: mockUserId })
   })
 })
 
@@ -239,15 +257,14 @@ describe('completeStep — Hook reward on step 2', () => {
     expect(tcGrant[0].data.creditsTc).toEqual({ increment: 15 })
   })
 
-  it('emits guide:hook_complete and guide:notification on step 2', async () => {
+  it('appends guide:hook_complete to the SSE stream on step 2', async () => {
     db.user.findUnique.mockResolvedValue(mockUserWithProgress([1]))
-    const io = mockIo()
 
-    await completeStep(mockUserId, 2, io)
+    await completeStep(mockUserId, 2)
 
-    const emittedEvents = io.roomEmit.mock.calls.map(c => c[0])
-    expect(emittedEvents).toContain('guide:hook_complete')
-    expect(emittedEvents).toContain('guide:notification')
+    const sseCall = mockAppendToStream.mock.calls.find(([ch]) => ch === 'guide:hook_complete')
+    expect(sseCall).toBeDefined()
+    expect(sseCall[2]).toEqual({ userId: mockUserId })
   })
 
   it('does NOT award Hook reward on any other step (not step 1, 3, 4, 5, 6, 7)', async () => {
@@ -293,16 +310,14 @@ describe('completeStep — Curriculum reward + Specialize start on step 7', () =
     expect(tcGrant[0].data.creditsTc).toEqual({ increment: 100 })
   })
 
-  it('emits guide:curriculum_complete AND guide:specialize_start on step 7', async () => {
+  it('appends guide:curriculum_complete AND guide:specialize_start on step 7', async () => {
     db.user.findUnique.mockResolvedValue(mockUserWithProgress([1, 2, 3, 4, 5, 6]))
-    const io = mockIo()
 
-    await completeStep(mockUserId, 7, io)
+    await completeStep(mockUserId, 7)
 
-    const emittedEvents = io.roomEmit.mock.calls.map(c => c[0])
-    expect(emittedEvents).toContain('guide:curriculum_complete')
-    expect(emittedEvents).toContain('guide:specialize_start')
-    expect(emittedEvents).toContain('guide:notification')
+    const sseChannels = mockAppendToStream.mock.calls.map(c => c[0])
+    expect(sseChannels).toContain('guide:curriculum_complete')
+    expect(sseChannels).toContain('guide:specialize_start')
   })
 })
 

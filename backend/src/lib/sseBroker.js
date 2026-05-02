@@ -29,7 +29,7 @@ import logger from '../logger.js'
 
 const STREAM_KEY = 'events:tier2:stream'
 
-// Map<res, { userId: string|null, channels: string[], lastSentId: string|null }>
+// Map<res, { userId: string|null, sessionId: string|null, channels: string[], lastSentId: string|null }>
 const _clients = new Map()
 
 // Dedicated Redis connection — XREAD BLOCK holds it, so it must not be shared
@@ -110,9 +110,22 @@ function dispatchEntry(id, fields) {
  *   res.on('close', () => unregister(res))
  * so dead clients don't accumulate.
  */
-export function register(res, { userId = null, channels = [] } = {}) {
-  _clients.set(res, { userId, channels, lastSentId: null })
+export function register(res, { userId = null, sessionId = null, channels = [] } = {}) {
+  _clients.set(res, { userId, sessionId, channels, lastSentId: null })
   ensureLoop()
+}
+
+/**
+ * Look up the response object for a given sseSessionId, if it is currently
+ * connected to this process. Used by debug/health endpoints — production
+ * dispatch goes through the XREAD loop, not direct lookups.
+ */
+export function resForSession(sessionId) {
+  if (!sessionId) return null
+  for (const [res, c] of _clients) {
+    if (c.sessionId === sessionId) return res
+  }
+  return null
 }
 
 export function unregister(res) {

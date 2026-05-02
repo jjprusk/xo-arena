@@ -23,7 +23,7 @@ export const CURRICULUM_CUP_CONFIG = Object.freeze({
   bestOfN:         1,
   minParticipants: 4,
   maxParticipants: 4,
-  paceMs:          1000,                   // brisk so the cup wraps in ~2 min
+  paceMs:          3000,                   // ~3s/move so a human watching can actually follow each move; cup still wraps in ~1 min
   // Opponent slots — 3 system bots draw from these tiers/pools.
   opponentSlots: Object.freeze([
     { tier: 'rusty',  builtinUsername: 'bot-rusty'  },

@@ -20,38 +20,41 @@
  * real. Both ONE_TRAIN_LOSS and HEAVY_LOSS branches ship now so the rules
  * surface is complete and all four CTAs are exercised by tests.
  *
- * Rookie Cup is text-only in v1 (the full bracket ships in v1.1 Sprint 8).
- * The CHAMPION CTA navigates to a static info screen — `/guide/rookie-cup`.
+ * Rookie Cup (the original CHAMPION CTA target) ships in v1.1 Sprint 8 — no
+ * template, clone endpoint, or `/guide/rookie-cup` route exists today, so
+ * pointing the CTA there in v1 produced a 404. Until the Cup ships, route
+ * champions back to the same training flow runners-up see; the body text
+ * keeps the win-specific framing so the card still feels earned.
  */
 
 export const COACHING_CARDS = Object.freeze({
   CHAMPION: Object.freeze({
     id:        'champion',
     title:     'Cup Champion!',
-    body:      'Your bot took the Curriculum Cup. Ready for tougher opponents?',
-    ctaLabel:  'Try Rookie Cup',
-    ctaHref:   '/guide/rookie-cup',
+    body:      'Your bot took the Curriculum Cup. Train it deeper to stay ahead of the next field.',
+    ctaLabel:  'Train your bot deeper',
+    ctaHref:   '/profile?action=train-bot',
   }),
   RUNNER_UP: Object.freeze({
     id:        'runner_up',
     title:     'So close.',
     body:      'You made the final. A deeper bot tier could close the gap.',
     ctaLabel:  'Train your bot deeper',
-    ctaHref:   '/profile?action=train',
+    ctaHref:   '/profile?action=train-bot',
   }),
   ONE_TRAIN_LOSS: Object.freeze({
     id:        'one_train_loss',
     title:     'Different angle?',
     body:      "Your bot improved with training but didn't break through. A different algorithm might suit your style better.",
     ctaLabel:  'Switch algorithm',
-    ctaHref:   '/gym?action=switch-algorithm',
+    ctaHref:   '/gym',
   }),
   HEAVY_LOSS: Object.freeze({
     id:        'heavy_loss',
     title:     'Time to dig in.',
     body:      'A trained bot makes a real difference at this tier. Train yours and try again.',
     ctaLabel:  'Train your bot',
-    ctaHref:   '/profile?action=train',
+    ctaHref:   '/profile?action=train-bot',
   }),
 })
 

@@ -19,7 +19,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react'
-import { getSocket } from '../../lib/socket.js'
+import { useEventStream } from '../../lib/useEventStream.js'
 
 const AUTO_DISMISS_MS = 8_000
 
@@ -27,41 +27,46 @@ export default function RewardPopup() {
   const [active, setActive] = useState(null)
   const dismissTimerRef = useRef(null)
 
+  // Stable show() across both transports — sub-effects below call into it.
+  const showRef = useRef(null)
+  showRef.current = (reward) => {
+    setActive(reward)
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+    dismissTimerRef.current = setTimeout(() => setActive(null), AUTO_DISMISS_MS)
+  }
+
+  function buildHookReward({ reward, message } = {}) {
+    return {
+      kind:     'hook',
+      title:    'Off to a great start!',
+      amount:   reward ?? 20,
+      body:     message ?? 'Welcome to the Arena.',
+      nextHint: 'Up next: build your first bot.',
+    }
+  }
+  function buildCurriculumReward({ reward, message } = {}) {
+    return {
+      kind:     'curriculum',
+      title:    'Journey complete!',
+      amount:   reward ?? 50,
+      body:     message ?? 'You earned the graduation reward.',
+      nextHint: "You're now in Specialize — personalized recommendations unlock here.",
+    }
+  }
+
   useEffect(() => {
-    const socket = getSocket()
-    function show(reward) {
-      setActive(reward)
-      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-      dismissTimerRef.current = setTimeout(() => setActive(null), AUTO_DISMISS_MS)
-    }
-
-    function onHookComplete({ reward, message } = {}) {
-      show({
-        kind:     'hook',
-        title:    'Off to a great start!',
-        amount:   reward ?? 20,
-        body:     message ?? 'Welcome to the Arena.',
-        nextHint: 'Up next: build your first bot.',
-      })
-    }
-    function onCurriculumComplete({ reward, message } = {}) {
-      show({
-        kind:     'curriculum',
-        title:    'Journey complete!',
-        amount:   reward ?? 50,
-        body:     message ?? 'You earned the graduation reward.',
-        nextHint: "You're now in Specialize — personalized recommendations unlock here.",
-      })
-    }
-
-    socket.on('guide:hook_complete',       onHookComplete)
-    socket.on('guide:curriculum_complete', onCurriculumComplete)
     return () => {
-      socket.off('guide:hook_complete',       onHookComplete)
-      socket.off('guide:curriculum_complete', onCurriculumComplete)
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
     }
   }, [])
+
+  useEventStream({
+    channels: ['guide:'],
+    onEvent: (channel, payload) => {
+      if (channel === 'guide:hook_complete')       showRef.current(buildHookReward(payload))
+      if (channel === 'guide:curriculum_complete') showRef.current(buildCurriculumReward(payload))
+    },
+  })
 
   if (!active) return null
 

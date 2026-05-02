@@ -27,6 +27,13 @@ vi.mock('../../lib/socket.js', () => ({
   getSocket: vi.fn(() => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn() })),
 }))
 
+// Capture useEventStream subscriptions so tests can dispatch synthetic bus
+// events and observe the page's reaction.
+const eventStreamSubs = []
+vi.mock('../../lib/useEventStream.js', () => ({
+  useEventStream: (opts) => { eventStreamSubs.push(opts) },
+}))
+
 import TablesPage from '../TablesPage.jsx'
 import { api } from '../../lib/api.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
@@ -41,8 +48,18 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  eventStreamSubs.length = 0
   useOptimisticSession.mockReturnValue({ data: null, isPending: false })
 })
+
+/** Fire a synthetic guide:notification bus event into TablesPage. */
+function fireBusEvent(payload) {
+  const sub = eventStreamSubs.find(s =>
+    Array.isArray(s.channels) && s.channels.includes('guide:notification'),
+  )
+  expect(sub).toBeTruthy()
+  sub.onEvent('guide:notification', payload)
+}
 
 describe('TablesPage', () => {
   it('renders the page heading', async () => {
@@ -98,5 +115,39 @@ describe('TablesPage', () => {
     api.tables.list.mockRejectedValue(new Error('boom'))
     renderPage()
     await waitFor(() => expect(screen.getByText(/boom/)).toBeInTheDocument())
+  })
+
+  // ── Bus-event refresh (Future_Ideas Known-Bugs §1 follow-up) ─────────────
+  //
+  // After a forfeit or natural game-end, the backend dispatches
+  // `table.released`. Without that event in the refresh-trigger set, the
+  // survivor's TablesPage kept showing the old ACTIVE/FORMING row even
+  // after the underlying table had flipped to COMPLETED.
+
+  it('refetches the list when a `table.released` bus event arrives', async () => {
+    api.tables.list.mockResolvedValue({ tables: [] })
+    renderPage()
+    await waitFor(() => expect(api.tables.list).toHaveBeenCalledTimes(1))
+
+    vi.useFakeTimers()
+    fireBusEvent({ type: 'table.released', payload: { tableId: 'tbl_x', reason: 'leave' } })
+    // Coalescing debounce is 250ms — advance past it.
+    await vi.advanceTimersByTimeAsync(300)
+    vi.useRealTimers()
+
+    await waitFor(() => expect(api.tables.list).toHaveBeenCalledTimes(2))
+  })
+
+  it('ignores unrelated bus events (e.g. guide:journeyStep) — no refetch', async () => {
+    api.tables.list.mockResolvedValue({ tables: [] })
+    renderPage()
+    await waitFor(() => expect(api.tables.list).toHaveBeenCalledTimes(1))
+
+    vi.useFakeTimers()
+    fireBusEvent({ type: 'guide:journeyStep', payload: { step: 3 } })
+    await vi.advanceTimersByTimeAsync(300)
+    vi.useRealTimers()
+
+    expect(api.tables.list).toHaveBeenCalledTimes(1)
   })
 })
