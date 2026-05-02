@@ -413,10 +413,12 @@ export async function createHvbTable({
   seatId,
   gameId            = 'xo',
   botUserId,
-  botSkillId        = null,
   spectatorAllowed  = true,
   tournamentMatchId = null,
 }) {
+  // Phase 3.8.5.2 — picker payload carries only botId. The skill is
+  // resolved server-side from (botId, gameId) below; any client-supplied
+  // botSkillId is intentionally not part of this signature.
   if (!seatId)     return { ok: false, code: 'BAD_REQUEST',  message: 'seatId required' }
   if (!botUserId)  return { ok: false, code: 'BAD_REQUEST',  message: 'botUserId required' }
 
@@ -521,11 +523,20 @@ export async function createHvbTable({
 
   // Resolve the game-specific skill server-side so the wrong-game skill
   // can never be used (e.g. an XO skill running in a Connect4 game).
-  let resolvedSkillId = botSkillId || null
-  {
-    const skill = await resolveSkillForGame(botUserRow.id, gameId)
-    if (skill) resolvedSkillId = skill.id
+  // Phase 3.8.5.2 — the server is fully authoritative here. If the bot
+  // has no skill for this game, the match cannot start; the picker is
+  // already filtered by `?gameId=` so this is a defensive 400 for the
+  // edge cases the picker can't catch (race with skill deletion, bots
+  // listed without per-game filtering, etc.).
+  const skill = await resolveSkillForGame(botUserRow.id, gameId)
+  if (!skill) {
+    return {
+      ok:      false,
+      code:    'NO_SKILL',
+      message: `Bot has no skill for game "${gameId}"`,
+    }
   }
+  const resolvedSkillId = skill.id
 
   // For tournament MIXED matches: resolve tournamentId + bestOfN so the
   // series play and result recording work like a first-class tournament

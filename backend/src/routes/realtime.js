@@ -412,7 +412,7 @@ async function resolveCaller(req) {
 
 // POST /api/v1/rt/tables
 //
-// Body: { kind: 'pvp'|'hvb', botUserId?, botSkillId?, spectatorAllowed?,
+// Body: { kind: 'pvp'|'hvb', botUserId?, spectatorAllowed?,
 //         tournamentMatchId? }
 //
 // Replaces socket emits `room:create` (PvP) and `room:create:hvb` (HvB).
@@ -420,12 +420,15 @@ async function resolveCaller(req) {
 // adds board/currentTurn so the client can render the opening position
 // without an extra GET. Tournament rejoin/rematch-in-place set `action` to
 // `'rejoined' | 'rematched'`; brand-new creates set it to `'created'`.
+//
+// Phase 3.8.5.2 — picker payload carries only `botId`; the skill is
+// resolved server-side from `(botId, gameId)` in tableFlowService.
+// Any incoming `botSkillId` is silently ignored.
 router.post('/tables', async (req, res) => {
   try {
     const {
       kind,
       botUserId,
-      botSkillId        = null,
       spectatorAllowed  = true,
       tournamentMatchId = null,
     } = req.body ?? {}
@@ -448,7 +451,6 @@ router.post('/tables', async (req, res) => {
         user:              caller.user,
         seatId:            caller.seatId,
         botUserId,
-        botSkillId,
         spectatorAllowed,
         tournamentMatchId,
       })

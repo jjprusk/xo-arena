@@ -71,57 +71,14 @@ describe('resolveSkillForGame', () => {
 })
 
 /**
- * Documents the socketHandler `room:create:hvb` override contract (§11e
- * item 3). The handler accepts a client-supplied `botSkillId` but re-
- * resolves from DB; the resolved value wins whenever the DB has a row.
- *
- * We replicate the 4-line logic here as a pure function so the contract
- * is testable without standing up a socket.io harness. A regression in
- * the handler (e.g., accidentally trusting the client first) will drift
- * from this baseline.
+ * Phase 3.8.5.2 — the realtime route + tableFlowService no longer accept a
+ * client-supplied `botSkillId`. The server is fully authoritative: the skill
+ * is always resolved from `(botId, gameId)` via `resolveSkillForGame`, and
+ * a missing skill is a hard 400 (no client fallback). The legacy
+ * `resolveHvbSkillId` override-contract tests were retired with that change;
+ * see backend/src/services/tableFlowService.js `createHvbTable` for the
+ * authoritative resolution path.
  */
-async function resolveHvbSkillId({ clientBotSkillId, botUserId, gameId }, findSkill) {
-  let resolvedSkillId = clientBotSkillId || null
-  const skill = await findSkill(botUserId, gameId)
-  if (skill) resolvedSkillId = skill.id
-  return resolvedSkillId
-}
-
-describe('socketHandler room:create:hvb — resolved skill override contract', () => {
-  it('ignores a client-supplied botSkillId when the DB has a matching skill', async () => {
-    const findSkill = vi.fn().mockResolvedValue({ id: 'sk_from_db', algorithm: 'minimax' })
-
-    const resolved = await resolveHvbSkillId(
-      { clientBotSkillId: 'sk_FAKE_from_client', botUserId: 'bot_abc', gameId: 'xo' },
-      findSkill,
-    )
-
-    expect(resolved).toBe('sk_from_db')
-    expect(findSkill).toHaveBeenCalledWith('bot_abc', 'xo')
-  })
-
-  it('falls back to the client-supplied id only when the DB lookup returns null', async () => {
-    const findSkill = vi.fn().mockResolvedValue(null)
-
-    const resolved = await resolveHvbSkillId(
-      { clientBotSkillId: 'sk_client_fallback', botUserId: 'bot_abc', gameId: 'xo' },
-      findSkill,
-    )
-
-    expect(resolved).toBe('sk_client_fallback')
-  })
-
-  it('returns null when neither the DB nor the client provides a skill id', async () => {
-    const findSkill = vi.fn().mockResolvedValue(null)
-
-    const resolved = await resolveHvbSkillId(
-      { clientBotSkillId: null, botUserId: 'bot_abc', gameId: 'xo' },
-      findSkill,
-    )
-
-    expect(resolved).toBeNull()
-  })
-})
 
 // ─── repointBotPrimarySkill (Phase 3.8.4.3) ──────────────────────────────────
 

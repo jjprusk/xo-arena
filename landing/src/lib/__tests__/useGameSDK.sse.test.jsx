@@ -100,15 +100,20 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
       })
       .mockResolvedValueOnce({ tableId: 'tbl_h', mark: 'X', action: 'host_reattach' })
 
+    // Phase 3.8.5.2 — picker payload is identity-scoped; the hook never
+    // forwards a botSkillId, even if a caller (legacy) tries to pass one.
     renderHook(() =>
-      useGameSDK({ gameId: 'xo', botUserId: 'bot_1', botSkillId: 'skill_1', currentUser: { id: 'u1' } }),
+      useGameSDK({ gameId: 'xo', botUserId: 'bot_1', currentUser: { id: 'u1' } }),
     )
 
     await waitFor(() => {
       expect(rtFetchMock).toHaveBeenCalledWith('/rt/tables', expect.objectContaining({
-        body: expect.objectContaining({ kind: 'hvb', botUserId: 'bot_1', botSkillId: 'skill_1' }),
+        body: expect.objectContaining({ kind: 'hvb', botUserId: 'bot_1' }),
       }))
     })
+    // Confirm the legacy field is gone from the request payload.
+    const hvbCall = rtFetchMock.mock.calls.find(c => c[0] === '/rt/tables' && c[1]?.body?.kind === 'hvb')
+    expect(hvbCall[1].body).not.toHaveProperty('botSkillId')
   })
 
   it('SDK.submitMove POSTs to /rt/tables/:slug/move when on the SSE transport', async () => {

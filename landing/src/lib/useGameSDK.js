@@ -51,9 +51,11 @@ export function useGameSDK({
   tournamentId    = null,
   currentUser     = null,
   botUserId       = null,
-  botSkillId      = null,
   spectate        = false,
 }) {
+  // Phase 3.8.5.2 — picker payload is identity-scoped (botId only). The
+  // server resolves (botId, gameId) → BotSkill at match start; any
+  // legacy `botSkillId` prop is intentionally not accepted here.
   // ── State ──────────────────────────────────────────────────────────────────
   const [phase, setPhase_]          = useState('connecting')
   const phaseRef                    = useRef('connecting')
@@ -421,7 +423,7 @@ export function useGameSDK({
         } else if (botUserId) {
           // HvB (free-play or MIXED tournament rematch).
           const res = await rtFetch('/rt/tables', {
-            body: { kind: 'hvb', botUserId, botSkillId, tournamentMatchId, spectatorAllowed: true },
+            body: { kind: 'hvb', botUserId, tournamentMatchId, spectatorAllowed: true },
           })
           if (cancelled) return
           applyCreateResultHvb(res)

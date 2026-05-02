@@ -9,6 +9,7 @@ import { useEventStream } from '../lib/useEventStream.js'
 import { rtFetch } from '../lib/rtSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
+import { disambiguateBotLabels } from '../lib/botLabels.js'
 import { useReplaySDK } from '../lib/useReplaySDK.js'
 import { meta as xoMeta } from '@callidity/game-xo'
 import { useSoundStore } from '../store/soundStore.js'
@@ -207,7 +208,7 @@ function PlayerLink({ userId, children, className, style }) {
 
 // ── Bracket visualization ─────────────────────────────────────────────────────
 
-function TournamentBracket({ rounds, participants, myBotIds, onMatchClick, onMatchSpectate, onFollow }) {
+function TournamentBracket({ rounds, participants, myBotIds, viewerUserId, onMatchClick, onMatchSpectate, onFollow }) {
   if (!rounds || rounds.length === 0) {
     return (
       <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -216,11 +217,23 @@ function TournamentBracket({ rounds, participants, myBotIds, onMatchClick, onMat
     )
   }
 
+  // Phase 3.8.A.3 + 3.8.5.4 — disambiguate bot names across the bracket
+  // (built-in vs your own vs another player's). Humans use raw displayName.
+  const botSubset = (participants ?? [])
+    .filter(p => p.user?.isBot)
+    .map(p => ({
+      id:          p.user.id,
+      displayName: p.user.displayName,
+      botOwnerId:  p.user.botOwnerId ?? null,
+    }))
+  const botLabels = disambiguateBotLabels(botSubset, { viewerUserId })
+
   const nameOf   = {}
   const userIdOf = {}
   const isYouOf  = {}
   ;(participants ?? []).forEach(p => {
-    nameOf[p.id]   = p.user?.displayName ?? `Seed ${p.seedPosition}`
+    const fallback = p.user?.displayName ?? `Seed ${p.seedPosition}`
+    nameOf[p.id]   = p.user?.isBot && p.user?.id ? (botLabels.get(p.user.id) ?? fallback) : fallback
     userIdOf[p.id] = p.user?.id ?? null
     isYouOf[p.id]  = !!(myBotIds && p.user?.id && myBotIds.has(p.user.id))
   })
@@ -1735,12 +1748,32 @@ function FinalStandings({ tournament }) {
 
 // ── Participants table ────────────────────────────────────────────────────────
 
-function ParticipantTable({ participants, tournamentStatus, myBotIds, onFollow }) {
+function ParticipantTable({ participants, tournamentStatus, myBotIds, viewerUserId, onFollow }) {
   if (!participants || participants.length === 0) {
     return <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No participants yet.</p>
   }
 
   const sorted = [...participants].sort((a, b) => (a.seedPosition ?? 999) - (b.seedPosition ?? 999))
+
+  // Phase 3.8.A.3 + 3.8.5.4 — when two bots in the bracket share a name (one
+  // built-in, one user-owned, or two from different owners), suffix them so
+  // the row text is unambiguous. The participant payload exposes the bot's
+  // own user.id and botOwnerId; we don't have ownerUsername here, so the
+  // helper falls back to "@user" / "@you" / "built-in" — enough to flag the
+  // collision distinctly.
+  const botSubset = sorted
+    .filter(p => p.user?.isBot)
+    .map(p => ({
+      id:          p.user.id,
+      displayName: p.user.displayName,
+      botOwnerId:  p.user.botOwnerId ?? null,
+    }))
+  const botLabels = disambiguateBotLabels(botSubset, { viewerUserId })
+  const labelFor = (p) => {
+    if (!p.user) return `User ${p.userId.slice(0, 6)}`
+    if (p.user.isBot) return botLabels.get(p.user.id) ?? p.user.displayName
+    return p.user.displayName ?? `User ${p.userId.slice(0, 6)}`
+  }
 
   return (
     <ListTable>
@@ -1769,7 +1802,7 @@ function ParticipantTable({ participants, tournamentStatus, myBotIds, onFollow }
                   className="text-sm font-medium"
                   style={{ color: 'var(--text-primary)' }}
                 >
-                  {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
+                  {labelFor(p)}
                 </PlayerLink>
                 {myBotIds && p.user?.id && myBotIds.has(p.user.id) && (
                   <span
@@ -2401,6 +2434,7 @@ export default function TournamentDetailPage() {
           >
             <TournamentBracket rounds={t.rounds ?? []} participants={t.participants ?? []}
               myBotIds={myBotIds}
+              viewerUserId={dbUserId}
               onMatchClick={(id, label) => setReplayMatch({ id, label })}
               onMatchSpectate={(id, label) => setWatchMatch({ id, label, mode: 'live' })}
               onFollow={handleFollow} />
@@ -2413,6 +2447,7 @@ export default function TournamentDetailPage() {
           participants={t.participants ?? []}
           tournamentStatus={t.status}
           myBotIds={myBotIds}
+          viewerUserId={dbUserId}
           onFollow={handleFollow}
         />
       </Section>

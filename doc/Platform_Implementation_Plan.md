@@ -13,7 +13,7 @@
 | 2 - Platform Consolidation (rebrand + nav) | **done** (44/44) | Complete. |
 | 3 - Frontend Retirement, Tables Page, Platform Shell | **done** (58/58) | 3.0-3.5 complete. (3.6 multi-seat shell relocated to Phase 5.0; 3.7 rendered-table polish relocated to Cross-Cutting.) |
 | 3.7a - Pre-prod cleanups | **done** (25/27) | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .5 cosmetic built-in-bot polish (optional). (Frontend follow-up from .2 relocated to 3.8.3.) |
-| 3.8 - Multi-Skill Bots | in progress (12/25) | Sprint 3.8.A complete (backend reshape + Profile bot-card + AddSkillModal + inline name check + mixed-list disambiguation). Sprint 3.8.B complete (Gym sidebar bot→skill drilldown, Profile→Gym nav buttons, in-Gym Add-Skill, backend `repointBotPrimarySkill` on training completion). Remaining: Sprint 3.8.C — Play + tournaments + closeout (7 items). Production cut after 3.8.C. |
+| 3.8 - Multi-Skill Bots | **done** (25/25) | All three sprints landed: 3.8.A (backend reshape + Profile bot-card + AddSkillModal + inline name check + mixed-list disambiguation), 3.8.B (Gym sidebar drilldown, Profile→Gym nav, in-Gym Add-Skill, `repointBotPrimarySkill`), 3.8.C (identity-scoped picker payload, server-side `(botId, gameId)` resolution at match start with hard `NO_SKILL` 400, tournament reg validation, bracket/participant disambiguation, Playwright lifecycle e2e). Ready for production cut. |
 | 4 - Connect4 | not started (0/20) | Blocked on 3.8. |
 | 5 - Poker | not started (0/24) | Blocked on 3.8 + 4. (Now includes 5.0 multi-seat shell, formerly 3.6.) |
 | 6 - Pong | not started (0/18) | Blocked on 5's real-time spike review. |
@@ -438,7 +438,7 @@ Deferred to prod-bringup day. No code change in this phase.
 - [x] `POST /api/v1/bots/:botId/skills` — body `{ gameId, algorithm, modelType }`. Creates a BotSkill, sets `botModelId = newSkill.id` if it's the bot's first. Idempotent on `(botId, gameId)` — second call returns existing skill.
 - [x] `GET /api/v1/bots/:botId` — includes `skills: BotSkill[]` with per-skill ELO joined from `GameElo (userId=botId, gameId=skill.gameId)`.
 - [x] `DELETE /api/v1/bots/:botId/skills/:skillId` — removes one skill. If the deleted skill was `botModelId`, repoint to any remaining skill or null. *(Also fixed `DELETE /api/v1/bots/:id` to sweep all the bot's BotSkill rows, not just the primary.)*
-- [ ] **[Sprint 3.8.C]** Tournament registration: validate that the picked bot has a `BotSkill` for the tournament's `gameId`; return a clear 400 if not.
+- [x] **[Sprint 3.8.C]** Tournament registration: validates that the picked bot has a `BotSkill` for the tournament's `gameId`; returns 400 with `code: 'NO_SKILL'` if not. Logic in `tournament/src/lib/registrationGuards.js` `assertBotHasSkillForGame`, called from `POST /api/tournaments/:id/register`.
 - [x] `GET /api/v1/bots?gameId=X` — list helper for community bot pickers, filters to bots that have a skill for `X`.
 
 ### 3.8.3 Frontend — Profile / bot creation
@@ -457,16 +457,16 @@ Deferred to prod-bringup day. No code change in this phase.
 
 ### 3.8.5 Frontend — Play + tournaments
 
-- [ ] **[Sprint 3.8.C]** Community bot picker lists bots (Rusty, Copper, Sterling, Magnus + user's public bots) filtered server-side by `gameId`. No "Bot X for Game Y" duplicates.
-- [ ] **[Sprint 3.8.C]** Starting a game with a community bot resolves the skill server-side from `(botId, gameId)` at match start — picker payload carries only `botId`.
-- [ ] **[Sprint 3.8.C]** Tournament registration picks a bot; backend resolves `(botId, tournamentGameId)` and rejects registration if the bot has no skill for that game.
-- [ ] **[Sprint 3.8.C]** Rankings page: already per-game via `GameElo`, but show the *bot identity* (not skill) as the leaderboard row, with the current game as implicit context.
+- [x] **[Sprint 3.8.C]** Community bot picker lists bots filtered server-side by `gameId` (`GET /api/v1/bots?gameId=:gameId` joins `BotSkill` to drop bots that lack a skill for that game). `communityBotCache.js` consumes it; no "Bot X for Game Y" duplicates.
+- [x] **[Sprint 3.8.C]** Starting a game with a community bot resolves the skill server-side from `(botId, gameId)` at match start — picker payload carries only `botId`. `useGameSDK`, `PlayPage`, `TablesPage`, `communityBotCache` all dropped the legacy `botSkillId` field; the realtime route + `tableFlowService.createHvbTable` no longer accept it; missing skill → 400 `NO_SKILL`.
+- [x] **[Sprint 3.8.C]** Tournament registration picks a bot; backend resolves `(botId, tournamentGameId)` and rejects registration if the bot has no skill for that game (see 3.8.2.5 above).
+- [x] **[Sprint 3.8.C]** Rankings page already per-game via `GameElo`; renders bot *identity* (not skill) as the row with `disambiguateBotLabels` for cross-owner collisions and link to `/bots/:botId`. (Shipped in Sprint A.3 — verified here.)
 
 ### 3.8.6 QA + tests
 
 - [x] Vitest: `POST /bots/:id/skills` creates + repoints `botModelId`; idempotent on `(botId, gameId)`; deleting the primary skill repoints to next remaining or null. *(21 new cases in `bots.test.js`; the `POST /bots` skill-less-bot reshape is deferred so its case lands with that work.)*
-- [ ] **[Sprint 3.8.C]** Vitest: tournament registration rejects bot lacking the tournament's skill. *(Pairs with 3.8.2.5 endpoint validation.)*
-- [ ] **[Sprint 3.8.C]** Playwright smoke.journey: add a case where a user creates a bot, adds an XO skill, enters XO match vs community bot — proves the two-step flow end-to-end.
+- [x] **[Sprint 3.8.C]** Vitest: `tournament/src/lib/__tests__/registrationGuards.test.js` covers the four observable behaviours (human pass-through, bot-with-skill pass, bot-without-skill 400 NO_SKILL, gameId-keyed lookup). Pairs with the route wiring at `tournament/src/routes/tournaments.js` `POST /:id/register`.
+- [x] **[Sprint 3.8.C]** Playwright `e2e/tests/open-items.spec.js` §11i: user creates a bot, adds an XO skill, then starts a PvB match against a community bot — proves the two-step flow end-to-end with the new identity-scoped picker.
 - [ ] **[Sprint 3.8.A]** Manual: Rusty with an XO skill still plays a PvB match identically to v1.28. *(Sprint-A closeout regression check after the `POST /bots` reshape lands.)*
 
 ---

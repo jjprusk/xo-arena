@@ -540,8 +540,9 @@ function CreateTableModal({ onClose, onCreated }) {
       if (opponentId !== 'human') {
         const bot = myBots.find(b => b.id === opponentId)
         if (!bot) throw new Error('Bot not found')
+        // Phase 3.8.5.2 — picker carries only botId; the server resolves
+        // the skill from (botId, gameId) at match start.
         const qs = new URLSearchParams({ botUserId: bot.id })
-        if (bot.botModelId) qs.set('botSkillId', bot.botModelId)
         navigate(`/play?${qs}`)
         onClose()
         return

@@ -421,6 +421,73 @@ test.describe('§11h — Profile→Gym nav + Gym bot→skill drilldown', () => {
   })
 })
 
+// ── 11i: Sprint 3.8.C — full bot lifecycle: create → add skill → enter PvB ───
+//
+// Phase 3.8 Sprint C closeout (3.8.6.3). Proves the two-step skill flow end-
+// to-end: a user mints a skill-less identity bot, adds an XO skill, then
+// starts a PvB match against a community bot. The picker payload is now
+// identity-scoped (botId only) — the server resolves (botId, gameId) at
+// match start.
+
+test.describe('§11i — Bot lifecycle: create → add skill → enter PvB', () => {
+  test.setTimeout(90_000)
+
+  test('create a bot, add an XO skill, then start a PvB match against a community bot', async ({ page }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    // 1) Mint a fresh skill-less bot via the API for determinism.
+    const apiCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    const apiPageLike = { context: () => ({ request: apiCtx }) }
+    await signIn(apiPageLike, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    const userToken = await fetchAuthToken(apiCtx, LANDING_URL)
+
+    const name = `qa-11i-${Date.now()}`
+    const createRes = await apiCtx.post(`${BACKEND_URL}/api/v1/bots`, {
+      headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+      data:    { name, competitive: false },
+    })
+    expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
+    const { bot } = await createRes.json()
+    const botId = bot.id
+    expect(botId).toBeTruthy()
+    await apiCtx.dispose()
+
+    try {
+      await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+
+      // 2) Add the XO skill via the Profile flow (covered in §11e in detail).
+      await page.goto(`${LANDING_URL}/profile?section=bots`)
+      await page.getByTestId(`bot-add-skill-${botId}`).click()
+      await expect(page.getByRole('dialog', { name: /Add a skill/i })).toBeVisible()
+      await page.getByTestId('add-skill-submit').click()
+      await expect(page.getByTestId(`bot-skill-pill-${botId}-xo`)).toBeVisible({ timeout: 10_000 })
+
+      // 3) Start a PvB match vs a community bot. /play?action=vs-community-bot
+      //    is the canonical entry point — it resolves the bot from
+      //    communityBotCache and posts /api/v1/rt/tables { kind: 'hvb', botUserId }.
+      //    The server resolves (botId, gameId='xo') → BotSkill at match start;
+      //    no botSkillId in the payload (Phase 3.8.5.2).
+      await page.goto(`${LANDING_URL}/play?action=vs-community-bot`)
+
+      // 4) The board renders — 9 cells visible — proving the match started.
+      //    We don't assert on the URL because PvB redirects through table slug.
+      await expect(page.locator('[data-testid^="cell-"], [aria-label^="cell"]').first()).toBeVisible({ timeout: 20_000 })
+    } finally {
+      const cleanCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+      try {
+        const cleanPage = { context: () => ({ request: cleanCtx }) }
+        await signIn(cleanPage, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+        const t = await fetchAuthToken(cleanCtx, LANDING_URL)
+        await cleanCtx.delete(`${BACKEND_URL}/api/v1/bots/${botId}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {})
+      } finally {
+        await cleanCtx.dispose()
+      }
+    }
+  })
+})
+
 // ── 11f: Admin skills column — none state + tooltip ──────────────────────────
 
 test.describe('§11f — Admin bots skills column edges', () => {

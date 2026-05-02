@@ -60,7 +60,6 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
     tournamentId,
     currentUser,
     botUserId:  botConfig?.botUserId  ?? null,
-    botSkillId: botConfig?.botSkillId ?? null,
     spectate,
   })
 
@@ -305,7 +304,9 @@ export default function PlayPage() {
   const tournamentId      = searchParams.get('tournamentId')
   const action            = searchParams.get('action')
   const botUserId         = searchParams.get('botUserId')
-  const botSkillId        = searchParams.get('botSkillId')
+  // Phase 3.8.5.2 — picker payload is identity-scoped now; the server
+  // resolves (botId, gameId) → BotSkill at match start. Any legacy
+  // ?botSkillId= value in a deep-link is ignored.
   // `?watch=1` joins as a spectator — required for bot-vs-bot games (Spar)
   // where neither seat matches the caller.
   const spectate          = searchParams.get('watch') === '1'
@@ -316,7 +317,7 @@ export default function PlayPage() {
   // with stale guest:socketId marks that don't match the new betterAuthId.
   const gameKey = authSession?.user?.id ?? 'guest'
 
-  const [botConfig, setBotConfig] = useState(null)   // { botUserId, botSkillId }
+  const [botConfig, setBotConfig] = useState(null)   // { botUserId }
   const [botError, setBotError]   = useState(false)
   const [demoError, setDemoError] = useState(false)
 
@@ -381,7 +382,7 @@ export default function PlayPage() {
   const resolvedBotConfig = action === 'vs-community-bot'
     ? botConfig
     : botUserId
-      ? { botUserId, botSkillId: botSkillId ?? null }
+      ? { botUserId }
       : null
 
   return (
