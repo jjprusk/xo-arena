@@ -161,12 +161,19 @@ test.describe('Smoke — frontend', () => {
   })
 
   test('sign-in modal can be opened', async ({ page }) => {
+    test.setTimeout(60_000)
+    // Don't wait for `networkidle` — the landing keeps an SSE event-stream
+    // open, so the network never goes idle. Default `domcontentloaded` is
+    // enough; we wait on the auth-gated button directly.
     await page.goto(LANDING_URL)
-    // Fresh browser has empty localStorage, so the guest welcome modal always appears.
-    // Its "Sign in" button opens the auth form directly.
-    const welcomeSignIn = page.getByRole('dialog').getByRole('button', { name: /sign in/i })
-    await welcomeSignIn.waitFor({ state: 'visible', timeout: 10_000 })
-    await welcomeSignIn.click()
+    // The header's Sign in button opens the auth modal directly. (Earlier
+    // builds gated this behind a guest welcome dialog, but that's gone —
+    // the header CTA is the canonical entry point.) The button is gated on
+    // `!isPending && !user`, so wait for the auth check to settle before
+    // asserting visibility.
+    const headerSignIn = page.getByRole('banner').getByRole('button', { name: /^sign in$/i })
+    await headerSignIn.waitFor({ state: 'visible', timeout: 30_000 })
+    await headerSignIn.click()
     await expect(page.locator('input[autocomplete="email"]')).toBeVisible({ timeout: 15_000 })
   })
 
