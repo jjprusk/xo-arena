@@ -325,24 +325,31 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
            u."displayName",
            u."avatarUrl",
            u."isBot",
+           u."botOwnerId",
+           owner.username AS "ownerUsername",
            c.total,
            c.wins,
            ROUND(c.wins::numeric / NULLIF(c.total, 0), 4) AS win_rate
     FROM counts c
     JOIN users u ON u.id = c.player_id
+    LEFT JOIN users owner ON owner.id = u."botOwnerId"
     WHERE c.total >= 1 ${botFilter}
     ORDER BY win_rate DESC, c.total DESC
     LIMIT ${limit}
   `
 
   // COUNT/SUM return BigInt from the Postgres driver — coerce to Number for JSON safety.
+  // botOwnerId + ownerUsername feed the mixed-list disambiguation suffix
+  // ("Rusty · @joe" / "Rusty · built-in") on the Rankings page (Phase 3.8.A.3).
   return rows.map((row, i) => ({
     rank: i + 1,
     user: {
-      id: row.id,
-      displayName: row.displayName,
-      avatarUrl: row.avatarUrl,
-      isBot: row.isBot,
+      id:            row.id,
+      displayName:   row.displayName,
+      avatarUrl:     row.avatarUrl,
+      isBot:         row.isBot,
+      botOwnerId:    row.botOwnerId ?? null,
+      ownerUsername: row.ownerUsername ?? null,
     },
     total:   Number(row.total),
     wins:    Number(row.wins),
@@ -362,6 +369,53 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
  * any internal callers.
  */
 const VALID_ML_ALGORITHMS = ['qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero']
+
+/**
+ * Check whether `name` would be accepted by createBot for `ownerId` without
+ * actually creating anything. Returns
+ *   { available: true }                                  — submit will succeed
+ *   { available: false, reason, message }                — would be rejected
+ * `reason` is one of 'empty' | 'too_long' | 'reserved' | 'profanity' | 'taken'.
+ *
+ * Mirrors the same rules as createBot — keep these in sync. This exists so the
+ * Profile create-bot form can debounce-validate before submit (Sprint 3.8.A.3).
+ */
+export async function checkBotName({ name, ownerId } = {}) {
+  if (!name || !name.trim()) {
+    return { available: false, reason: 'empty',    message: 'Enter a bot name.' }
+  }
+  const trimmed = name.trim()
+  if (trimmed.length > 40) {
+    return { available: false, reason: 'too_long', message: 'Name is too long (max 40 characters).' }
+  }
+  if (RESERVED_BOT_NAMES.includes(trimmed.toLowerCase())) {
+    return { available: false, reason: 'reserved', message: `"${trimmed}" is a reserved name.` }
+  }
+  const profanityList = await _getSystemConfig('bots.profanityList', [])
+  if (Array.isArray(profanityList) && profanityList.length > 0) {
+    const lower = trimmed.toLowerCase()
+    for (const word of profanityList) {
+      if (lower.includes(String(word).toLowerCase())) {
+        return { available: false, reason: 'profanity', message: 'Bot name contains disallowed content.' }
+      }
+    }
+  }
+  const collision = await db.user.findFirst({
+    where: {
+      isBot: true,
+      displayName: { equals: trimmed, mode: 'insensitive' },
+      OR: [
+        { botOwnerId: null },
+        ...(ownerId ? [{ botOwnerId: ownerId }] : []),
+      ],
+    },
+    select: { id: true },
+  })
+  if (collision) {
+    return { available: false, reason: 'taken', message: `"${trimmed}" is already taken.` }
+  }
+  return { available: true }
+}
 
 export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId, gameId = 'xo' } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
@@ -383,14 +437,23 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
     }
   }
 
-  // 3. Name dedup: reject if any bot already has this name (case-insensitive)
-  const existingBots = await db.user.findMany({
-    where: { isBot: true },
-    select: { displayName: true },
+  // 3. Name dedup — matches the partial-unique indexes from the
+  // `20260423010000_bot_displayname_hybrid_unique` migration: an unowned
+  // bot (built-in or orphan) reserves the name globally; within a single
+  // owner, names are unique. Cross-owner collisions are allowed and the UI
+  // disambiguates "Rusty · @joe" / "Rusty · built-in" in mixed-owner lists.
+  const collision = await db.user.findFirst({
+    where: {
+      isBot: true,
+      displayName: { equals: trimmedName, mode: 'insensitive' },
+      OR: [
+        { botOwnerId: null },
+        { botOwnerId: ownerId },
+      ],
+    },
+    select: { id: true },
   })
-  const existingNames = new Set(existingBots.map(b => b.displayName.toLowerCase()))
-
-  if (existingNames.has(trimmedName.toLowerCase())) {
+  if (collision) {
     throw Object.assign(new Error(`"${trimmedName}" is already taken — choose a different name`), { code: 'NAME_TAKEN' })
   }
 

@@ -64,6 +64,10 @@ export default function ProfilePage() {
   const [createForm, setCreateForm] = useState({ name: '', competitive: true })
   const [showBotCreatedPopup, setShowBotCreatedPopup] = useState(false)
   const [creatingBot, setCreatingBot] = useState(false)
+  // Phase 3.8.A.3 — debounced inline name-availability state. `nameCheck.status`
+  // is 'idle' | 'checking' | 'ok' | 'bad'; on 'bad' we render `nameCheck.message`
+  // beneath the input and disable the Create button.
+  const [nameCheck, setNameCheck] = useState({ status: 'idle', message: '' })
 
   // Credits & tier
   const [credits, setCredits] = useState(null)
@@ -201,6 +205,42 @@ export default function ProfilePage() {
     // case — we open it explicitly below).
     setOpenSections(prev => ({ ...prev, bots: true }))
   }, [searchParams, botsLoading, bots]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Phase 3.8.A.3 — debounce-validate the name input while the create panel
+  // is open. We wait 350 ms after the last keystroke before hitting
+  // /bots/check-name so we're not chatty, and we treat empty/short input as
+  // 'idle' (the form's required + maxLength attributes already cover those).
+  useEffect(() => {
+    if (!showCreateBot) {
+      setNameCheck({ status: 'idle', message: '' })
+      return
+    }
+    const trimmed = createForm.name.trim()
+    if (trimmed.length === 0) {
+      setNameCheck({ status: 'idle', message: '' })
+      return
+    }
+    let cancelled = false
+    setNameCheck({ status: 'checking', message: '' })
+    const id = setTimeout(async () => {
+      try {
+        const token = await getToken()
+        const res = await api.bots.checkName(trimmed, token)
+        if (cancelled) return
+        if (res.available) {
+          setNameCheck({ status: 'ok', message: 'Available' })
+        } else {
+          setNameCheck({ status: 'bad', message: res.message || 'Name not allowed' })
+        }
+      } catch (err) {
+        if (cancelled) return
+        // Network/auth blip — don't block submit, let server-side validation
+        // give the authoritative answer on Create.
+        setNameCheck({ status: 'idle', message: '' })
+      }
+    }, 350)
+    return () => { cancelled = true; clearTimeout(id) }
+  }, [createForm.name, showCreateBot])
 
   useEffect(() => {
     if (!clerkUser) return
@@ -646,7 +686,23 @@ export default function ProfilePage() {
                     onChange={e => { e.target.setCustomValidity(''); setCreateForm(f => ({ ...f, name: e.target.value })) }}
                     className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
                     style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    data-testid="bot-create-name"
                   />
+                  {nameCheck.status !== 'idle' && (
+                    <span
+                      className="text-xs"
+                      data-testid="bot-create-name-status"
+                      data-status={nameCheck.status}
+                      style={{
+                        color:
+                          nameCheck.status === 'ok'  ? 'var(--color-green-600)' :
+                          nameCheck.status === 'bad' ? 'var(--color-red-600)'   :
+                                                       'var(--text-muted)',
+                      }}
+                    >
+                      {nameCheck.status === 'checking' ? 'Checking…' : nameCheck.message}
+                    </span>
+                  )}
                 </label>
                 {/*
                   Phase 3.8 — Multi-Skill Bots: Game + Brain Architecture
@@ -669,8 +725,9 @@ export default function ProfilePage() {
                 <div className="flex gap-2 pt-1">
                   <button
                     type="submit"
-                    disabled={creatingBot}
+                    disabled={creatingBot || nameCheck.status === 'bad' || nameCheck.status === 'checking'}
                     className="btn btn-primary btn-sm"
+                    data-testid="bot-create-submit"
                   >
                     {creatingBot ? 'Creating…' : 'Create'}
                   </button>

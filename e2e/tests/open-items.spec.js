@@ -308,6 +308,40 @@ test.describe('§11e — Profile skill pills + Add a skill modal', () => {
   })
 })
 
+// ── 11g: Profile create-bot — inline name-availability check ─────────────────
+//
+// Phase 3.8 Sprint A.3 — the create-bot form debounces against
+// GET /api/v1/bots/check-name. Reserved built-in names ("Rusty") render an
+// inline "reserved" message and the Create button stays disabled. Typing a
+// fresh name flips the indicator to "Available" and the button enables.
+
+test.describe('§11g — Bot-name inline availability check', () => {
+  test.setTimeout(45_000)
+
+  test('reserved name shows error + disables Create; fresh name shows Available + enables Create', async ({ page }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    await page.goto(`${LANDING_URL}/profile?action=create-bot`)
+
+    const nameInput = page.getByTestId('bot-create-name')
+    const submitBtn = page.getByTestId('bot-create-submit')
+    const status    = page.getByTestId('bot-create-name-status')
+
+    await expect(nameInput).toBeVisible({ timeout: 10_000 })
+
+    // 1) Reserved name → "bad" status, button disabled.
+    await nameInput.fill('Rusty')
+    await expect(status).toHaveAttribute('data-status', 'bad', { timeout: 5_000 })
+    await expect(submitBtn).toBeDisabled()
+
+    // 2) Fresh name → "ok" status, button enabled.
+    await nameInput.fill(`qa-11g-${Date.now()}`)
+    await expect(status).toHaveAttribute('data-status', 'ok', { timeout: 5_000 })
+    await expect(submitBtn).toBeEnabled()
+  })
+})
+
 // ── 11f: Admin skills column — none state + tooltip ──────────────────────────
 
 test.describe('§11f — Admin bots skills column edges', () => {

@@ -434,7 +434,7 @@ Deferred to prod-bringup day. No code change in this phase.
 
 ### 3.8.2 Backend — bots + skills API
 
-- [ ] **[Sprint 3.8.A]** `POST /api/v1/bots` — accepts `{ name, avatarUrl, competitive }` only. No algorithm/game at this step. Creates a skill-less bot. `botModelId` starts null. *(Locked-step with 3.8.3.1 — reshapes the existing endpoint that the Quick Bot wizard depends on.)*
+- [x] **[Sprint 3.8.A]** `POST /api/v1/bots` — accepts `{ name, avatarUrl, competitive }` only. No algorithm/game at this step. Creates a skill-less bot. `botModelId` starts null. *(Quick Bot wizard preserved via separate `POST /bots/quick` legacy path.)*
 - [x] `POST /api/v1/bots/:botId/skills` — body `{ gameId, algorithm, modelType }`. Creates a BotSkill, sets `botModelId = newSkill.id` if it's the bot's first. Idempotent on `(botId, gameId)` — second call returns existing skill.
 - [x] `GET /api/v1/bots/:botId` — includes `skills: BotSkill[]` with per-skill ELO joined from `GameElo (userId=botId, gameId=skill.gameId)`.
 - [x] `DELETE /api/v1/bots/:botId/skills/:skillId` — removes one skill. If the deleted skill was `botModelId`, repoint to any remaining skill or null. *(Also fixed `DELETE /api/v1/bots/:id` to sweep all the bot's BotSkill rows, not just the primary.)*
@@ -443,11 +443,11 @@ Deferred to prod-bringup day. No code change in this phase.
 
 ### 3.8.3 Frontend — Profile / bot creation
 
-- [ ] **[Sprint 3.8.A]** Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
-- [ ] **[Sprint 3.8.A]** Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
-- [ ] **[Sprint 3.8.A]** "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`. *(Single-game world: the game dropdown shows only XO; structure stays so Connect4 row lights it up.)*
+- [x] **[Sprint 3.8.A]** Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
+- [x] **[Sprint 3.8.A]** Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
+- [x] **[Sprint 3.8.A]** "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`. *(Single-game world: the game dropdown shows only XO; structure stays so Connect4 row lights it up.)*
 - [ ] **[Sprint 3.8.B]** **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button in addition to the skill pills. Also add a "Gym ⚡" link in the My Bots section header. Closes the navigation gap identified in Phase 3.7a audit — today returning users with dismissed journey and no "AI Training" slot can't reach `/gym` from Profile. Deferred to 3.8 (not 3.7a) because the bot card is redesigned here; doing it twice would be waste.
-- [ ] **[Sprint 3.8.A]** **Bot-name uniqueness UX (relocated from 3.7a.2):** bot-create form checks availability inline (debounced GET) before submit; mixed-owner lists (leaderboard, bot picker, tournament bracket) render "Rusty · @joe" / "Rusty · built-in" when multiple bots share a name in the visible set. Backend partial-unique indexes already enforce the rule; this closes the UX side.
+- [x] **[Sprint 3.8.A]** **Bot-name uniqueness UX (relocated from 3.7a.2):** bot-create form checks availability inline (debounced GET `/bots/check-name`) before submit; per-owner dedup matches the partial-unique indexes (cross-owner collisions allowed); Rankings page renders "Rusty · @joe" / "Rusty · built-in" via `disambiguateBotLabels` when names collide in the visible set. *(Bot picker / tournament bracket helpers already in place — apply on those surfaces in Sprint 3.8.C alongside the picker reshape.)*
 
 ### 3.8.4 Frontend — Gym
 

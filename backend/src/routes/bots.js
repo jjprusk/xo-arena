@@ -2,7 +2,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
-import { createBot, listBots } from '../services/userService.js'
+import { createBot, listBots, checkBotName } from '../services/userService.js'
 import { getSystemConfig } from '../services/skillService.js'
 import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
@@ -86,6 +86,27 @@ router.get('/mine', requireAuth, async (req, res, next) => {
     if (!caller) return res.status(401).json({ error: 'Unauthorized' })
     const bots = await listBots({ ownerId: caller.id })
     res.json({ bots })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/bots/check-name?name=...
+ *
+ * Phase 3.8.A.3 — inline bot-name availability check. Mirrors the same rules
+ * as createBot (reserved / profanity / per-owner+built-in collision) without
+ * actually creating a row. Auth-scoped so the result reflects the caller's
+ * own owner-scope.
+ */
+router.get('/check-name', requireAuth, async (req, res, next) => {
+  try {
+    const baId = req.auth.userId
+    const caller = await db.user.findUnique({ where: { betterAuthId: baId }, select: { id: true } })
+    if (!caller) return res.status(401).json({ error: 'Unauthorized' })
+    const name = typeof req.query.name === 'string' ? req.query.name : ''
+    const result = await checkBotName({ name, ownerId: caller.id })
+    res.json(result)
   } catch (err) {
     next(err)
   }

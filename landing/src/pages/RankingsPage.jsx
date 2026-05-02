@@ -7,6 +7,8 @@ import {
   UserAvatar, SearchBar,
 } from '../components/ui/ListTable.jsx'
 import { LeaderboardSkeleton } from '../components/ui/Skeleton.jsx'
+import { disambiguateBotLabels } from '../lib/botLabels.js'
+import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 
 const PODIUM_COLORS = {
   0: { bg: 'var(--color-amber-100)', border: 'var(--color-amber-500)', label: '👑' },
@@ -61,11 +63,26 @@ export default function RankingsPage() {
     return () => { cancelled = true }
   }, [period, mode, showBots])
 
+  const { data: session } = useOptimisticSession()
+  const viewerBaId = session?.user?.id
+
   const filtered = board.filter((e) =>
     !search || e.user.displayName.toLowerCase().includes(search.toLowerCase())
   )
 
   const top3 = filtered.slice(0, 3)
+
+  // Phase 3.8.A.3 — when two bots in the visible set share a displayName
+  // (cross-owner collisions are allowed by design), suffix each with
+  // "· @username" / "· built-in" so the user can tell them apart.
+  const botLabels = React.useMemo(
+    () => disambiguateBotLabels(
+      filtered.filter((e) => e.user.isBot).map((e) => e.user),
+      { viewerUserId: viewerBaId },
+    ),
+    [filtered, viewerBaId],
+  )
+  const labelFor = (user) => user.isBot ? (botLabels.get(user.id) ?? user.displayName) : user.displayName
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -137,7 +154,7 @@ export default function RankingsPage() {
                     <div className="flex items-center gap-1">
                       {entry.user.isBot && <span title="Bot">🤖</span>}
                       <span className="text-sm font-semibold text-center max-w-[90px] truncate">
-                        {entry.user.displayName}
+                        {labelFor(entry.user)}
                       </span>
                     </div>
                     <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--color-teal-600)' }}>
@@ -174,14 +191,14 @@ export default function RankingsPage() {
                       {entry.user.isBot ? (
                         <Link
                           to={`/bots/${entry.user.id}`}
-                          className="flex items-center gap-1 font-medium truncate max-w-[120px] hover:underline"
+                          className="flex items-center gap-1 font-medium truncate max-w-[180px] hover:underline"
                           style={{ color: 'var(--text-primary)' }}
                         >
                           <span title="Bot">🤖</span>
-                          {entry.user.displayName}
+                          {labelFor(entry.user)}
                         </Link>
                       ) : (
-                        <span className="font-medium truncate max-w-[120px]">{entry.user.displayName}</span>
+                        <span className="font-medium truncate max-w-[120px]">{labelFor(entry.user)}</span>
                       )}
                     </div>
                   </ListTd>

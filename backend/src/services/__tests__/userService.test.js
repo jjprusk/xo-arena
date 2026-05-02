@@ -40,7 +40,7 @@ vi.mock('@xo-arena/db', () => ({
   },
 }))
 
-const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo, getLeaderboard, createBot, listBots } =
+const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo, getLeaderboard, createBot, listBots, checkBotName } =
   await import('../userService.js')
 const db = (await import('../../lib/db.js')).default
 
@@ -234,8 +234,8 @@ describe('getUserStats', () => {
 describe('getLeaderboard', () => {
   it('maps raw SQL rows to the expected leaderboard shape', async () => {
     db.$queryRaw.mockResolvedValue([
-      { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false, total: 20n, wins: 16n, win_rate: '0.8000' },
-      { id: 'u2', displayName: 'Bob',   avatarUrl: null, isBot: false, total: 15n, wins:  9n, win_rate: '0.6000' },
+      { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false, botOwnerId: null, ownerUsername: null, total: 20n, wins: 16n, win_rate: '0.8000' },
+      { id: 'u2', displayName: 'Bob',   avatarUrl: null, isBot: false, botOwnerId: null, ownerUsername: null, total: 15n, wins:  9n, win_rate: '0.6000' },
     ])
 
     const result = await getLeaderboard()
@@ -243,7 +243,7 @@ describe('getLeaderboard', () => {
     expect(result).toHaveLength(2)
     expect(result[0]).toEqual({
       rank: 1,
-      user: { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false },
+      user: { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false, botOwnerId: null, ownerUsername: null },
       total: 20,
       wins: 16,
       winRate: 0.8,
@@ -252,9 +252,21 @@ describe('getLeaderboard', () => {
     expect(result[1].user.displayName).toBe('Bob')
   })
 
+  it('carries botOwnerId + ownerUsername for bot rows so the UI can disambiguate cross-owner name collisions', async () => {
+    db.$queryRaw.mockResolvedValue([
+      { id: 'b1', displayName: 'Rusty', avatarUrl: null, isBot: true, botOwnerId: null,    ownerUsername: null,  total: 10n, wins: 7n, win_rate: '0.7000' },
+      { id: 'b2', displayName: 'Rusty', avatarUrl: null, isBot: true, botOwnerId: 'u_joe', ownerUsername: 'joe', total:  9n, wins: 6n, win_rate: '0.6667' },
+    ])
+    const [builtIn, owned] = await getLeaderboard({ includeBots: true })
+    expect(builtIn.user.botOwnerId).toBeNull()
+    expect(builtIn.user.ownerUsername).toBeNull()
+    expect(owned.user.botOwnerId).toBe('u_joe')
+    expect(owned.user.ownerUsername).toBe('joe')
+  })
+
   it('returns number types (not BigInt) for total, wins, winRate', async () => {
     db.$queryRaw.mockResolvedValue([
-      { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false, total: 10n, wins: 5n, win_rate: '0.5000' },
+      { id: 'u1', displayName: 'Alice', avatarUrl: null, isBot: false, botOwnerId: null, ownerUsername: null, total: 10n, wins: 5n, win_rate: '0.5000' },
     ])
 
     const [entry] = await getLeaderboard()
@@ -325,9 +337,27 @@ describe('createBot — Phase 3.8 skill-less', () => {
     await expect(createBot('owner_1', { name: 'rusty' }))
       .rejects.toMatchObject({ code: 'RESERVED_NAME' })
 
-    db.user.findMany.mockResolvedValueOnce([{ displayName: 'Taken' }])
+    // Phase 3.8.A.3 — dedup is now per-owner + global-on-built-ins, scoped via
+    // findFirst (not the legacy global findMany).
+    db.user.findFirst.mockResolvedValueOnce({ id: 'b_existing' })
     await expect(createBot('owner_1', { name: 'Taken' }))
       .rejects.toMatchObject({ code: 'NAME_TAKEN' })
+  })
+
+  it('skill-less call: dedup query is owner-scoped (built-in OR same-owner only)', async () => {
+    db.user.create.mockImplementation(async ({ data }) => ({ id: 'b1', ...data }))
+    db.user.findFirst.mockResolvedValue(null)
+    await createBot('owner_1', { name: 'Fresh' })
+    const findFirstCall = db.user.findFirst.mock.calls.find(
+      (c) => c[0]?.where?.isBot === true && c[0]?.where?.displayName?.equals === 'Fresh'
+    )
+    expect(findFirstCall).toBeDefined()
+    expect(findFirstCall[0].where.OR).toEqual(
+      expect.arrayContaining([
+        { botOwnerId: null },
+        { botOwnerId: 'owner_1' },
+      ])
+    )
   })
 
   it('legacy path (algorithm=minimax) still creates bot with synthetic botModelId — Quick Bot wizard regression guard', async () => {
@@ -417,5 +447,58 @@ describe('listBots — includeSkills', () => {
     // Skipping ELO fetch when there are no skills is a small perf win and
     // avoids an empty `OR: []` clause that some Prisma versions reject.
     expect(db.gameElo.findMany).not.toHaveBeenCalled()
+  })
+})
+
+// ─── checkBotName — Phase 3.8.A.3 inline availability check ──────────────────
+//
+// Powers the debounced GET /api/v1/bots/check-name endpoint that the Profile
+// create-bot form uses to validate inline before submit. Must mirror the same
+// rules as createBot (reserved / profanity / per-owner+built-in collision)
+// without writing anything. Cross-owner collisions stay available because
+// the partial-unique indexes allow them.
+describe('checkBotName', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.systemConfig.findUnique.mockResolvedValue(null)
+    db.user.findFirst.mockResolvedValue(null)
+  })
+
+  it('returns { available: false, reason: "empty" } for blank input', async () => {
+    expect(await checkBotName({ name: '',    ownerId: 'o1' })).toMatchObject({ available: false, reason: 'empty' })
+    expect(await checkBotName({ name: '   ', ownerId: 'o1' })).toMatchObject({ available: false, reason: 'empty' })
+  })
+
+  it('flags reserved built-in names', async () => {
+    const r = await checkBotName({ name: 'Rusty', ownerId: 'o1' })
+    expect(r).toMatchObject({ available: false, reason: 'reserved' })
+  })
+
+  it('flags profanity from system config (case-insensitive)', async () => {
+    db.systemConfig.findUnique.mockResolvedValue({ value: JSON.stringify(['badword']) })
+    const r = await checkBotName({ name: 'My-BadWord-Bot', ownerId: 'o1' })
+    expect(r).toMatchObject({ available: false, reason: 'profanity' })
+  })
+
+  it('flags collision with an existing same-owner or built-in bot', async () => {
+    db.user.findFirst.mockResolvedValueOnce({ id: 'b_existing' })
+    const r = await checkBotName({ name: 'Taken', ownerId: 'o1' })
+    expect(r).toMatchObject({ available: false, reason: 'taken' })
+    // The collision query is owner-scoped (built-ins OR same owner) — never global.
+    const args = db.user.findFirst.mock.calls.at(-1)[0]
+    expect(args.where.OR).toEqual(
+      expect.arrayContaining([{ botOwnerId: null }, { botOwnerId: 'o1' }]),
+    )
+  })
+
+  it('returns { available: true } for a fresh, non-reserved name', async () => {
+    const r = await checkBotName({ name: 'TotallyFresh', ownerId: 'o1' })
+    expect(r).toEqual({ available: true })
+  })
+
+  it('omits the same-owner clause when called with no ownerId (e.g. preview-only)', async () => {
+    await checkBotName({ name: 'Anything' })
+    const args = db.user.findFirst.mock.calls.at(-1)[0]
+    expect(args.where.OR).toEqual([{ botOwnerId: null }])
   })
 })

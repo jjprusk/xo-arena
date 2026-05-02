@@ -147,6 +147,7 @@ export const api = {
       return request('GET', `/bots${qs ? `?${qs}` : ''}`, null, params.token)
     },
     mine:       (token)             => request('GET',    '/bots/mine', null, token),
+    checkName:  (name, token)       => request('GET',    `/bots/check-name?name=${encodeURIComponent(name)}`, null, token),
     create:     (body, token)       => request('POST',   '/bots', body, token),
     quickCreate:(body, token)       => request('POST',   '/bots/quick', body, token),
     update:     (id, body, token)   => request('PATCH',  `/bots/${id}`, body, token),

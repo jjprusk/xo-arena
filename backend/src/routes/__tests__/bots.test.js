@@ -37,8 +37,9 @@ const mockDb = {
 vi.mock('../../lib/db.js', () => ({ default: mockDb }))
 
 vi.mock('../../services/userService.js', () => ({
-  listBots: vi.fn(),
-  createBot: vi.fn(),
+  listBots:     vi.fn(),
+  createBot:    vi.fn(),
+  checkBotName: vi.fn(),
 }))
 
 vi.mock('../../services/skillService.js', () => ({
@@ -56,7 +57,7 @@ vi.mock('../../utils/cache.js', () => ({
 // hasRole from ../../utils/roles.js is NOT mocked — runs real
 
 const botsRouter = (await import('../bots.js')).default
-const { listBots, createBot } = await import('../../services/userService.js')
+const { listBots, createBot, checkBotName } = await import('../../services/userService.js')
 const { getSystemConfig } = await import('../../services/skillService.js')
 const { getTierLimit } = await import('../../services/creditService.js')
 const cache = (await import('../../utils/cache.js')).default
@@ -333,6 +334,40 @@ describe('GET /api/v1/bots/:id', () => {
     const res = await request(app).get('/api/v1/bots/missing')
 
     expect(res.status).toBe(404)
+  })
+})
+
+// ─── GET /check-name (Phase 3.8.A.3) ─────────────────────────────────────────
+
+describe('GET /api/v1/bots/check-name', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards name + caller userId to checkBotName and returns its result', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    checkBotName.mockResolvedValue({ available: true })
+
+    const res = await request(app).get('/api/v1/bots/check-name?name=Sparky')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ available: true })
+    expect(checkBotName).toHaveBeenCalledWith({ name: 'Sparky', ownerId: 'usr_1' })
+  })
+
+  it('passes through unavailable results unchanged so the UI can show the reason', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    checkBotName.mockResolvedValue({ available: false, reason: 'reserved', message: '"Rusty" is a reserved name.' })
+
+    const res = await request(app).get('/api/v1/bots/check-name?name=Rusty')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ available: false, reason: 'reserved' })
+  })
+
+  it('401 when the caller has no DB row yet', async () => {
+    mockDb.user.findUnique.mockResolvedValue(null)
+    const res = await request(app).get('/api/v1/bots/check-name?name=Whatever')
+    expect(res.status).toBe(401)
+    expect(checkBotName).not.toHaveBeenCalled()
   })
 })
 
