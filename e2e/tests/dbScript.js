@@ -125,6 +125,55 @@ export function netCleanupByEmailPrefix(emailPrefix, { tag = 'sweep' } = {}) {
       await db.tournament.deleteMany({ where: { id: { in: tournIds } } }).catch(()=>{})
     }
 
+    // 3.5 TournamentTemplate cleanup. The recurring-tournament specs create
+    // templates via admin endpoints; those templates have createdById set to
+    // whichever admin user the spec authenticated as — usually NOT one of
+    // the per-spec test users matched above. Without a broader sweep,
+    // templates accumulate in the local DB across runs and the recurring
+    // scheduler keeps spawning fresh occurrences (DAILY) every 60s, which
+    // (a) hammers the DB with findFirst dedup queries and (b) starves the
+    // bot game runner so the cup tests time out.
+    //
+    // Sweep both axes:
+    //   - createdById in userIds (templates this run owned)
+    //   - name LIKE 'E2E%'    (test-named, regardless of owner)
+    //   - isTest = true       (admin-flagged test templates)
+    // ...then cascade their spawned occurrences + child rows + the templates
+    // themselves.
+    const templates = await db.tournamentTemplate.findMany({
+      where: {
+        OR: [
+          ...(userIds.length ? [{ createdById: { in: userIds } }] : []),
+          { name: { startsWith: 'E2E' } },
+          { isTest: true },
+        ],
+      },
+      select: { id: true },
+    })
+    const templateIds = templates.map(t => t.id)
+    if (templateIds.length) {
+      // Spawned occurrences (one per recurrence tick) — clean them out
+      // before the templates they back-ref to.
+      const occurrences = await db.tournament.findMany({
+        where: { templateId: { in: templateIds } },
+        select: { id: true },
+      })
+      const occIds = occurrences.map(o => o.id)
+      if (occIds.length) {
+        await db.game.deleteMany({ where: { tournamentId: { in: occIds } } }).catch(()=>{})
+        await db.tournamentMatch.deleteMany({ where: { tournamentId: { in: occIds } } }).catch(()=>{})
+        await db.tournamentRound.deleteMany({ where: { tournamentId: { in: occIds } } }).catch(()=>{})
+        await db.tournamentParticipant.deleteMany({ where: { tournamentId: { in: occIds } } }).catch(()=>{})
+        await db.tournamentSeedBot.deleteMany({ where: { tournamentId: { in: occIds } } }).catch(()=>{})
+        await db.table.deleteMany({ where: { tournamentId: { in: occIds } } }).catch(()=>{})
+        await db.tournament.deleteMany({ where: { id: { in: occIds } } }).catch(()=>{})
+      }
+      // Template-side child rows.
+      await db.tournamentTemplateSeedBot.deleteMany({ where: { templateId: { in: templateIds } } }).catch(()=>{})
+      await db.recurringTournamentRegistration.deleteMany({ where: { templateId: { in: templateIds } } }).catch(()=>{})
+      await db.tournamentTemplate.deleteMany({ where: { id: { in: templateIds } } }).catch(()=>{})
+    }
+
     // 4. Cup-bot collateral: cup clones leave bot-cup-* User rows around even
     //    when the calling user is gone. Sweep them by username pattern.
     const cupBots = await db.user.findMany({
@@ -198,7 +247,8 @@ export function netCleanupByEmailPrefix(emailPrefix, { tag = 'sweep' } = {}) {
     console.log('[netCleanup ${safe}] users=' + userIds.length +
       ' bots=' + botIds.length +
       ' cupBots=' + cupBotIds.length +
-      ' tournaments=' + tournIds.length)
+      ' tournaments=' + tournIds.length +
+      ' templates=' + templateIds.length)
   `
   const result = runDbScript(body, { tag })
   if (!result.ok) {

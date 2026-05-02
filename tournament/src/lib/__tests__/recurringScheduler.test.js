@@ -98,6 +98,22 @@ describe('checkRecurringOccurrences (Phase 3.7a)', () => {
     expect(call.where.paused).toBe(false)
   })
 
+  it('skips isTest=true templates in the background sweep (Guard A — default)', async () => {
+    mockDb.tournamentTemplate.findMany.mockResolvedValue([])
+    await checkRecurringOccurrences()
+    const where = mockDb.tournamentTemplate.findMany.mock.calls[0][0].where
+    // Default call (no opts) → background sweep → must filter isTest:false.
+    expect(where.isTest).toBe(false)
+  })
+
+  it('processes isTest=true templates when called with includeTest:true (admin endpoint path)', async () => {
+    mockDb.tournamentTemplate.findMany.mockResolvedValue([])
+    await checkRecurringOccurrences({ includeTest: true })
+    const where = mockDb.tournamentTemplate.findMany.mock.calls[0][0].where
+    // No isTest filter → admin trigger processes all templates.
+    expect(where.isTest).toBeUndefined()
+  })
+
   it('spawns a Tournament with templateId set when no existing occurrence is found', async () => {
     const template = makeTemplate()
     mockDb.tournamentTemplate.findMany.mockResolvedValue([template])
