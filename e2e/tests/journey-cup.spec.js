@@ -106,9 +106,10 @@ async function pollForStep(request, token, stepIndex, deadlineMs = 30_000) {
 }
 
 test.describe('Curriculum step 6 — UI dropoff regression', () => {
-  // 240s covers: the sequential-cups test (~50s first cup + 60s soak + ~50s
-  // second cup + buffer) and gives the mid-cup refresh test slack on slow CI.
-  test.setTimeout(240_000)
+  // 480s covers the worst case under heavy local docker load: sequential-
+  // cups test runs 1st cup poll (up to 240s) + soak (60s) + 2nd cup soak
+  // window. Tests run sequentially per file (workers=1), so this is per-test.
+  test.setTimeout(480_000)
 
   test.afterAll(() => {
     netCleanupByEmailPrefix(EMAIL_PREFIX, { tag: 'cup-after' })
@@ -316,6 +317,14 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     await expect(page.getByText(/Couldn't start the Curriculum Cup/i)).toBeHidden()
     await expect(page.getByText(/^Following:/)).toBeVisible({ timeout: 15_000 })
 
+    // Bug #9 — the spectate header must show a YOU badge so a first-time
+    // cup user can tell which of the four bots is theirs. Pre-fix, "Following:
+    // whip" gave no clue that whip was their own bot. The test guards both
+    // surfaces of the fix: server (`participant.user.botOwnerId` exposed in
+    // GET /tournaments/:id) and client (`MatchSpectateModal` derives + renders
+    // the badge from `myBotIds`).
+    await expect(page.getByTestId('follow-you-badge')).toBeVisible({ timeout: 10_000 })
+
     // Drawer-hide-during-spectate (commit 47e9077). When TournamentDetailPage
     // resolves the follow target, useGuideStore.close() fires. The Guide
     // dialog should not be visible while the user spectates the cup.
@@ -330,10 +339,13 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     expect(afterStep6Steps, 'step 7 must not have fired before cup completes').not.toContain(7)
 
     // Now wait for the cup to actually finish and step 7 to be credited.
-    // Two minutes of slack — the cup itself wraps in <60s but a slow CI
-    // runner with a starved Node loop has been seen to take ~90s.
-    const afterStep7Steps = await pollForStep(context.request, token, 7, 120_000)
-    expect(afterStep7Steps, 'step 7 not credited within 120s of cup start').toEqual(expect.arrayContaining([7]))
+    // 240s of slack — the cup itself wraps in <60s but a CPU-starved
+    // docker host (the tournament service has a recurring-scheduler loop
+    // that hammers the DB and can starve the bot game runner) has been
+    // seen to take 150-220s under load. The runtime is correct; the
+    // slowness is a separate perf issue tracked outside this test.
+    const afterStep7Steps = await pollForStep(context.request, token, 7, 240_000)
+    expect(afterStep7Steps, `step 7 not credited within 240s of cup start (saw [${afterStep7Steps.join(',')}])`).toEqual(expect.arrayContaining([7]))
 
     // The full transition: step 7 done, +50 TC granted, phase flipped.
     const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
@@ -357,9 +369,38 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     await expect(rewardPopup).toContainText(/\+50 Tournament Credits/i)
     await expect(rewardPopup).toContainText(/Specialize/i)
 
+    // Bug #10a — auto-close the stale spectate modal on tournament COMPLETED.
+    // Pre-fix, a "Waiting for X's next match" modal could persist after the
+    // cup wrapped, layered on top of the celebration. The page-level
+    // useEffect now clears watchMatch + drops the ?follow= param the moment
+    // tournament.status flips to COMPLETED. The status flip lands on the
+    // first refetch after step 7 — well before the coaching card animates
+    // in (delayed 8.2s for sequencing). 15s of slack covers slow CI.
+    await expect(page.getByText(/^Following:/)).toBeHidden({ timeout: 15_000 })
+    await page.waitForFunction(() => !window.location.search.includes('follow='), null, { timeout: 15_000 })
+
     // Coaching card renders (commit b163031 + tournamentBridge:coaching_card).
+    // Bug #10b — sequenced behind RewardPopup. CoachingCard delays its render
+    // by ~8.2s so the popup auto-dismisses (8s) before the card appears,
+    // preventing the visual stack the user reported. Total budget here:
+    // popup auto-dismiss (8s) + sequencing delay (200ms) + arrival window.
     const coachingCard = page.getByTestId('coaching-card')
     await expect(coachingCard).toBeVisible({ timeout: 30_000 })
+
+    // The reward popup must already have dismissed by the time the coaching
+    // card is visible — that's the whole point of the sequencing fix. If
+    // both are visible simultaneously this assertion fires and we know the
+    // delay regressed.
+    await expect(rewardPopup).toBeHidden()
+
+    // Bug #9 (continued) — with the spectate modal auto-closed, the bracket
+    // and participants list are now uncovered. Both should render the YOU
+    // badge on the user's bot. We don't pin a specific count (depends on
+    // whether the user's bot won R1 → appears in R2 too) — but at least
+    // one badge must be present, proving the badge wired through to
+    // bracket + participants list. `exact: true` keeps "You earned +50 TC"
+    // copy in the celebration card from false-matching.
+    expect(await page.getByText('You', { exact: true }).count()).toBeGreaterThan(0)
 
     // Variant pin: read finalPosition from the subtitle ("finished #N") and
     // assert the card title matches what coachingCardRules.pickCoachingCard
@@ -407,7 +448,10 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
 
     // /profile?action=train-bot bounces to /bots/<id>?action=train-bot when
     // the user has exactly one bot (this user does — the QuickBot we made).
-    await page.waitForURL(/\/bots\/[^/?]+\?action=train-bot/, { timeout: 10_000 })
+    // 30s of slack: the bounce sequence is navigate → ProfilePage mount →
+    // /bots/mine fetch → useEffect runs → second navigate. Under load on a
+    // busy CI runner the chained navigates have been seen to land at ~12s.
+    await page.waitForURL(/\/bots\/[^/?]+\?action=train-bot/, { timeout: 30_000 })
 
     // Destination renders real content — BotProfilePage shows the bot's
     // displayName and a "Train your bot" section. Pre-b163031 the URL
@@ -526,9 +570,10 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     // Step 7 must land regardless of client state — this is the core
     // server-autonomy guarantee. If the cup completed while we were on
     // about:blank, this returns immediately. If it's still in flight, the
-    // poll waits for the server-side bridge to fire.
-    const afterStep7 = await pollForStep(context.request, token, 7, 120_000)
-    expect(afterStep7, 'step 7 must be credited even when client is offline').toEqual(expect.arrayContaining([7]))
+    // poll waits for the server-side bridge to fire. 180s budget is the
+    // same we use elsewhere to absorb a CPU-starved docker host.
+    const afterStep7 = await pollForStep(context.request, token, 7, 240_000)
+    expect(afterStep7, `step 7 must be credited even when client is offline (saw [${afterStep7.join(',')}])`).toEqual(expect.arrayContaining([7]))
 
     // Phase + credits transitioned correctly.
     const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
@@ -590,9 +635,9 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const firstCupId = page.url().match(/\/tournaments\/([^/?]+)\?/)?.[1]
     expect(firstCupId).toBeTruthy()
 
-    await pollForStep(context.request, token, 7, 120_000)
+    await pollForStep(context.request, token, 7, 240_000)
     const afterFirstCup = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
-    expect(afterFirstCup.completedSteps).toEqual(expect.arrayContaining([7]))
+    expect(afterFirstCup.completedSteps, `step 7 not credited within 240s of first cup start (saw [${afterFirstCup.completedSteps.join(',')}])`).toEqual(expect.arrayContaining([7]))
     expect(afterFirstCup.phase).toBe('specialize')
     const tcAfterFirstCup = afterFirstCup.creditsTc
 
