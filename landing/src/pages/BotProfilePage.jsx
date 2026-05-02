@@ -172,7 +172,11 @@ export default function BotProfilePage() {
     : null
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
+    // Mobile: 1rem horizontal padding so section labels ("TRAIN YOUR BOT",
+    // "SPAR YOUR BOT") don't run into the viewport edge — uppercase +
+    // tracking-widest had them visually cut off on narrow phones. Desktop:
+    // padding collapses (px-0) since max-w-lg already centres with margin.
+    <div className="max-w-lg mx-auto space-y-6 px-4 sm:px-0">
       {/* Journey CTA spotlights (Curriculum steps 4 + 5). Mounted unconditionally;
           Spotlight no-ops when active=false. */}
       <Spotlight
