@@ -334,19 +334,28 @@ export async function handleEvent(_io, channel, data) {
         }
       }
 
-      // Also include participants not in finalStandings (eliminated early)
+      // Also include participants not in finalStandings (eliminated early).
+      // Pull finalPosition from the DB — finalStandings only contains the
+      // top two slots, but eliminated bots have a real finalPosition set on
+      // their TournamentParticipant row by the round-advance code. Without
+      // this read, a user whose cup bot lost in round 1 would get
+      // position:null and journey step 7 would never fire (gated below on
+      // position != null).
       try {
         const allParticipants = await db.tournamentParticipant.findMany({
-          where: { tournamentId },
-          select: { userId: true },
+          where:  { tournamentId },
+          select: { userId: true, finalPosition: true },
         })
         const standingUserIds = new Set(finalStandings.map(s => s.userId))
-        for (const { userId } of allParticipants) {
+        for (const { userId, finalPosition } of allParticipants) {
           if (standingUserIds.has(userId)) continue
           const botUser = await db.user.findUnique({ where: { id: userId }, select: { isBot: true, botOwnerId: true } })
           const notifyUserId = botUser?.isBot && botUser.botOwnerId ? botUser.botOwnerId : userId
-          if (!ownerPositionMap.has(notifyUserId)) {
-            ownerPositionMap.set(notifyUserId, null)
+          const current = ownerPositionMap.get(notifyUserId)
+          // Keep the best (lowest) finalPosition across the owner's bots.
+          if (current === undefined ||
+              (finalPosition != null && (current == null || finalPosition < current))) {
+            ownerPositionMap.set(notifyUserId, finalPosition ?? null)
           }
         }
       } catch (err) {

@@ -204,6 +204,30 @@ describe('cloneCurriculumCup — happy path', () => {
     // First two from rusty pool, then first from copper pool (in pool-declared order)
     expect(oppNames).toEqual(['Tarnished Bolt', 'Rusted Hinge', 'Copper Coil'])
   })
+
+  it('uses default 3000ms pace for real (non-test) users', async () => {
+    mockDb.user.findUnique.mockImplementation(({ where }) => {
+      if (where.id === CALLER_ID)        return Promise.resolve({ isTestUser: false })
+      if (where.id === 'bot-mine')       return Promise.resolve(CALLER_BOT)
+      if (where.username === 'bot-rusty')  return Promise.resolve(RUSTY)
+      if (where.username === 'bot-copper') return Promise.resolve(COPPER)
+      return Promise.resolve(null)
+    })
+    await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine' })
+    expect(mockDb.tournament.create.mock.calls[0][0].data.paceMs).toBe(3000)
+  })
+
+  it('drops pace to 50ms for isTestUser=true callers so e2e cups complete fast', async () => {
+    mockDb.user.findUnique.mockImplementation(({ where }) => {
+      if (where.id === CALLER_ID)        return Promise.resolve({ isTestUser: true })
+      if (where.id === 'bot-mine')       return Promise.resolve(CALLER_BOT)
+      if (where.username === 'bot-rusty')  return Promise.resolve(RUSTY)
+      if (where.username === 'bot-copper') return Promise.resolve(COPPER)
+      return Promise.resolve(null)
+    })
+    await cloneCurriculumCup({ callerId: CALLER_ID, myBotId: 'bot-mine' })
+    expect(mockDb.tournament.create.mock.calls[0][0].data.paceMs).toBe(50)
+  })
 })
 
 // ─── cloneCurriculumCup error paths ─────────────────────────────────────────

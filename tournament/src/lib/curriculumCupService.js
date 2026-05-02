@@ -176,6 +176,18 @@ export async function cloneCurriculumCup({ callerId, myBotId, rng = Math.random 
   if (sel.error) return { status: sel.error.status, body: { error: sel.error.message } }
   const callerBot = sel.bot
 
+  // Test-user pace override. Real users keep the 3s/move cadence so the
+  // cup is human-watchable; isTestUser=true callers (e2e specs) get a
+  // ~50ms cadence so a 3-match cup completes in seconds instead of
+  // minutes. Lets the playwright suite assert step-7 credit on a slow
+  // docker host without bumping wall-clock timeouts.
+  const TEST_USER_CUP_PACE_MS = 50
+  const caller = await db.user.findUnique({
+    where:  { id: callerId },
+    select: { isTestUser: true },
+  })
+  const paceMs = caller?.isTestUser ? TEST_USER_CUP_PACE_MS : CURRICULUM_CUP_CONFIG.paceMs
+
   // Draw opponent display names per the cup config.
   const slotsByTier = CURRICULUM_CUP_CONFIG.opponentSlots.reduce((acc, s) => {
     acc[s.tier] = (acc[s.tier] ?? 0) + 1
@@ -210,7 +222,7 @@ export async function cloneCurriculumCup({ callerId, myBotId, rng = Math.random 
       minParticipants:     CURRICULUM_CUP_CONFIG.minParticipants,
       maxParticipants:     CURRICULUM_CUP_CONFIG.maxParticipants,
       bestOfN:             CURRICULUM_CUP_CONFIG.bestOfN,
-      paceMs:              CURRICULUM_CUP_CONFIG.paceMs,
+      paceMs,
       status:              'IN_PROGRESS',
       isCup:               true,
       seedingMode:         'deterministic',
