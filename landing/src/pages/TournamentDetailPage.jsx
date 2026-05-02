@@ -2109,16 +2109,29 @@ export default function TournamentDetailPage() {
   // dismissing the modal entirely on COMPLETED is the cleanest fix — the
   // information isn't lost, it's just no longer occluded by an obsolete
   // "Waiting…" hourglass during the post-cup celebration.
+  //
+  // Guarded by a ref so the close-on-COMPLETED action runs exactly once per
+  // tournament. Without this, `searchParams` was a dep and `setSearchParams`
+  // returned a fresh reference each call → the effect re-ran indefinitely
+  // (Maximum update depth exceeded), repeatedly re-navigating the URL and
+  // breaking subsequent navigations like the post-cup CTA's transition to
+  // /profile?action=train-bot. Functional form of setSearchParams reads the
+  // latest params without needing them as a dep.
+  const autoClosedRef = useRef(false)
+  useEffect(() => { autoClosedRef.current = false }, [id])
   useEffect(() => {
+    if (autoClosedRef.current) return
     if (tournament?.status !== 'COMPLETED') return
     if (!watchMatch) return
+    autoClosedRef.current = true
     setWatchMatch(null)
-    if (searchParams.has('follow')) {
-      const next = new URLSearchParams(searchParams)
+    setSearchParams(prev => {
+      if (!prev.has('follow')) return prev
+      const next = new URLSearchParams(prev)
       next.delete('follow')
-      setSearchParams(next, { replace: true })
-    }
-  }, [tournament?.status, watchMatch, searchParams, setSearchParams])
+      return next
+    }, { replace: true })
+  }, [tournament?.status, watchMatch, setSearchParams, id])
 
   const load = useCallback(async () => {
     // If a session user is known but the token hasn't resolved yet, skip the pre-fetch.
@@ -2411,7 +2424,7 @@ export default function TournamentDetailPage() {
           onClose={() => setReplayMatch(null)}
         />
       )}
-      {watchMatch && (
+      {watchMatch && tournament?.status !== 'COMPLETED' && tournament?.status !== 'CANCELLED' && (
         <MatchSpectateModal
           matchId={watchMatch.id}
           matchLabel={watchMatch.label}
