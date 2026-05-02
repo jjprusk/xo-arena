@@ -144,27 +144,42 @@ test.describe('§11c — Tournament create form game dropdown', () => {
   })
 })
 
-// ── 11d: Bot create form Game dropdown + DB round-trip ────────────────────────
+// ── 11d: Bot create form (Phase 3.8 reshape) + DB round-trip ────────────────
+//
+// Phase 3.8 — Multi-Skill Bots: POST /bots is now skill-less. The Profile
+// create-bot form drops Game + Brain Architecture; skills are added per-bot
+// via POST /bots/:id/skills. This block asserts the new shape — both the UI
+// (no Game/Brain Architecture fields) and the API (two-step round-trip).
 
-test.describe('§11d — Bot creation game field', () => {
+test.describe('§11d — Bot creation (Phase 3.8 skill-less reshape)', () => {
   test.setTimeout(60_000)
 
-  test('dropdown defaults to xo', async ({ page }) => {
+  test('Profile create-bot form is identity-only — no Game / Brain Architecture pickers', async ({ page }) => {
     test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
 
     await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
     await page.goto(`${LANDING_URL}/profile?action=create-bot`)
 
-    const gameSelect = page.locator('select').filter({ has: page.locator('option[value="xo"]') }).first()
-    await expect(gameSelect).toBeVisible({ timeout: 10_000 })
-    await expect(gameSelect).toHaveValue('xo')
+    // The reshaped form keeps Name + Competitive only. The hint copy below
+    // promises the user adds a skill later.
+    await expect(page.getByText(/Your bot starts with no skills/i)).toBeVisible({ timeout: 10_000 })
+
+    // Hard-fail guards: the legacy Game and Brain Architecture labels must
+    // not be present anywhere in the create panel.
+    await expect(page.getByText(/Brain Architecture/i)).toHaveCount(0)
+    // 'Game' label was specifically the create-bot dropdown — guard against
+    // its return by asserting no select with an xo option exists in the
+    // create-bot panel area. (Guide rendering can still produce other
+    // selects elsewhere on the page; this scope is intentional.)
+    const createPanel = page.locator('form').filter({ has: page.getByText(/Your bot starts with no skills/i) }).first()
+    await expect(createPanel.locator('select')).toHaveCount(0)
   })
 
-  test('creating a bot via API round-trips through admin /bots with a BotSkill row', async ({ request }) => {
+  test('two-step round-trip: POST /bots creates skill-less identity, POST /bots/:id/skills adds the XO skill', async ({ request }) => {
     test.skip(!haveUser,  'Need TEST_USER_EMAIL')
     test.skip(!haveAdmin, 'Need TEST_ADMIN_EMAIL for the admin-list assertion')
 
-    // 1) User creates a bot via the public bots API.
+    // 1) User creates a skill-less bot via the new API shape.
     const userCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
     try {
       const userPageLike = { context: () => ({ request: userCtx }) }
@@ -174,14 +189,24 @@ test.describe('§11d — Bot creation game field', () => {
       const name = `qa-11d-${Date.now()}`
       const createRes = await userCtx.post(`${BACKEND_URL}/api/v1/bots`, {
         headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
-        data:    { name, modelType: 'Q_LEARNING', competitive: true, gameId: 'xo' },
+        data:    { name, competitive: true },
       })
       expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
       const { bot } = await createRes.json()
       expect(bot?.id).toBeTruthy()
+      // Skill-less invariant — the bot must NOT carry a model pointer at this point.
+      expect(bot.botModelId).toBeNull()
+      expect(bot.botModelType).toBeNull()
 
-      // 2) Admin reads the bots list and confirms our freshly-minted bot has a
-      //    skill entry with gameId='xo'.
+      // 2) User adds an XO skill via the dedicated endpoint (the new "Add a
+      //    skill" flow).
+      const skillRes = await userCtx.post(`${BACKEND_URL}/api/v1/bots/${bot.id}/skills`, {
+        headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+        data:    { gameId: 'xo', algorithm: 'qlearning' },
+      })
+      expect(skillRes.ok(), `skill add failed: ${skillRes.status()} ${await skillRes.text().catch(() => '')}`).toBe(true)
+
+      // 3) Admin reads the bots list and confirms the bot now has the XO skill.
       const adminCtx = await playwrightRequest.newContext({ baseURL: BACKEND_URL })
       try {
         const adminPageLike = { context: () => ({ request: adminCtx }) }
@@ -197,7 +222,7 @@ test.describe('§11d — Bot creation game field', () => {
         expect(mine, `admin list did not return bot ${bot.id}`).toBeDefined()
         expect(Array.isArray(mine.skills)).toBe(true)
         const xoSkill = mine.skills.find(s => s.gameId === 'xo')
-        expect(xoSkill, `bot has no xo skill`).toBeDefined()
+        expect(xoSkill, `bot has no xo skill after add`).toBeDefined()
       } finally {
         await adminCtx.dispose()
       }

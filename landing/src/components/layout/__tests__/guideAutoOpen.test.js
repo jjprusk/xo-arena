@@ -72,4 +72,47 @@ describe('shouldOpenGuideOnJourneyStep', () => {
     expect(shouldOpenGuideOnJourneyStep()).toBe(true)
     expect(shouldOpenGuideOnJourneyStep({})).toBe(true)
   })
+
+  // ── Per-step × per-route matrix (task #37) ────────────────────────────────
+  // Catches regressions where a future change to the suppression rules
+  // breaks any one cell. Each step has a defined open/suppress contract on
+  // the four interesting route classes (content vs non-content). Steps 5 +
+  // 7 are the documented exceptions: they always open even on content
+  // pages because they're end-of-flow signals.
+  describe('per-step × per-route matrix', () => {
+    const NON_CONTENT_PATHS = [
+      { pathname: '/home',                         search: '' },
+      { pathname: '/profile',                      search: '' },
+      { pathname: '/gym',                          search: '' },
+      { pathname: '/rankings',                     search: '' },
+      { pathname: '/tournaments',                  search: '' },
+      { pathname: '/tournaments/abc',              search: '' },        // listing-detail, no follow
+    ]
+    const CONTENT_PATHS = [
+      { pathname: '/play',                         search: '' },
+      { pathname: '/tables/tbl_abc',               search: '' },
+      { pathname: '/tournaments/cup-1',            search: '?follow=u1' },
+    ]
+
+    for (const step of [1, 2, 3, 4, 6]) {
+      it(`step ${step}: opens on every non-content route`, () => {
+        for (const r of NON_CONTENT_PATHS) {
+          expect(shouldOpenGuideOnJourneyStep({ ...r, step })).toBe(true)
+        }
+      })
+      it(`step ${step}: suppresses on every content route (no exception applies)`, () => {
+        for (const r of CONTENT_PATHS) {
+          expect(shouldOpenGuideOnJourneyStep({ ...r, step })).toBe(false)
+        }
+      })
+    }
+
+    for (const step of [5, 7]) {
+      it(`step ${step} (end-of-flow): opens on EVERY route, content or not`, () => {
+        for (const r of [...NON_CONTENT_PATHS, ...CONTENT_PATHS]) {
+          expect(shouldOpenGuideOnJourneyStep({ ...r, step })).toBe(true)
+        }
+      })
+    }
+  })
 })

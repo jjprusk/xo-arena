@@ -345,7 +345,7 @@ describe('POST /api/v1/bots', () => {
 
     const res = await request(app)
       .post('/api/v1/bots')
-      .send({ name: 'AlphaBot', modelType: 'ml' })
+      .send({ name: 'AlphaBot', avatarUrl: 'https://x/y.png', competitive: true })
 
     expect(res.status).toBe(201)
     expect(res.body.bot).toEqual(newBot)
@@ -353,6 +353,62 @@ describe('POST /api/v1/bots', () => {
     // ownerBaId must be the BA user ID so the gym's ownership check passes
     expect(createBot).toHaveBeenCalledWith('usr_1', expect.objectContaining({ ownerBaId: 'ba_user_1' }))
     expect(getTierLimit).toHaveBeenCalledWith('usr_1', 'bots')
+  })
+
+  // Phase 3.8 reshape: the route forwards ONLY `{ name, avatarUrl, competitive }`
+  // to createBot. Legacy keys (algorithm, modelType, gameId, difficulty) sent
+  // by an old client must be silently dropped — never propagate to createBot,
+  // because that would silently fall back into the legacy single-skill path
+  // and we'd create skill-bound bots from a v1.28 client we thought we'd
+  // retired. Asserts the bot is created skill-less.
+  it('Phase 3.8: route ignores legacy body keys and forwards skill-less payload', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    mockDb.user.count.mockResolvedValue(0)
+    getTierLimit.mockResolvedValue(5)
+    createBot.mockResolvedValue({ id: 'bot_new', displayName: 'AlphaBot' })
+
+    await request(app)
+      .post('/api/v1/bots')
+      .send({
+        name: 'AlphaBot',
+        avatarUrl: null,
+        competitive: false,
+        // Legacy keys an old client might still send:
+        algorithm: 'ml',
+        modelType: 'DQN',
+        gameId: 'xo',
+        difficulty: 'novice',
+      })
+
+    expect(createBot).toHaveBeenCalledTimes(1)
+    const [, payload] = createBot.mock.calls[0]
+    expect(payload).toEqual(expect.objectContaining({
+      name: 'AlphaBot',
+      avatarUrl: null,
+      competitive: false,
+      ownerBaId: 'ba_user_1',
+    }))
+    // Hard guarantee — these must not be present:
+    expect(payload).not.toHaveProperty('algorithm')
+    expect(payload).not.toHaveProperty('modelType')
+    expect(payload).not.toHaveProperty('gameId')
+    expect(payload).not.toHaveProperty('difficulty')
+  })
+
+  // Phase 3.8: defaulting — a body with just `{ name }` is enough; the bot is
+  // created skill-less with `competitive=undefined` (createBot coerces to
+  // false). Future clients that don't surface a competitive toggle (e.g. the
+  // Quick Bot wizard) won't accidentally crash.
+  it('Phase 3.8: minimal `{ name }` body still creates a bot', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    mockDb.user.count.mockResolvedValue(0)
+    getTierLimit.mockResolvedValue(5)
+    createBot.mockResolvedValue({ id: 'bot_new', displayName: 'JustName' })
+
+    const res = await request(app).post('/api/v1/bots').send({ name: 'JustName' })
+
+    expect(res.status).toBe(201)
+    expect(createBot).toHaveBeenCalledTimes(1)
   })
 
   it('user not found → 404', async () => {

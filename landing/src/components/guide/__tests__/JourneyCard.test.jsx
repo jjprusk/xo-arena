@@ -13,7 +13,7 @@
 
 import React from 'react'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { useGuideStore } from '../../../store/guideStore.js'
 import JourneyCard, { deriveCurrentPhase } from '../JourneyCard.jsx'
@@ -139,5 +139,133 @@ describe('JourneyCard — dismissed', () => {
     setProgress([1, 2], '2026-04-25T10:00:00Z')
     const { container } = renderCard()
     expect(container).toBeEmptyDOMElement()
+  })
+})
+
+/**
+ * State-machine transitions (task #27).
+ *
+ * The single-state tests above prove each phase renders correctly. These
+ * tests prove the card *transitions* correctly when guideStore state advances
+ * — catching regressions where phase derivation is right but the card fails
+ * to re-render (e.g., a memoised slice that doesn't subscribe to
+ * `completedSteps`, or a useEffect that misses a dep). One test per step
+ * boundary: 1→2 (intra-Hook), 2→3 (Hook→Curriculum, phase flip), 3→4, 4→5,
+ * 5→6 (intra-Curriculum), 6→7 (Curriculum→Specialize, phase flip).
+ */
+describe('JourneyCard — phase transitions (state machine)', () => {
+  function advance(completedSteps) {
+    act(() => {
+      useGuideStore.setState({
+        journeyProgress: { completedSteps, dismissedAt: null },
+      })
+    })
+  }
+
+  it('completing step 1 advances Hook hero from step 1 → step 2 CTA', () => {
+    setProgress([])
+    const { container } = renderCard()
+    expect(container.querySelector('[data-phase="hook"]')).toBeInTheDocument()
+    expect(screen.getByText('Play a quick game')).toBeInTheDocument()
+
+    advance([1])
+
+    // Still Hook (step 2 not yet complete) — but the hero is now step 2.
+    expect(container.querySelector('[data-phase="hook"]')).toBeInTheDocument()
+    expect(screen.getByText('Watch two bots battle')).toBeInTheDocument()
+    expect(screen.queryByText('Play a quick game')).not.toBeInTheDocument()
+  })
+
+  it('completing step 2 flips Hook → Curriculum and reveals the 5-row checklist', () => {
+    setProgress([1])
+    const { container } = renderCard()
+    expect(container.querySelector('[data-phase="hook"]')).toBeInTheDocument()
+    expect(screen.queryByTestId('curriculum-checklist')).not.toBeInTheDocument()
+
+    advance([1, 2])
+
+    expect(container.querySelector('[data-phase="curriculum"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-phase="hook"]')).not.toBeInTheDocument()
+    const list = screen.getByTestId('curriculum-checklist')
+    expect(list).toBeInTheDocument()
+    // Next CTA points at step 3 (build a bot).
+    expect(screen.getByRole('link', { name: /Build a bot/i })).toBeInTheDocument()
+    // Hook reward (+20 TC) does NOT linger in the card itself — that lives in
+    // RewardPopup. Card simply moves on.
+    expect(screen.queryByText(/\+20 TC/)).not.toBeInTheDocument()
+  })
+
+  it('completing step 3 advances Curriculum current marker to step 4 (Train)', () => {
+    setProgress([1, 2])
+    renderCard()
+    expect(screen.getByRole('link', { name: /Build a bot/i })).toBeInTheDocument()
+
+    advance([1, 2, 3])
+
+    // Step 3 row picks up the ✓; step 4 (Train) becomes the active CTA.
+    expect(screen.getByRole('link', { name: /Train your bot/i })).toBeInTheDocument()
+    const list = screen.getByTestId('curriculum-checklist')
+    const buildRow = Array.from(list.querySelectorAll('[style*="display: flex"]'))
+      .find(r => r.textContent?.includes('Create your first bot'))
+    expect(buildRow?.textContent).toContain('✓')
+  })
+
+  it('completing step 4 advances current marker to step 5 (Spar)', () => {
+    setProgress([1, 2, 3])
+    renderCard()
+    expect(screen.getByRole('link', { name: /Train your bot/i })).toBeInTheDocument()
+
+    advance([1, 2, 3, 4])
+
+    expect(screen.getByRole('link', { name: /Spar now/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Train your bot/i })).not.toBeInTheDocument()
+  })
+
+  it('completing step 6 swaps the Tournament CTA for the step-7 explanatory note (no link)', () => {
+    setProgress([1, 2, 3, 4, 5])
+    renderCard()
+    expect(screen.getByRole('link', { name: /Enter Curriculum Cup/i })).toBeInTheDocument()
+
+    advance([1, 2, 3, 4, 5, 6])
+
+    // Step 7 is link-less by design (cup is in flight; no result to view yet).
+    // The card renders an explanatory note instead, and the CTA link disappears.
+    expect(screen.queryByRole('link', { name: /View result/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Enter Curriculum Cup/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/Watching your cup play out/i)).toBeInTheDocument()
+  })
+
+  it('hydrates mid-Curriculum after long absence without losing checklist state (task #30)', () => {
+    // Resumed-journey scenario: user closed the tab weeks ago at step 4
+    // current. Sign-in fetch hydrates [1,2,3] from the server. The card
+    // must render Curriculum phase with step 4 highlighted as current and
+    // step 3 marked done — no spurious re-render to Hook, no missing rows.
+    setProgress([1, 2, 3])  // hydrated from GET /preferences after long gap
+    const { container } = renderCard()
+
+    expect(container.querySelector('[data-phase="curriculum"]')).toBeInTheDocument()
+    expect(screen.getByTestId('curriculum-checklist')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Train your bot/i })).toBeInTheDocument()
+    // Step 3 (Build) shows ✓; step 4 (Train) is current (highlighted, no ✓)
+    const list = screen.getByTestId('curriculum-checklist')
+    const buildRow = Array.from(list.querySelectorAll('[style*="display: flex"]'))
+      .find(r => r.textContent?.includes('Create your first bot'))
+    expect(buildRow?.textContent).toContain('✓')
+  })
+
+  it('completing step 7 flips Curriculum → Specialize celebration card', () => {
+    setProgress([1, 2, 3, 4, 5, 6])
+    const { container } = renderCard()
+    expect(container.querySelector('[data-phase="curriculum"]')).toBeInTheDocument()
+
+    advance([1, 2, 3, 4, 5, 6, 7])
+
+    // Specialize state has no data-phase attribute (its own celebration block);
+    // assert by content instead.
+    expect(container.querySelector('[data-phase="curriculum"]')).not.toBeInTheDocument()
+    expect(screen.getByText(/Curriculum complete!/i)).toBeInTheDocument()
+    expect(screen.getByText(/\+50 TC/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeInTheDocument()
+    expect(screen.queryByTestId('curriculum-checklist')).not.toBeInTheDocument()
   })
 })

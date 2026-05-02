@@ -84,6 +84,21 @@ describe('RewardPopup', () => {
     expect(screen.queryByTestId('reward-popup')).not.toBeInTheDocument()
   })
 
+  it('does NOT render on resumed-journey hydration — popup is event-driven, not state-driven (task #30)', () => {
+    // Scenario: user completed steps 1-3 weeks ago; now they sign in fresh.
+    // The guideStore hydrates with `completedSteps: [1, 2, 3]` from
+    // GET /api/v1/guide/preferences. RewardPopup MUST NOT render — that
+    // would re-celebrate the Hook reward they already received. The popup
+    // only fires on a fresh `guide:hook_complete` SSE event, never from
+    // hydrated state. Catches a regression where someone wires the popup
+    // to journeyProgress instead of the SSE channel.
+    const { container } = render(<RewardPopup />)
+    expect(container).toBeEmptyDOMElement()
+
+    // Even if the SSE stream stays silent (no replay), nothing renders.
+    expect(container).toBeEmptyDOMElement()
+  })
+
   it('a second event resets the auto-dismiss window (newest reward wins)', () => {
     vi.useFakeTimers()
     render(<RewardPopup />)

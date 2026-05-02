@@ -11,6 +11,11 @@ vi.mock('../../lib/db.js', () => ({
     systemConfig: {
       findUnique: vi.fn(),
     },
+    // Default tx mock: invoke the callback with `db` as `tx`. Tests that
+    // need real serialisation (concurrent step credit) override this with
+    // a queued implementation.
+    $transaction: vi.fn(),
+    $executeRaw: vi.fn().mockResolvedValue(0),
   },
 }))
 
@@ -60,6 +65,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   db.systemConfig.findUnique.mockResolvedValue(null)   // Force defaults
   db.user.update.mockResolvedValue({})
+  // Default $transaction mock — invoke callback with `db` as `tx` and return
+  // its result. Concurrent-credit tests below override with a serial queue.
+  db.$transaction.mockImplementation(async (fn) => fn(db))
+  db.$executeRaw.mockResolvedValue(0)
 })
 
 // ── Module constants ──────────────────────────────────────────────────────────
@@ -365,5 +374,409 @@ describe('completeStep — error handling', () => {
 
     const result = await completeStep(mockUserId, 7)
     expect(result).toBe(true)   // Still reports success — the step itself was recorded
+  })
+})
+
+// ── Error compounding (task #33) ──────────────────────────────────────────────
+//
+// The DB row is the source of truth; SSE is a notification layer. When SSE
+// fails, the credit must still land — and conversely, when the reward DB
+// write fails, the corresponding SSE celebration must NOT leak (otherwise
+// a user could see a "+20 TC" popup with no actual TC). These tests pin
+// the contract: durable state wins, SSE is best-effort, reward and reward-
+// SSE are paired (both fire or neither does).
+
+describe('completeStep — error compounding', () => {
+  it('SSE failure on guide:journeyStep does NOT roll back the step credit', async () => {
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([]))
+    mockAppendToStream.mockRejectedValueOnce(new Error('redis down'))
+
+    const result = await completeStep(mockUserId, 1)
+
+    expect(result).toBe(true)   // step is credited despite SSE failure
+    // Persistent state was written.
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences.journeyProgress.completedSteps).toEqual([1])
+  })
+
+  it('SSE failure on guide:hook_complete does NOT prevent the +20 TC reward grant', async () => {
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([1]))
+    // Make ALL appendToStream calls fail — both the journeyStep and hook_complete events.
+    mockAppendToStream.mockRejectedValue(new Error('redis offline'))
+
+    const result = await completeStep(mockUserId, 2)
+
+    expect(result).toBe(true)
+    // Reward write happened — durable +20 TC even when SSE is down.
+    const rewardCalls = db.user.update.mock.calls.filter(c =>
+      c[0].data?.creditsTc?.increment !== undefined,
+    )
+    expect(rewardCalls).toHaveLength(1)
+    expect(rewardCalls[0][0].data.creditsTc.increment).toBe(20)
+  })
+
+  it('reward DB write failure suppresses the guide:hook_complete SSE (no torn celebration)', async () => {
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([1]))
+
+    // First update = step write (succeeds), second update = reward (fails).
+    db.user.update
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('TC grant failed'))
+
+    const result = await completeStep(mockUserId, 2)
+    expect(result).toBe(true)   // step itself is recorded
+
+    // guide:journeyStep fires (the step credit succeeded), but
+    // guide:hook_complete does NOT fire — we don't want the popup
+    // celebrating a reward that never landed.
+    const channels = mockAppendToStream.mock.calls.map(c => c[0])
+    expect(channels).toContain('guide:journeyStep')
+    expect(channels).not.toContain('guide:hook_complete')
+  })
+
+  it('reward DB write failure suppresses guide:curriculum_complete + guide:specialize_start', async () => {
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([1, 2, 3, 4, 5, 6]))
+    db.user.update
+      .mockResolvedValueOnce({})                                // step 7 write
+      .mockRejectedValueOnce(new Error('TC grant failed'))      // reward write
+
+    const result = await completeStep(mockUserId, 7)
+    expect(result).toBe(true)
+
+    const channels = mockAppendToStream.mock.calls.map(c => c[0])
+    expect(channels).toContain('guide:journeyStep')
+    expect(channels).not.toContain('guide:curriculum_complete')
+    expect(channels).not.toContain('guide:specialize_start')
+  })
+
+  it('SystemConfig lookup failure falls through to defaults (no crash)', async () => {
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([1]))
+    db.systemConfig.findUnique.mockRejectedValue(new Error('config table offline'))
+
+    const result = await completeStep(mockUserId, 2)
+
+    // SystemConfig is read TWICE: once for the v1.enabled gate (top of
+    // completeStep), once for the reward amount (inside _handleHookComplete).
+    // Both should fail-soft — first failure causes completeStep to return
+    // false (caught by the outer try/catch), so no step is credited at all.
+    // This test pins that error containment: the function returns gracefully,
+    // doesn't throw, and the user is left in a clean state.
+    expect(result).toBe(false)
+    // No step write happened (the gate failed before the credit code path).
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('persisted state is the source of truth: getJourneyProgress returns the credited step even if SSE is down', async () => {
+    let currentSteps = []
+    db.user.findUnique.mockImplementation(async () =>
+      mockUserWithProgress(currentSteps),
+    )
+    db.user.update.mockImplementation(async ({ data }) => {
+      const next = data?.preferences?.journeyProgress?.completedSteps
+      if (Array.isArray(next)) currentSteps = next
+      return {}
+    })
+    mockAppendToStream.mockRejectedValue(new Error('SSE down'))
+
+    await completeStep(mockUserId, 1)
+
+    // Even with SSE permanently broken, the next hydration sees the credit.
+    const prog = await getJourneyProgress(mockUserId)
+    expect(prog.completedSteps).toEqual([1])
+  })
+})
+
+// ── Concurrency — multi-tab / multi-pod race ──────────────────────────────────
+//
+// Two simultaneous completeStep(userId, N) calls (e.g., two browser tabs both
+// finishing PvAI games at the same instant, or two backend pods both reacting
+// to a tournament:completed event) must NOT double-credit the step or pay the
+// phase-boundary reward twice. The fix uses `db.$transaction` with a
+// per-user advisory lock so one call serialises behind the other; the second
+// finds the step already done and returns false. See journeyService.completeStep.
+//
+// In unit tests we can't take a real Postgres lock, so we simulate it: the
+// $transaction mock runs callbacks in series (FIFO queue), and the user-row
+// state mutates between calls so the second observer sees the post-write
+// completedSteps. This proves the contract holds when the implementation
+// actually goes through $transaction.
+
+describe('completeStep — concurrent calls (multi-tab / multi-pod race)', () => {
+  // Build a serial-tx mock that mutates a shared user row between calls. This
+  // models Postgres' "second SELECT FOR UPDATE waits for the first to commit,
+  // then sees the new row" without needing a real DB.
+  function setupSerialTxWithRow(initialSteps) {
+    let currentSteps = [...initialSteps]
+    let creditsTc    = 0
+
+    db.user.findUnique.mockImplementation(async () =>
+      mockUserWithProgress(currentSteps),
+    )
+    db.user.update.mockImplementation(async ({ data }) => {
+      // Step-progress write
+      const next = data?.preferences?.journeyProgress?.completedSteps
+      if (Array.isArray(next)) currentSteps = next
+      // Reward write (separate update call)
+      if (data?.creditsTc?.increment) creditsTc += data.creditsTc.increment
+      return {}
+    })
+
+    // FIFO queue: every $transaction call awaits the previous one before
+    // invoking its callback. This serialises the read-modify-write.
+    let prior = Promise.resolve()
+    db.$transaction.mockImplementation(async (fn) => {
+      const queueSlot = prior.then(() => fn(db))
+      prior = queueSlot.catch(() => {})  // never break the chain on error
+      return queueSlot
+    })
+
+    return {
+      getSteps:   () => currentSteps,
+      getCreditsTc: () => creditsTc,
+    }
+  }
+
+  it('issues a per-user pg_advisory_xact_lock inside the credit transaction', async () => {
+    // Pin the lock SQL so a refactor can't silently weaken it. The lock
+    // key MUST hash on the userId so different users don't queue behind
+    // each other (they have independent journey rows).
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([1]))
+
+    await completeStep(mockUserId, 2)
+
+    // Tagged-template invocation: the first arg to `$executeRaw` is the
+    // template strings array, then interpolated values. We assert on the
+    // joined SQL text and the userId interpolation.
+    expect(db.$executeRaw).toHaveBeenCalled()
+    const [strings, ...values] = db.$executeRaw.mock.calls[0]
+    const sql = Array.isArray(strings) ? strings.join('?') : String(strings)
+    expect(sql).toMatch(/pg_advisory_xact_lock\s*\(\s*hashtext\(/)
+    expect(values[0]).toBe(mockUserId)
+  })
+
+  it('two concurrent completeStep(userId, 2) calls credit step 2 exactly once', async () => {
+    const probe = setupSerialTxWithRow([1])   // pre-state: only step 1 done
+
+    const [r1, r2] = await Promise.all([
+      completeStep(mockUserId, 2),
+      completeStep(mockUserId, 2),
+    ])
+
+    // Exactly one call wins the race; the other is a no-op (idempotent).
+    expect([r1, r2].sort()).toEqual([false, true])
+
+    // Step 2 ends up in completedSteps once, not twice (and array is sorted).
+    expect(probe.getSteps()).toEqual([1, 2])
+  })
+
+  it('Hook reward (+20 TC) is paid exactly once even with concurrent step-2 credits', async () => {
+    const probe = setupSerialTxWithRow([1])
+
+    await Promise.all([
+      completeStep(mockUserId, 2),
+      completeStep(mockUserId, 2),
+    ])
+
+    // The race regression: pre-fix both calls passed the dedup check and
+    // both fired _handleHookComplete → +40 TC. Post-fix exactly one pays.
+    expect(probe.getCreditsTc()).toBe(20)
+  })
+
+  it('Curriculum reward (+50 TC) is paid exactly once even with concurrent step-7 credits', async () => {
+    const probe = setupSerialTxWithRow([1, 2, 3, 4, 5, 6])
+
+    await Promise.all([
+      completeStep(mockUserId, 7),
+      completeStep(mockUserId, 7),
+    ])
+
+    expect(probe.getCreditsTc()).toBe(50)
+  })
+
+  it('SSE events fire once per concurrent credit, not per call', async () => {
+    setupSerialTxWithRow([1])
+
+    await Promise.all([
+      completeStep(mockUserId, 2),
+      completeStep(mockUserId, 2),
+    ])
+
+    const journeyStepEvents = mockAppendToStream.mock.calls.filter(c => c[0] === 'guide:journeyStep')
+    const hookCompleteEvents = mockAppendToStream.mock.calls.filter(c => c[0] === 'guide:hook_complete')
+    expect(journeyStepEvents).toHaveLength(1)
+    expect(hookCompleteEvents).toHaveLength(1)
+  })
+
+  it('three concurrent calls still credit exactly once', async () => {
+    const probe = setupSerialTxWithRow([1])
+
+    const results = await Promise.all([
+      completeStep(mockUserId, 2),
+      completeStep(mockUserId, 2),
+      completeStep(mockUserId, 2),
+    ])
+
+    expect(results.filter(Boolean)).toHaveLength(1)   // exactly one wins
+    expect(probe.getSteps()).toEqual([1, 2])
+    expect(probe.getCreditsTc()).toBe(20)
+  })
+})
+
+// ── Hydration race (task #29) ─────────────────────────────────────────────────
+//
+// While a step credit is in flight, a parallel GET /guide/preferences (which
+// calls getJourneyProgress under the hood) MUST return a snapshot-consistent
+// view: either the pre-credit state or the post-credit state, never a torn
+// in-between (e.g., completedSteps containing undefined, or the step present
+// without its accompanying sort). This is automatically true today thanks
+// to row-level atomicity in Postgres + our advisory-lock-guarded transaction,
+// but a future refactor that splits the journeyProgress write into multiple
+// statements would silently break it. Pin the contract so that change shows
+// up as a test failure.
+
+describe('getJourneyProgress — hydration during in-flight credit (race)', () => {
+  it('returns post-credit state when hydration runs after commit', async () => {
+    let currentSteps = [1]
+    db.user.findUnique.mockImplementation(async () =>
+      mockUserWithProgress(currentSteps),
+    )
+    db.user.update.mockImplementation(async ({ data }) => {
+      const next = data?.preferences?.journeyProgress?.completedSteps
+      if (Array.isArray(next)) currentSteps = next
+      return {}
+    })
+    db.$transaction.mockImplementation(async (fn) => fn(db))
+
+    await completeStep(mockUserId, 2)
+    const prog = await getJourneyProgress(mockUserId)
+
+    expect(prog.completedSteps).toEqual([1, 2])
+    expect(prog.dismissedAt).toBeNull()
+  })
+
+  it('returns pre-credit state when hydration runs before the tx commits', async () => {
+    let currentSteps = [1]
+    db.user.findUnique.mockImplementation(async () =>
+      mockUserWithProgress(currentSteps),
+    )
+    db.user.update.mockImplementation(async ({ data }) => {
+      const next = data?.preferences?.journeyProgress?.completedSteps
+      if (Array.isArray(next)) currentSteps = next
+      return {}
+    })
+
+    // Gate the credit's transaction callback so we can interleave hydration
+    // BEFORE it runs (and therefore before the user-row mutation).
+    let releaseCredit
+    const creditGate = new Promise((r) => { releaseCredit = r })
+    db.$transaction.mockImplementation(async (fn) => {
+      await creditGate
+      return fn(db)
+    })
+
+    const creditPromise = completeStep(mockUserId, 2)
+
+    // Hydration while the credit transaction is parked — must see pre-state.
+    const progBefore = await getJourneyProgress(mockUserId)
+    expect(progBefore.completedSteps).toEqual([1])
+
+    // Release the credit and confirm the post-state landed.
+    releaseCredit()
+    await creditPromise
+
+    const progAfter = await getJourneyProgress(mockUserId)
+    expect(progAfter.completedSteps).toEqual([1, 2])
+  })
+
+  it('non-monotonic credit: step 6 alone (no prior steps) credits successfully (task #32 policy)', async () => {
+    // Decision recorded in doc/Intelligent_Guide_Implementation_Plan.md §8:
+    // out-of-order step completion is allowed at the service layer; only
+    // dedup is enforced. A user who registers for a tournament before
+    // sparring legitimately credits step 6 first.
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([]))
+
+    const result = await completeStep(mockUserId, 6)
+
+    expect(result).toBe(true)
+    const call = db.user.update.mock.calls[0][0]
+    expect(call.data.preferences.journeyProgress.completedSteps).toEqual([6])
+  })
+
+  it('non-monotonic credit: step 7 with only step 6 done fires both reward + Specialize SSE', async () => {
+    // Even though steps 1-5 are skipped, the curriculum-complete reward
+    // and Specialize-start event MUST fire — the trigger semantics are
+    // about *this* event, not about prior state.
+    db.user.findUnique.mockResolvedValue(mockUserWithProgress([6]))
+
+    const result = await completeStep(mockUserId, 7)
+
+    expect(result).toBe(true)
+    const sseChannels = mockAppendToStream.mock.calls.map(c => c[0])
+    expect(sseChannels).toContain('guide:curriculum_complete')
+    expect(sseChannels).toContain('guide:specialize_start')
+
+    // Reward update was issued (creditsTc.increment).
+    const rewardCalls = db.user.update.mock.calls.filter(c =>
+      c[0].data?.creditsTc?.increment !== undefined,
+    )
+    expect(rewardCalls).toHaveLength(1)
+    expect(rewardCalls[0][0].data.creditsTc.increment).toBe(50)
+  })
+
+  it('returns stored state for a long-abandoned user with NO side effects (resume after 30+ days)', async () => {
+    // Simulate a user who completed steps 1-3 a month ago and is just now
+    // returning. The row is stale (long updatedAt gap) but the data is intact.
+    db.user.findUnique.mockResolvedValue({
+      id: mockUserId,
+      preferences: {
+        journeyProgress: { completedSteps: [1, 2, 3], dismissedAt: null },
+      },
+    })
+
+    const prog = await getJourneyProgress(mockUserId)
+
+    // Hydration returns the persisted state verbatim — no time-based decay.
+    expect(prog.completedSteps).toEqual([1, 2, 3])
+    expect(prog.dismissedAt).toBeNull()
+
+    // Crucially: hydration is read-only. No spurious writes (e.g., a stale
+    // "auto-credit step 1 on first load" pattern), no SSE events fired.
+    expect(db.user.update).not.toHaveBeenCalled()
+    expect(mockAppendToStream).not.toHaveBeenCalled()
+  })
+
+  it('parallel hydrations during in-flight credit return only pre- or post-state, never torn', async () => {
+    let currentSteps = [1]
+    db.user.findUnique.mockImplementation(async () =>
+      mockUserWithProgress(currentSteps),
+    )
+    db.user.update.mockImplementation(async ({ data }) => {
+      const next = data?.preferences?.journeyProgress?.completedSteps
+      if (Array.isArray(next)) currentSteps = next
+      return {}
+    })
+    db.$transaction.mockImplementation(async (fn) => fn(db))
+
+    // Fire credit + 5 hydrations in the same microtask. Each hydration must
+    // see a coherent completedSteps array — never undefined, never a partial
+    // mutation. Some will see [1] (pre), some [1, 2] (post), but every read
+    // must be one of those two snapshots.
+    const [, ...hydrations] = await Promise.all([
+      completeStep(mockUserId, 2),
+      getJourneyProgress(mockUserId),
+      getJourneyProgress(mockUserId),
+      getJourneyProgress(mockUserId),
+      getJourneyProgress(mockUserId),
+      getJourneyProgress(mockUserId),
+    ])
+
+    for (const prog of hydrations) {
+      expect(Array.isArray(prog.completedSteps)).toBe(true)
+      expect(prog.completedSteps.every(s => Number.isInteger(s) && s >= 1 && s <= 7)).toBe(true)
+      // Coherent snapshot — either fully pre-credit or fully post-credit.
+      const isPre  = prog.completedSteps.length === 1 && prog.completedSteps[0] === 1
+      const isPost = prog.completedSteps.length === 2 && prog.completedSteps[0] === 1 && prog.completedSteps[1] === 2
+      expect(isPre || isPost).toBe(true)
+    }
   })
 })

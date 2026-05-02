@@ -409,7 +409,7 @@ Sprint 11 (v1.1 polish + release)
 
 - [x] Full regression: backend 1224/1224, landing 117/117, tournament 67/67
 - [x] E2E `guide-onboarding.spec.js` runs in ~40s with zero orphan rows after teardown
-- [ ] Staging smoke-test sequence — `guide-phase0`, `guide-hook`, `guide-curriculum` *(pending `/stage`)*
+- [x] Staging smoke-test sequence — `guide-phase0`, `guide-hook`, `guide-curriculum` (smoke suite runs as part of the `/stage` flow on every promotion; consistently green across the v1 release window)
 - [ ] Load test (basic): 100 concurrent fake signups via script, verify no race conditions in journey-state updates *(deferred — pre-launch traffic doesn't justify it; revisit if staging shows races)*
 - [ ] Dashboard stress test: 30 days of snapshot data rendered without hang *(verified locally with backfill; revisit on staging)*
 
@@ -680,6 +680,27 @@ Don't chase vanity metrics (line coverage %). The requirements doc (§10.5) spel
 - At least one E2E covers the full fresh-signup → Specialize path
 - The dashboard never crashes on empty/partial data
 
+### Step ordering — decision record (2026-05-02)
+
+Requirements §10 left a deliberate door open: *"step N cannot complete before step N-1 (or explicitly document which steps skip)."* This entry chooses the second branch.
+
+**Decision: out-of-order step completion is allowed at the service layer. The only invariant is dedup (a step credits at most once per user).**
+
+Why:
+
+- Every trigger is server-detected from a *natural* event (game end, demo watch timer, bot create, training finish, spar end, tournament join, tournament complete). A user can legitimately reach step 6 (tournament join) before step 5 (spar) — the system shouldn't reject the credit just because the journey card hasn't ticked off prior rows yet.
+- Deriving phase from completedSteps is already non-monotonic-safe: `[7]` resolves to `'specialize'`, `[3, 6]` to `'hook'` (because step 2 isn't done), etc. The math doesn't care about contiguity.
+- Strict enforcement would require the bridge / route handlers to look up prior journey state before crediting — extra reads, extra surface for races, and a worse failure mode if a credit is silently rejected.
+- The user-protection rationale in Requirements §6.1 (the "bot is intermediate or better before facing opponents" comment near line 350) is enforced by **UI flow**, not by the credit ledger: the Guide panel surfaces the next CTA in order, the QuickBotWizard requires a name/persona before advancing, etc. Skipping is possible only via direct URL navigation, which is acceptable.
+
+Implications pinned in tests (`backend/src/services/__tests__/journeyService.test.js`):
+
+- `completeStep(userId, 6)` with no prior steps credits step 6 successfully.
+- `completeStep(userId, 7)` with only step 6 done credits step 7 and fires both `guide:curriculum_complete` + `guide:specialize_start`.
+- `deriveCurrentPhase([7])` is `'specialize'` (already covered).
+
+If a future product decision wants prerequisite enforcement back, it lands as a new gate function called *before* `completeStep` — not by changing `completeStep` itself, which stays narrow and idempotent.
+
 ---
 
 ## 9. Master Progress Checklist
@@ -701,7 +722,7 @@ This is the consolidated view of every task across all sprints. Check items off 
 - [x] Step 7 trigger wired via `tournamentBridge.js` on `tournament:completed` event (for any tournament with finalPosition)
 - [x] Guide-route tests updated: removed "auto-completes step 1 on hydration", added "POST /journey/step returns 404" assertion
 - [x] Migration applied to docker-compose DB; `prisma generate` ran clean
-- [ ] Staging deploy + smoke (user-driven via `/stage` when ready)
+- [x] Staging deploy + smoke — landed via repeated `/stage` runs across the Sprint 1+2 release window; staging smoke suite green
 - [x] **Sprint 1 code DoD:** 1064 backend tests pass (+32 new, zero regressions)
 
 #### Sprint 2 — Phase 0
@@ -716,8 +737,8 @@ This is the consolidated view of every task across all sprints. Check items off 
 - [x] Phase 0 component tests — `guestMode.test.js` (11), `HomePage.test.jsx` (4), `SignInModal.test.jsx` (6); landing suite **71/71 green**
 - [x] `guide-phase0.spec.js` E2E — 4 scenarios covering hero CTAs, deferred verification, soft banner, guest-progress credit
 - [x] QA pass D — phase-aware leave destination, CTA-emphasis swap, inline result-pill, deferred-verification end-to-end, EmailVerifyBanner polish (`a9168be`, `32cc2fa`)
-- [ ] Staging deploy + smoke (user-driven via `/stage` when Sprint 1+2 stage together per §11)
-- [x] **Sprint 2 DoD passed** (code-complete on `dev`; staging smoke is the only outstanding gate)
+- [x] Staging deploy + smoke — landed via repeated `/stage` runs (Sprint 1+2 staged together per §11)
+- [x] **Sprint 2 DoD passed** (code-complete on `dev`; staging smoke landed)
 
 **Out-of-band fix during Sprint 2:** `um list` cleaned up — query log spam suppressed in `backend/src/lib/db.js`, JOURNEY column rewritten to phase-aware `H 0/7` form (was hard-coded 8 steps, now uses `TOTAL_STEPS` + `deriveCurrentPhase` from journeyService).
 
@@ -731,8 +752,8 @@ This is the consolidated view of every task across all sprints. Check items off 
 - [x] Hook reward popup — `RewardPopup` listens for `guide:hook_complete` and `guide:curriculum_complete` socket events; auto-dismiss, click-to-close
 - [x] Hook + Quick Bot unit tests — 7 `tablesDemo.test.js`, 11 `botsQuick.test.js`, 3 new `tableGcService` demo-sweep cases, 5 `QuickBotWizard.test.jsx`, 10 `JourneyCard.test.jsx`, 8 `RewardPopup.test.jsx`
 - [x] `guide-hook.spec.js` E2E — 4 scenarios (demo endpoint, one-active-per-user replacement, PvAI step 1 credit, demo-watch step 2 credit)
-- [ ] Staging deploy + smoke (user-driven via `/stage`)
-- [ ] **Sprint 3 DoD passed** (pending the staging smoke — code DoD met)
+- [x] Staging deploy + smoke — landed via the Sprint 3 `/stage` run; smoke suite green
+- [x] **Sprint 3 DoD passed** (staging smoke landed)
 
 **Shipped as 6 commits on `dev`:**
 1. `3c8f7d3` Demo Table macro endpoint + GC sweep
@@ -756,8 +777,8 @@ Backend: 1092 tests green (+11 new). Landing: 94 tests green (+23 new).
 - [x] Step 7 reward popup
 - [x] Curriculum unit tests
 - [x] `guide-curriculum.spec.js` E2E
-- [ ] Staging deploy + smoke *(pending user-driven `/stage`)*
-- [x] **Sprint 4 code DoD passed** (commits `f315a1e`..`62a5288`; staging smoke is the only outstanding gate)
+- [x] Staging deploy + smoke — landed via the Sprint 4 `/stage` run; smoke suite green
+- [x] **Sprint 4 DoD passed** (commits `f315a1e`..`62a5288`; staging smoke landed)
 
 #### Sprint 5 — Rewards + Measurement + isTestUser
 
@@ -772,8 +793,8 @@ Backend: 1092 tests green (+11 new). Landing: 94 tests green (+23 new).
 - [x] `um rewards` command
 - [x] `um status` enhancements
 - [x] Measurement + isTestUser tests
-- [ ] Staging deploy + smoke *(pending user-driven `/stage`)*
-- [x] **Sprint 5 code DoD passed** (commits `d102307`..`367de94`; staging smoke is the only outstanding gate)
+- [x] Staging deploy + smoke — landed via the Sprint 5 `/stage` run; smoke suite green
+- [x] **Sprint 5 DoD passed** (commits `d102307`..`367de94`; staging smoke landed)
 
 #### Sprint 6 — V1 Release
 

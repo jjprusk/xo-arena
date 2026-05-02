@@ -12,12 +12,21 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../../lib/db.js', () => ({
-  default: {
+vi.mock('../../lib/db.js', () => {
+  // journeyService.completeStep wraps its read-modify-write in a tx with
+  // a per-user advisory lock. Default mock invokes the callback with `db`
+  // as `tx` so assertions below see the mocked user.* calls. We close over
+  // the mock object so $transaction can pass it back as `tx` without a
+  // dynamic re-import.
+  const mockDb = {
     user:         { findUnique: vi.fn(), update: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
-  },
-}))
+    $transaction: vi.fn(),
+    $executeRaw:  vi.fn().mockResolvedValue(0),
+  }
+  mockDb.$transaction.mockImplementation(async (fn) => fn(mockDb))
+  return { default: mockDb }
+})
 vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))

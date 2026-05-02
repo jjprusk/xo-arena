@@ -138,7 +138,13 @@ router.get('/:id', async (req, res, next) => {
 
 /**
  * POST /api/v1/bots
- * Create a new bot. Auth required. Enforces bot limit for non-admin/bot_admin users.
+ *
+ * Phase 3.8 — Multi-Skill Bots: creates a skill-less identity bot. Body is
+ * `{ name, avatarUrl?, competitive? }` only. No algorithm or game choice at
+ * this step — skills are added separately via `POST /bots/:id/skills`.
+ *
+ * Auth required. Enforces bot limit for non-admin/bot_admin users. Still
+ * fires journey step 3 (Curriculum: Create your first bot).
  */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
@@ -160,8 +166,8 @@ router.post('/', requireAuth, async (req, res, next) => {
       }
     }
 
-    const { name, modelType, competitive, avatarUrl } = req.body
-    const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl, ownerBaId: baId })
+    const { name, avatarUrl, competitive } = req.body ?? {}
+    const bot = await createBot(userId, { name, avatarUrl, competitive, ownerBaId: baId })
     cache.invalidate(BOTS_CACHE_KEY)
 
     // Journey step 3 (Curriculum: Create your first bot) — fire-and-forget.

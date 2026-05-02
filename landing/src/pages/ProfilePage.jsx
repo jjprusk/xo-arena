@@ -10,7 +10,6 @@ import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
 import QuickBotWizard from '../components/guide/QuickBotWizard.jsx'
-import { GAMES } from '../lib/gameRegistry.js'
 
 const BOT_MODEL_LABELS = {
   ml: 'ML',
@@ -55,7 +54,9 @@ export default function ProfilePage() {
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null)
-  const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: true, gameId: 'xo' })
+  // Phase 3.8 — Multi-Skill Bots: bot create is identity-only (name + competitive
+  // flag). Algorithm/game choice moves to the per-bot "Add a skill" flow.
+  const [createForm, setCreateForm] = useState({ name: '', competitive: true })
   const [showBotCreatedPopup, setShowBotCreatedPopup] = useState(false)
   const [creatingBot, setCreatingBot] = useState(false)
 
@@ -401,17 +402,16 @@ export default function ProfilePage() {
     setBotActionError(null)
     try {
       const token = await getToken()
+      // Phase 3.8 reshape: skill-less identity create. The bot starts with no
+      // skills; the user adds an XO skill from the bot card next.
       const payload = {
-        name: createForm.name,
-        algorithm: 'ml',
-        modelType: createForm.modelType,
+        name:        createForm.name,
         competitive: createForm.competitive,
-        gameId: createForm.gameId,
       }
       const { bot: newBot } = await api.bots.create(payload, token)
       setBots(prev => [newBot, ...prev])
       setLimitInfo(prev => prev ? { ...prev, count: prev.count + 1 } : prev)
-      setCreateForm({ name: '', modelType: 'Q_LEARNING', competitive: true })
+      setCreateForm({ name: '', competitive: true })
       setShowCreateBot(false)
       setShowBotCreatedPopup(true)
 
@@ -643,36 +643,16 @@ export default function ProfilePage() {
                     style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                   />
                 </label>
-                <label className="space-y-1 block">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Game</span>
-                  <select
-                    value={createForm.gameId}
-                    onChange={e => setCreateForm(f => ({ ...f, gameId: e.target.value }))}
-                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-                  </select>
-                </label>
-                <label className="space-y-1 block">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
-                  <select
-                    value={createForm.modelType}
-                    onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
-                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="Q_LEARNING">Q-Learning</option>
-                    <option value="SARSA">SARSA</option>
-                    <option value="MONTE_CARLO">Monte Carlo</option>
-                    <option value="POLICY_GRADIENT">Policy Gradient</option>
-                    <option value="DQN">DQN (Deep Q-Network)</option>
-                    <option value="ALPHA_ZERO">AlphaZero</option>
-                  </select>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    A fresh untrained brain of this type will be created. Train it in the Gym.
-                  </p>
-                </label>
+                {/*
+                  Phase 3.8 — Multi-Skill Bots: Game + Brain Architecture
+                  fields removed. A bot is now an identity (name + competitive
+                  flag); the user picks game and algorithm later via the
+                  per-bot "Add a skill" flow on the bot card. Hint copy below
+                  sets the expectation that the bot starts skill-less.
+                */}
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Your bot starts with no skills. Add a skill (game + algorithm) from the bot card after it's created.
+                </p>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"

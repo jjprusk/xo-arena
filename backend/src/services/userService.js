@@ -353,6 +353,13 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
 /**
  * Create a bot user row owned by the given user.
  * Enforces reserved name, profanity, and deduplication rules.
+ *
+ * Phase 3.8 — Multi-Skill Bots: when called with no `algorithm`, creates a
+ * skill-less identity bot (botModelType=null, botModelId=null, no GameElo
+ * row). Skills are added separately via `POST /api/v1/bots/:id/skills`. The
+ * legacy single-algorithm shape (algorithm + difficulty/modelType) is still
+ * honored for `POST /bots/quick` (the journey-step-3 Quick Bot wizard) and
+ * any internal callers.
  */
 const VALID_ML_ALGORITHMS = ['qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero']
 
@@ -389,8 +396,42 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
 
   const finalName = trimmedName
 
-  // 4. Validate algorithm and resolve ML algo
-  const alg = algorithm || 'minimax'
+  // 4. Skill-less path (Phase 3.8 — Multi-Skill Bots default).
+  // Generate a unique username slug shared by all branches below.
+  const slugBase = `bot_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
+  const existingUsernames = await db.user.findMany({
+    where: { username: { startsWith: slugBase } },
+    select: { username: true },
+  })
+  const usedUsernames = new Set(existingUsernames.map(u => u.username))
+  let username = slugBase
+  if (usedUsernames.has(username)) {
+    let i = 1
+    while (usedUsernames.has(`${slugBase}_${i}`)) i++
+    username = `${slugBase}_${i}`
+  }
+  const email = `${username}@xo-arena.internal`
+
+  if (algorithm === undefined || algorithm === null) {
+    return db.user.create({
+      data: {
+        username,
+        email,
+        displayName:    finalName,
+        avatarUrl:      avatarUrl ?? null,
+        isBot:          true,
+        botModelType:   null,
+        botModelId:     null,
+        botOwnerId:     ownerId,
+        botActive:      true,
+        botCompetitive: Boolean(competitive),
+        botProvisional: true,
+      },
+    })
+  }
+
+  // 5. Validate algorithm and resolve ML algo (legacy single-algorithm path)
+  const alg = algorithm
   const diff = difficulty || 'novice'
   let mlAlgo = null
 
@@ -405,23 +446,8 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
     throw Object.assign(new Error(`Unknown algorithm: ${alg}`), { code: 'INVALID_ALGORITHM' })
   }
 
-  // 5. Competitive flag: only honored for ml bots
+  // 6. Competitive flag: only honored for ml bots in legacy path
   const botCompetitive = alg === 'ml' ? Boolean(competitive) : false
-
-  // 6. Generate unique username slug
-  const slugBase = `bot_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
-  const existingUsernames = await db.user.findMany({
-    where: { username: { startsWith: slugBase } },
-    select: { username: true },
-  })
-  const usedUsernames = new Set(existingUsernames.map(u => u.username))
-  let username = slugBase
-  if (usedUsernames.has(username)) {
-    let i = 1
-    while (usedUsernames.has(`${slugBase}_${i}`)) i++
-    username = `${slugBase}_${i}`
-  }
-  const email = `${username}@xo-arena.internal`
 
   // 7. Resolve botModelId (synthetic for minimax/mcts, real FK for ml)
   // For ML bots, create the model and bot atomically so we never orphan a model.

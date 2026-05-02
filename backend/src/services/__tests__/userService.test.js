@@ -9,6 +9,7 @@ vi.mock('../../lib/db.js', () => ({
       findFirst: vi.fn(),
       update: vi.fn(),
       findMany: vi.fn(),
+      create: vi.fn(),
     },
     game: {
       findMany: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('@xo-arena/db', () => ({
   },
 }))
 
-const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo, getLeaderboard } =
+const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo, getLeaderboard, createBot } =
   await import('../userService.js')
 const db = (await import('../../lib/db.js')).default
 
@@ -262,5 +263,77 @@ describe('getLeaderboard', () => {
     db.$queryRaw.mockResolvedValue([])
     const result = await getLeaderboard()
     expect(result).toEqual([])
+  })
+})
+
+// ─── createBot — Phase 3.8 skill-less path ───────────────────────────────────
+//
+// The Multi-Skill Bots reshape splits bot creation from skill creation. When
+// `createBot` is called with no `algorithm`, it must produce a User row that
+// is a valid identity (isBot=true, owned by ownerId, name validated and
+// deduped) but carries NO model pointer (botModelId=null, botModelType=null)
+// and triggers NO BotSkill or GameElo writes — those happen later via the
+// /bots/:id/skills endpoint. Critical regression guard: an earlier draft
+// silently fell into the legacy minimax default when `algorithm` was
+// omitted, so a v1.28 client speaking the new skill-less body produced
+// minimax-bound bots and broke 3.8's whole "identity ≠ skill" decision.
+describe('createBot — Phase 3.8 skill-less', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Name dedup query returns no existing bots by default.
+    db.user.findMany.mockResolvedValue([])
+  })
+
+  it('skill-less call: creates bot with botModelId=null and botModelType=null', async () => {
+    db.user.create.mockImplementation(async ({ data }) => ({ id: 'bot_new', ...data }))
+
+    const bot = await createBot('owner_1', { name: 'Skillless', avatarUrl: null, competitive: true })
+
+    expect(db.user.create).toHaveBeenCalledTimes(1)
+    const data = db.user.create.mock.calls[0][0].data
+    expect(data).toEqual(expect.objectContaining({
+      displayName:    'Skillless',
+      isBot:          true,
+      botModelType:   null,
+      botModelId:     null,
+      botOwnerId:     'owner_1',
+      botActive:      true,
+      botCompetitive: true,
+      botProvisional: true,
+    }))
+    // Must NOT touch skills / ELO during identity-only create:
+    expect(bot.botModelType).toBeNull()
+    expect(bot.botModelId).toBeNull()
+  })
+
+  it('skill-less call honors competitive=false (default off if undefined)', async () => {
+    db.user.create.mockImplementation(async ({ data }) => ({ id: 'b1', ...data }))
+
+    await createBot('owner_1', { name: 'NotCompetitive' })
+    expect(db.user.create.mock.calls[0][0].data.botCompetitive).toBe(false)
+
+    db.user.create.mockClear()
+    await createBot('owner_2', { name: 'StillNot', competitive: false })
+    expect(db.user.create.mock.calls[0][0].data.botCompetitive).toBe(false)
+  })
+
+  it('skill-less call still rejects reserved + duplicate names', async () => {
+    await expect(createBot('owner_1', { name: 'rusty' }))
+      .rejects.toMatchObject({ code: 'RESERVED_NAME' })
+
+    db.user.findMany.mockResolvedValueOnce([{ displayName: 'Taken' }])
+    await expect(createBot('owner_1', { name: 'Taken' }))
+      .rejects.toMatchObject({ code: 'NAME_TAKEN' })
+  })
+
+  it('legacy path (algorithm=minimax) still creates bot with synthetic botModelId — Quick Bot wizard regression guard', async () => {
+    db.user.create.mockImplementation(async ({ data }) => ({ id: 'b1', ...data }))
+
+    const bot = await createBot('owner_1', { name: 'QuickBot', algorithm: 'minimax', difficulty: 'novice' })
+
+    const data = db.user.create.mock.calls[0][0].data
+    expect(data.botModelType).toBe('minimax')
+    expect(data.botModelId).toBe('user:owner_1:minimax:novice')
+    expect(bot.botModelId).toBe('user:owner_1:minimax:novice')
   })
 })

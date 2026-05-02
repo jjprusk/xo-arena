@@ -165,43 +165,44 @@ export default function HomePage() {
         </div>
 
         {/* Progressive CTA ladder.
-            Layout — the two top-row "action" buttons (Watch / Play) sit in a
-            2-column grid so they line up cleanly even on a narrow phone
-            viewport (the prior `flex-wrap` reflowed them at uneven heights and
-            mismatched styles, looking haphazard). The conversion CTA "Build
-            your own bot" gets its own full-width row below — it's the
-            funnel-defining moment and benefits from the visual emphasis. */}
+            Layout — the two "action" CTAs (Play, Build) share the top row in
+            a 2-column grid so the conversion path reads left-to-right as a
+            pair, with emphasis swapping between them based on whether the
+            visitor has already played their first PvAI game. The passive
+            "Watch another match" sits on its own full-width row below — it's
+            a demo-refresh affordance, never the call-to-action, so it stays
+            visually demoted regardless of journey state. */}
         <div className="max-w-lg mx-auto space-y-2 sm:space-y-3">
           <div className="grid grid-cols-2 gap-2 sm:gap-3">
-            <button
-              onClick={() => setDemoKey(k => k + 1)}
-              className="btn btn-secondary btn-sm w-full"
-              type="button"
-              aria-label="Watch another bot match"
-            >
-              ↻ Watch another match
-            </button>
             <Link
               to="/play?action=vs-community-bot"
               className={`${playClass} w-full`}
             >
               Play against a bot
             </Link>
+            {user ? (
+              <Link to="/gym" className={`${buildClass} w-full`}>
+                Build your own bot →
+              </Link>
+            ) : (
+              <button
+                onClick={() => setSignupOpen(true)}
+                className={`${buildClass} w-full`}
+                type="button"
+                data-cta="build-your-own-bot"
+              >
+                Build your own bot →
+              </button>
+            )}
           </div>
-          {user ? (
-            <Link to="/gym" className={`${buildClass} w-full`}>
-              Build your own bot →
-            </Link>
-          ) : (
-            <button
-              onClick={() => setSignupOpen(true)}
-              className={`${buildClass} w-full`}
-              type="button"
-              data-cta="build-your-own-bot"
-            >
-              Build your own bot →
-            </button>
-          )}
+          <button
+            onClick={() => setDemoKey(k => k + 1)}
+            className="btn btn-secondary btn-sm w-full"
+            type="button"
+            aria-label="Watch another bot match"
+          >
+            ↻ Watch another match
+          </button>
         </div>
 
         {/* Sub-line beneath the CTAs reinforcing the unique value prop */}

@@ -229,4 +229,65 @@ describe('POST /guest-credit', () => {
     })
     expect(res.status).toBe(404)
   })
+
+  // ── Edge cases (task #34) ────────────────────────────────────────────────
+  // The guest-credit payload comes from client localStorage, which is
+  // untrusted. The endpoint must handle malformed input, repeated calls,
+  // and garbage values without crashing or double-paying the Hook reward.
+
+  it('a second guest-credit call with same timestamps returns empty credited (idempotent)', async () => {
+    // First call credits both — second call sees both already credited.
+    completeStep
+      .mockResolvedValueOnce(true)   // step 1 — first call
+      .mockResolvedValueOnce(true)   // step 2 — first call
+      .mockResolvedValueOnce(false)  // step 1 — second call (already done)
+      .mockResolvedValueOnce(false)  // step 2 — second call (already done)
+
+    const payload = {
+      hookStep1CompletedAt: '2026-04-24T10:00:00Z',
+      hookStep2CompletedAt: '2026-04-24T10:05:00Z',
+    }
+
+    const r1 = await request(buildApp()).post('/guest-credit').send(payload)
+    const r2 = await request(buildApp()).post('/guest-credit').send(payload)
+
+    expect(r1.body.creditedSteps).toEqual([1, 2])
+    expect(r2.body.creditedSteps).toEqual([])    // both already done
+    expect(r2.body.ok).toBe(true)                 // not an error
+  })
+
+  it('truthy-but-non-ISO timestamp still credits (route trusts client low — see route comment)', async () => {
+    // The route's documented contract is best-effort — a truthy field is
+    // enough to fire the credit. Validation lives client-side. The max
+    // damage from a malicious client is +20 TC (one Hook reward), which
+    // the doc deems acceptable. Pin the contract so a future "tighten
+    // validation" change is a deliberate decision, not a silent break.
+    const res = await request(buildApp()).post('/guest-credit').send({
+      hookStep1CompletedAt: 'not-actually-an-iso-string',
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.creditedSteps).toEqual([1])
+  })
+
+  it('handles unexpected extra keys gracefully (forward-compatible payload)', async () => {
+    // An older client might persist extra keys (e.g., a future
+    // hookStep3CompletedAt). The route must ignore them, not 500.
+    const res = await request(buildApp()).post('/guest-credit').send({
+      hookStep1CompletedAt: '2026-04-24T10:00:00Z',
+      hookStep3CompletedAt: '2026-04-24T11:00:00Z',  // not real
+      garbageField:         { nested: 'object' },
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.creditedSteps).toEqual([1])
+  })
+
+  it('false-y timestamp values are skipped (null, "", 0, false)', async () => {
+    const res = await request(buildApp()).post('/guest-credit').send({
+      hookStep1CompletedAt: null,
+      hookStep2CompletedAt: '',
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.creditedSteps).toEqual([])
+    expect(completeStep).not.toHaveBeenCalled()
+  })
 })
