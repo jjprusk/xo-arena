@@ -13,7 +13,7 @@
 | 2 - Platform Consolidation (rebrand + nav) | **done** (44/44) | Complete. |
 | 3 - Frontend Retirement, Tables Page, Platform Shell | **done** (58/58) | 3.0-3.5 complete. (3.6 multi-seat shell relocated to Phase 5.0; 3.7 rendered-table polish relocated to Cross-Cutting.) |
 | 3.7a - Pre-prod cleanups | **done** (25/27) | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .5 cosmetic built-in-bot polish (optional). (Frontend follow-up from .2 relocated to 3.8.3.) |
-| 3.8 - Multi-Skill Bots | in progress (8/25) | Backend additive layer shipped (3.8.1 + 4 of 6 endpoints in 3.8.2 + initial vitest). Remaining 17 items grouped into 3 sprints (locked 2026-05-02): **3.8.A** backend reshape + Profile (6 items), **3.8.B** Gym + Profile→Gym nav (4), **3.8.C** Play + tournaments + closeout (7). Production cut after 3.8.C. |
+| 3.8 - Multi-Skill Bots | in progress (12/25) | Sprint 3.8.A complete (backend reshape + Profile bot-card + AddSkillModal + inline name check + mixed-list disambiguation). Sprint 3.8.B complete (Gym sidebar bot→skill drilldown, Profile→Gym nav buttons, in-Gym Add-Skill, backend `repointBotPrimarySkill` on training completion). Remaining: Sprint 3.8.C — Play + tournaments + closeout (7 items). Production cut after 3.8.C. |
 | 4 - Connect4 | not started (0/20) | Blocked on 3.8. |
 | 5 - Poker | not started (0/24) | Blocked on 3.8 + 4. (Now includes 5.0 multi-seat shell, formerly 3.6.) |
 | 6 - Pong | not started (0/18) | Blocked on 5's real-time spike review. |
@@ -446,14 +446,14 @@ Deferred to prod-bringup day. No code change in this phase.
 - [x] **[Sprint 3.8.A]** Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
 - [x] **[Sprint 3.8.A]** Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
 - [x] **[Sprint 3.8.A]** "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`. *(Single-game world: the game dropdown shows only XO; structure stays so Connect4 row lights it up.)*
-- [ ] **[Sprint 3.8.B]** **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button in addition to the skill pills. Also add a "Gym ⚡" link in the My Bots section header. Closes the navigation gap identified in Phase 3.7a audit — today returning users with dismissed journey and no "AI Training" slot can't reach `/gym` from Profile. Deferred to 3.8 (not 3.7a) because the bot card is redesigned here; doing it twice would be waste.
+- [x] **[Sprint 3.8.B]** **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button (deep-links to `/gym?bot=:botId&gameId=:firstSkillGameId`, or `/gym?bot=:botId` for skill-less bots), and a "Gym ⚡" link sits next to "+ Create new bot" inside the My Bots section. Closes the 3.7a navigation gap.
 - [x] **[Sprint 3.8.A]** **Bot-name uniqueness UX (relocated from 3.7a.2):** bot-create form checks availability inline (debounced GET `/bots/check-name`) before submit; per-owner dedup matches the partial-unique indexes (cross-owner collisions allowed); Rankings page renders "Rusty · @joe" / "Rusty · built-in" via `disambiguateBotLabels` when names collide in the visible set. *(Bot picker / tournament bracket helpers already in place — apply on those surfaces in Sprint 3.8.C alongside the picker reshape.)*
 
 ### 3.8.4 Frontend — Gym
 
-- [ ] **[Sprint 3.8.B]** Left sidebar shows bots; selecting a bot reveals its skills as a second-level picker (tabs or sub-list). Selecting a skill opens the existing Gym tabs scoped to that `(botId, gameId)`. *(Visually trivial with one skill per bot; structural for Phase 4.)*
-- [ ] **[Sprint 3.8.B]** "Add skill for this bot" affordance inside Gym for convenience — shares the Profile modal.
-- [ ] **[Sprint 3.8.B]** When a training session completes, update `User.botModelId` to point at the just-trained skill so Profile "last-trained" stays current.
+- [x] **[Sprint 3.8.B]** Left sidebar shows bots; selecting a bot expands it to surface its `BotSkill` rows as a second-level list. Selecting a skill opens the existing Gym tabs scoped to that `(botId, gameId)` and keeps `?bot=…&gameId=…` in sync so the deep-link is shareable. *(Visually trivial with one skill per bot today; structural for Phase 4.)*
+- [x] **[Sprint 3.8.B]** "Add skill for this bot" affordance inside Gym (header button on the active-skill panel + empty-state CTA on a skill-less bot) — shares the Profile `AddSkillModal` and auto-selects the new skill on success.
+- [x] **[Sprint 3.8.B]** When a training session completes, the backend auto-repoints `User.botModelId` to the just-finished `BotSkill` (`repointBotPrimarySkill`, exported from both `mlService` and `skillService`; covered by vitest in each service's `__tests__/`). The frontend `handleTrainingComplete` mirrors the same update optimistically so the Gym sidebar / Profile cache don't show stale state until the next bots refetch.
 
 ### 3.8.5 Frontend — Play + tournaments
 

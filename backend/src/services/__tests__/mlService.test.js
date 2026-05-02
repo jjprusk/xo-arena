@@ -25,6 +25,7 @@ vi.mock('../../lib/db.js', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      update: vi.fn(),
     },
   },
 }))
@@ -76,6 +77,7 @@ const {
   resetModel,
   cloneModel,
   listModels,
+  repointBotPrimarySkill,
 } = await import('../mlService.js')
 
 const db = (await import('../../lib/db.js')).default
@@ -447,5 +449,54 @@ describe('listModels', () => {
 
     const result = await listModels()
     expect(result[0].creatorName).toBeNull()
+  })
+})
+
+// ─── repointBotPrimarySkill (Phase 3.8.4.3) ──────────────────────────────────
+
+describe('repointBotPrimarySkill', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('updates User.botModelId on the bot that owns the skill', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_123' })
+    db.user.update.mockResolvedValue({ id: 'bot_123' })
+
+    const ok = await repointBotPrimarySkill('skill_xo')
+
+    expect(ok).toBe(true)
+    expect(db.botSkill.findUnique).toHaveBeenCalledWith({
+      where:  { id: 'skill_xo' },
+      select: { botId: true },
+    })
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'bot_123' },
+      data:  { botModelId: 'skill_xo' },
+    })
+  })
+
+  it('skips the user update when the skill has no botId (e.g. legacy / orphaned skill)', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: null })
+
+    const ok = await repointBotPrimarySkill('skill_orphan')
+
+    expect(ok).toBe(false)
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns false (and does not throw) if the skill row is missing', async () => {
+    db.botSkill.findUnique.mockResolvedValue(null)
+
+    const ok = await repointBotPrimarySkill('skill_gone')
+
+    expect(ok).toBe(false)
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns false (and does not throw) on db errors so the completion event still fires', async () => {
+    db.botSkill.findUnique.mockRejectedValue(new Error('boom'))
+
+    const ok = await repointBotPrimarySkill('skill_err')
+
+    expect(ok).toBe(false)
   })
 })

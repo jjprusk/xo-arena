@@ -342,6 +342,85 @@ test.describe('§11g — Bot-name inline availability check', () => {
   })
 })
 
+// ── 11h: Profile→Gym nav + sidebar bot→skill drilldown + in-Gym Add Skill ───
+//
+// Phase 3.8 Sprint B — closes the Profile→Gym navigation gap (Train in Gym
+// button + My Bots header link), the Gym sidebar drilldown (bot row expands
+// to surface its BotSkill rows), and the in-Gym "+ Add skill" affordance
+// that shares AddSkillModal with the Profile flow.
+
+test.describe('§11h — Profile→Gym nav + Gym bot→skill drilldown', () => {
+  test.setTimeout(75_000)
+
+  test('skill-less bot: Train-in-Gym deep-links to /gym?bot=…, empty-state Add Skill mints an XO skill, drilldown row appears', async ({ page }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    // Mint a fresh skill-less bot via the API for determinism.
+    const apiCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    const apiPageLike = { context: () => ({ request: apiCtx }) }
+    await signIn(apiPageLike, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    const userToken = await fetchAuthToken(apiCtx, LANDING_URL)
+
+    const name = `qa-11h-${Date.now()}`
+    const createRes = await apiCtx.post(`${BACKEND_URL}/api/v1/bots`, {
+      headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+      data:    { name, competitive: false },
+    })
+    expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
+    const { bot } = await createRes.json()
+    const botId = bot.id
+    expect(botId).toBeTruthy()
+    await apiCtx.dispose()
+
+    try {
+      await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+
+      // 1) Profile shows the per-row Train-in-Gym button. Skill-less → href
+      //    omits gameId (the route handles the empty-state in-Gym).
+      await page.goto(`${LANDING_URL}/profile?section=bots`)
+      const trainBtn = page.getByTestId(`bot-train-in-gym-${botId}`)
+      await expect(trainBtn).toBeVisible({ timeout: 15_000 })
+      await expect(trainBtn).toHaveAttribute('href', new RegExp(`/gym\\?bot=${botId}$`))
+
+      // 2) The header "Gym ⚡" link in My Bots is also present.
+      await expect(page.getByTestId('my-bots-gym-link')).toBeVisible()
+
+      // 3) Click into the Gym at this bot's deep-link.
+      await trainBtn.click()
+      await page.waitForURL(new RegExp(`/gym\\?bot=${botId}`))
+
+      // 4) Sidebar bot row is expanded and shows the "no skills" tag.
+      const botRow = page.getByTestId(`gym-bot-row-${botId}`)
+      await expect(botRow).toBeVisible({ timeout: 15_000 })
+      await expect(botRow).toContainText(/no skills/i)
+
+      // 5) Empty-state "+ Add a skill" button mints an XO + Q-Learning skill.
+      await page.getByTestId('gym-add-skill-empty').click()
+      await expect(page.getByRole('dialog', { name: /Add a skill/i })).toBeVisible()
+      await page.getByTestId('add-skill-submit').click()
+
+      // 6) Drilldown surfaces the new XO skill row under the bot.
+      const skillRow = page.getByTestId(`gym-skill-row-${botId}-xo`)
+      await expect(skillRow).toBeVisible({ timeout: 10_000 })
+
+      // 7) URL is updated to include gameId=xo so the deep-link is shareable.
+      await page.waitForURL(new RegExp(`/gym\\?bot=${botId}&gameId=xo`))
+    } finally {
+      const cleanCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+      try {
+        const cleanPage = { context: () => ({ request: cleanCtx }) }
+        await signIn(cleanPage, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+        const t = await fetchAuthToken(cleanCtx, LANDING_URL)
+        await cleanCtx.delete(`${BACKEND_URL}/api/v1/bots/${botId}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {})
+      } finally {
+        await cleanCtx.dispose()
+      }
+    }
+  })
+})
+
 // ── 11f: Admin skills column — none state + tooltip ──────────────────────────
 
 test.describe('§11f — Admin bots skills column edges', () => {

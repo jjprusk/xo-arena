@@ -20,11 +20,14 @@ vi.mock('../../lib/db.js', () => ({
       findFirst:  vi.fn(),
       findUnique: vi.fn(),
     },
+    user: {
+      update: vi.fn(),
+    },
   },
 }))
 
 // Import AFTER the mock so the module binds to our stubbed db.
-const { resolveSkillForGame } = await import('../skillService.js')
+const { resolveSkillForGame, repointBotPrimarySkill } = await import('../skillService.js')
 const db = (await import('../../lib/db.js')).default
 
 describe('resolveSkillForGame', () => {
@@ -117,5 +120,45 @@ describe('socketHandler room:create:hvb — resolved skill override contract', (
     )
 
     expect(resolved).toBeNull()
+  })
+})
+
+// ─── repointBotPrimarySkill (Phase 3.8.4.3) ──────────────────────────────────
+
+describe('repointBotPrimarySkill', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('updates User.botModelId on the bot that owns the skill', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_owner' })
+    db.user.update.mockResolvedValue({ id: 'bot_owner' })
+
+    const ok = await repointBotPrimarySkill('skill_xo_42')
+
+    expect(ok).toBe(true)
+    expect(db.botSkill.findUnique).toHaveBeenCalledWith({
+      where:  { id: 'skill_xo_42' },
+      select: { botId: true },
+    })
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'bot_owner' },
+      data:  { botModelId: 'skill_xo_42' },
+    })
+  })
+
+  it('skips the update when the skill has no botId', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: null })
+    expect(await repointBotPrimarySkill('skill_orphan')).toBe(false)
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns false (no throw) when the skill row is missing', async () => {
+    db.botSkill.findUnique.mockResolvedValue(null)
+    expect(await repointBotPrimarySkill('skill_gone')).toBe(false)
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns false (no throw) on db errors so the completion path keeps moving', async () => {
+    db.botSkill.findUnique.mockRejectedValue(new Error('boom'))
+    expect(await repointBotPrimarySkill('skill_err')).toBe(false)
   })
 })

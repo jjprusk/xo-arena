@@ -903,21 +903,32 @@ export default function ProfilePage() {
             <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{botActionError}</p>
           )}
 
-          <button
-            onClick={() => {
-              if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
-                setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
-                return
-              }
-              setBotActionError(null)
-              setShowCreateBot(true)
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-            }}
-            className="text-sm font-medium underline underline-offset-2 transition-opacity hover:opacity-70"
-            style={{ color: 'var(--color-blue-600)' }}
-          >
-            + Create new bot
-          </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <button
+              onClick={() => {
+                if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
+                  setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
+                  return
+                }
+                setBotActionError(null)
+                setShowCreateBot(true)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              className="text-sm font-medium underline underline-offset-2 transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-blue-600)' }}
+            >
+              + Create new bot
+            </button>
+            <Link
+              to="/gym"
+              className="text-sm font-medium underline underline-offset-2 transition-opacity hover:opacity-70 inline-flex items-center gap-1"
+              style={{ color: 'var(--color-purple-600)' }}
+              data-testid="my-bots-gym-link"
+              title="Go to the Gym to train your bots"
+            >
+              Gym <span aria-hidden="true">⚡</span>
+            </Link>
+          </div>
 
           {botsLoading && (
             <div className="flex items-center justify-center py-4">
@@ -1030,7 +1041,24 @@ export default function ProfilePage() {
                       <span className="font-mono tabular-nums">{Math.round(bot.eloRating)}</span>
                     </ListTd>
                     <ListTd align="right">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-1 flex-wrap">
+                        {(() => {
+                          const firstSkillGameId = bot.skills?.[0]?.gameId
+                          const href = firstSkillGameId
+                            ? `/gym?bot=${bot.id}&gameId=${firstSkillGameId}`
+                            : `/gym?bot=${bot.id}`
+                          return (
+                            <Link
+                              to={href}
+                              className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                              style={{ borderColor: 'var(--color-purple-300)', color: 'var(--color-purple-600)' }}
+                              data-testid={`bot-train-in-gym-${bot.id}`}
+                              title="Train this bot in the Gym"
+                            >
+                              Train in Gym →
+                            </Link>
+                          )
+                        })()}
                         <button
                           onClick={() => setRenamingBot({ id: bot.id, value: bot.displayName })}
                           className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
