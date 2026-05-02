@@ -141,6 +141,11 @@ describe('GET /api/v1/bots', () => {
     expect(res.body.bots).toEqual(bots)
     expect(res.body.limitInfo).toEqual({ count: 2, limit: 5, isExempt: false })
     expect(res.body.provisionalThreshold).toBe(5)
+    // Phase 3.8 — owner-scoped GET /bots must request includeSkills so the
+    // Profile bot list can render skill pills inline. Regression guard: an
+    // earlier draft passed only { ownerId, includeInactive } and the
+    // Profile UI fell back to the per-bot fetch fan-out path.
+    expect(listBots).toHaveBeenCalledWith(expect.objectContaining({ includeSkills: true }))
   })
 
   it('ownerId query with BOT_ADMIN owner → limit=null, isExempt=true (getTierLimit not called)', async () => {

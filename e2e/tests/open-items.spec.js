@@ -232,6 +232,82 @@ test.describe('§11d — Bot creation (Phase 3.8 skill-less reshape)', () => {
   })
 })
 
+// ── 11e: Profile bot card — skill pills + Add a skill modal ──────────────────
+//
+// Phase 3.8 Sprint A.2 — the bot card replaces the legacy "Type" badge with a
+// per-skill pill list and an "+ Add skill" chip that opens AddSkillModal.
+// This block exercises the full add flow end-to-end through the UI: create a
+// skill-less bot via API, navigate to /profile, confirm the empty-skills
+// hint shows, click "+ Add skill", submit the modal, and assert the new pill
+// appears in the bot row. Doubles as the regression net for the skill pill
+// deep-link target — the rendered <a> must point at /gym?bot=…&gameId=…
+// (Sprint 3.8.B will rely on that contract).
+
+test.describe('§11e — Profile skill pills + Add a skill modal', () => {
+  test.setTimeout(75_000)
+
+  test('skill-less bot shows the empty-state pill, then Add-a-skill flow renders an XO pill', async ({ page, request: _ }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    // 1) Mint a fresh skill-less bot via the API so the test is deterministic
+    //    regardless of the user's pre-existing bots.
+    const apiCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    const apiPageLike = { context: () => ({ request: apiCtx }) }
+    await signIn(apiPageLike, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    const userToken = await fetchAuthToken(apiCtx, LANDING_URL)
+
+    const name = `qa-11e-${Date.now()}`
+    const createRes = await apiCtx.post(`${BACKEND_URL}/api/v1/bots`, {
+      headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+      data:    { name, competitive: false },
+    })
+    expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
+    const { bot } = await createRes.json()
+    const botId = bot.id
+    expect(botId).toBeTruthy()
+    await apiCtx.dispose()
+
+    try {
+      // 2) Navigate to /profile in the UI session and open the My Bots
+      //    section. The bots accordion is collapsed by default; the
+      //    section=bots query param expands it.
+      await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+      await page.goto(`${LANDING_URL}/profile?section=bots`)
+
+      // 3) The empty-skills indicator for our fresh bot must appear.
+      const emptyHint = page.getByTestId(`bot-skills-empty-${botId}`)
+      await expect(emptyHint).toBeVisible({ timeout: 15_000 })
+
+      // 4) Click "+ Add skill" → modal opens.
+      await page.getByTestId(`bot-add-skill-${botId}`).click()
+      await expect(page.getByRole('dialog', { name: /Add a skill/i })).toBeVisible()
+      // Default selections are XO + Q-Learning — submit as-is.
+      await page.getByTestId('add-skill-submit').click()
+
+      // 5) The XO pill appears, deep-linking to /gym?bot=…&gameId=xo.
+      const pill = page.getByTestId(`bot-skill-pill-${botId}-xo`)
+      await expect(pill).toBeVisible({ timeout: 10_000 })
+      await expect(pill).toHaveAttribute('href', new RegExp(`/gym\\?bot=${botId}&gameId=xo`))
+
+      // 6) The empty-skills hint is gone.
+      await expect(emptyHint).toHaveCount(0)
+    } finally {
+      // Best-effort cleanup — delete the test bot via the API.
+      const cleanCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+      try {
+        const cleanPage = { context: () => ({ request: cleanCtx }) }
+        await signIn(cleanPage, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+        const t = await fetchAuthToken(cleanCtx, LANDING_URL)
+        await cleanCtx.delete(`${BACKEND_URL}/api/v1/bots/${botId}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {})
+      } finally {
+        await cleanCtx.dispose()
+      }
+    }
+  })
+})
+
 // ── 11f: Admin skills column — none state + tooltip ──────────────────────────
 
 test.describe('§11f — Admin bots skills column edges', () => {

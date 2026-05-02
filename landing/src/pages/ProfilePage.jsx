@@ -9,7 +9,9 @@ import { signOut } from '../lib/auth-client.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
+import AddSkillModal from '../components/ui/AddSkillModal.jsx'
 import QuickBotWizard from '../components/guide/QuickBotWizard.jsx'
+import { GAMES } from '../lib/gameRegistry.js'
 
 const BOT_MODEL_LABELS = {
   ml: 'ML',
@@ -46,6 +48,9 @@ export default function ProfilePage() {
   const [bots, setBots] = useState([])
   const [limitInfo, setLimitInfo] = useState(null)
   const [provisionalThreshold, setProvisionalThreshold] = useState(5)
+  // Phase 3.8 — Multi-Skill Bots: which bot (if any) currently has its
+  // "Add a skill" modal open. Null when closed.
+  const [addSkillBot, setAddSkillBot] = useState(null)
   // Starts `true` so effects that wait for the bot list (notably the
   // ?action=train-bot redirect) don't fire on the initial empty `bots = []`
   // and bounce a user with bots over to the QuickBotWizard. Cleared at the
@@ -868,11 +873,11 @@ export default function ProfilePage() {
           )}
 
           {!botsLoading && bots.length > 0 && (
-            <ListTable fitViewport topOffset={56} bottomPadding={32} columns={['33%', '13%', '11%', '43%']}>
+            <ListTable fitViewport topOffset={56} bottomPadding={32} columns={['28%', '24%', '8%', '40%']}>
               <thead>
                 <tr>
                   <ListTh>Bot</ListTh>
-                  <ListTh>Type</ListTh>
+                  <ListTh>Skills</ListTh>
                   <ListTh align="right">ELO</ListTh>
                   <ListTh align="right">Actions</ListTh>
                 </tr>
@@ -919,9 +924,50 @@ export default function ProfilePage() {
                       )}
                     </ListTd>
                     <ListTd>
-                      <span className="badge badge-live">
-                        {BOT_MODEL_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'}
-                      </span>
+                      {/*
+                        Phase 3.8 — Multi-Skill Bots: legacy single "Type"
+                        badge replaced with a per-skill pill list. Each pill
+                        deep-links to /gym scoped to (botId, gameId) so the
+                        user lands on the right Gym context with one click.
+                        The "+ Add" chip opens AddSkillModal; it's hidden
+                        when every supported game already has a skill.
+                      */}
+                      <div className="flex items-center gap-1 flex-wrap" data-testid={`bot-skills-${bot.id}`}>
+                        {(bot.skills ?? []).length === 0 && (
+                          <span
+                            className="text-xs italic"
+                            style={{ color: 'var(--text-muted)' }}
+                            data-testid={`bot-skills-empty-${bot.id}`}
+                          >
+                            No skills yet
+                          </span>
+                        )}
+                        {(bot.skills ?? []).map((s) => {
+                          const game = GAMES.find(g => g.id === s.gameId)
+                          const label = game?.label ?? s.gameId.toUpperCase()
+                          return (
+                            <Link
+                              key={s.id}
+                              to={`/gym?bot=${bot.id}&gameId=${s.gameId}`}
+                              className="badge badge-live hover:opacity-80 transition-opacity"
+                              title={`${label} · ${s.algorithm}${s.elo?.rating ? ` · ELO ${Math.round(s.elo.rating)}` : ''}`}
+                              data-testid={`bot-skill-pill-${bot.id}-${s.gameId}`}
+                            >
+                              {label.split(' ')[0]} · {s.algorithm}
+                            </Link>
+                          )
+                        })}
+                        {GAMES.length > (bot.skills ?? []).length && (
+                          <button
+                            type="button"
+                            onClick={() => setAddSkillBot(bot)}
+                            className="text-xs px-1.5 py-0.5 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                            style={{ borderColor: 'var(--color-blue-300)', color: 'var(--color-blue-600)' }}
+                            data-testid={`bot-add-skill-${bot.id}`}
+                            title="Add a skill"
+                          >+ Add skill</button>
+                        )}
+                      </div>
                     </ListTd>
                     <ListTd align="right">
                       <span className="font-mono tabular-nums">{Math.round(bot.eloRating)}</span>
@@ -1027,6 +1073,24 @@ export default function ProfilePage() {
             setShowBotCreatedPopup(false)
             useGuideStore.getState().open()
             window.location.href = '/gym'
+          }}
+        />
+      )}
+
+      {addSkillBot && (
+        <AddSkillModal
+          bot={addSkillBot}
+          onClose={() => setAddSkillBot(null)}
+          onAdded={(skill) => {
+            // Optimistic merge — append the new skill into the bot row in
+            // place. Avoids a full bots refetch and the visual flicker that
+            // would come with it. The /gym pill becomes immediately
+            // clickable; ELO populates on the next admin/match round-trip.
+            setBots(prev => prev.map(b => (
+              b.id === addSkillBot.id
+                ? { ...b, skills: [...(b.skills ?? []), { ...skill, elo: null }] }
+                : b
+            )))
           }}
         />
       )}

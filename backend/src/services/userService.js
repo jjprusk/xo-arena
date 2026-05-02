@@ -513,9 +513,17 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
 
 /**
  * List bot users.
- * @param {{ ownerId?: string, includeInactive?: boolean }} options
+ *
+ * @param {object} options
+ * @param {string}  [options.ownerId]         only return bots owned by this user
+ * @param {boolean} [options.includeInactive] include inactive bots
+ * @param {boolean} [options.includeSkills]   attach `skills: BotSkill[]` (each
+ *   enriched with `elo: { rating, gamesPlayed }` from GameElo). Phase 3.8 —
+ *   needed for the Profile bot list to render skill pills without an N+1
+ *   round-trip. Adds two grouped queries (botSkill + gameElo) regardless of
+ *   how many bots are in the result, so cost stays O(1) in DB calls.
  */
-export async function listBots({ ownerId, includeInactive = false } = {}) {
+export async function listBots({ ownerId, includeInactive = false, includeSkills = false } = {}) {
   const where = {
     isBot: true,
     ...(ownerId ? { botOwnerId: ownerId } : {}),
@@ -540,11 +548,37 @@ export async function listBots({ ownerId, includeInactive = false } = {}) {
     },
     orderBy: { createdAt: 'desc' },
   })
+
+  let skillsByBot = new Map()
+  if (includeSkills && bots.length > 0) {
+    const botIds = bots.map(b => b.id)
+    const allSkills = await db.botSkill.findMany({
+      where:   { botId: { in: botIds } },
+      orderBy: { createdAt: 'asc' },
+    })
+    // Per-skill ELO is keyed by (userId=botId, gameId). Pull all rows for
+    // any (botId, gameId) pair we hold a skill for, then index.
+    const eloPairs = allSkills.map(s => ({ userId: s.botId, gameId: s.gameId }))
+    const eloRows  = eloPairs.length === 0 ? [] : await db.gameElo.findMany({
+      where:  { OR: eloPairs },
+      select: { userId: true, gameId: true, rating: true, gamesPlayed: true },
+    })
+    const eloKey = (uid, gid) => `${uid}|${gid}`
+    const eloByPair = new Map(eloRows.map(r => [eloKey(r.userId, r.gameId), r]))
+
+    for (const s of allSkills) {
+      const arr = skillsByBot.get(s.botId) ?? []
+      arr.push({ ...s, elo: eloByPair.get(eloKey(s.botId, s.gameId)) ?? null })
+      skillsByBot.set(s.botId, arr)
+    }
+  }
+
   // Flatten gameElo into a top-level eloRating field for backward compatibility
   return bots.map(b => ({
     ...b,
     eloRating: b.gameElo?.[0]?.rating ?? 1200,
     gameElo: undefined,
+    ...(includeSkills ? { skills: skillsByBot.get(b.id) ?? [] } : {}),
   }))
 }
 

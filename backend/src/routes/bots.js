@@ -25,9 +25,11 @@ router.get('/', async (req, res, next) => {
   try {
     const { ownerId, includeInactive, gameId } = req.query
 
-    // Owner-specific requests are user-scoped — never cache them.
+    // Owner-specific requests are user-scoped — never cache them. Always
+    // include skills so the Profile bot list can render skill pills inline
+    // without a fan-out fetch per bot.
     if (ownerId) {
-      const bots = await listBots({ ownerId, includeInactive: includeInactive === 'true' })
+      const bots = await listBots({ ownerId, includeInactive: includeInactive === 'true', includeSkills: true })
       const owner = await db.user.findUnique({
         where: { id: ownerId },
         include: { userRoles: { select: { role: true } } },

@@ -155,6 +155,14 @@ export const api = {
     trainQuick: (id, token)         => request('POST',   `/bots/${id}/train-quick`, {}, token),
     trainGuided:        (id, token)             => request('POST',   `/bots/${id}/train-guided`, {}, token),
     trainGuidedFinalize:(id, body, token)       => request('POST',   `/bots/${id}/train-guided/finalize`, body, token),
+    // Phase 3.8 — Multi-Skill Bots: per-bot skill management. Body for `add`
+    // is `{ gameId, algorithm, modelType? }`; the endpoint is idempotent on
+    // (botId, gameId) so a second add returns the existing skill instead of
+    // failing.
+    skills: {
+      add:    (botId, body, token)              => request('POST',   `/bots/${botId}/skills`, body, token),
+      remove: (botId, skillId, token)           => request('DELETE', `/bots/${botId}/skills/${skillId}`, null, token),
+    },
   },
 
   botGames: {

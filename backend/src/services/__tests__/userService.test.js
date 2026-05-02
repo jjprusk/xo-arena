@@ -17,7 +17,11 @@ vi.mock('../../lib/db.js', () => ({
       groupBy: vi.fn(),
     },
     gameElo: {
-      upsert: vi.fn(),
+      upsert:   vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    botSkill: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     systemConfig: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -36,7 +40,7 @@ vi.mock('@xo-arena/db', () => ({
   },
 }))
 
-const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo, getLeaderboard, createBot } =
+const { syncUser, getUserById, updateUser, getUserStats, getBotByModelId, resetBotElo, getLeaderboard, createBot, listBots } =
   await import('../userService.js')
 const db = (await import('../../lib/db.js')).default
 
@@ -335,5 +339,83 @@ describe('createBot — Phase 3.8 skill-less', () => {
     expect(data.botModelType).toBe('minimax')
     expect(data.botModelId).toBe('user:owner_1:minimax:novice')
     expect(bot.botModelId).toBe('user:owner_1:minimax:novice')
+  })
+})
+
+// ─── listBots — Phase 3.8 includeSkills option ───────────────────────────────
+//
+// The Profile bot list renders skill pills inline. Without `includeSkills`,
+// listBots stays the legacy shape (bot rows only, eloRating flattened from
+// the xo GameElo). With `includeSkills`, it batch-attaches `skills: BotSkill[]`
+// — each with `elo: { rating, gamesPlayed } | null` — so the Profile fetch
+// is one round-trip regardless of bot count. Critical regression guard:
+// must NOT issue an N+1 query per bot, and must NOT crash when a bot has
+// zero skills (skill-less bots created via the new POST /bots).
+describe('listBots — includeSkills', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.gameElo.findMany.mockResolvedValue([])
+    db.botSkill.findMany.mockResolvedValue([])
+  })
+
+  it('default (no includeSkills) returns the legacy shape — no skills key, no botSkill query', async () => {
+    db.user.findMany.mockResolvedValue([
+      { id: 'b1', displayName: 'A', botModelType: 'ml', gameElo: [{ rating: 1300 }] },
+    ])
+
+    const result = await listBots({ ownerId: 'owner_1' })
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).not.toHaveProperty('skills')
+    expect(result[0].eloRating).toBe(1300)
+    // Hard guard: the skills batch query must not fire when not requested.
+    expect(db.botSkill.findMany).not.toHaveBeenCalled()
+  })
+
+  it('includeSkills attaches skills + per-skill ELO via two batched queries (no N+1)', async () => {
+    db.user.findMany.mockResolvedValue([
+      { id: 'b1', displayName: 'A', botModelType: 'ml', gameElo: [{ rating: 1200 }] },
+      { id: 'b2', displayName: 'B', botModelType: 'ml', gameElo: [] },
+    ])
+    db.botSkill.findMany.mockResolvedValue([
+      { id: 's1', botId: 'b1', gameId: 'xo',       algorithm: 'qlearning' },
+      { id: 's2', botId: 'b1', gameId: 'connect4', algorithm: 'dqn'       },
+      { id: 's3', botId: 'b2', gameId: 'xo',       algorithm: 'minimax'   },
+    ])
+    db.gameElo.findMany.mockResolvedValue([
+      { userId: 'b1', gameId: 'xo',       rating: 1450, gamesPlayed: 12 },
+      { userId: 'b2', gameId: 'xo',       rating: 1200, gamesPlayed: 0  },
+      // b1's connect4 skill intentionally has no ELO row — must surface as null
+    ])
+
+    const result = await listBots({ ownerId: 'owner_1', includeSkills: true })
+
+    // Exactly one batched call to each table — no N+1.
+    expect(db.botSkill.findMany).toHaveBeenCalledTimes(1)
+    expect(db.gameElo.findMany).toHaveBeenCalledTimes(1)
+
+    const [b1, b2] = result
+    expect(b1.skills).toHaveLength(2)
+    const xoSkill = b1.skills.find(s => s.gameId === 'xo')
+    const c4Skill = b1.skills.find(s => s.gameId === 'connect4')
+    expect(xoSkill.elo).toEqual(expect.objectContaining({ rating: 1450, gamesPlayed: 12 }))
+    expect(c4Skill.elo).toBeNull()
+
+    expect(b2.skills).toHaveLength(1)
+    expect(b2.skills[0].elo.rating).toBe(1200)
+  })
+
+  it('includeSkills with a skill-less bot returns skills: []', async () => {
+    db.user.findMany.mockResolvedValue([
+      { id: 'b1', displayName: 'Skillless', botModelType: null, gameElo: [] },
+    ])
+    db.botSkill.findMany.mockResolvedValue([])
+
+    const result = await listBots({ ownerId: 'owner_1', includeSkills: true })
+
+    expect(result[0].skills).toEqual([])
+    // Skipping ELO fetch when there are no skills is a small perf win and
+    // avoids an empty `OR: []` clause that some Prisma versions reject.
+    expect(db.gameElo.findMany).not.toHaveBeenCalled()
   })
 })
