@@ -147,7 +147,10 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       include: {
         participants: {
           include: {
-            user: { select: { id: true, betterAuthId: true, displayName: true, avatarUrl: true, isBot: true } },
+            // botOwnerId is exposed so the UI can flag "this bot is yours" in
+            // bracket / participants list / spectate header — a Curriculum Cup
+            // shows 4 bots and the user has no other way to spot theirs.
+            user: { select: { id: true, betterAuthId: true, displayName: true, avatarUrl: true, isBot: true, botOwnerId: true } },
           },
         },
         rounds: {

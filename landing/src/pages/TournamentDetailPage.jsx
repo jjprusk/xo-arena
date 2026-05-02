@@ -1,5 +1,5 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { useParams, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { api } from '../lib/api.js'
@@ -207,7 +207,7 @@ function PlayerLink({ userId, children, className, style }) {
 
 // ── Bracket visualization ─────────────────────────────────────────────────────
 
-function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate, onFollow }) {
+function TournamentBracket({ rounds, participants, myBotIds, onMatchClick, onMatchSpectate, onFollow }) {
   if (!rounds || rounds.length === 0) {
     return (
       <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -218,9 +218,11 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
 
   const nameOf   = {}
   const userIdOf = {}
+  const isYouOf  = {}
   ;(participants ?? []).forEach(p => {
     nameOf[p.id]   = p.user?.displayName ?? `Seed ${p.seedPosition}`
     userIdOf[p.id] = p.user?.id ?? null
+    isYouOf[p.id]  = !!(myBotIds && p.user?.id && myBotIds.has(p.user.id))
   })
 
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber)
@@ -248,6 +250,7 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
                     match={match}
                     nameOf={nameOf}
                     userIdOf={userIdOf}
+                    isYouOf={isYouOf}
                     matchIndex={matchIdx}
                     matchCount={sortedMatches.length}
                     roundIndex={roundIdx}
@@ -266,11 +269,13 @@ function TournamentBracket({ rounds, participants, onMatchClick, onMatchSpectate
   )
 }
 
-function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch, onSpectate, onFollow }) {
+function BracketMatch({ match, nameOf, userIdOf, isYouOf, matchIndex, matchCount, roundIndex, totalRounds, onWatch, onSpectate, onFollow }) {
   const p1Name   = match.participant1Id ? (nameOf[match.participant1Id] ?? 'TBD') : 'BYE'
   const p2Name   = match.participant2Id ? (nameOf[match.participant2Id] ?? 'TBD') : 'BYE'
   const p1UserId = match.participant1Id ? (userIdOf?.[match.participant1Id] ?? null) : null
   const p2UserId = match.participant2Id ? (userIdOf?.[match.participant2Id] ?? null) : null
+  const p1IsYou  = !!(isYouOf && match.participant1Id && isYouOf[match.participant1Id])
+  const p2IsYou  = !!(isYouOf && match.participant2Id && isYouOf[match.participant2Id])
   const isCompleted  = match.status === 'COMPLETED'
   const isInProgress = match.status === 'IN_PROGRESS'
   const isBye = !match.participant1Id || !match.participant2Id
@@ -292,17 +297,29 @@ function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIn
           className="flex items-center justify-between px-2 py-1.5 gap-2 border-b"
           style={{
             borderColor: 'var(--border-default)',
-            backgroundColor: p1Won ? 'var(--color-slate-50)' : undefined,
+            // YOU rows get a subtle teal tint (overrides the winner-slate when
+            // both apply — the user's own bot is the most useful signal).
+            backgroundColor: p1IsYou ? 'rgba(36,181,135,0.10)' : (p1Won ? 'var(--color-slate-50)' : undefined),
             opacity: isCompleted && !p1Won ? 0.5 : 1,
           }}
         >
-          <PlayerLink
-            userId={p1UserId}
-            className={`text-xs truncate max-w-[100px] ${p1Won ? 'font-bold' : 'font-medium'}`}
-            style={{ color: p1Won ? 'var(--color-slate-700)' : 'var(--text-primary)' }}
-          >
-            {p1Name}
-          </PlayerLink>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <PlayerLink
+              userId={p1UserId}
+              className={`text-xs truncate max-w-[100px] ${p1Won ? 'font-bold' : 'font-medium'}`}
+              style={{ color: p1Won ? 'var(--color-slate-700)' : 'var(--text-primary)' }}
+            >
+              {p1Name}
+            </PlayerLink>
+            {p1IsYou && (
+              <span
+                className="text-[8px] font-bold uppercase tracking-widest px-1 py-0.5 rounded shrink-0"
+                style={{ backgroundColor: 'var(--color-teal-500)', color: 'white' }}
+              >
+                You
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1 shrink-0">
             {onFollow && p1UserId && !isCompleted && !isBye && (
               <button
@@ -325,17 +342,27 @@ function BracketMatch({ match, nameOf, userIdOf, matchIndex, matchCount, roundIn
         <div
           className="flex items-center justify-between px-2 py-1.5 gap-2"
           style={{
-            backgroundColor: p2Won ? 'var(--color-slate-50)' : undefined,
+            backgroundColor: p2IsYou ? 'rgba(36,181,135,0.10)' : (p2Won ? 'var(--color-slate-50)' : undefined),
             opacity: isCompleted && !p2Won ? 0.5 : 1,
           }}
         >
-          <PlayerLink
-            userId={p2UserId}
-            className={`text-xs truncate max-w-[100px] ${p2Won ? 'font-bold' : 'font-medium'}`}
-            style={{ color: p2Won ? 'var(--color-slate-700)' : 'var(--text-primary)' }}
-          >
-            {p2Name}
-          </PlayerLink>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <PlayerLink
+              userId={p2UserId}
+              className={`text-xs truncate max-w-[100px] ${p2Won ? 'font-bold' : 'font-medium'}`}
+              style={{ color: p2Won ? 'var(--color-slate-700)' : 'var(--text-primary)' }}
+            >
+              {p2Name}
+            </PlayerLink>
+            {p2IsYou && (
+              <span
+                className="text-[8px] font-bold uppercase tracking-widest px-1 py-0.5 rounded shrink-0"
+                style={{ backgroundColor: 'var(--color-teal-500)', color: 'white' }}
+              >
+                You
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1 shrink-0">
             {onFollow && p2UserId && !isCompleted && !isBye && (
               <button
@@ -578,7 +605,8 @@ function SpectatorGame({ slug, onGameEnd }) {
   )
 }
 
-function MatchSpectateModal({ matchId, matchLabel, followedName, mode = 'live', statusMessage, onClose, onGameEnd }) {
+function MatchSpectateModal({ matchId, matchLabel, followedName, followedUserId, myBotIds, mode = 'live', statusMessage, onClose, onGameEnd }) {
+  const isFollowingYou = !!(followedUserId && myBotIds && myBotIds.has(followedUserId))
   const [slug, setSlug]       = useState(null)
   const [fetching, setFetching] = useState(mode === 'live')
   const [fetchError, setFetchError] = useState(null)
@@ -647,8 +675,17 @@ function MatchSpectateModal({ matchId, matchLabel, followedName, mode = 'live', 
             <div className="min-w-0">
               {followedName ? (
                 <>
-                  <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                    Following: {followedName}
+                  <div className="text-sm font-semibold truncate flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                    <span className="truncate">Following: {followedName}</span>
+                    {isFollowingYou && (
+                      <span
+                        data-testid="follow-you-badge"
+                        className="text-[8px] font-bold uppercase tracking-widest px-1 py-0.5 rounded shrink-0"
+                        style={{ backgroundColor: 'var(--color-teal-500)', color: 'white' }}
+                      >
+                        You
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{matchLabel}</div>
                 </>
@@ -1698,7 +1735,7 @@ function FinalStandings({ tournament }) {
 
 // ── Participants table ────────────────────────────────────────────────────────
 
-function ParticipantTable({ participants, tournamentStatus, onFollow }) {
+function ParticipantTable({ participants, tournamentStatus, myBotIds, onFollow }) {
   if (!participants || participants.length === 0) {
     return <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>No participants yet.</p>
   }
@@ -1726,18 +1763,28 @@ function ParticipantTable({ participants, tournamentStatus, onFollow }) {
               {p.seedPosition ?? '—'}
             </ListTd>
             <ListTd>
-              <PlayerLink
-                userId={p.user?.id}
-                className="text-sm font-medium"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
-              </PlayerLink>
-              {p.finalPosition && (
-                <span className="ml-2 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
-                  #{p.finalPosition}
-                </span>
-              )}
+              <div className="flex items-center gap-1.5">
+                <PlayerLink
+                  userId={p.user?.id}
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {p.user?.displayName ?? `User ${p.userId.slice(0, 6)}`}
+                </PlayerLink>
+                {myBotIds && p.user?.id && myBotIds.has(p.user.id) && (
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0"
+                    style={{ backgroundColor: 'var(--color-teal-500)', color: 'white' }}
+                  >
+                    You
+                  </span>
+                )}
+                {p.finalPosition && (
+                  <span className="ml-1 text-[10px] font-bold" style={{ color: 'var(--color-amber-600)' }}>
+                    #{p.finalPosition}
+                  </span>
+                )}
+              </div>
             </ListTd>
             <ListTd className="text-xs tabular-nums font-mono" style={{ color: 'var(--color-blue-600)' }}>
               {p.eloAtRegistration ? Math.round(p.eloAtRegistration) : '—'}
@@ -1893,8 +1940,13 @@ export default function TournamentDetailPage() {
       }
       if (live) break
     }
+    // followedUserId is stored on the watch state so MatchSpectateModal can
+    // derive the "(you)" badge against the current myBotIds at render time —
+    // safe against the dbUserId-resolves-late race.
+    const followedUserId = participant.user?.id ?? null
+
     if (live) {
-      setWatchMatch({ id: live.id, label: labelOf(live), followedName: displayName, mode: 'live' })
+      setWatchMatch({ id: live.id, label: labelOf(live), followedName: displayName, followedUserId, mode: 'live' })
       // Cup spectate: hide the Guide drawer so the live game is the focal
       // element. The step-7 SSE event reopens it on cup completion (see
       // AppLayout's guide:journeyStep handler — `cupDone` carve-out).
@@ -1908,6 +1960,7 @@ export default function TournamentDetailPage() {
         id: null,
         label: `Next: vs ${opponentName}`,
         followedName: displayName,
+        followedUserId,
         mode: 'waiting',
         statusMessage: `Waiting for ${displayName}'s next match — vs ${opponentName}.`,
       })
@@ -1919,7 +1972,7 @@ export default function TournamentDetailPage() {
       const msg = participant.finalPosition === 1
         ? `${displayName} won the tournament! 🏆`
         : `${displayName} finished #${participant.finalPosition}.`
-      setWatchMatch({ id: null, label: displayName, followedName: displayName, mode: 'ended', statusMessage: msg })
+      setWatchMatch({ id: null, label: displayName, followedName: displayName, followedUserId, mode: 'ended', statusMessage: msg })
     }
     // Otherwise: leave modal closed (tournament in DRAFT/REG_OPEN). User
     // sees the participant row; can click Follow again later.
@@ -1989,7 +2042,7 @@ export default function TournamentDetailPage() {
     }
 
     if (live) {
-      setWatchMatch({ id: live.id, label: labelOf(live), followedName: currentWatch.followedName, mode: 'live' })
+      setWatchMatch({ id: live.id, label: labelOf(live), followedName: currentWatch.followedName, followedUserId: currentWatch.followedUserId, mode: 'live' })
       return
     }
     if (pending) {
@@ -1999,6 +2052,7 @@ export default function TournamentDetailPage() {
         id: null,
         label: `Next: vs ${opponentName}`,
         followedName: currentWatch.followedName,
+        followedUserId: currentWatch.followedUserId,
         mode: 'waiting',
         statusMessage: `Waiting for ${currentWatch.followedName}'s next match — vs ${opponentName}.`,
       })
@@ -2013,6 +2067,7 @@ export default function TournamentDetailPage() {
       id: null,
       label: currentWatch.followedName,
       followedName: currentWatch.followedName,
+      followedUserId: currentWatch.followedUserId,
       mode: 'ended',
       statusMessage: msg,
     })
@@ -2029,6 +2084,41 @@ export default function TournamentDetailPage() {
     const timerId = setInterval(() => { handleGameEnd() }, 3_000)
     return () => clearInterval(timerId)
   }, [watchMatch?.mode, handleGameEnd])
+
+  // myBotIds — the set of *bot* user-ids the signed-in user owns, computed
+  // from the participants payload (which now includes user.botOwnerId on the
+  // GET /tournaments/:id select). Used to flag "this is your bot" in the
+  // bracket, the participants table, and the spectate-modal header so a
+  // first-time cup user can actually identify which of the four bots is
+  // theirs.
+  const myBotIds = useMemo(() => {
+    if (!dbUserId || !tournament?.participants) return new Set()
+    return new Set(
+      tournament.participants
+        .filter(p => p.user?.botOwnerId === dbUserId && p.user?.id)
+        .map(p => p.user.id)
+    )
+  }, [dbUserId, tournament?.participants])
+
+  // Auto-close the spectate modal when the tournament transitions to
+  // COMPLETED. The waiting-mode polling re-resolves participants every 3 s
+  // and *should* flip to 'ended' on its own, but we've seen it sit on a
+  // stale "Next: vs <opponent>" message after the cup wraps (poll hadn't
+  // ticked, or the participant.finalPosition propagated late). The user
+  // already sees the final standings + bracket on the page underneath, so
+  // dismissing the modal entirely on COMPLETED is the cleanest fix — the
+  // information isn't lost, it's just no longer occluded by an obsolete
+  // "Waiting…" hourglass during the post-cup celebration.
+  useEffect(() => {
+    if (tournament?.status !== 'COMPLETED') return
+    if (!watchMatch) return
+    setWatchMatch(null)
+    if (searchParams.has('follow')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('follow')
+      setSearchParams(next, { replace: true })
+    }
+  }, [tournament?.status, watchMatch, searchParams, setSearchParams])
 
   const load = useCallback(async () => {
     // If a session user is known but the token hasn't resolved yet, skip the pre-fetch.
@@ -2297,6 +2387,7 @@ export default function TournamentDetailPage() {
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
           >
             <TournamentBracket rounds={t.rounds ?? []} participants={t.participants ?? []}
+              myBotIds={myBotIds}
               onMatchClick={(id, label) => setReplayMatch({ id, label })}
               onMatchSpectate={(id, label) => setWatchMatch({ id, label, mode: 'live' })}
               onFollow={handleFollow} />
@@ -2308,6 +2399,7 @@ export default function TournamentDetailPage() {
         <ParticipantTable
           participants={t.participants ?? []}
           tournamentStatus={t.status}
+          myBotIds={myBotIds}
           onFollow={handleFollow}
         />
       </Section>
@@ -2324,6 +2416,8 @@ export default function TournamentDetailPage() {
           matchId={watchMatch.id}
           matchLabel={watchMatch.label}
           followedName={watchMatch.followedName}
+          followedUserId={watchMatch.followedUserId}
+          myBotIds={myBotIds}
           mode={watchMatch.mode ?? 'live'}
           statusMessage={watchMatch.statusMessage}
           onGameEnd={handleGameEnd}
