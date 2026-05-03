@@ -263,28 +263,36 @@ If anything fails, the snapshot is suspect — re-run after fixing.
 
 ## Phase 0 — Re-baseline
 
-**Until we re-measure, every "improvement" is a guess.** v1's `perf/perf.js`
-ran 6 pages on Railway with 2 services. We now have ~20 routable surfaces on
-Fly with 4 services and a totally different realtime stack.
+v1's `perf/perf.js` ran 6 pages on Railway with 2 services. We now have
+~20 routable surfaces on Fly with 4 services and a totally different
+realtime stack.
 
-### 0.1 Synthetic baseline (Playwright + WebPageTest)
+### 0.1 Synthetic baseline (Playwright)  *(done — 2026-05-02)*
 
-- [ ] Extend `perf/perf.js` to cover the full route inventory:
-  - `/`, `/play`, `/play?action=vs-community-bot`, `/leaderboard`, `/puzzles`,
-    `/stats`, `/profile`, `/profile?section=bots`, `/gym`, `/tournaments`,
-    `/tournaments/:liveCupId`, `/tables`, `/tables/:liveTableId`,
-    `/bots/:builtinBotId`, `/spar`, `/settings`.
-- [ ] Three contexts per route: `cold-anon`, `cold-signed-in`, `warm-signed-in`.
-- [ ] Two device profiles: desktop (1080p, broadband) + mobile (Moto G4 / 4G via
-      Playwright's emulation).
-- [ ] Run against `xo-*-staging.fly.dev` and `xo-*-prod.fly.dev`. 5 runs each,
-      report median + p95.
-- [ ] Capture: TTFB, FCP, LCP, Ready, JS bytes (parsed), CSS bytes, image bytes,
-      number of requests, longest task, INP for one scripted interaction per
-      page (e.g. open a modal).
-- [ ] Persist results into `perf/baselines/<date>.json` and check the file in.
+Shipped in `perf/perf-v2.js`. First baseline captured against staging on
+2026-05-02 — 130 measurements (13 routes × 2 device profiles × 5 runs)
+written to `perf/baselines/perf-staging-2026-05-02T*.json`. Analysis in
+`doc/Performance_Snapshot_2026-05-02.md`.
 
-### 0.2 RUM (real-user monitoring)
+- [x] Extend `perf/perf.js` to cover the full route inventory.
+- [x] Two device profiles: desktop (1280×800, broadband) + mobile
+      (Moto G4 / 4G via CDP throttling).
+- [x] Run against `xo-*-staging.fly.dev`. 5 runs each, p50 + p95.
+- [x] Capture: TTFB, FCP, LCP, Ready, JS bytes, image bytes, requests.
+- [x] Persist results into `perf/baselines/<env>-<ts>.json`.
+- [ ] **Open follow-ups** — these are real gaps, *not* blockers for
+      Phase 1; tackle when their inputs become available:
+  - [ ] Wire `cold-signed-in` and `warm-signed-in` contexts (needs
+        `TEST_USER_EMAIL` + `TEST_USER_PASSWORD` in env).
+  - [ ] Run against `xo-*-prod.fly.dev` once Phase 3.8 is promoted.
+  - [ ] Re-run on staging once it bumps past `1.3.0-alpha-8.0` so
+        Sprint 3.8.B + 3.8.C are reflected.
+  - [ ] Add INP measurement (one scripted interaction per page —
+        open modal / click row / submit form).
+  - [ ] Disable Fly auto-suspend on staging for the run, seed the
+        four representative-data fixtures from the Pre-flight section.
+
+### 0.2 RUM (real-user monitoring)  *(not started — Tier 1)*
 
 - [ ] Wire `web-vitals` into the landing app — POST `{ metric, value, route, deviceClass }`
       to a new `POST /api/v1/rum` endpoint with sampling (10% in prod, 100% in staging).
@@ -294,7 +302,7 @@ Fly with 4 services and a totally different realtime stack.
       existing admin metrics scaffold.)
 - [ ] Define alert: any route's p75 Ready > 1.5× target for 30min → Slack.
 
-### 0.3 Backend RED metrics (Rate / Errors / Duration)
+### 0.3 Backend RED metrics (Rate / Errors / Duration)  *(not started — Tier 2)*
 
 - [ ] Add request-duration histogram middleware in `backend/src/index.js` and
       `tournament/src/index.js`. Bucket per route + status.
