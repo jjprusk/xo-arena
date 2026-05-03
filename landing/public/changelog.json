@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-1.0",
+    "date": "2026-05-02",
+    "description": "multi-skill bots"
+  },
+  {
     "version": "1.3.0-alpha-8.0",
     "date": "2026-05-01",
     "description": "Journey fixes — cup step 7 credits round-1 losers, broken render loop blocking post-cup CTA, isTest template/scheduler guards, faster cup pace for e2e"
