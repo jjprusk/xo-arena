@@ -1,7 +1,9 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { getUserById, updateUser, getUserStats, getBotStats, syncUser } from '../services/userService.js'
 import { getUserCredits } from '../services/creditService.js'
+import { findOwnedBots, deleteUserWithBots } from '../services/userDeletionService.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
 
@@ -17,7 +19,7 @@ async function getBotProfileData(user) {
       ? db.user.findUnique({ where: { id: user.botOwnerId }, select: { id: true, displayName: true, betterAuthId: true } })
       : null,
     user.botModelId && user.botModelId.startsWith('builtin:') === false
-      ? db.mLModel.findUnique({
+      ? db.botSkill.findUnique({
           where: { id: user.botModelId },
           select: { id: true, name: true, algorithm: true, updatedAt: true, totalEpisodes: true },
         }).catch(() => null)
@@ -124,35 +126,16 @@ router.delete('/me', requireAuth, async (req, res, next) => {
       return res.json({ ok: true })
     }
 
-    // Collect bot IDs before the transaction so we can clean up their games
-    const bots = await db.user.findMany({
-      where: { botOwnerId: domainUser.id, isBot: true },
-      select: { id: true },
-    })
-    const botIds = bots.map(b => b.id)
+    const bots = await findOwnedBots(db, domainUser.id)
+    if (bots.length > 0) {
+      return res.status(409).json({
+        error: `You own ${bots.length} bot${bots.length === 1 ? '' : 's'}. Delete ${bots.length === 1 ? 'it' : 'them'} first, then delete your account.`,
+        code:  'USER_OWNS_BOTS',
+        bots:  bots.map(b => ({ id: b.id, username: b.username, displayName: b.displayName })),
+      })
+    }
 
-    await db.$transaction(async (tx) => {
-      // Delete each bot's games, then the bot itself
-      for (const botId of botIds) {
-        await tx.game.updateMany({ where: { player2Id: botId }, data: { player2Id: null } })
-        await tx.game.updateMany({ where: { winnerId:  botId }, data: { winnerId:  null } })
-        await tx.game.deleteMany({ where: { player1Id: botId } })
-        await tx.user.delete({ where: { id: botId } })
-      }
-
-      // Nullify nullable game references for the owner
-      await tx.game.updateMany({ where: { player2Id: domainUser.id }, data: { player2Id: null } })
-      await tx.game.updateMany({ where: { winnerId:  domainUser.id }, data: { winnerId:  null } })
-
-      // Delete games where user is player1 (NOT NULL — cannot nullify)
-      await tx.game.deleteMany({ where: { player1Id: domainUser.id } })
-
-      // Delete the domain User (cascades UserEloHistory, UserRole)
-      await tx.user.delete({ where: { id: domainUser.id } })
-
-      // Delete the Better Auth user (cascades BaSession, BaAccount)
-      await tx.baUser.delete({ where: { id: baUser.id } })
-    })
+    await deleteUserWithBots(db, domainUser, [])
 
     logger.info({ userId: domainUser.id }, 'User self-deleted account')
     res.json({ ok: true })
@@ -231,8 +214,19 @@ router.get('/me/notifications', requireAuth, async (req, res, next) => {
       select: { id: true },
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
+    // Filter out anything that has already expired — per REGISTRY ttlMs and/or
+    // an explicit expiresAt override (e.g. tournament.published expires at
+    // registrationCloseAt). "expiresAt IS NULL" covers notifications that
+    // never expire (admin announcements, system alerts).
     const notifications = await db.userNotification.findMany({
-      where: { userId: user.id, deliveredAt: null },
+      where: {
+        userId:     user.id,
+        deliveredAt: null,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
+      },
       orderBy: { createdAt: 'asc' },
     })
     res.json({ notifications })
@@ -293,6 +287,28 @@ router.patch('/me/settings', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/users/me/preferences
+ * Returns user-level preference keys relevant to client settings.
+ */
+router.get('/me/preferences', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { betterAuthId: req.auth.userId },
+      select: { preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    res.json({
+      showGuideButton:           prefs.showGuideButton !== false,
+      tournamentResultNotifPref: prefs.tournamentResultNotifPref ?? 'AS_PLAYED',
+      flashStartAlerts:          prefs.flashStartAlerts !== false,
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * PATCH /api/v1/users/me/preferences
  * Updates allowed preference keys for the signed-in user.
  */
@@ -304,9 +320,13 @@ router.patch('/me/preferences', requireAuth, async (req, res, next) => {
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
     const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
-    const { showGuideButton } = req.body
+    const { showGuideButton, tournamentResultNotifPref, flashStartAlerts } = req.body
     const updates = {}
     if (typeof showGuideButton === 'boolean') updates.showGuideButton = showGuideButton
+    if (tournamentResultNotifPref === 'AS_PLAYED' || tournamentResultNotifPref === 'END_OF_TOURNAMENT') {
+      updates.tournamentResultNotifPref = tournamentResultNotifPref
+    }
+    if (typeof flashStartAlerts === 'boolean') updates.flashStartAlerts = flashStartAlerts
     await db.user.update({ where: { id: user.id }, data: { preferences: { ...prefs, ...updates } } })
     res.json({ ok: true })
   } catch (err) {
@@ -334,6 +354,96 @@ router.get('/by-username/:username', async (req, res, next) => {
   }
 })
 
+// ── Notification preferences ──────────────────────────────────────────────────
+// Must be defined BEFORE /:id so Express doesn't swallow 'notification-preferences'
+// as a user ID wildcard.
+
+const NOTIF_REGISTRY_KEYS = [
+  'tournament.published', 'tournament.flash_announced', 'tournament.registration_closing',
+  'tournament.starting_soon', 'tournament.started', 'tournament.cancelled', 'tournament.completed',
+  'match.ready', 'match.result',
+  'achievement.tier_upgrade', 'achievement.milestone',
+  'admin.announcement', 'system.alert', 'system.alert.cleared',
+]
+
+const NOTIF_DEFAULTS = {
+  'tournament.published':            { inApp: true, email: false },
+  'tournament.flash_announced':      { inApp: true, email: false },
+  'tournament.registration_closing': { inApp: true, email: false },
+  'tournament.starting_soon':        { inApp: true, email: false },
+  'tournament.started':              { inApp: true, email: false },
+  'tournament.cancelled':            { inApp: true, email: true  },
+  'tournament.completed':            { inApp: true, email: true  },
+  'match.ready':                     { inApp: true, email: true  },
+  'match.result':                    { inApp: true, email: false },
+  'achievement.tier_upgrade':        { inApp: true, email: false },
+  'achievement.milestone':           { inApp: true, email: false },
+  'admin.announcement':              { inApp: true, email: false },
+  'system.alert':                    { inApp: true, email: false },
+  'system.alert.cleared':            { inApp: true, email: false },
+}
+
+/**
+ * GET /api/v1/users/notification-preferences
+ * Returns full preference list — all registry types, defaults filled in.
+ */
+router.get('/notification-preferences', requireAuth, async (req, res, next) => {
+  try {
+    const domainUser = await db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { id: true } })
+    if (!domainUser) return res.status(404).json({ error: 'User not found' })
+
+    const rows = await db.notificationPreference.findMany({ where: { userId: domainUser.id } })
+    const rowMap = {}
+    for (const row of rows) rowMap[row.eventType] = row
+
+    const result = NOTIF_REGISTRY_KEYS.map(eventType => {
+      const row = rowMap[eventType]
+      const def = NOTIF_DEFAULTS[eventType] ?? { inApp: true, email: false }
+      return {
+        eventType,
+        inApp: row ? row.inApp : def.inApp,
+        email: row ? row.email : def.email,
+      }
+    })
+
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PUT /api/v1/users/notification-preferences/:eventType
+ * Upserts a single preference row.
+ */
+router.put('/notification-preferences/:eventType', requireAuth, async (req, res, next) => {
+  try {
+    const { eventType } = req.params
+    if (!NOTIF_REGISTRY_KEYS.includes(eventType)) {
+      return res.status(400).json({ error: `Unknown event type: ${eventType}` })
+    }
+
+    const domainUser = await db.user.findUnique({ where: { betterAuthId: req.auth.userId }, select: { id: true } })
+    if (!domainUser) return res.status(404).json({ error: 'User not found' })
+
+    const { inApp, email, push } = req.body
+    const data = {}
+    if (typeof inApp === 'boolean') data.inApp = inApp
+    if (typeof email === 'boolean') data.email = email
+    if (typeof push  === 'boolean') data.push  = push
+
+    const pref = await db.notificationPreference.upsert({
+      where:  { userId_eventType: { userId: domainUser.id, eventType } },
+      update: data,
+      create: { userId: domainUser.id, eventType, ...data },
+    })
+
+    res.json({ eventType: pref.eventType, inApp: pref.inApp, email: pref.email, push: pref.push })
+  } catch (err) {
+    next(err)
+  }
+})
+
 /**
  * GET /api/v1/users/:id
  * Public profile (read-only). Returns sanitized user data.
@@ -345,13 +455,16 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
 
     // Only return full data to the user themselves; otherwise public view
     const isSelf = req.auth?.userId && user.betterAuthId === req.auth.userId
-    const botData = user.isBot ? await getBotProfileData(user) : null
+    const [botData, eloRow] = await Promise.all([
+      user.isBot ? getBotProfileData(user) : null,
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: user.id, gameId: 'xo' } } }),
+    ])
 
     const data = {
       id: user.id,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      eloRating: user.eloRating,
+      eloRating: eloRow?.rating ?? 1200,
       createdAt: user.createdAt,
       ...(botData ?? {}),
       ...(isSelf && { email: user.email, preferences: user.preferences, oauthProvider: user.oauthProvider, nameConfirmed: user.nameConfirmed }),
@@ -431,17 +544,18 @@ router.get('/:id/stats', async (req, res, next) => {
  */
 router.get('/:id/elo-history', async (req, res, next) => {
   try {
-    const [user, history] = await Promise.all([
+    const [user, history, eloRow] = await Promise.all([
       getUserById(req.params.id),
       db.userEloHistory.findMany({
         where: { userId: req.params.id },
         orderBy: { recordedAt: 'desc' },
         take: 50,
       }),
+      db.gameElo.findUnique({ where: { userId_gameId: { userId: req.params.id, gameId: 'xo' } } }),
     ])
     if (!user) return res.status(404).json({ error: 'User not found' })
 
-    res.json({ eloHistory: history, currentElo: user.eloRating })
+    res.json({ eloHistory: history, currentElo: eloRow?.rating ?? 1200 })
   } catch (err) {
     next(err)
   }

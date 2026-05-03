@@ -1,0 +1,17 @@
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 4174
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Keep one landing instance always-on. Cold starts (~1-3s) on Fly were causing
+  # noticeable lag on first visit / first /play navigation when the machine had
+  # been idle. Excess machines beyond 1 still scale to zero via auto_stop_machines.
+  min_machines_running = 1
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

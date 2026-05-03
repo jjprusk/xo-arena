@@ -38,12 +38,17 @@ vi.mock('../../lib/db.js', () => {
     deleteMany: vi.fn(),
     updateMany: vi.fn(),
   }
-  const mLModel = {
+  const botSkill = {
     count:      vi.fn(),
     findMany:   vi.fn(),
     findUnique: vi.fn(),
     update:     vi.fn(),
     delete:     vi.fn(),
+    deleteMany: vi.fn(),
+  }
+  const gameElo = {
+    findUnique: vi.fn(),
+    upsert:     vi.fn(),
   }
   const userRole = {
     create:     vi.fn(),
@@ -53,17 +58,22 @@ vi.mock('../../lib/db.js', () => {
     findUnique: vi.fn(),
     upsert:     vi.fn(),
   }
+  const tournamentAutoDrop = {
+    count:    vi.fn(),
+    findMany: vi.fn(),
+  }
+  const tournamentParticipant = { deleteMany: vi.fn(async () => ({ count: 0 })) }
   return {
     default: {
-      user, baUser, baSession, baAccount, game, mLModel, userRole, systemConfig,
-      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount })),
+      user, baUser, baSession, baAccount, game, botSkill, gameElo, userRole, systemConfig, tournamentAutoDrop, tournamentParticipant,
+      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, baSession, baAccount, botSkill, tournamentParticipant })),
     },
   }
 })
 
-// ─── mlService mock ───────────────────────────────────────────────────────────
+// ─── skillService mock ───────────────────────────────────────────────────────────
 
-vi.mock('../../services/mlService.js', () => ({
+vi.mock('../../services/skillService.js', () => ({
   deleteModel:     vi.fn(),
   getSystemConfig: vi.fn(),
   setSystemConfig: vi.fn(),
@@ -72,7 +82,7 @@ vi.mock('../../services/mlService.js', () => ({
 const adminRouter = (await import('../admin.js')).default
 const db = (await import('../../lib/db.js')).default
 const { deleteModel, getSystemConfig, setSystemConfig } =
-  await import('../../services/mlService.js')
+  await import('../../services/skillService.js')
 
 const app = express()
 app.use(express.json())
@@ -87,10 +97,10 @@ const mockUser = {
   displayName: 'Alice',
   email: 'alice@example.com',
   avatarUrl: null,
-  eloRating: 1000,
   banned: false,
   createdAt: new Date().toISOString(),
   botLimit: 5,
+  gameElo: [{ rating: 1000 }],
   userRoles: [],
   _count: { gamesAsPlayer1: 3 },
 }
@@ -103,7 +113,7 @@ const mockBot = {
   id: 'bot_1',
   displayName: 'TestBot',
   avatarUrl: null,
-  eloRating: 1000,
+  gameElo: [{ rating: 1000 }],
   botModelType: 'builtin',
   botModelId: 'builtin:minimax:novice',
   botActive: true,
@@ -139,7 +149,7 @@ describe('GET /api/v1/admin/stats', () => {
       .mockResolvedValueOnce(5)               // bannedUsers
     db.game.count.mockResolvedValueOnce(200)  // totalGames
       .mockResolvedValueOnce(10)              // gamesToday
-    db.mLModel.count.mockResolvedValueOnce(7) // totalModels
+    db.botSkill.count.mockResolvedValueOnce(7) // totalModels
 
     const res = await request(app).get('/api/v1/admin/stats')
 
@@ -276,7 +286,10 @@ describe('PATCH /api/v1/admin/users/:id', () => {
   })
 
   it('updates eloRating within valid range', async () => {
-    db.user.update.mockResolvedValue({ ...mockUser, eloRating: 1500 })
+    db.user.findUnique
+      .mockResolvedValueOnce(mockUser)  // initial findUnique after no scalar data update
+      .mockResolvedValueOnce({ ...mockUser, gameElo: [{ rating: 1500 }] }) // re-fetch after upsert
+    db.gameElo.upsert.mockResolvedValue({ rating: 1500 })
     db.baUser.findUnique.mockResolvedValue(mockBaUser)
 
     const res = await request(app)
@@ -385,11 +398,12 @@ describe('PATCH /api/v1/admin/users/:id', () => {
 
 describe('DELETE /api/v1/admin/users/:id', () => {
   it('deletes a user with no bots inside a transaction', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/users/usr_1')
 
@@ -399,11 +413,12 @@ describe('DELETE /api/v1/admin/users/:id', () => {
   })
 
   it('nullifies game references before deleting user', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     await request(app).delete('/api/v1/admin/users/usr_1')
 
@@ -416,43 +431,47 @@ describe('DELETE /api/v1/admin/users/:id', () => {
     expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'usr_1' } })
   })
 
-  it('cleans up bot games before deleting bots and user', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
-    db.user.findMany.mockResolvedValue([{ id: 'bot_1' }])
+  it('cleans up bot games and bot skills before deleting bots and user', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
+    db.user.findMany.mockResolvedValue([
+      { id: 'bot_1', username: 'b1', displayName: 'B1', betterAuthId: null, botModelId: null },
+    ])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
+    db.botSkill.deleteMany.mockResolvedValue({ count: 0 })
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/users/usr_1')
 
     expect(res.status).toBe(204)
-    // Bot game cleanup
+    // Bot game + skill cleanup
     expect(db.game.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ player2Id: 'bot_1' }) })
     )
     expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'bot_1' } })
+    expect(db.botSkill.deleteMany).toHaveBeenCalledWith({ where: { botId: 'bot_1' } })
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'bot_1' } })
     // Owner game cleanup and deletion
     expect(db.game.deleteMany).toHaveBeenCalledWith({ where: { player1Id: 'usr_1' } })
     expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
   })
 
-  it('deletes Better Auth records so the email can be re-registered', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: 'ba_user_1' })
+  it('deletes the Better Auth user (cascades sessions and accounts)', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
     db.user.delete.mockResolvedValue({})
+    db.baUser.delete.mockResolvedValue({})
 
     await request(app).delete('/api/v1/admin/users/usr_1')
 
-    expect(db.baSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'ba_user_1' } })
-    expect(db.baAccount.deleteMany).toHaveBeenCalledWith({ where: { userId: 'ba_user_1' } })
     expect(db.baUser.delete).toHaveBeenCalledWith({ where: { id: 'ba_user_1' } })
   })
 
   it('skips BA cleanup when user has no betterAuthId', async () => {
-    db.user.findUnique.mockResolvedValue({ betterAuthId: null })
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: null })
     db.user.findMany.mockResolvedValue([])
     db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
@@ -466,10 +485,6 @@ describe('DELETE /api/v1/admin/users/:id', () => {
 
   it('returns 404 for missing user', async () => {
     db.user.findUnique.mockResolvedValue(null)
-    db.user.findMany.mockResolvedValue([])
-    const err = new Error('Not found')
-    err.code = 'P2025'
-    db.$transaction.mockRejectedValue(err)
 
     const res = await request(app).delete('/api/v1/admin/users/nonexistent')
 
@@ -481,7 +496,7 @@ describe('DELETE /api/v1/admin/users/:id', () => {
 
 describe('GET /api/v1/admin/games', () => {
   it('returns paginated game list', async () => {
-    const mockGame = { id: 'g1', mode: 'PVAI', outcome: 'PLAYER1_WIN', endedAt: new Date(), player1: {}, player2: {}, winner: null }
+    const mockGame = { id: 'g1', mode: 'HVA', outcome: 'PLAYER1_WIN', endedAt: new Date(), player1: {}, player2: {}, winner: null }
     db.game.findMany.mockResolvedValue([mockGame])
     db.game.count.mockResolvedValue(1)
 
@@ -496,10 +511,10 @@ describe('GET /api/v1/admin/games', () => {
     db.game.findMany.mockResolvedValue([])
     db.game.count.mockResolvedValue(0)
 
-    await request(app).get('/api/v1/admin/games?mode=pvp')
+    await request(app).get('/api/v1/admin/games?mode=hvh')
 
     expect(db.game.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ mode: 'PVP' }) })
+      expect.objectContaining({ where: expect.objectContaining({ mode: 'HVH' }) })
     )
   })
 
@@ -537,6 +552,49 @@ describe('DELETE /api/v1/admin/games/:id', () => {
   })
 })
 
+// ─── GET /admin/tournaments/auto-dropped ─────────────────────────────────────
+
+describe('GET /api/v1/admin/tournaments/auto-dropped', () => {
+  beforeEach(() => {
+    db.tournamentAutoDrop.count.mockReset()
+    db.tournamentAutoDrop.findMany.mockReset()
+  })
+
+  it('returns count + items for the default period (week)', async () => {
+    db.tournamentAutoDrop.count.mockResolvedValue(3)
+    db.tournamentAutoDrop.findMany.mockResolvedValue([
+      { id: 'd1', name: 'Daily 3-Player', game: 'xo', minParticipants: 3, participantCount: 2, droppedAt: new Date() },
+    ])
+
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped')
+
+    expect(res.status).toBe(200)
+    expect(res.body.period).toBe('week')
+    expect(res.body.count).toBe(3)
+    expect(res.body.items).toHaveLength(1)
+    expect(new Date(res.body.since).getTime()).toBeLessThan(Date.now())
+  })
+
+  it('filters by the requested period — day', async () => {
+    db.tournamentAutoDrop.count.mockResolvedValue(1)
+    db.tournamentAutoDrop.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped?period=day')
+
+    expect(res.status).toBe(200)
+    expect(res.body.period).toBe('day')
+    const expectedSince = Date.now() - 24 * 60 * 60 * 1000
+    // Window is computed on the server; allow a second of slop for test runtime.
+    expect(Math.abs(new Date(res.body.since).getTime() - expectedSince)).toBeLessThan(2000)
+  })
+
+  it('rejects unknown periods with 400', async () => {
+    const res = await request(app).get('/api/v1/admin/tournaments/auto-dropped?period=year')
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/day.*week.*month/i)
+  })
+})
+
 // ─── GET /admin/bots ──────────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/bots', () => {
@@ -545,6 +603,7 @@ describe('GET /api/v1/admin/bots', () => {
       .mockResolvedValueOnce([mockBot])       // bots query
       .mockResolvedValueOnce([{ id: 'usr_1', displayName: 'Alice', username: 'alice' }]) // owners
     db.user.count.mockResolvedValue(1)
+    db.botSkill.findMany.mockResolvedValue([])  // skills enrichment
 
     const res = await request(app).get('/api/v1/admin/bots')
 
@@ -629,14 +688,18 @@ describe('PATCH /api/v1/admin/bots/:id', () => {
 
 describe('DELETE /api/v1/admin/bots/:id', () => {
   it('deletes bot and its games', async () => {
-    db.user.findUnique.mockResolvedValue({ id: 'bot_1', isBot: true, botModelId: null })
-    db.$transaction.mockImplementation(async (fn) => fn({ game: db.game, user: db.user }))
+    db.user.findUnique.mockResolvedValue({
+      id: 'bot_1', isBot: true, botModelId: null, username: 'bot-clone-x', betterAuthId: null,
+    })
+    db.game.updateMany.mockResolvedValue({})
     db.game.deleteMany.mockResolvedValue({})
+    db.botSkill.deleteMany.mockResolvedValue({ count: 0 })
     db.user.delete.mockResolvedValue({})
 
     const res = await request(app).delete('/api/v1/admin/bots/bot_1')
 
     expect(res.status).toBe(204)
+    expect(db.botSkill.deleteMany).toHaveBeenCalledWith({ where: { botId: 'bot_1' } })
   })
 
   it('returns 404 for non-bot id', async () => {
@@ -646,14 +709,54 @@ describe('DELETE /api/v1/admin/bots/:id', () => {
 
     expect(res.status).toBe(404)
   })
+
+  it.each(['bot-rusty', 'bot-copper', 'bot-sterling', 'bot-magnus'])(
+    'refuses to delete built-in persona %s',
+    async (username) => {
+      db.user.findUnique.mockResolvedValue({ id: 'bot_builtin', isBot: true, botModelId: 'builtin:minimax:novice', username })
+
+      const res = await request(app).delete('/api/v1/admin/bots/bot_builtin')
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toMatch(/built-in/i)
+      expect(db.$transaction).not.toHaveBeenCalled()
+    },
+  )
+})
+
+// ─── GET /admin/bots?systemOnly ───────────────────────────────────────────────
+
+describe('GET /api/v1/admin/bots?systemOnly=1', () => {
+  it('passes botOwnerId: null into the where clause', async () => {
+    db.user.findMany.mockResolvedValueOnce([])   // bots query
+    db.user.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+
+    const res = await request(app).get('/api/v1/admin/bots?systemOnly=1')
+
+    expect(res.status).toBe(200)
+    const firstCall = db.user.findMany.mock.calls[0][0]
+    expect(firstCall.where).toMatchObject({ isBot: true, botOwnerId: null })
+  })
+
+  it('omits botOwnerId filter when systemOnly is absent', async () => {
+    db.user.findMany.mockResolvedValueOnce([])
+    db.user.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+
+    await request(app).get('/api/v1/admin/bots')
+
+    const firstCall = db.user.findMany.mock.calls[0][0]
+    expect(firstCall.where).not.toHaveProperty('botOwnerId')
+  })
 })
 
 // ─── ML model admin ───────────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/ml/models', () => {
   it('returns model list with creator names resolved via BA user ID', async () => {
-    db.mLModel.findMany.mockResolvedValue([mockModel])
-    db.mLModel.count.mockResolvedValue(1)
+    db.botSkill.findMany.mockResolvedValue([mockModel])
+    db.botSkill.count.mockResolvedValue(1)
     // byBaId lookup returns the user; byDomainId returns nothing
     db.user.findMany.mockResolvedValueOnce([{ betterAuthId: 'ba_user_1', id: 'usr_1', displayName: 'Alice', username: 'alice' }])
     db.user.findMany.mockResolvedValueOnce([])
@@ -667,8 +770,8 @@ describe('GET /api/v1/admin/ml/models', () => {
 
   it('resolves creator name via domain user ID (legacy bots)', async () => {
     const legacyModel = { ...mockModel, createdBy: 'usr_1' }
-    db.mLModel.findMany.mockResolvedValue([legacyModel])
-    db.mLModel.count.mockResolvedValue(1)
+    db.botSkill.findMany.mockResolvedValue([legacyModel])
+    db.botSkill.count.mockResolvedValue(1)
     // byBaId lookup finds nothing; byDomainId lookup finds the owner
     db.user.findMany.mockResolvedValueOnce([])
     db.user.findMany.mockResolvedValueOnce([{ betterAuthId: 'ba_user_1', id: 'usr_1', displayName: 'Alice', username: 'alice' }])
@@ -680,8 +783,8 @@ describe('GET /api/v1/admin/ml/models', () => {
   })
 
   it('returns null creatorName when owner not found', async () => {
-    db.mLModel.findMany.mockResolvedValue([mockModel])
-    db.mLModel.count.mockResolvedValue(1)
+    db.botSkill.findMany.mockResolvedValue([mockModel])
+    db.botSkill.count.mockResolvedValue(1)
     db.user.findMany.mockResolvedValueOnce([])
     db.user.findMany.mockResolvedValueOnce([])
 
@@ -692,25 +795,25 @@ describe('GET /api/v1/admin/ml/models', () => {
   })
 
   it('filters by status', async () => {
-    db.mLModel.findMany.mockResolvedValue([])
-    db.mLModel.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+    db.botSkill.count.mockResolvedValue(0)
     db.user.findMany.mockResolvedValue([])
 
     await request(app).get('/api/v1/admin/ml/models?status=TRAINING')
 
-    expect(db.mLModel.findMany).toHaveBeenCalledWith(
+    expect(db.botSkill.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ status: 'TRAINING' }) })
     )
   })
 
   it('ignores invalid status filter', async () => {
-    db.mLModel.findMany.mockResolvedValue([])
-    db.mLModel.count.mockResolvedValue(0)
+    db.botSkill.findMany.mockResolvedValue([])
+    db.botSkill.count.mockResolvedValue(0)
     db.user.findMany.mockResolvedValue([])
 
     await request(app).get('/api/v1/admin/ml/models?status=INVALID')
 
-    expect(db.mLModel.findMany).toHaveBeenCalledWith(
+    expect(db.botSkill.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.not.objectContaining({ status: 'INVALID' }) })
     )
   })
@@ -718,8 +821,8 @@ describe('GET /api/v1/admin/ml/models', () => {
 
 describe('PATCH /api/v1/admin/ml/models/:id/feature', () => {
   it('toggles featured from false to true', async () => {
-    db.mLModel.findUnique.mockResolvedValue({ featured: false })
-    db.mLModel.update.mockResolvedValue({ id: 'model_1', featured: true })
+    db.botSkill.findUnique.mockResolvedValue({ featured: false })
+    db.botSkill.update.mockResolvedValue({ id: 'model_1', featured: true })
 
     const res = await request(app).patch('/api/v1/admin/ml/models/model_1/feature')
 
@@ -728,7 +831,7 @@ describe('PATCH /api/v1/admin/ml/models/:id/feature', () => {
   })
 
   it('returns 404 for missing model', async () => {
-    db.mLModel.findUnique.mockResolvedValue(null)
+    db.botSkill.findUnique.mockResolvedValue(null)
 
     const res = await request(app).patch('/api/v1/admin/ml/models/nonexistent/feature')
 
@@ -769,8 +872,8 @@ describe('DELETE /api/v1/admin/ml/models/:id', () => {
 
 describe('PATCH /api/v1/admin/ml/models/:id/max-episodes', () => {
   it('increases maxEpisodes', async () => {
-    db.mLModel.findUnique.mockResolvedValue({ id: 'model_1', maxEpisodes: 1000 })
-    db.mLModel.update.mockResolvedValue({ id: 'model_1', maxEpisodes: 5000 })
+    db.botSkill.findUnique.mockResolvedValue({ id: 'model_1', maxEpisodes: 1000 })
+    db.botSkill.update.mockResolvedValue({ id: 'model_1', maxEpisodes: 5000 })
 
     const res = await request(app)
       .patch('/api/v1/admin/ml/models/model_1/max-episodes')
@@ -781,7 +884,7 @@ describe('PATCH /api/v1/admin/ml/models/:id/max-episodes', () => {
   })
 
   it('rejects decreasing maxEpisodes', async () => {
-    db.mLModel.findUnique.mockResolvedValue({ id: 'model_1', maxEpisodes: 5000 })
+    db.botSkill.findUnique.mockResolvedValue({ id: 'model_1', maxEpisodes: 5000 })
 
     const res = await request(app)
       .patch('/api/v1/admin/ml/models/model_1/max-episodes')
@@ -792,7 +895,7 @@ describe('PATCH /api/v1/admin/ml/models/:id/max-episodes', () => {
   })
 
   it('rejects negative maxEpisodes', async () => {
-    db.mLModel.findUnique.mockResolvedValue({ id: 'model_1', maxEpisodes: 1000 })
+    db.botSkill.findUnique.mockResolvedValue({ id: 'model_1', maxEpisodes: 1000 })
 
     const res = await request(app)
       .patch('/api/v1/admin/ml/models/model_1/max-episodes')
@@ -802,7 +905,7 @@ describe('PATCH /api/v1/admin/ml/models/:id/max-episodes', () => {
   })
 
   it('returns 404 for missing model', async () => {
-    db.mLModel.findUnique.mockResolvedValue(null)
+    db.botSkill.findUnique.mockResolvedValue(null)
 
     const res = await request(app)
       .patch('/api/v1/admin/ml/models/nonexistent/max-episodes')

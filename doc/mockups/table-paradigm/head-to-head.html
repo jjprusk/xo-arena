@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Head-to-head Court — AI Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="table-paradigm.css">
+  <style>
+    /* Head-to-head-specific seat pod styling — sits off the court edges,
+       not on the play surface. Compact so the court reads as the "place." */
+    .court-end__avatar {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--color-slate-400), var(--color-slate-700));
+      color: white;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1rem;
+      border: 2px solid var(--bg-surface);
+      box-shadow: var(--shadow-sm);
+    }
+    .court-end__name { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); }
+    .court-end__meta { font-size: 0.6875rem; color: var(--text-muted); }
+
+    .court-end--turn .court-end__avatar {
+      box-shadow:
+        0 0 0 3px rgba(212, 137, 30, 0.95),
+        0 0 0 6px rgba(212, 137, 30, 0.2),
+        0 0 14px 4px rgba(212, 137, 30, 0.35);
+    }
+
+    /* In portrait, the player pods move to top/bottom ends. */
+    @media (max-aspect-ratio: 3/4) and (max-width: 620px) {
+      .court-end--left  { top: -1.25rem; bottom: auto; left: 50%; right: auto; transform: translateX(-50%); flex-direction: column-reverse; }
+      .court-end--right { top: auto;     bottom: -1.25rem; left: 50%; right: auto; transform: translateX(-50%); }
+      /* Padding sized so pods hug the court with ~0.5rem breathing room each side */
+      .table-container.table-court { padding: 5.25rem 0; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="app-nav">
+    <a href="index.html" class="app-nav__brand" style="text-decoration:none;color:inherit">
+      AI<span>·</span>Arena
+    </a>
+    <ul class="app-nav__links">
+      <li><a href="index.html">← Mockup index</a></li>
+      <li><a href="2p-sitdown.html">2p sit-down</a></li>
+      <li><a href="8p-oval.html">Poker</a></li>
+      <li><a href="tables-list.html">Tables list</a></li>
+    </ul>
+  </nav>
+
+  <div class="state-switcher" role="tablist" aria-label="Court state">
+    <button type="button" role="tab" data-state="forming">Forming</button>
+    <button type="button" role="tab" data-state="playing" class="active">Playing</button>
+    <button type="button" role="tab" data-state="completed">Completed</button>
+  </div>
+
+  <main class="shell">
+    <div class="shell__grid">
+      <section class="game-column">
+        <button type="button" class="mode-toggle" title="Focus mode (hide chrome)">⤡</button>
+
+        <article class="table-container table-court" id="table">
+          <!-- Player at the near (left in landscape, bottom in portrait) end -->
+          <div class="court-end court-end--left court-end--turn" id="endLeft">
+            <div class="court-end__avatar">J</div>
+            <div class="court-end__name">You</div>
+            <div class="court-end__meta">1640</div>
+          </div>
+
+          <div class="table-surface">
+            <div class="court" id="court">
+              <div class="court__score" id="score">3 &middot; 2</div>
+              <div class="court__center-line"></div>
+              <div class="court__paddle court__paddle--left"></div>
+              <div class="court__paddle court__paddle--right"></div>
+              <div class="court__ball"></div>
+            </div>
+            <div class="outcome-banner outcome-banner--win" id="outcome" hidden>You win!</div>
+          </div>
+
+          <!-- Player at the far (right in landscape, top in portrait) end -->
+          <div class="court-end court-end--right" id="endRight">
+            <div class="court-end__avatar" style="background:linear-gradient(135deg,#b36bff,#6d28d9)">M</div>
+            <div class="court-end__name">mclovin</div>
+            <div class="court-end__meta">1595</div>
+          </div>
+        </article>
+      </section>
+
+      <aside class="sidebar" aria-label="Court context">
+        <div>
+          <h3>Game</h3>
+          <p class="game-title">Pong</p>
+          <div class="status-row" style="margin-top:0.5rem">
+            <span class="status-chip active" id="statusChip">In play</span>
+            <span id="spectatorText">5 spectating</span>
+          </div>
+        </div>
+
+        <div>
+          <h3>Players</h3>
+          <ul class="seated-list">
+            <li>
+              <span class="seat__avatar" style="width:28px;height:28px;font-size:0.75rem;">J</span>
+              <span>You</span>
+              <span style="margin-left:auto;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">3</span>
+            </li>
+            <li>
+              <span class="seat__avatar" style="width:28px;height:28px;font-size:0.75rem;background:linear-gradient(135deg,#b36bff,#6d28d9)">M</span>
+              <span>mclovin</span>
+              <span style="margin-left:auto;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">2</span>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3>Orientation</h3>
+          <p style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.5;margin:0">
+            Shell auto-flips between horizontal (landscape) and vertical (portrait) based on viewport.
+            Rotate your device or narrow the browser to see the switch.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn btn-secondary btn-sm">Leave court</button>
+        </div>
+
+        <div class="spectator-badge spectator-badge--sidebar" id="spectatorBadge" title="5 spectating">
+          <span>👁</span><span id="spectatorText">5 spectating</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <aside class="mockup-meta" role="status">
+    <span>Pong court — responsive orientation</span>
+    <kbd>narrow to portrait</kbd>
+    <button class="theme-toggle" aria-label="Toggle theme" onclick="
+      const root = document.documentElement;
+      const isDark = root.getAttribute('data-theme') === 'dark';
+      root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      this.textContent = isDark ? '☾' : '☀';
+    ">☾</button>
+  </aside>
+
+  <script>
+    const states = {
+      forming: () => {
+        setChip('forming', 'Forming');
+        document.getElementById('spectatorText').textContent = '2 watching';
+        document.getElementById('endLeft').classList.remove('court-end--turn');
+        document.getElementById('endRight').classList.remove('court-end--turn');
+        document.getElementById('endRight').innerHTML = emptyEndHTML();
+        document.getElementById('score').textContent = '— · —';
+        document.getElementById('outcome').hidden = true;
+      },
+      playing: () => {
+        setChip('active', 'In play');
+        document.getElementById('spectatorText').textContent = '5 spectating';
+        document.getElementById('endLeft').classList.add('court-end--turn');
+        document.getElementById('endRight').classList.remove('court-end--turn');
+        document.getElementById('endRight').innerHTML = opponentEndHTML();
+        document.getElementById('score').textContent = '3 · 2';
+        document.getElementById('outcome').hidden = true;
+      },
+      completed: () => {
+        setChip('completed', 'Completed');
+        document.getElementById('spectatorText').textContent = '5 spectating';
+        document.getElementById('endLeft').classList.remove('court-end--turn');
+        document.getElementById('endRight').classList.remove('court-end--turn');
+        document.getElementById('endRight').innerHTML = opponentEndHTML();
+        document.getElementById('endRight').classList.add('seat--loser'); // dim
+        document.getElementById('score').textContent = '7 · 5';
+        const banner = document.getElementById('outcome');
+        banner.hidden = false;
+        banner.className = 'outcome-banner outcome-banner--win';
+        banner.textContent = 'You win!';
+      }
+    };
+    function setChip(cls, text) {
+      const chip = document.getElementById('statusChip');
+      chip.className = 'status-chip ' + cls;
+      chip.textContent = text;
+    }
+    function emptyEndHTML() {
+      return `
+        <div class="court-end__avatar" style="background:repeating-linear-gradient(45deg,var(--bg-surface-hover) 0 6px,var(--bg-surface) 6px 12px);color:var(--text-muted);border-style:dashed;border-color:var(--border-default)">?</div>
+        <div class="court-end__name" style="color:var(--text-muted);font-style:italic">Waiting…</div>
+        <div class="court-end__meta">&nbsp;</div>
+      `;
+    }
+    function opponentEndHTML() {
+      return `
+        <div class="court-end__avatar" style="background:linear-gradient(135deg,#b36bff,#6d28d9)">M</div>
+        <div class="court-end__name">mclovin</div>
+        <div class="court-end__meta">1595</div>
+      `;
+    }
+    document.querySelectorAll('.state-switcher button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.state-switcher button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        states[btn.dataset.state]?.();
+      });
+    });
+    states.playing();
+  </script>
+</body>
+</html>

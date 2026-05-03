@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { getLeaderboard } from '../services/userService.js'
 import cache from '../utils/cache.js'
@@ -8,7 +9,7 @@ const TTL_MS = 60_000  // 60 seconds
 
 /**
  * GET /api/v1/leaderboard
- * Query params: period (all|monthly|weekly), mode (all|pvp|pvai), limit, includeBots
+ * Query params: period (all|monthly|weekly), mode (all|hvh|hva), limit, includeBots
  */
 router.get('/', async (req, res, next) => {
   try {

@@ -1,0 +1,67 @@
+@theme {
+  /* ── Color palette ── */
+
+  /* Platform accent — Slate blue (Guide, nav accents, admin, focus rings) */
+  --color-slate-50:  #EEF2F8;
+  --color-slate-100: #D6E0EF;
+  --color-slate-200: #B8CBE3;
+  --color-slate-300: #94AECE;
+  --color-slate-400: #6F90B9;
+  --color-slate-500: #4A6FA5;
+  --color-slate-600: #3D5E8E;
+  --color-slate-700: #304D77;
+  --color-slate-800: #243C60;
+  --color-slate-900: #192B49;
+
+  /* Game primary — Blue (X mark, primary actions) */
+  --color-blue-50: #EBF3FC;
+  --color-blue-100: #C3D9F6;
+  --color-blue-500: #2E86E0;
+  --color-blue-600: #1A6FD4;
+  --color-blue-700: #155AAA;
+
+  /* Game secondary — Teal (O mark, success, xo.aiarena primary) */
+  --color-teal-50: #E6F6F2;
+  --color-teal-100: #C0E9DC;
+  --color-teal-500: #24B587;
+  --color-teal-600: #1D9E75;
+  --color-teal-700: #17805E;
+
+  /* Amber (onboarding, wins, draws) */
+  --color-amber-50: #FDF6E7;
+  --color-amber-100: #FAEEDA;
+  --color-amber-500: #D4891E;
+  --color-amber-600: #BA7517;
+  --color-amber-700: #965E12;
+
+  /* Red (errors, forfeit) */
+  --color-red-50: #FDECEA;
+  --color-red-500: #E85554;
+  --color-red-600: #E24B4A;
+  --color-red-700: #C23B3A;
+
+  /* Neutral — Warm gray */
+  --color-gray-50: #F1EFE8;
+  --color-gray-100: #E5E3DC;
+  --color-gray-200: #D0CEC7;
+  --color-gray-300: #B8B6AF;
+  --color-gray-400: #9E9C96;
+  --color-gray-500: #83817B;
+  --color-gray-600: #676561;
+  --color-gray-700: #4E4C49;
+  --color-gray-800: #3A3836;
+  --color-gray-900: #2C2C2A;
+
+  /* ── Typography ── */
+  --font-display: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ── Border radius (soft profile) ── */
+  --radius-sm:   0.375rem;  /* 6px  — inputs, small badges */
+  --radius-md:   0.625rem;  /* 10px — buttons, chips, nav items */
+  --radius-lg:   0.75rem;   /* 12px — legacy; prefer radius-card */
+  --radius-card: 1rem;      /* 16px — cards, panels, modals */
+  --radius-xl:   1rem;      /* 16px — alias */
+  --radius-pill: 9999px;    /* pill  — tags, badges, avatar borders */
+}

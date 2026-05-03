@@ -1,17 +1,15 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
-import { getSystemConfig, setSystemConfig } from '../services/mlService.js'
+import { getSystemConfig, setSystemConfig } from '../services/skillService.js'
+import { appendToStream } from '../lib/eventStream.js'
 
 const router = Router()
 
 const VALID_LEVELS  = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
 const VALID_SOURCES = ['frontend', 'api', 'realtime', 'ai']
 const DEFAULT_MAX_ENTRIES = 10_000
-
-// Socket.io reference for live-tail push
-let _io = null
-export function setIO(io) { _io = io }
 
 // ─── Prune oldest logs to stay within the configured limit ───────────────────
 async function pruneIfNeeded() {
@@ -58,11 +56,12 @@ router.post('/', async (req, res, next) => {
 
     await db.log.createMany({ data: rows })
 
-    // Emit each entry to admins watching live tail
-    if (_io) {
-      for (const row of rows) {
-        _io.to('admin:logs').emit('log:entry', row)
-      }
+    // Live-tail fan-out for admins. The `admin:logs:entry` channel is
+    // broadcast to all SSE subscribers; GET /events/stream already gates by
+    // admin role for anything under the `admin:` prefix, so unprivileged
+    // tabs never see it.
+    for (const row of rows) {
+      appendToStream('admin:logs:entry', row, { userId: '*' }).catch(() => {})
     }
 
     // Prune asynchronously — don't block the response

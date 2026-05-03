@@ -1,0 +1,2218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Arena — Tournaments (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Palette ───────────────────────────────────────────────────────── */
+:root {
+  --color-slate-50:  #EEF2F8;
+  --color-slate-100: #D6E0EF;
+  --color-slate-200: #B8CBE3;
+  --color-slate-500: #4A6FA5;
+  --color-slate-600: #3D5E8E;
+  --color-slate-700: #304D77;
+  --color-teal-50:   #E6F6F2;
+  --color-teal-100:  #C0E9DC;
+  --color-teal-500:  #24B587;
+  --color-teal-600:  #1D9E75;
+  --color-amber-50:  #FDF6E7;
+  --color-amber-100: #FAEEDA;
+  --color-amber-500: #D4891E;
+  --color-amber-600: #BA7517;
+  --color-red-500:   #E85554;
+  --color-red-600:   #C23B3A;
+  --color-blue-500:  #2E86E0;
+  --color-purple-500:#7C5CBF;
+  --color-gray-50:  #F1EFE8;
+  --color-gray-100: #E5E3DC;
+  --color-gray-200: #D0CEC7;
+  --color-gray-300: #B8B6AF;
+  --color-gray-400: #9E9C96;
+  --color-gray-500: #83817B;
+  --color-gray-600: #676561;
+  --color-gray-700: #4E4C49;
+  --color-gray-800: #3A3836;
+  --color-gray-900: #2C2C2A;
+  --font-display: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+/* ── Light theme ───────────────────────────────────────────────────── */
+:root, .light {
+  --bg-page:          #F5F7FA;
+  --bg-surface:       #ffffff;
+  --bg-surface-2:     var(--color-gray-50);
+  --bg-surface-hover: var(--color-slate-50);
+  --border-default:   var(--color-gray-200);
+  --border-strong:    var(--color-gray-300);
+  --text-primary:     var(--color-gray-900);
+  --text-secondary:   var(--color-gray-600);
+  --text-muted:       var(--color-gray-400);
+  --shadow-card:      0 2px 8px -1px rgb(0 0 0 / 0.08), 0 1px 3px -1px rgb(0 0 0 / 0.05);
+  --shadow-nav:       0 1px 0 0 var(--color-gray-200);
+  --guide-bg:         #ffffff;
+  --guide-border:     var(--color-slate-200);
+  --slot-bg:          var(--color-slate-50);
+  --slot-border:      var(--color-slate-100);
+  --slot-bg-hover:    var(--color-slate-100);
+}
+
+/* ── Dark theme ────────────────────────────────────────────────────── */
+.dark {
+  --bg-page:          var(--color-gray-900);
+  --bg-surface:       var(--color-gray-800);
+  --bg-surface-2:     var(--color-gray-700);
+  --bg-surface-hover: #454340;
+  --border-default:   var(--color-gray-700);
+  --border-strong:    var(--color-gray-600);
+  --text-primary:     var(--color-gray-50);
+  --text-secondary:   var(--color-gray-300);
+  --text-muted:       var(--color-gray-500);
+  --shadow-card:      0 2px 8px -1px rgb(0 0 0 / 0.35), 0 1px 3px -1px rgb(0 0 0 / 0.2);
+  --shadow-nav:       0 1px 0 0 var(--color-gray-700);
+  --guide-bg:         var(--color-gray-800);
+  --guide-border:     var(--color-slate-700);
+  --slot-bg:          rgba(74,111,165,0.1);
+  --slot-border:      rgba(74,111,165,0.2);
+  --slot-bg-hover:    rgba(74,111,165,0.2);
+}
+
+/* ── Animations ────────────────────────────────────────────────────── */
+@keyframes guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,111,165,0.7), 0 0 10px 2px rgba(74,111,165,0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(74,111,165,0), 0 0 16px 5px rgba(74,111,165,0.5); }
+}
+@keyframes guide-pulse-urgent {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,137,30,0.9), 0 0 12px 3px rgba(212,137,30,0.5); }
+  50%       { box-shadow: 0 0 0 7px rgba(212,137,30,0), 0 0 20px 6px rgba(212,137,30,0.4); }
+}
+@keyframes flash-pulse { 0%,100%{opacity:1} 50%{opacity:0.65} }
+@keyframes badge-pop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
+@keyframes fade-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+@keyframes slide-up { from{opacity:0;transform:translateY(12px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes slot-pop { 0%{transform:scale(0.8);opacity:0} 70%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background 0.2s, color 0.2s;
+}
+a { color:inherit; text-decoration:none; }
+button { cursor:pointer; font-family:inherit; border:none; background:none; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border-width:0; }
+
+/* ── Colosseum background ──────────────────────────────────────────── */
+.photo-bg {
+  position: fixed;
+  inset: 0;
+  background: url('./colosseum-bg.jpg') center 30% / cover no-repeat;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  opacity: 0.25;
+}
+.dark .photo-bg { opacity: 0.18; }
+
+/* ── Skip nav ──────────────────────────────────────────────────────── */
+.skip-nav {
+  position:absolute; top:-100%; left:0;
+  background:var(--color-slate-600); color:white;
+  padding:0.5rem 1rem; font-size:0.875rem; font-weight:600;
+  border-radius:0 0 0.5rem 0; z-index:9999; transition:top 0.1s;
+}
+.skip-nav:focus { top:0; }
+
+/* ── Navigation ────────────────────────────────────────────────────── */
+.nav {
+  position:sticky; top:0; z-index:100;
+  background:var(--bg-surface);
+  box-shadow:var(--shadow-nav);
+  height:56px;
+  display:flex; align-items:center;
+  padding:0 1.5rem; gap:1.5rem;
+}
+.nav-logo {
+  font-family:var(--font-display);
+  font-size:1.125rem; font-weight:800;
+  color:var(--color-slate-600);
+  letter-spacing:-0.02em;
+  white-space:nowrap;
+  display:flex; align-items:center; gap:0.5rem;
+}
+.nav-logo-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--color-slate-500);
+  animation:guide-pulse 2.4s ease-in-out infinite;
+}
+.dark .nav-logo { color:var(--color-slate-200); }
+.nav-links { display:flex; align-items:center; gap:0.25rem; flex:1; }
+.nav-link {
+  font-size:0.875rem; font-weight:500;
+  color:var(--text-secondary);
+  padding:0.375rem 0.75rem;
+  border-radius:0.5rem;
+  transition:color 0.15s, background 0.15s;
+}
+.nav-link:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+.nav-link.active { color:var(--color-slate-600); background:var(--color-slate-50); font-weight:600; }
+.dark .nav-link.active { color:var(--color-slate-200); background:rgba(74,111,165,0.15); }
+.nav-right { display:flex; align-items:center; gap:0.75rem; margin-left:auto; }
+.theme-toggle {
+  width:32px; height:32px; border-radius:0.5rem;
+  color:var(--text-muted);
+  display:flex; align-items:center; justify-content:center;
+  transition:color 0.15s, background 0.15s; font-size:1rem;
+}
+.theme-toggle:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+.guide-trigger {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.375rem 0.875rem 0.375rem 0.5rem;
+  border-radius:2rem;
+  border:1.5px solid var(--color-slate-200);
+  background:var(--color-slate-50);
+  color:var(--color-slate-600);
+  font-size:0.8125rem; font-weight:600;
+  transition:border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.dark .guide-trigger { border-color:var(--color-slate-700); background:rgba(74,111,165,0.12); color:var(--color-slate-200); }
+.guide-trigger:hover { border-color:var(--color-slate-500); box-shadow:0 0 0 3px rgba(74,111,165,0.12); }
+.guide-trigger[aria-expanded="true"] { border-color:var(--color-slate-500); background:var(--color-slate-100); }
+.dark .guide-trigger[aria-expanded="true"] { background:rgba(74,111,165,0.25); }
+.guide-orb {
+  width:20px; height:20px; border-radius:50%;
+  background:linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700));
+  animation:guide-pulse 2.4s ease-in-out infinite;
+  flex-shrink:0; position:relative;
+}
+/* Urgent state — flash tournament or match alert */
+.guide-trigger.urgent .guide-orb {
+  background:linear-gradient(135deg, var(--color-amber-500), var(--color-amber-600));
+  animation:guide-pulse-urgent 1.1s ease-in-out infinite;
+}
+.guide-trigger.urgent::after {
+  content:'';
+  position:absolute; top:6px; right:6px;
+  width:8px; height:8px; border-radius:50%;
+  background:var(--color-amber-500);
+  border:2px solid var(--bg-surface);
+  animation:badge-pop 0.3s cubic-bezier(0.175,0.885,0.32,1.275) both;
+}
+.sign-in-btn {
+  font-size:0.8125rem; font-weight:600;
+  padding:0.375rem 1rem; border-radius:0.5rem;
+  background:var(--color-slate-500); color:white;
+  transition:background 0.15s;
+}
+.sign-in-btn:hover { background:var(--color-slate-600); }
+
+/* ── Guide flash alert card ────────────────────────────────────────── */
+/* ── Guide notification stack ──────────────────────────────────────── */
+.guide-notif-stack {
+  display:flex; flex-direction:column; gap:0.5rem;
+  margin:0.75rem 0.875rem 0;
+  flex-shrink:0;
+}
+.guide-notif-stack:empty { display:none; }
+
+/* Individual notification card */
+.guide-notif {
+  border-radius:0.625rem;
+  color:white; overflow:hidden;
+  animation:slide-up 0.25s ease-out;
+}
+/* Type colour themes */
+.guide-notif[data-type="flash"]       { background:linear-gradient(135deg,#7C3F00,#A85800); }
+.guide-notif[data-type="admin"]       { background:linear-gradient(135deg,#2A3F6A,#3D5E8E); }
+.guide-notif[data-type="invite"]      { background:linear-gradient(135deg,#0D6648,#1D9E75); }
+.guide-notif[data-type="match_ready"] { background:linear-gradient(135deg,#3E1F7A,#6240AD); }
+
+.guide-notif-top {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.55rem 0.75rem 0.25rem;
+}
+.guide-notif-icon { font-size:1rem; flex-shrink:0; }
+.guide-notif[data-type="flash"] .guide-notif-icon { animation:flash-pulse 1.3s ease-in-out infinite; }
+.guide-notif[data-type="match_ready"] .guide-notif-icon { animation:flash-pulse 1.6s ease-in-out infinite; }
+.guide-notif-title { font-family:var(--font-display); font-weight:700; font-size:0.8125rem; flex:1; line-height:1.25; }
+.guide-notif-dismiss {
+  color:rgba(255,255,255,0.55); font-size:0.9rem; padding:0.2rem;
+  transition:color 0.15s; flex-shrink:0; line-height:1;
+}
+.guide-notif-dismiss:hover { color:white; }
+.guide-notif-bottom {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0.2rem 0.75rem 0.55rem; gap:0.5rem;
+}
+.guide-notif-meta { font-size:0.7125rem; color:rgba(255,255,255,0.72); flex:1; line-height:1.35; }
+.guide-notif-countdown {
+  font-family:var(--font-display); font-weight:700; font-size:0.9375rem;
+  background:rgba(255,255,255,0.15); padding:0.1rem 0.45rem;
+  border-radius:0.3rem; letter-spacing:0.04em;
+}
+.guide-notif-actions { display:flex; gap:0.375rem; flex-shrink:0; }
+.guide-notif-btn {
+  background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.32);
+  color:white; font-size:0.75rem; font-weight:600;
+  padding:0.25rem 0.625rem; border-radius:0.35rem;
+  transition:background 0.15s; white-space:nowrap; cursor:pointer;
+}
+.guide-notif-btn:hover { background:rgba(255,255,255,0.34); }
+.guide-notif-btn.secondary { background:transparent; border-color:rgba(255,255,255,0.22); }
+.guide-notif-btn.secondary:hover { background:rgba(255,255,255,0.12); }
+
+/* "N more" overflow indicator */
+.guide-notif-overflow {
+  text-align:center; font-size:0.75rem; color:var(--text-muted);
+  padding:0.2rem 0; cursor:pointer;
+}
+.guide-notif-overflow:hover { color:var(--text-secondary); }
+
+/* Orb badge count */
+.guide-trigger { position:relative; }
+.guide-orb-badge {
+  position:absolute; top:-4px; right:-4px;
+  min-width:16px; height:16px; border-radius:8px;
+  background:var(--color-amber-500); color:white;
+  font-size:0.6rem; font-weight:800; line-height:16px; text-align:center;
+  padding:0 3px;
+  border:2px solid var(--bg-surface);
+  animation:badge-pop 0.3s cubic-bezier(0.175,0.885,0.32,1.275) both;
+  display:none;
+}
+.guide-orb-badge.visible { display:block; }
+
+/* ── Page ──────────────────────────────────────────────────────────── */
+.page { max-width:1200px; margin:0 auto; padding:2rem 1.5rem; }
+.page-header { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:1.75rem; gap:1rem; flex-wrap:wrap; }
+.page-title { font-family:var(--font-display); font-size:2rem; font-weight:800; color:var(--text-primary); letter-spacing:-0.03em; line-height:1.1; }
+.page-subtitle { font-size:0.9375rem; color:var(--text-secondary); margin-top:0.3rem; }
+
+/* ── Tabs ──────────────────────────────────────────────────────────── */
+.tabs-bar { display:flex; align-items:center; border-bottom:2px solid var(--border-default); margin-bottom:1.5rem; overflow-x:auto; }
+.tab {
+  font-size:0.9375rem; font-weight:500; color:var(--text-secondary);
+  padding:0.625rem 1.125rem; border-bottom:2px solid transparent;
+  margin-bottom:-2px; white-space:nowrap;
+  transition:color 0.15s, border-color 0.15s;
+}
+.tab:hover { color:var(--text-primary); }
+.tab.active { color:var(--color-slate-600); border-bottom-color:var(--color-slate-500); font-weight:600; }
+.dark .tab.active { color:var(--color-slate-200); }
+.tab-count {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:20px; height:20px; border-radius:10px;
+  background:var(--color-slate-100); color:var(--color-slate-600);
+  font-size:0.75rem; font-weight:700; margin-left:0.4rem; padding:0 0.35rem;
+}
+.dark .tab-count { background:rgba(74,111,165,0.2); color:var(--color-slate-200); }
+.tab.active .tab-count { background:var(--color-slate-500); color:white; }
+
+/* ── Filters ───────────────────────────────────────────────────────── */
+.filter-row { display:flex; align-items:center; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+.filter-search-wrap { margin-left:auto; position:relative; display:flex; align-items:center; }
+.filter-search-icon { position:absolute; left:0.6rem; color:var(--text-muted); font-style:normal; font-size:0.875rem; pointer-events:none; }
+.filter-search {
+  padding:0.3rem 0.75rem 0.3rem 2rem;
+  border-radius:2rem; border:1.5px solid var(--border-default);
+  background:var(--bg-surface); color:var(--text-primary);
+  font-family:var(--font-body); font-size:0.8125rem;
+  width:180px; outline:none; transition:border-color 0.15s, width 0.2s;
+}
+.filter-search:focus { border-color:var(--color-slate-500); width:220px; }
+.filter-search::placeholder { color:var(--text-muted); }
+.filter-search-clear {
+  position:absolute; right:0.6rem; background:none; border:none;
+  color:var(--text-muted); font-size:0.875rem; cursor:pointer; line-height:1;
+  display:none;
+}
+.filter-search-clear.visible { display:block; }
+.no-results {
+  grid-column:1/-1; text-align:center;
+  padding:3rem 1rem; color:var(--text-muted); font-size:0.9375rem;
+}
+.filter-chip {
+  font-size:0.8125rem; font-weight:500; padding:0.3rem 0.75rem;
+  border-radius:2rem; border:1.5px solid var(--border-default);
+  color:var(--text-secondary); background:var(--bg-surface); transition:all 0.15s;
+}
+.filter-chip:hover { border-color:var(--color-slate-500); color:var(--color-slate-600); }
+.filter-chip.active { border-color:var(--color-slate-500); background:var(--color-slate-50); color:var(--color-slate-600); font-weight:600; }
+.dark .filter-chip.active { background:rgba(74,111,165,0.15); color:var(--color-slate-200); }
+
+/* ── View toggle ───────────────────────────────────────────────────── */
+.view-toggle-wrap { display:flex; align-items:center; gap:0.5rem; flex-shrink:0; }
+.view-toggle-label { font-size:0.75rem; font-weight:600; color:var(--text-muted); white-space:nowrap; }
+.view-toggle { display:flex; align-items:center; gap:0.25rem; border:1.5px solid var(--border-default); border-radius:0.5rem; padding:0.2rem; background:var(--bg-surface); }
+.view-toggle-btn {
+  display:flex; align-items:center; gap:0.3rem;
+  padding:0.25rem 0.625rem; border-radius:0.35rem;
+  font-size:0.75rem; font-weight:600; color:var(--text-muted);
+  transition:background 0.12s, color 0.12s; white-space:nowrap;
+}
+.view-toggle-btn:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+.view-toggle-btn.active { background:var(--color-slate-500); color:white; }
+
+/* ── Cards grid ────────────────────────────────────────────────────── */
+.cards-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; }
+@media (max-width:900px) { .cards-grid { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:560px) { .cards-grid { grid-template-columns:1fr; } }
+
+/* ── List view ─────────────────────────────────────────────────────── */
+.list-view { width:100%; overflow-x:auto; border:1.5px solid var(--border-default); border-radius:0.75rem; background:#ffffff; box-shadow:var(--shadow-card); position:relative; z-index:1; }
+.dark .list-view { background:#3A3836; }
+.list-view[hidden] { display:none; }
+.list-table { width:100%; border-collapse:collapse; font-size:0.875rem; min-width:680px; }
+.list-table th { font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); padding:0.625rem 1rem; text-align:left; border-bottom:1.5px solid var(--border-default); background:#F1EFE8; white-space:nowrap; }
+.dark .list-table th { background:#4E4C49; }
+.list-table td { padding:0.75rem 1rem; border-bottom:1px solid var(--border-default); vertical-align:middle; background:#ffffff; }
+.dark .list-table td { background:#3A3836; }
+.list-table tr:last-child td { border-bottom:none; }
+.list-table tr:hover td { background:#EEF2F8; }
+.dark .list-table tr:hover td { background:#454340; }
+.list-table tr.row-flash td { background:linear-gradient(180deg,#FFFBF5 0%,white 100%); }
+.dark .list-table tr.row-flash td { background:rgba(212,137,30,0.06); }
+.list-name { font-weight:600; color:var(--text-primary); line-height:1.3; }
+.list-game { font-size:0.75rem; color:var(--text-muted); margin-top:0.1rem; }
+.list-participants { display:flex; flex-direction:column; gap:0.3rem; min-width:80px; }
+.list-part-text { font-size:0.8125rem; color:var(--text-secondary); white-space:nowrap; }
+.list-progress { height:4px; background:var(--border-default); border-radius:2px; overflow:hidden; }
+.list-progress-fill { height:100%; border-radius:2px; background:var(--color-slate-500); }
+.list-progress-fill-flash { background:var(--color-amber-500); }
+.list-action { white-space:nowrap; }
+
+/* ── Card ──────────────────────────────────────────────────────────── */
+.card {
+  background:var(--bg-surface); border:1.5px solid var(--border-default);
+  border-radius:var(--radius-xl); padding:1.125rem 1.25rem 1rem;
+  box-shadow:var(--shadow-card); display:flex; flex-direction:column; gap:0.75rem;
+  transition:border-color 0.15s, box-shadow 0.15s;
+  animation:fade-in 0.25s ease-out both;
+}
+.card:hover { border-color:var(--color-slate-200); box-shadow:0 4px 16px -2px rgb(74 111 165 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.06); }
+.dark .card:hover { border-color:var(--color-slate-700); }
+.card-flash { border-color:var(--color-amber-500); background:linear-gradient(180deg,#FFFBF5 0%,white 60%); }
+.dark .card-flash { border-color:var(--color-amber-600); background:linear-gradient(180deg,#2A1F00 0%,var(--color-gray-800) 60%); }
+.card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem; }
+.card-name { font-family:var(--font-display); font-size:1rem; font-weight:700; color:var(--text-primary); line-height:1.3; letter-spacing:-0.01em; }
+a.card-name { text-decoration:none; display:block; }
+a.card-name:hover { color:var(--color-slate-500); text-decoration:underline; text-underline-offset:3px; }
+.card-game { font-size:0.6875rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:0.15rem; }
+.badge { display:inline-flex; align-items:center; gap:0.25rem; font-size:0.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:0.2rem 0.5rem; border-radius:0.375rem; white-space:nowrap; }
+.badge-open     { background:var(--color-teal-50); color:var(--color-teal-600); }
+.badge-progress { background:var(--color-slate-50); color:var(--color-slate-600); }
+.badge-completed{ background:var(--color-gray-100); color:var(--color-gray-500); }
+.badge-flash    { background:var(--color-amber-50); color:var(--color-amber-600); }
+.dark .badge-open     { background:rgba(36,181,135,0.15); color:#4ecca8; }
+.dark .badge-progress { background:rgba(74,111,165,0.2); color:var(--color-slate-200); }
+.dark .badge-completed{ background:rgba(130,129,123,0.2); color:var(--color-gray-400); }
+.dark .badge-flash    { background:rgba(212,137,30,0.2); color:#F0A94A; }
+.card-chips { display:flex; flex-wrap:wrap; gap:0.35rem; }
+.chip { font-size:0.6875rem; font-weight:600; padding:0.175rem 0.45rem; border-radius:0.3rem; background:var(--bg-surface-2); color:var(--text-secondary); border:1px solid var(--border-default); }
+.chip-pvp   { color:var(--color-blue-500); background:#EBF3FC; border-color:#C3D9F6; }
+.chip-bot   { color:var(--color-teal-600); background:var(--color-teal-50); border-color:var(--color-teal-100); }
+.chip-mixed { color:var(--color-purple-500); background:#F0EBF9; border-color:#D9CCF0; }
+.chip-flash { color:var(--color-amber-600); background:var(--color-amber-50); border-color:var(--color-amber-100); }
+.dark .chip-pvp   { background:rgba(46,134,224,0.12); border-color:rgba(46,134,224,0.25); color:#7AB8F0; }
+.dark .chip-bot   { background:rgba(36,181,135,0.12); border-color:rgba(36,181,135,0.25); color:#4ecca8; }
+.dark .chip-mixed { background:rgba(124,92,191,0.15); border-color:rgba(124,92,191,0.3); color:#B59FE0; }
+.dark .chip-flash { background:rgba(212,137,30,0.15); border-color:rgba(212,137,30,0.3); color:#F0A94A; }
+.card-meta { display:flex; align-items:center; justify-content:space-between; font-size:0.8125rem; color:var(--text-muted); gap:0.5rem; }
+.meta-participants { display:flex; align-items:center; gap:0.3rem; }
+.progress-bar { height:3px; background:var(--border-default); border-radius:2px; overflow:hidden; }
+.progress-fill { height:100%; border-radius:2px; background:var(--color-slate-500); transition:width 0.3s; }
+.progress-fill-flash { background:var(--color-amber-500); }
+.progress-fill-teal  { background:var(--color-teal-500); }
+.card-footer { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-top:0.25rem; }
+.card-footer-info { font-size:0.8125rem; color:var(--text-muted); }
+.btn-register { font-size:0.8125rem; font-weight:600; padding:0.4rem 1rem; border-radius:0.5rem; background:var(--color-slate-500); color:white; transition:background 0.15s; white-space:nowrap; }
+.btn-register:hover { background:var(--color-slate-600); }
+.btn-register-flash { background:var(--color-amber-500); }
+.btn-register-flash:hover { background:var(--color-amber-600); }
+.btn-registered { font-size:0.8125rem; font-weight:600; padding:0.4rem 1rem; border-radius:0.5rem; background:var(--color-teal-50); color:var(--color-teal-600); border:1.5px solid var(--color-teal-500); }
+.dark .btn-registered { background:rgba(36,181,135,0.12); color:#4ecca8; border-color:rgba(36,181,135,0.4); }
+.btn-view { font-size:0.8125rem; font-weight:500; padding:0.4rem 1rem; border-radius:0.5rem; border:1.5px solid var(--border-default); color:var(--text-secondary); transition:all 0.15s; }
+.btn-view:hover { border-color:var(--color-slate-500); color:var(--color-slate-600); }
+.match-ready-banner { display:flex; align-items:center; gap:0.5rem; background:linear-gradient(135deg,var(--color-slate-50),#EEF4FF); border:1.5px solid var(--color-slate-200); border-radius:0.5rem; padding:0.5rem 0.75rem; font-size:0.8125rem; color:var(--color-slate-700); }
+.dark .match-ready-banner { background:rgba(74,111,165,0.15); border-color:var(--color-slate-700); color:var(--color-slate-200); }
+.match-ready-dot { width:8px; height:8px; border-radius:50%; background:var(--color-slate-500); animation:flash-pulse 1.2s ease-in-out infinite; flex-shrink:0; }
+.match-ready-play { margin-left:auto; font-size:0.75rem; font-weight:700; color:var(--color-slate-600); text-transform:uppercase; letter-spacing:0.04em; }
+.dark .match-ready-play { color:var(--color-slate-200); }
+
+/* ── Guide panel ───────────────────────────────────────────────────── */
+.guide-panel {
+  position:fixed; bottom:1.5rem; right:1.5rem; width:348px;
+  background:var(--guide-bg); border:1.5px solid var(--guide-border);
+  border-radius:var(--radius-xl);
+  box-shadow:0 8px 32px -4px rgb(74 111 165 / 0.2), 0 2px 8px -2px rgb(0 0 0 / 0.12);
+  display:flex; flex-direction:column; overflow:hidden;
+  animation:slide-up 0.22s cubic-bezier(0.34,1.2,0.64,1) both;
+  z-index:200; max-height:calc(100vh - 4rem);
+}
+.guide-panel[hidden] { display:none; }
+
+/* Header */
+.guide-header {
+  display:flex; align-items:center; gap:0.625rem;
+  padding:0.875rem 0.875rem 0.75rem 1rem;
+  border-bottom:1px solid var(--border-default);
+  flex-shrink:0;
+}
+.guide-header-orb {
+  width:28px; height:28px; border-radius:50%;
+  background:linear-gradient(135deg, var(--color-slate-500), var(--color-slate-700));
+  flex-shrink:0;
+}
+.guide-header-title { font-family:var(--font-display); font-size:0.9375rem; font-weight:700; color:var(--text-primary); flex:1; }
+.guide-header-sub { font-size:0.6875rem; color:var(--text-muted); margin-top:0.05rem; }
+.guide-icon-btn {
+  width:28px; height:28px; border-radius:0.4rem;
+  color:var(--text-muted); font-size:0.9375rem;
+  display:flex; align-items:center; justify-content:center;
+  transition:color 0.15s, background 0.15s; flex-shrink:0;
+}
+.guide-icon-btn:hover { color:var(--text-primary); background:var(--bg-surface-2); }
+.guide-icon-btn.active { color:var(--color-slate-600); background:var(--color-slate-50); }
+.dark .guide-icon-btn.active { color:var(--color-slate-200); background:rgba(74,111,165,0.2); }
+
+/* ── Quick-action slots ────────────────────────────────────────────── */
+.guide-slots-section {
+  padding:0.875rem 0.875rem 0.625rem;
+  border-bottom:1px solid var(--border-default);
+  flex-shrink:0;
+}
+.guide-slots-label {
+  font-size:0.625rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.07em; color:var(--text-muted); margin-bottom:0.625rem;
+}
+.guide-slots-grid {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:0.5rem;
+}
+/* Individual slot */
+.guide-slot {
+  display:flex; flex-direction:column; align-items:center; gap:0.3rem;
+  padding:0.5rem 0.25rem 0.4rem;
+  border-radius:0.625rem;
+  background:var(--slot-bg); border:1px solid var(--slot-border);
+  transition:background 0.15s, border-color 0.15s, transform 0.1s;
+  position:relative; cursor:pointer;
+}
+.guide-slot:hover { background:var(--slot-bg-hover); border-color:var(--color-slate-300); transform:translateY(-1px); }
+.dark .guide-slot:hover { border-color:var(--color-slate-600); }
+.guide-slot:active { transform:scale(0.95); }
+.guide-slot-icon { font-size:1.375rem; line-height:1; }
+.guide-slot-label {
+  font-size:0.5625rem; font-weight:600; text-align:center;
+  color:var(--text-secondary); line-height:1.25;
+  max-width:100%; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
+/* Onboarding slot — dashed border, expires indicator */
+.guide-slot-onboarding {
+  border-style:dashed;
+  border-color:var(--color-amber-200);
+  background:var(--color-amber-50);
+}
+.dark .guide-slot-onboarding { border-color:rgba(212,137,30,0.3); background:rgba(212,137,30,0.08); }
+.guide-slot-onboarding .guide-slot-label { color:var(--color-amber-600); }
+.dark .guide-slot-onboarding .guide-slot-label { color:#F0A94A; }
+.guide-slot-expires {
+  position:absolute; top:3px; right:4px;
+  font-size:0.5rem; opacity:0.65; line-height:1;
+}
+
+/* ── Edit mode ─────────────────────────────────────────────────────── */
+.guide-edit-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0.625rem 0.875rem 0.5rem;
+  background:var(--color-slate-50);
+  border-bottom:1px solid var(--border-default);
+  flex-shrink:0;
+}
+.dark .guide-edit-bar { background:rgba(74,111,165,0.08); }
+.guide-edit-bar[hidden] { display:none; }
+.guide-edit-title { font-size:0.75rem; font-weight:600; color:var(--text-secondary); }
+.guide-edit-actions { display:flex; align-items:center; gap:0.5rem; }
+.guide-edit-done {
+  font-size:0.75rem; font-weight:700;
+  padding:0.25rem 0.75rem; border-radius:0.375rem;
+  background:var(--color-slate-500); color:white;
+  transition:background 0.15s;
+}
+.guide-edit-done:hover { background:var(--color-slate-600); }
+.guide-settings-link {
+  display:block; font-size:0.75rem; color:var(--color-slate-500);
+  text-align:center; padding:0.375rem;
+  border-top:1px solid var(--border-default);
+  transition:color 0.15s; flex-shrink:0;
+}
+.guide-settings-link:hover { color:var(--color-slate-600); }
+.dark .guide-settings-link { color:var(--color-slate-300); }
+
+/* Slots in edit mode */
+.guide-slots-grid.editing .guide-slot {
+  cursor:grab;
+  border-color:var(--color-slate-300);
+}
+.guide-slots-grid.editing .guide-slot:active { cursor:grabbing; }
+.guide-slot-remove {
+  position:absolute; top:-6px; right:-6px;
+  width:16px; height:16px; border-radius:50%;
+  background:var(--color-red-500); color:white;
+  font-size:0.6rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--bg-surface);
+  opacity:0; pointer-events:none;
+  transition:opacity 0.15s;
+  z-index:1;
+}
+.editing .guide-slot-remove { opacity:1; pointer-events:auto; }
+.guide-slot-drag {
+  position:absolute; top:3px; left:4px;
+  font-size:0.6rem; color:var(--text-muted); opacity:0; transition:opacity 0.15s;
+  line-height:1; cursor:grab;
+}
+.editing .guide-slot-drag { opacity:0.5; }
+/* Empty add-slot button */
+.guide-slot-empty {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.25rem;
+  padding:0.5rem 0.25rem 0.4rem;
+  border-radius:0.625rem; border:1.5px dashed var(--border-strong);
+  color:var(--text-muted); font-size:0.75rem;
+  cursor:pointer; transition:all 0.15s;
+  min-height:64px;
+}
+.guide-slot-empty:hover { border-color:var(--color-slate-400); color:var(--color-slate-500); background:var(--color-slate-50); }
+.guide-slot-empty-icon { font-size:1rem; }
+.guide-slot-empty-label { font-size:0.5625rem; font-weight:500; }
+/* Drag-over highlight */
+.guide-slot.drag-over { outline:2px solid var(--color-slate-500); outline-offset:2px; }
+
+/* ── Slot picker modal ─────────────────────────────────────────────── */
+.slot-picker {
+  position:absolute; inset:0; z-index:10;
+  background:var(--guide-bg);
+  display:flex; flex-direction:column;
+  animation:slide-up 0.18s ease-out both;
+}
+.slot-picker[hidden] { display:none; }
+.slot-picker-header {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.75rem 1rem;
+  border-bottom:1px solid var(--border-default);
+  flex-shrink:0;
+}
+.slot-picker-title { font-size:0.875rem; font-weight:700; color:var(--text-primary); flex:1; }
+.slot-picker-body { flex:1; overflow-y:auto; padding:0.75rem 1rem; }
+.slot-picker-section-label {
+  font-size:0.625rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.07em; color:var(--text-muted);
+  margin:0.75rem 0 0.5rem;
+}
+.slot-picker-section-label:first-child { margin-top:0; }
+.slot-picker-list { display:flex; flex-direction:column; gap:0.25rem; }
+.slot-picker-item {
+  display:flex; align-items:center; gap:0.75rem;
+  padding:0.5rem 0.625rem; border-radius:0.5rem;
+  font-size:0.875rem; color:var(--text-primary);
+  transition:background 0.12s; text-align:left;
+  border:1px solid transparent;
+}
+.slot-picker-item:hover { background:var(--bg-surface-2); border-color:var(--border-default); }
+.slot-picker-item-icon { font-size:1.125rem; width:1.5rem; text-align:center; flex-shrink:0; }
+.slot-picker-item-info { flex:1; }
+.slot-picker-item-name { font-weight:500; }
+.slot-picker-item-desc { font-size:0.75rem; color:var(--text-muted); margin-top:0.1rem; }
+.slot-picker-item-onboarding {
+  font-size:0.625rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.05em; color:var(--color-amber-600);
+  background:var(--color-amber-50); border:1px solid var(--color-amber-100);
+  padding:0.1rem 0.3rem; border-radius:0.25rem;
+}
+.dark .slot-picker-item-onboarding { background:rgba(212,137,30,0.15); border-color:rgba(212,137,30,0.3); color:#F0A94A; }
+
+/* ── Conversation ──────────────────────────────────────────────────── */
+.guide-body {
+  flex:1; overflow-y:auto; padding:0.875rem 1rem;
+  display:flex; flex-direction:column; gap:0.75rem;
+  max-height:220px; min-height:0;
+}
+.guide-msg-user {
+  align-self:flex-end; background:var(--color-slate-500); color:white;
+  font-size:0.875rem; padding:0.45rem 0.75rem;
+  border-radius:1rem 1rem 0.25rem 1rem; max-width:88%;
+}
+.guide-msg-guide {
+  align-self:flex-start; background:var(--bg-surface-2); color:var(--text-primary);
+  font-size:0.875rem; line-height:1.55; padding:0.5rem 0.75rem;
+  border-radius:1rem 1rem 1rem 0.25rem; max-width:90%;
+  border:1px solid var(--border-default);
+}
+
+/* Suggestions */
+.guide-suggestions { display:flex; flex-direction:column; gap:0.3rem; padding:0 0.875rem 0.5rem; flex-shrink:0; }
+.guide-suggest-label { font-size:0.625rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.1rem; }
+.guide-suggest {
+  text-align:left; font-size:0.8125rem; color:var(--color-slate-600);
+  padding:0.375rem 0.625rem; border-radius:0.5rem;
+  border:1px solid var(--color-slate-200); background:var(--color-slate-50);
+  transition:all 0.15s;
+}
+.dark .guide-suggest { color:var(--color-slate-200); border-color:var(--color-slate-700); background:rgba(74,111,165,0.1); }
+.guide-suggest:hover { background:var(--color-slate-100); border-color:var(--color-slate-400); }
+
+/* Input */
+.guide-input-row {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.625rem 0.875rem 0.75rem;
+  border-top:1px solid var(--border-default); flex-shrink:0;
+}
+.guide-input {
+  flex:1; font-family:var(--font-body); font-size:0.875rem;
+  padding:0.4rem 0.625rem; border-radius:0.5rem;
+  border:1.5px solid var(--border-default);
+  background:var(--bg-page); color:var(--text-primary);
+  outline:none; transition:border-color 0.15s;
+}
+.guide-input:focus { border-color:var(--color-slate-500); }
+.guide-input::placeholder { color:var(--text-muted); }
+.guide-send {
+  width:32px; height:32px; border-radius:0.5rem;
+  background:var(--color-slate-500); color:white;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.9rem; transition:background 0.15s; flex-shrink:0;
+}
+.guide-send:hover { background:var(--color-slate-600); }
+
+/* ── Guide online strip ────────────────────────────────────────────── */
+.guide-online-strip {
+  padding:0.6rem 0.875rem 0.5rem;
+  border-bottom:1px solid var(--border-default);
+  flex-shrink:0;
+}
+.guide-online-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:0.45rem;
+}
+.guide-online-label {
+  font-size:0.6875rem; font-weight:700; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:0.05em;
+  display:flex; align-items:center; gap:0.35rem;
+}
+.guide-online-dot {
+  width:6px; height:6px; border-radius:50%; background:#22c55e;
+  animation:flash-pulse 2.5s ease-in-out infinite;
+}
+.guide-online-count { font-size:0.75rem; color:var(--text-muted); }
+.guide-online-avatars {
+  display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;
+}
+.guide-online-avatar {
+  position:relative; width:34px; height:34px; border-radius:50%;
+  color:white; font-size:0.7rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; border:2px solid var(--bg-surface);
+  transition:transform 0.15s, box-shadow 0.15s;
+  flex-shrink:0;
+}
+.guide-online-avatar:hover { transform:scale(1.12); box-shadow:0 0 0 3px rgba(74,111,165,0.3); }
+.guide-online-avatar::after {
+  content:''; position:absolute; bottom:0; right:0;
+  width:9px; height:9px; border-radius:50%;
+  background:#22c55e; border:2px solid var(--bg-surface);
+}
+.guide-online-more {
+  font-size:0.75rem; color:var(--text-muted); white-space:nowrap; padding:0 0.25rem;
+}
+
+/* Join-me sent toast inside Guide */
+.guide-join-sent {
+  margin:0 0.875rem; padding:0.45rem 0.625rem;
+  border-radius:0.5rem; background:var(--color-teal-50);
+  border:1px solid var(--color-teal-100);
+  font-size:0.8125rem; color:var(--color-teal-600);
+  animation:slide-up 0.2s ease-out; flex-shrink:0;
+}
+.dark .guide-join-sent { background:rgba(29,158,117,0.12); border-color:rgba(29,158,117,0.25); color:#4DD9A8; }
+
+/* ── Guide invite panel ────────────────────────────────────────────── */
+.invite-panel {
+  position:absolute; inset:0; border-radius:inherit;
+  background:var(--guide-bg); display:flex; flex-direction:column;
+  z-index:10; animation:slide-up 0.2s ease-out;
+}
+.invite-panel[hidden] { display:none; }
+.invite-header {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.75rem 0.875rem 0.625rem;
+  border-bottom:1px solid var(--border-default); flex-shrink:0;
+}
+.invite-title { font-size:0.875rem; font-weight:700; color:var(--text-primary); flex:1; }
+.invite-body { flex:1; overflow-y:auto; padding:0.875rem; display:flex; flex-direction:column; gap:0.875rem; }
+
+/* Search row */
+.invite-search-wrap { position:relative; }
+.invite-search-icon { position:absolute; left:0.65rem; top:50%; transform:translateY(-50%); font-style:normal; font-size:0.875rem; pointer-events:none; color:var(--text-muted); }
+.invite-search-input {
+  width:100%; padding:0.45rem 0.75rem 0.45rem 2.1rem;
+  border-radius:0.5rem; border:1.5px solid var(--border-default);
+  background:var(--bg-page); color:var(--text-primary);
+  font-family:var(--font-body); font-size:0.875rem; outline:none;
+  transition:border-color 0.15s;
+}
+.invite-search-input:focus { border-color:var(--color-slate-500); }
+.invite-search-input::placeholder { color:var(--text-muted); }
+
+/* Game selector */
+.invite-section-label { font-size:0.6875rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; }
+.invite-game-list { display:flex; flex-direction:column; gap:0.3rem; }
+.invite-game-option {
+  display:flex; align-items:center; gap:0.625rem;
+  padding:0.5rem 0.625rem; border-radius:0.5rem;
+  border:1.5px solid var(--border-default); background:var(--bg-page);
+  cursor:pointer; transition:all 0.15s; text-align:left;
+}
+.invite-game-option:hover { border-color:var(--color-slate-500); background:var(--bg-surface-hover); }
+.invite-game-option.selected { border-color:var(--color-slate-500); background:var(--color-slate-50); }
+.dark .invite-game-option.selected { background:rgba(74,111,165,0.15); }
+.invite-game-icon { font-size:1.1rem; width:1.5rem; text-align:center; flex-shrink:0; }
+.invite-game-name { font-size:0.875rem; font-weight:600; color:var(--text-primary); }
+.invite-game-desc { font-size:0.75rem; color:var(--text-muted); }
+
+/* User results */
+.invite-user-list { display:flex; flex-direction:column; gap:0.3rem; }
+.invite-user {
+  display:flex; align-items:center; gap:0.625rem;
+  padding:0.45rem 0.625rem; border-radius:0.5rem;
+  border:1.5px solid transparent; cursor:pointer; transition:all 0.15s;
+}
+.invite-user:hover { background:var(--bg-surface-hover); border-color:var(--border-default); }
+.invite-user.selected { border-color:var(--color-slate-500); background:var(--color-slate-50); }
+.dark .invite-user.selected { background:rgba(74,111,165,0.15); }
+.invite-user-avatar {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  background:var(--color-slate-500); color:white;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.75rem; font-weight:700;
+}
+.invite-user-name { font-size:0.875rem; font-weight:600; color:var(--text-primary); flex:1; }
+.invite-user-status { display:flex; align-items:center; gap:0.3rem; font-size:0.75rem; }
+.invite-status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.invite-status-dot.online  { background:#22c55e; }
+.invite-status-dot.offline { background:var(--color-gray-400); }
+.invite-status-label { color:var(--text-muted); }
+
+/* Footer */
+.invite-footer {
+  padding:0.75rem 0.875rem;
+  border-top:1px solid var(--border-default); flex-shrink:0;
+  display:flex; flex-direction:column; gap:0.4rem;
+}
+.invite-expiry-note { font-size:0.7rem; color:var(--text-muted); text-align:center; }
+.invite-send-btn {
+  width:100%; padding:0.55rem;
+  border-radius:0.5rem; border:none;
+  background:var(--color-slate-500); color:white;
+  font-size:0.9375rem; font-weight:700; font-family:var(--font-body);
+  cursor:pointer; transition:background 0.15s;
+}
+.invite-send-btn:hover:not(:disabled) { background:var(--color-slate-600); }
+.invite-send-btn:disabled { opacity:0.4; cursor:default; }
+
+/* ── Load more ─────────────────────────────────────────────────────── */
+.load-more-row {
+  display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
+  margin-top: 2rem; padding-bottom: 2rem;
+}
+.load-more-count {
+  font-size: 0.8125rem; color: var(--text-muted);
+}
+.load-more-btn {
+  padding: 0.625rem 2rem;
+  border-radius: 0.5rem;
+  border: 1.5px solid var(--color-slate-500);
+  background: transparent;
+  color: var(--color-slate-500);
+  font-size: 0.9375rem; font-weight: 600; font-family: var(--font-body);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.load-more-btn:hover { background: var(--color-slate-500); color: white; }
+.load-more-btn:disabled { opacity: 0.4; cursor: default; }
+.load-more-btn.loading::after { content: ' …'; }
+
+/* ── Responsive ────────────────────────────────────────────────────── */
+@media (max-width:640px) {
+  .nav-links .nav-link:not(.mobile-show) { display:none; }
+  .page { padding:1.25rem 1rem; }
+  .page-title { font-size:1.5rem; }
+  .guide-panel { width:calc(100vw - 2rem); right:1rem; bottom:1rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Colosseum background ────────────────────────────────────────── -->
+<div class="photo-bg" aria-hidden="true"></div>
+
+<a href="#main-content" class="skip-nav">Skip to main content</a>
+
+<!-- ── Nav ────────────────────────────────────────────────────────── -->
+<nav class="nav" role="navigation" aria-label="Main navigation">
+  <a href="/" class="nav-logo" aria-label="AI Arena home">
+    <span class="nav-logo-dot" aria-hidden="true"></span>
+    AI Arena
+  </a>
+  <div class="nav-links" role="list">
+    <a href="lobby.html"          class="nav-link active mobile-show" role="listitem" aria-current="page">Tournaments</a>
+    <a href="#rankings"           class="nav-link" role="listitem">Rankings</a>
+    <a href="#games"              class="nav-link" role="listitem">Games</a>
+  </div>
+  <div class="nav-right">
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">☀️</button>
+    <button class="guide-trigger" id="guideToggle" aria-expanded="false" aria-controls="guidePanel" aria-label="Open Guide">
+      <span class="guide-orb" aria-hidden="true"></span>
+      Guide
+      <span class="guide-orb-badge" id="guideBadge" aria-hidden="true"></span>
+    </button>
+    <a href="player-profile.html" class="nav-avatar" aria-label="Your profile" style="display:flex;align-items:center;justify-content:center;text-decoration:none;">JD</a>
+  </div>
+</nav>
+
+<!-- ── Page ───────────────────────────────────────────────────────── -->
+<main id="main-content" class="page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Tournaments</h1>
+      <p class="page-subtitle">Compete, climb, and earn your place in the arena.</p>
+    </div>
+  </div>
+
+  <div class="tabs-bar" role="tablist" aria-label="Tournament status">
+    <button class="tab active" role="tab" aria-selected="true">Upcoming <span class="tab-count">5</span></button>
+    <button class="tab" role="tab" aria-selected="false">In Progress <span class="tab-count">3</span></button>
+    <button class="tab" role="tab" aria-selected="false">Completed <span class="tab-count">24</span></button>
+  </div>
+
+  <div class="filter-row" role="group" aria-label="Filters">
+    <button class="filter-chip active" aria-pressed="true">All games</button>
+    <button class="filter-chip" aria-pressed="false">XO Arena</button>
+    <button class="filter-chip" aria-pressed="false">PVP</button>
+    <button class="filter-chip" aria-pressed="false">Bot vs Bot</button>
+    <button class="filter-chip" aria-pressed="false">Mixed</button>
+    <button class="filter-chip" aria-pressed="false">Flash</button>
+    <div class="filter-search-wrap">
+      <i class="filter-search-icon" aria-hidden="true">🔍</i>
+      <input class="filter-search" id="tournamentSearch" type="search" placeholder="Search tournaments…" aria-label="Search tournaments by name" autocomplete="off">
+      <button class="filter-search-clear" id="searchClear" aria-label="Clear search">✕</button>
+    </div>
+    <div class="view-toggle-wrap">
+      <span class="view-toggle-label">View:</span>
+      <div class="view-toggle" role="group" aria-label="View mode">
+        <button class="view-toggle-btn active" id="viewGrid" aria-pressed="true" aria-label="Switch to card view">⊞ Cards</button>
+        <button class="view-toggle-btn" id="viewList" aria-pressed="false" aria-label="Switch to list view">☰ List</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards-grid" id="cardsGrid">
+
+    <!-- Flash in progress -->
+    <article class="card card-flash">
+      <div class="card-top">
+        <div><a href="tournament-detail.html" class="card-name">Speed Blitz</a><div class="card-game">XO Arena</div></div>
+        <span class="badge badge-flash">⚡ Flash</span>
+      </div>
+      <div class="card-chips">
+        <span class="chip chip-pvp">PVP</span>
+        <span class="chip">Best of 3</span>
+        <span class="chip chip-flash">Ends in 08:42</span>
+      </div>
+      <div class="match-ready-banner" role="status">
+        <span class="match-ready-dot" aria-hidden="true"></span>
+        <span>Your match is ready — Round 2</span>
+        <span class="match-ready-play">Play →</span>
+      </div>
+      <div class="progress-bar" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-fill progress-fill-flash" style="width:62%"></div>
+      </div>
+      <div class="card-footer">
+        <span class="card-footer-info">16 / 16 players</span>
+        <button class="btn-register btn-register-flash">Play now</button>
+      </div>
+    </article>
+
+    <!-- Open, registered -->
+    <article class="card">
+      <div class="card-top">
+        <div><a href="tournament-detail.html" class="card-name">Open Arena</a><div class="card-game">XO Arena</div></div>
+        <span class="badge badge-open">Reg. Open</span>
+      </div>
+      <div class="card-chips"><span class="chip chip-pvp">PVP</span><span class="chip">Open</span><span class="chip">Round Robin</span></div>
+      <div class="card-meta">
+        <span class="meta-participants">👥 14 players</span>
+        <span>Starts in 2h 15m</span>
+      </div>
+      <div class="progress-bar" role="progressbar" aria-valuenow="70" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-fill progress-fill-teal" style="width:70%"></div>
+      </div>
+      <div class="card-footer">
+        <span class="card-footer-info">Max 20</span>
+        <button class="btn-registered" aria-pressed="true">✓ Registered</button>
+      </div>
+    </article>
+
+    <!-- Bot vs Bot -->
+    <article class="card">
+      <div class="card-top">
+        <div><a href="tournament-detail.html" class="card-name">Silicon Clash</a><div class="card-game">XO Arena</div></div>
+        <span class="badge badge-open">Reg. Open</span>
+      </div>
+      <div class="card-chips"><span class="chip chip-bot">Bot vs Bot</span><span class="chip">Planned</span><span class="chip">Single Elim</span></div>
+      <div class="card-meta">
+        <span class="meta-participants">🤖 8 bots</span>
+        <span>Apr 9, 2pm</span>
+      </div>
+      <div class="card-meta" style="margin-top:-0.25rem">
+        <span class="badge badge-flash" style="font-size:0.6rem">Veteran+</span>
+      </div>
+      <div class="card-footer">
+        <span class="card-footer-info">Max 16 bots</span>
+        <button class="btn-register">Enter bot</button>
+      </div>
+    </article>
+
+    <!-- Mixed -->
+    <article class="card">
+      <div class="card-top">
+        <div><a href="tournament-detail.html" class="card-name">Mixed Signals</a><div class="card-game">XO Arena</div></div>
+        <span class="badge badge-open">Reg. Open</span>
+      </div>
+      <div class="card-chips"><span class="chip chip-mixed">Mixed</span><span class="chip">Planned</span><span class="chip">Best of 5</span></div>
+      <div class="card-meta">
+        <span class="meta-participants">👥 22 players &amp; bots</span>
+        <span>Apr 10, 7pm</span>
+      </div>
+      <div class="progress-bar" role="progressbar" aria-valuenow="44" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-fill" style="width:44%"></div>
+      </div>
+      <div class="card-footer">
+        <span class="card-footer-info">Max 50</span>
+        <button class="btn-register">Register</button>
+      </div>
+    </article>
+
+    <!-- In progress -->
+    <article class="card">
+      <div class="card-top">
+        <div><a href="tournament-detail.html" class="card-name">Weekly Clash</a><div class="card-game">XO Arena</div></div>
+        <span class="badge badge-progress">In Progress</span>
+      </div>
+      <div class="card-chips"><span class="chip chip-pvp">PVP</span><span class="chip">Planned</span><span class="chip">Single Elim</span><span class="chip">Recurring</span></div>
+      <div class="card-meta"><span>Round 3 of 4</span><span>Ends ~45m</span></div>
+      <div class="progress-bar" role="progressbar" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-fill" style="width:75%"></div>
+      </div>
+      <div class="card-footer">
+        <span class="card-footer-info">32 players</span>
+        <button class="btn-view">View bracket</button>
+      </div>
+    </article>
+
+    <!-- Completed -->
+    <article class="card">
+      <div class="card-top">
+        <div><a href="tournament-detail.html" class="card-name">Grand Prix XO</a><div class="card-game">XO Arena</div></div>
+        <span class="badge badge-completed">Completed</span>
+      </div>
+      <div class="card-chips"><span class="chip chip-pvp">PVP</span><span class="chip">Round Robin</span></div>
+      <div class="card-meta">
+        <span>🏆 Won by <strong>@cipher</strong></span>
+        <span>Apr 5</span>
+      </div>
+      <div class="card-footer">
+        <span class="card-footer-info">24 players</span>
+        <button class="btn-view">View results</button>
+      </div>
+    </article>
+
+  </div>
+
+  <!-- ── List view ───────────────────────────────────────────────────── -->
+  <div class="list-view" id="listView" hidden>
+    <table class="list-table" aria-label="Tournaments list">
+      <thead>
+        <tr>
+          <th>Tournament</th>
+          <th>Mode</th>
+          <th>Format</th>
+          <th>Status</th>
+          <th>Participants</th>
+          <th>Starts</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-flash">
+          <td><div class="list-name">⚡ Speed Blitz</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip chip-flash">Flash</span></td>
+          <td><span class="badge badge-flash">In Progress</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">12 / 16</span>
+              <div class="list-progress"><div class="list-progress-fill list-progress-fill-flash" style="width:75%"></div></div>
+            </div>
+          </td>
+          <td style="font-family:monospace;font-size:0.875rem;color:var(--color-amber-500);font-weight:700;">04:22</td>
+          <td class="list-action"><button class="btn-register btn-register-flash">Join now</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Spring Open 2026</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-progress">In Progress</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">8 / 8</span>
+              <div class="list-progress"><div class="list-progress-fill" style="width:100%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Started</td>
+          <td class="list-action"><button class="btn-registered">✓ Registered</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Championship #4</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">11 / 32</span>
+              <div class="list-progress"><div class="list-progress-fill list-progress-fill-teal" style="width:34%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 12</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Gold League — Week 14</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">6 / 8</span>
+              <div class="list-progress"><div class="list-progress-fill" style="width:75%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 15</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Mixed Masters</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-mixed">Mixed</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td>
+            <div class="list-participants">
+              <span class="list-part-text">3 / 16</span>
+              <div class="list-progress"><div class="list-progress-fill" style="width:19%"></div></div>
+            </div>
+          </td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 20</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Weekly Blitz #22</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">24 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Apr 5</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Silicon League — Week 3</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">2 / 8</span><div class="list-progress"><div class="list-progress-fill" style="width:25%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 22</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Cup — Qualifier 2</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">18 / 32</span><div class="list-progress"><div class="list-progress-fill list-progress-fill-teal" style="width:56%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 25</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Platinum Invitational</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">5 / 8</span><div class="list-progress"><div class="list-progress-fill" style="width:63%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">Apr 28</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Mixed Masters II</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-mixed">Mixed</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td><div class="list-participants"><span class="list-part-text">7 / 16</span><div class="list-progress"><div class="list-progress-fill" style="width:44%"></div></div></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-secondary);">May 2</td>
+          <td class="list-action"><button class="btn-register">Register</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Weekly Blitz #21</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">16 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 29</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Gold League — Week 13</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">8 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 22</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Championship #3</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 15</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Spring Tournament Series — R3</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">12 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 8</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Weekly Blitz #20</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">16 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Mar 1</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Silver Open — Feb 2026</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">24 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Feb 22</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Mixed Masters I</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-mixed">Mixed</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">16 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Feb 15</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Winter Championship 2026</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Jan 20</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Bot Cup — Qualifier 1</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-bot">Bot vs Bot</span></td>
+          <td><span class="chip">Round Robin</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Jan 10</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+        <tr>
+          <td><div class="list-name">Grand Prix XO — Season 1</div><div class="list-game">XO Arena</div></td>
+          <td><span class="chip chip-pvp">PVP</span></td>
+          <td><span class="chip">Single Elim</span></td>
+          <td><span class="badge badge-completed">Completed</span></td>
+          <td><div class="list-participants"><span class="list-part-text">32 players</span></div></td>
+          <td style="font-size:0.8125rem;color:var(--text-muted);">Jan 5</td>
+          <td class="list-action"><button class="btn-view">View results</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:0.625rem 1rem;font-size:0.8125rem;color:var(--text-muted);border-top:1px solid var(--border-default);">
+      Showing all 24 tournaments
+    </div>
+  </div>
+
+  <!-- ── Load more ─────────────────────────────────────────────────── -->
+  <div class="load-more-row" id="loadMoreRow">
+    <span class="load-more-count" id="loadMoreCount">Showing 6 of 24 tournaments</span>
+    <button class="load-more-btn" id="loadMoreBtn" aria-label="Load more tournaments">
+      Load more
+    </button>
+  </div>
+
+</main>
+
+<!-- ── Guide panel ─────────────────────────────────────────────────── -->
+<div id="guidePanel" class="guide-panel" role="dialog" aria-modal="false" aria-label="Guide" hidden>
+
+  <!-- Header -->
+  <div class="guide-header">
+    <div class="guide-header-orb" aria-hidden="true"></div>
+    <div>
+      <div class="guide-header-title">Guide</div>
+      <div class="guide-header-sub" id="guideStatus" aria-live="polite">Ready to help</div>
+    </div>
+    <button class="guide-icon-btn" id="guideEditBtn" aria-label="Customize Guide" title="Customize shortcuts">⚙</button>
+    <button class="guide-icon-btn" id="guideClose" aria-label="Close Guide">✕</button>
+  </div>
+
+  <!-- Notification stack (general-purpose: flash, admin, invite, match_ready) -->
+  <div class="guide-notif-stack" id="guideNotifStack" aria-live="polite" aria-label="Notifications"></div>
+
+  <!-- Who's online strip -->
+  <div class="guide-online-strip" id="guideOnlineStrip">
+    <div class="guide-online-header">
+      <span class="guide-online-label">
+        <span class="guide-online-dot" aria-hidden="true"></span>
+        Online now
+      </span>
+      <span class="guide-online-count" id="guideOnlineCount">7 players</span>
+    </div>
+    <div class="guide-online-avatars" id="guideOnlineAvatars" role="list" aria-label="Online players — tap to invite to your room">
+      <button class="guide-online-avatar" style="background:#4A6FA5" data-user="cipher"  title="@cipher — tap to invite" aria-label="Invite @cipher to your room" role="listitem">CI</button>
+      <button class="guide-online-avatar" style="background:#24B587" data-user="nova"    title="@nova — tap to invite"   aria-label="Invite @nova to your room"   role="listitem">NO</button>
+      <button class="guide-online-avatar" style="background:#7C5CBF" data-user="axon"    title="@axon — tap to invite"   aria-label="Invite @axon to your room"   role="listitem">AX</button>
+      <button class="guide-online-avatar" style="background:#E85554" data-user="striker" title="@striker — tap to invite" aria-label="Invite @striker to your room" role="listitem">ST</button>
+      <button class="guide-online-avatar" style="background:#D4891E" data-user="wren"    title="@wren — tap to invite"   aria-label="Invite @wren to your room"   role="listitem">WR</button>
+      <button class="guide-online-avatar" style="background:#304D77" data-user="lumen"   title="@lumen — tap to invite"  aria-label="Invite @lumen to your room"  role="listitem">LU</button>
+      <span class="guide-online-more">+1 more</span>
+    </div>
+  </div>
+
+  <!-- Edit mode bar (shown in edit mode) -->
+  <div class="guide-edit-bar" id="guideEditBar" hidden>
+    <span class="guide-edit-title">Drag to reorder · tap × to remove</span>
+    <div class="guide-edit-actions">
+      <button class="guide-edit-done" id="guideEditDone">Done</button>
+    </div>
+  </div>
+
+  <!-- Quick-action slots -->
+  <div class="guide-slots-section">
+    <div class="guide-slots-label" aria-hidden="true">Quick actions</div>
+    <div class="guide-slots-grid" id="guideSlotsGrid" aria-label="Quick action shortcuts">
+
+      <button class="guide-slot" data-action="tournaments" aria-label="Go to Tournaments" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-icon" aria-hidden="true">🏆</span>
+        <span class="guide-slot-label">Tournaments</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove Tournaments shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot" data-action="classification" aria-label="My Classification" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-icon" aria-hidden="true">🎖️</span>
+        <span class="guide-slot-label">My Tier</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove My Tier shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot" data-action="rankings" aria-label="Rankings" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-icon" aria-hidden="true">📊</span>
+        <span class="guide-slot-label">Rankings</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove Rankings shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot" data-action="flash" aria-label="Flash Tournaments" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-icon" aria-hidden="true">⚡</span>
+        <span class="guide-slot-label">Flash</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove Flash shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot" data-action="profile" aria-label="My Profile" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-icon" aria-hidden="true">👤</span>
+        <span class="guide-slot-label">Profile</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove Profile shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot" data-action="notifications" aria-label="Notification Preferences" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-icon" aria-hidden="true">🔔</span>
+        <span class="guide-slot-label">Alerts</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove Alerts shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot" data-action="invite" aria-label="Invite a player to a game" draggable="false" id="inviteSlotBtn">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-icon" aria-hidden="true">⚔️</span>
+        <span class="guide-slot-label">Invite</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove Invite shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot guide-slot-onboarding" data-action="how-tournaments" aria-label="How tournaments work (onboarding)" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-expires" aria-hidden="true" title="Expires in ~14 days">⏱</span>
+        <span class="guide-slot-icon" aria-hidden="true">❓</span>
+        <span class="guide-slot-label">How it works</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove How it works shortcut">✕</button>
+      </button>
+
+      <button class="guide-slot guide-slot-onboarding" data-action="faq" aria-label="Read the FAQ (onboarding)" draggable="false">
+        <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+        <span class="guide-slot-expires" aria-hidden="true" title="Expires in ~14 days">⏱</span>
+        <span class="guide-slot-icon" aria-hidden="true">📖</span>
+        <span class="guide-slot-label">FAQ</span>
+        <button class="guide-slot-remove" tabindex="-1" aria-label="Remove FAQ shortcut">✕</button>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Settings link (shown in edit mode) -->
+  <a href="/settings/guide" class="guide-settings-link" id="guideSettingsLink" hidden>
+    All Guide settings →
+  </a>
+
+  <!-- Slot picker (full-panel overlay) -->
+  <div class="slot-picker" id="slotPicker" role="dialog" aria-label="Choose a shortcut" hidden>
+    <div class="slot-picker-header">
+      <button class="guide-icon-btn" id="slotPickerBack" aria-label="Back">←</button>
+      <span class="slot-picker-title">Add a shortcut</span>
+    </div>
+    <div class="slot-picker-body">
+
+      <div class="slot-picker-section-label">Platform</div>
+      <div class="slot-picker-list">
+        <button class="slot-picker-item" data-action="tournaments">
+          <span class="slot-picker-item-icon">🏆</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Tournaments</div>
+            <div class="slot-picker-item-desc">Browse and join tournaments</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="classification">
+          <span class="slot-picker-item-icon">🎖️</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">My Classification</div>
+            <div class="slot-picker-item-desc">Your tier, merits, and history</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="rankings">
+          <span class="slot-picker-item-icon">📊</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Rankings</div>
+            <div class="slot-picker-item-desc">Cross-game leaderboard</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="flash">
+          <span class="slot-picker-item-icon">⚡</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Flash Tournaments</div>
+            <div class="slot-picker-item-desc">Spontaneous short-form events</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="profile">
+          <span class="slot-picker-item-icon">👤</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">My Profile</div>
+            <div class="slot-picker-item-desc">Your platform profile page</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="notifications">
+          <span class="slot-picker-item-icon">🔔</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Notification Preferences</div>
+            <div class="slot-picker-item-desc">Match alerts, flash banners, reminders</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="slot-picker-section-label">XO Arena</div>
+      <div class="slot-picker-list">
+        <button class="slot-picker-item" data-action="xo-play">
+          <span class="slot-picker-item-icon">🎮</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Play XO</div>
+            <div class="slot-picker-item-desc">Jump into a game at XO Arena</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="xo-bots">
+          <span class="slot-picker-item-icon">🤖</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Community Bots</div>
+            <div class="slot-picker-item-desc">Browse and challenge bots</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="xo-stats">
+          <span class="slot-picker-item-icon">📈</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">My XO Stats</div>
+            <div class="slot-picker-item-desc">Your ELO, win rate, match history</div>
+          </div>
+        </button>
+        <button class="slot-picker-item" data-action="xo-train">
+          <span class="slot-picker-item-icon">🧪</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Train My Bot</div>
+            <div class="slot-picker-item-desc">Open the XO bot training interface</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="slot-picker-section-label">Onboarding</div>
+      <div class="slot-picker-list">
+        <button class="slot-picker-item" data-action="how-tournaments">
+          <span class="slot-picker-item-icon">❓</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">How Tournaments Work</div>
+            <div class="slot-picker-item-desc">Overview of formats, merits, and tiers</div>
+          </div>
+          <span class="slot-picker-item-onboarding">Onboarding</span>
+        </button>
+        <button class="slot-picker-item" data-action="faq">
+          <span class="slot-picker-item-icon">📖</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">Read the FAQ</div>
+            <div class="slot-picker-item-desc">Common questions answered</div>
+          </div>
+          <span class="slot-picker-item-onboarding">Onboarding</span>
+        </button>
+        <button class="slot-picker-item" data-action="xo-how-to-train">
+          <span class="slot-picker-item-icon">🎓</span>
+          <div class="slot-picker-item-info">
+            <div class="slot-picker-item-name">How to Train a Bot</div>
+            <div class="slot-picker-item-desc">XO Arena bot training guide</div>
+          </div>
+          <span class="slot-picker-item-onboarding">Onboarding</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Invite panel -->
+  <div class="invite-panel" id="invitePanel" role="dialog" aria-label="Invite a player" hidden>
+    <div class="invite-header">
+      <button class="guide-icon-btn" id="invitePanelBack" aria-label="Back">←</button>
+      <span class="invite-title">⚔️ Invite to a game</span>
+    </div>
+    <div class="invite-body">
+
+      <!-- User search -->
+      <div class="invite-search-wrap">
+        <i class="invite-search-icon" aria-hidden="true">🔍</i>
+        <input class="invite-search-input" id="inviteSearch" type="search" placeholder="Search players…" autocomplete="off" aria-label="Search for a player to invite">
+      </div>
+
+      <!-- User list -->
+      <div>
+        <div class="invite-section-label" style="margin-bottom:0.4rem">Players</div>
+        <div class="invite-user-list" id="inviteUserList">
+          <button class="invite-user" data-user="cipher">
+            <div class="invite-user-avatar">CI</div>
+            <span class="invite-user-name">@cipher</span>
+            <span class="invite-user-status">
+              <span class="invite-status-dot online" aria-hidden="true"></span>
+              <span class="invite-status-label">Online</span>
+            </span>
+          </button>
+          <button class="invite-user" data-user="nova">
+            <div class="invite-user-avatar" style="background:var(--color-teal-500)">NO</div>
+            <span class="invite-user-name">@nova</span>
+            <span class="invite-user-status">
+              <span class="invite-status-dot online" aria-hidden="true"></span>
+              <span class="invite-status-label">Online</span>
+            </span>
+          </button>
+          <button class="invite-user" data-user="blaze">
+            <div class="invite-user-avatar" style="background:var(--color-purple-500)">BL</div>
+            <span class="invite-user-name">@blaze</span>
+            <span class="invite-user-status">
+              <span class="invite-status-dot offline" aria-hidden="true"></span>
+              <span class="invite-status-label">Offline — will email</span>
+            </span>
+          </button>
+          <button class="invite-user" data-user="axon">
+            <div class="invite-user-avatar" style="background:var(--color-amber-500)">AX</div>
+            <span class="invite-user-name">@axon</span>
+            <span class="invite-user-status">
+              <span class="invite-status-dot offline" aria-hidden="true"></span>
+              <span class="invite-status-label">Offline — will email</span>
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Game selector -->
+      <div>
+        <div class="invite-section-label" style="margin-bottom:0.4rem">Game</div>
+        <div class="invite-game-list">
+          <button class="invite-game-option selected" data-game="xo" id="gameOptXO">
+            <span class="invite-game-icon">✖️</span>
+            <div>
+              <div class="invite-game-name">XO Arena</div>
+              <div class="invite-game-desc">Tic-tac-toe · best of 3</div>
+            </div>
+          </button>
+          <button class="invite-game-option" data-game="coming-soon" disabled style="opacity:0.45;cursor:default">
+            <span class="invite-game-icon">🔲</span>
+            <div>
+              <div class="invite-game-name">Connect4 Arena</div>
+              <div class="invite-game-desc">Coming soon</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+    </div>
+    <div class="invite-footer">
+      <span class="invite-expiry-note">Invite expires after 5 min if not accepted</span>
+      <button class="invite-send-btn" id="inviteSendBtn" disabled>Send invite</button>
+    </div>
+  </div>
+
+  <!-- Conversation -->
+  <div class="guide-body" aria-live="polite" aria-label="Conversation" id="guideBody">
+    <div style="align-self:flex-end" class="guide-msg-user">How do I register for a tournament?</div>
+    <div class="guide-msg-guide">
+      Open any tournament with <em>Registration Open</em> status and hit Register. You'll choose how you want match results delivered — after each game or a summary at the end. Then you're in.<br><br>
+      Want me to show you what's open right now?
+    </div>
+  </div>
+
+  <!-- Suggestions -->
+  <div class="guide-suggestions" id="guideSuggestions">
+    <div class="guide-suggest-label" aria-hidden="true">Try asking</div>
+    <button class="guide-suggest">⚡ Show flash tournaments</button>
+    <button class="guide-suggest">🏅 What's my current tier?</button>
+    <button class="guide-suggest">📖 How do merits work?</button>
+  </div>
+
+  <!-- Input -->
+  <div class="guide-input-row">
+    <label for="guideInput" class="sr-only">Ask Guide anything</label>
+    <input id="guideInput" type="text" class="guide-input" placeholder="Ask anything…" autocomplete="off">
+    <button class="guide-send" aria-label="Send">→</button>
+  </div>
+
+</div><!-- /guide-panel -->
+
+<script>
+/* ── Theme ─────────────────────────────────────────────────────────── */
+const root = document.documentElement;
+const saved = localStorage.getItem('arena-theme');
+if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) root.classList.add('dark');
+const themeBtn = document.getElementById('themeToggle');
+themeBtn.textContent = root.classList.contains('dark') ? '🌙' : '☀️';
+themeBtn.addEventListener('click', () => {
+  const dark = root.classList.toggle('dark');
+  localStorage.setItem('arena-theme', dark ? 'dark' : 'light');
+  themeBtn.textContent = dark ? '🌙' : '☀️';
+});
+
+/* ── Guide notification system ───────────────────────────────────────── */
+const guideToggleBtn = document.getElementById('guideToggle');
+const guideBadge     = document.getElementById('guideBadge');
+const notifStack     = document.getElementById('guideNotifStack');
+const MAX_VISIBLE    = 3;
+// Simulate context: 'passive' = browsing, 'active' = mid-game
+const pageContext    = 'passive';
+
+// Urgent types that trigger amber orb + auto-open on passive pages
+const URGENT_TYPES   = new Set(['flash', 'match_ready']);
+
+// Notification data store
+let notifications = [
+  {
+    id: 'n1', type: 'flash',
+    icon: '⚡', title: 'Flash Tournament — Speed Blitz',
+    meta: 'Starts in', countdown: true,
+    actions: [{ label: 'Join now →', primary: true }],
+  },
+  {
+    id: 'n2', type: 'admin',
+    icon: '📢', title: 'Maintenance window tonight',
+    meta: 'Servers will be offline 11 pm – midnight ET.',
+    actions: [{ label: 'Got it', primary: true }],
+  },
+  {
+    id: 'n3', type: 'invite',
+    icon: '⚔️', title: '@cipher challenged you',
+    meta: 'XO Arena — best of 3 · expires in 5 min',
+    actions: [{ label: 'Accept', primary: true }, { label: 'Decline', primary: false }],
+  },
+];
+
+// Flash countdown (seconds)
+let flashSecs = 8 * 60 + 42;
+setInterval(() => {
+  if (flashSecs <= 0) return; flashSecs--;
+  const m = String(Math.floor(flashSecs/60)).padStart(2,'0');
+  const s = String(flashSecs % 60).padStart(2,'0');
+  document.querySelectorAll('.guide-notif-countdown').forEach(el => {
+    el.textContent = `${m}:${s}`;
+  });
+}, 1000);
+
+function updateBadgeAndOrb() {
+  const count = notifications.length;
+  const hasUrgent = notifications.some(n => URGENT_TYPES.has(n.type));
+
+  // Badge
+  if (count > 0) {
+    guideBadge.textContent = count;
+    guideBadge.classList.add('visible');
+  } else {
+    guideBadge.classList.remove('visible');
+  }
+
+  // Orb urgency
+  if (hasUrgent) {
+    guideToggleBtn.classList.add('urgent');
+    guideToggleBtn.setAttribute('aria-label', `Open Guide — ${count} alert${count !== 1 ? 's' : ''}`);
+  } else if (count > 0) {
+    guideToggleBtn.classList.remove('urgent');
+    guideToggleBtn.setAttribute('aria-label', `Open Guide — ${count} notification${count !== 1 ? 's' : ''}`);
+  } else {
+    guideToggleBtn.classList.remove('urgent');
+    guideToggleBtn.setAttribute('aria-label', 'Open Guide');
+  }
+}
+
+function renderNotifications() {
+  notifStack.innerHTML = '';
+  const visible = notifications.slice(0, MAX_VISIBLE);
+
+  visible.forEach(n => {
+    const card = document.createElement('div');
+    card.className = 'guide-notif';
+    card.dataset.type = n.type;
+    card.dataset.id = n.id;
+    card.setAttribute('role', 'status');
+
+    const actionsHtml = n.actions.map(a =>
+      `<button class="guide-notif-btn${a.primary ? '' : ' secondary'}">${a.label}</button>`
+    ).join('');
+
+    const metaHtml = n.countdown
+      ? `${n.meta} <span class="guide-notif-countdown" aria-label="Time remaining">${
+          String(Math.floor(flashSecs/60)).padStart(2,'0')}:${String(flashSecs%60).padStart(2,'0')
+        }</span>`
+      : n.meta;
+
+    card.innerHTML = `
+      <div class="guide-notif-top">
+        <span class="guide-notif-icon" aria-hidden="true">${n.icon}</span>
+        <span class="guide-notif-title">${n.title}</span>
+        <button class="guide-notif-dismiss" aria-label="Dismiss notification">✕</button>
+      </div>
+      <div class="guide-notif-bottom">
+        <span class="guide-notif-meta">${metaHtml}</span>
+        <div class="guide-notif-actions">${actionsHtml}</div>
+      </div>`;
+
+    // Dismiss
+    card.querySelector('.guide-notif-dismiss').addEventListener('click', () => dismissNotif(n.id));
+    // Action buttons also dismiss
+    card.querySelectorAll('.guide-notif-btn').forEach(btn => {
+      btn.addEventListener('click', () => dismissNotif(n.id));
+    });
+
+    notifStack.appendChild(card);
+  });
+
+  // Overflow indicator
+  const overflow = notifications.length - MAX_VISIBLE;
+  if (overflow > 0) {
+    const more = document.createElement('p');
+    more.className = 'guide-notif-overflow';
+    more.textContent = `+${overflow} more notification${overflow !== 1 ? 's' : ''}`;
+    notifStack.appendChild(more);
+  }
+
+  updateBadgeAndOrb();
+}
+
+function dismissNotif(id) {
+  notifications = notifications.filter(n => n.id !== id);
+  renderNotifications();
+}
+
+function pushNotification(notif) {
+  notifications.unshift(notif);
+  renderNotifications();
+  // Auto-open Guide on passive pages for urgent types
+  if (URGENT_TYPES.has(notif.type) && pageContext === 'passive') {
+    const guidePanel = document.getElementById('guidePanel');
+    guidePanel.removeAttribute('hidden');
+    guideToggleBtn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+// Boot with sample notifications
+renderNotifications();
+// Auto-open since we have an urgent notification and context is passive
+if (notifications.some(n => URGENT_TYPES.has(n.type)) && pageContext === 'passive') {
+  document.getElementById('guidePanel').removeAttribute('hidden');
+  guideToggleBtn.setAttribute('aria-expanded', 'true');
+}
+
+/* ── Load more ──────────────────────────────────────────────────────── */
+const TOTAL = 24;
+let shown = 6;
+const loadMoreBtn = document.getElementById('loadMoreBtn');
+const loadMoreCount = document.getElementById('loadMoreCount');
+function updateLoadMore() {
+  loadMoreCount.textContent = `Showing ${shown} of ${TOTAL} tournaments`;
+  if (shown >= TOTAL) { loadMoreBtn.disabled = true; loadMoreBtn.textContent = 'All caught up'; }
+}
+loadMoreBtn.addEventListener('click', () => {
+  loadMoreBtn.classList.add('loading');
+  loadMoreBtn.disabled = true;
+  setTimeout(() => {
+    shown = Math.min(shown + 6, TOTAL);
+    loadMoreBtn.classList.remove('loading');
+    updateLoadMore();
+  }, 600);
+});
+
+/* ── Online strip — one-tap join-me ─────────────────────────────────── */
+let joinSentToast = null;
+
+document.querySelectorAll('.guide-online-avatar').forEach(avatar => {
+  avatar.addEventListener('click', () => {
+    const user = avatar.dataset.user;
+
+    // Remove any previous toast
+    if (joinSentToast) joinSentToast.remove();
+
+    // Insert a confirmation toast below the online strip
+    joinSentToast = document.createElement('div');
+    joinSentToast.className = 'guide-join-sent';
+    joinSentToast.setAttribute('role', 'status');
+    joinSentToast.innerHTML = `✅ Room invite sent to <strong>@${user}</strong> — they'll see it in their Guide now.`;
+
+    const strip = document.getElementById('guideOnlineStrip');
+    strip.insertAdjacentElement('afterend', joinSentToast);
+
+    // Also push a notification simulating what the recipient receives
+    pushNotification({
+      id: `join-${Date.now()}`,
+      type: 'invite',
+      icon: '🎮',
+      title: `@you invited @${user} to your room`,
+      meta: 'Waiting for them to join · expires in 5 min',
+      actions: [{ label: 'Cancel', primary: false }],
+    });
+
+    // Auto-dismiss toast after 4s
+    setTimeout(() => { if (joinSentToast) { joinSentToast.remove(); joinSentToast = null; } }, 4000);
+  });
+});
+
+/* ── Invite panel ───────────────────────────────────────────────────── */
+const invitePanel    = document.getElementById('invitePanel');
+const invitePanelBack= document.getElementById('invitePanelBack');
+const inviteSearch   = document.getElementById('inviteSearch');
+const inviteUserList = document.getElementById('inviteUserList');
+const inviteSendBtn  = document.getElementById('inviteSendBtn');
+let selectedUser     = null;
+let selectedGame     = 'xo';
+
+// Open invite panel when the invite slot is tapped
+document.getElementById('inviteSlotBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  invitePanel.removeAttribute('hidden');
+  inviteSearch.focus();
+});
+
+// Back button
+invitePanelBack.addEventListener('click', () => {
+  invitePanel.setAttribute('hidden', '');
+  selectedUser = null;
+  updateInviteSendBtn();
+  inviteSearch.value = '';
+  inviteUserList.querySelectorAll('.invite-user').forEach(u => u.classList.remove('selected'));
+});
+
+// User selection
+inviteUserList.querySelectorAll('.invite-user').forEach(btn => {
+  btn.addEventListener('click', () => {
+    inviteUserList.querySelectorAll('.invite-user').forEach(u => u.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedUser = btn.dataset.user;
+    updateInviteSendBtn();
+  });
+});
+
+// Game selection
+document.querySelectorAll('.invite-game-option:not([disabled])').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.invite-game-option').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedGame = btn.dataset.game;
+  });
+});
+
+// Live user filter
+inviteSearch.addEventListener('input', () => {
+  const q = inviteSearch.value.toLowerCase();
+  inviteUserList.querySelectorAll('.invite-user').forEach(u => {
+    u.style.display = !q || u.dataset.user.includes(q) ? '' : 'none';
+  });
+});
+
+function updateInviteSendBtn() {
+  inviteSendBtn.disabled = !selectedUser;
+  if (selectedUser) {
+    const isOnline = inviteUserList.querySelector(`[data-user="${selectedUser}"] .invite-status-dot`).classList.contains('online');
+    inviteSendBtn.textContent = isOnline ? `Send invite to @${selectedUser}` : `Email invite to @${selectedUser}`;
+  } else {
+    inviteSendBtn.textContent = 'Send invite';
+  }
+}
+
+// Send — simulate delivering the invite notification
+inviteSendBtn.addEventListener('click', () => {
+  const isOnline = inviteUserList.querySelector(`[data-user="${selectedUser}"] .invite-status-dot`).classList.contains('online');
+  invitePanel.setAttribute('hidden', '');
+  // Show sent confirmation as a Guide chat message
+  const guideBody = document.getElementById('guideBody');
+  const msg = document.createElement('div');
+  msg.className = 'guide-msg-guide';
+  msg.innerHTML = isOnline
+    ? `✅ Invite sent to <strong>@${selectedUser}</strong> — they'll see it in their Guide now.`
+    : `📧 <strong>@${selectedUser}</strong> is offline. An email invite has been sent with a link to join.`;
+  guideBody.appendChild(msg);
+  guideBody.scrollTop = guideBody.scrollHeight;
+  selectedUser = null;
+  updateInviteSendBtn();
+  inviteSearch.value = '';
+  inviteUserList.querySelectorAll('.invite-user').forEach(u => { u.classList.remove('selected'); u.style.display = ''; });
+});
+
+/* ── Filter chips ───────────────────────────────────────────────────── */
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.filter-chip').forEach(c => { c.classList.remove('active'); c.setAttribute('aria-pressed','false'); });
+    chip.classList.add('active'); chip.setAttribute('aria-pressed','true');
+  });
+});
+
+/* ── Search ─────────────────────────────────────────────────────────── */
+/* ── View toggle ────────────────────────────────────────────────────── */
+const cardsGrid   = document.getElementById('cardsGrid');
+const listView    = document.getElementById('listView');
+const loadMoreRow = document.getElementById('loadMoreRow');
+const viewGridBtn = document.getElementById('viewGrid');
+const viewListBtn = document.getElementById('viewList');
+let currentView   = 'grid';
+
+// List rows navigate to detail page
+document.querySelectorAll('.list-table tbody tr').forEach(row => {
+  row.style.cursor = 'pointer';
+  row.addEventListener('click', e => {
+    if (e.target.closest('button')) return;
+    location.href = 'tournament-detail.html';
+  });
+});
+
+viewGridBtn.addEventListener('click', () => {
+  if (currentView === 'grid') return;
+  currentView = 'grid';
+  cardsGrid.style.display = '';
+  listView.style.display  = 'none';
+  loadMoreRow.style.display = '';
+  viewGridBtn.classList.add('active');    viewGridBtn.setAttribute('aria-pressed','true');
+  viewListBtn.classList.remove('active'); viewListBtn.setAttribute('aria-pressed','false');
+});
+viewListBtn.addEventListener('click', () => {
+  if (currentView === 'list') return;
+  currentView = 'list';
+  cardsGrid.style.display = 'none';
+  listView.style.display  = 'block';
+  loadMoreRow.style.display = 'none';
+  viewListBtn.classList.add('active');    viewListBtn.setAttribute('aria-pressed','true');
+  viewGridBtn.classList.remove('active'); viewGridBtn.setAttribute('aria-pressed','false');
+});
+
+/* ── Search ─────────────────────────────────────────────────────────── */
+const searchInput = document.getElementById('tournamentSearch');
+const searchClear = document.getElementById('searchClear');
+const cards = document.querySelectorAll('#cardsGrid article');
+const grid  = document.getElementById('cardsGrid');
+
+function applySearch(query) {
+  const q = query.trim().toLowerCase();
+  let visible = 0;
+  cards.forEach(card => {
+    const name = card.querySelector('.card-name')?.textContent.toLowerCase() ?? '';
+    const match = !q || name.includes(q);
+    card.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  // Show/hide no-results message
+  let noRes = grid.querySelector('.no-results');
+  if (visible === 0) {
+    if (!noRes) {
+      noRes = document.createElement('p');
+      noRes.className = 'no-results';
+      grid.appendChild(noRes);
+    }
+    noRes.textContent = `No tournaments matching "${query}"`;
+  } else if (noRes) {
+    noRes.remove();
+  }
+  // Update count
+  loadMoreCount.textContent = q
+    ? `${visible} result${visible !== 1 ? 's' : ''} for "${query}"`
+    : `Showing ${shown} of ${TOTAL} tournaments`;
+  searchClear.classList.toggle('visible', q.length > 0);
+}
+
+searchInput.addEventListener('input', () => applySearch(searchInput.value));
+searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  searchInput.focus();
+  applySearch('');
+});
+
+/* ── Guide panel ────────────────────────────────────────────────────── */
+const panel      = document.getElementById('guidePanel');
+const toggle     = guideToggleBtn;
+const closeBtn   = document.getElementById('guideClose');
+const editBtn    = document.getElementById('guideEditBtn');
+const editBar    = document.getElementById('guideEditBar');
+const editDone   = document.getElementById('guideEditDone');
+const slotsGrid  = document.getElementById('guideSlotsGrid');
+const settingsLk = document.getElementById('guideSettingsLink');
+const slotPicker = document.getElementById('slotPicker');
+const pickerBack = document.getElementById('slotPickerBack');
+const guideInput = document.getElementById('guideInput');
+
+let editMode = false;
+let pickerTargetEmpty = null; // which empty slot triggered the picker
+
+function openGuide() {
+  panel.removeAttribute('hidden');
+  toggle.setAttribute('aria-expanded','true');
+  guideInput.focus();
+}
+function closeGuide() {
+  panel.setAttribute('hidden','');
+  toggle.setAttribute('aria-expanded','false');
+  if (editMode) exitEditMode();
+  toggle.focus();
+}
+
+toggle.addEventListener('click', () => panel.hasAttribute('hidden') ? openGuide() : closeGuide());
+closeBtn.addEventListener('click', closeGuide);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !panel.hasAttribute('hidden')) closeGuide(); });
+
+/* Edit mode */
+function enterEditMode() {
+  editMode = true;
+  editBtn.classList.add('active');
+  editBar.removeAttribute('hidden');
+  settingsLk.removeAttribute('hidden');
+  slotsGrid.classList.add('editing');
+  // Make slots draggable
+  slotsGrid.querySelectorAll('.guide-slot').forEach(s => s.setAttribute('draggable','true'));
+  // Show empty slot(s) up to cap of 8
+  renderEmptySlots();
+}
+function exitEditMode() {
+  editMode = false;
+  editBtn.classList.remove('active');
+  editBar.setAttribute('hidden','');
+  settingsLk.setAttribute('hidden','');
+  slotsGrid.classList.remove('editing');
+  slotsGrid.querySelectorAll('.guide-slot').forEach(s => s.setAttribute('draggable','false'));
+  slotsGrid.querySelectorAll('.guide-slot-empty').forEach(e => e.remove());
+}
+function renderEmptySlots() {
+  slotsGrid.querySelectorAll('.guide-slot-empty').forEach(e => e.remove());
+  const filled = slotsGrid.querySelectorAll('.guide-slot').length;
+  const toAdd = Math.min(2, 8 - filled); // show up to 2 empty slots at a time
+  for (let i = 0; i < toAdd; i++) {
+    const empty = document.createElement('button');
+    empty.className = 'guide-slot-empty';
+    empty.setAttribute('aria-label', 'Add a shortcut');
+    empty.innerHTML = '<span class="guide-slot-empty-icon">＋</span><span class="guide-slot-empty-label">Add</span>';
+    empty.addEventListener('click', () => { pickerTargetEmpty = empty; openPicker(); });
+    slotsGrid.appendChild(empty);
+  }
+}
+
+editBtn.addEventListener('click', () => editMode ? exitEditMode() : enterEditMode());
+editDone.addEventListener('click', exitEditMode);
+
+/* Remove slot */
+slotsGrid.addEventListener('click', e => {
+  const removeBtn = e.target.closest('.guide-slot-remove');
+  if (!removeBtn || !editMode) return;
+  e.stopPropagation();
+  const slot = removeBtn.closest('.guide-slot');
+  slot.style.animation = 'slot-pop 0.15s ease-out reverse both';
+  setTimeout(() => { slot.remove(); renderEmptySlots(); }, 140);
+});
+
+/* Drag-and-drop reorder */
+let dragSrc = null;
+slotsGrid.addEventListener('dragstart', e => {
+  const slot = e.target.closest('.guide-slot');
+  if (!slot || !editMode) return;
+  dragSrc = slot;
+  slot.style.opacity = '0.5';
+  e.dataTransfer.effectAllowed = 'move';
+});
+slotsGrid.addEventListener('dragend', e => {
+  const slot = e.target.closest('.guide-slot');
+  if (slot) slot.style.opacity = '';
+  slotsGrid.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  dragSrc = null;
+});
+slotsGrid.addEventListener('dragover', e => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const target = e.target.closest('.guide-slot, .guide-slot-empty');
+  slotsGrid.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  if (target && target !== dragSrc) target.classList.add('drag-over');
+});
+slotsGrid.addEventListener('drop', e => {
+  e.preventDefault();
+  const target = e.target.closest('.guide-slot, .guide-slot-empty');
+  if (!target || target === dragSrc || !dragSrc) return;
+  target.classList.remove('drag-over');
+  const slots = [...slotsGrid.children];
+  const srcIdx = slots.indexOf(dragSrc);
+  const tgtIdx = slots.indexOf(target);
+  if (srcIdx < tgtIdx) target.after(dragSrc);
+  else target.before(dragSrc);
+});
+
+/* Slot picker */
+function openPicker() {
+  slotPicker.removeAttribute('hidden');
+  pickerBack.focus();
+}
+function closePicker() {
+  slotPicker.setAttribute('hidden','');
+  pickerTargetEmpty = null;
+}
+pickerBack.addEventListener('click', closePicker);
+
+// Add action from picker
+const ACTION_META = {
+  'tournaments':     { icon:'🏆', label:'Tournaments' },
+  'classification':  { icon:'🎖️', label:'My Tier' },
+  'rankings':        { icon:'📊', label:'Rankings' },
+  'flash':           { icon:'⚡', label:'Flash' },
+  'profile':         { icon:'👤', label:'Profile' },
+  'notifications':   { icon:'🔔', label:'Alerts' },
+  'how-tournaments': { icon:'❓', label:'How it works', onboarding:true },
+  'faq':             { icon:'📖', label:'FAQ', onboarding:true },
+  'xo-play':         { icon:'🎮', label:'Play XO' },
+  'xo-bots':         { icon:'🤖', label:'Community Bots' },
+  'xo-stats':        { icon:'📈', label:'My XO Stats' },
+  'xo-train':        { icon:'🧪', label:'Train Bot' },
+  'xo-how-to-train': { icon:'🎓', label:'Train Guide', onboarding:true },
+};
+
+slotPicker.addEventListener('click', e => {
+  const item = e.target.closest('.slot-picker-item');
+  if (!item) return;
+  const action = item.dataset.action;
+  const meta = ACTION_META[action];
+  if (!meta) return;
+
+  const newSlot = document.createElement('button');
+  newSlot.className = 'guide-slot' + (meta.onboarding ? ' guide-slot-onboarding' : '');
+  newSlot.setAttribute('data-action', action);
+  newSlot.setAttribute('aria-label', meta.label);
+  newSlot.setAttribute('draggable', 'true');
+  newSlot.style.animation = 'slot-pop 0.25s cubic-bezier(0.34,1.4,0.64,1) both';
+  newSlot.innerHTML = `
+    <span class="guide-slot-drag" aria-hidden="true">⠿</span>
+    ${meta.onboarding ? '<span class="guide-slot-expires" aria-hidden="true" title="Expires after onboarding">⏱</span>' : ''}
+    <span class="guide-slot-icon" aria-hidden="true">${meta.icon}</span>
+    <span class="guide-slot-label">${meta.label}</span>
+    <button class="guide-slot-remove" tabindex="-1" aria-label="Remove ${meta.label} shortcut">✕</button>
+  `;
+
+  if (pickerTargetEmpty) {
+    pickerTargetEmpty.replaceWith(newSlot);
+  } else {
+    slotsGrid.appendChild(newSlot);
+  }
+
+  closePicker();
+  renderEmptySlots();
+});
+
+/* Slot click (normal mode — navigate) */
+const SLOT_ROUTES = {
+  'tournaments':    'lobby.html',
+  'classification': 'player-profile.html',
+  'profile':        'player-profile.html',
+  'flash':          'lobby.html',
+};
+slotsGrid.addEventListener('click', e => {
+  if (editMode) return;
+  const slot = e.target.closest('.guide-slot');
+  if (!slot) return;
+  const action = slot.dataset.action;
+  const status = document.getElementById('guideStatus');
+  const meta = ACTION_META[action];
+  if (status && meta) {
+    status.textContent = `Opening ${meta.label}…`;
+    setTimeout(() => { status.textContent = 'Ready to help'; }, 1800);
+  }
+  if (SLOT_ROUTES[action]) {
+    setTimeout(() => { location.href = SLOT_ROUTES[action]; }, 300);
+  }
+});
+</script>
+</body>
+</html>

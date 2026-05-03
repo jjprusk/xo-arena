@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 // All vi.mock() calls must precede the dynamic import of the module under test.
 
-vi.mock('../mountainNames.js', () => ({
-  mountainPool: { acquire: vi.fn(() => 'Everest'), release: vi.fn() },
-  MountainNamePool: { toSlug: vi.fn((name) => name.toLowerCase()) },
+// Deterministic slug for tests — nanoid is otherwise random.
+vi.mock('nanoid', () => ({
+  nanoid: vi.fn(() => 'testslug'),
 }))
 
 vi.mock('@xo-arena/ai', () => ({
@@ -33,9 +33,27 @@ vi.mock('../services/eloService.js', () => ({
   updateBothElosAfterBotVsBot: vi.fn(),
 }))
 
-vi.mock('../lib/db.js', () => ({
-  default: { user: { updateMany: vi.fn() } },
+vi.mock('../services/skillService.js', () => ({
+  getMoveForModel: vi.fn().mockResolvedValue(0),
 }))
+
+const { mockTournamentMatchUpdate, mockTableCreate, mockTableFindFirst } = vi.hoisted(() => ({
+  mockTournamentMatchUpdate: vi.fn().mockResolvedValue({}),
+  mockTableCreate:           vi.fn().mockResolvedValue({ id: 'tbl-created' }),
+  mockTableFindFirst:        vi.fn().mockResolvedValue(null),
+}))
+vi.mock('../../lib/db.js', () => ({
+  default: {
+    user:            { updateMany: vi.fn().mockResolvedValue({}) },
+    table:           { findFirst: mockTableFindFirst, create: mockTableCreate },
+    tournamentMatch: { update: mockTournamentMatchUpdate },
+  },
+}))
+
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../../lib/eventStream.js', () => ({ appendToStream: mockAppendToStream }))
 
 vi.mock('../logger.js', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
@@ -50,8 +68,7 @@ const { botGameRunner } = await import('../botGameRunner.js')
 function makeMockGame(overrides = {}) {
   return {
     slug: 'test-slug',
-    displayName: 'Mt. Test',
-    name: 'Test',
+    displayName: 'Bot1 vs Bot2',
     bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
     bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
     board: Array(9).fill(null),
@@ -70,6 +87,12 @@ function makeMockGame(overrides = {}) {
 beforeEach(() => {
   botGameRunner._games.clear()
   botGameRunner._socketToGame.clear()
+  mockAppendToStream.mockClear()
+  mockTournamentMatchUpdate.mockClear()
+  mockTableCreate.mockClear()
+  mockTableFindFirst.mockClear()
+  mockTableFindFirst.mockResolvedValue(null)
+  mockTableCreate.mockResolvedValue({ id: 'tbl-created' })
 })
 
 // ---------------------------------------------------------------------------
@@ -186,40 +209,13 @@ describe('listGames', () => {
 })
 
 // ---------------------------------------------------------------------------
-// setIO
-// ---------------------------------------------------------------------------
-
-describe('setIO', () => {
-  it('stores the io instance on _io', () => {
-    const fakeIo = { to: vi.fn() }
-    botGameRunner.setIO(fakeIo)
-    expect(botGameRunner._io).toBe(fakeIo)
-    // clean up so other tests start with _io = null
-    botGameRunner.setIO(null)
-  })
-})
-
-// ---------------------------------------------------------------------------
 // startGame
 // ---------------------------------------------------------------------------
 
 describe('startGame', () => {
-  it('throws when mountainPool.acquire returns null', async () => {
-    const { mountainPool } = await import('../mountainNames.js')
-    mountainPool.acquire.mockReturnValueOnce(null)
-
-    await expect(
-      botGameRunner.startGame({
-        bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
-        bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
-      })
-    ).rejects.toThrow('No mountain names available')
-  })
-
-  it('returns { slug, displayName } when a name is available', async () => {
-    const { mountainPool, MountainNamePool } = await import('../mountainNames.js')
-    mountainPool.acquire.mockReturnValueOnce('Everest')
-    MountainNamePool.toSlug.mockReturnValueOnce('everest')
+  it('mints a nanoid slug and synthesises a label from the bot names', async () => {
+    const { nanoid } = await import('nanoid')
+    nanoid.mockReturnValueOnce('abc12345')
 
     const result = await botGameRunner.startGame({
       bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
@@ -227,7 +223,118 @@ describe('startGame', () => {
       moveDelayMs: 9_999_999,
     })
 
-    expect(result).toHaveProperty('slug', 'everest')
-    expect(result).toHaveProperty('displayName', 'Mt. Everest')
+    expect(result).toEqual({ slug: 'abc12345', displayName: 'Bot1 vs Bot2' })
+  })
+
+  it('uses an explicit slug when the caller provides one', async () => {
+    const result = await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'demo-xyz',
+      moveDelayMs: 9_999_999,
+    })
+
+    expect(result.slug).toBe('demo-xyz')
+  })
+
+  it('flips tournamentMatch.status to IN_PROGRESS when starting a tournament bot match', async () => {
+    // Without this flip, the cup follow-modal stays in "waiting" mode for
+    // the entire match: it polls tournament.rounds[*].matches[*].status
+    // and only switches to live when a match is IN_PROGRESS.
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'cup-match-1',
+      moveDelayMs: 9_999_999,
+      tournamentId: 't1',
+      tournamentMatchId: 'm1',
+    })
+
+    expect(mockTournamentMatchUpdate).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data:  { status: 'IN_PROGRESS' },
+    })
+  })
+
+  it('mints a backing Table for tournament bot matches when none exists', async () => {
+    // Without a Table row, the standard /rt/tables/:slug/join path 404s
+    // (TABLE_NOT_FOUND) when a cup spectator follows their bot, even though
+    // the bot game is running in memory.
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'cup-match-2',
+      moveDelayMs: 9_999_999,
+      tournamentId: 't1',
+      tournamentMatchId: 'm1',
+      bestOfN: 1,
+    })
+
+    expect(mockTableCreate).toHaveBeenCalledTimes(1)
+    const args = mockTableCreate.mock.calls[0][0]
+    expect(args.data).toMatchObject({
+      gameId:            'xo',
+      slug:              'cup-match-2',
+      isTournament:      true,
+      tournamentMatchId: 'm1',
+      tournamentId:      't1',
+      status:            'ACTIVE',
+    })
+    expect(args.data.seats).toHaveLength(2)
+  })
+
+  it('does not create a backing Table when one already exists for the slug (spar/demo path)', async () => {
+    mockTableFindFirst.mockResolvedValueOnce({ id: 'pre-existing-tbl' })
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'demo-existing',
+      moveDelayMs: 9_999_999,
+      tournamentId: 't1',
+      tournamentMatchId: 'm1',
+    })
+    expect(mockTableCreate).not.toHaveBeenCalled()
+  })
+
+  it('does not create a backing Table for non-tournament bot games', async () => {
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'free-bot-no-table',
+      moveDelayMs: 9_999_999,
+    })
+    expect(mockTableCreate).not.toHaveBeenCalled()
+  })
+
+  it('does not call tournamentMatch.update for non-tournament bot games', async () => {
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'free-bot-game',
+      moveDelayMs: 9_999_999,
+    })
+    expect(mockTournamentMatchUpdate).not.toHaveBeenCalled()
+  })
+
+  it('emits a kind=start frame on table:<slug>:state for SSE spectators', async () => {
+    await botGameRunner.startGame({
+      bot1: { id: 'b1', displayName: 'Bot1', botModelId: null },
+      bot2: { id: 'b2', displayName: 'Bot2', botModelId: null },
+      slug: 'sse-emit',
+      moveDelayMs: 9_999_999,
+    })
+    // _runGameLoop is fire-and-forget. Yield the event loop several times so
+    // the loop's start emit fires before we assert.
+    for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r))
+
+    expect(mockAppendToStream).toHaveBeenCalledWith(
+      'table:sse-emit:state',
+      expect.objectContaining({
+        kind:        'start',
+        currentTurn: 'X',
+        round:       1,
+      }),
+      { userId: '*' },
+    )
   })
 })

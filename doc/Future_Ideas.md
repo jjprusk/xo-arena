@@ -1,21 +1,74 @@
+<!-- Copyright © 2026 Joe Pruskowski. All rights reserved. -->
 # Future Ideas
 
 Deferred features and improvements that are worth revisiting but not currently prioritized.
 
+## Journey CTA spotlight — wiring leftovers
+
+The reusable `<Spotlight target={ref} active={...} onDismiss={...} />` component shipped on 2026-04-29 (`landing/src/components/guide/Spotlight.jsx`) and replaces the ad-hoc per-page `xo-spotlight-pulse` toggle. Wired so far:
+
+- **Step 4 (`?action=train-bot`)** — `BotProfilePage` Train button. ✅
+- **Step 5 (`?action=spar`)** — `BotProfilePage` Spar block; `ProfilePage` forwards the action to the bot detail page same way it does for `train-bot`. ✅
+
+Not yet wired (each one is one `<Spotlight>` render line + a small destination handler):
+
+- **Step 3 (`?action=quick-bot`)** — `QuickBotWizard` "Next" button. The wizard is already a focused modal so the spotlight is lower-value here; skip unless usability tests show the Next button blends in.
+- **Step 6 (`?action=cup`)** — Curriculum Cup card. No `?action=cup` handler exists on `ProfilePage` (or anywhere else), and there's no Cup-card destination element to ref. Needs the destination feature first.
+- **Step 7 (`?action=cup-result`)** — result row in the tournament list. Same as step 6 — destination doesn't exist yet.
+
+Effort: ~30 minutes per remaining wiring site once the destination handler is in place.
+
 ---
 
-## Real-Time Presence / Inactivity Detection
+## Status snapshot (last reviewed 2026-04-23)
 
-**What:** Make the admin "online" indicator reflect actual user presence rather than just session validity. When a user's screensaver activates (tab becomes hidden), they should transition to "away" or "offline" within ~90 seconds.
+| Item | Status |
+|---|---|
+| Real-Time Presence / Inactivity Detection | ✅ Mostly done (presence store + heartbeat live; away/active refinement open) |
+| Multi-Game Bots (now Phase 3.8) | 🚧 In-plan (scheduled as Phase 3.8 of the Implementation Plan) |
+| Real-Time Games Against Bots (Pong) | ⏳ Open (Phase 6) |
+| Persist Game State Through Deploys | ❌ Obsolete (replaced by DB-backed `Table` rows in Phase 3.4) |
+| Backend Logs in Admin Log Viewer | ⏳ Open |
+| Guide Help Subsystem (Chat Interface) | ⏳ Open |
+| Guide as Navigation (Command Palette) | ⏳ Open |
+| Configurable Guide | ❌ Obsolete (iframe guide retired; premise gone) |
+| Multi-Game Architecture | ✅ Largely done as the Game SDK (Phases 1.1–1.4) — remaining games are their own phases |
+| Tier 2/3 instrumentation | 🟡 Partly done (3 counters live; rest in `doc/Observability_Plan.md`) |
+| Recurring tournaments refactor (now Phase 3.7a) | 🚧 In-plan (scheduled as Phase 3.7a of the Implementation Plan, pre-prod window) |
+| `table.released` per-reason soak monitor | ⏳ Open (post-prod-launch — needs real traffic to be meaningful) |
 
-**Why deferred:** Currently online status is based on BetterAuth session existence, which doesn't change when the user goes idle. No client-side inactivity tracking exists.
+## Migration-sensitivity audit (2026-04-23)
 
-**What it would take:**
-- **Frontend:** emit a socket heartbeat every ~60s; pause it via `visibilitychange` when the tab is hidden (`document.visibilityState === 'hidden'`). On hide, emit `user:away`; on show, emit `user:active`.
-- **Backend:** track `onlineAt` per connected socket with a short TTL (~90s). If no heartbeat arrives within the TTL, consider the user offline. This is separate from session validity.
-- The `activityService` already tracks `lastActiveAt` via Redis — this could be extended or reused for the presence signal.
+Which of the items above actually benefit from shipping *before* prod has real users? Only schema/data-migration costs scale with user volume; UX features cost the same at 0 users or 10,000.
 
-**Complexity:** Medium (~1 day). Accurate presence requires careful handling of tab switching, multiple tabs, and mobile backgrounding.
+| Item | Migration-sensitive? | Verdict |
+|---|---|---|
+| Real-Time Presence | Done (✅) | — |
+| Multi-Game Bots (Phase 3.8) | No — schema already anticipates it (`BotSkill (botId, gameId)` unique from Phase 1.7) | Do via 3.8 on the normal track |
+| Pong (Phase 6) | No — new subsystems, no data migration | Ship when scheduled |
+| Persist Game State | Obsolete (❌) | — |
+| Backend Logs → DB | No — just starts writing more rows | Ship anytime |
+| Guide Chat | No — UX feature | Ship anytime |
+| Command Palette | No — UX feature | Ship anytime |
+| Configurable Guide | Obsolete (❌) | — |
+| Multi-Game Architecture | Done via SDK (✅) | — |
+| Tier 2/3 instrumentation | No — counters, not schema | Ship anytime |
+| **Recurring tournaments refactor** | **Yes — template vs occurrence split** | **Phase 3.7a (now)** |
+
+Also folded into Phase 3.7a for the same "easier empty than later" reason (not in the original Future_Ideas list):
+
+- Bot `displayName` uniqueness policy
+- Public profile URL structure (reserve `/users/:username`)
+- OAuth prod redirect URLs at providers
+- Seeded built-in bot polish (avatars, bios, ELO ladder)
+
+---
+
+## Real-Time Presence / Inactivity Detection — ✅ MOSTLY DONE
+
+**Status:** The core heartbeat-based presence was built during the Phase E tier-2 comms work. `backend/src/lib/presenceStore.js` tracks `onlineAt` with TTL; `landing/src/lib/useHeartbeat.js` is the client hook; `GET /api/v1/presence/online` + the `presence:changed` SSE channel expose the state.
+
+**What's still open (small refinement, not blocking):** the hide/show behaviour uses default visibility — when a tab backgrounds, the heartbeat stops and the server evicts the user after the TTL. There's no explicit `user:away` transition and no distinction between "tab hidden" (may come back in seconds) and "tab closed" (likely gone for the day). Good enough for the admin "online" indicator in its current form.
 
 ---
 
@@ -52,35 +105,44 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ---
 
-## Persist Game State Through Deploys (Redis-backed Rooms)
+## Persist Game State Through Deploys (Redis-backed Rooms) — ❌ OBSOLETE
 
-**What:** Store active room and game state in Redis so that a Railway deploy (or any container restart) does not drop in-progress games. Currently all room state lives in the `roomManager`'s in-memory map — a restart silently kills any active session.
+**Status:** Superseded by Phase 3.4 — `roomManager` was retired. Active games are now `Table` rows in Postgres (`previewState Json` + `seats Json`), so game state survives deploys by design. Socket reconnection after a brief drop re-joins the table room via the `TableDetailPage` flow. The scenario this item was guarding against no longer exists.
 
-**Why deferred:** Traffic is low enough that deploys rarely hit active games. A graceful SIGTERM drain window partially mitigates this for short deployments.
-
-**What it would take:**
-- **Redis room store:** serialize `roomManager` room state (board, turn, player sockets, timestamps) to a Redis hash on every state change. On startup, rehydrate in-memory state from Redis.
-- **Socket reconnection:** when a client reconnects after a brief drop, look up their room by session/user ID and re-join them to the recovered room rather than showing an error.
-- **Expiry:** set a TTL on room keys (e.g. 1 hour) so abandoned rooms don't accumulate.
-- **Bot games:** bot game runner state would need the same treatment, or bot games could simply be restarted on reconnect (acceptable since they're not PvP).
-
-**Complexity:** Medium (~1–2 days). Redis is already used for the activity/presence service, so the infrastructure is in place. The main work is wiring the roomManager writes/reads through Redis and handling the reconnect flow on the frontend.
+**Residual concern worth tracking separately:** when a socket drops mid-game, `useGameSDK` needs to rebind the move stream — today there's a short window where a move could be emitted to a disconnected socket. This is a socket-reconnect concern, not a state-persistence one, and is better filed as a gameplay-robustness task if it ever surfaces.
 
 ---
 
 ## Backend Logs in Admin Log Viewer
 
-**What:** Route backend (pino) logs into the database so the admin Log Viewer shows all four sources — `frontend`, `api`, `realtime`, and `ai` — instead of only frontend entries. Currently pino writes to stdout (visible in Railway's log stream) but never reaches the `logs` table, so the viewer is nearly empty in normal operation.
+> **Status update (2026-04-29):** the frontend half landed — `landing/src/lib/frontendLogger.js` batches errors / warnings to `POST /api/v1/logs` and the admin Log Viewer now actually populates with `source: frontend` rows. `setLogUserId` is wired through AppLayout so user context is captured. Backend pino → DB is the remaining piece; the rest of this entry covers what's left.
 
-**Why deferred:** stdout logs are accessible via Railway's dashboard for now. The viewer is still useful for frontend errors. Wiring pino to the DB adds write pressure on every request.
+**What:** Route backend (pino) logs into the database so the admin Log Viewer shows all four sources — `api`, `realtime`, and `ai` — alongside the frontend rows already flowing in. Currently pino writes to stdout (visible in the Fly.io log stream) but never reaches the `logs` table.
+
+**Why deferred:** stdout logs are accessible via Fly.io / `docker compose logs` for now. The viewer is already useful for frontend errors. Wiring pino to the DB adds write pressure on every request.
 
 **What it would take:**
 - **Pino DB transport:** a custom pino transport (or `pino-transport` wrapper) that batches log entries and inserts them into the `logs` table, respecting the existing `pruneIfNeeded` limit. Use `source: 'api'`, `'realtime'`, or `'ai'` depending on origin.
 - **Log level threshold:** only write INFO and above from the backend to avoid flooding the table with debug noise. DEBUG can remain stdout-only.
-- **`setLogUserId` fix:** the current frontend logger has a broken `setLogUserId` (line 79 of `logger.js` does `Object.assign` on a string, which is a no-op) — userId is always null on log entries. Fix this so user context is captured.
-- **Live tail:** backend log entries would flow through the existing `_io.to('admin:logs').emit('log:entry', ...)` path automatically once they're written to the DB.
+- **Live tail:** backend log entries flow through the existing `appendToStream('admin:logs:entry', ...)` path automatically once they're written via the same POST handler the frontend logger uses (or via a direct stream emit from the transport).
 
-**Complexity:** Small-to-medium (~half a day). The DB schema, ingestion endpoint, pruning, and live-tail socket are already in place — the missing piece is just the pino → DB bridge and the userId fix.
+**Complexity:** Small-to-medium (~half a day). The DB schema, ingestion endpoint, pruning, frontend logger, and live-tail SSE are all in place — the missing piece is just the pino → DB bridge.
+
+---
+
+## Guide Help Subsystem (Chat Interface)
+
+**What:** Wire up the "Ask Guide anything…" input at the bottom of the Guide panel so users can ask natural-language questions and get contextual answers from an LLM.
+
+**Why deferred:** The panel footer placeholder exists but is not connected to any backend. Building it well requires deciding on context injection strategy, conversation persistence, and cost controls.
+
+**What it would take:**
+- **Backend endpoint:** `POST /api/guide/chat` — accepts `{ message, context }` and streams or returns an LLM response. Context should include the user's journey progress, current page, bot name/config, and recent activity so answers are relevant.
+- **Conversation state:** local component state (or `guideStore`) to hold message history for the current session. No persistence needed initially.
+- **UI:** replace the placeholder `div` in `GuidePanel.jsx:153–167` with a real `<textarea>` + send button, and a scrollable message thread above it inside the panel body.
+- **Rate limiting / cost control:** per-user request throttle on the backend to prevent runaway LLM spend.
+
+**Complexity:** Medium (~2 days). The panel, orb, and store are all wired up — chat is the only missing piece.
 
 ---
 
@@ -109,7 +171,11 @@ The nav works fine but requires knowing where things live. There's no way to rea
 
 ---
 
-## Configurable Guide
+## Configurable Guide — ❌ OBSOLETE (premise gone)
+
+**Status:** This item was written against the old iframe-based `public/getting-started.html` + 9-balloon SVG layout. That page no longer exists — it was retired during the Phase 2 nav restructure and the Phase 3.3 Guide panel rebuild. The Guide is now a React drawer (`landing/src/components/guide/GuidePanel.jsx`) with a journey card, slots grid, and notifications feed. Any future "configurable guide" work would be a fresh design against the new shell, not a continuation of this item. Leaving the original text below for archaeology:
+
+---
 
 **What:** Let users personalize the Getting Started guide through a "Configure Guide" panel in Settings. Three layers of configuration, in increasing complexity:
 
@@ -166,7 +232,18 @@ The postMessage approach is the right starting point — it extends the existing
 
 ---
 
-## Multi-Game Architecture
+## Multi-Game Architecture — ✅ LARGELY DONE (as the Game SDK)
+
+**Status:** The Game Adapter pattern proposed here was implemented as the `GameSDK` contract in Platform Phases 1.1–1.4. `packages/sdk` defines `GameMeta`, `GameSDK`, and `botInterface`; `@callidity/game-xo` is the reference implementation; `PlatformShell` loads any `GameMeta`-conforming package via `React.lazy`. `roomManager` was retired in Phase 3.4 — `Table` rows + `previewState` + SDK adapters replaced it.
+
+**What's left (tracked in `doc/Platform_Implementation_Plan.md`):**
+- **Phase 4** — Connect4 (2p sit-down, validates the abstraction with a second game)
+- **Phase 5** — Poker (adds hidden-info via `getPlayerState`, variable player counts)
+- **Phase 6** — Pong (adds `tableArchetype: 'head-to-head'` + real-time loop)
+
+The original analysis below remains a useful reference for the per-game rendering strategy (React vs Framer Motion vs Phaser), but the high-level adapter/registry work is done. Leaving below:
+
+---
 
 **What:** Evolve the platform to support additional game types — Connect 4, Checkers, card games, and real-time games like Pong — without rewriting the infrastructure that already works.
 
@@ -231,5 +308,65 @@ No single renderer fits all game types:
 4. **Phase 4 — Real-time (Pong):** Separate architecture path. `RealtimeGameRunner`, canvas renderer via Phaser, tick loop. Plan independently once at least one more turn-based game exists.
 
 **Complexity:** Phase 1 is medium (~3–4 days — the adapter extraction plus a working Connect 4). Each subsequent phase builds on it. The real-time phase is large and largely independent.
+
+---
+
+## Tier 2/3 transport — instrumentation (partly done)
+
+The first three items (SSE client count, presence-store size, XREAD-loop heartbeat) are wired in `resourceCounters.js`. The remaining items below are tracked more fully in **`doc/Observability_Plan.md`** (SSE broker peak/age, Redis stream XLEN + consumer lag, Web Push delivery metrics). Treat this entry as the short form; work from the Observability Plan when picking up an observability sprint.
+
+Open nice-to-haves — wire them in once real traffic lands or when push starts behaving oddly:
+
+- **Push subscriptions count** — snapshot `db.pushSubscription.count()` to see how many device endpoints we're pushing to. Also useful for sizing UI in the admin health dashboard.
+- **Push send metrics** — expose counters from `pushService`: `pushSent`, `pushFailed` (transient, non-404/410), `pushPurged` (dead endpoints). Surfaces success-rate and catches a VAPID misconfiguration quickly.
+- **Redis Stream length** — `XLEN events:tier2:stream`. Bounded by MAXLEN=5000 so it'll always cap there, but tracking the value confirms trimming is working and gives a rough "events per minute" signal when cross-referenced with snapshot timestamps.
+
+Low priority, mentioned for completeness:
+
+- **`/api/v1/presence/heartbeat` QPS** — normal load is `(online users) / 15s`. A sudden 10× spike indicates a client-side retry-loop bug.
+- **Dispatch → push fan-out counter** — how often `notificationBus.dispatch` actually lands a push vs skips because SSE was online. Useful for tuning which event types should have `push: true` in the REGISTRY.
+
+**Effort:** each item is ~5–10 LOC in `resourceCounters.js` plus a small `export function` in the owning module (`pushService.js`, `tournament/src/lib/redis.js` for XLEN, etc.).
+
+---
+
+## Recurring tournaments — template vs occurrence semantic refactor
+
+Today a recurring tournament is modelled as a single `Tournament` row with `isRecurring: true` that *also runs as the first occurrence*. When that row transitions to COMPLETED, the sweep creates child rows with `isRecurring: false` (the "occurrences"). The chain continues because `_nextOccurrenceStart` keeps advancing from the template's startTime and the dedup check keeps spawns unique.
+
+This works and ships, but is awkward:
+
+- The template is both a configuration row *and* a historical record of the first occurrence's results. You can't edit the template without risking weird side-effects on the past run.
+- Admins conflate "cancel this occurrence" with "stop the whole series." The `recurrencePaused` flag added in this sweep addresses the second part but doesn't resolve the semantic mix.
+- Querying "what recurring series exist?" means filtering tournaments by `isRecurring: true`, which excludes paused templates *and* all historical occurrences.
+
+**Cleaner model (refactor deferred):**
+
+- Add a `TournamentTemplate` table that holds the recurrence config (interval, end date, paused, seed bots, human subscriptions) but never itself runs.
+- Every tournament row becomes a pure occurrence with `templateId?: string`.
+- Admin create-recurring UI creates the template first, then the sweep spawns the first occurrence on `startTime`.
+- Human subscriptions + seed bots attach to the template, not the first occurrence.
+- `GET /api/tournaments` filters stay on `Tournament`; `GET /api/templates` becomes the admin view.
+
+**Effort:** ~4–6 hours. Schema migration + data backfill (split existing templates into their config rows + preserved-as-occurrence rows) + rewriting the sweep + updating 3-4 UI surfaces. No functional gain for users in isolation — only worth doing when the current model actively causes a bug or a planned feature requires separating config from history.
+
+---
+
+## `table.released` per-reason soak monitor — ⏳ OPEN (defer until prod has traffic)
+
+**Background:** Chunk 3 of the table-fixes sweep added a per-reason `table.released` counter to `/api/v1/admin/health/tables` (reasons: `disconnect`, `leave`, `game-end`, `gc-stale`, `gc-idle`, `admin`, `guest-cleanup`, plus `OTHER` catch-all). The shape of the per-reason histogram is the V1-acceptance success metric for "where do tables actually die" — does the disconnect bucket dominate (Safari hang regression) vs. the game-end bucket (healthy completion), is the `OTHER` bucket nonzero (typo'd reason at a call site), is `gc-idle` climbing (idle abandonment runaway), etc.
+
+**Why deferred:** On staging the only traffic is manual QA — the per-reason distribution reflects the tester's clicks, not real user behaviour. Running a soak there would just measure the test, not the system. The metric's value scales with traffic.
+
+**What to do post-prod:**
+
+- Schedule a periodic poll of `/api/v1/admin/health/tables` (e.g. hourly via the same scheduler used for tournament sweeps, or a cron-driven Slack/Linear post). Diff against the previous reading and post the per-reason deltas.
+- Alert thresholds (rough first cuts; tune from data):
+  - `OTHER > 0` for any window → call-site typo, page on-call.
+  - `disconnect / game-end > 0.5` over a 1-h window → Safari/network regression suspected; page on-call.
+  - `gc-idle` rising > 5/hour while active sessions are non-zero → idle threshold misconfigured.
+- Cross-reference with `tableCreateErrors.P2002` (should be ~0 post-chunk-1) and `gc.secondsSinceLastSuccess` (should be < 600s).
+
+**Effort:** ~2 hours. Reuse the existing scheduler + a small `lib/healthDiff.js` to compute deltas. Pairs naturally with the rest of the Tier 2/3 instrumentation work (see entry above).
 
 ---

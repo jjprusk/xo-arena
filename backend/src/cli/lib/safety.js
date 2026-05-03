@@ -1,35 +1,32 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { config as dotenvConfig } from 'dotenv'
 import { existsSync } from 'fs'
+import { spawn } from 'child_process'
+import net from 'net'
 import { fileURLToPath } from 'url'
 import { resolve, dirname } from 'path'
 
-// Load backend/.env using a path relative to this file, not cwd.
-// This ensures the right .env is found regardless of where `um` is invoked.
+// Read --env <name> from argv before dotenv loads (Commander hasn't parsed yet).
+const _envIdx = process.argv.indexOf('--env')
+export const umEnv = _envIdx !== -1 ? process.argv[_envIdx + 1] : null
+
+// Load backend/.env (or backend/.env.<name> for --env) relative to this file.
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const envPath = resolve(__dirname, '../../../.env')
-try { dotenvConfig({ path: envPath }) } catch { /* cwd may not exist when invoked from a deleted directory */ }
+const envFile = umEnv ? `.env.${umEnv}` : '.env'
+const envPath = resolve(__dirname, `../../../${envFile}`)
+try { dotenvConfig({ path: envPath }) } catch { /* ignore */ }
 
 // When running on the host (not inside Docker), Docker service hostnames
 // ("postgres", "redis") aren't resolvable. Both ports are mapped to localhost,
 // so we rewrite the URLs automatically.
-// When running via `railway run`, Railway injects internal hostnames that are
-// unreachable from outside its network. Fall back to DATABASE_PUBLIC_URL if set.
+// Skip rewriting when --env is set — the .env.<name> file should have the
+// correct URL already (e.g. localhost via flyctl proxy for staging).
 function fixDockerUrls() {
+  if (umEnv) return
   if (existsSync('/.dockerenv')) return
 
-  // Prefer the public URL when available (e.g. `railway run --environment staging`)
-  if (process.env.DATABASE_PUBLIC_URL) {
-    process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL
-  } else {
-    const db = process.env.DATABASE_URL ?? ''
-    if (db.includes('.railway.internal')) {
-      console.error('um: DATABASE_URL points to a Railway internal hostname that is unreachable from outside Railway.')
-      console.error('um: Enable the public TCP proxy on your Railway Postgres plugin to get DATABASE_PUBLIC_URL,')
-      console.error('um: or set DATABASE_PUBLIC_URL manually in your Railway environment variables.')
-      process.exit(1)
-    }
-    if (db) process.env.DATABASE_URL = db.replace('@postgres:', '@localhost:')
-  }
+  const db = process.env.DATABASE_URL ?? ''
+  if (db) process.env.DATABASE_URL = db.replace('@postgres:', '@localhost:')
 
   const redis = process.env.REDIS_URL
   if (redis) process.env.REDIS_URL = redis.replace('//redis:', '//localhost:')
@@ -38,12 +35,48 @@ fixDockerUrls()
 
 export function guardProduction() {
   const isProduction = process.env.NODE_ENV === 'production'
-  const railwayEnv   = process.env.RAILWAY_ENVIRONMENT
-  // Allow staging even when Railway sets NODE_ENV=production
-  if (isProduction && railwayEnv !== 'staging') {
+  // Allow when --env staging is explicitly passed
+  if (isProduction && umEnv !== 'staging') {
     console.error('um: refuses to run in production')
     process.exit(1)
   }
+}
+
+function portOpen(port) {
+  return new Promise(resolve => {
+    const sock = net.createConnection(port, '127.0.0.1')
+    sock.setTimeout(500)
+    sock.on('connect', () => { sock.destroy(); resolve(true) })
+    sock.on('error',   () => resolve(false))
+    sock.on('timeout', () => { sock.destroy(); resolve(false) })
+  })
+}
+
+/**
+ * If the .env file specifies FLY_PROXY_APP, ensure the flyctl proxy is running.
+ * Starts it automatically if the port isn't open yet.
+ */
+export async function ensureProxy() {
+  const app        = process.env.FLY_PROXY_APP
+  const localPort  = parseInt(process.env.FLY_PROXY_LOCAL_PORT  || '5454')
+  const remotePort = parseInt(process.env.FLY_PROXY_REMOTE_PORT || '5432')
+  if (!app) return
+
+  if (await portOpen(localPort)) return  // already running
+
+  process.stderr.write(`Starting flyctl proxy ${localPort}:${remotePort} -a ${app}...\n`)
+  const proc = spawn('flyctl', ['proxy', `${localPort}:${remotePort}`, '-a', app], {
+    detached: true,
+    stdio: 'ignore',
+  })
+  proc.unref()
+
+  // Poll up to 8 s for the proxy to be ready
+  for (let i = 0; i < 16; i++) {
+    await new Promise(r => setTimeout(r, 500))
+    if (await portOpen(localPort)) return
+  }
+  process.stderr.write('Warning: proxy may not be ready — proceeding anyway\n')
 }
 
 /**

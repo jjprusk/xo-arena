@@ -1,10 +1,14 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
+import { releaseSeats } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
+import { unregisterTable, getSocketAdapterState } from '../realtime/socketHandler.js'
 import logger from '../logger.js'
-import { getSnapshots, getLatestSnapshot, getAlerts } from '../lib/resourceCounters.js'
-import { deleteModel, getSystemConfig, setSystemConfig } from '../services/mlService.js'
+import { getSnapshots, getLatestSnapshot, getAlerts, getTableCreateErrors, getGcStats, getTableReleased } from '../lib/resourceCounters.js'
+import { deleteModel, getSystemConfig, setSystemConfig } from '../services/skillService.js'
 import { hasRole } from '../utils/roles.js'
 import {
   listFeedback,
@@ -17,11 +21,42 @@ import {
   createReply,
 } from '../lib/feedbackHelpers.js'
 import { replyTemplate } from '../lib/emailTemplates.js'
+import { dispatch } from '../lib/notificationBus.js'
+import { appendToStream } from '../lib/eventStream.js'
+import { truncateStream } from '../lib/eventStream.js'
+import { sweep as gcSweep } from '../services/tableGcService.js'
+import { runMetricsSnapshot } from '../services/metricsSnapshotService.js'
+import {
+  findOwnedBots,
+  deleteBot as deleteBotCascade,
+  deleteUserWithBots,
+  BuiltinBotProtectedError,
+} from '../services/userDeletionService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM   = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 
 const router = Router()
+
+// ─── GC trigger (manual QA / on-demand sweep) ────────────────────────────────
+// Placed before requireAuth so it can accept either a valid admin JWT or the
+// QA_SECRET env var (read by qa-scripts/*.sh — no browser token needed).
+
+router.post('/gc/run', async (req, res, next) => {
+  try {
+    const qaSecret = process.env.QA_SECRET
+    const headerSecret = req.headers['x-qa-secret']
+    if (!qaSecret || headerSecret !== qaSecret) {
+      // Fall through to normal admin auth — still works with a real JWT too
+      return next('route')
+    }
+    const result = await gcSweep(null)
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.use(requireAuth, requireAdmin)
 
 // ─── Resource health ─────────────────────────────────────────────────────────
@@ -35,6 +70,49 @@ router.get('/health/sockets', (req, res) => {
     latest: getLatestSnapshot(),
     history: getSnapshots(),
     alerts: getAlerts(),
+    uptime: Math.round(process.uptime()),
+  })
+})
+
+/**
+ * GET /api/v1/admin/health/tables
+ *
+ * Table-resource health view for the admin dashboard. Same shape pattern as
+ * /health/sockets but scoped to table-related counters: per-mode active
+ * breakdown, stale-FORMING count, GC liveness, and `db.table.create` error
+ * counts keyed by Prisma error code (so a P2002 burst is distinguishable
+ * from a real schema regression).
+ *
+ * Lives under the admin router → already gated by requireAuth + requireAdmin.
+ */
+router.get('/health/tables', (req, res) => {
+  const latest   = getLatestSnapshot() ?? {}
+  const alerts   = getAlerts()
+  const gc       = getGcStats()
+  const creates  = getTableCreateErrors()
+  const released = getTableReleased()
+  res.json({
+    latest: {
+      ts:                       latest.ts ?? null,
+      tablesForming:            latest.tablesForming ?? 0,
+      tablesActive:             latest.tablesActive ?? 0,
+      tablesCompleted:          latest.tablesCompleted ?? 0,
+      tablesStaleForming:       latest.tablesStaleForming ?? 0,
+      tablesActive_pvp:         latest.tablesActive_pvp ?? 0,
+      tablesActive_hvb:         latest.tablesActive_hvb ?? 0,
+      tablesActive_tournament:  latest.tablesActive_tournament ?? 0,
+      tablesActive_demo:        latest.tablesActive_demo ?? 0,
+      tableWatchers:            latest.tableWatchers ?? 0,
+    },
+    alerts: {
+      tablesActive:       !!alerts.tablesActive,
+      tablesStaleForming: !!alerts.tablesStaleForming,
+      gcStale:            !!alerts.gcStale,
+    },
+    tableCreateErrors: creates,
+    tableReleased:     released,
+    gc,
+    socketAdapter:     'sse',  // socket.io removed — SSE+POST is the only transport
     uptime: Math.round(process.uptime()),
   })
 })
@@ -55,10 +133,45 @@ router.get('/stats', async (_req, res, next) => {
       db.game.count(),
       db.game.count({ where: { endedAt: { gte: todayStart } } }),
       db.user.count({ where: { banned: true } }),
-      db.mLModel.count(),
+      db.botSkill.count(),
     ])
 
     res.json({ stats: { totalUsers, totalGames, gamesToday, bannedUsers, totalModels } })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── Intelligent Guide metrics ────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/guide-metrics
+ *
+ * Returns the v1 Intelligent Guide metric set for the admin dashboard:
+ *  - latest snapshot (today's row, freshly computed on demand for accuracy)
+ *  - 30-day history of the same metrics for the trend lines
+ *  - current testUserCount for the "excluding N test users" footer
+ *
+ * On-demand recompute is intentionally cheap — the snapshot writer is the
+ * single source of truth, so a stale dashboard couldn't drift from cron-
+ * written rows. Idempotency is guaranteed by the unique index on
+ * (date, metric, dimensions).
+ */
+router.get('/guide-metrics', async (req, res, next) => {
+  try {
+    const fresh = await runMetricsSnapshot()
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+    const history = await db.metricsSnapshot.findMany({
+      where:   { date: { gte: since } },
+      orderBy: [{ date: 'asc' }, { metric: 'asc' }],
+      select:  { date: true, metric: true, value: true, dimensions: true },
+    })
+
+    res.json({
+      now: fresh,             // null only if today's recompute hit an internal error
+      history,
+    })
   } catch (err) {
     next(err)
   }
@@ -118,9 +231,9 @@ router.get('/users', async (req, res, next) => {
           displayName: true,
           email: true,
           avatarUrl: true,
-          eloRating: true,
           banned: true,
           lastActiveAt: true,
+          gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
           userRoles: { select: { role: true, grantedAt: true } },
           createdAt: true,
           _count: { select: { gamesAsPlayer1: true } },
@@ -151,6 +264,8 @@ router.get('/users', async (req, res, next) => {
 
     const users = rawUsers.map(u => ({
       ...u,
+      eloRating: u.gameElo?.[0]?.rating ?? 1200,
+      gameElo: undefined,
       roles: u.userRoles?.map(r => r.role) ?? [],
       baRole: baRoleMap[u.betterAuthId] ?? null,
       emailVerified: baVerifiedMap[u.betterAuthId] ?? null,
@@ -174,25 +289,32 @@ router.patch('/users/:id', async (req, res, next) => {
 
     const data = {}
     if (banned !== undefined) data.banned = Boolean(banned)
+    let eloOverride = undefined
     if (eloRating !== undefined) {
       const elo = parseFloat(eloRating)
       if (isNaN(elo) || elo < 0 || elo > 5000) {
         return res.status(400).json({ error: 'eloRating must be between 0 and 5000' })
       }
-      data.eloRating = elo
+      eloOverride = elo
     }
     // Update domain user scalar fields
     let user = null
     const USER_SELECT = {
       id: true, betterAuthId: true, username: true, displayName: true,
-      email: true, avatarUrl: true, eloRating: true, banned: true,
+      email: true, avatarUrl: true, banned: true,
       createdAt: true, botLimit: true,
+      gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
       userRoles: { select: { role: true, grantedAt: true } },
       _count: { select: { gamesAsPlayer1: true } },
     }
 
     function flattenRoles(rawUser) {
-      return { ...rawUser, roles: rawUser.userRoles?.map(r => r.role) ?? [] }
+      return {
+        ...rawUser,
+        eloRating: rawUser.gameElo?.[0]?.rating ?? 1200,
+        gameElo: undefined,
+        roles: rawUser.userRoles?.map(r => r.role) ?? [],
+      }
     }
 
     if (Object.keys(data).length > 0) {
@@ -200,6 +322,15 @@ router.patch('/users/:id', async (req, res, next) => {
     } else {
       user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
       if (!user) return res.status(404).json({ error: 'User not found' })
+    }
+    // Update GameElo if eloRating was provided
+    if (eloOverride !== undefined) {
+      await db.gameElo.upsert({
+        where: { userId_gameId: { userId: req.params.id, gameId: 'xo' } },
+        update: { rating: eloOverride },
+        create: { userId: req.params.id, gameId: 'xo', rating: eloOverride, gamesPlayed: 0 },
+      })
+      user = await db.user.findUnique({ where: { id: req.params.id }, select: USER_SELECT })
     }
 
     // Update domain roles via UserRole join table
@@ -254,6 +385,13 @@ router.patch('/users/:id', async (req, res, next) => {
         })
         baRole_ = updated.role
         emailVerified_ = updated.emailVerified
+        // §2 metrics-pollution prevention: granting BA admin flags this
+        // domain user as a test user (excluded from dashboards). Reversal
+        // is manual via the upcoming admin toggle, not an automatic inverse
+        // of role removal.
+        if (baData.role === 'admin') {
+          await db.user.update({ where: { id: req.params.id }, data: { isTestUser: true } })
+        }
       } else {
         const ba = await db.baUser.findUnique({ where: { id: user.betterAuthId }, select: { role: true, emailVerified: true } })
         baRole_ = ba?.role ?? null
@@ -282,8 +420,9 @@ router.get('/users/:id', async (req, res, next) => {
       where: { id: req.params.id, isBot: false },
       select: {
         id: true, betterAuthId: true, username: true, displayName: true,
-        email: true, avatarUrl: true, eloRating: true, banned: true,
+        email: true, avatarUrl: true, banned: true,
         oauthProvider: true, createdAt: true, botLimit: true,
+        gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
         userRoles: { select: { role: true, grantedAt: true } },
         _count: { select: { gamesAsPlayer1: true } },
       },
@@ -306,6 +445,8 @@ router.get('/users/:id', async (req, res, next) => {
     res.json({
       user: {
         ...user,
+        eloRating: user.gameElo?.[0]?.rating ?? 1200,
+        gameElo: undefined,
         roles: user.userRoles?.map(r => r.role) ?? [],
         baRole: baUser?.role ?? null,
         emailVerified: baUser?.emailVerified ?? null,
@@ -320,33 +461,16 @@ router.get('/users/:id', async (req, res, next) => {
 
 router.delete('/users/:id', async (req, res, next) => {
   try {
-    const [domainUser, bots] = await Promise.all([
-      db.user.findUnique({ where: { id: req.params.id }, select: { betterAuthId: true } }),
-      db.user.findMany({ where: { botOwnerId: req.params.id, isBot: true }, select: { id: true } }),
-    ])
-    const botIds = bots.map(b => b.id)
-
-    await db.$transaction(async (tx) => {
-      for (const botId of botIds) {
-        await tx.game.updateMany({ where: { player2Id: botId }, data: { player2Id: null } })
-        await tx.game.updateMany({ where: { winnerId:  botId }, data: { winnerId:  null } })
-        await tx.game.deleteMany({ where: { player1Id: botId } })
-        await tx.user.delete({ where: { id: botId } })
-      }
-      await tx.game.updateMany({ where: { player2Id: req.params.id }, data: { player2Id: null } })
-      await tx.game.updateMany({ where: { winnerId:  req.params.id }, data: { winnerId:  null } })
-      await tx.game.deleteMany({ where: { player1Id: req.params.id } })
-      await tx.user.delete({ where: { id: req.params.id } })
-      // Remove Better Auth records so the email can be re-registered
-      if (domainUser?.betterAuthId) {
-        await tx.baSession.deleteMany({ where: { userId: domainUser.betterAuthId } })
-        await tx.baAccount.deleteMany({ where: { userId: domainUser.betterAuthId } })
-        try { await tx.baUser.delete({ where: { id: domainUser.betterAuthId } }) } catch { }
-      }
+    const domainUser = await db.user.findUnique({
+      where:  { id: req.params.id },
+      select: { id: true, username: true, betterAuthId: true },
     })
-
+    if (!domainUser) return res.status(404).json({ error: 'User not found' })
+    const bots = await findOwnedBots(db, domainUser.id)
+    await deleteUserWithBots(db, domainUser, bots)
     res.status(204).end()
   } catch (err) {
+    if (err instanceof BuiltinBotProtectedError) return res.status(400).json({ error: err.message })
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' })
     next(err)
   }
@@ -363,7 +487,7 @@ router.get('/games', async (req, res, next) => {
     const limit = Math.min(100, parseInt(req.query.limit) || 25)
     const skip = (page - 1) * limit
 
-    const where = {}
+    const where = { totalMoves: { gt: 0 } }
     if (req.query.mode) where.mode = req.query.mode.toUpperCase()
     if (req.query.outcome) where.outcome = req.query.outcome.toUpperCase()
     if (req.query.player) {
@@ -436,39 +560,52 @@ router.get('/ml/models', async (req, res, next) => {
     }
 
     const [models, total] = await Promise.all([
-      db.mLModel.findMany({
+      db.botSkill.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
         include: { _count: { select: { sessions: true } } },
       }),
-      db.mLModel.count({ where }),
+      db.botSkill.count({ where }),
     ])
 
     // Enrich with creator display names.
     // createdBy may store a BA user ID (ba_xxx) for new bots or a domain user ID
     // for bots created before the ownerBaId fix — query both ways.
     const creatorIds = [...new Set(models.map(m => m.createdBy).filter(Boolean))]
-    const [byBaId, byDomainId] = creatorIds.length
-      ? await Promise.all([
-          db.user.findMany({
+    const botIds = [...new Set(models.map(m => m.botId).filter(Boolean))]
+
+    const [byBaId, byDomainId, botEloRows] = await Promise.all([
+      creatorIds.length
+        ? db.user.findMany({
             where: { betterAuthId: { in: creatorIds } },
             select: { betterAuthId: true, id: true, displayName: true, username: true },
-          }),
-          db.user.findMany({
+          })
+        : [],
+      creatorIds.length
+        ? db.user.findMany({
             where: { id: { in: creatorIds } },
             select: { betterAuthId: true, id: true, displayName: true, username: true },
-          }),
-        ])
-      : [[], []]
+          })
+        : [],
+      botIds.length
+        ? db.gameElo.findMany({
+            where: { userId: { in: botIds }, gameId: 'xo' },
+            select: { userId: true, rating: true },
+          })
+        : [],
+    ])
+
     const creatorMap = Object.fromEntries([
       ...byDomainId.map(u => [u.id, u]),
       ...byBaId.map(u => [u.betterAuthId, u]),
     ])
+    const eloMap = Object.fromEntries(botEloRows.map(r => [r.userId, r.rating]))
 
     const enriched = models.map(m => ({
       ...m,
+      eloRating: m.botId ? (eloMap[m.botId] ?? 1200) : null,
       creatorName: m.createdBy
         ? (creatorMap[m.createdBy]?.displayName || creatorMap[m.createdBy]?.username || null)
         : null,
@@ -486,9 +623,9 @@ router.get('/ml/models', async (req, res, next) => {
  */
 router.patch('/ml/models/:id/feature', async (req, res, next) => {
   try {
-    const model = await db.mLModel.findUnique({ where: { id: req.params.id }, select: { featured: true } })
+    const model = await db.botSkill.findUnique({ where: { id: req.params.id }, select: { featured: true } })
     if (!model) return res.status(404).json({ error: 'Model not found' })
-    const updated = await db.mLModel.update({
+    const updated = await db.botSkill.update({
       where: { id: req.params.id },
       data: { featured: !model.featured },
     })
@@ -533,7 +670,8 @@ router.delete('/ml/models/:id', async (req, res, next) => {
 router.get('/ml/limits', async (_req, res, next) => {
   try {
     const [maxEpisodes, maxConcurrent, maxModels, maxEpisodesPerModel,
-      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer] = await Promise.all([
+      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer,
+      epsBronze, epsSilver, epsGold, epsPlatinum, epsDiamond] = await Promise.all([
       getSystemConfig('ml.maxEpisodesPerSession', 100_000),
       getSystemConfig('ml.maxConcurrentSessions', 0),
       getSystemConfig('ml.maxModelsPerUser', 10),
@@ -541,6 +679,11 @@ router.get('/ml/limits', async (_req, res, next) => {
       getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
       getSystemConfig('ml.dqn.maxHiddenLayers', 3),
       getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
+      getSystemConfig('credits.limits.episodesPerSession.bronze',   1_000),
+      getSystemConfig('credits.limits.episodesPerSession.silver',   5_000),
+      getSystemConfig('credits.limits.episodesPerSession.gold',    20_000),
+      getSystemConfig('credits.limits.episodesPerSession.platinum', 50_000),
+      getSystemConfig('credits.limits.episodesPerSession.diamond', 100_000),
     ])
     res.json({ limits: {
       maxEpisodesPerSession: maxEpisodes,
@@ -550,6 +693,7 @@ router.get('/ml/limits', async (_req, res, next) => {
       dqnDefaultHiddenLayers,
       dqnMaxHiddenLayers,
       dqnMaxUnitsPerLayer,
+      episodesPerSessionTiers: { bronze: epsBronze, silver: epsSilver, gold: epsGold, platinum: epsPlatinum, diamond: epsDiamond },
     }})
   } catch (err) {
     next(err)
@@ -562,7 +706,8 @@ router.get('/ml/limits', async (_req, res, next) => {
 router.patch('/ml/limits', async (req, res, next) => {
   try {
     const { maxEpisodesPerSession, maxConcurrentSessions, maxModelsPerUser, maxEpisodesPerModel,
-      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer } = req.body
+      dqnDefaultHiddenLayers, dqnMaxHiddenLayers, dqnMaxUnitsPerLayer,
+      episodesPerSessionTiers } = req.body
     const updates = []
 
     if (maxEpisodesPerSession !== undefined) {
@@ -605,11 +750,23 @@ router.patch('/ml/limits', async (req, res, next) => {
       updates.push(setSystemConfig('ml.dqn.maxUnitsPerLayer', v))
     }
 
+    if (episodesPerSessionTiers !== undefined) {
+      const TIER_KEYS = { bronze: 1_000, silver: 5_000, gold: 20_000, platinum: 50_000, diamond: 100_000 }
+      for (const [tier, def] of Object.entries(TIER_KEYS)) {
+        if (episodesPerSessionTiers[tier] !== undefined) {
+          const v = parseInt(episodesPerSessionTiers[tier])
+          if (isNaN(v) || v < 0) return res.status(400).json({ error: `episodesPerSessionTiers.${tier} must be a non-negative integer` })
+          updates.push(setSystemConfig(`credits.limits.episodesPerSession.${tier}`, v))
+        }
+      }
+    }
+
     if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' })
     await Promise.all(updates)
 
     const [updatedMaxEpisodes, updatedMaxConcurrent, updatedMaxModels, updatedMaxEpisodesPerModel,
-      updatedDqnDefaultHiddenLayers, updatedDqnMaxHiddenLayers, updatedDqnMaxUnitsPerLayer] = await Promise.all([
+      updatedDqnDefaultHiddenLayers, updatedDqnMaxHiddenLayers, updatedDqnMaxUnitsPerLayer,
+      epsBronze, epsSilver, epsGold, epsPlatinum, epsDiamond] = await Promise.all([
       getSystemConfig('ml.maxEpisodesPerSession', 100_000),
       getSystemConfig('ml.maxConcurrentSessions', 0),
       getSystemConfig('ml.maxModelsPerUser', 10),
@@ -617,6 +774,11 @@ router.patch('/ml/limits', async (req, res, next) => {
       getSystemConfig('ml.dqn.defaultHiddenLayers', [32]),
       getSystemConfig('ml.dqn.maxHiddenLayers', 3),
       getSystemConfig('ml.dqn.maxUnitsPerLayer', 256),
+      getSystemConfig('credits.limits.episodesPerSession.bronze',    1_000),
+      getSystemConfig('credits.limits.episodesPerSession.silver',    5_000),
+      getSystemConfig('credits.limits.episodesPerSession.gold',     20_000),
+      getSystemConfig('credits.limits.episodesPerSession.platinum',  50_000),
+      getSystemConfig('credits.limits.episodesPerSession.diamond', 100_000),
     ])
     res.json({ limits: {
       maxEpisodesPerSession: updatedMaxEpisodes,
@@ -626,6 +788,7 @@ router.patch('/ml/limits', async (req, res, next) => {
       dqnDefaultHiddenLayers: updatedDqnDefaultHiddenLayers,
       dqnMaxHiddenLayers: updatedDqnMaxHiddenLayers,
       dqnMaxUnitsPerLayer: updatedDqnMaxUnitsPerLayer,
+      episodesPerSessionTiers: { bronze: epsBronze, silver: epsSilver, gold: epsGold, platinum: epsPlatinum, diamond: epsDiamond },
     }})
   } catch (err) {
     next(err)
@@ -638,7 +801,7 @@ router.patch('/ml/limits', async (req, res, next) => {
  */
 router.patch('/ml/models/:id/max-episodes', async (req, res, next) => {
   try {
-    const model = await db.mLModel.findUnique({ where: { id: req.params.id }, select: { id: true, maxEpisodes: true } })
+    const model = await db.botSkill.findUnique({ where: { id: req.params.id }, select: { id: true, maxEpisodes: true } })
     if (!model) return res.status(404).json({ error: 'Model not found' })
 
     const v = parseInt(req.body.maxEpisodes)
@@ -647,7 +810,7 @@ router.patch('/ml/models/:id/max-episodes', async (req, res, next) => {
       return res.status(400).json({ error: `Cannot decrease maxEpisodes (current: ${model.maxEpisodes.toLocaleString()})` })
     }
 
-    const updated = await db.mLModel.update({ where: { id: req.params.id }, data: { maxEpisodes: v } })
+    const updated = await db.botSkill.update({ where: { id: req.params.id }, data: { maxEpisodes: v } })
     res.json({ model: { id: updated.id, maxEpisodes: updated.maxEpisodes } })
   } catch (err) {
     next(err)
@@ -684,6 +847,45 @@ router.patch('/logs/limit', async (req, res, next) => {
   }
 })
 
+// ─── Tournament auto-drop audit ──────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/tournaments/auto-dropped?period=day|week|month
+ *
+ * Phase 3.7a.6 health signal: how often did the tournament sweep
+ * hard-delete unfilled bot-only tournaments in the given window? Returns
+ * `{ count, items }` where items are the raw audit rows (newest first,
+ * capped at 20) so the admin widget can render a mini-list for
+ * pattern-spotting (same seed-bot mix dropping repeatedly → tune min
+ * participants).
+ */
+const AUTO_DROP_WINDOWS = {
+  day:   24 * 60 * 60 * 1000,
+  week:   7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+}
+router.get('/tournaments/auto-dropped', async (req, res, next) => {
+  try {
+    const period = (req.query.period ?? 'week').toString()
+    const windowMs = AUTO_DROP_WINDOWS[period]
+    if (!windowMs) {
+      return res.status(400).json({ error: 'period must be one of day, week, month' })
+    }
+    const since = new Date(Date.now() - windowMs)
+    const [count, items] = await Promise.all([
+      db.tournamentAutoDrop.count({ where: { droppedAt: { gte: since } } }),
+      db.tournamentAutoDrop.findMany({
+        where:   { droppedAt: { gte: since } },
+        orderBy: { droppedAt: 'desc' },
+        take:    20,
+      }),
+    ])
+    res.json({ period, since, count, items })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── Bot management ───────────────────────────────────────────────────────────
 
 /**
@@ -696,9 +898,11 @@ router.get('/bots', async (req, res, next) => {
     const page  = Math.max(1, parseInt(req.query.page) || 1)
     const limit = Math.min(100, parseInt(req.query.limit) || 25)
     const skip  = (page - 1) * limit
+    const systemOnly = req.query.systemOnly === '1' || req.query.systemOnly === 'true'
 
     const where = {
       isBot: true,
+      ...(systemOnly ? { botOwnerId: null } : {}),
       ...(search ? { displayName: { contains: search, mode: 'insensitive' } } : {}),
     }
 
@@ -712,7 +916,7 @@ router.get('/bots', async (req, res, next) => {
           id: true,
           displayName: true,
           avatarUrl: true,
-          eloRating: true,
+          gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
           botModelType: true,
           botModelId: true,
           botActive: true,
@@ -737,9 +941,26 @@ router.get('/bots', async (req, res, next) => {
       : []
     const ownerMap = Object.fromEntries(owners.map(o => [o.id, o]))
 
+    // Enrich with per-game skills
+    const botIds = bots.map(b => b.id)
+    const allSkills = botIds.length
+      ? await db.botSkill.findMany({
+          where: { botId: { in: botIds } },
+          select: { botId: true, gameId: true, algorithm: true, status: true },
+        })
+      : []
+    const skillsByBot = {}
+    for (const s of allSkills) {
+      if (!skillsByBot[s.botId]) skillsByBot[s.botId] = []
+      skillsByBot[s.botId].push({ gameId: s.gameId, algorithm: s.algorithm, status: s.status })
+    }
+
     const enriched = bots.map(b => ({
       ...b,
+      eloRating: b.gameElo?.[0]?.rating ?? 1200,
+      gameElo: undefined,
       owner: b.botOwnerId ? (ownerMap[b.botOwnerId] ?? null) : null,
+      skills: skillsByBot[b.id] ?? [],
     }))
 
     res.json({ bots: enriched, total, page, limit })
@@ -795,22 +1016,14 @@ router.patch('/bots/:id', async (req, res, next) => {
 router.delete('/bots/:id', async (req, res, next) => {
   try {
     const bot = await db.user.findUnique({
-      where: { id: req.params.id },
-      select: { id: true, isBot: true, botModelId: true },
+      where:  { id: req.params.id },
+      select: { id: true, isBot: true, botModelId: true, username: true, betterAuthId: true },
     })
     if (!bot || !bot.isBot) return res.status(404).json({ error: 'Bot not found' })
-
-    await db.$transaction(async (tx) => {
-      await tx.game.deleteMany({ where: { player1Id: bot.id } })
-      await tx.user.delete({ where: { id: bot.id } })
-    })
-
-    if (bot.botModelId) {
-      await db.mLModel.delete({ where: { id: bot.botModelId } }).catch(() => {})
-    }
-
+    await deleteBotCascade(db, bot)
     res.status(204).end()
   } catch (err) {
+    if (err instanceof BuiltinBotProtectedError) return res.status(400).json({ error: err.message })
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bot not found' })
     next(err)
   }
@@ -965,6 +1178,150 @@ router.patch('/session-config', async (req, res, next) => {
   }
 })
 
+/**
+ * GET /api/v1/admin/replay-config
+ */
+router.get('/replay-config', async (_req, res, next) => {
+  try {
+    const [casualRetentionDays, tournamentRetentionDays] = await Promise.all([
+      getSystemConfig('replay.casualRetentionDays',    90),
+      getSystemConfig('replay.tournamentRetentionDays', 90),
+    ])
+    res.json({ casualRetentionDays, tournamentRetentionDays })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/replay-config
+ */
+router.patch('/replay-config', async (req, res, next) => {
+  try {
+    const { casualRetentionDays, tournamentRetentionDays } = req.body
+    if (casualRetentionDays !== undefined) {
+      const v = parseInt(casualRetentionDays)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'casualRetentionDays must be >= 1' })
+      await setSystemConfig('replay.casualRetentionDays', v)
+    }
+    if (tournamentRetentionDays !== undefined) {
+      const v = parseInt(tournamentRetentionDays)
+      if (isNaN(v) || v < 1) return res.status(400).json({ error: 'tournamentRetentionDays must be >= 1' })
+      await setSystemConfig('replay.tournamentRetentionDays', v)
+    }
+    const [casual, tournament] = await Promise.all([
+      getSystemConfig('replay.casualRetentionDays',    90),
+      getSystemConfig('replay.tournamentRetentionDays', 90),
+    ])
+    res.json({ casualRetentionDays: casual, tournamentRetentionDays: tournament })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── Intelligent Guide v1 SystemConfig ───────────────────────────────────────
+//
+// Sprint 6 (§8.4 / Sprint6_Kickoff §3.4): inline-edit the v1 Guide tunables
+// from the admin dashboard so reward sizes, the release flag, etc. can be
+// tuned without a deploy.
+//
+// Spec table is the single source of truth — used by both GET (returns
+// defaults when a key isn't seeded yet) and PATCH (validates types + ranges
+// + enum membership). guide.cup.sizeEntrants is reserved/informational in v1
+// because the cup spawn logic hardcodes the slot mix; PATCH rejects writes.
+
+const TIER_VALUES = ['novice', 'intermediate', 'advanced', 'master']
+
+const GUIDE_CONFIG_SPEC = {
+  'guide.v1.enabled':                                 { type: 'boolean',     default: true        },
+  'guide.rewards.hookComplete':                       { type: 'integer',     default: 20,  min: 0, max: 1000 },
+  'guide.rewards.curriculumComplete':                 { type: 'integer',     default: 50,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstSpecializeAction':    { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstRealTournamentWin':   { type: 'integer',     default: 25,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstNonDefaultAlgorithm': { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.rewards.discovery.firstTemplateClone':       { type: 'integer',     default: 10,  min: 0, max: 1000 },
+  'guide.quickBot.defaultTier':                       { type: 'enum',        default: 'novice',       enum: TIER_VALUES },
+  'guide.quickBot.firstTrainingTier':                 { type: 'enum',        default: 'intermediate', enum: TIER_VALUES },
+  'guide.cup.sizeEntrants':                           { type: 'integer',     default: 4,   readOnly: true   },
+  'guide.cup.retentionDays':                          { type: 'integer',     default: 30,  min: 1, max: 365 },
+  'guide.demo.ttlMinutes':                            { type: 'integer',     default: 60,  min: 5, max: 1440 },
+  'metrics.internalEmailDomains':                     { type: 'stringArray', default: []                    },
+}
+
+function _validateGuideConfigValue(key, raw) {
+  const spec = GUIDE_CONFIG_SPEC[key]
+  if (!spec) return { ok: false, error: `Unknown guide-config key "${key}"` }
+  if (spec.readOnly) return { ok: false, error: `"${key}" is read-only in v1` }
+
+  if (spec.type === 'boolean') {
+    if (typeof raw !== 'boolean') return { ok: false, error: `"${key}" must be a boolean` }
+    return { ok: true, value: raw }
+  }
+  if (spec.type === 'integer') {
+    const n = typeof raw === 'number' ? raw : parseInt(raw, 10)
+    if (!Number.isFinite(n) || !Number.isInteger(n)) return { ok: false, error: `"${key}" must be an integer` }
+    if (spec.min !== undefined && n < spec.min) return { ok: false, error: `"${key}" must be >= ${spec.min}` }
+    if (spec.max !== undefined && n > spec.max) return { ok: false, error: `"${key}" must be <= ${spec.max}` }
+    return { ok: true, value: n }
+  }
+  if (spec.type === 'enum') {
+    if (!spec.enum.includes(raw)) return { ok: false, error: `"${key}" must be one of: ${spec.enum.join(', ')}` }
+    return { ok: true, value: raw }
+  }
+  if (spec.type === 'stringArray') {
+    if (!Array.isArray(raw)) return { ok: false, error: `"${key}" must be an array` }
+    const cleaned = raw.map(s => String(s ?? '').trim()).filter(Boolean)
+    return { ok: true, value: cleaned }
+  }
+  return { ok: false, error: `"${key}" has an unsupported spec type` }
+}
+
+async function _readGuideConfigMap() {
+  const out = {}
+  await Promise.all(Object.entries(GUIDE_CONFIG_SPEC).map(async ([key, spec]) => {
+    out[key] = await getSystemConfig(key, spec.default)
+  }))
+  return out
+}
+
+/**
+ * GET /api/v1/admin/guide-config
+ * Returns the full 13-key map of Intelligent Guide v1 SystemConfig values
+ * (with defaults filled in from the spec table when a key hasn't been seeded
+ * yet).
+ */
+router.get('/guide-config', async (_req, res, next) => {
+  try {
+    res.json({ config: await _readGuideConfigMap() })
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * PATCH /api/v1/admin/guide-config
+ * Body: `{ "<key>": <value>, ... }` — partial map. Each key is validated
+ * against `GUIDE_CONFIG_SPEC`; any unknown / read-only / out-of-range value
+ * yields a 400 with no writes (all-or-nothing). Returns the full updated map.
+ */
+router.patch('/guide-config', async (req, res, next) => {
+  try {
+    const body = req.body || {}
+    const updates = []
+    for (const [key, raw] of Object.entries(body)) {
+      const r = _validateGuideConfigValue(key, raw)
+      if (!r.ok) return res.status(400).json({ error: r.error })
+      updates.push([key, r.value])
+    }
+    for (const [key, value] of updates) {
+      await setSystemConfig(key, value)
+    }
+    res.json({ config: await _readGuideConfigMap() })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── Feedback management (admin mirror) ──────────────────────────────────────
 
 /**
@@ -1107,6 +1464,87 @@ router.post('/feedback/:id/reply', async (req, res, next) => {
     res.status(201).json({ reply: result.reply, replies: result.replies })
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Feedback not found' })
+    next(err)
+  }
+})
+
+/**
+ * POST /api/v1/admin/dev/flush-notifications
+ *
+ * Operational drain for the dev/staging notification backlog. Marks every
+ * undelivered `user_notifications` row as delivered (clearing the
+ * notifQueueDepth gauge) and truncates the `events:tier2:stream` Redis
+ * stream to `?maxLen=` entries (default 0 — wipe).
+ *
+ * Sized for the case where a long-running dev environment has accumulated
+ * thousands of stale entries (we hit `tier2StreamLen: 3697` /
+ * `notifQueueDepth: 235` after a redis-outage stretch on 2026-04-27) and
+ * the SSE consumer can't catch up. Production should never need this —
+ * the consumer keeps the stream drained — but in dev this is a faster
+ * path than restarting redis.
+ */
+router.post('/dev/flush-notifications', async (req, res, next) => {
+  try {
+    const maxLen = Math.max(0, Number(req.query.maxLen ?? 0))
+    const [{ count: notifsCleared }, streamRemaining] = await Promise.all([
+      db.userNotification.updateMany({
+        where: { deliveredAt: null },
+        data:  { deliveredAt: new Date() },
+      }),
+      truncateStream(maxLen),
+    ])
+    res.json({
+      ok: true,
+      notifsMarkedDelivered: notifsCleared,
+      streamRemaining,                  // -1 if Redis unavailable
+      streamMaxLenRequested: maxLen,
+    })
+  } catch (err) {
+    logger.error({ err }, 'Admin flush-notifications failed')
+    next(err)
+  }
+})
+
+/**
+ * DELETE /api/v1/admin/tables/:id
+ * Force-stop any table (mark COMPLETED + notify connected players).
+ */
+router.delete('/tables/:id', async (req, res, next) => {
+  try {
+    const table = await db.table.findUnique({ where: { id: req.params.id } })
+    if (!table) return res.status(404).json({ error: 'Table not found' })
+
+    await db.table.update({
+      where: { id: req.params.id },
+      data:  { status: 'COMPLETED', seats: releaseSeats(table.seats) },
+    })
+
+    // End the game immediately for connected players so GameComponent transitions
+    // to the finished state before the table.deleted navigation arrives.
+    const scores = table.previewState?.scores ?? { X: 0, O: 0 }
+    appendToStream(
+      `table:${table.id}:state`,
+      { kind: 'forfeit', winner: null, scores },
+      { userId: '*' },
+    ).catch(() => {})
+
+    // Bounce connected players/spectators back to the tables list.
+    dispatch({
+      type:    'table.deleted',
+      targets: { broadcast: true },
+      payload: { tableId: req.params.id, slug: table.slug },
+    })
+    dispatchTableReleased(req.params.id, TABLE_RELEASED_REASONS.ADMIN, { trigger: 'admin-delete' })
+
+    // Drop every in-memory pointer at this table — disconnect timers, idle
+    // timers, socket→table mappings, watchers (chunk 3 F5). Without this the
+    // maps held stale entries until the next disconnect, wasting one
+    // db.table.findUnique per orphan timer.
+    unregisterTable(req.params.id)
+
+    res.json({ ok: true })
+  } catch (err) {
+    logger.error({ err }, 'Admin force-stop table failed')
     next(err)
   }
 })

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" fill="currentColor">
+  <!-- Colosseum silhouette — simplified architectural outline -->
+  <!-- Outer wall -->
+  <path d="M0 320 L0 200 Q480 120 960 200 L960 320 Z" opacity="0.15"/>
+  <!-- Arched facade row 1 (bottom) -->
+  <g opacity="0.6">
+    <path d="M60 320 L60 240 Q80 220 100 240 L100 320 Z"/>
+    <path d="M120 320 L120 240 Q140 220 160 240 L160 320 Z"/>
+    <path d="M180 320 L180 240 Q200 220 220 240 L220 320 Z"/>
+    <path d="M240 320 L240 240 Q260 220 280 240 L280 320 Z"/>
+    <path d="M300 320 L300 240 Q320 220 340 240 L340 320 Z"/>
+    <path d="M360 320 L360 240 Q380 220 400 240 L400 320 Z"/>
+    <path d="M420 320 L420 240 Q440 220 460 240 L460 320 Z"/>
+    <path d="M480 320 L480 240 Q500 220 520 240 L520 320 Z"/>
+    <path d="M540 320 L540 240 Q560 220 580 240 L580 320 Z"/>
+    <path d="M600 320 L600 240 Q620 220 640 240 L640 320 Z"/>
+    <path d="M660 320 L660 240 Q680 220 700 240 L700 320 Z"/>
+    <path d="M720 320 L720 240 Q740 220 760 240 L760 320 Z"/>
+    <path d="M780 320 L780 240 Q800 220 820 240 L820 320 Z"/>
+    <path d="M840 320 L840 240 Q860 220 880 240 L880 320 Z"/>
+  </g>
+  <!-- Arched facade row 2 (middle) -->
+  <g opacity="0.35">
+    <path d="M40 240 L40 175 Q60 158 80 175 L80 240 Z"/>
+    <path d="M100 240 L100 175 Q120 158 140 175 L140 240 Z"/>
+    <path d="M160 240 L160 175 Q180 158 200 175 L200 240 Z"/>
+    <path d="M220 240 L220 175 Q240 158 260 175 L260 240 Z"/>
+    <path d="M280 240 L280 175 Q300 158 320 175 L320 240 Z"/>
+    <path d="M340 240 L340 175 Q360 158 380 175 L380 240 Z"/>
+    <path d="M400 240 L400 175 Q420 158 440 175 L440 240 Z"/>
+    <path d="M460 240 L460 175 Q480 158 500 175 L500 240 Z"/>
+    <path d="M520 240 L520 175 Q540 158 560 175 L560 240 Z"/>
+    <path d="M580 240 L580 175 Q600 158 620 175 L620 240 Z"/>
+    <path d="M640 240 L640 175 Q660 158 680 175 L680 240 Z"/>
+    <path d="M700 240 L700 175 Q720 158 740 175 L740 240 Z"/>
+    <path d="M760 240 L760 175 Q780 158 800 175 L800 240 Z"/>
+    <path d="M820 240 L820 175 Q840 158 860 175 L860 240 Z"/>
+    <path d="M880 240 L880 175 Q900 158 920 175 L920 240 Z"/>
+  </g>
+  <!-- Top battlements -->
+  <g opacity="0.25">
+    <rect x="20"  y="155" width="25" height="20"/>
+    <rect x="75"  y="155" width="25" height="20"/>
+    <rect x="130" y="155" width="25" height="20"/>
+    <rect x="185" y="155" width="25" height="20"/>
+    <rect x="240" y="155" width="25" height="20"/>
+    <rect x="295" y="155" width="25" height="20"/>
+    <rect x="350" y="155" width="25" height="20"/>
+    <rect x="405" y="155" width="25" height="20"/>
+    <rect x="460" y="155" width="25" height="20"/>
+    <rect x="515" y="155" width="25" height="20"/>
+    <rect x="570" y="155" width="25" height="20"/>
+    <rect x="625" y="155" width="25" height="20"/>
+    <rect x="680" y="155" width="25" height="20"/>
+    <rect x="735" y="155" width="25" height="20"/>
+    <rect x="790" y="155" width="25" height="20"/>
+    <rect x="845" y="155" width="25" height="20"/>
+    <rect x="900" y="155" width="25" height="20"/>
+  </g>
+</svg>

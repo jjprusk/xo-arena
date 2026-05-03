@@ -1,0 +1,20 @@
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  # Keep at least one machine running at all times — the tournament
+  # service runs background jobs (60s sweep + recurring scheduler)
+  # that must stay alive even when no HTTP traffic hits the app.
+  # Previously set to 0, which silently broke recurring tournaments
+  # during traffic lulls (matches stuck PENDING with no one to fire
+  # tournament:bot:match:ready).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

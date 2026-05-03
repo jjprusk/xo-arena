@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * BotGameRunner — server-side bot vs bot game execution.
  *
@@ -6,15 +7,40 @@
  * Results are recorded to the DB and ELO is updated when the game ends.
  */
 
-import { mountainPool, MountainNamePool } from './mountainNames.js'
+import { nanoid } from 'nanoid'
 import { getWinner, isBoardFull, getEmptyCells, WIN_LINES } from '@xo-arena/ai'
 import registry from '../ai/registry.js'
+import { getMoveForModel } from '../services/skillService.js'
 import { createGame } from '../services/userService.js'
 import { updateBothElosAfterBotVsBot } from '../services/eloService.js'
 import db from '../lib/db.js'
+import { releaseSeats } from '../lib/tableSeats.js'
+import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
+import { appendToStream } from '../lib/eventStream.js'
 import logger from '../logger.js'
 
-const DEFAULT_MOVE_DELAY_MS = 800
+const TOURNAMENT_SERVICE_URL = process.env.TOURNAMENT_SERVICE_URL || 'http://localhost:3001'
+
+async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGames) {
+  try {
+    const res = await fetch(`${TOURNAMENT_SERVICE_URL}/api/matches/${matchId}/complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.INTERNAL_SECRET ? { 'x-internal-secret': process.env.INTERNAL_SECRET } : {}),
+      },
+      body: JSON.stringify({ winnerId, p1Wins, p2Wins, drawGames }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      logger.warn({ matchId, status: res.status, body }, 'completeTournamentMatch: non-2xx response')
+    }
+  } catch (err) {
+    logger.error({ err, matchId }, 'completeTournamentMatch: fetch failed')
+  }
+}
+
+const DEFAULT_MOVE_DELAY_MS = 1500
 
 /**
  * Parse a botModelId string into { impl, difficulty }.
@@ -28,6 +54,11 @@ function parseBotModelId(botModelId) {
     return { impl: 'minimax', difficulty: diff }
   }
 
+  if (botModelId.startsWith('testbot:') || botModelId.startsWith('seed:')) {
+    const diff = botModelId.split(':')[2] || 'novice'
+    return { impl: 'minimax', difficulty: diff }
+  }
+
   if (botModelId.startsWith('user:')) {
     const parts = botModelId.split(':')
     const algo = parts[2] || 'minimax'
@@ -36,8 +67,8 @@ function parseBotModelId(botModelId) {
     return { impl, difficulty: diff }
   }
 
-  // ML model ID or unknown — fall back to minimax master
-  return { impl: 'minimax', difficulty: 'master' }
+  // Raw ML skill ID (UUID) — use ML implementation with this skill
+  return { impl: 'ml', difficulty: 'intermediate' }
 }
 
 class BotGameRunner {
@@ -46,12 +77,6 @@ class BotGameRunner {
     this._games = new Map()
     /** @type {Map<string, string>} socketId → slug */
     this._socketToGame = new Map()
-    /** @type {import('socket.io').Server|null} */
-    this._io = null
-  }
-
-  setIO(io) {
-    this._io = io
   }
 
   /**
@@ -60,19 +85,22 @@ class BotGameRunner {
    * @param {{ id, displayName, botModelId }} opts.bot1 - plays X
    * @param {{ id, displayName, botModelId }} opts.bot2 - plays O
    * @param {number} [opts.moveDelayMs]
+   * @param {string|null} [opts.tournamentId]
+   * @param {string|null} [opts.tournamentMatchId]
    * @returns {{ slug, displayName }}
    */
-  async startGame({ bot1, bot2, moveDelayMs = DEFAULT_MOVE_DELAY_MS }) {
-    const name = mountainPool.acquire()
-    if (!name) throw new Error('No mountain names available for bot game')
+  async startGame({ bot1, bot2, gameId = 'xo', moveDelayMs = DEFAULT_MOVE_DELAY_MS, tournamentId = null, tournamentMatchId = null, bestOfN = 1, slug: explicitSlug = null, isSpar = false, sparUserId = null }) {
+    // Demo Table macro (§5.1) pre-allocates a slug so the Table row's slug
+    // matches the bot-game slug. Otherwise we mint our own.
+    const slug = explicitSlug ?? nanoid(8)
+    // Synthesised label for spectator UIs (no longer stored on the Table row).
+    const displayName = `${bot1.displayName} vs ${bot2.displayName}`
 
-    const slug = MountainNamePool.toSlug(name)
     const now = Date.now()
 
     const game = {
       slug,
-      displayName: `Mt. ${name}`,
-      name,
+      displayName,
       bot1,   // plays X
       bot2,   // plays O
       board: Array(9).fill(null),
@@ -84,10 +112,95 @@ class BotGameRunner {
       createdAt: now,
       lastActivityAt: now,
       moveDelayMs,
+      gameId,
+      tournamentId,
+      tournamentMatchId,
+      bestOfN: bestOfN ?? 1,
+      seriesBot1Wins: 0,
+      seriesBot2Wins: 0,
+      seriesDraws: 0,
+      seriesGamesPlayed: 0,
+      moves: [],  // compact move stream for replay
+      isSpar,
+      sparUserId,  // owner of bot1 — receives Hook step 5 credit on series completion
+      // tableId — populated below when a Table row exists for this slug (Demo
+      // Table macro and any future Spar/HvB-via-Table flow). The SSE state
+      // channel uses the Prisma `Table.id`, NOT the slug — useGameSDK on the
+      // client subscribes to `table:<tableId>:state`, so events emitted
+      // against `table:<slug>:state` are silently dropped by spectators.
+      tableId: null,
     }
 
     this._games.set(slug, game)
-    logger.info({ slug, bot1: bot1.displayName, bot2: bot2.displayName }, 'Bot game started')
+
+    // Resolve the Table.id for this slug. Spar/demo flows create the Table
+    // row before calling startGame so we just look it up. Tournament bot
+    // matches arrive without a Table — we mint one here so the standard
+    // spectator join path (`/rt/tables/:slug/join`) resolves. Without it
+    // the cup follow-modal 404'd on TABLE_NOT_FOUND once the match flipped
+    // to live.
+    try {
+      let row = await db.table.findFirst({ where: { slug }, select: { id: true } })
+      if (!row && tournamentMatchId) {
+        row = await db.table.create({
+          data: {
+            gameId,
+            slug,
+            createdById:      bot1.id,
+            minPlayers:       2,
+            maxPlayers:       2,
+            isPrivate:        false,
+            isTournament:     true,
+            tournamentMatchId,
+            tournamentId,
+            bestOfN,
+            status:           'ACTIVE',
+            seats: [
+              { userId: bot1.id, status: 'occupied', displayName: bot1.displayName },
+              { userId: bot2.id, status: 'occupied', displayName: bot2.displayName },
+            ],
+            previewState: {
+              board:       Array(9).fill(null),
+              currentTurn: 'X',
+              scores:      { X: 0, O: 0 },
+              round:       1,
+              winner:      null,
+              winLine:     null,
+              marks:       { [bot1.id]: 'X', [bot2.id]: 'O' },
+              botMark:     null,
+              moves:       [],
+            },
+          },
+          select: { id: true },
+        })
+      }
+      if (row?.id) game.tableId = row.id
+    } catch (err) {
+      logger.warn({ err: err.message, slug, tournamentMatchId }, 'botGameRunner: tableId resolve/create failed')
+    }
+    const channelKey = game.tableId ?? slug
+    game.channelKey = channelKey
+
+    logger.info({ slug, tableId: game.tableId, bot1: bot1.displayName, bot2: bot2.displayName, tournamentMatchId }, 'Bot game started')
+
+    // Mark bots as in-tournament so they can't be trained mid-match
+    if (tournamentMatchId) {
+      await db.user.updateMany({
+        where: { id: { in: [bot1.id, bot2.id] } },
+        data: { botInTournament: true },
+      }).catch(err => logger.warn({ err }, 'Failed to set botInTournament flag'))
+
+      // Flip the tournament match to IN_PROGRESS so spectator UI (e.g. the
+      // Curriculum Cup follow-modal) can detect that the game is live.
+      // Without this, bot matches stayed PENDING for their entire run and
+      // a follower watching their bot was stuck on "waiting" until the
+      // match completed — by which time the next match was already gone.
+      // PvP matches get the same flip mid-series in socketHandler.js.
+      await db.tournamentMatch.update({
+        where: { id: tournamentMatchId },
+        data:  { status: 'IN_PROGRESS' },
+      }).catch(err => logger.warn({ err, tournamentMatchId }, 'Failed to set tournamentMatch IN_PROGRESS'))
+    }
 
     // Run the game loop asynchronously
     this._runGameLoop(slug).catch((err) => {
@@ -100,125 +213,303 @@ class BotGameRunner {
 
   /**
    * Async game loop — drives moves until terminal state.
+   * For best-of-N series, loops until a bot wins enough games or the hard cap is reached.
    */
   async _runGameLoop(slug) {
     const game = this._games.get(slug)
     if (!game) return
 
-    // Emit game:start to all spectators
-    this._io?.to(slug).emit('game:start', {
-      board: game.board,
-      currentTurn: game.currentTurn,
-      round: 1,
-      bot1: { displayName: game.bot1.displayName, mark: 'X' },
-      bot2: { displayName: game.bot2.displayName, mark: 'O' },
-    })
-
-    while (game.status === 'playing') {
-      await new Promise((r) => setTimeout(r, game.moveDelayMs))
-
-      // Re-fetch in case the game was closed externally
-      if (!this._games.has(slug)) return
-
-      const bot = game.currentTurn === 'X' ? game.bot1 : game.bot2
-      const { impl, difficulty } = parseBotModelId(bot.botModelId)
-
-      let cellIndex
-      try {
-        const aiImpl = registry.get(impl)
-        cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn)
-      } catch (err) {
-        logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
-        // Forfeit: the erroring bot loses
-        game.winner = game.currentTurn === 'X' ? 'O' : 'X'
-        game.status = 'finished'
-        this._io?.to(slug).emit('game:moved', {
-          cellIndex: null,
-          board: game.board,
-          currentTurn: game.currentTurn,
-          status: game.status,
-          winner: game.winner,
-          winLine: null,
-          forfeit: true,
-        })
-        break
-      }
-
-      // Apply move
-      game.board[cellIndex] = game.currentTurn
-      game.lastActivityAt = Date.now()
-
-      const winner = getWinner(game.board)
-      const draw = !winner && isBoardFull(game.board)
-
-      if (winner) {
-        game.winner = winner
-        game.winLine = WIN_LINES.find(([a, b, c]) =>
-          game.board[a] === winner && game.board[b] === winner && game.board[c] === winner
-        ) || null
-        game.status = 'finished'
-      } else if (draw) {
-        game.status = 'finished'
-        game.winner = null
-      } else {
-        game.currentTurn = game.currentTurn === 'X' ? 'O' : 'X'
-      }
-
-      // Broadcast move
-      this._io?.to(slug).emit('game:moved', {
-        cellIndex,
-        board: game.board,
-        currentTurn: game.currentTurn,
-        status: game.status,
-        winner: game.winner,
-        winLine: game.winLine,
-      })
+    // Validate bestOfN — must be a positive odd integer
+    if (!game.bestOfN || game.bestOfN < 1 || game.bestOfN % 2 === 0) {
+      logger.error({ slug, bestOfN: game.bestOfN }, 'Invalid bestOfN — must be a positive odd number. Defaulting to 1.')
+      game.bestOfN = 1
     }
 
-    // Record the finished game
+    const winsNeeded = Math.ceil(game.bestOfN / 2)
+    // Hard cap: maximum possible games in a best-of-N series (e.g. best-of-3 → 5 max)
+    const hardCap = Math.max(game.bestOfN * 2 - 1, 1)
+
+    // Series loop
+    while (true) {
+      game.moves = []
+      const gameStartedAt = new Date(game.createdAt)
+
+      // Emit per-round opening state on the SSE table:<slug>:state channel
+      // so spectators see each round of the series.
+      const startPayload = {
+        board: game.board,
+        currentTurn: game.currentTurn,
+        round: game.seriesGamesPlayed + 1,
+        scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
+        bot1: { displayName: game.bot1.displayName, mark: 'X' },
+        bot2: { displayName: game.bot2.displayName, mark: 'O' },
+      }
+      appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'start', ...startPayload }, { userId: '*' }).catch(() => {})
+
+      // Play until terminal state
+      while (game.status === 'playing') {
+        await new Promise((r) => setTimeout(r, game.moveDelayMs))
+
+        if (!this._games.has(slug)) return
+
+        const bot = game.currentTurn === 'X' ? game.bot1 : game.bot2
+        const { impl, difficulty } = parseBotModelId(bot.botModelId)
+
+        let cellIndex
+        try {
+          const aiImpl = registry.get(impl)
+          cellIndex = await aiImpl.move(game.board, difficulty, game.currentTurn, bot.botModelId)
+        } catch (err) {
+          logger.error({ err, slug, bot: bot.displayName }, 'Bot move failed — forfeiting game')
+          game.winner = game.currentTurn === 'X' ? 'O' : 'X'
+          game.status = 'finished'
+          {
+            const movedPayload = {
+              cellIndex: null,
+              board: game.board,
+              currentTurn: game.currentTurn,
+              status: game.status,
+              winner: game.winner,
+              winLine: null,
+              forfeit: true,
+              scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
+            }
+            appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+          }
+          break
+        }
+
+        game.board[cellIndex] = game.currentTurn
+        game.lastActivityAt = Date.now()
+        game.moves.push({ n: game.moves.length + 1, m: game.currentTurn, c: cellIndex })
+
+        const winner = getWinner(game.board)
+        const draw = !winner && isBoardFull(game.board)
+
+        if (winner) {
+          game.winner = winner
+          game.winLine = WIN_LINES.find(([a, b, c]) =>
+            game.board[a] === winner && game.board[b] === winner && game.board[c] === winner
+          ) || null
+          game.status = 'finished'
+        } else if (draw) {
+          game.status = 'finished'
+          game.winner = null
+        } else {
+          game.currentTurn = game.currentTurn === 'X' ? 'O' : 'X'
+        }
+
+        {
+          const movedPayload = {
+            cellIndex,
+            board: game.board,
+            currentTurn: game.currentTurn,
+            status: game.status,
+            winner: game.winner,
+            winLine: game.winLine,
+            scores: { X: game.seriesBot1Wins, O: game.seriesBot2Wins },
+          }
+          appendToStream(`table:${game.channelKey ?? slug}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+        }
+      }
+
+      // Save a DB record for this individual game in the series
+      const gameWinnerId = game.winner === 'X' ? game.bot1.id : game.winner === 'O' ? game.bot2.id : null
+      const gameOutcome = game.winner === 'X' ? 'PLAYER1_WIN' : game.winner === 'O' ? 'PLAYER2_WIN' : 'DRAW'
+      await createGame({
+        player1Id: game.bot1.id,
+        player2Id: game.bot2.id,
+        winnerId: gameWinnerId,
+        mode: 'BVB',
+        outcome: gameOutcome,
+        totalMoves: game.board.filter(Boolean).length,
+        durationMs: game.lastActivityAt - game.createdAt,
+        startedAt: gameStartedAt,
+        tournamentId: game.tournamentId ?? null,
+        tournamentMatchId: game.tournamentMatchId ?? null,
+        moveStream: game.moves.length ? game.moves : null,
+        isSpar: !!game.isSpar,
+      }).catch(err => logger.warn({ err, slug }, 'Failed to write per-game bot record'))
+
+      // Update series counters after this game
+      if (game.winner === 'X') game.seriesBot1Wins++
+      else if (game.winner === 'O') game.seriesBot2Wins++
+      else game.seriesDraws++
+      game.seriesGamesPlayed++
+
+      // Check if series is decided
+      const seriesDone =
+        game.seriesBot1Wins >= winsNeeded ||
+        game.seriesBot2Wins >= winsNeeded ||
+        game.seriesGamesPlayed >= hardCap
+
+      if (seriesDone) break
+
+      // Brief pause between games, then reset board for next game
+      await new Promise((r) => setTimeout(r, 2000))
+      if (!this._games.has(slug)) return
+
+      game.board = Array(9).fill(null)
+      game.currentTurn = 'X'
+      game.status = 'playing'
+      game.winner = null
+      game.winLine = null
+      game.createdAt = Date.now()
+      game.lastActivityAt = Date.now()
+    }
+
+    // Record the finished series
     await this._recordGame(slug).catch((err) => logger.warn({ err, slug }, 'Failed to record bot game'))
+
+    // Demo Table macro (§5.1) — fire the journey + bus side-effects RIGHT
+    // NOW, not after the 60 s in-memory grace window. Otherwise the user
+    // sees "O wins!" on a finished board with no progression for a full
+    // minute. The grace window only exists to let late-joining spectators
+    // observe the final position; it has nothing to do with journey state.
+    await this._finalizeBackingTableIfPresent(slug).catch((err) =>
+      logger.warn({ err: err.message, slug }, 'Demo finalize failed'),
+    )
+
+    // Spar series: credit Hook step 5 to the user who initiated the spar.
+    if (this._games.get(slug)?.isSpar && this._games.get(slug)?.sparUserId) {
+      try {
+        const { completeStep } = await import('../services/journeyService.js')
+        completeStep(this._games.get(slug).sparUserId, 5).catch(() => {})
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Spar: step-5 credit failed')
+      }
+    }
 
     // Clean up after a short delay (so late-joining spectators still see the result)
     setTimeout(() => this._closeGame(slug), 60_000)
   }
 
+  /**
+   * If any Table row backs this bot-game slug (Hook demo or Curriculum
+   * spar), mark it COMPLETED + dispatch `table.released`. Pulled out of
+   * `_closeGame` so it fires immediately at series end instead of waiting
+   * 60 s for the in-memory grace window.
+   *
+   * Demo tables additionally credit Hook step 2 to all current spectators;
+   * spar tables don't (step 5 is already credited via the spar-specific
+   * `_creditSparStepIfApplicable` path that runs as the series ends).
+   *
+   * Idempotent: subsequent calls (from `_closeGame`) skip the COMPLETED
+   * branch but the journey credit is also idempotent at the journeyService
+   * layer, so repeated calls are safe.
+   */
+  async _finalizeBackingTableIfPresent(slug) {
+    const backingTable = await db.table.findFirst({
+      where:  { slug },
+      select: { id: true, status: true, seats: true, isDemo: true },
+    }).catch(() => null)
+    if (!backingTable) return
+
+    if (backingTable.status !== 'COMPLETED') {
+      await db.table.update({
+        where: { id: backingTable.id },
+        data:  { status: 'COMPLETED', seats: releaseSeats(backingTable.seats) },
+      }).catch(err => logger.warn({ err: err.message, slug }, 'Failed to mark backing table COMPLETED'))
+      dispatchTableReleased(backingTable.id, TABLE_RELEASED_REASONS.GAME_END, {
+        // Distinguish backing-table flavors so the client can react
+        // differently. Demo (Hook step 2) and spar (Curriculum step 5)
+        // both want the guide panel to reopen on finish so the next-step
+        // CTA is visible — TableDetailPage matches on these triggers.
+        trigger: backingTable.isDemo ? 'demo-finish' : 'spar-finish',
+      })
+    }
+
+    if (backingTable.isDemo) {
+      // Hook step 2 — only for demo tables. Spar uses the dedicated
+      // step-5 credit path on the bot-game runner side.
+      try {
+        const { getPresence } = await import('./tablePresence.js')
+        const { completeStep } = await import('../services/journeyService.js')
+        const { userIds = [] } = getPresence(backingTable.id) ?? {}
+        for (const userId of userIds) {
+          completeStep(userId, 2).catch(() => {})
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, slug }, 'Demo: completion-credit broadcast failed')
+      }
+    }
+  }
+
   async _recordGame(slug) {
     const game = this._games.get(slug)
-    if (!game || game.status !== 'finished') return
+    if (!game) return
 
-    const totalMoves = game.board.filter(Boolean).length
-    const durationMs = game.lastActivityAt - game.createdAt
+    const isTournamentGame = !!(game.tournamentMatchId)
 
-    // Outcome from bot1 (X) perspective
+    // For series: derive winner from accumulated series counters.
+    // Random tiebreaker if still tied after hard cap (e.g. all draws).
+    let seriesWinnerId = null
+    if (game.seriesBot1Wins > game.seriesBot2Wins) {
+      seriesWinnerId = game.bot1.id
+    } else if (game.seriesBot2Wins > game.seriesBot1Wins) {
+      seriesWinnerId = game.bot2.id
+    } else if (isTournamentGame) {
+      // Tied after hard cap — deterministic tiebreaker derived from matchId
+      // so the same match always resolves the same way (auditable, reproducible).
+      const idSum = game.tournamentMatchId
+        .split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+      seriesWinnerId = idSum % 2 === 0 ? game.bot1.id : game.bot2.id
+      logger.info(
+        { slug, tournamentMatchId: game.tournamentMatchId, winner: seriesWinnerId === game.bot1.id ? game.bot1.displayName : game.bot2.displayName },
+        'Bot series tied at hard cap — deterministic tiebreaker applied'
+      )
+    }
+
+    // Outcome from bot1 (X) perspective for the last game (used for ELO)
     let outcome = 'DRAW'
     if (game.winner === 'X') outcome = 'PLAYER1_WIN'
     else if (game.winner === 'O') outcome = 'PLAYER2_WIN'
 
-    let winnerId = null
-    if (game.winner === 'X') winnerId = game.bot1.id
-    else if (game.winner === 'O') winnerId = game.bot2.id
+    if (!isTournamentGame) {
+      await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})
+      await db.user.updateMany({
+        where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
+        data: { botInTournament: false },
+      }).catch(() => {})
+    }
 
-    await createGame({
-      player1Id: game.bot1.id,
-      player2Id: game.bot2.id,
-      winnerId,
-      mode: 'BOTVBOT',
-      outcome,
-      totalMoves,
-      durationMs,
-      startedAt: new Date(game.createdAt),
-    })
+    // Report series result to tournament service for bracket progression
+    if (isTournamentGame) {
+      try {
+        const winnerParticipant = seriesWinnerId
+          ? await db.tournamentParticipant.findFirst({
+              where: { tournamentId: game.tournamentId, userId: seriesWinnerId },
+              select: { id: true },
+            })
+          : null
+        await completeTournamentMatch(
+          game.tournamentMatchId,
+          winnerParticipant?.id ?? null,
+          game.seriesBot1Wins,
+          game.seriesBot2Wins,
+          game.seriesDraws,
+        )
+      } catch (err) {
+        logger.warn({ err, tournamentMatchId: game.tournamentMatchId }, 'Failed to report bot tournament match result')
+      }
 
-    // Update ELO for both bots
-    await updateBothElosAfterBotVsBot(game.bot1.id, game.bot2.id, outcome).catch(() => {})
+      await db.user.updateMany({
+        where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
+        data: { botInTournament: false },
+      }).catch(err => logger.warn({ err }, 'Failed to clear botInTournament flag after tournament game'))
+    }
 
-    // Clear botInTournament flag for both bots (no-op if neither was in tournament)
-    await db.user.updateMany({
-      where: { id: { in: [game.bot1.id, game.bot2.id] }, botInTournament: true },
-      data: { botInTournament: false },
-    }).catch(() => {})
+    // Demo Table macro (§5.1) finalize — moved to fire at series end (see
+    // _runGameLoop). Calling again here is a safe idempotent no-op for the
+    // late spectators who joined during the 60 s grace window.
+    await this._finalizeBackingTableIfPresent(slug).catch((err) =>
+      logger.warn({ err: err.message, slug }, 'Demo finalize (late) failed'),
+    )
 
-    logger.info({ slug, outcome, winner: game.winner }, 'Bot game recorded')
+    logger.info(
+      { slug, seriesBot1Wins: game.seriesBot1Wins, seriesBot2Wins: game.seriesBot2Wins, seriesDraws: game.seriesDraws, gamesPlayed: game.seriesGamesPlayed, tournamentMatchId: game.tournamentMatchId ?? null, isSpar: !!game.isSpar },
+      'Bot series recorded'
+    )
   }
 
   /**
@@ -252,6 +543,15 @@ class BotGameRunner {
     return this._games.get(slug) || null
   }
 
+  getSlugForMatch(tournamentMatchId) {
+    for (const game of this._games.values()) {
+      if (game.tournamentMatchId === tournamentMatchId && game.status === 'playing') {
+        return game.slug
+      }
+    }
+    return null
+  }
+
   /** List active/playing bot games for the room list. */
   listGames() {
     return [...this._games.values()]
@@ -276,8 +576,51 @@ class BotGameRunner {
       this._socketToGame.delete(id)
     }
     this._games.delete(slug)
-    mountainPool.release(game.name)
     logger.info({ slug }, 'Bot game closed')
+  }
+
+  /**
+   * Force-close an in-flight bot game by slug. Used by the Demo Table macro's
+   * "one active per user" policy: when a user starts a new demo, any prior
+   * demo game is killed first. Idempotent — no-op if the slug isn't running.
+   */
+  closeGameBySlug(slug) {
+    if (!this._games.has(slug)) return
+    this._closeGame(slug)
+  }
+
+  /**
+   * Find an in-flight spar match for a given user-bot id. Used by the Spar
+   * endpoint's "one active spar per bot" policy — a new spar request kills
+   * any previous in-flight spar for the same bot before starting fresh.
+   * Returns the slug, or null if no active spar matches.
+   */
+  findActiveSparForBot(botId) {
+    for (const game of this._games.values()) {
+      if (game.isSpar && game.bot1?.id === botId && game.status === 'playing') {
+        return game.slug
+      }
+    }
+    return null
+  }
+
+  /**
+   * Force-close any spar matches that have been alive longer than `maxAgeMs`
+   * (default 2 hours). Catches stuck spars whose game loop hung — the runner
+   * has no other timeout. Returns the slugs that were closed so the caller
+   * can log a summary.
+   */
+  sweepStaleSpars(maxAgeMs = 2 * 60 * 60 * 1000) {
+    const now    = Date.now()
+    const closed = []
+    for (const game of [...this._games.values()]) {
+      if (!game.isSpar) continue
+      if (now - game.createdAt > maxAgeMs) {
+        this._closeGame(game.slug)
+        closed.push(game.slug)
+      }
+    }
+    return closed
   }
 }
 

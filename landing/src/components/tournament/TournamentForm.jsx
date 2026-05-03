@@ -1,0 +1,413 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
+import React, { useState } from 'react'
+import { GAMES } from '../../lib/gameRegistry.js'
+
+const FIELD_STYLE = {
+  backgroundColor: 'var(--bg-base)',
+  borderColor: 'var(--border-default)',
+  color: 'var(--text-primary)',
+}
+
+function Field({ label, hint, children, required, as: As = 'label' }) {
+  return (
+    <As className="flex flex-col gap-1">
+      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+        {label}
+        {required && <span className="ml-0.5" style={{ color: 'var(--color-red-500)' }}>*</span>}
+      </span>
+      {children}
+      {hint && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{hint}</span>}
+    </As>
+  )
+}
+
+const INPUT_CLASS = 'w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors'
+const SELECT_CLASS = INPUT_CLASS
+
+/**
+ * Separate date + time inputs combined into YYYY-MM-DDTHH:mm.
+ * Avoids Safari's broken datetime-local behavior.
+ */
+function DateTimePicker({ value, onChange }) {
+  const datePart = value ? value.slice(0, 10) : ''
+  const timePart = value ? value.slice(11, 16) : ''
+  function handleDate(e) {
+    const d = e.target.value
+    if (!d) { onChange(''); return }
+    onChange(`${d}T${timePart || '00:00'}`)
+  }
+  function handleTime(e) {
+    const t = e.target.value
+    if (datePart) onChange(`${datePart}T${t || '00:00'}`)
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      <input type="date" value={datePart} onChange={handleDate}
+        className="flex-1 min-w-[9rem] px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors"
+        style={FIELD_STYLE} />
+      <input type="time" value={timePart} onChange={handleTime}
+        className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors w-36 shrink-0"
+        style={FIELD_STYLE} />
+    </div>
+  )
+}
+
+function toLocalDatetimeValue(val) {
+  if (!val) return ''
+  try {
+    const d = new Date(val)
+    const pad = n => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  } catch { return '' }
+}
+
+// Default game = first registered game in gameRegistry. Dodges a hardcoded
+// 'xo' literal so adding a new game doesn't require touching this file.
+const DEFAULT_GAME_ID = GAMES[0]?.id
+
+const DEFAULT_FORM = {
+  name: '', description: '', game: DEFAULT_GAME_ID, mode: 'HVH', format: 'PLANNED',
+  bracketType: 'SINGLE_ELIM', bestOfN: 3, minParticipants: 2, maxParticipants: '',
+  startMode: 'AUTO',
+  startTime: '', registrationOpenAt: '', registrationCloseAt: '', allowSpectators: true,
+  botMinGamesPlayed: '', allowNonCompetitiveBots: false, paceMs: '',
+  noticePeriodMinutes: '', durationMinutes: '',
+  isRecurring: false, recurrenceInterval: 'WEEKLY', recurrenceEndDate: '', autoOptOutAfterMissed: '', recurrencePaused: false,
+  isTest: false,
+}
+
+export default function TournamentForm({ initialValues, onSubmit, onCancel, submitLabel = 'Create Tournament' }) {
+  const [form, setForm] = useState(() => {
+    if (!initialValues) return DEFAULT_FORM
+    return {
+      name: initialValues.name ?? '', description: initialValues.description ?? '',
+      game: initialValues.game ?? DEFAULT_GAME_ID, mode: initialValues.mode ?? 'HVH',
+      format: initialValues.format ?? 'PLANNED', bracketType: initialValues.bracketType ?? 'SINGLE_ELIM',
+      bestOfN: initialValues.bestOfN ?? 3, minParticipants: initialValues.minParticipants ?? 2,
+      maxParticipants: initialValues.maxParticipants ?? '',
+      startMode: initialValues.startMode ?? 'AUTO',
+      startTime: toLocalDatetimeValue(initialValues.startTime),
+      registrationOpenAt: toLocalDatetimeValue(initialValues.registrationOpenAt),
+      registrationCloseAt: toLocalDatetimeValue(initialValues.registrationCloseAt),
+      allowSpectators: initialValues.allowSpectators ?? true,
+      botMinGamesPlayed: initialValues.botMinGamesPlayed != null ? String(initialValues.botMinGamesPlayed) : '',
+      allowNonCompetitiveBots: initialValues.allowNonCompetitiveBots ?? false,
+      paceMs: initialValues.paceMs != null ? String(initialValues.paceMs) : '',
+      noticePeriodMinutes: initialValues.noticePeriodMinutes != null ? String(initialValues.noticePeriodMinutes) : '',
+      durationMinutes: initialValues.durationMinutes != null ? String(initialValues.durationMinutes) : '',
+      isRecurring: initialValues.isRecurring ?? false,
+      recurrenceInterval: initialValues.recurrenceInterval ?? 'WEEKLY',
+      recurrencePaused: initialValues.recurrencePaused ?? false,
+      recurrenceEndDate: initialValues.recurrenceEndDate ? initialValues.recurrenceEndDate.slice(0, 10) : '',
+      autoOptOutAfterMissed: initialValues.autoOptOutAfterMissed != null ? String(initialValues.autoOptOutAfterMissed) : '',
+      isTest: initialValues.isTest ?? false,
+    }
+  })
+  const [errors, setErrors] = useState({})
+  const [busy, setBusy]     = useState(false)
+  const [apiErr, setApiErr] = useState(null)
+
+  function set(key, val) {
+    setForm(f => ({ ...f, [key]: val }))
+    setErrors(e => ({ ...e, [key]: undefined }))
+  }
+
+  function validate() {
+    const errs = {}
+    if (!form.name.trim()) errs.name = 'Name is required.'
+    if (form.registrationOpenAt && form.registrationCloseAt) {
+      if (new Date(form.registrationOpenAt) >= new Date(form.registrationCloseAt))
+        errs.registrationCloseAt = 'Registration close must be after open.'
+    }
+    if (form.startMode === 'SCHEDULED' && !form.startTime) {
+      errs.startTime = 'A start time is required for Scheduled mode.'
+    }
+    if (form.registrationCloseAt && form.startTime) {
+      if (new Date(form.registrationCloseAt) > new Date(form.startTime))
+        errs.startTime = 'Start time must be at or after registration close.'
+    }
+    if (form.maxParticipants && Number(form.maxParticipants) < Number(form.minParticipants))
+      errs.maxParticipants = 'Max must be ≥ min participants.'
+    return errs
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    const errs = validate()
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+    setBusy(true)
+    setApiErr(null)
+    try {
+      const payload = {
+        name: form.name.trim(), game: form.game, mode: form.mode, format: form.format,
+        bracketType: form.bracketType, bestOfN: Number(form.bestOfN),
+        minParticipants: Number(form.minParticipants), allowSpectators: form.allowSpectators,
+        startMode: form.startMode,
+      }
+      if (form.description.trim())    payload.description         = form.description.trim()
+      if (form.maxParticipants)       payload.maxParticipants     = Number(form.maxParticipants)
+      if (form.startTime)             payload.startTime           = new Date(form.startTime).toISOString()
+      if (form.registrationOpenAt)    payload.registrationOpenAt  = new Date(form.registrationOpenAt).toISOString()
+      if (form.registrationCloseAt)   payload.registrationCloseAt = new Date(form.registrationCloseAt).toISOString()
+      if (form.mode === 'BOT_VS_BOT') {
+        payload.allowNonCompetitiveBots = form.allowNonCompetitiveBots
+        payload.botMinGamesPlayed = form.botMinGamesPlayed !== '' ? parseInt(form.botMinGamesPlayed, 10) : null
+        payload.paceMs = form.paceMs !== '' ? parseInt(form.paceMs, 10) : null
+      }
+      if (form.format === 'FLASH') {
+        payload.noticePeriodMinutes = form.noticePeriodMinutes !== '' ? parseInt(form.noticePeriodMinutes, 10) : null
+        payload.durationMinutes     = form.durationMinutes !== '' ? parseInt(form.durationMinutes, 10) : null
+      }
+      payload.isRecurring = form.isRecurring
+      if (form.isRecurring) {
+        payload.recurrenceInterval    = form.recurrenceInterval
+        payload.recurrenceEndDate     = form.recurrenceEndDate || null
+        payload.autoOptOutAfterMissed = form.autoOptOutAfterMissed !== '' ? parseInt(form.autoOptOutAfterMissed, 10) : null
+        payload.recurrencePaused      = !!form.recurrencePaused
+      }
+      payload.isTest = !!form.isTest
+      await onSubmit(payload)
+    } catch (err) {
+      setApiErr(err.message || 'Submit failed. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      <Field label="Name" required>
+        <input type="text" value={form.name} onChange={e => set('name', e.target.value)}
+          placeholder="Summer Championship 2026" className={INPUT_CLASS} style={FIELD_STYLE} maxLength={120} />
+        {errors.name && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.name}</span>}
+      </Field>
+
+      <Field label="Description">
+        <textarea value={form.description} onChange={e => set('description', e.target.value)}
+          placeholder="Optional description…" rows={3} className={INPUT_CLASS + ' resize-y'} style={FIELD_STYLE} maxLength={1000} />
+      </Field>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Game" required>
+          <select value={form.game} onChange={e => set('game', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+            {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Mode" required>
+          <select value={form.mode} onChange={e => set('mode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+            <option value="HVH">HvH (Human vs Human)</option>
+            <option value="BOT_VS_BOT">Bot vs Bot</option>
+            <option value="MIXED">Mixed</option>
+          </select>
+        </Field>
+        <Field label="Format" required>
+          <select value={form.format} onChange={e => set('format', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+            <option value="PLANNED">Planned</option>
+            <option value="OPEN">Open</option>
+            <option value="FLASH">Flash</option>
+          </select>
+        </Field>
+        <Field label="Bracket Type" required>
+          <select value={form.bracketType} onChange={e => set('bracketType', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+            <option value="SINGLE_ELIM">Single Elimination</option>
+            <option value="ROUND_ROBIN">Round Robin</option>
+          </select>
+        </Field>
+      </div>
+
+      {form.format === 'FLASH' && (
+        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Flash Tournament Settings</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Notice Period (minutes)">
+              <input type="number" min="0" value={form.noticePeriodMinutes} onChange={e => set('noticePeriodMinutes', e.target.value)}
+                placeholder="e.g. 15" className={INPUT_CLASS} style={FIELD_STYLE} />
+            </Field>
+            <Field label="Duration (minutes)">
+              <input type="number" min="1" value={form.durationMinutes} onChange={e => set('durationMinutes', e.target.value)}
+                placeholder="e.g. 60" className={INPUT_CLASS} style={FIELD_STYLE} />
+            </Field>
+          </div>
+        </div>
+      )}
+
+      {form.mode === 'BOT_VS_BOT' && (
+        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Bot Settings</p>
+          <Field label="Min Games Played">
+            <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
+              value={form.botMinGamesPlayed} onChange={e => setForm(f => ({ ...f, botMinGamesPlayed: e.target.value }))}
+              placeholder="System default" />
+          </Field>
+          <Field label="Pace (ms between dispatches)">
+            <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
+              value={form.paceMs} onChange={e => setForm(f => ({ ...f, paceMs: e.target.value }))}
+              placeholder="System default" />
+          </Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={form.allowNonCompetitiveBots}
+              onChange={e => setForm(f => ({ ...f, allowNonCompetitiveBots: e.target.checked }))} className="w-4 h-4 rounded" />
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Allow non-competitive bots</span>
+          </label>
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" checked={form.isRecurring} onChange={e => set('isRecurring', e.target.checked)}
+          className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Recurring Tournament</span>
+      </label>
+
+      {form.isRecurring && (
+        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Recurring Settings</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Recurrence Interval" required>
+              <select value={form.recurrenceInterval} onChange={e => set('recurrenceInterval', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+            </Field>
+            <Field label="Recurrence End Date" hint="Optional — leave blank to recur indefinitely">
+              <input type="date" value={form.recurrenceEndDate} onChange={e => set('recurrenceEndDate', e.target.value)}
+                className={INPUT_CLASS} style={FIELD_STYLE} />
+            </Field>
+          </div>
+          <Field label="Auto-opt-out after missed occurrences" hint="0 = never">
+            <input type="number" min="0" value={form.autoOptOutAfterMissed}
+              onChange={e => set('autoOptOutAfterMissed', e.target.value)} placeholder="0" className={INPUT_CLASS} style={FIELD_STYLE} />
+          </Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={form.recurrencePaused} onChange={e => set('recurrencePaused', e.target.checked)}
+              className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Pause recurrence
+              <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                — stop generating new occurrences without cancelling the template. Resume by unchecking.
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Field label="Best of N" required>
+          <select value={form.bestOfN} onChange={e => set('bestOfN', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+            {[1, 3, 5, 7].map(n => <option key={n} value={n}>Best of {n}</option>)}
+          </select>
+        </Field>
+        <Field label="Min Participants" required>
+          <input type="number" min={2} max={256} value={form.minParticipants} onChange={e => set('minParticipants', e.target.value)}
+            className={INPUT_CLASS} style={FIELD_STYLE} />
+        </Field>
+        <Field label="Max Participants" hint="Leave blank for no limit">
+          <input type="number" min={2} max={256} value={form.maxParticipants} onChange={e => set('maxParticipants', e.target.value)}
+            placeholder="—" className={INPUT_CLASS} style={FIELD_STYLE} />
+          {errors.maxParticipants && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.maxParticipants}</span>}
+        </Field>
+      </div>
+
+      <Field label="Start Mode" hint="Controls how the tournament begins after registration closes">
+        <select value={form.startMode} onChange={e => set('startMode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+          <option value="AUTO">Auto — starts automatically when registration closes</option>
+          <option value="SCHEDULED">Scheduled — starts at a specific date and time</option>
+          <option value="MANUAL">Manual — admin clicks Start</option>
+        </select>
+      </Field>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Start Time" hint={
+          form.startMode === 'SCHEDULED' ? 'Required — tournament starts at this time'
+          : form.startMode === 'AUTO'    ? 'Optional — anchor time for each occurrence (e.g. 3pm daily)'
+          :                                'Optional'
+        } as="div">
+          {form.startTime ? (
+            <div className="flex flex-col gap-1">
+              <DateTimePicker value={form.startTime} onChange={v => set('startTime', v)} />
+              <button type="button" onClick={() => set('startTime', '')}
+                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => set('startTime', toLocalDatetimeValue(new Date()))}
+              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+              — not set —
+            </button>
+          )}
+          {errors.startTime && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.startTime}</span>}
+        </Field>
+        <Field label="Registration Opens At" hint="Optional" as="div">
+          {form.registrationOpenAt ? (
+            <div className="flex flex-col gap-1">
+              <DateTimePicker value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
+              <button type="button" onClick={() => set('registrationOpenAt', '')}
+                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => set('registrationOpenAt', toLocalDatetimeValue(new Date()))}
+              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+              — not set —
+            </button>
+          )}
+        </Field>
+        <Field label="Registration Closes At" hint="Optional — defaults to start time" as="div">
+          {form.registrationCloseAt ? (
+            <div className="flex flex-col gap-1">
+              <DateTimePicker value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
+              <button type="button" onClick={() => set('registrationCloseAt', '')}
+                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => {
+              // Default to 1 hour after Opens At (if set) to avoid AM/PM trap
+              const base = form.registrationOpenAt ? new Date(form.registrationOpenAt) : new Date()
+              base.setHours(base.getHours() + 1)
+              set('registrationCloseAt', toLocalDatetimeValue(base))
+            }}
+              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+              — not set —
+            </button>
+          )}
+          {errors.registrationCloseAt && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.registrationCloseAt}</span>}
+        </Field>
+      </div>
+
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" checked={form.allowSpectators} onChange={e => set('allowSpectators', e.target.checked)}
+          className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Allow spectators</span>
+      </label>
+
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" checked={form.isTest} onChange={e => set('isTest', e.target.checked)}
+          className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Mark as test tournament
+          <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+            — hidden from the public tournaments page; only visible to admins with the "Show test" toggle.
+          </span>
+        </span>
+      </label>
+
+      {apiErr && <p className="text-sm" style={{ color: 'var(--color-red-600)' }}>{apiErr}</p>}
+
+      <div className="flex items-center gap-3 pt-2">
+        <button type="submit" disabled={busy}
+          className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}>
+          {busy ? 'Saving…' : submitLabel}
+        </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm border transition-colors hover:bg-[var(--bg-surface-hover)]"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
+  )
+}

@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * User service — account management and stats.
  */
@@ -8,8 +9,8 @@ import { DEFAULT_CONFIG as ML_DEFAULT_CONFIG } from '@xo-arena/ai'
 const RESERVED_BOT_NAMES = ['rusty', 'copper', 'sterling', 'magnus']
 
 /**
- * Local helper — mirrors mlService.getSystemConfig to avoid a circular import
- * (mlService already imports resetBotElo from this module).
+ * Local helper — mirrors skillService.getSystemConfig to avoid a circular import
+ * (skillService already imports resetBotElo from this module).
  */
 async function _getSystemConfig(key, defaultValue = null) {
   const row = await db.systemConfig.findUnique({ where: { key } })
@@ -18,9 +19,38 @@ async function _getSystemConfig(key, defaultValue = null) {
 }
 
 /**
+ * Returns true if the email's domain matches the
+ * `metrics.internalEmailDomains` SystemConfig list (case-insensitive). Used
+ * by syncUser to default `isTestUser=true` on creation for internal accounts.
+ *
+ * The SystemConfig value is a JSON array of strings. Each entry may include or
+ * omit a leading "@" — both styles compare equally. Null/empty list = match
+ * nothing (the default seeded value).
+ */
+export async function isInternalEmailDomain(email) {
+  if (!email || typeof email !== 'string') return false
+  const at = email.lastIndexOf('@')
+  if (at < 0) return false
+  const domain = email.slice(at + 1).toLowerCase()
+  if (!domain) return false
+  const list = await _getSystemConfig('metrics.internalEmailDomains', [])
+  if (!Array.isArray(list)) return false
+  return list.some(entry => {
+    if (typeof entry !== 'string' || !entry) return false
+    const norm = entry.toLowerCase().replace(/^@/, '')
+    return norm === domain
+  })
+}
+
+/**
  * Find or create a domain User row.
  * Supports both Better Auth (betterAuthId) and legacy Clerk (clerkId) paths.
  * Auto-links existing Clerk users to Better Auth by email.
+ *
+ * Sprint 5 (§2 / §8.4): brand-new accounts whose email matches the
+ * `metrics.internalEmailDomains` SystemConfig list are flagged
+ * `isTestUser=true` on creation. Existing rows are not retroactively flagged
+ * (admins can flip via the upcoming Settings toggle or `um testuser` CLI).
  */
 export async function syncUser({ betterAuthId, clerkId, email, username, displayName, oauthProvider, avatarUrl, nameConfirmed = false }) {
   if (betterAuthId) {
@@ -44,17 +74,19 @@ export async function syncUser({ betterAuthId, clerkId, email, username, display
     }
     // New user — create from scratch
     const safeUsername = username || email?.split('@')[0] || betterAuthId
+    const isTestUser   = await isInternalEmailDomain(email)
     return db.user.create({
-      data: { betterAuthId, email, username: safeUsername, displayName, oauthProvider, avatarUrl, nameConfirmed },
+      data: { betterAuthId, email, username: safeUsername, displayName, oauthProvider, avatarUrl, nameConfirmed, isTestUser },
     })
   }
 
   // Legacy Clerk path (kept during cutover window)
   if (clerkId) {
+    const isTestUser = await isInternalEmailDomain(email)
     return db.user.upsert({
       where: { clerkId },
       update: { email, displayName, avatarUrl },
-      create: { clerkId, email, username: username || clerkId, displayName, oauthProvider, avatarUrl },
+      create: { clerkId, email, username: username || clerkId, displayName, oauthProvider, avatarUrl, isTestUser },
     })
   }
 
@@ -96,13 +128,20 @@ export async function getBotByModelId(botModelId) {
 
 /**
  * Reset a bot's ELO to 1200 and mark it as calibrating.
- * Called on scratch retrain (via mlService.resetModel) or by owner/admin.
+ * Called on scratch retrain (via skillService.resetModel) or by owner/admin.
  */
 export async function resetBotElo(botId) {
-  return db.user.update({
-    where: { id: botId },
-    data: { eloRating: 1200, botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
-  })
+  return db.$transaction([
+    db.gameElo.upsert({
+      where: { userId_gameId: { userId: botId, gameId: 'xo' } },
+      update: { rating: 1200, gamesPlayed: 0 },
+      create: { userId: botId, gameId: 'xo', rating: 1200, gamesPlayed: 0 },
+    }),
+    db.user.update({
+      where: { id: botId },
+      data: { botEloResetAt: new Date(), botProvisional: true, botGamesPlayed: 0 },
+    }),
+  ])
 }
 
 /**
@@ -126,17 +165,17 @@ export async function getUserStats(userId) {
   const [pvpGames, pvaiGames, pvbotGames, recent] = await Promise.all([
     db.game.findMany({
       where: {
-        mode: 'PVP',
+        mode: 'HVH',
         OR: [{ player1Id: userId }, { player2Id: userId }],
       },
       select: { outcome: true, player1Id: true, winnerId: true },
     }),
     db.game.findMany({
-      where: { mode: 'PVAI', player1Id: userId },
+      where: { mode: 'HVA', player1Id: userId },
       select: { outcome: true, difficulty: true, winnerId: true },
     }),
     db.game.findMany({
-      where: { mode: 'PVBOT', player1Id: userId },
+      where: { mode: 'HVB', player1Id: userId },
       select: {
         outcome: true, winnerId: true, player2Id: true,
         player2: { select: { id: true, displayName: true, avatarUrl: true } },
@@ -182,7 +221,7 @@ export async function getUserStats(userId) {
     }
   }
 
-  // PVBOT stats grouped by opponent bot
+  // HVB stats grouped by opponent bot
   const pvbotByBot = {}
   for (const g of pvbotGames) {
     const botId = g.player2Id
@@ -208,9 +247,9 @@ export async function getUserStats(userId) {
     losses,
     draws,
     winRate,
-    pvp: { played: pvpGames.length, wins: pvpWins, rate: pvpRate },
-    pvai: pvaiByDiff,
-    pvbot: {
+    hvh: { played: pvpGames.length, wins: pvpWins, rate: pvpRate },
+    hva: pvaiByDiff,
+    hvb: {
       played: pvbotGames.length,
       wins: pvbotGames.filter((g) => g.winnerId === userId).length,
       rate: pvbotGames.length > 0 ? pvbotGames.filter((g) => g.winnerId === userId).length / pvbotGames.length : 0,
@@ -222,12 +261,12 @@ export async function getUserStats(userId) {
 
 /**
  * Compute stats for a bot from the bot's perspective.
- * Queries games where the bot is player2 (PVBOT challenges).
+ * Queries games where the bot is player2 (HVB challenges).
  * Returns win rates vs humans and vs other bots separately.
  */
 export async function getBotStats(botId) {
   const games = await db.game.findMany({
-    where: { player2Id: botId, mode: 'PVBOT' },
+    where: { player2Id: botId, mode: 'HVB' },
     select: {
       outcome: true, winnerId: true, player1Id: true,
       player1: { select: { isBot: true } },
@@ -256,7 +295,7 @@ export async function getBotStats(botId) {
  * Uses a single CTE query instead of 4 Prisma round trips.
  */
 export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50, includeBots = false } = {}) {
-  const whereMode = mode === 'pvp' ? 'PVP' : mode === 'pvai' ? 'PVAI' : null
+  const whereMode = mode === 'hvh' ? 'HVH' : mode === 'hva' ? 'HVA' : null
 
   // Prisma.sql fragments for optional filters — interpolated safely as SQL, not parameters
   const modeFilter = whereMode ? Prisma.sql`AND g.mode = ${whereMode}::"GameMode"` : Prisma.empty
@@ -286,24 +325,31 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
            u."displayName",
            u."avatarUrl",
            u."isBot",
+           u."botOwnerId",
+           owner.username AS "ownerUsername",
            c.total,
            c.wins,
            ROUND(c.wins::numeric / NULLIF(c.total, 0), 4) AS win_rate
     FROM counts c
     JOIN users u ON u.id = c.player_id
+    LEFT JOIN users owner ON owner.id = u."botOwnerId"
     WHERE c.total >= 1 ${botFilter}
     ORDER BY win_rate DESC, c.total DESC
     LIMIT ${limit}
   `
 
   // COUNT/SUM return BigInt from the Postgres driver — coerce to Number for JSON safety.
+  // botOwnerId + ownerUsername feed the mixed-list disambiguation suffix
+  // ("Rusty · @joe" / "Rusty · built-in") on the Rankings page (Phase 3.8.A.3).
   return rows.map((row, i) => ({
     rank: i + 1,
     user: {
-      id: row.id,
-      displayName: row.displayName,
-      avatarUrl: row.avatarUrl,
-      isBot: row.isBot,
+      id:            row.id,
+      displayName:   row.displayName,
+      avatarUrl:     row.avatarUrl,
+      isBot:         row.isBot,
+      botOwnerId:    row.botOwnerId ?? null,
+      ownerUsername: row.ownerUsername ?? null,
     },
     total:   Number(row.total),
     wins:    Number(row.wins),
@@ -314,10 +360,64 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
 /**
  * Create a bot user row owned by the given user.
  * Enforces reserved name, profanity, and deduplication rules.
+ *
+ * Phase 3.8 — Multi-Skill Bots: when called with no `algorithm`, creates a
+ * skill-less identity bot (botModelType=null, botModelId=null, no GameElo
+ * row). Skills are added separately via `POST /api/v1/bots/:id/skills`. The
+ * legacy single-algorithm shape (algorithm + difficulty/modelType) is still
+ * honored for `POST /bots/quick` (the journey-step-3 Quick Bot wizard) and
+ * any internal callers.
  */
-const VALID_ML_ALGORITHMS = ['Q_LEARNING', 'SARSA', 'MONTE_CARLO', 'POLICY_GRADIENT', 'DQN', 'ALPHA_ZERO']
+const VALID_ML_ALGORITHMS = ['qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero']
 
-export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId } = {}) {
+/**
+ * Check whether `name` would be accepted by createBot for `ownerId` without
+ * actually creating anything. Returns
+ *   { available: true }                                  — submit will succeed
+ *   { available: false, reason, message }                — would be rejected
+ * `reason` is one of 'empty' | 'too_long' | 'reserved' | 'profanity' | 'taken'.
+ *
+ * Mirrors the same rules as createBot — keep these in sync. This exists so the
+ * Profile create-bot form can debounce-validate before submit (Sprint 3.8.A.3).
+ */
+export async function checkBotName({ name, ownerId } = {}) {
+  if (!name || !name.trim()) {
+    return { available: false, reason: 'empty',    message: 'Enter a bot name.' }
+  }
+  const trimmed = name.trim()
+  if (trimmed.length > 40) {
+    return { available: false, reason: 'too_long', message: 'Name is too long (max 40 characters).' }
+  }
+  if (RESERVED_BOT_NAMES.includes(trimmed.toLowerCase())) {
+    return { available: false, reason: 'reserved', message: `"${trimmed}" is a reserved name.` }
+  }
+  const profanityList = await _getSystemConfig('bots.profanityList', [])
+  if (Array.isArray(profanityList) && profanityList.length > 0) {
+    const lower = trimmed.toLowerCase()
+    for (const word of profanityList) {
+      if (lower.includes(String(word).toLowerCase())) {
+        return { available: false, reason: 'profanity', message: 'Bot name contains disallowed content.' }
+      }
+    }
+  }
+  const collision = await db.user.findFirst({
+    where: {
+      isBot: true,
+      displayName: { equals: trimmed, mode: 'insensitive' },
+      OR: [
+        { botOwnerId: null },
+        ...(ownerId ? [{ botOwnerId: ownerId }] : []),
+      ],
+    },
+    select: { id: true },
+  })
+  if (collision) {
+    return { available: false, reason: 'taken', message: `"${trimmed}" is already taken.` }
+  }
+  return { available: true }
+}
+
+export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId, gameId = 'xo' } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
   const trimmedName = name.trim()
 
@@ -337,39 +437,30 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
     }
   }
 
-  // 3. Name dedup: reject if any bot already has this name (case-insensitive)
-  const existingBots = await db.user.findMany({
-    where: { isBot: true },
-    select: { displayName: true },
+  // 3. Name dedup — matches the partial-unique indexes from the
+  // `20260423010000_bot_displayname_hybrid_unique` migration: an unowned
+  // bot (built-in or orphan) reserves the name globally; within a single
+  // owner, names are unique. Cross-owner collisions are allowed and the UI
+  // disambiguates "Rusty · @joe" / "Rusty · built-in" in mixed-owner lists.
+  const collision = await db.user.findFirst({
+    where: {
+      isBot: true,
+      displayName: { equals: trimmedName, mode: 'insensitive' },
+      OR: [
+        { botOwnerId: null },
+        { botOwnerId: ownerId },
+      ],
+    },
+    select: { id: true },
   })
-  const existingNames = new Set(existingBots.map(b => b.displayName.toLowerCase()))
-
-  if (existingNames.has(trimmedName.toLowerCase())) {
+  if (collision) {
     throw Object.assign(new Error(`"${trimmedName}" is already taken — choose a different name`), { code: 'NAME_TAKEN' })
   }
 
   const finalName = trimmedName
 
-  // 4. Validate algorithm and resolve ML algo
-  const alg = algorithm || 'minimax'
-  const diff = difficulty || 'novice'
-  let mlAlgo = null
-
-  if (alg === 'minimax' || alg === 'mcts' || alg === 'rule_based') {
-    // handled below
-  } else if (alg === 'ml') {
-    mlAlgo = (modelType || 'DQN').toUpperCase().replace(/-/g, '_')
-    if (!VALID_ML_ALGORITHMS.includes(mlAlgo)) {
-      throw Object.assign(new Error(`Unknown ML algorithm: ${modelType}`), { code: 'INVALID_ALGORITHM' })
-    }
-  } else {
-    throw Object.assign(new Error(`Unknown algorithm: ${alg}`), { code: 'INVALID_ALGORITHM' })
-  }
-
-  // 5. Competitive flag: only honored for ml bots
-  const botCompetitive = alg === 'ml' ? Boolean(competitive) : false
-
-  // 6. Generate unique username slug
+  // 4. Skill-less path (Phase 3.8 — Multi-Skill Bots default).
+  // Generate a unique username slug shared by all branches below.
   const slugBase = `bot_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
   const existingUsernames = await db.user.findMany({
     where: { username: { startsWith: slugBase } },
@@ -384,22 +475,60 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
   }
   const email = `${username}@xo-arena.internal`
 
+  if (algorithm === undefined || algorithm === null) {
+    return db.user.create({
+      data: {
+        username,
+        email,
+        displayName:    finalName,
+        avatarUrl:      avatarUrl ?? null,
+        isBot:          true,
+        botModelType:   null,
+        botModelId:     null,
+        botOwnerId:     ownerId,
+        botActive:      true,
+        botCompetitive: Boolean(competitive),
+        botProvisional: true,
+      },
+    })
+  }
+
+  // 5. Validate algorithm and resolve ML algo (legacy single-algorithm path)
+  const alg = algorithm
+  const diff = difficulty || 'novice'
+  let mlAlgo = null
+
+  if (alg === 'minimax' || alg === 'mcts' || alg === 'rule_based') {
+    // handled below
+  } else if (alg === 'ml') {
+    mlAlgo = (modelType || 'dqn').toLowerCase().replace(/[-_]/g, '')
+    if (!VALID_ML_ALGORITHMS.includes(mlAlgo)) {
+      throw Object.assign(new Error(`Unknown ML algorithm: ${modelType}`), { code: 'INVALID_ALGORITHM' })
+    }
+  } else {
+    throw Object.assign(new Error(`Unknown algorithm: ${alg}`), { code: 'INVALID_ALGORITHM' })
+  }
+
+  // 6. Competitive flag: only honored for ml bots in legacy path
+  const botCompetitive = alg === 'ml' ? Boolean(competitive) : false
+
   // 7. Resolve botModelId (synthetic for minimax/mcts, real FK for ml)
   // For ML bots, create the model and bot atomically so we never orphan a model.
   if (alg === 'ml') {
     const maxEpisodes = await _getSystemConfig('ml.maxEpisodesPerModel', 100_000)
     return db.$transaction(async (tx) => {
-      const model = await tx.mLModel.create({
+      const skill = await tx.botSkill.create({
         data: {
           name: finalName,
-          algorithm: mlAlgo,
-          qtable: {},
+          algorithm: mlAlgo || 'qlearning',
+          weights: {},
           config: { ...ML_DEFAULT_CONFIG },
           createdBy: ownerBaId ?? ownerId,
           maxEpisodes,
+          gameId,
         },
       })
-      return tx.user.create({
+      const bot = await tx.user.create({
         data: {
           username,
           email,
@@ -407,13 +536,18 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
           avatarUrl: avatarUrl ?? null,
           isBot: true,
           botModelType: alg,
-          botModelId: model.id,
+          botModelId: skill.id,
           botOwnerId: ownerId,
           botActive: true,
           botCompetitive,
           botProvisional: true,
         },
       })
+      // Set botId on the skill now that we have the bot's user ID
+      await tx.botSkill.update({ where: { id: skill.id }, data: { botId: bot.id } })
+      // Create initial GameElo record for the bot
+      await tx.gameElo.create({ data: { userId: bot.id, gameId, rating: 1200 } })
+      return bot
     })
   }
 
@@ -442,21 +576,28 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
 
 /**
  * List bot users.
- * @param {{ ownerId?: string, includeInactive?: boolean }} options
+ *
+ * @param {object} options
+ * @param {string}  [options.ownerId]         only return bots owned by this user
+ * @param {boolean} [options.includeInactive] include inactive bots
+ * @param {boolean} [options.includeSkills]   attach `skills: BotSkill[]` (each
+ *   enriched with `elo: { rating, gamesPlayed }` from GameElo). Phase 3.8 —
+ *   needed for the Profile bot list to render skill pills without an N+1
+ *   round-trip. Adds two grouped queries (botSkill + gameElo) regardless of
+ *   how many bots are in the result, so cost stays O(1) in DB calls.
  */
-export async function listBots({ ownerId, includeInactive = false } = {}) {
+export async function listBots({ ownerId, includeInactive = false, includeSkills = false } = {}) {
   const where = {
     isBot: true,
     ...(ownerId ? { botOwnerId: ownerId } : {}),
     ...(includeInactive ? {} : { botActive: true }),
   }
-  return db.user.findMany({
+  const bots = await db.user.findMany({
     where,
     select: {
       id: true,
       displayName: true,
       avatarUrl: true,
-      eloRating: true,
       botModelType: true,
       botModelId: true,
       botActive: true,
@@ -466,9 +607,42 @@ export async function listBots({ ownerId, includeInactive = false } = {}) {
       botInTournament: true,
       botOwnerId: true,
       createdAt: true,
+      gameElo: { where: { gameId: 'xo' }, select: { rating: true } },
     },
     orderBy: { createdAt: 'desc' },
   })
+
+  let skillsByBot = new Map()
+  if (includeSkills && bots.length > 0) {
+    const botIds = bots.map(b => b.id)
+    const allSkills = await db.botSkill.findMany({
+      where:   { botId: { in: botIds } },
+      orderBy: { createdAt: 'asc' },
+    })
+    // Per-skill ELO is keyed by (userId=botId, gameId). Pull all rows for
+    // any (botId, gameId) pair we hold a skill for, then index.
+    const eloPairs = allSkills.map(s => ({ userId: s.botId, gameId: s.gameId }))
+    const eloRows  = eloPairs.length === 0 ? [] : await db.gameElo.findMany({
+      where:  { OR: eloPairs },
+      select: { userId: true, gameId: true, rating: true, gamesPlayed: true },
+    })
+    const eloKey = (uid, gid) => `${uid}|${gid}`
+    const eloByPair = new Map(eloRows.map(r => [eloKey(r.userId, r.gameId), r]))
+
+    for (const s of allSkills) {
+      const arr = skillsByBot.get(s.botId) ?? []
+      arr.push({ ...s, elo: eloByPair.get(eloKey(s.botId, s.gameId)) ?? null })
+      skillsByBot.set(s.botId, arr)
+    }
+  }
+
+  // Flatten gameElo into a top-level eloRating field for backward compatibility
+  return bots.map(b => ({
+    ...b,
+    eloRating: b.gameElo?.[0]?.rating ?? 1200,
+    gameElo: undefined,
+    ...(includeSkills ? { skills: skillsByBot.get(b.id) ?? [] } : {}),
+  }))
 }
 
 /**
@@ -503,7 +677,7 @@ export async function createGame({
   player1Id,
   player2Id = null,
   winnerId = null,
-  mode,           // 'PVP' | 'PVAI' | 'PVBOT'
+  mode,           // 'HVH' | 'HVA' | 'HVB'
   outcome,        // 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'AI_WIN' | 'DRAW'
   difficulty = null,
   aiImplementationId = null,
@@ -511,6 +685,10 @@ export async function createGame({
   durationMs,
   startedAt,
   roomName = null,
+  tournamentId = null,
+  tournamentMatchId = null,
+  moveStream = null,
+  isSpar = false,
 }) {
   return db.game.create({
     data: {
@@ -526,6 +704,11 @@ export async function createGame({
       startedAt: new Date(startedAt),
       endedAt: new Date(),
       roomName,
+      tournamentId,
+      tournamentMatchId,
+      isTournament: !!(tournamentId),
+      isSpar,
+      moveStream: moveStream ?? undefined,
     },
   })
 }

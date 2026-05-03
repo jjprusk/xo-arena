@@ -1,22 +1,39 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Notification service — accomplishment detection, queuing, and email delivery.
  */
 import { Resend } from 'resend'
 import db from '../lib/db.js'
 import { getUserCredits, getTierLimit } from './creditService.js'
-import { achievementTemplate } from '../lib/emailTemplates.js'
+import { achievementTemplate, tournamentMatchTemplate } from '../lib/emailTemplates.js'
 import logger from '../logger.js'
+import { dispatch } from '../lib/notificationBus.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM = process.env.EMAIL_FROM ?? 'noreply@aiarena.callidity.com'
 
 const MILESTONE_SCORES = [100, 500, 2000]
 
+// Old type → new bus type key mapping
+const TYPE_MAP = {
+  tier_upgrade:             'achievement.tier_upgrade',
+  credit_milestone:         'achievement.milestone',
+  first_hpc:                'achievement.milestone',
+  first_bpc:                'achievement.milestone',
+  first_tc:                 'achievement.milestone',
+  system_alert:             'system.alert',
+  tournament_match_ready:   'match.ready',
+  tournament_match_result:  'match.result',
+  tournament_starting_soon: 'tournament.starting_soon',
+  tournament_completed:     'tournament.completed',
+  tournament_cancelled:     'tournament.cancelled',
+}
+
 /**
  * Determines whether a user currently has an active session (proxy for "online").
  * Uses active Better Auth sessions — consistent with the admin online status indicator.
  */
-async function isUserOnline(userId) {
+export async function isUserOnline(userId) {
   const user = await db.user.findUnique({ where: { id: userId }, select: { betterAuthId: true } })
   if (!user?.betterAuthId) return false
   const session = await db.baSession.findFirst({
@@ -26,53 +43,43 @@ async function isUserOnline(userId) {
 }
 
 /**
- * Insert a UserNotification row if no undelivered row with the same type + key already exists.
- * If the user is offline AND has emailAchievements=true, sends an achievement email via Resend
- * and sets emailedAt on the row.
+ * Email delivery helper — looks up user, builds subject/html, sends via Resend.
+ * Called by dispatch() in a future phase for email delivery.
+ * @returns {Promise<void>}
  */
-export async function queueNotification(userId, type, payload) {
-  // Build dedup filter: add payload path match for types with multiple possible values
-  const payloadFilter = type === 'tier_upgrade'
-    ? { payload: { path: ['tier'], equals: payload.tier } }
-    : type === 'credit_milestone'
-      ? { payload: { path: ['score'], equals: payload.score } }
-      : {}
-
-  const existing = await db.userNotification.findFirst({
-    where: { userId, type, deliveredAt: null, ...payloadFilter },
+export async function sendEmail(userId, type, payload) {
+  if (!resend) return
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { email: true, displayName: true },
   })
-  if (existing) return null
+  if (!user?.email) return
 
-  const notification = await db.userNotification.create({
-    data: { userId, type, payload },
-  })
-
-  // Non-fatal: attempt email delivery if user is offline and opted in
-  try {
-    const [online, user] = await Promise.all([
-      isUserOnline(userId),
-      db.user.findUnique({
-        where: { id: userId },
-        select: { email: true, displayName: true, emailAchievements: true },
-      }),
-    ])
-
-    if (!online && user?.emailAchievements && resend) {
-      const subject = payload.message
-        ? `XO Arena — ${payload.message}`
-        : 'XO Arena — New achievement!'
-      const html = achievementTemplate({ name: user.displayName, type, payload })
-      await resend.emails.send({ from: FROM, to: user.email, subject, html })
-      await db.userNotification.update({
-        where: { id: notification.id },
-        data: { emailedAt: new Date() },
-      })
-    }
-  } catch (err) {
-    logger.warn({ err, userId, type }, 'Achievement email failed (non-fatal)')
+  let subject, html
+  if (type === 'match.result' || type === 'tournament_match_result') {
+    subject = 'XO Arena — Match result'
+    html = tournamentMatchTemplate({ name: user.displayName, payload })
+  } else {
+    subject = payload.message
+      ? `XO Arena — ${payload.message}`
+      : 'XO Arena — New achievement!'
+    html = achievementTemplate({ name: user.displayName, type, payload })
   }
 
-  return notification
+  return resend.emails.send({ from: FROM, to: user.email, subject, html })
+}
+
+/**
+ * Thin adapter — maps legacy type string to new bus key and calls dispatch().
+ * Kept exported so existing callers (tournamentBridge.js) still work without changes.
+ */
+export async function queueNotification(userId, type, payload) {
+  const newType = TYPE_MAP[type]
+  if (!newType) {
+    logger.warn({ type }, 'queueNotification: unknown legacy type — skipping')
+    return null
+  }
+  return dispatch({ type: newType, targets: { userId }, payload })
 }
 
 /**

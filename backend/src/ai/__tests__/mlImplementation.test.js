@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock the entire mlService module so its transitive db/logger deps are never loaded
-vi.mock('../../services/mlService.js', () => ({
+// Mock the entire skillService module so its transitive db/logger deps are never loaded
+vi.mock('../../services/skillService.js', () => ({
   getMoveForModel: vi.fn(),
   setIO: vi.fn(),
 }))
@@ -12,7 +12,7 @@ vi.mock('@xo-arena/ai', async (importOriginal) => {
   return { ...actual }
 })
 
-const { getMoveForModel } = await import('../../services/mlService.js')
+const { getMoveForModel } = await import('../../services/skillService.js')
 const { mlImplementation } = await import('../mlImplementation.js')
 
 const EMPTY_BOARD = Array(9).fill(null)

@@ -8,9 +8,6 @@ vi.mock('../../middleware/auth.js', () => ({
   requireAdmin: (req, res, next) => next(),
   optionalAuth: (req, res, next) => next(),
 }))
-vi.mock('../../services/userService.js', () => ({
-  getUserByBetterAuthId: vi.fn(),
-}))
 vi.mock('../../realtime/botGameRunner.js', () => ({
   botGameRunner: {
     startGame: vi.fn(),
@@ -27,7 +24,6 @@ vi.mock('../../utils/roles.js', () => ({
   hasRole: vi.fn(),
 }))
 
-const { getUserByBetterAuthId } = await import('../../services/userService.js')
 const { botGameRunner } = await import('../../realtime/botGameRunner.js')
 const db = (await import('../../lib/db.js')).default
 const { hasRole } = await import('../../utils/roles.js')
@@ -46,15 +42,14 @@ const BOT2 = { id: 'bot2', displayName: 'Beta',  botModelId: 'model-b', isBot: t
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Default: caller is an admin-role user
-  getUserByBetterAuthId.mockResolvedValue(ADMIN_USER)
   hasRole.mockImplementation((user, role) => {
     if (!user?.userRoles) return false
     const roles = user.userRoles.map(r => r.role)
     return roles.includes('ADMIN') || roles.includes(role)
   })
-  // Default: both bots exist and are active
+  // Default: caller is admin; bots exist and are active
   db.user.findUnique.mockImplementation(({ where }) => {
+    if (where.betterAuthId === 'test-user-id') return Promise.resolve(ADMIN_USER)
     if (where.id === 'bot1') return Promise.resolve(BOT1)
     if (where.id === 'bot2') return Promise.resolve(BOT2)
     return Promise.resolve(null)
@@ -98,7 +93,12 @@ describe('POST /', () => {
   })
 
   it('returns 403 when caller lacks ADMIN or BOT_ADMIN role', async () => {
-    getUserByBetterAuthId.mockResolvedValue({ id: 'caller-id', userRoles: [] })
+    db.user.findUnique.mockImplementation(({ where }) => {
+      if (where.betterAuthId === 'test-user-id') return Promise.resolve({ id: 'caller-id', userRoles: [] })
+      if (where.id === 'bot1') return Promise.resolve(BOT1)
+      if (where.id === 'bot2') return Promise.resolve(BOT2)
+      return Promise.resolve(null)
+    })
     hasRole.mockReturnValue(false)
 
     const res = await request(buildApp()).post('/').send({ bot1Id: 'bot1', bot2Id: 'bot2' })
@@ -108,6 +108,7 @@ describe('POST /', () => {
 
   it('returns 404 when bot1 is not found in the database', async () => {
     db.user.findUnique.mockImplementation(({ where }) => {
+      if (where.betterAuthId === 'test-user-id') return Promise.resolve(ADMIN_USER)
       if (where.id === 'bot2') return Promise.resolve(BOT2)
       return Promise.resolve(null)
     })
@@ -119,6 +120,7 @@ describe('POST /', () => {
 
   it('returns 404 when bot1.isBot is false', async () => {
     db.user.findUnique.mockImplementation(({ where }) => {
+      if (where.betterAuthId === 'test-user-id') return Promise.resolve(ADMIN_USER)
       if (where.id === 'bot1') return Promise.resolve({ ...BOT1, isBot: false })
       if (where.id === 'bot2') return Promise.resolve(BOT2)
       return Promise.resolve(null)
@@ -131,6 +133,7 @@ describe('POST /', () => {
 
   it('returns 409 when bot1.botActive is false', async () => {
     db.user.findUnique.mockImplementation(({ where }) => {
+      if (where.betterAuthId === 'test-user-id') return Promise.resolve(ADMIN_USER)
       if (where.id === 'bot1') return Promise.resolve({ ...BOT1, botActive: false })
       if (where.id === 'bot2') return Promise.resolve(BOT2)
       return Promise.resolve(null)

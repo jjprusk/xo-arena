@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import 'dotenv/config'
 import http from 'http'
 import { readFileSync } from 'node:fs'
@@ -11,21 +12,33 @@ import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
 import leaderboardRouter from './routes/leaderboard.js'
-import roomsRouter from './routes/rooms.js'
+// roomsRouter removed in Phase 3.4 — Tables are the only game primitive
 import adminAiRouter from './routes/adminAi.js'
 import gamesRouter from './routes/games.js'
-import { attachSocketIO } from './realtime/socketHandler.js'
 import mlRouter from './routes/ml.js'
+import skillsRouter from './routes/skills.js'
 import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
 import supportRouter from './routes/support.js'
-import { setIO as mlSetIO } from './services/mlService.js'
-import { setIO as logSetIO } from './routes/logs.js'
-import { getSystemConfig } from './services/mlService.js'
+import guideRouter from './routes/guide.js'
+import tablesRouter from './routes/tables.js'
+import tournamentMatchesRouter from './routes/tournamentMatches.js'
+import eventsRouter from './routes/events.js'
+import presenceRouter from './routes/presence.js'
+import pushRouter from './routes/push.js'
+import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realtime.js'
+import { getSystemConfig } from './services/skillService.js'
 import { startActivityFlushJob } from './services/activityService.js'
+import { startReplayPurgeJob } from './services/replayPurgeService.js'
+import { startIdleSessionPurgeJob } from './services/idleSessionPurgeService.js'
+import { startTournamentBridge } from './lib/tournamentBridge.js'
+import { startExpiredNotificationPruner } from './lib/notificationBus.js'
+import { startDispatcher } from './lib/scheduledJobs.js'
+import { start as startTableGc } from './services/tableGcService.js'
+import { startMetricsSnapshotCron } from './services/metricsSnapshotService.js'
 
 const PORT = process.env.PORT || 3000
 
@@ -34,16 +47,25 @@ registerRoutes(app, {
   '/logs': logsRouter,
   '/users': usersRouter,
   '/leaderboard': leaderboardRouter,
-  '/rooms': roomsRouter,
+  // '/rooms' removed in Phase 3.4 — Tables are the only game primitive
   '/admin/ai': adminAiRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
+  '/skills': skillsRouter,
   '/puzzles': puzzlesRouter,
   '/admin': adminRouter,
   '/bots': botsRouter,
   '/bot-games': botGamesRouter,
   '/feedback': feedbackRouter,
   '/support': supportRouter,
+  '/guide': guideRouter,
+  '/tables': tablesRouter,
+  '/tournament-matches': tournamentMatchesRouter,
+  '/events':             eventsRouter,
+  '/presence':           presenceRouter,
+  '/push':               pushRouter,
+  '/rt':                 realtimeRouter,
+  '/realtime':           realtimeModeRouter,
 })
 
 // Public version endpoint — no auth required
@@ -90,14 +112,19 @@ db.$connect().catch((err) => logger.warn('DB pre-connect failed', { err }))
 
 // Start background activity flush job (Redis → Postgres)
 startActivityFlushJob()
+startReplayPurgeJob()
+startIdleSessionPurgeJob()
+startDispatcher()
+startExpiredNotificationPruner()
+startMetricsSnapshotCron()
 
-attachSocketIO(server).then((io) => {
-  app.set('io', io)
-  mlSetIO(io)
-  logSetIO(io)
-  server.listen(PORT, () => {
-    logger.info(`XO Arena backend running on port ${PORT}`)
-  })
+// SSE+POST is the only realtime transport (Realtime_Migration_Plan.md
+// Phase 8). socket.io was removed in this commit.
+app.set('io', null)
+startTournamentBridge(null)
+startTableGc(null)
+server.listen(PORT, () => {
+  logger.info(`XO Arena backend running on port ${PORT}`)
 })
 
 export default server

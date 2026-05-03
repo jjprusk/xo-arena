@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 /**
  * Email templates for the feedback system and achievement notifications.
  */
@@ -86,6 +87,29 @@ export function staffAlertTemplate({ category, message, pageUrl, appId }) {
   <blockquote style="border-left: 3px solid #ccc; margin: 8px 0; padding: 8px 16px; color: #555;">
     ${truncated}
   </blockquote>
+</body>
+</html>
+  `.trim()
+}
+
+/**
+ * Tournament match result email sent when a match completes and the user is offline.
+ * @param {{ name: string, payload: object }} params
+ * @returns {string} HTML string
+ */
+export function tournamentMatchTemplate({ name, payload }) {
+  const tournamentId = payload.tournamentId ?? ''
+  const matchId = payload.matchId ?? ''
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /></head>
+<body style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h2 style="color: #1a1a2e;">Match Result, ${name}!</h2>
+  <p>A match has concluded in your tournament.</p>
+  <p style="color: #555; font-size: 0.9em;">Tournament: ${tournamentId}<br>Match: ${matchId}</p>
+  <p style="color: #888; font-size: 0.85em; margin-top: 32px;">Log in to XO Arena to view the full result and standings.</p>
+  <p style="color: #888; font-size: 0.85em;">— The XO Arena Team</p>
 </body>
 </html>
   `.trim()

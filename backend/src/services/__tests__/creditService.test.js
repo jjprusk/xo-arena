@@ -267,7 +267,7 @@ describe('recordGameCompletion', () => {
   })
 
   it('awards HPC to both humans in a pvp game', async () => {
-    const result = await recordGameCompletion({ appId: 'xo-arena', participants: [human1, human2], mode: 'pvp' })
+    const result = await recordGameCompletion({ appId: 'xo-arena', participants: [human1, human2], mode: 'hvh' })
     expect(db.user.update).toHaveBeenCalledTimes(2)
     expect(db.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'usr_1' }, data: { creditsHpc: { increment: 1 } } })
@@ -279,7 +279,7 @@ describe('recordGameCompletion', () => {
   })
 
   it('awards HPC with appId "chess" identically (game-agnostic)', async () => {
-    await recordGameCompletion({ appId: 'chess', participants: [human1, human2], mode: 'pvp' })
+    await recordGameCompletion({ appId: 'chess', participants: [human1, human2], mode: 'hvh' })
     expect(db.user.update).toHaveBeenCalledTimes(2)
     expect(db.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { creditsHpc: { increment: 1 } } })
@@ -287,7 +287,7 @@ describe('recordGameCompletion', () => {
   })
 
   it('awards HPC to the human when playing a community bot', async () => {
-    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, bot], mode: 'pvp' })
+    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, bot], mode: 'hvh' })
     expect(db.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'usr_1' }, data: { creditsHpc: { increment: 1 } } })
     )
@@ -295,7 +295,7 @@ describe('recordGameCompletion', () => {
 
   it('awards BPC to bot owner when bot plays external human opponent', async () => {
     // human1 (usr_1) plays bot owned by owner_1 — they are different users
-    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, bot], mode: 'pvp' })
+    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, bot], mode: 'hvh' })
     expect(db.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'owner_1' }, data: { creditsBpc: { increment: 1 } } })
     )
@@ -303,7 +303,7 @@ describe('recordGameCompletion', () => {
 
   it('does not award BPC when owner plays their own bot', async () => {
     // usr_1 plays ownBot (botOwnerId='usr_1') — same user, not external
-    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, ownBot], mode: 'pvp' })
+    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, ownBot], mode: 'hvh' })
     const bpcCalls = db.user.update.mock.calls.filter(c => c[0]?.data?.creditsBpc)
     expect(bpcCalls).toHaveLength(0)
   })
@@ -327,7 +327,7 @@ describe('recordGameCompletion', () => {
 
   it('calls checkAndNotify with pre-increment credit snapshot', async () => {
     db.user.findUnique.mockResolvedValue(mockUser({ creditsHpc: 5 }))
-    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, human2], mode: 'pvp' })
+    await recordGameCompletion({ appId: 'xo-arena', participants: [human1, human2], mode: 'hvh' })
     // prev snapshot has hpc=5 (before the increment)
     expect(checkAndNotify).toHaveBeenCalledWith('usr_1', expect.objectContaining({ hpc: 5 }))
     expect(checkAndNotify).toHaveBeenCalledWith('usr_2', expect.objectContaining({ hpc: 5 }))
@@ -336,7 +336,7 @@ describe('recordGameCompletion', () => {
   it('returns created notification objects from checkAndNotify', async () => {
     const notif = { id: 'n1', type: 'first_hpc', payload: {} }
     checkAndNotify.mockResolvedValueOnce([notif]).mockResolvedValueOnce([])
-    const result = await recordGameCompletion({ appId: 'xo-arena', participants: [human1, human2], mode: 'pvp' })
+    const result = await recordGameCompletion({ appId: 'xo-arena', participants: [human1, human2], mode: 'hvh' })
     expect(result).toContainEqual(notif)
   })
 })

@@ -41,11 +41,15 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
       REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:5173,http://localhost:5174
+      TOURNAMENT_SERVICE_URL: http://tournament:3001
+      INTERNAL_SECRET: xo-arena-internal-dev-secret
     ports:
       - "3000:3000"
     volumes:
       - ./backend:/app/backend
       - ./packages/ai:/app/packages/ai
+      - ./packages/db:/app/packages/db
       - /app/node_modules
     depends_on:
       postgres:
@@ -53,19 +57,55 @@ services:
       redis:
         condition: service_healthy
 
-  frontend:
+  landing:
     build:
-      context: ./frontend
+      context: ./landing
       dockerfile: Dockerfile.dev
     restart: unless-stopped
-    # API uses relative URLs via Vite proxy — no VITE_API_URL needed
+    environment:
+      BACKEND_URL: http://backend:3000
+      TOURNAMENT_URL: http://tournament:3001
+      VITE_XO_URL: http://localhost:5173
+      # Web Push VAPID public key — the matching private key stays in
+      # backend/.env only. Safe to expose to the browser.
+      VITE_VAPID_PUBLIC_KEY: "BKJBje66cklVt-3V4Mzc21yv_6YEPgZ3c0xvpyD-kLouNIm1mqP70T0ta56Z7DtuVggkcBuKPTv8j5CvJh6HZrU"
     ports:
-      - "5173:5173"
+      - "5174:5174"
     volumes:
-      - ./frontend:/app
+      - ./landing:/app
+      - ./packages/xo:/packages/xo           # resolve alias: __dirname(/app)/../packages/xo
+      - ./packages/nav:/packages/nav         # resolve alias: __dirname(/app)/../packages/nav
+      - ./packages/sdk:/packages/sdk         # resolve alias: __dirname(/app)/../packages/sdk
+      - ./packages/game-xo:/packages/game-xo # resolve alias: __dirname(/app)/../packages/game-xo
+      - ./packages/game-pong:/packages/game-pong # resolve alias: __dirname(/app)/../packages/game-pong
+      - ./packages/ai:/packages/ai           # game-xo imports @xo-arena/ai
       - /app/node_modules
     depends_on:
       - backend
+
+  tournament:
+    build:
+      context: .
+      dockerfile: tournament/Dockerfile.dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://xo:xo@postgres:5432/xo_arena
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:5174,http://localhost:5173
+      INTERNAL_SECRET: xo-arena-internal-dev-secret
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./tournament:/app/tournament
+      - ./packages/db:/app/packages/db
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:

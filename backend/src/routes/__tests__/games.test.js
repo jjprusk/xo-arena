@@ -51,15 +51,15 @@ beforeEach(() => {
   createGame.mockResolvedValue({ id: 'game_1' })
 })
 
-describe('POST /api/v1/games — PVAI (default)', () => {
-  it('records a PVAI game and returns 201', async () => {
+describe('POST /api/v1/games — HVA (default)', () => {
+  it('records a HVA game and returns 201', async () => {
     const res = await request(app)
       .post('/api/v1/games')
       .send({ ...BASE_BODY, difficulty: 'easy', aiImplementationId: 'minimax' })
 
     expect(res.status).toBe(201)
     expect(res.body.game.id).toBe('game_1')
-    expect(createGame).toHaveBeenCalledWith(expect.objectContaining({ mode: 'PVAI' }))
+    expect(createGame).toHaveBeenCalledWith(expect.objectContaining({ mode: 'HVA' }))
     expect(updatePlayerEloAfterPvAI).toHaveBeenCalledWith('usr_1', 'PLAYER1_WIN', 'easy')
   })
 
@@ -86,19 +86,19 @@ describe('POST /api/v1/games — PVAI (default)', () => {
   })
 })
 
-describe('POST /api/v1/games — PVBOT', () => {
+describe('POST /api/v1/games — HVB', () => {
   beforeEach(() => {
     getBotByModelId.mockResolvedValue(mockBot)
   })
 
-  it('records a PVBOT game and returns 201', async () => {
+  it('records a HVB game and returns 201', async () => {
     const res = await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'builtin:minimax:novice' })
 
     expect(res.status).toBe(201)
     expect(createGame).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: 'PVBOT', player2Id: 'bot_1' })
+      expect.objectContaining({ mode: 'HVB', player2Id: 'bot_1' })
     )
     expect(updateBothElosAfterPvBot).toHaveBeenCalledWith('usr_1', 'bot_1', 'PLAYER1_WIN')
   })
@@ -106,7 +106,7 @@ describe('POST /api/v1/games — PVBOT', () => {
   it('sets human as winner on PLAYER1_WIN', async () => {
     await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice', outcome: 'PLAYER1_WIN' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'builtin:minimax:novice', outcome: 'PLAYER1_WIN' })
 
     const call = createGame.mock.calls[0][0]
     expect(call.winnerId).toBe('usr_1')
@@ -115,7 +115,7 @@ describe('POST /api/v1/games — PVBOT', () => {
   it('sets bot as winner on PLAYER2_WIN', async () => {
     await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice', outcome: 'PLAYER2_WIN' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'builtin:minimax:novice', outcome: 'PLAYER2_WIN' })
 
     const call = createGame.mock.calls[0][0]
     expect(call.winnerId).toBe('bot_1')
@@ -124,7 +124,7 @@ describe('POST /api/v1/games — PVBOT', () => {
   it('returns 400 when botModelId is missing', async () => {
     const res = await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT' })
+      .send({ ...BASE_BODY, mode: 'HVB' })
     expect(res.status).toBe(400)
   })
 
@@ -132,7 +132,7 @@ describe('POST /api/v1/games — PVBOT', () => {
     getBotByModelId.mockResolvedValue(null)
     const res = await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'unknown:bot' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'unknown:bot' })
     expect(res.status).toBe(404)
   })
 
@@ -140,14 +140,14 @@ describe('POST /api/v1/games — PVBOT', () => {
     getBotByModelId.mockResolvedValue({ ...mockBot, botActive: false })
     const res = await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'builtin:minimax:novice' })
     expect(res.status).toBe(409)
   })
 
-  it('does not call PVAI ELO for PVBOT games', async () => {
+  it('does not call HVA ELO for HVB games', async () => {
     await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'builtin:minimax:novice' })
     expect(updatePlayerEloAfterPvAI).not.toHaveBeenCalled()
   })
 })
@@ -161,22 +161,22 @@ describe('POST /api/v1/games — credit recording', () => {
     getBotByModelId.mockResolvedValue(mockBot)
   })
 
-  it('calls recordGameCompletion fire-and-forget for PVBOT games', async () => {
+  it('calls recordGameCompletion fire-and-forget for HVB games', async () => {
     const res = await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'builtin:minimax:novice' })
     expect(res.status).toBe(201)
     // Allow the async fire-and-forget to settle
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(recordGameCompletion).toHaveBeenCalledWith(
-      expect.objectContaining({ appId: 'xo-arena', mode: 'pvp' })
+      expect.objectContaining({ appId: 'xo-arena', mode: 'hvb' })
     )
     const call = recordGameCompletion.mock.calls[0][0]
     expect(call.participants).toContainEqual(expect.objectContaining({ userId: 'usr_1', isBot: false }))
     expect(call.participants).toContainEqual(expect.objectContaining({ userId: 'bot_1', isBot: true }))
   })
 
-  it('does not call recordGameCompletion for PVAI games', async () => {
+  it('does not call recordGameCompletion for HVA games', async () => {
     await request(app)
       .post('/api/v1/games')
       .send({ ...BASE_BODY, difficulty: 'easy', aiImplementationId: 'minimax' })
@@ -188,7 +188,7 @@ describe('POST /api/v1/games — credit recording', () => {
     recordGameCompletion.mockRejectedValueOnce(new Error('DB offline'))
     const res = await request(app)
       .post('/api/v1/games')
-      .send({ ...BASE_BODY, mode: 'PVBOT', botModelId: 'builtin:minimax:novice' })
+      .send({ ...BASE_BODY, mode: 'HVB', botModelId: 'builtin:minimax:novice' })
     expect(res.status).toBe(201)
   })
 })

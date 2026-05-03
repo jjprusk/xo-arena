@@ -45,7 +45,7 @@ vi.mock('@xo-arena/ai', () => ({
 
 vi.mock('../../lib/db.js', () => ({
   default: {
-    mLModel: { findUnique: vi.fn() },
+    botSkill: { findUnique: vi.fn() },
   },
 }))
 
@@ -69,23 +69,23 @@ const SIMPLE_QTABLE = {
 
 const Q_MODEL = {
   id: 'model_ql',
-  algorithm: 'Q_LEARNING',
+  algorithm: 'qlearning',
   config: {},
-  qtable: SIMPLE_QTABLE,
+  weights: SIMPLE_QTABLE,
 }
 
 const DQN_MODEL = {
   id: 'model_dqn',
-  algorithm: 'DQN',
+  algorithm: 'dqn',
   config: {},
-  qtable: {},
+  weights: {},
 }
 
 const SARSA_MODEL = {
   id: 'model_sarsa',
-  algorithm: 'SARSA',
+  algorithm: 'sarsa',
   config: {},
-  qtable: SIMPLE_QTABLE,
+  weights: SIMPLE_QTABLE,
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,13 +100,13 @@ beforeEach(() => {
 
 describe('extractRulesFromModel — model not found', () => {
   it('throws when model does not exist', async () => {
-    db.mLModel.findUnique.mockResolvedValue(null)
+    db.botSkill.findUnique.mockResolvedValue(null)
     await expect(extractRulesFromModel('missing_id')).rejects.toThrow('missing_id')
   })
 })
 
 describe('extractRulesFromModel — return shape', () => {
-  beforeEach(() => { db.mLModel.findUnique.mockResolvedValue(Q_MODEL) })
+  beforeEach(() => { db.botSkill.findUnique.mockResolvedValue(Q_MODEL) })
 
   it('returns rules array and movePairsAnalyzed', async () => {
     const result = await extractRulesFromModel(Q_MODEL.id)
@@ -161,7 +161,7 @@ describe('extractRulesFromModel — confidence ordering', () => {
       if (ruleId === 'center') return 4 // always matches
       return null
     })
-    db.mLModel.findUnique.mockResolvedValue(Q_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(Q_MODEL)
 
     const { rules } = await extractRulesFromModel(Q_MODEL.id)
     const flexible = rules.filter(r => r.id !== 'win' && r.id !== 'block')
@@ -171,7 +171,7 @@ describe('extractRulesFromModel — confidence ordering', () => {
   })
 
   it('confidence is between 0 and 1 inclusive', async () => {
-    db.mLModel.findUnique.mockResolvedValue(Q_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(Q_MODEL)
     const { rules } = await extractRulesFromModel(Q_MODEL.id)
     for (const r of rules) {
       expect(r.confidence).toBeGreaterThanOrEqual(0)
@@ -191,7 +191,7 @@ describe('extractRulesFromModel — confidence ordering', () => {
       }
       return null
     })
-    db.mLModel.findUnique.mockResolvedValue(Q_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(Q_MODEL)
 
     const { rules } = await extractRulesFromModel(Q_MODEL.id)
     const center = rules.find(r => r.id === 'center')
@@ -201,41 +201,41 @@ describe('extractRulesFromModel — confidence ordering', () => {
 
 describe('extractRulesFromModel — algorithm routing', () => {
   it('uses QLearningEngine for Q_LEARNING algorithm', async () => {
-    db.mLModel.findUnique.mockResolvedValue(Q_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(Q_MODEL)
     await extractRulesFromModel(Q_MODEL.id)
     expect(MockQLearning).toHaveBeenCalled()
     expect(MockDQN).not.toHaveBeenCalled()
   })
 
   it('uses SarsaEngine for SARSA algorithm', async () => {
-    db.mLModel.findUnique.mockResolvedValue(SARSA_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(SARSA_MODEL)
     await extractRulesFromModel(SARSA_MODEL.id)
     expect(MockSarsa).toHaveBeenCalled()
     expect(MockQLearning).not.toHaveBeenCalled()
   })
 
   it('uses DQNEngine for DQN algorithm', async () => {
-    db.mLModel.findUnique.mockResolvedValue(DQN_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(DQN_MODEL)
     await extractRulesFromModel(DQN_MODEL.id)
     expect(MockDQN).toHaveBeenCalled()
     expect(MockQLearning).not.toHaveBeenCalled()
   })
 
-  it('uses AlphaZeroEngine for ALPHA_ZERO algorithm', async () => {
-    const alphaModel = { ...DQN_MODEL, algorithm: 'ALPHA_ZERO' }
-    db.mLModel.findUnique.mockResolvedValue(alphaModel)
+  it('uses AlphaZeroEngine for alphazero algorithm', async () => {
+    const alphaModel = { ...DQN_MODEL, algorithm: 'alphazero' }
+    db.botSkill.findUnique.mockResolvedValue(alphaModel)
     await extractRulesFromModel(alphaModel.id)
     expect(MockAlphaZero).toHaveBeenCalled()
   })
 
   it('calls loadQTable on the engine with model qtable', async () => {
-    db.mLModel.findUnique.mockResolvedValue(Q_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(Q_MODEL)
     await extractRulesFromModel(Q_MODEL.id)
     expect(mockEngineInstance.loadQTable).toHaveBeenCalledWith(SIMPLE_QTABLE)
   })
 
   it('DQN path calls engine.chooseAction (neural net inference)', async () => {
-    db.mLModel.findUnique.mockResolvedValue(DQN_MODEL)
+    db.botSkill.findUnique.mockResolvedValue(DQN_MODEL)
     await extractRulesFromModel(DQN_MODEL.id)
     expect(mockEngineInstance.chooseAction).toHaveBeenCalled()
   })
@@ -248,7 +248,7 @@ describe('extractRulesFromEnsemble', () => {
   const MODEL_B = { ...Q_MODEL, id: 'model_b' }
 
   beforeEach(() => {
-    db.mLModel.findUnique.mockImplementation(({ where: { id } }) => {
+    db.botSkill.findUnique.mockImplementation(({ where: { id } }) => {
       if (id === 'model_a') return Promise.resolve(MODEL_A)
       if (id === 'model_b') return Promise.resolve(MODEL_B)
       return Promise.resolve(null)

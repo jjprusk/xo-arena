@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -8,45 +9,64 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  clerkId         String?          @unique
-  username        String           @unique
-  email           String           @unique
-  displayName     String
-  avatarUrl       String?
-  oauthProvider   String?
-  preferences     Json             @default("{}")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  eloRating       Float            @default(1200)
-  banned          Boolean          @default(false)
-  mlModelLimit    Int?
-  betterAuthId    String?          @unique
-  botActive       Boolean          @default(true)
-  botAvailable    Boolean          @default(false)
-  botProvisional  Boolean          @default(false)
-  botCompetitive  Boolean          @default(false)
-  botInTournament Boolean          @default(false)
-  botLimit        Int?
-  botModelId      String?          @unique
-  botModelType    String?
-  botOwnerId      String?
-  isBot           Boolean          @default(false)
-  nameConfirmed   Boolean          @default(false)
-  lastActiveAt      DateTime?
-  botEloResetAt     DateTime?
-  botGamesPlayed    Int              @default(0)
-  creditsHpc        Int              @default(0)
-  creditsBpc        Int              @default(0)
-  creditsTc         Int              @default(0)
-  emailAchievements Boolean          @default(false)
-  gamesAsPlayer1  Game[]           @relation("Player1Games")
-  gamesAsPlayer2  Game[]           @relation("Player2Games")
-  gamesWon        Game[]           @relation("WinnerGames")
-  eloHistory      UserEloHistory[]
-  userRoles       UserRole[]
-  notifications   UserNotification[]
-  feedback        Feedback[]
+  id                     String                   @id @default(cuid())
+  clerkId                String?                  @unique
+  username               String                   @unique
+  email                  String                   @unique
+  displayName            String
+  avatarUrl              String?
+  oauthProvider          String?
+  preferences            Json                     @default("{}")
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  banned                 Boolean                  @default(false)
+  skillLimit             Int?
+  betterAuthId           String?                  @unique
+  botActive              Boolean                  @default(true)
+  botAvailable           Boolean                  @default(false)
+  botProvisional         Boolean                  @default(false)
+  botCompetitive         Boolean                  @default(false)
+  botInTournament        Boolean                  @default(false)
+  botLimit               Int?
+  /// Nullable pointer to the bot's *primary* (or last-trained) skill — see
+  /// Phase 3.8 in Platform_Implementation_Plan.md. Source of truth for the
+  /// full skill set is `BotSkill.findMany({ where: { botId } })`; this field
+  /// is a UI-convenience alias the runtime reads via
+  /// `botGameRunner.parseBotModelId` (built-in bots use the well-known
+  /// `builtin:minimax:<tier>` form). Set on first skill add, repointed on
+  /// training completion or when the primary skill is deleted.
+  botModelId             String?                  @unique
+  botModelType           String?
+  botOwnerId             String?
+  isBot                  Boolean                  @default(false)
+  botEloResetAt          DateTime?
+  botGamesPlayed         Int                      @default(0)
+  creditsBpc             Int                      @default(0)
+  creditsHpc             Int                      @default(0)
+  creditsTc              Int                      @default(0)
+  nameConfirmed          Boolean                  @default(false)
+  lastActiveAt           DateTime?
+  emailAchievements      Boolean                  @default(false)
+  /// Excludes this user from all dashboard/metrics aggregations. Set true on
+  /// account creation for admins, seed-script accounts, and emails whose domain
+  /// matches the `metrics.internalEmailDomains` SystemConfig entry. Admins who
+  /// want their activity counted can flip their own flag via a Settings toggle.
+  /// See Intelligent_Guide_Requirements.md §2 (pollution prevention).
+  isTestUser             Boolean                  @default(false)
+  feedback               Feedback[]
+  gameElo                GameElo[]
+  gamesAsPlayer1         Game[]                   @relation("Player1Games")
+  gamesAsPlayer2         Game[]                   @relation("Player2Games")
+  gamesWon               Game[]                   @relation("WinnerGames")
+  notifPreferences       NotificationPreference[]
+  classification         PlayerClassification?
+  tournamentParticipants TournamentParticipant[]
+  eloHistory             UserEloHistory[]
+  notifications          UserNotification[]
+  pushSubscriptions      PushSubscription[]
+  userRoles              UserRole[]
+  seedBotConfigs         TournamentSeedBot[]
+  templateSeedBotConfigs TournamentTemplateSeedBot[]
 
   @@map("users")
 }
@@ -55,12 +75,11 @@ model Feedback {
   id             String           @id @default(cuid())
   appId          String           @default("xo-arena")
   userId         String?
-  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   category       FeedbackCategory @default(OTHER)
   status         FeedbackStatus   @default(OPEN)
   message        String
   pageUrl        String
-  screenshotData String?          @db.Text
+  screenshotData String?
   userAgent      String?
   resolutionNote String?
   resolvedAt     DateTime?
@@ -68,6 +87,7 @@ model Feedback {
   archivedAt     DateTime?
   createdAt      DateTime         @default(now())
   readAt         DateTime?
+  user           User?            @relation(fields: [userId], references: [id])
   replies        FeedbackReply[]
 
   @@index([appId])
@@ -81,10 +101,10 @@ model Feedback {
 model FeedbackReply {
   id         String   @id @default(cuid())
   feedbackId String
-  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
   adminId    String
   message    String
   createdAt  DateTime @default(now())
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
 
   @@index([feedbackId])
   @@map("feedback_replies")
@@ -117,9 +137,25 @@ model UserEloHistory {
   @@map("user_elo_history")
 }
 
+/// Current ELO rating for a user in a specific game (replaces User.eloRating).
+/// Note: game_elo table uses snake_case columns — @map required on all non-trivial fields.
+model GameElo {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  gameId      String   @map("game_id")
+  rating      Float    @default(1200)
+  gamesPlayed Int      @default(0) @map("games_played")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([userId])
+  @@map("game_elo")
+}
+
 model Game {
-  id                 String      @id @default(cuid())
-  appId              String      @default("xo-arena")
+  id                 String           @id @default(cuid())
   player1Id          String
   player2Id          String?
   winnerId           String?
@@ -130,12 +166,23 @@ model Game {
   totalMoves         Int
   durationMs         Int
   startedAt          DateTime
-  endedAt            DateTime    @default(now())
+  endedAt            DateTime         @default(now())
   roomName           String?
+  appId              String           @default("xo-arena")
+  tournamentId       String?
+  tournamentMatchId  String?
+  isTournament       Boolean          @default(false)
+  /// True when the game is a user-initiated spar match (bot vs system bot,
+  /// outside any tournament). Preserved for 30 days per §5.2 retention policy;
+  /// excluded from ELO/ranking calculations. See Intelligent_Guide_Requirements.md §5.2.
+  isSpar             Boolean          @default(false)
+  moveStream         Json?
   aiErrors           AIError[]
-  player1            User        @relation("Player1Games", fields: [player1Id], references: [id])
-  player2            User?       @relation("Player2Games", fields: [player2Id], references: [id])
-  winner             User?       @relation("WinnerGames", fields: [winnerId], references: [id])
+  player1            User             @relation("Player1Games", fields: [player1Id], references: [id])
+  player2            User?            @relation("Player2Games", fields: [player2Id], references: [id])
+  tournament         Tournament?      @relation(fields: [tournamentId], references: [id])
+  tournamentMatch    TournamentMatch? @relation(fields: [tournamentMatchId], references: [id])
+  winner             User?            @relation("WinnerGames", fields: [winnerId], references: [id])
   moves              Move[]
 
   @@index([outcome])
@@ -144,6 +191,8 @@ model Game {
   @@index([endedAt])
   @@index([player1Id])
   @@index([player2Id])
+  @@index([tournamentId])
+  @@index([isSpar])
   @@map("games")
 }
 
@@ -178,28 +227,30 @@ model AIError {
   @@map("ai_errors")
 }
 
-model MLModel {
-  id             String              @id @default(cuid())
+model BotSkill {
+  id             String              @id(map: "ml_models_pkey") @default(cuid())
   name           String
   description    String?
-  algorithm      MLAlgorithm         @default(Q_LEARNING)
-  qtable         Json                @default("{}")
+  algorithm      String
+  weights        Json                @default("{}")
   config         Json
-  status         MLModelStatus       @default(IDLE)
+  status         BotSkillStatus      @default(IDLE)
   totalEpisodes  Int                 @default(0)
-  eloRating      Float               @default(1000)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   featured       Boolean             @default(false)
   createdBy      String?
   maxEpisodes    Int                 @default(100000)
+  botId          String?             @map("bot_id")
+  gameId         String              @default("xo") @map("game_id")
   benchmarks     MLBenchmarkResult[]
   checkpoints    MLCheckpoint[]
   eloHistory     MLEloHistory[]
   playerProfiles MLPlayerProfile[]
   sessions       TrainingSession[]
 
-  @@map("ml_models")
+  @@unique([botId, gameId], where: raw("(bot_id IS NOT NULL)"))
+  @@map("bot_skills")
 }
 
 model MLPlayerProfile {
@@ -212,7 +263,7 @@ model MLPlayerProfile {
   tendencies         Json     @default("{}")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  model              MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model              BotSkill @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@unique([modelId, userId])
   @@map("ml_player_profiles")
@@ -229,7 +280,7 @@ model TrainingSession {
   startedAt   DateTime          @default(now())
   completedAt DateTime?
   episodes    TrainingEpisode[]
-  model       MLModel           @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model       BotSkill          @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("training_sessions")
@@ -254,11 +305,10 @@ model MLCheckpoint {
   id         String   @id @default(cuid())
   modelId    String
   episodeNum Int
-  qtable     Json
+  weights    Json
   epsilon    Float
-  eloRating  Float
   createdAt  DateTime @default(now())
-  model      MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model      BotSkill @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_checkpoints")
@@ -274,7 +324,7 @@ model MLBenchmarkResult {
   vsHard   Json
   summary  Json
   vsTough  Json?
-  model    MLModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model    BotSkill @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_benchmark_results")
@@ -289,7 +339,7 @@ model MLEloHistory {
   opponentType String
   outcome      EpisodeOutcome
   recordedAt   DateTime       @default(now())
-  model        MLModel        @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model        BotSkill       @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
   @@map("ml_elo_history")
@@ -425,10 +475,435 @@ model UserNotification {
   createdAt   DateTime  @default(now())
   deliveredAt DateTime?
   emailedAt   DateTime?
+  readAt      DateTime?
+  expiresAt   DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, deliveredAt])
   @@map("user_notifications")
+}
+
+model NotificationPreference {
+  id        String  @id @default(cuid())
+  userId    String
+  eventType String
+  inApp     Boolean @default(true)
+  email     Boolean @default(false)
+  sms       Boolean @default(false)
+  push      Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType])
+  @@map("notification_preferences")
+}
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model ScheduledJob {
+  id          String             @id @default(cuid())
+  type        String
+  payload     Json
+  runAt       DateTime
+  status      ScheduledJobStatus @default(PENDING)
+  attempts    Int                @default(0)
+  maxAttempts Int                @default(3)
+  lastError   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([status, runAt])
+  @@map("scheduled_jobs")
+}
+
+model Tournament {
+  id                      String                  @id @default(cuid())
+  name                    String
+  description             String?
+  game                    String
+  mode                    TournamentMode
+  format                  TournamentFormat
+  bracketType             BracketType
+  status                  TournamentStatus        @default(DRAFT)
+  minParticipants         Int                     @default(2)
+  maxParticipants         Int?
+  bestOfN                 Int                     @default(3)
+  botMinGamesPlayed       Int?
+  allowNonCompetitiveBots Boolean                 @default(false)
+  allowSpectators         Boolean                 @default(true)
+  startTime               DateTime?
+  endTime                 DateTime?
+  registrationOpenAt      DateTime?
+  registrationCloseAt     DateTime?
+  noticePeriodMinutes     Int?
+  durationMinutes         Int?
+  // Phase 3.7a — recurrence config lives exclusively on TournamentTemplate.
+  // An occurrence's link back to its template is `templateId`; all other
+  // recurrence fields (interval / end / paused / auto-opt-out) dropped in
+  // the 20260423150000_drop_tournament_recurrence_columns migration.
+  templateId              String?
+  template                TournamentTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  createdById             String
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  paceMs                  Int?                    @map("pace_ms")
+  startMode               TournamentStartMode     @default(AUTO)
+  // True when created by an automated test suite; hidden from the public
+  // /tournaments page (filtered at the API layer) and exposed behind an
+  // admin toggle. Never set by end users.
+  isTest                  Boolean                 @default(false)
+  /// True for Curriculum Cup and Rookie Cup clones (curated-field guided
+  /// tournaments). Private to the creator, excluded from ELO / rankings,
+  /// GC'd after 30 days. See Intelligent_Guide_Requirements.md §5.4, §5.8.
+  isCup                   Boolean                 @default(false)
+  /// Bracket participant placement strategy. `random` = shuffle (existing
+  /// behavior, unchanged default). `deterministic` = respect each
+  /// participant's pre-assigned `slotIndex`. Rookie Cup sets this to
+  /// `deterministic` to place Sterling opposite the user. See §5.9.
+  seedingMode             TournamentSeedingMode   @default(random)
+  games                   Game[]
+  participants            TournamentParticipant[]
+  rounds                  TournamentRound[]
+  seedBots                TournamentSeedBot[]
+
+  @@index([status])
+  @@index([game])
+  @@index([createdById])
+  @@index([templateId])
+  @@index([isCup])
+  @@map("tournaments")
+}
+
+/// Phase 3.7a — holds recurrence *configuration* only. Never itself runs.
+/// Each recurring series is one TournamentTemplate + N spawned Tournament
+/// occurrences (each with `templateId` pointing back here). Subscribers
+/// attach to the template; seed bots attach to the template; running state
+/// (bracket, matches, results) lives exclusively on the occurrences.
+model TournamentTemplate {
+  id                      String                            @id @default(cuid())
+  name                    String
+  description             String?
+  game                    String
+  mode                    TournamentMode
+  format                  TournamentFormat
+  bracketType             BracketType
+  minParticipants         Int                               @default(2)
+  maxParticipants         Int?
+  bestOfN                 Int                               @default(3)
+  botMinGamesPlayed       Int?
+  allowNonCompetitiveBots Boolean                           @default(false)
+  allowSpectators         Boolean                           @default(true)
+  noticePeriodMinutes     Int?
+  durationMinutes         Int?
+  paceMs                  Int?                              @map("pace_ms")
+  startMode               TournamentStartMode               @default(AUTO)
+  // Recurrence config
+  recurrenceInterval      RecurrenceInterval
+  /// First (or next) occurrence start — scheduler reads this to decide when
+  /// to spawn the next Tournament row.
+  recurrenceStart         DateTime
+  recurrenceEndDate       DateTime?
+  /// Registration window for the NEXT occurrence. Both advance by the
+  /// recurrence interval each time the scheduler spawns an occurrence, so
+  /// they always describe the upcoming occurrence. Null fields fall back
+  /// to defaults at spawn time (open = now, close = startTime).
+  registrationOpenAt      DateTime?
+  registrationCloseAt     DateTime?
+  /// Halts generation of new occurrences without cancelling the template.
+  /// Running occurrences (already spawned) are unaffected.
+  paused                  Boolean                           @default(false)
+  autoOptOutAfterMissed   Int?
+  createdById             String
+  createdAt               DateTime                          @default(now())
+  updatedAt               DateTime                          @updatedAt
+  /// True when created by an automated test suite.
+  isTest                  Boolean                           @default(false)
+  /// Bracket seeding strategy inherited by cloned occurrences. See §5.9.
+  seedingMode             TournamentSeedingMode             @default(random)
+  tournaments             Tournament[]
+  seedBots                TournamentTemplateSeedBot[]
+  subscriptions           RecurringTournamentRegistration[]
+
+  @@index([game])
+  @@index([createdById])
+  @@index([paused, recurrenceStart])
+  @@map("tournament_templates")
+}
+
+model TournamentParticipant {
+  id                String            @id @default(cuid())
+  tournamentId      String
+  userId            String
+  seedPosition      Int?
+  eloAtRegistration Float?
+  status            ParticipantStatus @default(REGISTERED)
+  resultNotifPref   ResultNotifPref   @default(AS_PLAYED)
+  finalPosition     Int?
+  /// Normalised rank: 0.0 = winner (best), 1.0 = last place (worst). Null until tournament ends.
+  finalPositionPct  Float?
+  registeredAt      DateTime          @default(now())
+  points            Int               @default(0)
+  registrationMode  RegistrationMode  @default(SINGLE)
+  tournament        Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
+  @@map("tournament_participants")
+}
+
+model TournamentRound {
+  id           String            @id @default(cuid())
+  tournamentId String
+  roundNumber  Int
+  status       RoundStatus       @default(PENDING)
+  createdAt    DateTime          @default(now())
+  matches      TournamentMatch[]
+  tournament   Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, roundNumber])
+  @@index([tournamentId])
+  @@map("tournament_rounds")
+}
+
+model TournamentMatch {
+  id             String          @id @default(cuid())
+  tournamentId   String
+  roundId        String
+  participant1Id String?
+  participant2Id String?
+  winnerId       String?
+  status         MatchStatus     @default(PENDING)
+  drawResolution String?
+  p1Wins         Int             @default(0)
+  p2Wins         Int             @default(0)
+  drawGames      Int             @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  games          Game[]
+  round          TournamentRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId])
+  @@index([roundId])
+  @@map("tournament_matches")
+}
+
+model PlayerClassification {
+  id                   String                  @id @default(cuid())
+  userId               String                  @unique
+  tier                 ClassificationTier      @default(RECRUIT)
+  merits               Int                     @default(0)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  demotionOptOutUsedAt DateTime?
+  history              ClassificationHistory[]
+  meritTx              MeritTransaction[]
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("player_classifications")
+}
+
+model MeritTransaction {
+  id               String               @id @default(cuid())
+  classificationId String
+  tournamentId     String?
+  delta            Int
+  reason           String
+  createdAt        DateTime             @default(now())
+  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+
+  @@index([classificationId])
+  @@index([tournamentId])
+  @@map("merit_transactions")
+}
+
+model ClassificationHistory {
+  id               String               @id @default(cuid())
+  classificationId String
+  fromTier         ClassificationTier?
+  toTier           ClassificationTier
+  reason           String
+  tournamentId     String?
+  createdAt        DateTime             @default(now())
+  classification   PlayerClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+
+  @@index([classificationId])
+  @@map("classification_history")
+}
+
+model MeritThreshold {
+  id      String @id @default(cuid())
+  bandMin Int
+  bandMax Int?
+  pos1    Int
+  pos2    Int
+  pos3    Int
+  pos4    Int
+
+  @@map("merit_thresholds")
+}
+
+model RecurringTournamentRegistration {
+  id          String              @id @default(cuid())
+  templateId  String
+  userId      String
+  missedCount Int                 @default(0)
+  optedOutAt  DateTime?
+  createdAt   DateTime            @default(now())
+  /// Phase 3.7a: FK now targets TournamentTemplate (was Tournament with
+  /// isRecurring:true). Cascade so deleting a template cleans up subs.
+  template    TournamentTemplate? @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, userId])
+  @@index([templateId])
+  @@index([userId])
+  @@map("recurring_tournament_registrations")
+}
+
+model TournamentSeedBot {
+  id           String     @id @default(cuid())
+  tournamentId String
+  userId       String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@map("tournament_seed_bots")
+}
+
+/// Phase 3.7a.6 — append-only audit log of tournaments the sweep hard-
+/// deleted for being unfilled + bot-only. The delete removes the source
+/// Tournament row, so a post-hoc COUNT is impossible; this row is written
+/// immediately before the delete so admins can still see "how often is
+/// this happening" as a health signal for scheduling / seed-bot tuning.
+/// No FKs — the referenced Tournament (and possibly Template) may be gone.
+model TournamentAutoDrop {
+  id                   String   @id @default(cuid())
+  originalTournamentId String?
+  templateId           String?
+  name                 String
+  game                 String
+  minParticipants      Int
+  participantCount     Int
+  droppedAt            DateTime @default(now())
+
+  @@index([droppedAt])
+  @@map("tournament_auto_drops")
+}
+
+/// Phase 3.7a — seed bots attached to a recurring-tournament *template*.
+/// Every spawned occurrence inherits these; the `TournamentSeedBot` table
+/// above stays for per-occurrence overrides on one-shot tournaments.
+model TournamentTemplateSeedBot {
+  id         String             @id @default(cuid())
+  templateId String
+  userId     String
+  template   TournamentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id])
+  createdAt  DateTime           @default(now())
+
+  @@unique([templateId, userId])
+  @@index([templateId])
+  @@map("tournament_template_seed_bots")
+}
+
+model Table {
+  id                String      @id @default(cuid())
+  gameId            String
+  status            TableStatus @default(FORMING)
+  createdById       String
+  minPlayers        Int
+  maxPlayers        Int
+  isPrivate         Boolean     @default(false)
+  chatEnabled       Boolean     @default(false)
+  isTournament      Boolean     @default(false)
+  /// Array of seat objects: { userId: string|null, status: "occupied" | "empty" }.
+  /// Length always equals maxPlayers; empty seats have userId: null.
+  seats             Json
+  /// Full game state blob — replaces the in-memory Room's board/turn/scores.
+  /// Shape: { board, currentTurn, scores, round, winner, winLine, marks, botMark, moves }
+  /// Updated on every move; game-defined but platform reads status fields for
+  /// lifecycle decisions (e.g., marking Table COMPLETED on winner).
+  previewState      Json?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  /// Phase 3.4 — tournament context (null for free-play tables).
+  tournamentMatchId String?
+  tournamentId      String?
+  bestOfN           Int?
+  /// Phase 3.4 — bot context (null for PvP tables).
+  isHvb             Boolean     @default(false)
+  botUserId         String?
+  botSkillId        String?
+  /// Opaque URL slug (nanoid). Unique per row; UI labels are computed on read
+  /// from seats + tournament context (see lib/tableLabel.js), not stored here.
+  slug              String?     @unique
+  /// True for Hook-phase "Watch bots battle" demo tables. Private to the creator,
+  /// GC'd aggressively (one active per user, 2-min-post-complete, 1-hour TTL).
+  /// See Intelligent_Guide_Requirements.md §5.1.
+  isDemo            Boolean     @default(false)
+  /// Realtime transport this table was opened with: 'socketio' or 'sse'.
+  /// Pinned at create time from `realtime.gameflow.via` SystemConfig so a
+  /// mid-rollout PvP doesn't end up with players on different transports —
+  /// per Realtime_Migration_Plan.md Risk R7. The legacy default keeps prod
+  /// safe before the flag flip.
+  gameflowVia       String      @default("socketio")
+
+  @@index([status])
+  @@index([gameId])
+  @@index([createdById])
+  @@index([isTournament])
+  @@index([tournamentMatchId])
+  @@index([botUserId])
+  @@index([isDemo])
+  @@map("tables")
+}
+
+/// Daily aggregate snapshot written by a UTC-midnight cron job. The admin
+/// `/admin/guide-metrics` dashboard reads from this table for historical
+/// trend data; real-time metrics query raw events (users, games,
+/// tournaments) directly. All aggregation queries filter
+/// `WHERE user.isTestUser = false`. Retention defaults to indefinite
+/// (see Intelligent_Guide_Requirements.md §2).
+///
+/// `dimensions` is a free-form JSON slicer: e.g. `{ "bucket": "designer" }`
+/// for per-bucket breakdowns or `{ "cohortWeek": "2026-W17" }` for
+/// cohort-sliced snapshots. The `(date, metric, dimensions)` unique index
+/// makes re-running the cron for the same UTC date idempotent (same
+/// dimensions → same row → upsert, never duplicates).
+model MetricsSnapshot {
+  id         String   @id @default(cuid())
+  date       DateTime @db.Date
+  metric     String
+  value      Float
+  dimensions Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([date])
+  @@index([metric])
+  @@map("metrics_snapshots")
+}
+
+enum ScheduledJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
 }
 
 enum Role {
@@ -452,10 +927,10 @@ enum FeedbackStatus {
 }
 
 enum GameMode {
-  PVP
-  PVAI
-  PVBOT
-  BOTVBOT
+  HVH
+  HVA
+  HVB
+  BVB
 }
 
 enum Difficulty {
@@ -480,16 +955,7 @@ enum MovePlayer {
   AI
 }
 
-enum MLAlgorithm {
-  Q_LEARNING
-  SARSA
-  MONTE_CARLO
-  POLICY_GRADIENT
-  DQN
-  ALPHA_ZERO
-}
-
-enum MLModelStatus {
+enum BotSkillStatus {
   IDLE
   TRAINING
 }
@@ -512,4 +978,92 @@ enum EpisodeOutcome {
   WIN
   LOSS
   DRAW
+}
+
+enum TournamentMode {
+  HVH
+  BOT_VS_BOT
+  MIXED
+}
+
+enum RegistrationMode {
+  SINGLE
+  RECURRING
+}
+
+enum RecurrenceInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum TournamentFormat {
+  OPEN
+  PLANNED
+  FLASH
+}
+
+enum BracketType {
+  SINGLE_ELIM
+  ROUND_ROBIN
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TournamentSeedingMode {
+  random
+  deterministic
+}
+
+enum TournamentStartMode {
+  AUTO
+  SCHEDULED
+  MANUAL
+}
+
+enum ParticipantStatus {
+  REGISTERED
+  ELIMINATED
+  WITHDRAWN
+}
+
+enum MatchStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum RoundStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ResultNotifPref {
+  AS_PLAYED
+  END_OF_TOURNAMENT
+}
+
+enum ClassificationTier {
+  RECRUIT
+  CONTENDER
+  VETERAN
+  ELITE
+  CHAMPION
+  LEGEND
+}
+
+enum TableStatus {
+  FORMING
+  ACTIVE
+  COMPLETED
 }

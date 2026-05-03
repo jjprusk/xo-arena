@@ -1,3 +1,30 @@
-# Run unit tests across all workspaces before committing
-# Blocks commit if any tests fail
-npm test --workspace=frontend --workspace=backend
+# Run unit tests across landing + backend before committing.
+# Backend tests need a real Postgres connection (per the project's standing
+# convention — DB is not reachable from the host), so they must run inside
+# the docker-compose backend container. Landing tests run on the host.
+
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "▶ landing tests (host)…"
+npm test --workspace=landing
+
+echo "▶ backend tests (docker compose exec)…"
+if ! docker info >/dev/null 2>&1; then
+  echo
+  echo "✗ Docker daemon is not reachable. Start Docker Desktop, then retry."
+  echo "  (Backend tests need the docker-compose Postgres — they cannot run from the host.)"
+  exit 1
+fi
+
+if ! docker compose ps --services --status running 2>/dev/null | grep -qx backend; then
+  echo
+  echo "✗ The 'backend' compose service is not running. Start it with:"
+  echo "    docker compose up -d backend postgres redis"
+  echo "  …then retry the commit."
+  exit 1
+fi
+
+docker compose exec -T backend npx vitest run

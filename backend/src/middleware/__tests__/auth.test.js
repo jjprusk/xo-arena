@@ -109,10 +109,18 @@ describe('requireAuth', () => {
     expect(res.body.error).toMatch(/suspended/i)
   })
 
-  it('passes through when ban check throws (fail-open behaviour)', async () => {
+  it('returns 401 when JWT is valid but no active session exists (zombie-state fix)', async () => {
+    db.baSession.findFirst.mockResolvedValueOnce(null)
+    const res = await request(app).get('/test').set('Authorization', `Bearer ${VALID_JWT}`)
+    expect(res.status).toBe(401)
+    expect(res.body.code).toBe('SESSION_EXPIRED')
+  })
+
+  it('returns 503 when the auth-session DB check throws (fail closed, not open)', async () => {
     db.user.findUnique.mockRejectedValueOnce(new Error('db offline'))
     const res = await request(app).get('/test').set('Authorization', `Bearer ${VALID_JWT}`)
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(503)
+    expect(res.body.error).toMatch(/auth service unavailable/i)
   })
 })
 
@@ -135,6 +143,13 @@ describe('optionalAuth', () => {
 
   it('sets req.auth = null when token verification fails (no 401)', async () => {
     jwtVerify.mockRejectedValueOnce(new Error('bad sig'))
+    const res = await request(app).get('/test').set('Authorization', `Bearer ${VALID_JWT}`)
+    expect(res.status).toBe(200)
+    expect(res.body.auth).toBeNull()
+  })
+
+  it('treats JWT-valid-but-no-session as guest (not authenticated)', async () => {
+    db.baSession.findFirst.mockResolvedValueOnce(null)
     const res = await request(app).get('/test').set('Authorization', `Bearer ${VALID_JWT}`)
     expect(res.status).toBe(200)
     expect(res.body.auth).toBeNull()

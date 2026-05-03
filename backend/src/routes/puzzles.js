@@ -1,3 +1,4 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
 import { PUZZLE_TYPES } from '../utils/puzzleGenerator.js'
 

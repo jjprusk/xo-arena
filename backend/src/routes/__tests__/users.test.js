@@ -23,36 +23,44 @@ vi.mock('../../services/userService.js', () => ({
 }))
 
 // Mock db for sync endpoint (baUser lookup) and game history
-vi.mock('../../lib/db.js', () => ({
-  default: {
-    baUser: {
-      findUnique: vi.fn(async () => ({
-        id: 'ba_user_1',
-        email: 'a@b.com',
-        name: 'Test User',
-        image: null,
-      })),
+vi.mock('../../lib/db.js', () => {
+  const game = {
+    findMany:   vi.fn(async () => []),
+    count:      vi.fn(async () => 0),
+    deleteMany: vi.fn(async () => ({ count: 0 })),
+    updateMany: vi.fn(async () => ({ count: 0 })),
+  }
+  const baUser = {
+    findUnique: vi.fn(async () => ({
+      id: 'ba_user_1',
+      email: 'a@b.com',
+      name: 'Test User',
+      image: null,
+    })),
+    delete: vi.fn(async () => ({})),
+  }
+  const user = {
+    findUnique: vi.fn(),
+    findMany:   vi.fn(async () => []),
+    update:     vi.fn(async () => ({})),
+    delete:     vi.fn(async () => ({})),
+  }
+  const botSkill = { deleteMany: vi.fn(async () => ({ count: 0 })) }
+  const tournamentParticipant = { deleteMany: vi.fn(async () => ({ count: 0 })) }
+  return {
+    default: {
+      baUser, user, game, botSkill, tournamentParticipant,
+      userEloHistory: { findMany: vi.fn(async () => []) },
+      gameElo:        { findUnique: vi.fn(async () => ({ rating: 1200 })) },
+      mLPlayerProfile:{ findMany: vi.fn(async () => []) },
+      userNotification: {
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+      $transaction: vi.fn(async (fn) => fn({ game, user, baUser, botSkill, tournamentParticipant })),
     },
-    user: {
-      findUnique: vi.fn(),
-      update: vi.fn(async () => ({})),
-    },
-    game: {
-      findMany: vi.fn(async () => []),
-      count: vi.fn(async () => 0),
-    },
-    userEloHistory: {
-      findMany: vi.fn(async () => []),
-    },
-    mLPlayerProfile: {
-      findMany: vi.fn(async () => []),
-    },
-    userNotification: {
-      findMany: vi.fn(async () => []),
-      updateMany: vi.fn(async () => ({ count: 0 })),
-    },
-  },
-}))
+  }
+})
 
 vi.mock('../../services/creditService.js', () => ({
   getUserCredits: vi.fn(),
@@ -209,6 +217,21 @@ describe('GET /api/v1/users/me/notifications', () => {
     const res = await request(app).get('/api/v1/users/me/notifications')
     expect(res.status).toBe(404)
   })
+
+  it('filters out expired notifications (expiresAt < now)', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    db.userNotification.findMany.mockResolvedValue([])
+    await request(app).get('/api/v1/users/me/notifications')
+
+    const call = db.userNotification.findMany.mock.calls[0][0]
+    expect(call.where.userId).toBe('usr_1')
+    expect(call.where.deliveredAt).toBeNull()
+    // Either expiresAt IS NULL (no TTL) or expiresAt > now (still valid)
+    expect(call.where.OR).toEqual([
+      { expiresAt: null },
+      { expiresAt: { gt: expect.any(Date) } },
+    ])
+  })
 })
 
 describe('POST /api/v1/users/me/notifications/deliver', () => {
@@ -254,6 +277,148 @@ describe('POST /api/v1/users/me/notifications/deliver', () => {
   })
 })
 
+describe('GET /api/v1/users/me/preferences', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns defaults when preferences are empty', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: {} })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.showGuideButton).toBe(true)
+    expect(res.body.tournamentResultNotifPref).toBe('AS_PLAYED')
+  })
+
+  it('returns stored tournamentResultNotifPref', async () => {
+    db.user.findUnique.mockResolvedValue({
+      preferences: { tournamentResultNotifPref: 'END_OF_TOURNAMENT' },
+    })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.tournamentResultNotifPref).toBe('END_OF_TOURNAMENT')
+  })
+
+  it('returns false for showGuideButton when explicitly set', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: { showGuideButton: false } })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.showGuideButton).toBe(false)
+  })
+
+  it('returns flashStartAlerts=true by default', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: {} })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.flashStartAlerts).toBe(true)
+  })
+
+  it('returns flashStartAlerts=false when explicitly disabled', async () => {
+    db.user.findUnique.mockResolvedValue({ preferences: { flashStartAlerts: false } })
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.flashStartAlerts).toBe(false)
+  })
+
+  it('returns 404 when user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app).get('/api/v1/users/me/preferences')
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('PATCH /api/v1/users/me/preferences', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('saves AS_PLAYED tournamentResultNotifPref', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'AS_PLAYED' })
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { preferences: expect.objectContaining({ tournamentResultNotifPref: 'AS_PLAYED' }) },
+      })
+    )
+  })
+
+  it('saves END_OF_TOURNAMENT tournamentResultNotifPref', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'END_OF_TOURNAMENT' })
+    expect(res.status).toBe(200)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { preferences: expect.objectContaining({ tournamentResultNotifPref: 'END_OF_TOURNAMENT' }) },
+      })
+    )
+  })
+
+  it('ignores invalid tournamentResultNotifPref values', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'INVALID' })
+    expect(res.status).toBe(200)
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences).not.toHaveProperty('tournamentResultNotifPref')
+  })
+
+  it('merges with existing preferences', async () => {
+    db.user.findUnique.mockResolvedValue({
+      id: 'usr_1',
+      preferences: { showGuideButton: false, faqHintSeen: true },
+    })
+    db.user.update.mockResolvedValue({})
+    await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'END_OF_TOURNAMENT' })
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences).toMatchObject({
+      showGuideButton: false,
+      faqHintSeen: true,
+      tournamentResultNotifPref: 'END_OF_TOURNAMENT',
+    })
+  })
+
+  it('saves flashStartAlerts=false', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: {} })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ flashStartAlerts: false })
+    expect(res.status).toBe(200)
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { preferences: expect.objectContaining({ flashStartAlerts: false }) },
+      })
+    )
+  })
+
+  it('saves flashStartAlerts=true', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', preferences: { flashStartAlerts: false } })
+    db.user.update.mockResolvedValue({})
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ flashStartAlerts: true })
+    expect(res.status).toBe(200)
+    const updateCall = db.user.update.mock.calls[0][0]
+    expect(updateCall.data.preferences.flashStartAlerts).toBe(true)
+  })
+
+  it('returns 404 when user not found', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+    const res = await request(app)
+      .patch('/api/v1/users/me/preferences')
+      .send({ tournamentResultNotifPref: 'AS_PLAYED' })
+    expect(res.status).toBe(404)
+  })
+})
+
 describe('PATCH /api/v1/users/me/settings', () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -284,5 +449,61 @@ describe('PATCH /api/v1/users/me/settings', () => {
       .patch('/api/v1/users/me/settings')
       .send({ emailAchievements: false })
     expect(res.status).toBe(404)
+  })
+})
+
+describe('DELETE /api/v1/users/me', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.baUser.findUnique.mockResolvedValue({ id: 'ba_user_1', email: 'a@b.com', role: 'user' })
+  })
+
+  it('refuses 403 when caller is an admin', async () => {
+    db.baUser.findUnique.mockResolvedValue({ id: 'ba_user_1', email: 'a@b.com', role: 'admin' })
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(403)
+    expect(db.user.delete).not.toHaveBeenCalled()
+  })
+
+  it('refuses 409 with bot list when caller owns bots', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', betterAuthId: 'ba_user_1' })
+    db.user.findMany.mockResolvedValue([
+      { id: 'bot_1', username: 'mybot', displayName: 'MyBot', betterAuthId: null, botModelId: null },
+      { id: 'bot_2', username: 'other', displayName: 'Other', betterAuthId: null, botModelId: null },
+    ])
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('USER_OWNS_BOTS')
+    expect(res.body.bots).toEqual([
+      { id: 'bot_1', username: 'mybot', displayName: 'MyBot' },
+      { id: 'bot_2', username: 'other', displayName: 'Other' },
+    ])
+    expect(db.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('deletes the user when no bots are owned', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'usr_1', username: 'alice', betterAuthId: 'ba_user_1' })
+    db.user.findMany.mockResolvedValue([])
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ ok: true })
+    expect(db.$transaction).toHaveBeenCalledTimes(1)
+    expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'usr_1' } })
+  })
+
+  it('deletes only the BaUser when there is no domain user record yet', async () => {
+    db.user.findUnique.mockResolvedValue(null)
+
+    const res = await request(app).delete('/api/v1/users/me')
+
+    expect(res.status).toBe(200)
+    expect(db.baUser.delete).toHaveBeenCalledWith({ where: { id: 'ba_user_1' } })
+    expect(db.$transaction).not.toHaveBeenCalled()
   })
 })

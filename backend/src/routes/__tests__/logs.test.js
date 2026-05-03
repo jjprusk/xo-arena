@@ -23,6 +23,11 @@ vi.mock('../../services/mlService.js', () => ({
   setSystemConfig: vi.fn(),
 }))
 
+const { mockAppendToStream } = vi.hoisted(() => ({
+  mockAppendToStream: vi.fn().mockResolvedValue('1-0'),
+}))
+vi.mock('../../lib/eventStream.js', () => ({ appendToStream: mockAppendToStream }))
+
 const logsRouter = (await import('../logs.js')).default
 const db = (await import('../../lib/db.js')).default
 
@@ -79,6 +84,16 @@ describe('POST /api/v1/logs', () => {
     expect(data[0].level).toBe('INFO')
     expect(data[0].source).toBe('frontend')
     expect(data[0].message).toBe('Page loaded')
+  })
+
+  it('Phase 4: dual-emits each row to the SSE admin:logs:entry channel', async () => {
+    await request(app)
+      .post('/api/v1/logs')
+      .send({ entries: [validEntry, { ...validEntry, message: 'second' }] })
+    // Two rows in → two SSE appends out, on the same channel.
+    const calls = mockAppendToStream.mock.calls.filter(([ch]) => ch === 'admin:logs:entry')
+    expect(calls).toHaveLength(2)
+    expect(calls[0][2]).toEqual({ userId: '*' })
   })
 
   it('returns 204 with no db write when all entries are invalid', async () => {

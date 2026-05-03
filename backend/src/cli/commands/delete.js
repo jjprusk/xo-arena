@@ -1,6 +1,12 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { createInterface } from 'readline'
 import db from '../lib/db.js'
 import { resolveUsers, ok, fail } from '../lib/safety.js'
+import {
+  findOwnedBots,
+  deleteUserWithBots,
+  BuiltinBotProtectedError,
+} from '../../services/userDeletionService.js'
 
 async function confirm(question) {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
@@ -38,7 +44,9 @@ export function deleteCommand(program) {
           continue
         }
         if (isAdmin) remainingAdmins--
-        toDelete.push(user)
+
+        const bots = await findOwnedBots(db, user.id)
+        toDelete.push({ ...user, _bots: bots })
       }
 
       if (toDelete.length === 0) {
@@ -49,24 +57,34 @@ export function deleteCommand(program) {
       if (!opts.yes) {
         if (toDelete.length === 1) {
           const u = toDelete[0]
-          const confirmed = await confirm(`Delete user "${u.username}" (${u.email})? This cannot be undone.`)
+          const botSuffix = u._bots.length > 0
+            ? ` and ${u._bots.length} bot${u._bots.length === 1 ? '' : 's'} (${u._bots.map(b => b.username).join(', ')})`
+            : ''
+          const confirmed = await confirm(`Delete user "${u.username}" (${u.email})${botSuffix}? This cannot be undone.`)
           if (!confirmed) { console.log('Aborted.'); process.exit(0) }
         } else {
           console.log(`About to delete ${toDelete.length} users:`)
-          for (const u of toDelete) console.log(`  ${u.username} (${u.email})`)
+          for (const u of toDelete) {
+            const botSuffix = u._bots.length > 0 ? ` [+${u._bots.length} bot${u._bots.length === 1 ? '' : 's'}]` : ''
+            console.log(`  ${u.username} (${u.email})${botSuffix}`)
+          }
           const confirmed = await confirm('Delete all of the above? This cannot be undone.')
           if (!confirmed) { console.log('Aborted.'); process.exit(0) }
         }
       }
 
       for (const user of toDelete) {
-        await db.$transaction(async (tx) => {
-          if (user.betterAuthId) {
-            await tx.baUser.delete({ where: { id: user.betterAuthId } })
+        try {
+          await deleteUserWithBots(db, user, user._bots)
+        } catch (err) {
+          if (err instanceof BuiltinBotProtectedError) {
+            console.error(`  ✗ "${user.username}" skipped — ${err.message}`)
+            continue
           }
-          await tx.user.delete({ where: { id: user.id } })
-        })
-        ok(`Deleted user "${user.username}"`)
+          throw err
+        }
+        const botSuffix = user._bots.length > 0 ? ` (+${user._bots.length} bot${user._bots.length === 1 ? '' : 's'})` : ''
+        ok(`Deleted user "${user.username}"${botSuffix}`)
       }
     })
 }

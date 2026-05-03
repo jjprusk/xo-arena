@@ -1,5 +1,10 @@
+// Copyright © 2026 Joe Pruskowski. All rights reserved.
 import db from '../lib/db.js'
 import { formatIdle } from './idle.js'
+import { TOTAL_STEPS, deriveCurrentPhase } from '../../services/journeyService.js'
+
+// Single-letter phase tag for the JOURNEY column header
+const PHASE_TAG = { hook: 'H', curriculum: 'C', specialize: 'S' }
 
 const GREEN  = '\x1b[32m'
 const YELLOW = '\x1b[93m'
@@ -108,7 +113,7 @@ export function listCommand(program) {
         col('VERIFIED',  8),
         col('IDLE',      7),
         col('SIGNED IN', 9),
-        col('HINTS',     14),
+        col('JOURNEY',   9),
         col('ROLES',     20),
         col('CREATED',   12),
       ].join('  ')
@@ -121,11 +126,15 @@ export function listCommand(program) {
         const roles    = u.userRoles.map(r => r.role).join(', ') || '—'
         const created  = u.createdAt.toISOString().slice(0, 10)
         const verified = u.emailVerified == null ? '?' : u.emailVerified ? 'yes' : 'no'
-        const prefs    = (u.preferences && typeof u.preferences === 'object') ? u.preferences : {}
-        const hints = [
-          prefs.faqHintSeen  ? 'faq✓'  : 'faq',
-          prefs.playHintSeen ? 'play✓' : 'play',
-        ].join(', ')
+        const prefs     = (u.preferences && typeof u.preferences === 'object') ? u.preferences : {}
+        const progress  = prefs.journeyProgress
+        const completed = Array.isArray(progress?.completedSteps) ? progress.completedSteps : []
+        // Format: "<phase> <n>/7" + 'D' if journey dismissed.
+        // Phase derives from the latest milestone reached (hook → curriculum →
+        // specialize). Pre-Sprint-1 users (no progress row) display as "H 0/7".
+        const phaseTag  = PHASE_TAG[deriveCurrentPhase(completed)] ?? '?'
+        const dismissed = progress?.dismissedAt ? 'D' : ''
+        const journey   = `${phaseTag} ${completed.length}/${TOTAL_STEPS}${dismissed}`
 
         // Colour the dot based on idle status (only for signed-in users).
         // We can't use col() on the dot because ANSI codes inflate the byte
@@ -148,7 +157,7 @@ export function listCommand(program) {
           col(verified,                   8),
           col(u.online ? formatIdle(u.lastActiveAt) : '—', 7),
           col(u.signedInAt ? formatIdle(u.signedInAt) : '—', 9),
-          col(hints,                     14),
+          col(journey,                    9),
           col(roles,                     20),
           col(created,                   12),
         ].join('  '))

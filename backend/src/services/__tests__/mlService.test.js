@@ -13,7 +13,7 @@ vi.mock('../../lib/db.js', () => ({
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
-    mLModel: {
+    botSkill: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -25,6 +25,7 @@ vi.mock('../../lib/db.js', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      update: vi.fn(),
     },
   },
 }))
@@ -35,6 +36,10 @@ vi.mock('../../logger.js', () => ({
 
 vi.mock('../../services/userService.js', () => ({
   resetBotElo: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../../lib/eventStream.js', () => ({
+  appendToStream: vi.fn().mockResolvedValue('1-0'),
 }))
 
 vi.mock('@xo-arena/ai', () => ({
@@ -72,6 +77,7 @@ const {
   resetModel,
   cloneModel,
   listModels,
+  repointBotPrimarySkill,
 } = await import('../mlService.js')
 
 const db = (await import('../../lib/db.js')).default
@@ -88,12 +94,11 @@ function makeModel(overrides = {}) {
     id: 'model_1',
     name: 'Test Model',
     description: null,
-    algorithm: 'Q_LEARNING',
-    qtable: {},
+    algorithm: 'qlearning',
+    weights: {},
     config: { learningRate: 0.1, epsilonStart: 1.0 },
     totalEpisodes: 0,
     maxEpisodes: 100_000,
-    eloRating: 1200,
     featured: false,
     createdBy: null,
     status: 'IDLE',
@@ -151,31 +156,31 @@ describe('createModel', () => {
   it('creates a Q_LEARNING model with defaults', async () => {
     db.systemConfig.findUnique.mockResolvedValue(null) // maxEpisodes → default 100_000
     const created = makeModel({ id: 'new_1', name: 'QL Model', algorithm: 'Q_LEARNING' })
-    db.mLModel.create.mockResolvedValue(created)
+    db.botSkill.create.mockResolvedValue(created)
 
     const result = await createModel({ name: 'QL Model', algorithm: 'Q_LEARNING' })
     expect(result.id).toBe('new_1')
-    expect(db.mLModel.create).toHaveBeenCalledOnce()
-    const { data } = db.mLModel.create.mock.calls[0][0]
+    expect(db.botSkill.create).toHaveBeenCalledOnce()
+    const { data } = db.botSkill.create.mock.calls[0][0]
     expect(data.algorithm).toBe('Q_LEARNING')
     expect(data.maxEpisodes).toBe(100_000)
-    expect(data.qtable).toEqual({})
+    expect(data.weights).toEqual({})
     expect(data.createdBy).toBeNull()
   })
 
   it('stores null description when description is empty string', async () => {
     db.systemConfig.findUnique.mockResolvedValue(null)
-    db.mLModel.create.mockResolvedValue(makeModel())
+    db.botSkill.create.mockResolvedValue(makeModel())
     await createModel({ name: 'M', description: '', algorithm: 'Q_LEARNING' })
-    const { data } = db.mLModel.create.mock.calls[0][0]
+    const { data } = db.botSkill.create.mock.calls[0][0]
     expect(data.description).toBeNull()
   })
 
   it('uses custom maxEpisodes from system config', async () => {
     db.systemConfig.findUnique.mockResolvedValue({ key: 'ml.maxEpisodesPerModel', value: 50_000 })
-    db.mLModel.create.mockResolvedValue(makeModel())
+    db.botSkill.create.mockResolvedValue(makeModel())
     await createModel({ name: 'M', algorithm: 'SARSA' })
-    const { data } = db.mLModel.create.mock.calls[0][0]
+    const { data } = db.botSkill.create.mock.calls[0][0]
     expect(data.maxEpisodes).toBe(50_000)
   })
 
@@ -188,13 +193,13 @@ describe('createModel', () => {
         if (key === 'ml.maxEpisodesPerModel')      return { key, value: 100_000 }
         return null
       })
-      db.mLModel.create.mockResolvedValue(makeModel({ algorithm: 'DQN' }))
+      db.botSkill.create.mockResolvedValue(makeModel({ algorithm: 'DQN' }))
     }
 
     it('accepts valid networkShape and bakes layerSizes', async () => {
       setupDqnConfig()
       await createModel({ name: 'DQN', algorithm: 'DQN', config: { networkShape: [64, 32] } })
-      const { data } = db.mLModel.create.mock.calls[0][0]
+      const { data } = db.botSkill.create.mock.calls[0][0]
       expect(data.config.layerSizes).toEqual([9, 64, 32, 9])
       expect(data.config.networkShape).toEqual([64, 32])
       expect(data.config.hiddenSize).toBeUndefined()
@@ -203,7 +208,7 @@ describe('createModel', () => {
     it('uses defaultHiddenLayers when no networkShape provided', async () => {
       setupDqnConfig()
       await createModel({ name: 'DQN', algorithm: 'DQN' })
-      const { data } = db.mLModel.create.mock.calls[0][0]
+      const { data } = db.botSkill.create.mock.calls[0][0]
       expect(data.config.layerSizes).toEqual([9, 32, 9])
     })
 
@@ -243,14 +248,14 @@ describe('getModel', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('returns null when model not found', async () => {
-    db.mLModel.findUnique.mockResolvedValue(null)
+    db.botSkill.findUnique.mockResolvedValue(null)
     const result = await getModel('nope')
     expect(result).toBeNull()
   })
 
   it('returns model with creatorName when createdBy is set', async () => {
     const model = makeModel({ createdBy: 'ba_user_1' })
-    db.mLModel.findUnique.mockResolvedValue(model)
+    db.botSkill.findUnique.mockResolvedValue(model)
     db.user.findUnique.mockResolvedValue({ displayName: 'Alice', username: 'alice' })
 
     const result = await getModel('model_1')
@@ -259,7 +264,7 @@ describe('getModel', () => {
 
   it('falls back to username when displayName is null', async () => {
     const model = makeModel({ createdBy: 'ba_user_1' })
-    db.mLModel.findUnique.mockResolvedValue(model)
+    db.botSkill.findUnique.mockResolvedValue(model)
     db.user.findUnique.mockResolvedValue({ displayName: null, username: 'alice' })
 
     const result = await getModel('model_1')
@@ -268,7 +273,7 @@ describe('getModel', () => {
 
   it('returns creatorName null when createdBy is null', async () => {
     const model = makeModel({ createdBy: null })
-    db.mLModel.findUnique.mockResolvedValue(model)
+    db.botSkill.findUnique.mockResolvedValue(model)
 
     const result = await getModel('model_1')
     expect(result.creatorName).toBeNull()
@@ -282,20 +287,20 @@ describe('updateModel', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('only includes defined fields in the update', async () => {
-    db.mLModel.update.mockResolvedValue(makeModel({ name: 'New Name' }))
+    db.botSkill.update.mockResolvedValue(makeModel({ name: 'New Name' }))
     await updateModel('model_1', { name: 'New Name' })
 
-    const { data } = db.mLModel.update.mock.calls[0][0]
+    const { data } = db.botSkill.update.mock.calls[0][0]
     expect(data).toHaveProperty('name', 'New Name')
     expect(data).not.toHaveProperty('description')
     expect(data).not.toHaveProperty('config')
   })
 
   it('includes description when explicitly provided', async () => {
-    db.mLModel.update.mockResolvedValue(makeModel())
+    db.botSkill.update.mockResolvedValue(makeModel())
     await updateModel('model_1', { name: 'X', description: 'New desc', config: { lr: 0.05 } })
 
-    const { data } = db.mLModel.update.mock.calls[0][0]
+    const { data } = db.botSkill.update.mock.calls[0][0]
     expect(data.description).toBe('New desc')
     expect(data.config).toEqual({ lr: 0.05 })
   })
@@ -307,9 +312,9 @@ describe('deleteModel', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('deletes the model from the database', async () => {
-    db.mLModel.delete.mockResolvedValue({ id: 'model_1' })
+    db.botSkill.delete.mockResolvedValue({ id: 'model_1' })
     await deleteModel('model_1')
-    expect(db.mLModel.delete).toHaveBeenCalledWith({ where: { id: 'model_1' } })
+    expect(db.botSkill.delete).toHaveBeenCalledWith({ where: { id: 'model_1' } })
   })
 })
 
@@ -319,20 +324,20 @@ describe('resetModel', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('throws when model not found', async () => {
-    db.mLModel.findUnique.mockResolvedValue(null)
+    db.botSkill.findUnique.mockResolvedValue(null)
     await expect(resetModel('nope')).rejects.toThrow('Model not found')
   })
 
-  it('resets qtable and totalEpisodes, restores initial epsilon', async () => {
+  it('resets weights and totalEpisodes, restores initial epsilon', async () => {
     const model = makeModel({ config: { epsilonStart: 0.9, currentEpsilon: 0.1 } })
-    db.mLModel.findUnique.mockResolvedValue(model)
-    db.mLModel.update.mockResolvedValue({ ...model, qtable: {}, totalEpisodes: 0, status: 'IDLE' })
+    db.botSkill.findUnique.mockResolvedValue(model)
+    db.botSkill.update.mockResolvedValue({ ...model, weights: {}, totalEpisodes: 0, status: 'IDLE' })
     db.user.findFirst.mockResolvedValue(null) // no bot
 
     await resetModel('model_1')
 
-    const { data } = db.mLModel.update.mock.calls[0][0]
-    expect(data.qtable).toEqual({})
+    const { data } = db.botSkill.update.mock.calls[0][0]
+    expect(data.weights).toEqual({})
     expect(data.totalEpisodes).toBe(0)
     expect(data.status).toBe('IDLE')
     expect(data.config.currentEpsilon).toBe(0.9) // restored from epsilonStart
@@ -340,20 +345,20 @@ describe('resetModel', () => {
 
   it('uses DEFAULT_CONFIG.epsilonStart when epsilonStart missing from config', async () => {
     const model = makeModel({ config: {} })
-    db.mLModel.findUnique.mockResolvedValue(model)
-    db.mLModel.update.mockResolvedValue(model)
+    db.botSkill.findUnique.mockResolvedValue(model)
+    db.botSkill.update.mockResolvedValue(model)
     db.user.findFirst.mockResolvedValue(null)
 
     await resetModel('model_1')
 
-    const { data } = db.mLModel.update.mock.calls[0][0]
+    const { data } = db.botSkill.update.mock.calls[0][0]
     expect(data.config.currentEpsilon).toBe(1.0) // DEFAULT_CONFIG.epsilonStart
   })
 
   it('triggers resetBotElo when model is owned by a bot', async () => {
     const model = makeModel()
-    db.mLModel.findUnique.mockResolvedValue(model)
-    db.mLModel.update.mockResolvedValue(model)
+    db.botSkill.findUnique.mockResolvedValue(model)
+    db.botSkill.update.mockResolvedValue(model)
     db.user.findFirst.mockResolvedValue({ id: 'bot_1', isBot: true })
 
     await resetModel('model_1')
@@ -364,8 +369,8 @@ describe('resetModel', () => {
 
   it('does not call resetBotElo when no bot owns the model', async () => {
     const model = makeModel()
-    db.mLModel.findUnique.mockResolvedValue(model)
-    db.mLModel.update.mockResolvedValue(model)
+    db.botSkill.findUnique.mockResolvedValue(model)
+    db.botSkill.update.mockResolvedValue(model)
     db.user.findFirst.mockResolvedValue(null)
 
     await resetModel('model_1')
@@ -381,32 +386,31 @@ describe('cloneModel', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('throws when source model not found', async () => {
-    db.mLModel.findUnique.mockResolvedValue(null)
+    db.botSkill.findUnique.mockResolvedValue(null)
     await expect(cloneModel('nope', { name: 'Clone' })).rejects.toThrow('Source model not found')
   })
 
   it('creates a clone with the provided name', async () => {
-    const src = makeModel({ name: 'Original', algorithm: 'SARSA', eloRating: 1400 })
-    db.mLModel.findUnique.mockResolvedValue(src)
-    db.mLModel.create.mockResolvedValue({ ...src, id: 'clone_1', name: 'My Clone' })
+    const src = makeModel({ name: 'Original', algorithm: 'sarsa' })
+    db.botSkill.findUnique.mockResolvedValue(src)
+    db.botSkill.create.mockResolvedValue({ ...src, id: 'clone_1', name: 'My Clone' })
 
     await cloneModel('model_1', { name: 'My Clone', createdBy: 'ba_user_1' })
 
-    const { data } = db.mLModel.create.mock.calls[0][0]
+    const { data } = db.botSkill.create.mock.calls[0][0]
     expect(data.name).toBe('My Clone')
-    expect(data.algorithm).toBe('SARSA')
-    expect(data.eloRating).toBe(1400)
+    expect(data.algorithm).toBe('sarsa')
     expect(data.createdBy).toBe('ba_user_1')
   })
 
   it('defaults name to "<source> (copy)" when no name provided', async () => {
     const src = makeModel({ name: 'Original' })
-    db.mLModel.findUnique.mockResolvedValue(src)
-    db.mLModel.create.mockResolvedValue({ ...src, id: 'clone_1', name: 'Original (copy)' })
+    db.botSkill.findUnique.mockResolvedValue(src)
+    db.botSkill.create.mockResolvedValue({ ...src, id: 'clone_1', name: 'Original (copy)' })
 
     await cloneModel('model_1', {})
 
-    const { data } = db.mLModel.create.mock.calls[0][0]
+    const { data } = db.botSkill.create.mock.calls[0][0]
     expect(data.name).toBe('Original (copy)')
   })
 })
@@ -419,7 +423,7 @@ describe('listModels', () => {
   it('returns featured models first', async () => {
     const featured = makeModel({ id: 'm_featured', featured: true, createdBy: null })
     const normal   = makeModel({ id: 'm_normal',   featured: false, createdBy: null })
-    db.mLModel.findMany.mockResolvedValue([normal, featured]) // DB order: normal first
+    db.botSkill.findMany.mockResolvedValue([normal, featured]) // DB order: normal first
     db.user.findMany.mockResolvedValue([])
 
     const result = await listModels()
@@ -429,7 +433,7 @@ describe('listModels', () => {
 
   it('enriches models with creatorName', async () => {
     const model = makeModel({ createdBy: 'ba_1', _count: { sessions: 2 } })
-    db.mLModel.findMany.mockResolvedValue([model])
+    db.botSkill.findMany.mockResolvedValue([model])
     db.user.findMany.mockResolvedValue([
       { betterAuthId: 'ba_1', displayName: 'Alice', username: 'alice' },
     ])
@@ -440,10 +444,59 @@ describe('listModels', () => {
 
   it('sets creatorName to null for models without creator', async () => {
     const model = makeModel({ createdBy: null })
-    db.mLModel.findMany.mockResolvedValue([model])
+    db.botSkill.findMany.mockResolvedValue([model])
     db.user.findMany.mockResolvedValue([])
 
     const result = await listModels()
     expect(result[0].creatorName).toBeNull()
+  })
+})
+
+// ─── repointBotPrimarySkill (Phase 3.8.4.3) ──────────────────────────────────
+
+describe('repointBotPrimarySkill', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('updates User.botModelId on the bot that owns the skill', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_123' })
+    db.user.update.mockResolvedValue({ id: 'bot_123' })
+
+    const ok = await repointBotPrimarySkill('skill_xo')
+
+    expect(ok).toBe(true)
+    expect(db.botSkill.findUnique).toHaveBeenCalledWith({
+      where:  { id: 'skill_xo' },
+      select: { botId: true },
+    })
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'bot_123' },
+      data:  { botModelId: 'skill_xo' },
+    })
+  })
+
+  it('skips the user update when the skill has no botId (e.g. legacy / orphaned skill)', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: null })
+
+    const ok = await repointBotPrimarySkill('skill_orphan')
+
+    expect(ok).toBe(false)
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns false (and does not throw) if the skill row is missing', async () => {
+    db.botSkill.findUnique.mockResolvedValue(null)
+
+    const ok = await repointBotPrimarySkill('skill_gone')
+
+    expect(ok).toBe(false)
+    expect(db.user.update).not.toHaveBeenCalled()
+  })
+
+  it('returns false (and does not throw) on db errors so the completion event still fires', async () => {
+    db.botSkill.findUnique.mockRejectedValue(new Error('boom'))
+
+    const ok = await repointBotPrimarySkill('skill_err')
+
+    expect(ok).toBe(false)
   })
 })
