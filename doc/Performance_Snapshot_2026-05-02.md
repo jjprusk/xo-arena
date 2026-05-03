@@ -147,3 +147,75 @@ To turn this from "first look" into "trustworthy baseline":
 
 Numbers above are good enough to start Phase 1 and pick the next phase
 from data. They're **not** good enough to claim a binding baseline yet.
+
+---
+
+## Addendum — bundle audit + PlayVsBot anomaly (same day)
+
+After the initial run, two confirmation passes:
+
+### 1. PlayVsBot anomaly is real (10-run)
+
+Re-ran `--routes=PlayVsBot --runs=10 --warmup` to rule out variance:
+
+| Device  | p50    | p95    | First-run p50 (5×) |
+|---------|--------|--------|---------------------|
+| Desktop | 1529ms | 1702ms | 1340ms              |
+| Mobile  | 2207ms | 2564ms | 2116ms              |
+
+Both runs show PlayVsBot ~600–700ms slower than the next-worst route.
+The path is `/play?action=vs-community-bot` → `getCommunityBot()` fetch
+→ `/api/v1/rt/tables` POST → React redirect into the game view, all
+before the spinner clears. Each step is sequential. Worth a targeted
+fix once Phase 1 lands.
+
+### 2. Bundle audit (production build of staging-equivalent code)
+
+Ran `VISUALIZE=1 npx vite build` against landing. Output chunks:
+
+| Chunk                          | Raw       | Gzip    |
+|--------------------------------|-----------|---------|
+| **`main.supported-*.js`**      | **1,529 KB** | **411 KB** |
+| `vendor-react-*.js`            | 257 KB    | 82 KB   |
+| `TrainTab` / Gym tabs (each)   | 2–51 KB   | 1–13 KB |
+| recharts (`Legend`, `CartesianGrid`) | 6–7 KB | 2 KB |
+| `game-xo-*.js`                 | 40 KB     | 13 KB   |
+| `game-pong-*.js`               | 5 KB      | 2 KB    |
+| CSS (`main-*.css`)             | 61 KB     | 12 KB   |
+
+**First-paint JS: ~493 KB gzip** (vendor-react + main.supported) —
+matches the **487 KB** measured per route. ✓
+
+**The `main.supported` 1.5 MB chunk holds the entire app:** every page
+component (PlayPage, TournamentDetailPage, GymPage, ProfilePage,
+TablesPage, etc.), all UI primitives, Better Auth client, every store /
+hook / helper, and all `@xo-arena/*` packages except `game-xo` /
+`game-pong`. There's **no per-route lazy splitting at the page level** —
+the only `React.lazy()` boundaries today are inside Gym for tab content.
+
+This single chunk is the reason FCP / LCP / Ready collapse to within
+~100ms of each other on every route on every device, and why the
+numbers are flat regardless of what the user actually requested.
+
+Visualizer report: `landing/dist/bundle-stats.html` (open in a browser
+for the treemap drill-down). Generated only when `VISUALIZE=1` —
+normal builds are unchanged.
+
+### 3. Phase 1 (bundle) is the obvious top priority — confirmed
+
+Order of attack inside Phase 1, based on the visualizer:
+
+1. **Per-route `React.lazy()` for every page component in `App.jsx`.**
+   PlayPage, GymPage, TournamentDetailPage, TournamentsPage,
+   ProfilePage, BotProfilePage, PublicProfilePage, RankingsPage,
+   StatsPage, SettingsPage, TablesPage, TableDetailPage, SparPage,
+   PuzzlePage. Expect a ~50% drop in first-paint JS for non-Home routes.
+2. **Vendor-split `@xo-arena/*` (xo, nav, ai, sdk).** Currently bundled
+   into `main.supported`. Promote to separate chunks via `manualChunks`.
+3. **Audit Better Auth client.** Likely a meaningful chunk
+   (auth client + better-fetch + zod). Consider moving the auth surface
+   to a lazy module loaded only after sign-in trigger.
+4. **Reload bundle stats; confirm `main.supported` drops below 200 KB
+   gzip and per-route chunks are 30–80 KB gzip each.**
+
+After Phase 1 lands, re-run `perf-v2.js` to capture the actual win.

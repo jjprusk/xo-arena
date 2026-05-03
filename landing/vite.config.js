@@ -4,6 +4,18 @@ import tailwindcss from '@tailwindcss/vite'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
+
+// Optional bundle visualizer — only loaded when VISUALIZE=1 so prod builds
+// don't pull a dev-only dep into the dependency graph.
+const visualizerPlugin = process.env.VISUALIZE === '1'
+  ? (await import('rollup-plugin-visualizer')).visualizer({
+      filename: 'dist/bundle-stats.html',
+      gzipSize: true,
+      brotliSize: true,
+      template: 'treemap',
+      open: false,
+    })
+  : null
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 
@@ -43,7 +55,8 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react({ jsxRuntime: 'automatic' }),
     tailwindcss(),
-  ],
+    visualizerPlugin,
+  ].filter(Boolean),
   build: {
     rollupOptions: {
       output: {

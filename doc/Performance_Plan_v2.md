@@ -50,6 +50,47 @@ If a phase's measured win doesn't move at least one budgeted metric, mark it
 
 ---
 
+## Current baseline (2026-05-02 staging, cold-anon)
+
+Full numbers + caveats: `doc/Performance_Snapshot_2026-05-02.md`. The
+single-pass median across 13 routes:
+
+| Metric           | Target (desktop) | Measured | Over by |
+|------------------|------------------|----------|---------|
+| FCP              | ≤ 100ms          | ~525ms   | 5.3×    |
+| LCP              | ≤ 200ms          | ~640ms   | 3.2×    |
+| Ready            | ≤ 200ms          | ~760ms   | 3.8×    |
+
+| Metric           | Target (mobile)  | Measured | Over by |
+|------------------|------------------|----------|---------|
+| FCP              | ≤ 250ms          | ~1360ms  | 5.4×    |
+| LCP              | ≤ 500ms          | ~1450ms  | 2.9×    |
+| Ready            | ≤ 500ms          | ~1580ms  | 3.2×    |
+
+**Every route is over budget on both devices.** Three load-bearing facts
+from the snapshot drive the priorities below:
+
+1. **One bundle, every page.** First-paint JS is ~493 KB gz on every
+   route (`vendor-react` 82 KB + `main.supported` 411 KB). The
+   `main.supported` chunk is **1,529 KB raw / 411 KB gzip** and contains
+   the entire app — no per-route lazy splitting at the page level today.
+   FCP / LCP / Ready collapse to within ~100ms of each other on every
+   route, the fingerprint of a single bundle blocking the first paint.
+2. **PlayVsBot is genuinely 600–700ms slower than the next-worst route**
+   on both devices (10-run confirmation). Not noise. The `/play?action=
+   vs-community-bot` path runs sequential: `getCommunityBot()` →
+   `/api/v1/rt/tables` POST → redirect, all before the spinner clears.
+3. **Image bytes were not counted.** `colosseum-bg.jpg` (888 KB) didn't
+   appear in the static byte total — likely loads async after Ready
+   resolves. Need to confirm before promoting Phase 3.
+
+**The data does not support** chasing DB indexes (Phase 2), SSE latency
+(Phase 5), or cross-service hops (Phase 4) yet — the bundle + parse
+floor is currently dominating everything else by a ~10× margin. Those
+phases stay in the plan but move to Tier 2.
+
+---
+
 ## Pre-flight — before running Phase 0
 
 Cold benchmark numbers are only meaningful if the environment is real and the
@@ -275,22 +316,95 @@ this plan, showing where every route currently sits vs the targets above.
 Phases that move the actual latency floor (server time, network, parse,
 render). Ordered by expected impact-to-effort.
 
-### Phase 1 — Bundle audit + per-route splitting
+### Phase 1 — Bundle audit + per-route splitting  *(Tier 0 — start here)*
 
-Measure first (`vite build --mode production --report` or `rollup-plugin-visualizer`),
-then act. v1 split the Gym tabs but a lot has been added since: tournament
-brackets, recurring tournaments, journey UI, multi-skill bot UI, ML training
-engines.
+The 2026-05-02 visualizer pass (run `VISUALIZE=1 npx vite build` in
+`landing/`) showed `main.supported-*.js` at **1,529 KB raw / 411 KB gz**
+holding the entire app. Only `vendor-react`, `game-xo`, `game-pong`, and
+the Gym sub-tabs are split out — every page component is in `main`. Per-
+route splitting is the highest-leverage fix in the entire plan; until
+this lands, every other phase is a rounding error.
 
-- [ ] Generate the bundle report; commit `perf/baselines/bundle-<date>.html`.
-- [ ] Audit: `recharts` (Gym/Stats only?), the AlphaZero / DQN engines (Gym
-      Train tab only?), Better Auth client, Sentry/observability, journey
-      components.
-- [ ] Move heavy pages to `React.lazy()` if not already (TournamentDetailPage,
-      GymPage tabs, AdminUserProfilePage).
-- [ ] Verify `vendor-*` chunks are stable (don't churn on minor changes).
-- [ ] Add a CI bundle-size guard (`size-limit` or hand-rolled) — fail PR if a
-      chunk grows > 5% without a justification label.
+Concrete sub-steps (in order):
+
+- [ ] **Per-route `React.lazy()` for every page in `App.jsx`.** PlayPage,
+      GymPage, TournamentDetailPage, TournamentsPage, ProfilePage,
+      BotProfilePage, PublicProfilePage, RankingsPage, StatsPage,
+      SettingsPage, TablesPage, TableDetailPage, SparPage, PuzzlePage,
+      plus all `/admin/*` pages. Wrap each `<Suspense fallback={<Skeleton/>}>`
+      so the skeleton already aligns with Phase 8 work.
+- [ ] **Vendor-split `@xo-arena/*`** in `manualChunks` —
+      `xo`, `nav`, `ai`, `sdk`. They're currently bundled into
+      `main.supported`. Promote each to its own chunk.
+- [ ] **Audit Better Auth client.** Likely a meaningful chunk
+      (auth-client + better-fetch + zod). If the auth flow is only
+      relevant after a sign-in trigger, lazy-load the client module.
+- [ ] **Audit `recharts`.** Only used in Gym Analytics + Stats.
+      Confirm `vendor-charts` chunk separation; if it's leaking into
+      `main`, fix the import boundary.
+- [ ] **Audit ML engines (`@xo-arena/ai`).** Q-learning / DQN / AlphaZero
+      should only load on Gym Train tab — already lazy at the tab level,
+      but verify the engines aren't statically imported elsewhere.
+- [ ] **Audit images / SVG / icons.** Anything imported as a JS module
+      should be inspected; large inline SVGs should move to `<img>` or
+      a sprite sheet (currently inline JSX SVGs ship inside the JS chunk).
+- [ ] **Tactical library swaps.** Each of these has a measured-bytes
+      payoff; do them as separate PRs so each can be validated:
+  - `recharts` → `uplot` (~20× smaller, only used in Gym Analytics + Stats).
+  - Audit `dayjs` boundary; nothing should pull `moment`, `luxon`, etc.
+  - Subset `lodash` imports (`lodash-es/get`, not `lodash`); remove `lodash` if any path still uses it.
+  - Audit `zod` boundary — only use on validators that actually run client-side.
+- [ ] **Tree-shake hygiene.** Mark `sideEffects: false` on every
+      internal `@xo-arena/*` package so unused exports drop. Audit
+      duplicate deps (`npm ls react`, `npm ls zustand`).
+- [ ] **Brotli at the edge.** Confirm Fly is serving Brotli, not just
+      gzip — usually 15–20% smaller wire bytes for free.
+- [ ] **Aggressive minifier.** Compare `esbuild` vs `swc` vs `terser`
+      passes on `main.supported`. Cumulative ~5–10% gain typical.
+- [ ] *(Optional / longshot)* Preact compat alias — saves ~50 KB gz over
+      React 18, but Better Auth + react-router compat needs verification.
+      Land last, behind a feature flag.
+- [ ] Generate updated visualizer report; commit at
+      `perf/baselines/bundle-<date>.html` for diffing.
+- [ ] Re-run `perf-v2.js` against staging — confirm `main` < 200 KB gz,
+      per-route chunks 30–80 KB gz, and FCP / Ready drop on every page.
+- [ ] **CI bundle-size guard.** Fail PR if any chunk grows > 5% over
+      `main` without a `perf-ok` label. (`size-limit` or hand-rolled.)
+
+**Expected outcome (data-driven hypothesis):**
+- `main` chunk: 411 KB gz → ≤ 200 KB gz
+- First-paint JS: 493 KB gz → ~280 KB gz on Home, lower per-route
+- Mobile FCP: 1360ms → ~700ms (parse cost cut roughly proportional to
+  byte cut on Moto G4 CPU)
+- Desktop Ready: 760ms → ~400ms
+
+If the second perf-v2 run does *not* show these moves, Phase 1 is
+*landed but ineffective* and we go back to the visualizer to find what
+else is stuck in `main`.
+
+### Phase 1b — PlayVsBot deep-dive  *(Tier 0, immediate after Phase 1)*
+
+The 10-run confirmation showed `/play?action=vs-community-bot` is
+600–700ms slower than the next-worst route on both devices, *every
+time*. The path is sequential and visible to a returning user every
+time they click "Play vs Bot" cold:
+
+```
+mount → getCommunityBot() fetch → /api/v1/rt/tables POST → redirect → render
+```
+
+- [ ] Trace each step server-side and client-side; identify the longest
+      synchronous wait.
+- [ ] Render an interim board *shell* (skeleton board + "Finding bot…")
+      *before* `getCommunityBot()` returns — the spinner detection then
+      flips when the bot is ready, not 600ms later.
+- [ ] Move `getCommunityBot()` cache warming into the route entry —
+      hover-prefetch `/play` from the home CTA, fire the bot fetch then.
+- [ ] Verify `/api/v1/rt/tables` POST is the actual path (not socket).
+      Make sure the server returns the table id immediately and SSE
+      backfill picks up state, instead of a single big response.
+- [ ] Re-measure with the same `--routes=PlayVsBot --runs=10` invocation.
+      Target: parity with `/play` (≤ 750ms desktop, ≤ 1600ms mobile).
 
 ### Phase 2 — Database query audit + indexing pass
 
@@ -307,17 +421,61 @@ especially the new ones:
       verify the partial unique still covers reads).
 - [ ] Convert any lingering N+1s to `findMany` + grouped indexing
       (`groupBy`/`include`).
+- [ ] **Materialized view for the leaderboard.** The current SQL
+      aggregates win counts on every request. Refresh the view on
+      game-end (already a single hot path). Read becomes O(rows
+      returned), write cost moves out of the request thread.
+- [ ] **Read replica for hot reads** (Fly Postgres supports it).
+      Public read endpoints (`/leaderboard`, `/bots`, `/tournaments`)
+      go to the replica; writes + auth stay on primary. Cuts write-
+      lock contention on busy windows.
+- [ ] **Stream large responses.** `GET /api/tournaments/:id` currently
+      returns the full eager tree as one payload. With Express
+      `res.write()` chunks (or NDJSON), the client can paint the
+      header → bracket → participant table → match history in stages
+      instead of waiting on the longest one.
+- [ ] **Worker queue for off-request work.** ML training kicks, ELO
+      calibration, journey event publishing — every one of these blocks
+      the request that triggered it today. Push to BullMQ-style queue
+      (Redis-backed); the request returns immediately.
+- [ ] **Pre-warm critical caches on boot, not first request.** Built-in
+      bot roster, puzzles, system config — load on `app.listen` callback
+      so the first user doesn't pay the miss.
+- [ ] **Compress payload responses.** Confirm gzip/Brotli on JSON
+      responses, not just static assets — cuts wire bytes 60–80% for
+      tournament/leaderboard JSON.
 
-### Phase 3 — Hero image + asset diet
+### Phase 3 — Hero image + asset diet  *(Tier 1 — confirm impact first)*
 
-- [ ] `colosseum-bg.jpg` is 1920×1279, 888 KB JPEG. Convert to AVIF + WebP +
-      JPEG fallback via `<picture>`; cap mobile delivery at ≤ 1280 wide.
-- [ ] Audit other public images (`landing/public/`); drop anything unused.
-- [ ] Add `loading="lazy"` and explicit `width`/`height` on every `<img>` to
-      stop layout shift (CLS).
-- [ ] Preload only what's needed for LCP (likely the hero image on `/`).
+The 2026-05-02 baseline showed **0 KB image bytes** on every route — the
+`colosseum-bg.jpg` (888 KB) didn't appear in the static byte total. It
+likely loads async after Ready resolves, or via a CSS background not
+caught by the resource-type filter. Before sinking time into AVIF
+encoding, confirm where and when the image actually lands.
+
+- [ ] **Investigate first.** Open DevTools → Network on `/` cold, filter
+      by Img. Confirm whether `colosseum-bg.jpg` loads at all on cold-
+      anon, when it loads relative to FCP / Ready, and on which routes.
+- [ ] If it loads after Ready: low-priority — it doesn't move the
+      measured budget. Still worth shipping AVIF + responsive sizes for
+      mobile data costs, but demote out of Tier 1.
+- [ ] If it blocks LCP on `/`: keep in Tier 1 — convert to AVIF + WebP +
+      JPEG fallback via `<picture>`; cap mobile delivery at ≤ 1280 wide;
+      preload.
+- [ ] Audit other public images (`landing/public/`); drop anything
+      unused.
+- [ ] Add `loading="lazy"` and explicit `width`/`height` on every `<img>`
+      to stop layout shift (CLS).
 - [ ] Confirm font strategy: `font-display: swap` and self-hosted (no
       blocking Google fonts).
+- [ ] **Subset fonts** to the glyphs actually used. A full Latin Inter
+      subset is ~25 KB; full font is ~120 KB.
+- [ ] **SVG sprite sheet** for icons. Inline JSX `<svg>` ships inside
+      the JS chunk — moving icons to an external sprite (`<use href />`)
+      lets them stream + cache separately and shrinks `main.supported`.
+- [ ] **Skip the hero on mobile entirely.** A CSS gradient or solid
+      colour as fallback; serve the real image only at ≥ 1024 viewport.
+      Cuts ~200 KB off mobile data on `/`.
 
 ### Phase 4 — Cross-service network shape
 
@@ -332,7 +490,19 @@ the tournament service. Each proxied call adds a hop.
     Redis-backed sharing.
 - [ ] Audit `Connection: keep-alive` between landing↔backend, landing↔tournament
       — don't pay TLS handshake on every request.
-- [ ] Confirm HTTP/2 (or HTTP/3) is enabled on all Fly fronts.
+- [ ] Confirm **HTTP/3 (QUIC)** is enabled on all Fly fronts. Cuts
+      handshake latency on flaky mobile connections (vs HTTP/2's
+      head-of-line blocking).
+- [ ] **Same-origin auth cookie path.** Better Auth sometimes triggers a
+      CORS preflight `OPTIONS` for `/api/auth/get-session`. If the
+      cookie domain is set tight, this is `Access-Control-Max-Age` away
+      from a noticeable savings (or eliminate the preflight entirely).
+- [ ] **Audit cookie size.** Better Auth tokens can balloon (esp. with
+      provider claims). Every request carries them — keep < 4 KB.
+- [ ] **Combine cold-start API calls into `/api/v1/init`.** A returning
+      signed-in user fires session check + bots + tournaments + journey
+      progress in parallel; one combined endpoint lets the server fan
+      out + return one payload, cutting N waterfalls to 1.
 
 ### Phase 5 — SSE channel + POST round-trip latency
 
@@ -364,15 +534,33 @@ dominate Ready for low-traffic regions.
 
 ### Phase 7 — Mobile-specific
 
-Mobile is now first-class but never benchmarked.
+Mobile is now first-class but never benchmarked. The 2026-05-02 snapshot
+showed Mobile FCP at ~1360ms — that's the parse cost on a Moto G4 CPU.
+After Phase 1 cuts the bundle, the remaining mobile gap will come from
+critical-path render and CSS.
 
 - [ ] Identify any desktop-only assumption: large tables, hover-only UI,
       keyboard shortcuts, missed touch targets.
 - [ ] Audit DOM size on the heaviest mobile pages (TournamentDetailPage,
       GymPage with tabs).
 - [ ] Lighthouse mobile score ≥ 90 per route as a hard CI gate.
-- [ ] Service Worker for offline-first shell (low-effort win for repeat users
-      on bad networks).
+- [ ] **Critical CSS inlined into `<head>`.** Most CSS is render-blocking
+      today (`<link>` tag → server round-trip on bad networks). Extract
+      the above-the-fold subset and inline it; defer the rest. Likely
+      saves 50–150ms on Moto G4 / 4G FCP.
+- [ ] **`touch-action: manipulation`** on tappable areas. Eliminates
+      any residual 300ms tap delay; cheap one-liner.
+- [ ] **Transform-only animations.** Audit any animation that uses
+      `top`/`left`/`width`/`height` — replace with `transform` so it
+      runs on the compositor thread, not main.
+- [ ] **`content-visibility: auto`** on long off-screen sections (the
+      tournament participant table when collapsed, the leaderboard rows
+      below the fold, the Gym session list). Free skip-render for
+      non-visible content; one CSS line per container.
+- [ ] **Reduce DOM nodes** on mobile-heavy pages. TournamentDetailPage's
+      1900 lines render hundreds of nodes — split via Suspense and only
+      mount visible sections.
+- [ ] Service Worker for offline-first shell (covered in Phase 21 below).
 
 ---
 
@@ -406,6 +594,11 @@ spinner.
       smoothly when the SSE event arrives.
 - [ ] Streaming responses for large GETs (tournament detail with 100+
       matches) — render the bracket as JSON streams in.
+- [ ] **Partial-UI loading states.** Replace `Loading…` with progress
+      narration: "Found bot, building table…" / "Bracket ready, fetching
+      participants…". Same wait time, lower perceived latency.
+- [ ] **Animation cover during fetch.** A 200ms fade/slide on route
+      change can hide a 200ms fetch entirely — the wait reads as polish.
 
 ### Phase 10 — Hover-intent prefetch + "warm next" patterns
 
@@ -417,6 +610,9 @@ v1 added hover prefetch on nav links. Extend:
 - [ ] On match end (post-cup), prefetch the next likely route (next match,
       coaching card).
 - [ ] On `/play`, after first move, prefetch the rematch flow's chunks.
+- [ ] **Pre-render the next likely route** in a hidden iframe / shadow
+      DOM during idle time on slow paths (post-cup celebrations, match
+      results). Click feels instant.
 
 ### Phase 11 — Route transition polish
 
@@ -451,16 +647,32 @@ after the cup journey and shows under load on Cup days.
 - [ ] Memoize bracket layout math; profile re-renders when SSE events fire.
 - [ ] Confirm `ParticipantTable` disambiguation (just shipped in 3.8.C) doesn't
       do per-render allocation.
+- [ ] **`useDeferredValue`** on the bracket + participant lists when SSE
+      pushes a new event. Render the new state at lower priority than
+      user input (React 18).
+- [ ] **Memoize `BracketMatch`** — currently re-renders on every SSE
+      event for the whole bracket, even matches that didn't change.
+- [ ] **`content-visibility: auto`** on rounds the user has scrolled
+      past or off-screen.
 
-### Phase 14 — Gym page perf
+### Phase 14 — Gym page perf + ML compute
 
-The Gym detail panel re-mounts whole tab trees on bot/skill switch.
+The Gym detail panel re-mounts whole tab trees on bot/skill switch, and
+ML inference today runs on the main thread (jank during play).
 
 - [ ] Ensure keep-alive (`display: none`) survives the new bot→skill drilldown.
 - [ ] ML model fetch should stream — show training history first, then current
       model weights.
-- [ ] Worker-thread ML inference (offload `getMoveForModel` to a Web Worker for
-      ML bots) so the main thread never jank.
+- [ ] **Web Worker for ML inference.** Offload `getMoveForModel` for ML
+      bots to a worker so the main thread never janks during a move.
+- [ ] **WASM minimax / AlphaZero.** Could move bot move latency from
+      ~30ms to <5ms. Compile the minimax engine to WASM behind a flag;
+      benchmark vs JS. Bigger payoff once Connect4 lands (state space
+      grows).
+- [ ] **OffscreenCanvas for game render** (where applicable). Frees
+      main thread for UI during high-FPS games like Pong.
+- [ ] **`requestIdleCallback`** for journey events, telemetry, and
+      RUM flushes — never compete with user input.
 
 ### Phase 15 — Intelligent Guide journey
 
@@ -483,6 +695,77 @@ common path is hot:
 - [ ] `botGameRunner`: parallel runs OK at 50 concurrent demo tables?
 - [ ] `createTableTracked` resource counter overhead — single Redis call or
       multi-hop?
+
+---
+
+## Section C2 — Compute, cache, and architecture (added from brainstorm)
+
+These are bigger swings than the per-phase tactics above. Each one is a
+"could be a project" rather than a checklist item, but they're listed
+here so the option is visible when the data points to them.
+
+### Phase 19 — Compute relocation
+
+Today, all heavy compute runs on the user's main thread:
+
+- ML training (Q-learning, DQN, AlphaZero) — browser-only.
+- ML inference (`getMoveForModel`) — main thread.
+- Game logic (minimax, AlphaZero MCTS) — main thread JS.
+- Journey events, ELO calibration — request thread on backend.
+
+Targets after this phase:
+
+- [ ] **Web Worker for ML inference.** Offload to a worker; main thread
+      never janks during a move. Pairs with Phase 14.
+- [ ] **WASM for minimax / AlphaZero.** Compile the engines to WASM
+      behind a feature flag; benchmark vs the JS engines. Expected
+      10–100× faster move computation. Critical for Connect4 (tied to
+      `doc/Connect4_Ship_Checklist.md` Spike A on TF.js).
+- [ ] **OffscreenCanvas for game render.** When games like Pong land,
+      keep the render loop off the main thread.
+- [ ] **Move ML training to a backend worker.** Tracked in
+      `doc/Connect4_Ship_Checklist.md` Spike B — perf is one input;
+      architectural decision is broader (mobile training, headless
+      cluster runs, training on devices that can't keep a tab open).
+- [ ] **`requestIdleCallback`** for journey events, telemetry, RUM
+      flushes — never compete with user input on the main thread.
+
+### Phase 20 — Cache & app shell
+
+Today: warm visits read from `localStorage` for some stores, but the
+HTML / JS / CSS still hits the network every time.
+
+- [ ] **Service Worker app shell.** Cache the index HTML + the vendor
+      chunks; serve from cache on second visit; revalidate in background.
+      Repeat-visit Ready ≈ 0ms. Highest-leverage perceived-perf change
+      not yet in v2.
+- [ ] **IndexedDB for tournament/leaderboard JSON.** Faster than
+      localStorage at size; survives reload. Stale-while-revalidate
+      directly off IDB.
+- [ ] **Edge response cache** on Fly for public reads (`/leaderboard`,
+      `/bots`, `/tournaments`). Backend never sees cached requests.
+- [ ] **HTTP `immutable` cache headers** on hashed asset URLs
+      (`max-age=31536000, immutable`). Confirm Fly is doing this.
+- [ ] **Persist Zustand stores** so warm boot has full state — guide
+      progress, sound prefs, ui sort orders, etc.
+
+### Phase 21 — Architecture experiments (longshots)
+
+Each is a meaningful re-architecture; pursue only if Tier 0 + Tier 1
+data shows the gap they'd close. Listed for completeness.
+
+- [ ] **Server-side render the landing page (`/`) only.** It's mostly
+      static. React 19 RSC or a tiny SSR shell could deliver Ready ≈
+      TTFB. Other routes stay SPA.
+- [ ] **Edge functions for `/leaderboard` / `/bots`.** Fly Functions
+      could serve these from cache without touching the Node process,
+      cutting cold-start exposure entirely.
+- [ ] **Replace JSON-over-HTTP with gRPC-Web** for hot endpoints —
+      smaller payloads, schema validation, generated clients.
+- [ ] **Migrate hot read endpoints off Express to Hono on the edge** —
+      lower per-request overhead than full Express middleware stack.
+- [ ] **React Server Components for static-ish pages** — Settings,
+      Puzzles, parts of Profile. Cut their JS to ~0 KB.
 
 ---
 
@@ -522,16 +805,115 @@ synthetically once and stopped. v2 makes measurement continuous.
 
 ---
 
-## Sequencing
+## Sequencing  *(updated 2026-05-02 from snapshot data)*
 
-Do these in order — each phase's value depends on the prior:
+The original sequencing was a guess; the snapshot data lets us tier the
+phases by expected impact. **Tier 0 must land before Tier 1 even gets a
+benchmark slot** — otherwise the bundle floor masks any other win.
 
-1. **Phase 0** (Re-baseline) — without it, nothing else has a benchmark.
-2. **Phase 17** (CI gates) — prevent regressions while we work.
-3. **Phase 1** (Bundle) — biggest expected win for cold pages.
-4. **Phase 3** (Hero image) — biggest expected win for mobile LCP.
-5. **Phase 13** (Tournament page) — heaviest single surface.
-6. **Phase 8** (Skeletons new) — perceived win, quick.
-7. Everything else, prioritized by what the Phase 0 numbers actually show.
+### Tier 0 — bundle floor (run today)
 
-Let the data, not the doc, drive the prioritization after step 5.
+Single-bundle blocking is so dominant in the data that no other phase
+will register a measurable win until this is fixed.
+
+1. **Phase 1** — Bundle audit + per-route splitting. Concrete sub-steps
+   come from the visualizer; expected to drop `main` from 411 KB gz to
+   ≤ 200 KB gz and Mobile FCP from 1360ms to ~700ms.
+2. **Phase 1b** — PlayVsBot deep-dive (independent path bug — different
+   root cause than bundle, but same blast radius for that one user
+   journey).
+3. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
+   Lock in Tier 0's gains before any new feature work bloats them back.
+
+### Tier 1 — confirm budget after Tier 0, then attack what the data still shows
+
+After Tier 0, **re-run `perf-v2.js`** and re-measure. The remaining gap
+between the new numbers and the budgets table determines what comes
+next. Likely candidates, not committed:
+
+4. **Phase 0.2** — RUM wiring. Until prod numbers exist, we're guessing
+   from synthetic. Code-only work, ships independently of Tier 0.
+5. **Phase 8** — Skeletons everywhere new (TournamentDetailPage,
+   TournamentsPage, BotProfilePage, ProfilePage). Pairs with Phase 1's
+   `<Suspense>` boundaries — the skeleton *is* the fallback.
+6. **Phase 3** — Hero image. *Investigate first* (the snapshot showed
+   0 KB image bytes, suggesting the image loads after Ready). Promote
+   only if DevTools confirms it blocks LCP.
+7. **Phase 13** — Tournament page. The heaviest single surface; Phase 1
+   should already lazy-load it, but the page itself still has a 1900-line
+   render path that needs Suspense splitting + memo / pagination.
+8. **Phase 7** — Mobile-specific. Mobile FCP is ~3× desktop today —
+   parse cost on Moto G4 CPU. If Phase 1 doesn't bring it to budget,
+   critical-CSS extraction + transform-only animations are the next levers.
+
+### Quick wins — high leverage, can run alongside any tier
+
+These don't need to wait for Tier 0 and don't conflict with later work.
+Order by gut-feel impact, ranked from the brainstorm:
+
+- **Service Worker app shell** (Phase 20). Repeat-visit Ready ≈ 0ms.
+  Highest-leverage perceived-perf change in the plan.
+- **Critical CSS inlined into `<head>`** (Phase 7). Cheap mobile FCP
+  win the platform never had.
+- **Materialized view for the leaderboard** (Phase 2). Kills a hot DB
+  path forever; simple Postgres feature.
+- **WASM minimax / AlphaZero** (Phase 19). Bot move latency from ~30ms
+  to <5ms. Becomes load-bearing once Connect4 lands.
+- **`content-visibility: auto`** on long off-screen sections (Phase 7,
+  Phase 13). One CSS line per container; free render skip.
+- **Brotli at the edge** (Phase 1). 15–20% smaller wire bytes for free.
+- **Pre-warm caches on boot** (Phase 2). Built-in bots, puzzles, system
+  config. The first user stops paying the miss.
+
+### Tier 2 — promote *only* when data shows them as a bottleneck
+
+These were Tier 1 in the original draft but the snapshot doesn't
+support attacking them yet. Promote to Tier 1 only when re-measurement
+shows them on the critical path.
+
+- **Phase 2** — DB index pass. Backend p95 wasn't measured yet (Phase
+  0.3 work). Until RED metrics show DB time > target, this is
+  speculative.
+- **Phase 4** — Cross-service network shape. Same — needs measurement
+  before it earns a slot.
+- **Phase 5** — SSE channel + POST round-trip. Same — needs measurement,
+  and the user journeys most affected (PvP move latency) aren't on the
+  cold-page benchmark at all.
+- **Phase 6** — Backend cold start. Needs cold-start measurement to
+  know whether `auto_stop_machines = false` is worth the cost.
+
+### Tier 3 — perceived-perf polish, after the floor moves
+
+These look like wins on a fast platform but reading "Refreshing…" on a
+2-second cold page just adds noise. Land after Tier 0 + Tier 1.
+
+- Phase 9 (optimistic / streaming everywhere)
+- Phase 10 (hover prefetch on tournament cards / bot rows)
+- Phase 11 (route transition polish — view-transitions API)
+- Phase 12 (in-game animation budgets)
+- Phase 14 (Gym worker-thread inference + WASM)
+- Phase 15 (Guide INP audit)
+- Phase 16 (Tables-as-primitive overhead)
+- Phase 18 (production perf dashboard) — wait for RUM data first.
+
+### Tier 4 — architecture experiments (Phase 21)
+
+These are re-architectures, not phases. Pursue only if Tier 0 + Tier 1
++ Tier 2 + Tier 3 data still shows the gap they would close.
+
+- SSR / RSC for `/`
+- Edge functions for hot reads
+- gRPC-Web on hot endpoints
+- Hono on the edge for read paths
+- Preact compat alias (longshot from Phase 1)
+
+### Re-measure cadence
+
+- After Tier 0 lands → run `perf-v2.js --target=staging --warmup`
+  and append a new `Performance_Snapshot_<date>.md`.
+- After each Tier 1 phase → same.
+- Tier 2 phases require Phase 0.3 RED metrics to be in place first.
+
+Let the data drive every promotion. If a phase lands and the next
+snapshot doesn't show movement, the phase is *landed but ineffective*
+and the assumption gets revisited.
