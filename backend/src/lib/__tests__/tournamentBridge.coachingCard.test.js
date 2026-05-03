@@ -107,6 +107,36 @@ describe('tournament:completed — coaching card emission', () => {
     expect(findCardCall()).toBeUndefined()
   })
 
+  it('NEVER emits ONE_TRAIN_LOSS in v1 — bridge passes didTrainImprove=false (task #36 / v1.1 placeholder)', async () => {
+    // Per coachingCardRules.js + tournamentBridge.js comments, the
+    // didTrainImprove signal is hardcoded `false` in v1 because the
+    // ML-history inspection ships in v1.1 Sprint 9. As a result, every
+    // semi-loss falls through to HEAVY_LOSS — ONE_TRAIN_LOSS is technically
+    // reachable by the rules engine but unreachable through the bridge in
+    // v1. Pin this so a future change of `didTrainImprove: true` without
+    // a deliberate decision causes a test failure (forcing the v1.1 work
+    // to land alongside).
+    mockDb.tournament.findUnique.mockResolvedValue({ isCup: true })
+    mockDb.tournamentParticipant.count.mockResolvedValue(4)
+
+    // Multiple semi-losses across multiple cups — none should produce
+    // ONE_TRAIN_LOSS in v1.
+    for (const finalPos of [3, 4]) {
+      mockAppendToStream.mockClear()
+      await handleEvent(null, 'tournament:completed', {
+        tournamentId:   `cup-train-loss-${finalPos}`,
+        name:           'Curriculum Cup',
+        finalStandings: [{ userId: 'user-caller', position: finalPos }],
+      })
+      const cardCall = findCardCall()
+      // A coaching card was emitted, but it must be HEAVY_LOSS, never ONE_TRAIN_LOSS.
+      if (cardCall) {
+        expect(cardCall[1].card.id).not.toBe('one_train_loss')
+        expect(cardCall[1].card.id).toBe('heavy_loss')
+      }
+    }
+  })
+
   it('does NOT append a coaching card when the user has no finalPosition', async () => {
     mockDb.tournament.findUnique.mockResolvedValue({ isCup: true })
     mockDb.tournamentParticipant.findMany.mockResolvedValue([{ userId: 'user-caller' }])

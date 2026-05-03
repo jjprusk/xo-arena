@@ -1,0 +1,277 @@
+{
+  "timestamp": "2026-05-02T23:05:14.970Z",
+  "env": "staging",
+  "baseUrl": "https://xo-landing-staging.fly.dev",
+  "runs": 10,
+  "auth": false,
+  "warmup": true,
+  "devices": [
+    "desktop",
+    "mobile"
+  ],
+  "contexts": [
+    "cold-anon"
+  ],
+  "results": [
+    {
+      "route": "PlayVsBot",
+      "path": "/play?action=vs-community-bot",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 10,
+      "stats": {
+        "ready_p50": 1529,
+        "ready_p95": 1702,
+        "ttfb_p50": 58,
+        "fcp_p50": 712,
+        "lcp_p50": 712,
+        "js_kb": 487,
+        "static_kb": 1387,
+        "img_kb": 888,
+        "requests": 14
+      },
+      "raw": [
+        {
+          "readyMs": 1631,
+          "ttfb": 70,
+          "fcp": 780,
+          "lcp": 780,
+          "domContentLoaded": 459,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1437,
+          "ttfb": 55,
+          "fcp": 604,
+          "lcp": 604,
+          "domContentLoaded": 286,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1536,
+          "ttfb": 59,
+          "fcp": 744,
+          "lcp": 744,
+          "domContentLoaded": 376,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1506,
+          "ttfb": 56,
+          "fcp": 692,
+          "lcp": 692,
+          "domContentLoaded": 349,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1588,
+          "ttfb": 85,
+          "fcp": 756,
+          "lcp": 756,
+          "domContentLoaded": 437,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1494,
+          "ttfb": 56,
+          "fcp": 700,
+          "lcp": 700,
+          "domContentLoaded": 343,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1522,
+          "ttfb": 57,
+          "fcp": 672,
+          "lcp": 672,
+          "domContentLoaded": 360,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1506,
+          "ttfb": 58,
+          "fcp": 660,
+          "lcp": 660,
+          "domContentLoaded": 353,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1551,
+          "ttfb": 57,
+          "fcp": 724,
+          "lcp": 724,
+          "domContentLoaded": 389,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 1702,
+          "ttfb": 60,
+          "fcp": 888,
+          "lcp": 888,
+          "domContentLoaded": 453,
+          "requests": 14,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        }
+      ]
+    },
+    {
+      "route": "PlayVsBot",
+      "path": "/play?action=vs-community-bot",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 10,
+      "stats": {
+        "ready_p50": 2207,
+        "ready_p95": 2564,
+        "ttfb_p50": 58,
+        "fcp_p50": 1414,
+        "lcp_p50": 1414,
+        "js_kb": 487,
+        "static_kb": 499,
+        "img_kb": null,
+        "requests": 13
+      },
+      "raw": [
+        {
+          "readyMs": 2365,
+          "ttfb": 69,
+          "fcp": 1580,
+          "lcp": 1580,
+          "domContentLoaded": 644,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2279,
+          "ttfb": 57,
+          "fcp": 1496,
+          "lcp": 1496,
+          "domContentLoaded": 508,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 1839,
+          "ttfb": 56,
+          "fcp": 1348,
+          "lcp": 1348,
+          "domContentLoaded": 392,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2288,
+          "ttfb": 54,
+          "fcp": 1496,
+          "lcp": 1496,
+          "domContentLoaded": 504,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2118,
+          "ttfb": 55,
+          "fcp": 1328,
+          "lcp": 1328,
+          "domContentLoaded": 404,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2199,
+          "ttfb": 58,
+          "fcp": 1408,
+          "lcp": 1408,
+          "domContentLoaded": 496,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2564,
+          "ttfb": 96,
+          "fcp": 1884,
+          "lcp": 1884,
+          "domContentLoaded": 974,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2196,
+          "ttfb": 110,
+          "fcp": 1408,
+          "lcp": 1408,
+          "domContentLoaded": 462,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2214,
+          "ttfb": 62,
+          "fcp": 1420,
+          "lcp": 1420,
+          "domContentLoaded": 440,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 1998,
+          "ttfb": 54,
+          "fcp": 1312,
+          "lcp": 1312,
+          "domContentLoaded": 393,
+          "requests": 13,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        }
+      ]
+    }
+  ]
+}

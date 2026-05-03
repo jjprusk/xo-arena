@@ -70,6 +70,33 @@ const cancelledSessions = new Set()
 /** Queue of pending training requests: [{ modelId, sessionId, opts }, ...] */
 const trainingQueue = []
 
+/**
+ * Phase 3.8.4.3 — repoint a bot's primary skill (`User.botModelId`) at the
+ * skill that just finished training so Profile "last-trained" / Gym sidebar
+ * stay accurate without a manual select.
+ *
+ * Best-effort: returns `false` on any failure (logged at warn). BotSkill.botId
+ * is a plain String — no FK relation back to User — so the bot is resolved in
+ * two steps.
+ */
+export async function repointBotPrimarySkill(modelId) {
+  try {
+    const skillRow = await db.botSkill.findUnique({
+      where:  { id: modelId },
+      select: { botId: true },
+    })
+    if (!skillRow?.botId) return false
+    await db.user.update({
+      where: { id: skillRow.botId },
+      data:  { botModelId: modelId },
+    })
+    return true
+  } catch (e) {
+    logger.warn({ err: e?.message, modelId }, 'auto-repoint botModelId failed')
+    return false
+  }
+}
+
 // ─── Model CRUD ─────────────────────────────────────────────────────────────
 
 export async function listModels({ gameId } = {}) {
@@ -875,6 +902,9 @@ export async function finishTrainingFromFrontend(sessionId, { weights, stats, it
   ])
 
   engineCache.delete(modelId)
+
+  if (status === 'COMPLETED') await repointBotPrimarySkill(modelId)
+
   logger.info({ sessionId, modelId, status, samples: episodeRecords.length, ...summary }, 'Frontend training finished')
 
   // Journey step 4 (Curriculum: Train your bot) — fire-and-forget.
@@ -1472,6 +1502,9 @@ async function _finishSession(sessionId, modelId, engine, iterations, status, { 
     }),
   ])
   engineCache.delete(modelId)
+
+  if (status === 'COMPLETED') await repointBotPrimarySkill(modelId)
+
   _emit(`ml:session:${sessionId}`, status === 'COMPLETED' ? 'ml:complete' : 'ml:cancelled', { sessionId, summary })
   logger.info({ sessionId, modelId, status, ...summary }, 'Training finished')
 

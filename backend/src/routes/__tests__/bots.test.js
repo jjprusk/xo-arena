@@ -37,8 +37,9 @@ const mockDb = {
 vi.mock('../../lib/db.js', () => ({ default: mockDb }))
 
 vi.mock('../../services/userService.js', () => ({
-  listBots: vi.fn(),
-  createBot: vi.fn(),
+  listBots:     vi.fn(),
+  createBot:    vi.fn(),
+  checkBotName: vi.fn(),
 }))
 
 vi.mock('../../services/skillService.js', () => ({
@@ -56,7 +57,7 @@ vi.mock('../../utils/cache.js', () => ({
 // hasRole from ../../utils/roles.js is NOT mocked — runs real
 
 const botsRouter = (await import('../bots.js')).default
-const { listBots, createBot } = await import('../../services/userService.js')
+const { listBots, createBot, checkBotName } = await import('../../services/userService.js')
 const { getSystemConfig } = await import('../../services/skillService.js')
 const { getTierLimit } = await import('../../services/creditService.js')
 const cache = (await import('../../utils/cache.js')).default
@@ -141,6 +142,11 @@ describe('GET /api/v1/bots', () => {
     expect(res.body.bots).toEqual(bots)
     expect(res.body.limitInfo).toEqual({ count: 2, limit: 5, isExempt: false })
     expect(res.body.provisionalThreshold).toBe(5)
+    // Phase 3.8 — owner-scoped GET /bots must request includeSkills so the
+    // Profile bot list can render skill pills inline. Regression guard: an
+    // earlier draft passed only { ownerId, includeInactive } and the
+    // Profile UI fell back to the per-bot fetch fan-out path.
+    expect(listBots).toHaveBeenCalledWith(expect.objectContaining({ includeSkills: true }))
   })
 
   it('ownerId query with BOT_ADMIN owner → limit=null, isExempt=true (getTierLimit not called)', async () => {
@@ -331,6 +337,40 @@ describe('GET /api/v1/bots/:id', () => {
   })
 })
 
+// ─── GET /check-name (Phase 3.8.A.3) ─────────────────────────────────────────
+
+describe('GET /api/v1/bots/check-name', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards name + caller userId to checkBotName and returns its result', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    checkBotName.mockResolvedValue({ available: true })
+
+    const res = await request(app).get('/api/v1/bots/check-name?name=Sparky')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ available: true })
+    expect(checkBotName).toHaveBeenCalledWith({ name: 'Sparky', ownerId: 'usr_1' })
+  })
+
+  it('passes through unavailable results unchanged so the UI can show the reason', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: 'usr_1' })
+    checkBotName.mockResolvedValue({ available: false, reason: 'reserved', message: '"Rusty" is a reserved name.' })
+
+    const res = await request(app).get('/api/v1/bots/check-name?name=Rusty')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ available: false, reason: 'reserved' })
+  })
+
+  it('401 when the caller has no DB row yet', async () => {
+    mockDb.user.findUnique.mockResolvedValue(null)
+    const res = await request(app).get('/api/v1/bots/check-name?name=Whatever')
+    expect(res.status).toBe(401)
+    expect(checkBotName).not.toHaveBeenCalled()
+  })
+})
+
 // ─── POST / ──────────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/bots', () => {
@@ -345,7 +385,7 @@ describe('POST /api/v1/bots', () => {
 
     const res = await request(app)
       .post('/api/v1/bots')
-      .send({ name: 'AlphaBot', modelType: 'ml' })
+      .send({ name: 'AlphaBot', avatarUrl: 'https://x/y.png', competitive: true })
 
     expect(res.status).toBe(201)
     expect(res.body.bot).toEqual(newBot)
@@ -353,6 +393,62 @@ describe('POST /api/v1/bots', () => {
     // ownerBaId must be the BA user ID so the gym's ownership check passes
     expect(createBot).toHaveBeenCalledWith('usr_1', expect.objectContaining({ ownerBaId: 'ba_user_1' }))
     expect(getTierLimit).toHaveBeenCalledWith('usr_1', 'bots')
+  })
+
+  // Phase 3.8 reshape: the route forwards ONLY `{ name, avatarUrl, competitive }`
+  // to createBot. Legacy keys (algorithm, modelType, gameId, difficulty) sent
+  // by an old client must be silently dropped — never propagate to createBot,
+  // because that would silently fall back into the legacy single-skill path
+  // and we'd create skill-bound bots from a v1.28 client we thought we'd
+  // retired. Asserts the bot is created skill-less.
+  it('Phase 3.8: route ignores legacy body keys and forwards skill-less payload', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    mockDb.user.count.mockResolvedValue(0)
+    getTierLimit.mockResolvedValue(5)
+    createBot.mockResolvedValue({ id: 'bot_new', displayName: 'AlphaBot' })
+
+    await request(app)
+      .post('/api/v1/bots')
+      .send({
+        name: 'AlphaBot',
+        avatarUrl: null,
+        competitive: false,
+        // Legacy keys an old client might still send:
+        algorithm: 'ml',
+        modelType: 'DQN',
+        gameId: 'xo',
+        difficulty: 'novice',
+      })
+
+    expect(createBot).toHaveBeenCalledTimes(1)
+    const [, payload] = createBot.mock.calls[0]
+    expect(payload).toEqual(expect.objectContaining({
+      name: 'AlphaBot',
+      avatarUrl: null,
+      competitive: false,
+      ownerBaId: 'ba_user_1',
+    }))
+    // Hard guarantee — these must not be present:
+    expect(payload).not.toHaveProperty('algorithm')
+    expect(payload).not.toHaveProperty('modelType')
+    expect(payload).not.toHaveProperty('gameId')
+    expect(payload).not.toHaveProperty('difficulty')
+  })
+
+  // Phase 3.8: defaulting — a body with just `{ name }` is enough; the bot is
+  // created skill-less with `competitive=undefined` (createBot coerces to
+  // false). Future clients that don't surface a competitive toggle (e.g. the
+  // Quick Bot wizard) won't accidentally crash.
+  it('Phase 3.8: minimal `{ name }` body still creates a bot', async () => {
+    mockDb.user.findUnique.mockResolvedValue(mockCaller)
+    mockDb.user.count.mockResolvedValue(0)
+    getTierLimit.mockResolvedValue(5)
+    createBot.mockResolvedValue({ id: 'bot_new', displayName: 'JustName' })
+
+    const res = await request(app).post('/api/v1/bots').send({ name: 'JustName' })
+
+    expect(res.status).toBe(201)
+    expect(createBot).toHaveBeenCalledTimes(1)
   })
 
   it('user not found → 404', async () => {

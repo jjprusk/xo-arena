@@ -7,6 +7,7 @@ import { cleanupSeededBots } from '../lib/tournamentSweep.js'
 import { checkRecurringOccurrences } from '../lib/recurringScheduler.js'
 import { computeTemplateEndDate } from '../lib/templateDefaults.js'
 import { cloneAndSeedPersona, seedExistingSystemBot, syncTemplateSeedsToTournament } from '../lib/seedBotService.js'
+import { assertBotHasSkillForGame } from '../lib/registrationGuards.js'
 import { cloneCurriculumCup } from '../lib/curriculumCupService.js'
 import { expectedGameCount } from '../lib/bracketMath.js'
 
@@ -778,6 +779,16 @@ router.post('/:id/register', requireAuth, async (req, res, next) => {
 
     const user = await db.user.findUnique({ where: { id: userId } })
     if (!user) return res.status(404).json({ error: 'User not found' })
+
+    // Phase 3.8.2.5 / 3.8.5.3 — a bot can only enter a tournament if it has
+    // a BotSkill for the tournament's game.
+    const skillCheck = await assertBotHasSkillForGame({
+      db,
+      userId,
+      isBot:  user.isBot,
+      gameId: tournament.game,
+    })
+    if (!skillCheck.ok) return res.status(skillCheck.status).json(skillCheck.body)
 
     const gameEloRow = await db.gameElo.findUnique({
       where: { userId_gameId: { userId, gameId: tournament.game } },

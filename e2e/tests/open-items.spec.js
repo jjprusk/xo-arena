@@ -144,27 +144,42 @@ test.describe('§11c — Tournament create form game dropdown', () => {
   })
 })
 
-// ── 11d: Bot create form Game dropdown + DB round-trip ────────────────────────
+// ── 11d: Bot create form (Phase 3.8 reshape) + DB round-trip ────────────────
+//
+// Phase 3.8 — Multi-Skill Bots: POST /bots is now skill-less. The Profile
+// create-bot form drops Game + Brain Architecture; skills are added per-bot
+// via POST /bots/:id/skills. This block asserts the new shape — both the UI
+// (no Game/Brain Architecture fields) and the API (two-step round-trip).
 
-test.describe('§11d — Bot creation game field', () => {
+test.describe('§11d — Bot creation (Phase 3.8 skill-less reshape)', () => {
   test.setTimeout(60_000)
 
-  test('dropdown defaults to xo', async ({ page }) => {
+  test('Profile create-bot form is identity-only — no Game / Brain Architecture pickers', async ({ page }) => {
     test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
 
     await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
     await page.goto(`${LANDING_URL}/profile?action=create-bot`)
 
-    const gameSelect = page.locator('select').filter({ has: page.locator('option[value="xo"]') }).first()
-    await expect(gameSelect).toBeVisible({ timeout: 10_000 })
-    await expect(gameSelect).toHaveValue('xo')
+    // The reshaped form keeps Name + Competitive only. The hint copy below
+    // promises the user adds a skill later.
+    await expect(page.getByText(/Your bot starts with no skills/i)).toBeVisible({ timeout: 10_000 })
+
+    // Hard-fail guards: the legacy Game and Brain Architecture labels must
+    // not be present anywhere in the create panel.
+    await expect(page.getByText(/Brain Architecture/i)).toHaveCount(0)
+    // 'Game' label was specifically the create-bot dropdown — guard against
+    // its return by asserting no select with an xo option exists in the
+    // create-bot panel area. (Guide rendering can still produce other
+    // selects elsewhere on the page; this scope is intentional.)
+    const createPanel = page.locator('form').filter({ has: page.getByText(/Your bot starts with no skills/i) }).first()
+    await expect(createPanel.locator('select')).toHaveCount(0)
   })
 
-  test('creating a bot via API round-trips through admin /bots with a BotSkill row', async ({ request }) => {
+  test('two-step round-trip: POST /bots creates skill-less identity, POST /bots/:id/skills adds the XO skill', async ({ request }) => {
     test.skip(!haveUser,  'Need TEST_USER_EMAIL')
     test.skip(!haveAdmin, 'Need TEST_ADMIN_EMAIL for the admin-list assertion')
 
-    // 1) User creates a bot via the public bots API.
+    // 1) User creates a skill-less bot via the new API shape.
     const userCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
     try {
       const userPageLike = { context: () => ({ request: userCtx }) }
@@ -174,14 +189,24 @@ test.describe('§11d — Bot creation game field', () => {
       const name = `qa-11d-${Date.now()}`
       const createRes = await userCtx.post(`${BACKEND_URL}/api/v1/bots`, {
         headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
-        data:    { name, modelType: 'Q_LEARNING', competitive: true, gameId: 'xo' },
+        data:    { name, competitive: true },
       })
       expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
       const { bot } = await createRes.json()
       expect(bot?.id).toBeTruthy()
+      // Skill-less invariant — the bot must NOT carry a model pointer at this point.
+      expect(bot.botModelId).toBeNull()
+      expect(bot.botModelType).toBeNull()
 
-      // 2) Admin reads the bots list and confirms our freshly-minted bot has a
-      //    skill entry with gameId='xo'.
+      // 2) User adds an XO skill via the dedicated endpoint (the new "Add a
+      //    skill" flow).
+      const skillRes = await userCtx.post(`${BACKEND_URL}/api/v1/bots/${bot.id}/skills`, {
+        headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+        data:    { gameId: 'xo', algorithm: 'qlearning' },
+      })
+      expect(skillRes.ok(), `skill add failed: ${skillRes.status()} ${await skillRes.text().catch(() => '')}`).toBe(true)
+
+      // 3) Admin reads the bots list and confirms the bot now has the XO skill.
       const adminCtx = await playwrightRequest.newContext({ baseURL: BACKEND_URL })
       try {
         const adminPageLike = { context: () => ({ request: adminCtx }) }
@@ -197,12 +222,268 @@ test.describe('§11d — Bot creation game field', () => {
         expect(mine, `admin list did not return bot ${bot.id}`).toBeDefined()
         expect(Array.isArray(mine.skills)).toBe(true)
         const xoSkill = mine.skills.find(s => s.gameId === 'xo')
-        expect(xoSkill, `bot has no xo skill`).toBeDefined()
+        expect(xoSkill, `bot has no xo skill after add`).toBeDefined()
       } finally {
         await adminCtx.dispose()
       }
     } finally {
       await userCtx.dispose()
+    }
+  })
+})
+
+// ── 11e: Profile bot card — skill pills + Add a skill modal ──────────────────
+//
+// Phase 3.8 Sprint A.2 — the bot card replaces the legacy "Type" badge with a
+// per-skill pill list and an "+ Add skill" chip that opens AddSkillModal.
+// This block exercises the full add flow end-to-end through the UI: create a
+// skill-less bot via API, navigate to /profile, confirm the empty-skills
+// hint shows, click "+ Add skill", submit the modal, and assert the new pill
+// appears in the bot row. Doubles as the regression net for the skill pill
+// deep-link target — the rendered <a> must point at /gym?bot=…&gameId=…
+// (Sprint 3.8.B will rely on that contract).
+
+test.describe('§11e — Profile skill pills + Add a skill modal', () => {
+  test.setTimeout(75_000)
+
+  test('skill-less bot shows the empty-state pill, then Add-a-skill flow renders an XO pill', async ({ page, request: _ }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    // 1) Mint a fresh skill-less bot via the API so the test is deterministic
+    //    regardless of the user's pre-existing bots.
+    const apiCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    const apiPageLike = { context: () => ({ request: apiCtx }) }
+    await signIn(apiPageLike, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    const userToken = await fetchAuthToken(apiCtx, LANDING_URL)
+
+    const name = `qa-11e-${Date.now()}`
+    const createRes = await apiCtx.post(`${BACKEND_URL}/api/v1/bots`, {
+      headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+      data:    { name, competitive: false },
+    })
+    expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
+    const { bot } = await createRes.json()
+    const botId = bot.id
+    expect(botId).toBeTruthy()
+    await apiCtx.dispose()
+
+    try {
+      // 2) Navigate to /profile in the UI session and open the My Bots
+      //    section. The bots accordion is collapsed by default; the
+      //    section=bots query param expands it.
+      await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+      await page.goto(`${LANDING_URL}/profile?section=bots`)
+
+      // 3) The empty-skills indicator for our fresh bot must appear.
+      const emptyHint = page.getByTestId(`bot-skills-empty-${botId}`)
+      await expect(emptyHint).toBeVisible({ timeout: 15_000 })
+
+      // 4) Click "+ Add skill" → modal opens.
+      await page.getByTestId(`bot-add-skill-${botId}`).click()
+      await expect(page.getByRole('dialog', { name: /Add a skill/i })).toBeVisible()
+      // Default selections are XO + Q-Learning — submit as-is.
+      await page.getByTestId('add-skill-submit').click()
+
+      // 5) The XO pill appears, deep-linking to /gym?bot=…&gameId=xo.
+      const pill = page.getByTestId(`bot-skill-pill-${botId}-xo`)
+      await expect(pill).toBeVisible({ timeout: 10_000 })
+      await expect(pill).toHaveAttribute('href', new RegExp(`/gym\\?bot=${botId}&gameId=xo`))
+
+      // 6) The empty-skills hint is gone.
+      await expect(emptyHint).toHaveCount(0)
+    } finally {
+      // Best-effort cleanup — delete the test bot via the API.
+      const cleanCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+      try {
+        const cleanPage = { context: () => ({ request: cleanCtx }) }
+        await signIn(cleanPage, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+        const t = await fetchAuthToken(cleanCtx, LANDING_URL)
+        await cleanCtx.delete(`${BACKEND_URL}/api/v1/bots/${botId}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {})
+      } finally {
+        await cleanCtx.dispose()
+      }
+    }
+  })
+})
+
+// ── 11g: Profile create-bot — inline name-availability check ─────────────────
+//
+// Phase 3.8 Sprint A.3 — the create-bot form debounces against
+// GET /api/v1/bots/check-name. Reserved built-in names ("Rusty") render an
+// inline "reserved" message and the Create button stays disabled. Typing a
+// fresh name flips the indicator to "Available" and the button enables.
+
+test.describe('§11g — Bot-name inline availability check', () => {
+  test.setTimeout(45_000)
+
+  test('reserved name shows error + disables Create; fresh name shows Available + enables Create', async ({ page }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    await page.goto(`${LANDING_URL}/profile?action=create-bot`)
+
+    const nameInput = page.getByTestId('bot-create-name')
+    const submitBtn = page.getByTestId('bot-create-submit')
+    const status    = page.getByTestId('bot-create-name-status')
+
+    await expect(nameInput).toBeVisible({ timeout: 10_000 })
+
+    // 1) Reserved name → "bad" status, button disabled.
+    await nameInput.fill('Rusty')
+    await expect(status).toHaveAttribute('data-status', 'bad', { timeout: 5_000 })
+    await expect(submitBtn).toBeDisabled()
+
+    // 2) Fresh name → "ok" status, button enabled.
+    await nameInput.fill(`qa-11g-${Date.now()}`)
+    await expect(status).toHaveAttribute('data-status', 'ok', { timeout: 5_000 })
+    await expect(submitBtn).toBeEnabled()
+  })
+})
+
+// ── 11h: Profile→Gym nav + sidebar bot→skill drilldown + in-Gym Add Skill ───
+//
+// Phase 3.8 Sprint B — closes the Profile→Gym navigation gap (Train in Gym
+// button + My Bots header link), the Gym sidebar drilldown (bot row expands
+// to surface its BotSkill rows), and the in-Gym "+ Add skill" affordance
+// that shares AddSkillModal with the Profile flow.
+
+test.describe('§11h — Profile→Gym nav + Gym bot→skill drilldown', () => {
+  test.setTimeout(75_000)
+
+  test('skill-less bot: Train-in-Gym deep-links to /gym?bot=…, empty-state Add Skill mints an XO skill, drilldown row appears', async ({ page }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    // Mint a fresh skill-less bot via the API for determinism.
+    const apiCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    const apiPageLike = { context: () => ({ request: apiCtx }) }
+    await signIn(apiPageLike, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    const userToken = await fetchAuthToken(apiCtx, LANDING_URL)
+
+    const name = `qa-11h-${Date.now()}`
+    const createRes = await apiCtx.post(`${BACKEND_URL}/api/v1/bots`, {
+      headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+      data:    { name, competitive: false },
+    })
+    expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
+    const { bot } = await createRes.json()
+    const botId = bot.id
+    expect(botId).toBeTruthy()
+    await apiCtx.dispose()
+
+    try {
+      await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+
+      // 1) Profile shows the per-row Train-in-Gym button. Skill-less → href
+      //    omits gameId (the route handles the empty-state in-Gym).
+      await page.goto(`${LANDING_URL}/profile?section=bots`)
+      const trainBtn = page.getByTestId(`bot-train-in-gym-${botId}`)
+      await expect(trainBtn).toBeVisible({ timeout: 15_000 })
+      await expect(trainBtn).toHaveAttribute('href', new RegExp(`/gym\\?bot=${botId}$`))
+
+      // 2) The header "Gym ⚡" link in My Bots is also present.
+      await expect(page.getByTestId('my-bots-gym-link')).toBeVisible()
+
+      // 3) Click into the Gym at this bot's deep-link.
+      await trainBtn.click()
+      await page.waitForURL(new RegExp(`/gym\\?bot=${botId}`))
+
+      // 4) Sidebar bot row is expanded and shows the "no skills" tag.
+      const botRow = page.getByTestId(`gym-bot-row-${botId}`)
+      await expect(botRow).toBeVisible({ timeout: 15_000 })
+      await expect(botRow).toContainText(/no skills/i)
+
+      // 5) Empty-state "+ Add a skill" button mints an XO + Q-Learning skill.
+      await page.getByTestId('gym-add-skill-empty').click()
+      await expect(page.getByRole('dialog', { name: /Add a skill/i })).toBeVisible()
+      await page.getByTestId('add-skill-submit').click()
+
+      // 6) Drilldown surfaces the new XO skill row under the bot.
+      const skillRow = page.getByTestId(`gym-skill-row-${botId}-xo`)
+      await expect(skillRow).toBeVisible({ timeout: 10_000 })
+
+      // 7) URL is updated to include gameId=xo so the deep-link is shareable.
+      await page.waitForURL(new RegExp(`/gym\\?bot=${botId}&gameId=xo`))
+    } finally {
+      const cleanCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+      try {
+        const cleanPage = { context: () => ({ request: cleanCtx }) }
+        await signIn(cleanPage, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+        const t = await fetchAuthToken(cleanCtx, LANDING_URL)
+        await cleanCtx.delete(`${BACKEND_URL}/api/v1/bots/${botId}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {})
+      } finally {
+        await cleanCtx.dispose()
+      }
+    }
+  })
+})
+
+// ── 11i: Sprint 3.8.C — full bot lifecycle: create → add skill → enter PvB ───
+//
+// Phase 3.8 Sprint C closeout (3.8.6.3). Proves the two-step skill flow end-
+// to-end: a user mints a skill-less identity bot, adds an XO skill, then
+// starts a PvB match against a community bot. The picker payload is now
+// identity-scoped (botId only) — the server resolves (botId, gameId) at
+// match start.
+
+test.describe('§11i — Bot lifecycle: create → add skill → enter PvB', () => {
+  test.setTimeout(90_000)
+
+  test('create a bot, add an XO skill, then start a PvB match against a community bot', async ({ page }) => {
+    test.skip(!haveUser, 'Need TEST_USER_EMAIL + TEST_USER_PASSWORD')
+
+    // 1) Mint a fresh skill-less bot via the API for determinism.
+    const apiCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+    const apiPageLike = { context: () => ({ request: apiCtx }) }
+    await signIn(apiPageLike, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+    const userToken = await fetchAuthToken(apiCtx, LANDING_URL)
+
+    const name = `qa-11i-${Date.now()}`
+    const createRes = await apiCtx.post(`${BACKEND_URL}/api/v1/bots`, {
+      headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+      data:    { name, competitive: false },
+    })
+    expect(createRes.ok(), `create failed: ${createRes.status()} ${await createRes.text().catch(() => '')}`).toBe(true)
+    const { bot } = await createRes.json()
+    const botId = bot.id
+    expect(botId).toBeTruthy()
+    await apiCtx.dispose()
+
+    try {
+      await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+
+      // 2) Add the XO skill via the Profile flow (covered in §11e in detail).
+      await page.goto(`${LANDING_URL}/profile?section=bots`)
+      await page.getByTestId(`bot-add-skill-${botId}`).click()
+      await expect(page.getByRole('dialog', { name: /Add a skill/i })).toBeVisible()
+      await page.getByTestId('add-skill-submit').click()
+      await expect(page.getByTestId(`bot-skill-pill-${botId}-xo`)).toBeVisible({ timeout: 10_000 })
+
+      // 3) Start a PvB match vs a community bot. /play?action=vs-community-bot
+      //    is the canonical entry point — it resolves the bot from
+      //    communityBotCache and posts /api/v1/rt/tables { kind: 'hvb', botUserId }.
+      //    The server resolves (botId, gameId='xo') → BotSkill at match start;
+      //    no botSkillId in the payload (Phase 3.8.5.2).
+      await page.goto(`${LANDING_URL}/play?action=vs-community-bot`)
+
+      // 4) The board renders — 9 cells visible — proving the match started.
+      //    We don't assert on the URL because PvB redirects through table slug.
+      await expect(page.locator('[data-testid^="cell-"], [aria-label^="cell"]').first()).toBeVisible({ timeout: 20_000 })
+    } finally {
+      const cleanCtx = await playwrightRequest.newContext({ baseURL: LANDING_URL })
+      try {
+        const cleanPage = { context: () => ({ request: cleanCtx }) }
+        await signIn(cleanPage, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
+        const t = await fetchAuthToken(cleanCtx, LANDING_URL)
+        await cleanCtx.delete(`${BACKEND_URL}/api/v1/bots/${botId}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {})
+      } finally {
+        await cleanCtx.dispose()
+      }
     }
   })
 })

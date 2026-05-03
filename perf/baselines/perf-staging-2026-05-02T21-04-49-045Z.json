@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-05-02T21:04:49.045Z",
+  "env": "staging",
+  "baseUrl": "https://xo-landing-staging.fly.dev",
+  "runs": 2,
+  "auth": false,
+  "warmup": true,
+  "devices": [
+    "desktop",
+    "mobile"
+  ],
+  "contexts": [
+    "cold-anon"
+  ],
+  "results": [
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 821,
+        "ready_p95": 842,
+        "ttfb_p50": 78,
+        "fcp_p50": 624,
+        "lcp_p50": 750,
+        "js_kb": 487,
+        "static_kb": 1387,
+        "img_kb": 888,
+        "requests": 9
+      },
+      "raw": [
+        {
+          "readyMs": 800,
+          "ttfb": 77,
+          "fcp": 600,
+          "lcp": 724,
+          "domContentLoaded": 314,
+          "requests": 10,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        },
+        {
+          "readyMs": 842,
+          "ttfb": 78,
+          "fcp": 648,
+          "lcp": 776,
+          "domContentLoaded": 371,
+          "requests": 8,
+          "staticKb": 1387,
+          "jsKb": 487,
+          "imgKb": 888
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 2011,
+        "ready_p95": 2021,
+        "ttfb_p50": 57,
+        "fcp_p50": 1366,
+        "lcp_p50": 1734,
+        "js_kb": 487,
+        "static_kb": 499,
+        "img_kb": null,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 2021,
+          "ttfb": 55,
+          "fcp": 1352,
+          "lcp": 1716,
+          "domContentLoaded": 408,
+          "requests": 11,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        },
+        {
+          "readyMs": 2001,
+          "ttfb": 59,
+          "fcp": 1380,
+          "lcp": 1752,
+          "domContentLoaded": 404,
+          "requests": 11,
+          "staticKb": 499,
+          "jsKb": 487,
+          "imgKb": 0
+        }
+      ]
+    }
+  ]
+}

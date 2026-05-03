@@ -173,21 +173,22 @@ describe('POST /api/v1/rt/tables', () => {
       currentTurn: 'X',
     })
 
+    // Phase 3.8.5.2 — even if the client sends a botSkillId, the route
+    // strips it. The picker payload is identity-scoped now (botId only).
     const res = await request(app)
       .post('/api/v1/rt/tables')
       .set('X-SSE-Session', 's1')
-      .send({ kind: 'hvb', botUserId: 'bot_1', botSkillId: 'skill_1' })
+      .send({ kind: 'hvb', botUserId: 'bot_1', botSkillId: 'skill_1_should_be_ignored' })
 
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({
       slug: 'hvbslug', mark: 'X', action: 'created', currentTurn: 'X',
     })
     expect(res.body.board).toHaveLength(9)
-    expect(flow.createHvbTable).toHaveBeenCalledWith(expect.objectContaining({
-      seatId:     'ba_user_1',
-      botUserId:  'bot_1',
-      botSkillId: 'skill_1',
-    }))
+    const callArgs = flow.createHvbTable.mock.calls[0][0]
+    expect(callArgs.seatId).toBe('ba_user_1')
+    expect(callArgs.botUserId).toBe('bot_1')
+    expect(callArgs).not.toHaveProperty('botSkillId')
   })
 
   it('returns action=rejoined when the service rejoined an existing tournament table', async () => {
@@ -231,6 +232,24 @@ describe('POST /api/v1/rt/tables', () => {
       .set('X-SSE-Session', 's1')
       .send({ kind: 'hvb', botUserId: 'missing' })
     expect(res.status).toBe(404)
+  })
+
+  it('400s with code=NO_SKILL when the bot has no BotSkill for the requested gameId (Phase 3.8.5.2)', async () => {
+    const { app } = makeApp()
+    sseSessions.register('s1', { userId: 'user_1' })
+    db.user.findUnique.mockResolvedValueOnce({
+      id: 'user_1', betterAuthId: 'ba_user_1', displayName: 'A',
+    })
+    flow.createHvbTable.mockResolvedValueOnce({
+      ok: false, code: 'NO_SKILL', message: 'Bot has no skill for game "xo"',
+    })
+
+    const res = await request(app)
+      .post('/api/v1/rt/tables')
+      .set('X-SSE-Session', 's1')
+      .send({ kind: 'hvb', botUserId: 'bot_skilless' })
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('NO_SKILL')
   })
 
   it('dispatches the bot opening when the service flagged botOpeningPending', async () => {

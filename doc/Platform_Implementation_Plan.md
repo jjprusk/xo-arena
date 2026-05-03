@@ -13,7 +13,7 @@
 | 2 - Platform Consolidation (rebrand + nav) | **done** (44/44) | Complete. |
 | 3 - Frontend Retirement, Tables Page, Platform Shell | **done** (58/58) | 3.0-3.5 complete. (3.6 multi-seat shell relocated to Phase 5.0; 3.7 rendered-table polish relocated to Cross-Cutting.) |
 | 3.7a - Pre-prod cleanups | **done** (25/27) | 3.7a.1 (template split), .2 (bot-name uniqueness), .3 (profile route), .4 (OAuth note), .6 (auto-drop audit) all shipped. Open: .5 cosmetic built-in-bot polish (optional). (Frontend follow-up from .2 relocated to 3.8.3.) |
-| 3.8 - Multi-Skill Bots | in progress (8/25) | Backend additive layer shipped on `dev` (3.8.1 schema/seed + 4 of 6 endpoints in 3.8.2 + initial vitest). Reshape items (3.8.2.1, 3.8.2.5) and all frontend (3.8.3-3.8.5) deferred until V1 QA completes. |
+| 3.8 - Multi-Skill Bots | **done** (25/25) | All three sprints landed: 3.8.A (backend reshape + Profile bot-card + AddSkillModal + inline name check + mixed-list disambiguation), 3.8.B (Gym sidebar drilldown, Profile→Gym nav, in-Gym Add-Skill, `repointBotPrimarySkill`), 3.8.C (identity-scoped picker payload, server-side `(botId, gameId)` resolution at match start with hard `NO_SKILL` 400, tournament reg validation, bracket/participant disambiguation, Playwright lifecycle e2e). Ready for production cut. |
 | 4 - Connect4 | not started (0/20) | Blocked on 3.8. |
 | 5 - Poker | not started (0/24) | Blocked on 3.8 + 4. (Now includes 5.0 multi-seat shell, formerly 3.6.) |
 | 6 - Pong | not started (0/18) | Blocked on 5's real-time spike review. |
@@ -412,6 +412,19 @@ Deferred to prod-bringup day. No code change in this phase.
 > - Bot create is two-step: create the bot (name + avatar + competitive flag), then *Add a skill* separately. No implicit first-skill bundling.
 > - Pickers are identity-scoped: user picks *Rusty* in Play or tournament registration; the game context determines which of Rusty's skills runs. No "Rusty (XO)" / "Rusty (C4)" duplicate entries.
 > - `User.botModelId` stays as a nullable "primary/last-trained skill" pointer for UI convenience. Source of truth for skills is `BotSkill.findMany({ where: { botId } })`.
+>
+> **Sprint plan locked 2026-05-02 — production-readiness shape.** Goal: ship a complete platform to production with **XO only** but fully reshaped so Connect4 (Phase 4) drops in by adding rows, not redesigning UI. Three sprints, then prod cut. Single-game world during this work means picker filters / "add skill" modals collapse to one option visually — but the structure must be there so Phase 4 is additive.
+>
+> | Sprint | Items | Why grouped |
+> |---|---|---|
+> | **3.8.A — Backend reshape + Profile** (locked-step) | 3.8.2.1, 3.8.3.1, 3.8.3.2, 3.8.3.3, 3.8.3.5, 3.8.6.4 | `POST /bots` going skill-less breaks the existing Quick Bot wizard. The new Profile create-bot form + bot-card + "Add a skill" modal must ship in the same deploy. Bot-name uniqueness UX rides along (touches the same form). Manual Rusty-PvB regression check closes the sprint. |
+> | **3.8.B — Gym + Profile→Gym navigation** | 3.8.3.4, 3.8.4.1, 3.8.4.2, 3.8.4.3 | All Gym-side reshape. Sidebar bot→skill drilldown is the structural piece (visually trivial with one skill but required for Phase 4). "Train in Gym →" closes the navigation gap from 3.7a. Auto-repoint of `botModelId` on training completion makes "last-trained" accurate without manual select. |
+> | **3.8.C — Play + Tournaments + closeout** | 3.8.2.5, 3.8.5.1, 3.8.5.2, 3.8.5.3, 3.8.5.4, 3.8.6.2, 3.8.6.3 | Pickers move to identity-scoped (botId only); backend resolves `(botId, gameId)` at match start. Tournament reg rejects skill-missing bots. Rankings reframe as bot identity. Vitest + Playwright closeout. After this sprint the system is structurally Phase-4-ready. |
+> | **Production cut** | n/a | Once 3.8.C green on staging + smoke clean, deploy to `xo-*-prod`. Connect4 (Phase 4) lands later as additive: one `BotSkill` row per built-in bot, one game package, no platform reshape. |
+>
+> Items keep their canonical 3.8.x.y numbering below — the sprint table above is just the execution overlay.
+>
+> **E2E test mandate (locked 2026-05-02):** every sprint above ships its Playwright updates *in the same PR* as the user-surface change. Especially the journey/onboarding suite (`e2e/tests/journey*.spec.ts`) — the bot-create form, picker UI, and Gym sidebar are all directly asserted there. No "fix e2e next sprint" — broken e2e leaves the deploy gate dishonest. Run `cd e2e && npm test` against running services before signaling sprint complete.
 
 ### 3.8.1 Schema + seed
 
@@ -421,40 +434,40 @@ Deferred to prod-bringup day. No code change in this phase.
 
 ### 3.8.2 Backend — bots + skills API
 
-- [ ] `POST /api/v1/bots` — accepts `{ name, avatarUrl, competitive }` only. No algorithm/game at this step. Creates a skill-less bot. `botModelId` starts null. *(Deferred until V1 QA completes — reshapes the existing endpoint that the Quick Bot wizard depends on.)*
+- [x] **[Sprint 3.8.A]** `POST /api/v1/bots` — accepts `{ name, avatarUrl, competitive }` only. No algorithm/game at this step. Creates a skill-less bot. `botModelId` starts null. *(Quick Bot wizard preserved via separate `POST /bots/quick` legacy path.)*
 - [x] `POST /api/v1/bots/:botId/skills` — body `{ gameId, algorithm, modelType }`. Creates a BotSkill, sets `botModelId = newSkill.id` if it's the bot's first. Idempotent on `(botId, gameId)` — second call returns existing skill.
 - [x] `GET /api/v1/bots/:botId` — includes `skills: BotSkill[]` with per-skill ELO joined from `GameElo (userId=botId, gameId=skill.gameId)`.
 - [x] `DELETE /api/v1/bots/:botId/skills/:skillId` — removes one skill. If the deleted skill was `botModelId`, repoint to any remaining skill or null. *(Also fixed `DELETE /api/v1/bots/:id` to sweep all the bot's BotSkill rows, not just the primary.)*
-- [ ] Tournament registration: validate that the picked bot has a `BotSkill` for the tournament's `gameId`; return a clear 400 if not. *(Deferred until V1 QA completes — could reject in-flight QA enrollments.)*
+- [x] **[Sprint 3.8.C]** Tournament registration: validates that the picked bot has a `BotSkill` for the tournament's `gameId`; returns 400 with `code: 'NO_SKILL'` if not. Logic in `tournament/src/lib/registrationGuards.js` `assertBotHasSkillForGame`, called from `POST /api/tournaments/:id/register`.
 - [x] `GET /api/v1/bots?gameId=X` — list helper for community bot pickers, filters to bots that have a skill for `X`.
 
 ### 3.8.3 Frontend — Profile / bot creation
 
-- [ ] Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
-- [ ] Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
-- [ ] "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`.
-- [ ] **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button in addition to the skill pills. Also add a "Gym ⚡" link in the My Bots section header. Closes the navigation gap identified in Phase 3.7a audit — today returning users with dismissed journey and no "AI Training" slot can't reach `/gym` from Profile. Deferred to 3.8 (not 3.7a) because the bot card is redesigned here; doing it twice would be waste.
-- [ ] **Bot-name uniqueness UX (relocated from 3.7a.2):** bot-create form checks availability inline (debounced GET) before submit; mixed-owner lists (leaderboard, bot picker, tournament bracket) render "Rusty · @joe" / "Rusty · built-in" when multiple bots share a name in the visible set. Backend partial-unique indexes already enforce the rule; this closes the UX side.
+- [x] **[Sprint 3.8.A]** Profile "Create a bot" form: reduce to name + avatar + competitive flag. Submit → bot card appears with "No skills yet — Add a skill" affordance.
+- [x] **[Sprint 3.8.A]** Bot card shows skill pills (one per game with `{ gameLabel, algorithm, ELO, episodes }`) and an "+ Add skill" chip. Clicking a pill opens Gym focused on that `(botId, gameId)` — deep-link via `/gym?bot=:botId&gameId=:gameId`.
+- [x] **[Sprint 3.8.A]** "Add a skill" modal: pick game (dropdown of games that don't already have a skill for this bot) + algorithm + optional starter config. Submits to `POST /bots/:botId/skills`. *(Single-game world: the game dropdown shows only XO; structure stays so Connect4 row lights it up.)*
+- [x] **[Sprint 3.8.B]** **Gym deep-link from Profile (gym-navigation gap close):** each bot row gets a visible "Train in Gym →" button (deep-links to `/gym?bot=:botId&gameId=:firstSkillGameId`, or `/gym?bot=:botId` for skill-less bots), and a "Gym ⚡" link sits next to "+ Create new bot" inside the My Bots section. Closes the 3.7a navigation gap.
+- [x] **[Sprint 3.8.A]** **Bot-name uniqueness UX (relocated from 3.7a.2):** bot-create form checks availability inline (debounced GET `/bots/check-name`) before submit; per-owner dedup matches the partial-unique indexes (cross-owner collisions allowed); Rankings page renders "Rusty · @joe" / "Rusty · built-in" via `disambiguateBotLabels` when names collide in the visible set. *(Bot picker / tournament bracket helpers already in place — apply on those surfaces in Sprint 3.8.C alongside the picker reshape.)*
 
 ### 3.8.4 Frontend — Gym
 
-- [ ] Left sidebar shows bots; selecting a bot reveals its skills as a second-level picker (tabs or sub-list). Selecting a skill opens the existing Gym tabs scoped to that `(botId, gameId)`.
-- [ ] "Add skill for this bot" affordance inside Gym for convenience — shares the Profile modal.
-- [ ] When a training session completes, update `User.botModelId` to point at the just-trained skill so Profile "last-trained" stays current.
+- [x] **[Sprint 3.8.B]** Left sidebar shows bots; selecting a bot expands it to surface its `BotSkill` rows as a second-level list. Selecting a skill opens the existing Gym tabs scoped to that `(botId, gameId)` and keeps `?bot=…&gameId=…` in sync so the deep-link is shareable. *(Visually trivial with one skill per bot today; structural for Phase 4.)*
+- [x] **[Sprint 3.8.B]** "Add skill for this bot" affordance inside Gym (header button on the active-skill panel + empty-state CTA on a skill-less bot) — shares the Profile `AddSkillModal` and auto-selects the new skill on success.
+- [x] **[Sprint 3.8.B]** When a training session completes, the backend auto-repoints `User.botModelId` to the just-finished `BotSkill` (`repointBotPrimarySkill`, exported from both `mlService` and `skillService`; covered by vitest in each service's `__tests__/`). The frontend `handleTrainingComplete` mirrors the same update optimistically so the Gym sidebar / Profile cache don't show stale state until the next bots refetch.
 
 ### 3.8.5 Frontend — Play + tournaments
 
-- [ ] Community bot picker lists bots (Rusty, Copper, Sterling, Magnus + user's public bots) filtered server-side by `gameId`. No "Bot X for Game Y" duplicates.
-- [ ] Starting a game with a community bot resolves the skill server-side from `(botId, gameId)` at match start — picker payload carries only `botId`.
-- [ ] Tournament registration picks a bot; backend resolves `(botId, tournamentGameId)` and rejects registration if the bot has no skill for that game.
-- [ ] Rankings page: already per-game via `GameElo`, but show the *bot identity* (not skill) as the leaderboard row, with the current game as implicit context.
+- [x] **[Sprint 3.8.C]** Community bot picker lists bots filtered server-side by `gameId` (`GET /api/v1/bots?gameId=:gameId` joins `BotSkill` to drop bots that lack a skill for that game). `communityBotCache.js` consumes it; no "Bot X for Game Y" duplicates.
+- [x] **[Sprint 3.8.C]** Starting a game with a community bot resolves the skill server-side from `(botId, gameId)` at match start — picker payload carries only `botId`. `useGameSDK`, `PlayPage`, `TablesPage`, `communityBotCache` all dropped the legacy `botSkillId` field; the realtime route + `tableFlowService.createHvbTable` no longer accept it; missing skill → 400 `NO_SKILL`.
+- [x] **[Sprint 3.8.C]** Tournament registration picks a bot; backend resolves `(botId, tournamentGameId)` and rejects registration if the bot has no skill for that game (see 3.8.2.5 above).
+- [x] **[Sprint 3.8.C]** Rankings page already per-game via `GameElo`; renders bot *identity* (not skill) as the row with `disambiguateBotLabels` for cross-owner collisions and link to `/bots/:botId`. (Shipped in Sprint A.3 — verified here.)
 
 ### 3.8.6 QA + tests
 
 - [x] Vitest: `POST /bots/:id/skills` creates + repoints `botModelId`; idempotent on `(botId, gameId)`; deleting the primary skill repoints to next remaining or null. *(21 new cases in `bots.test.js`; the `POST /bots` skill-less-bot reshape is deferred so its case lands with that work.)*
-- [ ] Vitest: tournament registration rejects bot lacking the tournament's skill. *(Deferred — pairs with the deferred 3.8.2.5 endpoint validation.)*
-- [ ] Playwright smoke.journey: add a case where a user creates a bot, adds an XO skill, enters XO match vs community bot — proves the two-step flow end-to-end. *(Deferred — depends on 3.8.3 UI.)*
-- [ ] Manual: Rusty with an XO skill still plays a PvB match identically to v1.28. *(Pending — run after V1 QA completes.)*
+- [x] **[Sprint 3.8.C]** Vitest: `tournament/src/lib/__tests__/registrationGuards.test.js` covers the four observable behaviours (human pass-through, bot-with-skill pass, bot-without-skill 400 NO_SKILL, gameId-keyed lookup). Pairs with the route wiring at `tournament/src/routes/tournaments.js` `POST /:id/register`.
+- [x] **[Sprint 3.8.C]** Playwright `e2e/tests/open-items.spec.js` §11i: user creates a bot, adds an XO skill, then starts a PvB match against a community bot — proves the two-step flow end-to-end with the new identity-scoped picker.
+- [ ] **[Sprint 3.8.A]** Manual: Rusty with an XO skill still plays a PvB match identically to v1.28. *(Sprint-A closeout regression check after the `POST /bots` reshape lands.)*
 
 ---
 

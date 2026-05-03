@@ -5,6 +5,29 @@ author: "Joe Pruskowski"
 date: "2026-04-25"
 ---
 
+## Run status — 2026-05-02 (local dev)
+
+| Stage | Description | Status |
+|---|---|---|
+| 0 | Prereqs (env up, services healthy) | not run |
+| 1 | Phase 0 funnel (Sprints 1+2) | pending — manual |
+| 2 | Hook (Sprint 3) | pending — manual |
+| 3 | Curriculum: Quick Bot wizard (Sprint 3) | pending — manual |
+| 4 | Curriculum: Spar (Sprint 4) | pending — manual |
+| 5 | Curriculum: Cup (Sprint 4) | pending — manual |
+| 6 | Specialize: discovery rewards (Sprint 5) | pending — manual |
+| 7 | Admin metrics dashboard (Sprints 5+6) | pending — manual |
+| 8 | SystemConfig admin panel (Sprint 6) | pending — manual |
+| 9 | `um` admin commands (Sprint 6) | pending — manual |
+| 10 | V1 release flag (Sprint 6) | pending — manual |
+| 11.1 | Concurrent step-2 race (post-2026-05-02 hardening) | **PASSED 2026-05-02** ✅ |
+| 11.2 | SystemConfig outage fail-closed (post-2026-05-02 hardening) | **PASSED 2026-05-02** ✅ |
+| 11.3 | Out-of-order step credit / monotonicity (post-2026-05-02 hardening) | **PASSED 2026-05-02** ✅ |
+
+Stages 1–10 form the golden-path walkthrough and are scheduled for the next manual run on dev. Stage 11 covers the concurrency + edge-case hardening shipped on 2026-05-02 and is automated-friendly enough to re-run on demand. Once Stages 1–10 complete on dev, the same script runs against staging before production.
+
+---
+
 ## What this document covers
 
 This is the single end-to-end QA script for the Intelligent Guide v1 release. It walks the *whole* journey — Phase 0 funnel, Hook, Curriculum, Specialize discovery rewards, the admin dashboard, the SystemConfig panel, and the kill switch — in one sitting, in chronological user order.
@@ -330,6 +353,87 @@ The release-gate flag. Verify both directions: off silently no-ops credits, on r
 - `um status` should now show step 1 credited (the new PvAI fired the trigger; the earlier one is lost — intentional).
 
 **Pass criteria:** off-window credits are dropped (not deferred), on-state immediately resumes credits for new actions.
+
+---
+
+## Stage 11 — Concurrency + edge cases (post-2026-05-02 hardening)
+
+These checks pin two specific defects that were fixed alongside the journey-test hardening pass on 2026-05-02. They aren't part of the normal user flow, but they're cheap to run and they catch the class of regression that's hardest to spot from the dashboard (silent double-payment, propagated config errors).
+
+### 11.1 Concurrent step-2 credit pays Hook reward exactly once — PASSED 2026-05-02
+
+**What this guards:** before the fix, two simultaneous credits for the same step (multi-tab, or two backend pods reacting to the same Redis event) both passed the dedup check and both fired `_handleHookComplete` — paying +40 TC instead of +20. The fix wraps the read-modify-write in a per-user `pg_advisory_xact_lock` transaction (`backend/src/services/journeyService.js`).
+
+Steps:
+
+1. Sign up a fresh user (`v1ack-race+<rand>@dev.local`). Confirm `um status` shows `completedSteps: []`.
+2. Play **one** PvAI game to completion (any opponent, any result). This credits step 1, leaving step 2 as the next-pending step. Confirm `um status` now shows `completedSteps: [1]`, `phase: hook`.
+3. In **tab A**, open the journey panel and click **"Watch a demo"**. The page redirects to `/tables/<demoId>` — note that URL.
+4. In **tab B** (same browser, same logged-in session), paste the exact `/tables/<demoId>` URL. Do **not** click "Watch a demo" in tab B — that would mint a *different* demo table and you'd lose the race condition. Both tabs must be spectating the same `tableId`.
+5. Let both tabs watch ≥ 2 minutes. Each tab runs its own 120s spectate timer; when both fire, they POST the step-2 credit concurrently — this is the race window the advisory lock guards.
+6. After both tabs have rendered the +20 TC popup (or after a fresh page load on either tab), check:
+   - `um status v1ack-race+<rand>` → `journey.completedSteps` includes `2` exactly once (no duplicates in the array).
+   - User's TC balance should be **+20**, not **+40**. Read it from the profile dropdown or `um wallet show v1ack-race+<rand>`.
+   - Backend logs (`docker compose logs backend | grep "Hook complete"`) show the reward grant logged exactly once for this user.
+
+**Pass criteria:** balance shows +20 TC, not +40. The race is closed.
+
+**Result (2026-05-02):** PASSED. User `qqq` showed `creditsTc=20`, `completedSteps=[1,2]`, single "Hook complete — TC awarded" log line. Advisory lock confirmed working under real two-tab race.
+
+### 11.2 SystemConfig outage fails closed (no propagated 500) — PASSED 2026-05-02
+
+**What this guards:** the `guide.v1.enabled` lookup used to live outside the try/catch — a SystemConfig DB failure propagated the error up to every step-credit call site (game-end, tournament bridge, etc.), turning a single config-table hiccup into a cascade. The fix moved the lookup inside the existing try/catch; failures now return false silently.
+
+Steps:
+
+1. Pick a user mid-curriculum (`qqq` works, or any `v1ack-flag+<rand>` from Stage 10). Note their `creditsTc` and `journeyProgress` baseline.
+2. Simulate the outage by **renaming the system_config table** so Prisma reads error immediately:
+   ```sh
+   docker compose exec -T postgres psql -U xo -d xo_arena -c \
+     "ALTER TABLE system_config RENAME TO _system_config_outage_test;"
+   ```
+   (We use rename rather than `LOCK TABLE` because Postgres has no `statement_timeout` set — a lock would *hang* the read indefinitely instead of erroring, which doesn't exercise the catch path. Rename produces an instant `relation does not exist` error, which is the failure mode the fix actually defends against.)
+3. With the table renamed, have the user trigger any step-credit code path (play a PvAI game to end is easiest — even though step 1 is already credited, the trigger still calls `completeStep` and exercises the SystemConfig lookup before the dedup check).
+4. Check the backend response and logs:
+   - Game POST should return **200**, not 500.
+   - Backend logs show a `WARN` line: `Journey step completion failed (non-fatal)` with the err containing `relation "system_config" does not exist` (or similar).
+   - No unhandled-promise-rejection trace, no 500-level response anywhere in the network tab.
+5. Restore the table:
+   ```sh
+   docker compose exec -T postgres psql -U xo -d xo_arena -c \
+     "ALTER TABLE _system_config_outage_test RENAME TO system_config;"
+   ```
+6. Have the user fire a step-trigger event that produces a *new* credit (e.g., create a bot to credit step 3 if they're at step 2). `um status` should show the new step credited and TC balance updated.
+
+**Pass criteria:** during the outage, the call site stays clean (200 response, warn log only, no cascading 500s). After the rename is restored, credits resume on the next trigger.
+
+**Result (2026-05-02):** PASSED. Outage simulated by renaming `system_config` for ~54 seconds; user `qqq` played a PvAI game during the window with no 500s. Backend logs showed exactly one `Journey step completion failed (non-fatal)` warn (with the underlying `relation "system_config" does not exist` Prisma error), no unhandled-promise rejections, no stack-trace propagation. Bonus finding: `creditService` and the table-GC sweep also fail closed under the same outage — the defensive pattern is consistent across services. After table rename was reversed, `qqq` created a bot and step 3 credited cleanly (`completedSteps=[1,2,3]`).
+
+### 11.3 Out-of-order step credit (monotonicity policy spot-check) — PASSED 2026-05-02
+
+**What this guards:** documented decision (Implementation Plan §8) — the service layer allows out-of-order completion, the only invariant is dedup. Step 7 alone fires the +50 TC reward and Specialize transition without prior steps, so a user who somehow lands on step 7 first still graduates cleanly. (The natural flow is steered by UI — this only matters for admin tools or future direct API access.)
+
+Steps:
+
+1. Pick a fresh user with `journey.completedSteps == []`.
+2. Run `um journey complete-step <user> 7` (or equivalent admin tool) — bypass the natural triggers.
+3. Verify:
+   - `um status <user>` shows `completedSteps: [7]` and `phase: specialize`.
+   - User's TC balance went up by **+50** (Curriculum reward fires regardless of prior state).
+   - SSE events `guide:curriculum_complete` and `guide:specialize_start` were emitted (visible in browser if user is online; otherwise check Redis stream).
+
+**Pass criteria:** non-monotonic credit produces the same reward + transition as a complete journey. Confirms the documented policy is wired correctly.
+
+**Note on tooling:** `um journey complete-step` doesn't exist as a CLI subcommand — `um journey <user> 0000001` would write `completedSteps: [7]` directly into preferences but skip the reward + SSE emission paths, defeating the test. Run instead:
+
+```sh
+docker compose exec -T backend node --experimental-transform-types --no-warnings --input-type=module -e \
+  "import('./src/services/journeyService.js').then(async ({ completeStep }) => { await completeStep('<userId>', 7); await new Promise(r => setTimeout(r, 1000)); process.exit(0); })"
+```
+
+The 1-second sleep is needed because `appendToStream` is fire-and-forget — without it, the process exits before Redis XADD completes and the SSE events aren't written.
+
+**Result (2026-05-02):** PASSED. Fresh user `v1ack-mono` (cmoohdw9m..., creditsTc=0, completedSteps=[]) had `completeStep(userId, 7)` invoked directly. Post-call: `creditsTc=50`, `completedSteps=[7]`, phase=`specialize`. All three expected SSE events landed on the Redis events stream: `guide:journeyStep` (step=7, phase=specialize), `guide:curriculum_complete` (reward=50), and `guide:specialize_start`. Monotonicity policy confirmed — service layer enforces dedup only, never prior-step ordering.
 
 ---
 

@@ -9,6 +9,7 @@ import { signOut } from '../lib/auth-client.js'
 import { useGuideStore } from '../store/guideStore.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
+import AddSkillModal from '../components/ui/AddSkillModal.jsx'
 import QuickBotWizard from '../components/guide/QuickBotWizard.jsx'
 import { GAMES } from '../lib/gameRegistry.js'
 
@@ -47,6 +48,9 @@ export default function ProfilePage() {
   const [bots, setBots] = useState([])
   const [limitInfo, setLimitInfo] = useState(null)
   const [provisionalThreshold, setProvisionalThreshold] = useState(5)
+  // Phase 3.8 — Multi-Skill Bots: which bot (if any) currently has its
+  // "Add a skill" modal open. Null when closed.
+  const [addSkillBot, setAddSkillBot] = useState(null)
   // Starts `true` so effects that wait for the bot list (notably the
   // ?action=train-bot redirect) don't fire on the initial empty `bots = []`
   // and bounce a user with bots over to the QuickBotWizard. Cleared at the
@@ -55,9 +59,15 @@ export default function ProfilePage() {
   const [showCreateBot, setShowCreateBot] = useState(false)
   const [botActionError, setBotActionError] = useState(null)
   const [renamingBot, setRenamingBot] = useState(null)
-  const [createForm, setCreateForm] = useState({ name: '', modelType: 'Q_LEARNING', competitive: true, gameId: 'xo' })
+  // Phase 3.8 — Multi-Skill Bots: bot create is identity-only (name + competitive
+  // flag). Algorithm/game choice moves to the per-bot "Add a skill" flow.
+  const [createForm, setCreateForm] = useState({ name: '', competitive: true })
   const [showBotCreatedPopup, setShowBotCreatedPopup] = useState(false)
   const [creatingBot, setCreatingBot] = useState(false)
+  // Phase 3.8.A.3 — debounced inline name-availability state. `nameCheck.status`
+  // is 'idle' | 'checking' | 'ok' | 'bad'; on 'bad' we render `nameCheck.message`
+  // beneath the input and disable the Create button.
+  const [nameCheck, setNameCheck] = useState({ status: 'idle', message: '' })
 
   // Credits & tier
   const [credits, setCredits] = useState(null)
@@ -195,6 +205,42 @@ export default function ProfilePage() {
     // case — we open it explicitly below).
     setOpenSections(prev => ({ ...prev, bots: true }))
   }, [searchParams, botsLoading, bots]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Phase 3.8.A.3 — debounce-validate the name input while the create panel
+  // is open. We wait 350 ms after the last keystroke before hitting
+  // /bots/check-name so we're not chatty, and we treat empty/short input as
+  // 'idle' (the form's required + maxLength attributes already cover those).
+  useEffect(() => {
+    if (!showCreateBot) {
+      setNameCheck({ status: 'idle', message: '' })
+      return
+    }
+    const trimmed = createForm.name.trim()
+    if (trimmed.length === 0) {
+      setNameCheck({ status: 'idle', message: '' })
+      return
+    }
+    let cancelled = false
+    setNameCheck({ status: 'checking', message: '' })
+    const id = setTimeout(async () => {
+      try {
+        const token = await getToken()
+        const res = await api.bots.checkName(trimmed, token)
+        if (cancelled) return
+        if (res.available) {
+          setNameCheck({ status: 'ok', message: 'Available' })
+        } else {
+          setNameCheck({ status: 'bad', message: res.message || 'Name not allowed' })
+        }
+      } catch (err) {
+        if (cancelled) return
+        // Network/auth blip — don't block submit, let server-side validation
+        // give the authoritative answer on Create.
+        setNameCheck({ status: 'idle', message: '' })
+      }
+    }, 350)
+    return () => { cancelled = true; clearTimeout(id) }
+  }, [createForm.name, showCreateBot])
 
   useEffect(() => {
     if (!clerkUser) return
@@ -401,17 +447,16 @@ export default function ProfilePage() {
     setBotActionError(null)
     try {
       const token = await getToken()
+      // Phase 3.8 reshape: skill-less identity create. The bot starts with no
+      // skills; the user adds an XO skill from the bot card next.
       const payload = {
-        name: createForm.name,
-        algorithm: 'ml',
-        modelType: createForm.modelType,
+        name:        createForm.name,
         competitive: createForm.competitive,
-        gameId: createForm.gameId,
       }
       const { bot: newBot } = await api.bots.create(payload, token)
       setBots(prev => [newBot, ...prev])
       setLimitInfo(prev => prev ? { ...prev, count: prev.count + 1 } : prev)
-      setCreateForm({ name: '', modelType: 'Q_LEARNING', competitive: true })
+      setCreateForm({ name: '', competitive: true })
       setShowCreateBot(false)
       setShowBotCreatedPopup(true)
 
@@ -641,38 +686,34 @@ export default function ProfilePage() {
                     onChange={e => { e.target.setCustomValidity(''); setCreateForm(f => ({ ...f, name: e.target.value })) }}
                     className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
                     style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    data-testid="bot-create-name"
                   />
+                  {nameCheck.status !== 'idle' && (
+                    <span
+                      className="text-xs"
+                      data-testid="bot-create-name-status"
+                      data-status={nameCheck.status}
+                      style={{
+                        color:
+                          nameCheck.status === 'ok'  ? 'var(--color-green-600)' :
+                          nameCheck.status === 'bad' ? 'var(--color-red-600)'   :
+                                                       'var(--text-muted)',
+                      }}
+                    >
+                      {nameCheck.status === 'checking' ? 'Checking…' : nameCheck.message}
+                    </span>
+                  )}
                 </label>
-                <label className="space-y-1 block">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Game</span>
-                  <select
-                    value={createForm.gameId}
-                    onChange={e => setCreateForm(f => ({ ...f, gameId: e.target.value }))}
-                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-                  </select>
-                </label>
-                <label className="space-y-1 block">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Brain Architecture</span>
-                  <select
-                    value={createForm.modelType}
-                    onChange={e => setCreateForm(f => ({ ...f, modelType: e.target.value }))}
-                    className="w-full px-3 py-1.5 rounded-lg border text-sm focus:outline-none"
-                    style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="Q_LEARNING">Q-Learning</option>
-                    <option value="SARSA">SARSA</option>
-                    <option value="MONTE_CARLO">Monte Carlo</option>
-                    <option value="POLICY_GRADIENT">Policy Gradient</option>
-                    <option value="DQN">DQN (Deep Q-Network)</option>
-                    <option value="ALPHA_ZERO">AlphaZero</option>
-                  </select>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    A fresh untrained brain of this type will be created. Train it in the Gym.
-                  </p>
-                </label>
+                {/*
+                  Phase 3.8 — Multi-Skill Bots: Game + Brain Architecture
+                  fields removed. A bot is now an identity (name + competitive
+                  flag); the user picks game and algorithm later via the
+                  per-bot "Add a skill" flow on the bot card. Hint copy below
+                  sets the expectation that the bot starts skill-less.
+                */}
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Your bot starts with no skills. Add a skill (game + algorithm) from the bot card after it's created.
+                </p>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -684,8 +725,9 @@ export default function ProfilePage() {
                 <div className="flex gap-2 pt-1">
                   <button
                     type="submit"
-                    disabled={creatingBot}
+                    disabled={creatingBot || nameCheck.status === 'bad' || nameCheck.status === 'checking'}
                     className="btn btn-primary btn-sm"
+                    data-testid="bot-create-submit"
                   >
                     {creatingBot ? 'Creating…' : 'Create'}
                   </button>
@@ -861,21 +903,32 @@ export default function ProfilePage() {
             <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{botActionError}</p>
           )}
 
-          <button
-            onClick={() => {
-              if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
-                setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
-                return
-              }
-              setBotActionError(null)
-              setShowCreateBot(true)
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-            }}
-            className="text-sm font-medium underline underline-offset-2 transition-opacity hover:opacity-70"
-            style={{ color: 'var(--color-blue-600)' }}
-          >
-            + Create new bot
-          </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <button
+              onClick={() => {
+                if (limitInfo && !limitInfo.isExempt && limitInfo.count >= limitInfo.limit) {
+                  setBotActionError(`Bot limit reached (${limitInfo.limit}). Delete a bot to create a new one.`)
+                  return
+                }
+                setBotActionError(null)
+                setShowCreateBot(true)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              className="text-sm font-medium underline underline-offset-2 transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-blue-600)' }}
+            >
+              + Create new bot
+            </button>
+            <Link
+              to="/gym"
+              className="text-sm font-medium underline underline-offset-2 transition-opacity hover:opacity-70 inline-flex items-center gap-1"
+              style={{ color: 'var(--color-purple-600)' }}
+              data-testid="my-bots-gym-link"
+              title="Go to the Gym to train your bots"
+            >
+              Gym <span aria-hidden="true">⚡</span>
+            </Link>
+          </div>
 
           {botsLoading && (
             <div className="flex items-center justify-center py-4">
@@ -888,11 +941,11 @@ export default function ProfilePage() {
           )}
 
           {!botsLoading && bots.length > 0 && (
-            <ListTable fitViewport topOffset={56} bottomPadding={32} columns={['33%', '13%', '11%', '43%']}>
+            <ListTable fitViewport topOffset={56} bottomPadding={32} columns={['28%', '24%', '8%', '40%']}>
               <thead>
                 <tr>
                   <ListTh>Bot</ListTh>
-                  <ListTh>Type</ListTh>
+                  <ListTh>Skills</ListTh>
                   <ListTh align="right">ELO</ListTh>
                   <ListTh align="right">Actions</ListTh>
                 </tr>
@@ -939,15 +992,73 @@ export default function ProfilePage() {
                       )}
                     </ListTd>
                     <ListTd>
-                      <span className="badge badge-live">
-                        {BOT_MODEL_LABELS[bot.botModelType] ?? bot.botModelType ?? 'AI'}
-                      </span>
+                      {/*
+                        Phase 3.8 — Multi-Skill Bots: legacy single "Type"
+                        badge replaced with a per-skill pill list. Each pill
+                        deep-links to /gym scoped to (botId, gameId) so the
+                        user lands on the right Gym context with one click.
+                        The "+ Add" chip opens AddSkillModal; it's hidden
+                        when every supported game already has a skill.
+                      */}
+                      <div className="flex items-center gap-1 flex-wrap" data-testid={`bot-skills-${bot.id}`}>
+                        {(bot.skills ?? []).length === 0 && (
+                          <span
+                            className="text-xs italic"
+                            style={{ color: 'var(--text-muted)' }}
+                            data-testid={`bot-skills-empty-${bot.id}`}
+                          >
+                            No skills yet
+                          </span>
+                        )}
+                        {(bot.skills ?? []).map((s) => {
+                          const game = GAMES.find(g => g.id === s.gameId)
+                          const label = game?.label ?? s.gameId.toUpperCase()
+                          return (
+                            <Link
+                              key={s.id}
+                              to={`/gym?bot=${bot.id}&gameId=${s.gameId}`}
+                              className="badge badge-live hover:opacity-80 transition-opacity"
+                              title={`${label} · ${s.algorithm}${s.elo?.rating ? ` · ELO ${Math.round(s.elo.rating)}` : ''}`}
+                              data-testid={`bot-skill-pill-${bot.id}-${s.gameId}`}
+                            >
+                              {label.split(' ')[0]} · {s.algorithm}
+                            </Link>
+                          )
+                        })}
+                        {GAMES.length > (bot.skills ?? []).length && (
+                          <button
+                            type="button"
+                            onClick={() => setAddSkillBot(bot)}
+                            className="text-xs px-1.5 py-0.5 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                            style={{ borderColor: 'var(--color-blue-300)', color: 'var(--color-blue-600)' }}
+                            data-testid={`bot-add-skill-${bot.id}`}
+                            title="Add a skill"
+                          >+ Add skill</button>
+                        )}
+                      </div>
                     </ListTd>
                     <ListTd align="right">
                       <span className="font-mono tabular-nums">{Math.round(bot.eloRating)}</span>
                     </ListTd>
                     <ListTd align="right">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-1 flex-wrap">
+                        {(() => {
+                          const firstSkillGameId = bot.skills?.[0]?.gameId
+                          const href = firstSkillGameId
+                            ? `/gym?bot=${bot.id}&gameId=${firstSkillGameId}`
+                            : `/gym?bot=${bot.id}`
+                          return (
+                            <Link
+                              to={href}
+                              className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
+                              style={{ borderColor: 'var(--color-purple-300)', color: 'var(--color-purple-600)' }}
+                              data-testid={`bot-train-in-gym-${bot.id}`}
+                              title="Train this bot in the Gym"
+                            >
+                              Train in Gym →
+                            </Link>
+                          )
+                        })()}
                         <button
                           onClick={() => setRenamingBot({ id: bot.id, value: bot.displayName })}
                           className="text-xs px-2 py-1 rounded border transition-colors hover:bg-[var(--bg-surface-hover)]"
@@ -1047,6 +1158,24 @@ export default function ProfilePage() {
             setShowBotCreatedPopup(false)
             useGuideStore.getState().open()
             window.location.href = '/gym'
+          }}
+        />
+      )}
+
+      {addSkillBot && (
+        <AddSkillModal
+          bot={addSkillBot}
+          onClose={() => setAddSkillBot(null)}
+          onAdded={(skill) => {
+            // Optimistic merge — append the new skill into the bot row in
+            // place. Avoids a full bots refetch and the visual flicker that
+            // would come with it. The /gym pill becomes immediately
+            // clickable; ELO populates on the next admin/match round-trip.
+            setBots(prev => prev.map(b => (
+              b.id === addSkillBot.id
+                ? { ...b, skills: [...(b.skills ?? []), { ...skill, elo: null }] }
+                : b
+            )))
           }}
         />
       )}

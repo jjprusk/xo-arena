@@ -73,24 +73,28 @@ test.describe('Phase 3.5 — tables page', () => {
   })
 })
 
-// ─── Part 3: Bot creation game field — requires user auth ─────────────────────
+// ─── Part 3: Bot creation form — Phase 3.8 reshape ────────────────────────────
+//
+// Phase 3.5's "bot create has a Game dropdown" assertion is obsolete: in
+// Phase 3.8, bot create is identity-only (name + competitive flag); game and
+// algorithm move to the per-bot Add-a-skill flow. Updated to assert the new
+// shape so this spec doesn't false-pass on a regression that re-introduces
+// the dropdown.
 
-test.describe('Phase 3.5 — bot creation game field', () => {
-  test('bot creation panel has a Game dropdown with XO option', async ({ page }) => {
+test.describe('Phase 3.5 — bot creation form (Phase 3.8 reshape)', () => {
+  test('create-bot panel is identity-only — no Game dropdown, hint copy promises later skill-add', async ({ page }) => {
     test.skip(!process.env.TEST_USER_EMAIL, 'Set TEST_USER_EMAIL + TEST_USER_PASSWORD to enable')
 
     await signIn(page, process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, LANDING_URL)
-    // ?action=create-bot auto-opens the create panel as soon as the dbUser
-    // loads — no button click required. More reliable than racing a scroll +
-    // accordion toggle via the "+ Create new bot" button.
     await page.goto(`${LANDING_URL}/profile?action=create-bot`)
 
-    // Game dropdown should be visible
-    const gameSelect = page.locator('select').filter({
-      has: page.locator('option[value="xo"]'),
-    })
-    await expect(gameSelect).toBeVisible({ timeout: 10_000 })
-    await expect(gameSelect.locator('option[value="xo"]')).toHaveText(/XO/i)
+    // The hint copy is the load-bearing assertion that the reshaped form
+    // rendered (vs. the legacy form that had Game + Brain Architecture).
+    await expect(page.getByText(/Your bot starts with no skills/i)).toBeVisible({ timeout: 10_000 })
+
+    // Inside the create form, no select elements should remain.
+    const createPanel = page.locator('form').filter({ has: page.getByText(/Your bot starts with no skills/i) }).first()
+    await expect(createPanel.locator('select')).toHaveCount(0)
   })
 })
 

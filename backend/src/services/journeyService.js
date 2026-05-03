@@ -105,30 +105,59 @@ export function deriveCurrentPhase(completedSteps = []) {
  *
  * Returns true if this call completed the step (false if already done or user
  * not found). Non-fatal on any error (logs a warn, returns false).
+ *
+ * Concurrency: the read-modify-write of `preferences.journeyProgress` runs
+ * inside a transaction guarded by a per-user Postgres advisory lock
+ * (`pg_advisory_xact_lock(hashtext(userId))`). Without this, two simultaneous
+ * calls (multi-tab, or two backend pods reacting to the same Redis event)
+ * would both pass the "already includes step" check and both fire the
+ * phase-boundary reward — paying +20 / +50 TC twice. The lock auto-releases
+ * at transaction end. SSE notifications and the reward grant are
+ * intentionally outside the transaction: the `creditsTc.increment` is
+ * already an atomic single-statement update, and SSE writes are
+ * fire-and-forget.
  */
 export async function completeStep(userId, stepIndex, _io) {
   if (!Number.isInteger(stepIndex) || stepIndex < 1 || stepIndex > TOTAL_STEPS) {
     logger.warn({ userId, stepIndex }, 'Journey step index out of range')
     return false
   }
-  // Sprint 6 — V1 release gate. When the flag is off, journey credits become
-  // a no-op (the rest of the platform — games, bots, tournaments — keeps
-  // working). Default true: flag is opt-out for staging, opt-in for the
-  // production rollout. Read fresh per call so admin can flip without a
-  // restart; cost is one indexed lookup, dominated by the user.findUnique
-  // that follows.
-  const enabled = await _getSystemConfig('guide.v1.enabled', true)
-  if (enabled === false) return false
   try {
-    const prefs    = await _getPrefs(userId)
-    if (!prefs) return false
+    // Sprint 6 — V1 release gate. When the flag is off, journey credits
+    // become a no-op (the rest of the platform — games, bots, tournaments
+    // — keeps working). Default true: flag is opt-out for staging, opt-in
+    // for the production rollout. Read fresh per call so admin can flip
+    // without a restart; cost is one indexed lookup, dominated by the
+    // user.findUnique that follows. Inside the try/catch so a SystemConfig
+    // outage fails closed (returns false, no crash) — task #33 caught a
+    // regression where this lookup propagated errors out and broke every
+    // step-completion call site.
+    const enabled = await _getSystemConfig('guide.v1.enabled', true)
+    if (enabled === false) return false
+    const completedSteps = await db.$transaction(async (tx) => {
+      // Per-user advisory lock — second concurrent call for the same user
+      // queues here until the first transaction commits and releases.
+      // hashtext() returns int4; collisions just queue (correctness still
+      // intact via the includes() dedup below).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`
 
-    const progress = prefs.journeyProgress ?? { completedSteps: [], dismissedAt: null }
-    if (progress.completedSteps.includes(stepIndex)) return false   // idempotent
+      const user = await tx.user.findUnique({
+        where:  { id: userId },
+        select: { id: true, preferences: true },
+      })
+      if (!user) return null
 
-    const completedSteps = [...progress.completedSteps, stepIndex].sort((a, b) => a - b)
-    const updated        = { ...prefs, journeyProgress: { ...progress, completedSteps } }
-    await _savePrefs(userId, updated)
+      const prefs    = user.preferences ?? {}
+      const progress = prefs.journeyProgress ?? { completedSteps: [], dismissedAt: null }
+      if (progress.completedSteps.includes(stepIndex)) return null  // idempotent
+
+      const next    = [...progress.completedSteps, stepIndex].sort((a, b) => a - b)
+      const updated = { ...prefs, journeyProgress: { ...progress, completedSteps: next } }
+      await tx.user.update({ where: { id: userId }, data: { preferences: updated } })
+      return next
+    })
+
+    if (completedSteps === null) return false
 
     // Notify client of step completion
     const journeyStepPayload = {

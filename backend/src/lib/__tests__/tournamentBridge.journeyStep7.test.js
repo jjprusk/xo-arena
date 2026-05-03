@@ -97,6 +97,92 @@ describe('tournament:completed → journey step 7', () => {
     expect(mockCompleteStep).not.toHaveBeenCalledWith(expect.anything(), 7)
   })
 
+  it('credits step 7 for the CHAMPION (finalPosition=1) — winner gets graduation', async () => {
+    // CHAMPION outcome: user's bot won the cup. Step 7 must credit so the
+    // user transitions to Specialize phase along with the coaching card.
+    db.tournamentParticipant.findMany.mockResolvedValue([
+      { userId: 'bot-mine', finalPosition: 1 },
+      { userId: 'bot-r',    finalPosition: 2 },
+      { userId: 'bot-3',    finalPosition: 3 },
+      { userId: 'bot-4',    finalPosition: 3 },
+    ])
+    db.user.findUnique.mockImplementation(({ where }) => {
+      if (where.id === 'bot-mine') return Promise.resolve({ isBot: true, botOwnerId: 'human-1' })
+      return Promise.resolve({ isBot: true, botOwnerId: null })
+    })
+
+    await handleEvent(null, 'tournament:completed', {
+      tournamentId: 'cup_1',
+      name: 'Curriculum Cup',
+      finalStandings: [
+        { userId: 'bot-mine', position: 1 },
+        { userId: 'bot-r',    position: 2 },
+      ],
+    })
+
+    const human1Calls = mockCompleteStep.mock.calls.filter(([uid, step]) => uid === 'human-1' && step === 7)
+    expect(human1Calls.length).toBe(1)
+  })
+
+  it('credits step 7 for the RUNNER_UP (finalPosition=2) — final-loser gets graduation', async () => {
+    db.tournamentParticipant.findMany.mockResolvedValue([
+      { userId: 'bot-w',    finalPosition: 1 },
+      { userId: 'bot-mine', finalPosition: 2 },
+      { userId: 'bot-3',    finalPosition: 3 },
+      { userId: 'bot-4',    finalPosition: 3 },
+    ])
+    db.user.findUnique.mockImplementation(({ where }) => {
+      if (where.id === 'bot-mine') return Promise.resolve({ isBot: true, botOwnerId: 'human-2' })
+      return Promise.resolve({ isBot: true, botOwnerId: null })
+    })
+
+    await handleEvent(null, 'tournament:completed', {
+      tournamentId: 'cup_2',
+      name: 'Curriculum Cup',
+      finalStandings: [
+        { userId: 'bot-w',    position: 1 },
+        { userId: 'bot-mine', position: 2 },
+      ],
+    })
+
+    const human2Calls = mockCompleteStep.mock.calls.filter(([uid, step]) => uid === 'human-2' && step === 7)
+    expect(human2Calls.length).toBe(1)
+  })
+
+  it('credits step 7 for ALL four cup outcome variants in one shot (smoke test)', async () => {
+    // Single 4-bot cup where all 4 humans own one bot each. Every owner
+    // must credit step 7, regardless of finishing position. Catches a
+    // regression where step 7 became position-gated (e.g., "only winners
+    // graduate") without that being a deliberate decision.
+    db.tournamentParticipant.findMany.mockResolvedValue([
+      { userId: 'bot-1', finalPosition: 1 },  // CHAMPION
+      { userId: 'bot-2', finalPosition: 2 },  // RUNNER_UP
+      { userId: 'bot-3', finalPosition: 3 },  // HEAVY_LOSS
+      { userId: 'bot-4', finalPosition: 3 },  // HEAVY_LOSS
+    ])
+    db.user.findUnique.mockImplementation(({ where }) => {
+      if (where.id === 'bot-1') return Promise.resolve({ isBot: true, botOwnerId: 'human-1' })
+      if (where.id === 'bot-2') return Promise.resolve({ isBot: true, botOwnerId: 'human-2' })
+      if (where.id === 'bot-3') return Promise.resolve({ isBot: true, botOwnerId: 'human-3' })
+      if (where.id === 'bot-4') return Promise.resolve({ isBot: true, botOwnerId: 'human-4' })
+      return Promise.resolve(null)
+    })
+
+    await handleEvent(null, 'tournament:completed', {
+      tournamentId: 'cup_3',
+      name: 'Curriculum Cup',
+      finalStandings: [
+        { userId: 'bot-1', position: 1 },
+        { userId: 'bot-2', position: 2 },
+      ],
+    })
+
+    for (const human of ['human-1', 'human-2', 'human-3', 'human-4']) {
+      const calls = mockCompleteStep.mock.calls.filter(([uid, step]) => uid === human && step === 7)
+      expect(calls.length).toBe(1)
+    }
+  })
+
   it('credits step 7 once per owner even when they own multiple bot participants', async () => {
     // Owner has two bots — one finished 2nd, one finished 3rd. Best-position
     // de-duping should still result in ONE step-7 credit.

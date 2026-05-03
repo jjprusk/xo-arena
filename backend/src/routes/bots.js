@@ -2,7 +2,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
-import { createBot, listBots } from '../services/userService.js'
+import { createBot, listBots, checkBotName } from '../services/userService.js'
 import { getSystemConfig } from '../services/skillService.js'
 import { getTierLimit } from '../services/creditService.js'
 import { hasRole } from '../utils/roles.js'
@@ -25,9 +25,11 @@ router.get('/', async (req, res, next) => {
   try {
     const { ownerId, includeInactive, gameId } = req.query
 
-    // Owner-specific requests are user-scoped — never cache them.
+    // Owner-specific requests are user-scoped — never cache them. Always
+    // include skills so the Profile bot list can render skill pills inline
+    // without a fan-out fetch per bot.
     if (ownerId) {
-      const bots = await listBots({ ownerId, includeInactive: includeInactive === 'true' })
+      const bots = await listBots({ ownerId, includeInactive: includeInactive === 'true', includeSkills: true })
       const owner = await db.user.findUnique({
         where: { id: ownerId },
         include: { userRoles: { select: { role: true } } },
@@ -90,6 +92,27 @@ router.get('/mine', requireAuth, async (req, res, next) => {
 })
 
 /**
+ * GET /api/v1/bots/check-name?name=...
+ *
+ * Phase 3.8.A.3 — inline bot-name availability check. Mirrors the same rules
+ * as createBot (reserved / profanity / per-owner+built-in collision) without
+ * actually creating a row. Auth-scoped so the result reflects the caller's
+ * own owner-scope.
+ */
+router.get('/check-name', requireAuth, async (req, res, next) => {
+  try {
+    const baId = req.auth.userId
+    const caller = await db.user.findUnique({ where: { betterAuthId: baId }, select: { id: true } })
+    if (!caller) return res.status(401).json({ error: 'Unauthorized' })
+    const name = typeof req.query.name === 'string' ? req.query.name : ''
+    const result = await checkBotName({ name, ownerId: caller.id })
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
  * GET /api/v1/bots/:id
  *
  * Bot identity + per-game skills. Public — used by community bot pickers and
@@ -138,7 +161,13 @@ router.get('/:id', async (req, res, next) => {
 
 /**
  * POST /api/v1/bots
- * Create a new bot. Auth required. Enforces bot limit for non-admin/bot_admin users.
+ *
+ * Phase 3.8 — Multi-Skill Bots: creates a skill-less identity bot. Body is
+ * `{ name, avatarUrl?, competitive? }` only. No algorithm or game choice at
+ * this step — skills are added separately via `POST /bots/:id/skills`.
+ *
+ * Auth required. Enforces bot limit for non-admin/bot_admin users. Still
+ * fires journey step 3 (Curriculum: Create your first bot).
  */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
@@ -160,8 +189,8 @@ router.post('/', requireAuth, async (req, res, next) => {
       }
     }
 
-    const { name, modelType, competitive, avatarUrl } = req.body
-    const bot = await createBot(userId, { name, algorithm: 'ml', modelType, competitive, avatarUrl, ownerBaId: baId })
+    const { name, avatarUrl, competitive } = req.body ?? {}
+    const bot = await createBot(userId, { name, avatarUrl, competitive, ownerBaId: baId })
     cache.invalidate(BOTS_CACHE_KEY)
 
     // Journey step 3 (Curriculum: Create your first bot) — fire-and-forget.

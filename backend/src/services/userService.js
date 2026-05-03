@@ -325,24 +325,31 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
            u."displayName",
            u."avatarUrl",
            u."isBot",
+           u."botOwnerId",
+           owner.username AS "ownerUsername",
            c.total,
            c.wins,
            ROUND(c.wins::numeric / NULLIF(c.total, 0), 4) AS win_rate
     FROM counts c
     JOIN users u ON u.id = c.player_id
+    LEFT JOIN users owner ON owner.id = u."botOwnerId"
     WHERE c.total >= 1 ${botFilter}
     ORDER BY win_rate DESC, c.total DESC
     LIMIT ${limit}
   `
 
   // COUNT/SUM return BigInt from the Postgres driver — coerce to Number for JSON safety.
+  // botOwnerId + ownerUsername feed the mixed-list disambiguation suffix
+  // ("Rusty · @joe" / "Rusty · built-in") on the Rankings page (Phase 3.8.A.3).
   return rows.map((row, i) => ({
     rank: i + 1,
     user: {
-      id: row.id,
-      displayName: row.displayName,
-      avatarUrl: row.avatarUrl,
-      isBot: row.isBot,
+      id:            row.id,
+      displayName:   row.displayName,
+      avatarUrl:     row.avatarUrl,
+      isBot:         row.isBot,
+      botOwnerId:    row.botOwnerId ?? null,
+      ownerUsername: row.ownerUsername ?? null,
     },
     total:   Number(row.total),
     wins:    Number(row.wins),
@@ -353,8 +360,62 @@ export async function getLeaderboard({ period = 'all', mode = 'all', limit = 50,
 /**
  * Create a bot user row owned by the given user.
  * Enforces reserved name, profanity, and deduplication rules.
+ *
+ * Phase 3.8 — Multi-Skill Bots: when called with no `algorithm`, creates a
+ * skill-less identity bot (botModelType=null, botModelId=null, no GameElo
+ * row). Skills are added separately via `POST /api/v1/bots/:id/skills`. The
+ * legacy single-algorithm shape (algorithm + difficulty/modelType) is still
+ * honored for `POST /bots/quick` (the journey-step-3 Quick Bot wizard) and
+ * any internal callers.
  */
 const VALID_ML_ALGORITHMS = ['qlearning', 'sarsa', 'montecarlo', 'policygradient', 'dqn', 'alphazero']
+
+/**
+ * Check whether `name` would be accepted by createBot for `ownerId` without
+ * actually creating anything. Returns
+ *   { available: true }                                  — submit will succeed
+ *   { available: false, reason, message }                — would be rejected
+ * `reason` is one of 'empty' | 'too_long' | 'reserved' | 'profanity' | 'taken'.
+ *
+ * Mirrors the same rules as createBot — keep these in sync. This exists so the
+ * Profile create-bot form can debounce-validate before submit (Sprint 3.8.A.3).
+ */
+export async function checkBotName({ name, ownerId } = {}) {
+  if (!name || !name.trim()) {
+    return { available: false, reason: 'empty',    message: 'Enter a bot name.' }
+  }
+  const trimmed = name.trim()
+  if (trimmed.length > 40) {
+    return { available: false, reason: 'too_long', message: 'Name is too long (max 40 characters).' }
+  }
+  if (RESERVED_BOT_NAMES.includes(trimmed.toLowerCase())) {
+    return { available: false, reason: 'reserved', message: `"${trimmed}" is a reserved name.` }
+  }
+  const profanityList = await _getSystemConfig('bots.profanityList', [])
+  if (Array.isArray(profanityList) && profanityList.length > 0) {
+    const lower = trimmed.toLowerCase()
+    for (const word of profanityList) {
+      if (lower.includes(String(word).toLowerCase())) {
+        return { available: false, reason: 'profanity', message: 'Bot name contains disallowed content.' }
+      }
+    }
+  }
+  const collision = await db.user.findFirst({
+    where: {
+      isBot: true,
+      displayName: { equals: trimmed, mode: 'insensitive' },
+      OR: [
+        { botOwnerId: null },
+        ...(ownerId ? [{ botOwnerId: ownerId }] : []),
+      ],
+    },
+    select: { id: true },
+  })
+  if (collision) {
+    return { available: false, reason: 'taken', message: `"${trimmed}" is already taken.` }
+  }
+  return { available: true }
+}
 
 export async function createBot(ownerId, { name, algorithm, difficulty, modelType, competitive, avatarUrl, ownerBaId, gameId = 'xo' } = {}) {
   if (!name || !name.trim()) throw Object.assign(new Error('Bot name is required'), { code: 'INVALID_NAME' })
@@ -376,21 +437,64 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
     }
   }
 
-  // 3. Name dedup: reject if any bot already has this name (case-insensitive)
-  const existingBots = await db.user.findMany({
-    where: { isBot: true },
-    select: { displayName: true },
+  // 3. Name dedup — matches the partial-unique indexes from the
+  // `20260423010000_bot_displayname_hybrid_unique` migration: an unowned
+  // bot (built-in or orphan) reserves the name globally; within a single
+  // owner, names are unique. Cross-owner collisions are allowed and the UI
+  // disambiguates "Rusty · @joe" / "Rusty · built-in" in mixed-owner lists.
+  const collision = await db.user.findFirst({
+    where: {
+      isBot: true,
+      displayName: { equals: trimmedName, mode: 'insensitive' },
+      OR: [
+        { botOwnerId: null },
+        { botOwnerId: ownerId },
+      ],
+    },
+    select: { id: true },
   })
-  const existingNames = new Set(existingBots.map(b => b.displayName.toLowerCase()))
-
-  if (existingNames.has(trimmedName.toLowerCase())) {
+  if (collision) {
     throw Object.assign(new Error(`"${trimmedName}" is already taken — choose a different name`), { code: 'NAME_TAKEN' })
   }
 
   const finalName = trimmedName
 
-  // 4. Validate algorithm and resolve ML algo
-  const alg = algorithm || 'minimax'
+  // 4. Skill-less path (Phase 3.8 — Multi-Skill Bots default).
+  // Generate a unique username slug shared by all branches below.
+  const slugBase = `bot_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
+  const existingUsernames = await db.user.findMany({
+    where: { username: { startsWith: slugBase } },
+    select: { username: true },
+  })
+  const usedUsernames = new Set(existingUsernames.map(u => u.username))
+  let username = slugBase
+  if (usedUsernames.has(username)) {
+    let i = 1
+    while (usedUsernames.has(`${slugBase}_${i}`)) i++
+    username = `${slugBase}_${i}`
+  }
+  const email = `${username}@xo-arena.internal`
+
+  if (algorithm === undefined || algorithm === null) {
+    return db.user.create({
+      data: {
+        username,
+        email,
+        displayName:    finalName,
+        avatarUrl:      avatarUrl ?? null,
+        isBot:          true,
+        botModelType:   null,
+        botModelId:     null,
+        botOwnerId:     ownerId,
+        botActive:      true,
+        botCompetitive: Boolean(competitive),
+        botProvisional: true,
+      },
+    })
+  }
+
+  // 5. Validate algorithm and resolve ML algo (legacy single-algorithm path)
+  const alg = algorithm
   const diff = difficulty || 'novice'
   let mlAlgo = null
 
@@ -405,23 +509,8 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
     throw Object.assign(new Error(`Unknown algorithm: ${alg}`), { code: 'INVALID_ALGORITHM' })
   }
 
-  // 5. Competitive flag: only honored for ml bots
+  // 6. Competitive flag: only honored for ml bots in legacy path
   const botCompetitive = alg === 'ml' ? Boolean(competitive) : false
-
-  // 6. Generate unique username slug
-  const slugBase = `bot_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
-  const existingUsernames = await db.user.findMany({
-    where: { username: { startsWith: slugBase } },
-    select: { username: true },
-  })
-  const usedUsernames = new Set(existingUsernames.map(u => u.username))
-  let username = slugBase
-  if (usedUsernames.has(username)) {
-    let i = 1
-    while (usedUsernames.has(`${slugBase}_${i}`)) i++
-    username = `${slugBase}_${i}`
-  }
-  const email = `${username}@xo-arena.internal`
 
   // 7. Resolve botModelId (synthetic for minimax/mcts, real FK for ml)
   // For ML bots, create the model and bot atomically so we never orphan a model.
@@ -487,9 +576,17 @@ export async function createBot(ownerId, { name, algorithm, difficulty, modelTyp
 
 /**
  * List bot users.
- * @param {{ ownerId?: string, includeInactive?: boolean }} options
+ *
+ * @param {object} options
+ * @param {string}  [options.ownerId]         only return bots owned by this user
+ * @param {boolean} [options.includeInactive] include inactive bots
+ * @param {boolean} [options.includeSkills]   attach `skills: BotSkill[]` (each
+ *   enriched with `elo: { rating, gamesPlayed }` from GameElo). Phase 3.8 —
+ *   needed for the Profile bot list to render skill pills without an N+1
+ *   round-trip. Adds two grouped queries (botSkill + gameElo) regardless of
+ *   how many bots are in the result, so cost stays O(1) in DB calls.
  */
-export async function listBots({ ownerId, includeInactive = false } = {}) {
+export async function listBots({ ownerId, includeInactive = false, includeSkills = false } = {}) {
   const where = {
     isBot: true,
     ...(ownerId ? { botOwnerId: ownerId } : {}),
@@ -514,11 +611,37 @@ export async function listBots({ ownerId, includeInactive = false } = {}) {
     },
     orderBy: { createdAt: 'desc' },
   })
+
+  let skillsByBot = new Map()
+  if (includeSkills && bots.length > 0) {
+    const botIds = bots.map(b => b.id)
+    const allSkills = await db.botSkill.findMany({
+      where:   { botId: { in: botIds } },
+      orderBy: { createdAt: 'asc' },
+    })
+    // Per-skill ELO is keyed by (userId=botId, gameId). Pull all rows for
+    // any (botId, gameId) pair we hold a skill for, then index.
+    const eloPairs = allSkills.map(s => ({ userId: s.botId, gameId: s.gameId }))
+    const eloRows  = eloPairs.length === 0 ? [] : await db.gameElo.findMany({
+      where:  { OR: eloPairs },
+      select: { userId: true, gameId: true, rating: true, gamesPlayed: true },
+    })
+    const eloKey = (uid, gid) => `${uid}|${gid}`
+    const eloByPair = new Map(eloRows.map(r => [eloKey(r.userId, r.gameId), r]))
+
+    for (const s of allSkills) {
+      const arr = skillsByBot.get(s.botId) ?? []
+      arr.push({ ...s, elo: eloByPair.get(eloKey(s.botId, s.gameId)) ?? null })
+      skillsByBot.set(s.botId, arr)
+    }
+  }
+
   // Flatten gameElo into a top-level eloRating field for backward compatibility
   return bots.map(b => ({
     ...b,
     eloRating: b.gameElo?.[0]?.rating ?? 1200,
     gameElo: undefined,
+    ...(includeSkills ? { skills: skillsByBot.get(b.id) ?? [] } : {}),
   }))
 }
 

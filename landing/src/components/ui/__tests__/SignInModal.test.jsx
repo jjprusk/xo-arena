@@ -148,6 +148,48 @@ describe('SignInModal — deferred email verification on signup', () => {
     expect(syncOrder).toBeLessThan(creditOrder)
   })
 
+  it('does not call guestCredit when localStorage holds malformed JSON (task #34)', async () => {
+    // Corrupted localStorage shouldn't crash the signup or fire a bad post.
+    // readGuestJourney returns {} on parse failure → hasGuestProgress is
+    // false → guestCredit isn't called → signup completes cleanly.
+    window.localStorage.setItem(STORAGE_KEY, '{not json{')
+    signUp.email.mockResolvedValueOnce({ user: { id: 'u1', emailVerified: false } })
+
+    render(<SignInModal onClose={vi.fn()} defaultView="sign-up" />)
+    bypassSubmitDelayGuard()
+
+    fillSignupForm({ email: 'guest@example.com', password: 'password123' })
+    fireEvent.submit(screen.getByRole('button', { name: /create account/i }).closest('form'))
+
+    await waitFor(() => expect(signUp.email).toHaveBeenCalled())
+    expect(api.guide.guestCredit).not.toHaveBeenCalled()
+  })
+
+  it('signup completes cleanly even if guestCredit rejects (task #34)', async () => {
+    // The guest-credit POST is best-effort — a 500 from /guest-credit must
+    // NOT block the signup completion or surface as a user-facing error.
+    // The user is already authenticated; the worst case is starting at
+    // step 0 instead of step 2, which the next page load can re-credit
+    // (the bridge fires when they next play a PvAI game).
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      hookStep1CompletedAt: '2026-04-24T12:00:00.000Z',
+    }))
+    signUp.email.mockResolvedValueOnce({ user: { id: 'u1', emailVerified: false } })
+    api.guide.guestCredit.mockRejectedValueOnce(new Error('server 500'))
+
+    render(<SignInModal onClose={vi.fn()} defaultView="sign-up" />)
+    bypassSubmitDelayGuard()
+
+    fillSignupForm({ email: 'guest@example.com', password: 'password123' })
+    fireEvent.submit(screen.getByRole('button', { name: /create account/i }).closest('form'))
+
+    await waitFor(() => expect(api.guide.guestCredit).toHaveBeenCalled())
+    // No catastrophic UI error — the verification screen still appears (or
+    // the modal still closes cleanly). Critically, no thrown exception
+    // bubbles out of the submit handler.
+    await waitFor(() => expect(signUp.email).toHaveBeenCalled())
+  })
+
   it('does not call guestCredit when no guest progress was recorded', async () => {
     signUp.email.mockResolvedValueOnce({ user: { id: 'u1', emailVerified: false } })
 
