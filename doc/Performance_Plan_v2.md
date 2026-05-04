@@ -996,14 +996,45 @@ brotli** — half of total brotli bytes shipped. This is the F5 / Phase
 1 target; the rest of the JS budget (16 chunks) is mostly small
 named splits (TrainTab, ExplainabilityTab, game, etc.).
 
-**Still missing → next milestone:** RUM (real-user web-vitals from
-prod). Synthetic baselines tell us what one Playwright run on a
-controlled connection sees; RUM tells us what 1000 real users on
-real networks experience. Plan: install `web-vitals` in landing,
-batch FCP/LCP/INP/CLS/TTFB via `navigator.sendBeacon` to a new
-`/api/v1/perf/vitals` endpoint at 5% sampling, no PII. Land in dev
-before any Tier 0 implementation work begins so we have a real-user
-baseline to diff against.
+### D1 — RUM (Real-User Monitoring) (landed 2026-05-04, `dev`)
+
+Synthetic baselines see what one Playwright run on a controlled
+connection sees; RUM sees what real users on real networks actually
+experience.
+
+- **Client:** `landing/src/lib/rum.js` registers `onFCP / onLCP /
+  onINP / onCLS / onTTFB` from `web-vitals`. Each metric appends to a
+  per-tab queue; on `pagehide` (or first `visibility:hidden`) the
+  queue is drained as a single beacon to `/api/v1/perf/vitals` via
+  `navigator.sendBeacon` with explicit `application/json` content
+  type (the default `text/plain` is silently dropped by Express's
+  body parser — easy footgun, captured here so we don't repeat it).
+  Sampling: `VITE_RUM_SAMPLE_RATE` (default `1.0`); decision is
+  sticky for the tab.
+- **Backend:** `POST /api/v1/perf/vitals` (route
+  `backend/src/routes/perfVitals.js`). No auth, no SSE-session
+  required. Validates each entry (allowed name set, finite numeric
+  range 0–1e7, capped 32 vitals per beacon), persists via Prisma
+  `createMany`, always returns 204. 8 vitest cases cover happy path,
+  unknown names, garbage values, oversize beacons, DB failure.
+- **Schema:** `PerfVital` table — anonymous (`sessionId` is a
+  per-tab random hex, never a user id), no IP. Indexes on
+  `(name, route, createdAt)` and `(env, name, createdAt)` so the
+  obvious aggregations (p50/p75/p95 per route × device × env over
+  time) stay cheap.
+- **Smoke:** Playwright headless run hits `/`, fires
+  `visibilitychange → hidden`, beacon arrives 204, three rows land
+  in DB (TTFB, FCP, CLS — LCP/INP need real interaction to register).
+
+**Privacy boundary:** never sends `userId`, never stores IP, no
+fingerprinting. The only durable identifier is the tab-scoped
+`sessionId`, which has no cross-tab persistence.
+
+**Next:** ship to staging + prod with the next `/stage` cycle. After
+~1 week of real-user data, we have an honest p50/p75/p95 baseline
+to diff every Tier 0 deploy against. Add a small admin query
+helper (group by route × device × env) before the first
+optimization PR lands.
 
 ### Phase 17 — Per-PR perf gates
 

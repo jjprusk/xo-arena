@@ -30,6 +30,7 @@ import eventsRouter from './routes/events.js'
 import presenceRouter from './routes/presence.js'
 import pushRouter from './routes/push.js'
 import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realtime.js'
+import perfVitalsRouter from './routes/perfVitals.js'
 import { getSystemConfig } from './services/skillService.js'
 import { startActivityFlushJob } from './services/activityService.js'
 import { startReplayPurgeJob } from './services/replayPurgeService.js'
@@ -66,6 +67,7 @@ registerRoutes(app, {
   '/push':               pushRouter,
   '/rt':                 realtimeRouter,
   '/realtime':           realtimeModeRouter,
+  '/perf':               perfVitalsRouter,
 })
 
 // Public version endpoint — no auth required
