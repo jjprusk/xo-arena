@@ -8,21 +8,42 @@
 - `aiarena.callidity.com` DNS points at `xo-landing-prod.fly.dev` anycast IP
 - Fly cert for `aiarena.callidity.com` issued to `xo-landing-prod`
 - `xo-redis-prod` Upstash instance exists (`fly redis list`)
-- `xo-db-prod` Fly Postgres app deployed and empty
+- `xo-db-prod` Fly Postgres app deployed and empty, with **≥ 512MB memory** —
+  the Fly default of 256MB OOM-kills postgres under any real load (seed +
+  startup pool + first user request is enough). Bump immediately after
+  creation: `fly machine update <id> --vm-memory 512 -a xo-db-prod`
 - No lingering `xo-frontend-prod` Fly app (retired in Phase 3.0)
 - No real users on prod — the DB-wipe step assumes this
 
-## Step 1 — Attach Postgres to each app
+## Step 1 — Attach Postgres to backend, share with tournament
 
-Generates a fresh DB user per app and sets `DATABASE_URL` atomically. Safe on an empty DB; idempotent detach suppresses errors.
+Both services share the **same** database (matching staging's topology). Backend's
+`prisma migrate deploy` on boot is the single owner of the schema; tournament
+service connects to the same DB and reads/writes the same tables.
 
 ```sh
 fly postgres detach --app xo-backend-prod    xo-db-prod 2>/dev/null || true
 fly postgres detach --app xo-tournament-prod xo-db-prod 2>/dev/null || true
 
-fly postgres attach --app xo-backend-prod    xo-db-prod
-fly postgres attach --app xo-tournament-prod xo-db-prod
+# Backend gets a fresh attach — this creates xo_backend_prod DB + user
+# and sets DATABASE_URL on xo-backend-prod.
+fly postgres attach --app xo-backend-prod xo-db-prod
+
+# Tournament uses backend's DATABASE_URL verbatim. Do NOT run
+# `fly postgres attach --app xo-tournament-prod` — that would create a
+# second, empty database (xo_tournament_prod) that nobody migrates,
+# and tournament queries would 500 on every request.
+BACKEND_DB_URL="$(fly ssh console -a xo-backend-prod -C 'printenv DATABASE_URL' | tr -d '\r' | tail -1)"
+fly secrets set DATABASE_URL="$BACKEND_DB_URL" -a xo-tournament-prod
 ```
+
+> **Lesson from prod cut 2026-05-03:** The original runbook attached postgres
+> to both apps separately, which produced two databases (`xo_backend_prod`
+> and `xo_tournament_prod`). Backend migrated its DB on first boot; tournament's
+> DB stayed empty because the tournament Dockerfile doesn't run
+> `prisma migrate deploy`. Every `/api/tournaments` request 500'd with
+> *"The table `public.tournaments` does not exist"*. Fix at the time was to
+> point tournament at backend's DB (matching staging). Don't repeat the mistake.
 
 ## Step 2 — Set the known-safe URL / env secrets
 

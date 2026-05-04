@@ -593,6 +593,9 @@ router.post('/tables/:slug/cancel', async (req, res) => {
 
 // POST /api/v1/rt/tables/:slug/move  Body: { cellIndex }
 router.post('/tables/:slug/move', async (req, res) => {
+  // F4 perf decomposition: emit Server-Timing so perf-sse-rtt can split the
+  // POST round-trip into lookup vs apply vs network. Cheap (Date.now × 3).
+  const t0 = Date.now()
   try {
     const { cellIndex } = req.body ?? {}
     if (!Number.isInteger(cellIndex) || cellIndex < 0 || cellIndex > 8) {
@@ -600,6 +603,7 @@ router.post('/tables/:slug/move', async (req, res) => {
     }
     const { caller, table } = await lookupTableForCaller(req)
     if (!table) return res.status(404).json({ error: 'Table not found' })
+    const t1 = Date.now()
     const io = req.app.get('io')
     const result = await tableFlow.applyMove({
       io,
@@ -607,6 +611,7 @@ router.post('/tables/:slug/move', async (req, res) => {
       userId:  caller.seatId,
       cellIndex,
     })
+    const t2 = Date.now()
     if (!result.ok) {
       const map = {
         NOT_IN_TABLE:     409,
@@ -631,6 +636,7 @@ router.post('/tables/:slug/move', async (req, res) => {
     } else if (result.completed) {
       idleTimers.cancelAllForTable(table.id)
     }
+    res.set('Server-Timing', `lookup;dur=${t1 - t0}, apply;dur=${t2 - t1}`)
     return res.json({ ok: true, completed: !!result.completed, mark: result.mark })
   } catch (err) {
     logger.error({ err, slug: req.params.slug }, 'POST /rt/tables/:slug/move failed')

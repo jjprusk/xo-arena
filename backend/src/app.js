@@ -18,6 +18,9 @@ app.use(cors({
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
   credentials: true,
+  // Expose Server-Timing so the perf-sse-rtt harness (and any browser perf
+  // tooling) can read per-leg breakdowns from the move POST.
+  exposedHeaders: ['Server-Timing'],
 }))
 
 // Better Auth handler — must be mounted BEFORE express.json()
