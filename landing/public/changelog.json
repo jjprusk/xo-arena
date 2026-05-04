@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-3.0",
+    "date": "2026-05-04",
+    "description": "Performance instrumentation continued"
+  },
+  {
     "version": "1.4.0-alpha-2.0",
     "date": "2026-05-04",
     "description": "Perform instrumentation, minor fixes"

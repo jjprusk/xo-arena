@@ -133,6 +133,27 @@ const VITAL_THRESHOLDS = {
   CLS:  { good: 0.1,  poor: 0.25, unit: ''   },
 }
 
+// Hover legend for the metric column. Keep these terse — `title` attribute
+// shows them as native browser tooltips.
+const VITAL_DESCRIPTIONS = {
+  LCP:  'Largest Contentful Paint — time until the largest visible element renders. Loading speed. Good ≤ 2.5s, Poor > 4s.',
+  INP:  'Interaction to Next Paint — worst latency from a click/tap/keypress to the next visual update. Interactivity. Good ≤ 200ms, Poor > 500ms.',
+  CLS:  'Cumulative Layout Shift — sum of unexpected layout shifts during the session (unitless). Visual stability. Good ≤ 0.1, Poor > 0.25.',
+  FCP:  'First Contentful Paint — time until the first text or image renders. Earliest visible feedback. Good ≤ 1.8s, Poor > 3s.',
+  TTFB: 'Time to First Byte — time from request start to first byte of the response. Backend responsiveness. Good ≤ 800ms, Poor > 1.8s.',
+}
+
+// Hover legend for the percentile columns + auxiliary columns.
+const COLUMN_DESCRIPTIONS = {
+  Route:  'URL pathname the sample was captured on (sessionPath at the moment the metric was recorded).',
+  Metric: 'Web Vital name. Hover the metric label in each row for what it measures.',
+  n:      'Sample count — how many beacon entries contributed to this row.',
+  p50:    'Median — half of sessions saw a worse value than this. The "typical" experience.',
+  p75:    '75th percentile — 75% of sessions are at or below this value. Google\'s Core Web Vitals threshold is defined at p75.',
+  p95:    '95th percentile — only the worst 5% of sessions were slower than this. The tail; catches slow networks, cold caches, slow devices.',
+  Mix:    'Distribution bar — green/amber/red proportions of "good" / "needs improvement" / "poor" samples. Hover the bar for raw counts.',
+}
+
 function rateValue(name, value) {
   if (value == null) return 'unknown'
   const t = VITAL_THRESHOLDS[name]
@@ -191,18 +212,34 @@ function VitalsTable({ data }) {
       </p>
     )
   }
+  // Hoverable header — dotted-underline cue tells readers there's a tooltip.
+  const helpStyle = {
+    color: 'var(--text-muted)',
+    cursor: 'help',
+    textDecoration: 'underline dotted',
+    textUnderlineOffset: '3px',
+  }
+  const Hdr = ({ children, label, align = 'left' }) => (
+    <th
+      className={`px-3 py-2 text-${align} font-semibold`}
+      style={helpStyle}
+      title={COLUMN_DESCRIPTIONS[label]}
+    >
+      {children}
+    </th>
+  )
   return (
     <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-default)' }}>
       <table className="w-full text-xs">
         <thead>
           <tr style={{ backgroundColor: 'var(--bg-surface-hover)' }}>
-            <th className="px-3 py-2 text-left font-semibold"  style={{ color: 'var(--text-muted)' }}>Route</th>
-            <th className="px-3 py-2 text-left font-semibold"  style={{ color: 'var(--text-muted)' }}>Metric</th>
-            <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>n</th>
-            <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>p50</th>
-            <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>p75</th>
-            <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>p95</th>
-            <th className="px-3 py-2 text-left font-semibold"  style={{ color: 'var(--text-muted)' }}>Mix</th>
+            <Hdr label="Route">Route</Hdr>
+            <Hdr label="Metric">Metric</Hdr>
+            <Hdr label="n"   align="right">n</Hdr>
+            <Hdr label="p50" align="right">p50</Hdr>
+            <Hdr label="p75" align="right">p75</Hdr>
+            <Hdr label="p95" align="right">p95</Hdr>
+            <Hdr label="Mix">Mix</Hdr>
           </tr>
         </thead>
         <tbody>
@@ -219,7 +256,16 @@ function VitalsTable({ data }) {
                   <td className="px-3 py-1.5" style={{ color: 'var(--text-secondary)' }}>
                     {i === 0 ? route : ''}
                   </td>
-                  <td className="px-3 py-1.5 font-medium" style={{ color: 'var(--text-primary)' }}>{name}</td>
+                  <td
+                    className="px-3 py-1.5 font-medium"
+                    style={{
+                      color: 'var(--text-primary)',
+                      cursor: 'help',
+                      textDecoration: 'underline dotted',
+                      textUnderlineOffset: '3px',
+                    }}
+                    title={VITAL_DESCRIPTIONS[name]}
+                  >{name}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums font-mono" style={{ color: 'var(--text-secondary)' }}>{m.count}</td>
                   <VitalCell name={name} value={m.p50} />
                   <VitalCell name={name} value={m.p75} />
