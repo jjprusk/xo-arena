@@ -965,6 +965,46 @@ data shows the gap they'd close. Listed for completeness.
 Performance work without instrumentation is fishing in the dark. v1 measured
 synthetically once and stopped. v2 makes measurement continuous.
 
+### D0 — Pre-Tier-0 instrumentation (landed 2026-05-04, `dev`)
+
+Before committing to Tier 0 work, the toolbox is filled in so each
+tackled item is *measurable* before and after. Synthetic harnesses
+that exist today on `dev`:
+
+| Aspect | Script | What it answers |
+|---|---|---|
+| Cold-page totals | `perf/perf-v2.js` | TTFB / FCP / LCP / Ready per route × device, with `--extended-resources` for late-loading bytes |
+| Interaction (INP) | `perf/perf-inp.js` | p50/p95 INP per common interaction × route |
+| Backend hot endpoints | `perf/perf-backend-p95.js` | p50/p95/p99 for `/api/version`, `/api/v1/bots`, `/api/v1/leaderboard`, `/api/auth/get-session`, `/api/tournaments` |
+| SSE round-trip (F4) | `perf/perf-sse-rtt.js` | Splits POST move → SSE event into server.lookup, server.apply, redis publish→pickup, broker pickup→write, network legs |
+| Cold-page waterfall (F2) | `perf/perf-waterfall.js` | When the route's primary `/api/*` fires + how long it takes — sizes the prize for `<link rel=preload>` and inline initial payload |
+| Long-task profile | `perf/perf-longtasks.js` | count / sum / max long tasks per cold load (Moto-G4 + 4× CPU throttle for mobile) — sizes Phase 1 / 1b TBT prize |
+| Bundle composition | `perf/perf-bundle.js` | Per-chunk raw / gzip / brotli for every dist/ asset; checked-in baseline for diff after Phase 1 |
+
+Backend-side instrumentation:
+- Global `Server-Timing: handler;dur=X` middleware on every backend
+  response (preserves route-level timings like the move POST's
+  `lookup, apply`). CORS exposes `Server-Timing`. The waterfall +
+  any future ad-hoc test can read server vs network breakdown for
+  every `/api/*` call without per-handler instrumentation.
+- Move POST emits `lookup;dur=X, apply;dur=Y`.
+- SSE broker injects `_t: { publishToPickupMs, pickupToWriteMs }`
+  into every payload (publishMs comes free from the Redis stream id).
+
+**Key bundle finding:** `main.supported.js` is **1506 KB raw / 319 KB
+brotli** — half of total brotli bytes shipped. This is the F5 / Phase
+1 target; the rest of the JS budget (16 chunks) is mostly small
+named splits (TrainTab, ExplainabilityTab, game, etc.).
+
+**Still missing → next milestone:** RUM (real-user web-vitals from
+prod). Synthetic baselines tell us what one Playwright run on a
+controlled connection sees; RUM tells us what 1000 real users on
+real networks experience. Plan: install `web-vitals` in landing,
+batch FCP/LCP/INP/CLS/TTFB via `navigator.sendBeacon` to a new
+`/api/v1/perf/vitals` endpoint at 5% sampling, no PII. Land in dev
+before any Tier 0 implementation work begins so we have a real-user
+baseline to diff against.
+
 ### Phase 17 — Per-PR perf gates
 
 - [ ] CI runs `perf/perf.js` against a preview env on every PR; comments the
