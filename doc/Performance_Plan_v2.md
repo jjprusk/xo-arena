@@ -1031,10 +1031,192 @@ fingerprinting. The only durable identifier is the tab-scoped
 `sessionId`, which has no cross-tab persistence.
 
 **Next:** ship to staging + prod with the next `/stage` cycle. After
-~1 week of real-user data, we have an honest p50/p75/p95 baseline
-to diff every Tier 0 deploy against. Add a small admin query
-helper (group by route × device × env) before the first
-optimization PR lands.
+~1 week of real-user data — or immediately, with the synthetic driver
+in D2 — we have an honest p50/p75/p95 baseline to diff every Tier 0
+deploy against. Admin dashboard for it landed 2026-05-04 (see D3).
+
+### D2 — Synthetic RUM driver  *(planned)*
+
+D1 only fills `perf_vitals` when real humans load pages. Staging has
+near-zero organic traffic; prod takes hours-to-days to accumulate
+stable percentiles. So before we can compare a Tier 0 change against a
+"clean" baseline we need a way to *guarantee* a complete sample set.
+The synthetic driver is that guarantee — Playwright-scripted sessions
+that exercise every route on both desktop and mobile profiles and let
+the same `web-vitals` listeners + beacon do the reporting.
+
+**Script:** `perf/perf-rum-driver.js` (TBD).
+
+- Launches N parallel `chromium` contexts (default 5; configurable).
+- Iterates the standard route inventory (`/`, `/play`,
+  `/tournaments`, `/rankings`, `/gym`, `/profile`, …) per device
+  profile (desktop, mobile w/ 4× CPU throttle via CDP, optionally
+  4G / 3G network throttle).
+- Per route: load → wait for LCP candidate → perform a representative
+  interaction so INP fires (button click that doesn't navigate) →
+  trigger `visibilitychange:hidden` so the beacon flushes → close
+  context. Passive page loads alone don't yield LCP / INP / CLS, so
+  the interaction step is non-optional.
+- Tags every session with a recognizable UA suffix
+  (`XO-Synthetic/1.0`) so the aggregation endpoint can split organic
+  vs synthetic via `userAgent ILIKE '%XO-Synthetic/%'`. No schema
+  change, no separate ingest path — same `POST /api/v1/perf/vitals`.
+- Backend `GET /admin/health/perf/vitals` gains a
+  `?source=organic|synthetic|all` filter (default `organic`) so the
+  admin dashboard can show either view without polluting the real
+  baseline.
+
+**Cadence:**
+
+- *On-demand* (always available): developer runs
+  `BASE_URL=https://xo-frontend-staging.fly.dev node perf/perf-rum-driver.js`
+  before and after a change to capture before/after percentiles in one
+  session.
+- *Scheduled* (CI): a GH Actions cron drives staging every ~6h so the
+  staging RUM dashboard never shows empty bars. **Prod is not on the
+  cron** — synthetic samples on prod would skew real-user numbers, so
+  prod runs are manual-dispatch only, used when "what does INP look
+  like under prod backend load?" is the actual question.
+
+**Caveats:**
+
+- Synthetic INP is bounded by Playwright's input-event latency, which
+  is tighter than a real human. Treat synthetic INP as a *stability /
+  regression* signal, not as an absolute number for budget compliance.
+- Network conditions skew the picture if not pinned. Default to one
+  desktop + one mobile-throttled profile per run; optionally include
+  3G / 4G via CDP `Network.emulateNetworkConditions` for the long-tail.
+- Synthetic rows accumulate cost in `perf_vitals`. Cleanup is a
+  scheduled prune (D2.1) — see below — not a per-run delete, so
+  comparison runs across days remain possible.
+
+### D2.1 — Synthetic-row retention & data hygiene  *(planned)*
+
+The synthetic driver produces a continuous trickle of rows; without a
+prune, `perf_vitals` grows linearly forever (a 6h staging cron writing
+~5 routes × 2 device profiles × ~5 vitals = ~50 rows/cycle = ~200
+rows/day = ~75k rows/year per cron alone, before any prod synthetic
+or any organic). Cheap on day one, painful to fix at year three. So
+the prune ships with D2.
+
+**Goals.**
+
+1. Keep `perf_vitals` bounded so admin queries stay sub-100 ms even
+   at year-scale.
+2. Never delete data mid-experiment — a comparison run that started
+   yesterday must still have its baseline rows tomorrow.
+3. Default behaviour is safe: organic rows are untouched, synthetic
+   rows are kept long enough to span a typical Tier 0 PR cycle.
+
+**What gets pruned (and what doesn't).**
+
+| Source | Default retention | Rationale |
+|---|---|---|
+| Synthetic (`userAgent ILIKE '%XO-Synthetic/%'`) | 14 days | Long enough to span a feature branch + review + post-merge diff. Tunable up. |
+| Organic (everything else) | unlimited | Real-user rows are scarce on staging and irreplaceable on prod. Only prune if the table actually outgrows its index — measured, not pre-emptive. |
+| Smoke / dev rows (`env = 'local'`) | 7 days | Kept short — they're noise once the smoke run that wrote them has been verified. |
+
+**Cadence.** Nightly. Implemented as a recurring `scheduledJob` (type
+`perf_vitals_prune`) registered with the existing
+`scheduledJobs.js` dispatcher: handler runs the deletes, then enqueues
+the next run 24 h out. If the dispatcher misses a tick (process
+restart, env unavailable), startup recovery resets stuck RUNNING jobs
+and the next tick catches up — no lost data, no double-prune.
+
+**Implementation sketch.**
+
+- New handler module `backend/src/services/perfVitalsRetentionService.js`
+  exporting `pruneSynthetic({ olderThan })`, `pruneSmoke({ olderThan })`,
+  and a `runPrune()` orchestrator. Each delete uses the existing
+  `(env, name, createdAt)` index — an `EXPLAIN` against the staging
+  DB before merge confirms an index scan, not a seq scan.
+- Bootstrap from `backend/src/index.js`: register the
+  `perf_vitals_prune` handler, then enqueue the first run if no
+  PENDING / RUNNING row already exists. Idempotent across restarts.
+- Test coverage: unit tests for each prune function (boundary on the
+  cutoff, no-op when nothing matches, error path doesn't tombstone
+  the job), plus a handler-level test that asserts the next run is
+  re-enqueued.
+
+**Pause / extend for long comparison runs.** Two system_config keys
+(`getSystemConfig` / `setSystemConfig` already wired through the
+admin panel):
+
+- `perf.retention.synthetic.days` (number, default `14`) — bump to
+  `60` before a multi-week experiment, drop back to `14` afterwards.
+- `perf.retention.paused` (bool, default `false`) — hard pause; the
+  handler short-circuits to a no-op while still re-enqueueing itself
+  so resuming is just flipping the flag back. Useful when a
+  multi-day "hold everything" capture is in flight.
+
+Both are read at the top of the handler so a flip takes effect on
+the next tick (≤ 24 h) without a backend restart.
+
+**Observability.** Each run logs `{ prunedSynthetic, prunedSmoke,
+keptOrganic, durationMs, paused }` at info level. The numbers also
+land in the metrics snapshot so the admin Health dashboard's
+`/admin/health/sockets` history shows whether the table is
+stabilizing or still growing.
+
+**One-time scrub (only if needed).** If any synthetic rows leak into
+the table *before* D2 ships its UA tag, they'd be indistinguishable
+from organic. Mitigation:
+
+1. Ship D2 (UA tag + `?source` filter) and D2.1 (prune) **in the same
+   PR** — this is the primary defence; there's no untagged-synthetic
+   period.
+2. Belt-and-suspenders: a one-shot admin endpoint
+   `POST /admin/health/perf/vitals/scrub-synthetic-before` accepting a
+   timestamp, runnable manually if step 1 ever fails. Behind
+   `requireAdmin`, idempotent, returns the row count it deleted. Add
+   only if step 1's pre-merge testing reveals a gap; otherwise skip.
+
+**Future: dedicated `source` column.** The UA-suffix filter is fine at
+year-one scale (`userAgent` is already indexed via the
+`(name, route, createdAt)` composite for the hot path; the source
+filter only matters on infrequent admin queries). If the synthetic
+volume ever rises to where the `ILIKE` becomes hot, add a
+`source enum('organic', 'synthetic', 'smoke')` column and a
+backfill — but not before, since the column adds write-side cost on
+every beacon and the current shape is already costly enough at
+hundreds of rows/sec organic.
+
+**Sequencing — when does cleanup actually happen?** Three distinct
+moments to keep separate:
+
+1. *Before the next `/promote`* (i.e., right now): **no cleanup
+   needed.** D1 just landed on dev; prod's `perf_vitals` is empty.
+   The `/stage` + `/promote` we're queueing pushes code, not data.
+2. *Between `/promote` and the synthetic driver going live*: **also
+   no cleanup needed.** Real users start writing organic rows
+   immediately; that's exactly what we want. The perf-* scripts
+   re-baseline produces JSONs in `perf/baselines/`, never touching
+   `perf_vitals`.
+3. *Once D2 + D2.1 land*: cleanup becomes ongoing — the prune does
+   its job nightly, queries default to `?source=organic`, the
+   dashboard stays clean. **No "cleanup phase" between push and data
+   collection** — the cleanliness primitives ship inside D2 itself,
+   not as a separate gate.
+
+### D3 — Admin Health dashboard panels (landed 2026-05-04, `dev`)
+
+The on-call surface for everything D0–D2 produces, all under
+`/admin/health`:
+
+- **Real-User Web Vitals** — `GET /api/v1/admin/health/perf/vitals` —
+  per-(route, metric) p50/p75/p95 with rating-mix bars, 1h/24h/7d
+  toggle, env breakdown. Color-coded against the
+  [web-vitals thresholds](https://web.dev/articles/vitals)
+  (LCP ≤ 2.5s good / > 4s poor, INP ≤ 200ms / > 500ms, CLS ≤ 0.1 / > 0.25, …).
+- **Perf Baselines (dev-only)** — `GET /api/v1/admin/perf/baselines{,/:filename}` —
+  read-only browser of `perf/baselines/*.json` with kind filter and
+  click-to-view JSON. Disabled on Fly.io (no `PERF_BASELINES_DIR`)
+  because the JSONs only exist on the dev machine that ran the perf
+  scripts. Strict filename regex + resolved-path check guard against
+  traversal.
+
+Tests: 6 + 8 vitest cases on the backend; UI is straightforward
+presentation.
 
 ### Phase 17 — Per-PR perf gates
 
