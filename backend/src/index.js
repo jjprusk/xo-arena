@@ -19,6 +19,7 @@ import mlRouter from './routes/ml.js'
 import skillsRouter from './routes/skills.js'
 import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
+import adminPerfBaselinesRouter from './routes/adminPerfBaselines.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
@@ -50,6 +51,7 @@ registerRoutes(app, {
   '/leaderboard': leaderboardRouter,
   // '/rooms' removed in Phase 3.4 — Tables are the only game primitive
   '/admin/ai': adminAiRouter,
+  '/admin/perf': adminPerfBaselinesRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,
