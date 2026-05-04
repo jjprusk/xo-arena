@@ -1254,12 +1254,36 @@ The cold-page Ready cost is dominated by waterfalls: HTML parses → JS
 parses → bundle queries an API → API returns → render. The plan covers
 the JS parse but not the *API queries during parse*.
 
+**Instrumentation landed (2026-05-04, `dev`):**
+`perf/perf-waterfall.js` measures, per route × device, when the
+primary `/api/*` call fires (`requestStart` from navStart) and when
+its response lands (`responseEnd`). Local sanity-check (n=3, desktop,
+no network throttling) — every route's primary API doesn't fire
+until ~400ms after navStart, which is pure JS parse + React mount +
+`useEffect` cost (the API itself is 2–5ms locally):
+
+| Route        | apiStart | apiTotal | LCP   | preload prize (~) |
+|--------------|----------|----------|-------|-------------------|
+| `/`          | 418ms    | 5ms      | 696ms | ~400ms            |
+| `/tournaments` | 377ms  | 2ms      | 388ms | ~370ms            |
+| `/rankings`  | 385ms    | 5ms      | 396ms | ~380ms            |
+
+LCP on `/tournaments` and `/rankings` lands ~11ms after the API
+returns — preload would shift the entire chain ~370ms earlier.
+Staging/prod prize is presumably larger (longer bundle download +
+bigger API total). Re-run with `--target=staging` to confirm before
+committing implementation effort.
+
+**Aside:** the waterfall also surfaces ~7 redundant `/api/session`
+hits per cold page load. Filed as a separate dedupe issue; not part
+of F2 itself.
+
 - [ ] **`<link rel="preload" as="fetch">`** for the top-1 API call per
       route, emitted in the HTML `<head>` so the request fires in
       parallel with bundle download. Routes + targets:
   - `/` → `/api/v1/bots?gameId=xo` (the community bot fetch)
   - `/tournaments` → `/api/tournaments`
-  - `/leaderboard` → `/api/v1/leaderboard?game=xo`
+  - `/rankings` → `/api/v1/leaderboard?period=all&mode=all&includeBots=false`
   - `/profile` (auth) → `/api/v1/bots?ownerId=…`
 - [ ] **103 Early Hints with `Link: rel=preload`** (Section E1) for
       both static chunks *and* the API preload above. Doubles the
