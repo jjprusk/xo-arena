@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { Resend } from 'resend'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import db from '../lib/db.js'
+import { Prisma } from '@xo-arena/db'
 import { releaseSeats } from '../lib/tableSeats.js'
 import { dispatchTableReleased, TABLE_RELEASED_REASONS } from '../lib/tableReleased.js'
 import { unregisterTable, getSocketAdapterState } from '../realtime/socketHandler.js'
@@ -115,6 +116,90 @@ router.get('/health/tables', (req, res) => {
     socketAdapter:     'sse',  // socket.io removed — SSE+POST is the only transport
     uptime: Math.round(process.uptime()),
   })
+})
+
+// ─── Real-User Web Vitals (RUM) ──────────────────────────────────────────────
+
+const PERF_WINDOW_MS = {
+  '1h':  60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d':  7 * 24 * 60 * 60 * 1000,
+}
+
+/**
+ * GET /api/v1/admin/health/perf/vitals?window=24h&env=prod
+ *
+ * Aggregates rows from `perf_vitals` (populated by the anonymous beacon at
+ * POST /api/v1/perf/vitals) into per-(route, metric) percentiles + rating
+ * distribution. Default window is 24h. `env` is optional — when omitted the
+ * response includes a `byEnv` count so the dashboard can show which envs are
+ * actually reporting.
+ */
+router.get('/health/perf/vitals', async (req, res, next) => {
+  try {
+    const windowKey = PERF_WINDOW_MS[req.query.window] ? req.query.window : '24h'
+    const since = new Date(Date.now() - PERF_WINDOW_MS[windowKey])
+    const env = typeof req.query.env === 'string' && req.query.env ? req.query.env : null
+    const envFilter = env ? Prisma.sql`AND env = ${env}` : Prisma.empty
+
+    const [rows, envCounts] = await Promise.all([
+      db.$queryRaw`
+        SELECT
+          route,
+          name,
+          COUNT(*)::int                                                    AS cnt,
+          PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY value)              AS p50,
+          PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY value)              AS p75,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY value)              AS p95,
+          COUNT(*) FILTER (WHERE rating = 'good')::int                     AS good,
+          COUNT(*) FILTER (WHERE rating = 'needs-improvement')::int        AS needs,
+          COUNT(*) FILTER (WHERE rating = 'poor')::int                     AS poor
+        FROM perf_vitals
+        WHERE "createdAt" >= ${since} ${envFilter}
+        GROUP BY route, name
+        ORDER BY route, name
+      `,
+      db.$queryRaw`
+        SELECT COALESCE(env, 'unknown') AS env, COUNT(*)::int AS cnt
+        FROM perf_vitals
+        WHERE "createdAt" >= ${since}
+        GROUP BY env
+        ORDER BY env
+      `,
+    ])
+
+    const routeMap = new Map()
+    for (const r of rows) {
+      if (!routeMap.has(r.route)) routeMap.set(r.route, {})
+      routeMap.get(r.route)[r.name] = {
+        count: r.cnt,
+        p50: r.p50 == null ? null : Number(r.p50),
+        p75: r.p75 == null ? null : Number(r.p75),
+        p95: r.p95 == null ? null : Number(r.p95),
+        good:  r.good,
+        needs: r.needs,
+        poor:  r.poor,
+      }
+    }
+    const routes = [...routeMap.entries()].map(([route, metrics]) => ({ route, metrics }))
+    const byEnv = {}
+    let totalRows = 0
+    for (const r of envCounts) {
+      byEnv[r.env] = r.cnt
+      totalRows += r.cnt
+    }
+
+    res.json({
+      window: windowKey,
+      since:  since.toISOString(),
+      env,
+      totalRows,
+      byEnv,
+      routes,
+    })
+  } catch (err) {
+    next(err)
+  }
 })
 
 // ─── Platform stats ───────────────────────────────────────────────────────────

@@ -79,11 +79,24 @@ function ensureLoop() {
 
 function dispatchEntry(id, fields) {
   // fields is a flat array: [key, val, key, val, …].
+  const pickupMs = Date.now()
   const entry = {}
   for (let i = 0; i < fields.length; i += 2) entry[fields[i]] = fields[i + 1]
   const entryUserId = entry.userId ?? '*'
   const channel     = entry.channel ?? ''
-  const payload     = entry.payload ?? '{}'
+  let payload       = entry.payload ?? '{}'
+
+  // F4 perf decomposition: append `_t` breadcrumbs to the JSON payload so the
+  // perf-sse-rtt script can split the SSE round-trip into Redis fanout vs
+  // broker loop vs client-network. Redis stream ids are `<ms>-<seq>`;
+  // parseInt(id,10) stops at the dash and yields publishMs.
+  const publishMs = parseInt(id, 10)
+  if (Number.isFinite(publishMs)
+      && payload.length > 0
+      && payload.charCodeAt(payload.length - 1) === 0x7d /* '}' */) {
+    const tBlob = `"_t":{"publishToPickupMs":${pickupMs - publishMs},"pickupToWriteMs":${Date.now() - pickupMs}}`
+    payload = payload === '{}' ? `{${tBlob}}` : `${payload.slice(0, -1)},${tBlob}}`
+  }
 
   for (const [res, client] of _clients) {
     // Personal entry: only the target user sees it.

@@ -12,6 +12,7 @@ import App from './App.jsx'
 import { getToken } from './lib/getToken.js'
 import { perfMark } from './lib/perfLog.js'
 import { installGlobalErrorHandlers } from './lib/frontendLogger.js'
+import { startRUM } from './lib/rum.js'
 
 perfMark('main:module-evaluated')
 
@@ -19,6 +20,11 @@ perfMark('main:module-evaluated')
 // Viewer instead of vanishing into the browser console. Idempotent — safe
 // to call once per page lifetime.
 installGlobalErrorHandlers()
+
+// Start Real-User Monitoring (web-vitals → /api/v1/perf/vitals beacon).
+// Idempotent; respects VITE_RUM_SAMPLE_RATE (default 1.0); silent if
+// listeners can't be attached.
+startRUM()
 
 // Pre-fetch token in parallel with React rendering when session cache shows a signed-in user.
 // Eliminates the sequential /api/token → /api/<page-data> waterfall on hard reload.

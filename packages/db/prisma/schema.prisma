@@ -899,6 +899,30 @@ model MetricsSnapshot {
   @@map("metrics_snapshots")
 }
 
+/// RUM (Real-User Monitoring) Web Vitals beacon — one row per individual
+/// metric (FCP/LCP/INP/CLS/TTFB) per page session. Written by
+/// POST /api/v1/perf/vitals from landing's `lib/rum.js` on `pagehide`.
+/// Anonymous: `sessionId` is a tab-scoped random id, never a userId.
+model PerfVital {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  env             String?
+  releaseVersion  String?
+  sessionId       String
+  route           String
+  name            String
+  value           Float
+  rating          String?
+  navigationType  String?
+  deviceClass     String?
+  effectiveType   String?
+  userAgent       String?
+
+  @@index([name, route, createdAt])
+  @@index([env, name, createdAt])
+  @@map("perf_vitals")
+}
+
 enum ScheduledJobStatus {
   PENDING
   RUNNING

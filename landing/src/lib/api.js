@@ -200,6 +200,14 @@ export const api = {
   admin: {
     stats:        (token)           => api.get('/admin/stats', token),
     getHealth:    (token)           => api.get('/admin/health/sockets', token),
+    getPerfVitals: (token, { window = '24h', env } = {}) => {
+      const p = new URLSearchParams()
+      p.set('window', window)
+      if (env) p.set('env', env)
+      return api.get(`/admin/health/perf/vitals?${p.toString()}`, token)
+    },
+    listPerfBaselines: (token)           => api.get('/admin/perf/baselines', token),
+    getPerfBaseline:   (filename, token) => api.get(`/admin/perf/baselines/${encodeURIComponent(filename)}`, token),
     getUser:      (id, token)       => api.get(`/admin/users/${id}`, token),
     users:        (token, search, page, limit, status) => {
       const p = new URLSearchParams()

@@ -19,6 +19,7 @@ import mlRouter from './routes/ml.js'
 import skillsRouter from './routes/skills.js'
 import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
+import adminPerfBaselinesRouter from './routes/adminPerfBaselines.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
@@ -30,6 +31,7 @@ import eventsRouter from './routes/events.js'
 import presenceRouter from './routes/presence.js'
 import pushRouter from './routes/push.js'
 import realtimeRouter, { modeRouter as realtimeModeRouter } from './routes/realtime.js'
+import perfVitalsRouter from './routes/perfVitals.js'
 import { getSystemConfig } from './services/skillService.js'
 import { startActivityFlushJob } from './services/activityService.js'
 import { startReplayPurgeJob } from './services/replayPurgeService.js'
@@ -49,6 +51,7 @@ registerRoutes(app, {
   '/leaderboard': leaderboardRouter,
   // '/rooms' removed in Phase 3.4 — Tables are the only game primitive
   '/admin/ai': adminAiRouter,
+  '/admin/perf': adminPerfBaselinesRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,
@@ -66,6 +69,7 @@ registerRoutes(app, {
   '/push':               pushRouter,
   '/rt':                 realtimeRouter,
   '/realtime':           realtimeModeRouter,
+  '/perf':               perfVitalsRouter,
 })
 
 // Public version endpoint — no auth required

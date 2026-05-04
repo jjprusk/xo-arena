@@ -18,6 +18,9 @@ app.use(cors({
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
   credentials: true,
+  // Expose Server-Timing so the perf-sse-rtt harness (and any browser perf
+  // tooling) can read per-leg breakdowns from the move POST.
+  exposedHeaders: ['Server-Timing'],
 }))
 
 // Better Auth handler — must be mounted BEFORE express.json()
@@ -46,9 +49,28 @@ app.get('/api/token', async (req, res) => {
 
 app.use(express.json({ limit: '50mb' }))
 
-// Request timing middleware
+// Request timing middleware. Logs every request and emits a
+// `Server-Timing: handler;dur=X` header so cold-page perf scripts +
+// browser DevTools can split server time from network time on any /api/*
+// call (companion to Performance_Plan_v2 §F2 instrumentation). We hook
+// res.end rather than `finish` because finish runs *after* the headers
+// have flushed. SSE responses call res.write before res.end and have
+// already-sent headers by then — `res.headersSent` skips silently.
+// Existing Server-Timing values set by route-level handlers (e.g. the
+// move POST's `lookup, apply` segments) are preserved by appending.
 app.use((req, res, next) => {
-  const start = Date.now()
+  const start  = Date.now()
+  const startNs = process.hrtime.bigint()
+  const origEnd = res.end.bind(res)
+  res.end = function (...args) {
+    if (!res.headersSent) {
+      const dur = Math.round(Number(process.hrtime.bigint() - startNs) / 1e6)
+      const handler = `handler;dur=${dur}`
+      const existing = res.getHeader('Server-Timing')
+      res.setHeader('Server-Timing', existing ? `${existing}, ${handler}` : handler)
+    }
+    return origEnd(...args)
+  }
   res.on('finish', () => {
     logger.info({
       method: req.method,
