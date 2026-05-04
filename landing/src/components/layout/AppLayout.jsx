@@ -128,7 +128,7 @@ export function normalizeBusNotification(type, payload = {}, expiresAt = null) {
 }
 
 export default function AppLayout() {
-  const { data: session, isPending } = useOptimisticSession()
+  const { data: session } = useOptimisticSession()
   const user = session?.user ?? null
   const navigate = useNavigate()
   const location = useLocation()
@@ -493,7 +493,7 @@ export default function AppLayout() {
         rightSlot={
           <div className="flex items-center gap-2">
             {user && <GuideOrb />}
-            {!isPending && !user && (
+            {!user && (
               <button onClick={() => setShowSignIn(true)} className="btn btn-primary btn-sm">
                 Sign in
               </button>
