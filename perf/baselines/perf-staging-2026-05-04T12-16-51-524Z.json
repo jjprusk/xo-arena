@@ -1,0 +1,1127 @@
+{
+  "timestamp": "2026-05-04T12:16:51.524Z",
+  "env": "staging",
+  "baseUrl": "https://xo-landing-staging.fly.dev",
+  "runs": 2,
+  "auth": false,
+  "warmup": true,
+  "devices": [
+    "desktop",
+    "mobile"
+  ],
+  "contexts": [
+    "cold-anon"
+  ],
+  "results": [
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 767,
+        "ready_p95": 769,
+        "ttfb_p50": 51,
+        "fcp_p50": 568,
+        "lcp_p50": 756,
+        "js_kb": 490,
+        "static_kb": 1390,
+        "img_kb": 888,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 769,
+          "ttfb": 51,
+          "fcp": 572,
+          "lcp": 752,
+          "domContentLoaded": 303,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 130,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 131,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 131,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 131,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 303,
+              "bytes": 12484
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 303,
+              "bytes": 402819
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 531,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 531,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 531,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 531,
+              "bytes": 3058
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 531,
+              "bytes": 300
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 534,
+              "bytes": 909402
+            }
+          ]
+        },
+        {
+          "readyMs": 764,
+          "ttfb": 50,
+          "fcp": 564,
+          "lcp": 760,
+          "domContentLoaded": 307,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 131,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 131,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 131,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 131,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 307,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 307,
+              "bytes": 12484
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 526,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 554,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 554,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 555,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 555,
+              "bytes": 3087
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 555,
+              "bytes": 300
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Leaderboard",
+      "path": "/leaderboard",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 1047,
+        "ready_p95": 1342,
+        "ttfb_p50": 50,
+        "fcp_p50": 624,
+        "lcp_p50": 826,
+        "js_kb": 490,
+        "static_kb": 1390,
+        "img_kb": 888,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 1342,
+          "ttfb": 50,
+          "fcp": 712,
+          "lcp": 920,
+          "domContentLoaded": 289,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 135,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 135,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 135,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 135,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 289,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 289,
+              "bytes": 12484
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 670,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 671,
+              "bytes": 300
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 676,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 702,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 702,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 703,
+              "bytes": 3101
+            }
+          ]
+        },
+        {
+          "readyMs": 751,
+          "ttfb": 49,
+          "fcp": 536,
+          "lcp": 732,
+          "domContentLoaded": 298,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 139,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 140,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 140,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 140,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 298,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 298,
+              "bytes": 12484
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 509,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 510,
+              "bytes": 300
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 512,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 544,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 544,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 544,
+              "bytes": 3078
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 3793,
+        "ready_p95": 6918,
+        "ttfb_p50": 50,
+        "fcp_p50": 550,
+        "lcp_p50": 550,
+        "js_kb": 490,
+        "static_kb": 1390,
+        "img_kb": 888,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 6918,
+          "ttfb": 49,
+          "fcp": 540,
+          "lcp": 540,
+          "domContentLoaded": 293,
+          "requests": 11,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 132,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 132,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 132,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 132,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 293,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 293,
+              "bytes": 12484
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 507,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 529,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 529,
+              "bytes": 300
+            },
+            {
+              "name": "/api/tournaments",
+              "type": "fetch",
+              "startMs": 530,
+              "bytes": 1422
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 530,
+              "bytes": 300
+            }
+          ]
+        },
+        {
+          "readyMs": 668,
+          "ttfb": 50,
+          "fcp": 560,
+          "lcp": 560,
+          "domContentLoaded": 320,
+          "requests": 11,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 139,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 139,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 139,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 139,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 320,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 320,
+              "bytes": 12484
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 529,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 552,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 553,
+              "bytes": 300
+            },
+            {
+              "name": "/api/tournaments",
+              "type": "fetch",
+              "startMs": 553,
+              "bytes": 1417
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 554,
+              "bytes": 300
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 2026,
+        "ready_p95": 2047,
+        "ttfb_p50": 51,
+        "fcp_p50": 1360,
+        "lcp_p50": 1774,
+        "js_kb": 490,
+        "static_kb": 1390,
+        "img_kb": 888,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 2047,
+          "ttfb": 52,
+          "fcp": 1380,
+          "lcp": 1792,
+          "domContentLoaded": 440,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 143,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 143,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 143,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 143,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 440,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 440,
+              "bytes": 12484
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 1344,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1372,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1372,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1372,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 1372,
+              "bytes": 3058
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1373,
+              "bytes": 300
+            }
+          ]
+        },
+        {
+          "readyMs": 2005,
+          "ttfb": 49,
+          "fcp": 1340,
+          "lcp": 1756,
+          "domContentLoaded": 396,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 132,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 132,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 132,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 132,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 396,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 396,
+              "bytes": 12484
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1301,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1301,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1302,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 1302,
+              "bytes": 3087
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1302,
+              "bytes": 300
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 1305,
+              "bytes": 909402
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Leaderboard",
+      "path": "/leaderboard",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 2008,
+        "ready_p95": 2011,
+        "ttfb_p50": 51,
+        "fcp_p50": 1360,
+        "lcp_p50": 1774,
+        "js_kb": 490,
+        "static_kb": 1390,
+        "img_kb": 888,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 2004,
+          "ttfb": 52,
+          "fcp": 1328,
+          "lcp": 1744,
+          "domContentLoaded": 402,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 138,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 138,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 138,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 138,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 401,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 401,
+              "bytes": 12484
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1301,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1302,
+              "bytes": 300
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 1304,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1326,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1326,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 1326,
+              "bytes": 3098
+            }
+          ]
+        },
+        {
+          "readyMs": 2011,
+          "ttfb": 49,
+          "fcp": 1392,
+          "lcp": 1804,
+          "domContentLoaded": 413,
+          "requests": 12,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 144,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 144,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 144,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 144,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 413,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 413,
+              "bytes": 12484
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 1369,
+              "bytes": 909402
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1389,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1389,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1407,
+              "bytes": 300
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1407,
+              "bytes": 300
+            },
+            {
+              "name": "/api/v1/bots",
+              "type": "fetch",
+              "startMs": 1407,
+              "bytes": 3058
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 2,
+      "stats": {
+        "ready_p50": 1760,
+        "ready_p95": 2004,
+        "ttfb_p50": 50,
+        "fcp_p50": 1342,
+        "lcp_p50": 1342,
+        "js_kb": 490,
+        "static_kb": 946,
+        "img_kb": 888,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 1516,
+          "ttfb": 50,
+          "fcp": 1336,
+          "lcp": 1336,
+          "domContentLoaded": 398,
+          "requests": 10,
+          "staticKb": 502,
+          "jsKb": 490,
+          "imgKb": 0,
+          "lateLoaded": [
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 136,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 136,
+              "bytes": 1995
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 136,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 136,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 398,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 398,
+              "bytes": 12484
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1323,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1323,
+              "bytes": 300
+            },
+            {
+              "name": "/api/tournaments",
+              "type": "fetch",
+              "startMs": 1323,
+              "bytes": 1411
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1324,
+              "bytes": 300
+            }
+          ]
+        },
+        {
+          "readyMs": 2004,
+          "ttfb": 49,
+          "fcp": 1348,
+          "lcp": 1348,
+          "domContentLoaded": 395,
+          "requests": 11,
+          "staticKb": 1390,
+          "jsKb": 490,
+          "imgKb": 888,
+          "lateLoaded": [
+            {
+              "name": "/assets/index-D2ck_Ip7.js",
+              "type": "script",
+              "startMs": 135,
+              "bytes": 1995
+            },
+            {
+              "name": "/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap",
+              "type": "link",
+              "startMs": 135,
+              "bytes": 1203
+            },
+            {
+              "name": "/assets/game-xo-C47aEtB8.js",
+              "type": "other",
+              "startMs": 136,
+              "bytes": 13311
+            },
+            {
+              "name": "/assets/vendor-react-DXeMfk3m.js",
+              "type": "other",
+              "startMs": 136,
+              "bytes": 83314
+            },
+            {
+              "name": "/assets/main.supported-DzuL-T3V.js",
+              "type": "script",
+              "startMs": 395,
+              "bytes": 402819
+            },
+            {
+              "name": "/assets/main-CKafxYlx.css",
+              "type": "link",
+              "startMs": 395,
+              "bytes": 12484
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1310,
+              "bytes": 337
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1310,
+              "bytes": 300
+            },
+            {
+              "name": "/api/tournaments",
+              "type": "fetch",
+              "startMs": 1310,
+              "bytes": 1419
+            },
+            {
+              "name": "/api/session",
+              "type": "fetch",
+              "startMs": 1311,
+              "bytes": 300
+            },
+            {
+              "name": "/colosseum-bg.jpg",
+              "type": "css",
+              "startMs": 1316,
+              "bytes": 909402
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

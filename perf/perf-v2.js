@@ -47,6 +47,14 @@ const CONTEXT_F = args.find(a => a.startsWith('--context='))?.split('=')[1] ?? n
 const ROUTES_F  = args.find(a => a.startsWith('--routes='))?.split('=')[1]?.toLowerCase().split(',') ?? null
 const WARMUP    = args.includes('--warmup')
 const HEADED    = args.includes('--headed')
+// When set, after Ready resolves we wait an extra `EXT_MS` and re-collect
+// `performance.getEntriesByType('resource')`, exposing late-loading bytes
+// (e.g. the colosseum hero, async-fetched avatars) that the cold-page
+// numbers wouldn't otherwise count. The 2026-05-02 snapshot showed
+// img_kb = 0 on every route — this flag is how we find out where the
+// 888 KB hero is actually showing up.
+const EXTENDED  = args.includes('--extended-resources')
+const EXTENDED_MS = parseInt(args.find(a => a.startsWith('--extended-ms='))?.split('=')[1] ?? '5000') || 5000
 
 // Map --target= shortcuts to the canonical landing host.
 function resolveBaseUrl() {
@@ -161,15 +169,16 @@ async function measure({ browser, url, profile, contextOpts }) {
     })
   }
 
-  // LCP observer
-  await page.addInitScript(() => {
+  // LCP observer + extended-resource flag.
+  await page.addInitScript((captureLate) => {
     window.__lcp = 0
+    window.__captureLate = !!captureLate
     try {
       new PerformanceObserver(list => {
         for (const e of list.getEntries()) window.__lcp = e.startTime
       }).observe({ type: 'largest-contentful-paint', buffered: true })
     } catch {}
-  })
+  }, EXTENDED)
 
   const t0 = Date.now()
   await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
@@ -186,6 +195,12 @@ async function measure({ browser, url, profile, contextOpts }) {
   }
 
   const readyMs = Date.now() - t0
+
+  if (EXTENDED) {
+    // Wait for late-loading resources (hero image, avatars, async chunks
+    // that mount after Ready resolves). Pure idle wait — no interaction.
+    await page.waitForTimeout(EXTENDED_MS)
+  }
 
   const perf = await page.evaluate(() => {
     const nav   = performance.getEntriesByType('navigation')[0]
@@ -205,6 +220,19 @@ async function measure({ browser, url, profile, contextOpts }) {
       .filter(r => ['.png', '.jpg', '.jpeg', '.webp', '.avif', '.svg'].some(ext => r.name.split('?')[0].toLowerCase().endsWith(ext)))
       .reduce((sum, r) => sum + (r.transferSize || 0), 0)
 
+    // Per-resource detail used when --extended-resources is set, so we
+    // can see *which* late-loading images / chunks landed and at what
+    // time relative to navigation start.
+    const lateLoaded = resources
+      .filter(r => r.startTime > 0)
+      .map(r => ({
+        name: r.name.replace(/^https?:\/\/[^/]+/, ''),
+        type: r.initiatorType,
+        startMs: Math.round(r.startTime),
+        bytes:   r.transferSize || 0,
+      }))
+      .sort((a, b) => a.startMs - b.startMs)
+
     return {
       ttfb: nav ? Math.round(nav.responseStart - nav.requestStart) : null,
       fcp:  paint['first-contentful-paint'] ?? null,
@@ -214,6 +242,8 @@ async function measure({ browser, url, profile, contextOpts }) {
       staticKb: Math.round(staticBytes / 1024),
       jsKb:     Math.round(jsBytes / 1024),
       imgKb:    Math.round(imgBytes / 1024),
+      // Only persisted when --extended-resources is set; otherwise empty.
+      lateLoaded: typeof window.__captureLate === 'boolean' && window.__captureLate ? lateLoaded : [],
     }
   })
 
