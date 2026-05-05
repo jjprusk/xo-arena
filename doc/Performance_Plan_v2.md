@@ -386,247 +386,28 @@ written to `perf/baselines/perf-staging-2026-05-02T*.json`. Analysis in
       realtime postmortem mentions per-channel timing — verify it lights up
       Grafana).
 
-### 0.4 Targeted gap measurements (2026-05-04)
+### 0.4 Targeted gap measurements (2026-05-04 / 05) *(done — see Appendix Z.1)*
 
-The 0.1 baseline left four open questions. New scripts plug each one
-without waiting on RUM (0.2) or Prometheus (0.3):
+The 0.1 baseline left four open questions. New scripts plug each one:
+`perf/perf-inp.js`, `perf/perf-sse-rtt.js`, `perf/perf-backend-p95.js`,
+and `perf-v2.js --extended-resources`.
 
-- **`perf/perf-inp.js`** — INP per page via `PerformanceObserver({type:
-  'event', durationThreshold: 16})`, 5 runs × desktop+mobile.
-- **`perf/perf-sse-rtt.js`** — SSE connect, POST move ack, POST move →
-  SSE state event, POST move → bot move event, 20 runs.
-- **`perf/perf-backend-p95.js`** — concurrent loader, 200 reqs ×
-  concurrency 5 across the five hot read endpoints.
-- **`perf-v2.js --extended-resources`** — wait 5s post-Ready and
-  re-collect resource bytes, exposing late-loading images that
-  `transferSize` reports as 0 at Ready time.
+**Headline findings** (full tables and details in **Appendix Z.1**):
 
-Saved at `perf/baselines/{inp,sse-rtt,backend-p95,perf}-{env}-*.json`.
-Headlines below; raw numbers in the JSON.
+- **INP** under 32 ms p50 across every measured route on both desktop
+  and mobile — *not a problem today*. (Z.1.1)
+- **SSE round-trip** ~577 ms p50 prod is the perceived-perf bottleneck
+  on every move; long pole is Fly Upstash pub/sub. Drives **Phase 5**
+  in Tier 0. (Z.1.2)
+- **Multi-machine routing bug** found and fixed via Fly-Replay
+  (commit `0771718`) — 18/20 → 0/20 SSE failures on prod. (Z.1.3)
+- **Prod re-baseline 2026-05-05** — backend p95 healthy across the
+  board; the two genuinely load-bearing items are the JS bundle and
+  the (then-) 888 KB hero image. (Z.1.4 / Z.1.5)
+- **Hero image** identified as the second-biggest single-byte cost
+  after JS — **Phase 3 shipped** with responsive WebP, mobile cuts
+  888 KB → 50 KB (−94%). (Z.1.6)
 
-#### INP — the click-to-paint floor is excellent
-
-Where the script could find a stable interaction, every measured route
-sits **well under the 200ms "good" threshold** on both desktop and
-Moto G4 mobile:
-
-| Interaction              | Desktop p50 | Desktop p95 | Mobile p50 | Mobile p95 |
-|--------------------------|------------:|------------:|-----------:|-----------:|
-| Home — refresh demo      | **24ms**    | 120ms       | 24ms       | 32ms       |
-| Home — open sign-in      | **32ms**    | 32ms        | 24ms       | 40ms       |
-| Puzzles — first button   | **24ms**    | 24ms        | 24ms       | 24ms       |
-
-Two routes (Tournaments filter, Leaderboard "Show bots" toggle) hit
-selector-miss issues during the run; the data we have already says
-**INP is not a problem on the platform today** for the routes that
-landed. Phase 15 (Guide INP audit) drops in priority — the *idle*
-floor is fine. The remaining concern is INP under live SSE updates,
-which the current script doesn't measure (TODO: extend with a
-"during-cup" mode).
-
-#### SSE round-trip — the real perceived-latency story
-
-Every PvP / PvB move passes through this path. Numbers are the headline
-finding of this whole section:
-
-| Phase                       | Staging p50 | Staging p95 | Prod p50  | Prod p95   |
-|-----------------------------|------------:|------------:|----------:|-----------:|
-| SSE connect → session       | 194ms       | 258ms       | 179ms     | 263ms      |
-| POST move → ack             | 173ms       | 233ms       | 185ms     | 252ms      |
-| **POST move → SSE state**   | **656ms**   | 902ms       | **577ms** | 926ms      |
-| POST move → bot move event  | 657ms       | 902ms       | 578ms     | 926ms      |
-
-*(2026-05-05 baselines — staging `sse-rtt-staging-...01-10-39-968Z`, prod
-post Fly-Replay fix `sse-rtt-prod-...01-30-53-025Z`. 20/20 successful runs
-on both envs, no failures.)*
-
-Three load-bearing facts here:
-
-1. **The POST acks at 174–262ms but the SSE event arrives 386–408ms
-   later.** That gap is the SSE pub/sub dispatch — flushing the
-   channel write through to the same client's open EventSource.
-   Players click a square and wait ~half a second to see the result.
-   This is *the* perceived-perf bottleneck on every move, every game,
-   every user. **Phase 5 promotes from Tier 2 to Tier 0.**
-2. **Bot move and player move arrive ~simultaneously** because the
-   backend dispatches both state events in the same request handler.
-   Bot computation is effectively free. No work needed there.
-3. **Prod is ~120ms slower than staging on the SSE round-trip.**
-   Same machine class; same code. Likely cold-machine flap on the
-   move POST handler — Phase 6 input.
-
-##### Multi-machine Fly-Replay fix — 2026-05-04
-
-The prod baselines collected on 2026-05-04 surfaced a real production
-bug, not a measurement artifact. The first prod run after the iad
-migration showed **18/20 SSE round-trips failing** with
-`409 SSE_SESSION_EXPIRED`; staging was 0/20.
-
-Root cause: prod runs **2 backend machines** behind Fly's round-robin
-load balancer. The SSE session registry is a per-process `Map` keyed
-by session id, so any `/rt/*` POST that hits the *other* machine looks
-up an unknown session and 409s. Staging (1 machine) never tripped it.
-
-Fix (commit `0771718`): SSE session ids are now minted with a
-machine-id prefix (`<FLY_MACHINE_ID>.<nanoid>`). The `/rt/*`
-middleware decodes the prefix and, if it doesn't match the current
-machine, returns the `Fly-Replay` header to retry the request on the
-owning machine. ~30 LOC primitive in
-`backend/src/realtime/flyReplay.js` plus 2 call sites.
-
-Post-fix prod baseline: **0/20 failures, 20/20 valid samples.** Code-
-path overhead is unchanged (`server.lookup` 4ms, `server.apply` 8ms).
-
-**Baseline discontinuity to know about:**
-`perf/baselines/sse-rtt-prod-2026-05-04T23-53-58-761Z.json` and
-earlier prod F4 baselines were computed over the 2 lucky runs that
-landed on the SSE-owning machine, so their p50/p95s look
-artificially low. Use
-`perf/baselines/sse-rtt-prod-2026-05-05T01-17-08-425Z.json` (the
-first post-fix run) as the new prod F4 reference. Staging baselines
-are unaffected — staging never had the bug.
-
-A future Redis-backed session registry (which would replace
-Fly-Replay entirely and enable non-Fly hosting) is captured in
-`doc/Future_Ideas.md` and is deferred until non-Fly hosting is on
-the table.
-
-##### Prod re-baseline — 2026-05-05 (full suite, post Fly-Replay fix)
-
-`perf/perf-rebaseline.sh prod` ran all 7 scripts against
-v1.4.0-alpha-4.0 in 555 s. **Headline takeaways:**
-
-- **Backend latency, all green.** No endpoint p95 over 140ms; only
-  flag is the Better Auth rate limit on synthetic `get-session`.
-- **SSE 0/20 failures.** The Fly-Replay fix is doing its job in prod.
-  Multi-machine routing no longer drops POSTs.
-- **Cold-page Ready** — desktop p50 ~750–990 ms across 13 routes;
-  mobile (Moto G4 / 4G) p50 stays in a tight ~2030–2080 ms band.
-  Mobile is dominated by JS parse/eval (496 KB bundle) + the 888 KB
-  hero image — the band is so flat *because* every route ships the
-  same payload.
-- **TBT (long tasks)** — desktop = 0 ms across the board. Mobile
-  Home p50 = **99 ms** (p95 121 ms). All TBT lives in mobile JS
-  parse, not application code.
-- **INP** — every measured interaction p50 ≤ 32 ms (desktop and
-  mobile). The "click → paint" floor is a non-issue. (Rankings
-  toggle still produces 0 samples because the toggle settles below
-  the 16 ms PerformanceObserver threshold — re-anchor that probe to
-  a heavier interaction in a future pass.)
-
-**The two genuinely load-bearing items** the new baselines re-confirm:
-
-1. **888 KB hero image on every cold-anon page** — the largest
-   single-byte cost after the JS bundle, and the only one that's
-   imperceptibly degradable (because of the 6–18% photo opacity
-   overlay). See "Hero candidates" table below.
-2. **POST move → SSE state ~577 ms p50 prod** — every move waits
-   roughly half a second to see the result. Decomposition shows
-   `publishToPickup` (Fly Upstash pub/sub) is the long pole at
-   383 ms p50 / 639 ms p95.
-
-Everything else is in the *no longer the bottleneck* bucket.
-
-#### Backend endpoint p95 — healthy across the board
-
-| Endpoint                          | Stage p50 | Stage p95 | Stage p99 | Prod p50 | Prod p95 | Prod p99 |
-|-----------------------------------|----------:|----------:|----------:|---------:|---------:|---------:|
-| `GET /api/version`                | 52ms      | 135ms     | 225ms     | 54ms     | 139ms    | 158ms    |
-| `GET /api/v1/bots?gameId=xo`      | 72ms      | 184ms     | 305ms     | 68ms     | 140ms    | 157ms    |
-| `GET /api/v1/leaderboard?game=xo` | 52ms      | 113ms     | 137ms     | 53ms     | 120ms    | 144ms    |
-| `GET /api/auth/get-session`       | 57ms      | 139ms     | 147ms     | 57ms     | 135ms    | 206ms    |
-| `GET /api/tournaments`            | 67ms      | 143ms     | 256ms     | 54ms     | 137ms    | 160ms    |
-
-*(2026-05-05 baselines. All endpoints 200/200 ok except prod
-`get-session` at 90/200 — Better Auth's default rate limiter is still
-hitting the synthetic harness at concurrency 5. Real users won't trip
-it; whitelist or raise the cap for the synthetic runner.)*
-
-Implications:
-
-- **Phase 2 (DB index pass) is genuinely off the critical path for now.**
-  No endpoint's p95 is over 175ms; p99 caps at 242ms (cold-bot list
-  on prod). Promote only when a future feature plants a slow query.
-- **Prod auth endpoint rate-limited at concurrency 5.** 110 of 200
-  requests returned 429 — Better Auth's default rate limiter is
-  kicking in hard. Either bump the limit or whitelist the smoke runner.
-  Either way: real users won't hit this, but admin scripts will.
-- **`/api/v1/bots` is the slowest endpoint** (133ms p50 prod). Every
-  cold-anon page that calls `getCommunityBot()` waits on this. If
-  Phase 1 cuts page-level work, this becomes the next visible blocker —
-  candidate for edge KV (Section E4) since the built-in bot list
-  rarely changes.
-
-#### Extended-resource capture — the hero image was never zero KB
-
-The 2026-05-02 snapshot reported `img_kb: 0` on every route. With
-`--extended-resources` (5s post-Ready wait), `colosseum-bg.jpg` shows
-up at **909 KB** on every measured route, starting around 500–700ms
-(overlapping the Ready window):
-
-| Route       | Image start (ms) | Bytes  |
-|-------------|-----------------:|-------:|
-| Home        | 534              | 909 KB |
-| Leaderboard | 676              | 909 KB |
-| Tournaments | 507              | 909 KB |
-
-Original perf-v2 was polling `transferSize` while the resource was
-still in flight, which Resource Timing reports as 0 until the body
-fully lands. **Phase 3 (image diet) promotes from Tier 1 to Tier 0**:
-~888 KB shipped on every page is the second-biggest single-byte cost
-after the JS bundle, and unlike JS it's reachable with one PR
-(WebP + responsive sizes + heavy compression that the 6–18% photo
-opacity makes invisible).
-
-**Hero candidates evaluated 2026-05-05** (in `perf/hero-candidates/`):
-
-| Candidate | Spec                              | Size  | vs original |
-|-----------|-----------------------------------|------:|------------:|
-| Original  | 1920×1279 JPEG                    | 888KB |        —    |
-| A         | 1600w WebP q70                    | 174KB |    **−80%** |
-| B         | 1280w WebP q55 (browser scales)   |  94KB |    **−89%** |
-| C         | 960w WebP q60 + sharpness 7 blur  |  64KB |    **−93%** |
-| D         | 800w WebP q50 + sharpness 7 blur  |  47KB |    **−95%** |
-
-Because the image renders at `--photo-opacity: 0.18` (light) /
-`0.06` (dark), encode-time blur and aggressive downscale are
-imperceptible — the eye sees a tinted wash, not a photograph.
-Recommendation was: ship **B** as the default with WebP, keep the JPG as
-a fallback for the ~3% browsers without WebP support.
-
-**Shipped 2026-05-05** (commits `28b7aca` + `f14d052` /stage to staging
-v1.4.0-alpha-4.1) — went with a 2-asset responsive setup via CSS
-`@media (min-width: 768px)` instead of a single B candidate, so 4G
-mobile gets the smaller 800w/q55+blur asset (D) and tablet+ gets the
-1600w/q70 asset (A):
-
-| Tier   | File                       | Size | Spec                  |
-|--------|----------------------------|-----:|-----------------------|
-| Mobile | `colosseum-mobile.webp`    | 50KB | 800w q55 sharpness 7  |
-| Tablet+| `colosseum-desktop.webp`   |174KB | 1600w q70             |
-
-Original `colosseum-bg.jpg` (888 KB) kept in `/landing/public/` as a
-silent fallback for any future need.
-
-**Measured impact (staging v1.4.0-alpha-4.1, 2026-05-05 baseline):**
-
-| Metric (Home, cold-anon)   | Before        | After (staging) | Delta      |
-|----------------------------|--------------:|----------------:|-----------:|
-| `img_kb` mobile            | 888 KB        | **50 KB**       | **−94%**   |
-| `img_kb` desktop           | 888 KB        | **174 KB**      | **−80%**   |
-| Mobile TBT p50             | 62 ms         | 50 ms           | −19%       |
-| Mobile LCP p50             | 1816 ms       | 1792 ms         | −1%        |
-| Mobile Ready p50           | 2052 ms       | 2041 ms         | −1%        |
-
-The Ready/LCP movement on mobile is small because mobile cold-anon is
-JS-parse-bound on Moto G4 (Phase 1 territory); the WebP win lands
-primarily on **bytes-over-the-wire** (~838 KB saved per cold mobile
-visit on 4G) and **TBT** (less main-thread image-decode work), not on
-synthetic Ready. Real users on metered networks feel the byte savings
-more than the synthetic harness does.
-
-This **closes Phase 3** as Tier 0. The next Tier 0 item is Phase 1
-(JS bundle splitting).
 
 **Deliverable:** a single `Performance_Snapshot_<date>.md` checked in next to
 this plan, showing where every route currently sits vs the targets above.
@@ -1774,10 +1555,67 @@ Phase 2 mentions PgBouncer; doesn't audit what's already in place.
 
 ### F4 — Phase 5 (SSE round-trip) decomposition (concrete steps)
 
-The 0.4 data shows POST move → SSE event = 560ms / 670ms p50, with
-~400ms unaccounted for between POST ack and event arrival. The
-existing Phase 5 lists this at a high level; here's the specific
-sequence.
+The 0.4 data showed POST move → SSE event = 560ms / 670ms p50, with
+~400ms unaccounted for between POST ack and event arrival. The single-
+stream `perf-sse-rtt` decomposition (2026-05-05) put 383ms p50 of
+that on `publishToPickup` (Redis XADD → broker XREAD wake). The
+follow-up concurrent load test (`perf/perf-sse-load.js`,
+2026-05-05) sharply rewrote what that number represents:
+
+- **It is not Redis throughput** — `pickupToWrite` is < 1ms p50 at
+  every load level, and `apply` (which includes the XADD) is < 20ms
+  p50 even at c=50.
+- **It is not load-related** — at c=50 concurrent users the
+  publishToPickup p50 is **21ms** (vs 383ms quiet), p95 106ms.
+- **It is the broker's process wake-up cost on a quiet service.**
+  The broker uses `XREAD BLOCK 30_000` (`backend/src/lib/sseBroker.js:43`).
+  When the backend is idle, the Node process pages out / scheduler
+  deprioritises it / Redis TCP connection's recv-buffer is empty.
+  The first XADD that follows pays a measurable wake-up tax
+  (~150–500ms) before `Date.now()` is sampled in `dispatchEntry`.
+  Once the loop is hot — i.e. any time the broker has dispatched an
+  event in the last few hundred ms — that tax is ~20ms.
+- **By move-index** (staging, c=5, n=5 each):
+  - move 0 (cold table, may also catch broker idle): **382ms p50, 740ms p95**
+  - move 1 (warm channel): 35ms p50, 49ms p95
+  - move 2 (warm channel): 55ms p50, 69ms p95
+
+#### Concurrency sweep — staging, 2026-05-05
+
+`perf/perf-sse-load.js --target=staging --sweep=1,5,10,25` then a
+follow-up `--concurrency=50`. 3 moves per virtual user, 80ms ramp.
+
+| c   | n   | apply p50/p95 | publishToPickup p50/p95 | pickupToWrite p50/p95 | movePostAck p50/p95 | botMoveTotal p50/p95 |
+|----:|----:|:-------------:|:-----------------------:|:---------------------:|:-------------------:|:--------------------:|
+|  1  |   3 |   7 / 8 ms    |     55 / 196 ms         |     0 / 1 ms          |   166 / 197 ms      |   257 / 367 ms       |
+|  5  |  15 |   7 / 8 ms    |     55 / **740 ms**     |     0 / 0 ms          |   189 / 260 ms      |   324 / 932 ms       |
+| 10  |  30 |   7 / 18 ms   |     32 / 406 ms         |     0 / 0 ms          |   195 / 304 ms      |   278 / 612 ms       |
+| 25  |  75 |  15 / 45 ms   |     25 / 406 ms         |     0 / 0 ms          |   291 / 556 ms      |   391 / 721 ms       |
+| 50  | 150 |  19 / 41 ms   |     21 / 80 ms          |     0 / 0 ms          |   396 / 604 ms      |   453 / 633 ms       |
+
+Reading the table:
+
+- **`publishToPickup` p50 *drops* with load**, from 55 → 21ms. p95
+  spikes at c=5/10 (740 / 406ms) but is dominated by move-0
+  cold-wake (see breakdown above). At c=50 the p95 is back to 80ms
+  because the broker loop never goes idle long enough to catch a
+  cold wake-up.
+- **`apply` p95 climbs cleanly** (8 → 45 ms = 5.6× at c=25, then
+  41ms at c=50 — Postgres holds up). This is the only metric where
+  load amplification is monotone and clean.
+- **`pickupToWrite` is flat at 0** at every level — broker dispatch
+  loop is not a bottleneck, which kills one Phase 5 sub-task ("audit
+  redis pub/sub round-trip" — answer: it's fine).
+- **`movePostAck` p50 ~doubles** by c=50 (166 → 396 ms), driven by
+  apply growth + Node event-loop pressure. This is the dominant
+  user-perceptible regression under load.
+- **No fatal failures** at c=50 (50/50 users completed all 3 moves).
+
+This rewrites Phase 5's ROI math and step list. The original
+in-process-fanout / pubsub-shortcut steps below are still valid,
+but the headline win is no longer "~300 ms saved on every move":
+it's "~300 ms saved on the *first* move per fresh table, *only* on
+quiet services."
 
 - [x] **Time-trace one move end to end.** *(spike landed 2026-05-04 on
       `dev`)* — `backend/src/routes/realtime.js` POST `/rt/tables/:slug/move`
@@ -1792,6 +1630,17 @@ sequence.
       (ack→event − server). **Local sanity-check (n=10):** every leg
       ≤2ms; total matches client-measured `playerEventMs`. Staging +
       prod numbers TBD after promote — that's where the ~400ms lives.
+- [ ] **Keep the broker hot — kill the cold-wake penalty.**
+      *(NEW, top priority based on 2026-05-05 load evidence.)* The
+      cheapest possible fix: add a 1Hz keepalive XADD into
+      `events:tier2:stream` (no-op payload, suppressed at dispatch).
+      Cost: 86k extra stream entries/day, negligible Redis CPU.
+      Benefit: `publishToPickupMs` p50 drops from ~383ms to ~20ms on
+      every quiet-traffic environment (prod nights, staging, dev). Or
+      reduce `XREAD_BLOCK_MS` from 30_000 to 1_000 so the loop iterates
+      every second — same effect via a different lever; pick whichever
+      has cleaner failure modes. Validate with `perf/perf-sse-load.js
+      --concurrency=1` before/after.
 - [ ] **Confirm SSE response is unbuffered.** Express + compression
       middleware can buffer SSE frames if not disabled per-route.
       Verify `Content-Encoding: identity` (or no-op compress) on
@@ -1890,9 +1739,9 @@ synthetic blind spots, ranked by likely-to-find-real-issues:
 |--:|----------------------------------|---------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|:------:|
 | 1 | **Cold-authed page-level perf**  | perf-v2 only does `cold-anon`. We have authed *endpoints* (p95) but not authed *pages* (Ready/FCP/LCP). | Phase 1c is scoped from endpoint math (200→143 ms p50). Actual cold-authed page Ready could be 300 ms slower than cold-anon for *all* signed-in users — we're guessing the win. | 1d     |
 | 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
-| 3 | **Live SSE under realistic load**| `perf-sse-rtt` measures **one** move at a time, isolated. Real games are: rapid-fire move sequences, 2 concurrent games per machine, 10 spectators on a table, tournament fan-out to 50 users. | The `publishToPickup` 383 ms p50 is on a *quiet* prod. Under fan-out load it could be much worse. The Phase 5 ROI estimate ("move pub/sub closer = ~300 ms saved") is unvalidated under load. | 2-3d   |
+| 3 | **Live SSE under realistic load** *(closed)* | ~~`perf-sse-rtt` measures **one** move at a time, isolated.~~ Closed 2026-05-05 by `perf/perf-sse-load.js`. Findings rewrote Phase 5's scope — see §F4 above. tl;dr: fan-out load doesn't degrade `publishToPickup`; the 383 ms prod number is **cold-broker-wakeup** on the *first* move into a fresh table, and warm/under-load moves all complete in <60 ms p50. | closed |
 | 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
-| 5 | **DB time as fraction of p95**   | Endpoint p95 is wall-clock — could be 90% DB or 10% DB. Phase 0.3 (RED metrics) hasn't shipped.        | Phase 2 is "deferred for lack of evidence" — but the evidence collection itself is the deferred work. Circular.                  | 2-3d   |
+| 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50); the wall-clock cost under load is **pool wait**, not query time. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
 | 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
 | 7 | **CLS (Cumulative Layout Shift)**| LCP is tracked, CLS is not.                                                                             | Hero swap, late-loading auth UI, modal reflows all *could* cause shift (budget ≤0.1 per Web Vitals). Probably fine but the not-knowing is itself the gap. | 0.5d   |
 
@@ -1902,15 +1751,299 @@ batch — each gap-closing PR is its own measurement → finding cycle.
 **My recommendation for next gap to close** (after Phase 1 lands):
 gap **#1 (cold-authed pages)**. It directly validates Phase 1c's
 expected ROI, and we already have the `xo_perf` token plumbing from
-the `um perfuser` CLI. Gap #3 (SSE under load) is the biggest blind
-spot for *quality*, but requires more fixture work — better as a
-pair with Phase 5 when it's time to scope that.
+the `um perfuser` CLI. Gap **#3 (SSE under load)** closed
+2026-05-05 — see §F4 above for the full evidence and revised
+Phase 5 scope.
 
 What stays *out of scope* for the synthetic harness even now: cross-region
 latency (not actionable from a single test runner), tab-throttling
 behavior (browser-internal, hard to script), and battery / energy
 profiling (not a perf-budget conversation). Those go to RUM /
 production telemetry if they ever become a question.
+
+### F9 — DB audit findings (2026-05-05)
+
+Triggered by the F4 load test surfacing `apply p95` growth (8 → 45ms
+at c=25, 5.6×) — the only metric where load amplification was clean
+and monotone. Audit covers (a) the immediate `applyMove` regression,
+(b) F8 gap #5 (DB time as fraction of p95), and (c) other DB risks
+on hot paths.
+
+#### F9.1 — Connection pool is the bottleneck *(highest leverage)*
+
+`packages/db/src/index.js` constructs `new PrismaPg({ connectionString,
+idleTimeoutMillis: 15_000, connectionTimeoutMillis: 10_000 })`. **No
+`max` is set, so `pg.Pool` defaults to `max: 10`.** Confirmed by
+constructing a fresh pool (`new pg.Pool({...}).options.max === 10`).
+
+At c=50 concurrent moves on staging:
+
+- 50 in-flight HTTP requests × 2 queries each (`findUnique` +
+  `update`) = up to 100 query-acquisitions queueing on 10 slots.
+- Postgres on Fly.io completes each PK lookup / PK update in
+  ~1–5ms (well-indexed, JSONB writes included).
+- Pool wait dominates. Math: 100 acquisitions / 10 slots × 5ms ≈
+  50ms per move queue depth. Matches the observed p95 of 41–45ms
+  vs c=1 baseline of 8ms (~33ms additional).
+
+Fix: bump pool to `max: 25–30`. Postgres' default `max_connections`
+on Fly Postgres is 100+ for small instances, and we have one
+backend service plus tournament service competing — 30 per backend
+machine is well within bounds.
+
+```js
+new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+  max: 30,                     // up from default 10
+  idleTimeoutMillis: 15_000,
+  connectionTimeoutMillis: 10_000,
+})
+```
+
+Estimated win: `apply p95` at c=25 drops from 45ms to ~10–15ms.
+At c=50 from 41ms to ~15ms. Validate with `perf-sse-load.js
+--target=staging --concurrency=25,50` after deploying.
+
+#### F9.2 — VM sizing as the secondary ceiling
+
+`backend/fly.toml`: 1 shared CPU, 512 MB RAM. Even with a larger
+pool, a single shared vCPU caps how much concurrency the Node
+event loop can sustain before `movePostAck` p50 climbs (already
+166 → 396ms c=1 → c=50). Once F9.1 lands, re-measure: if
+`movePostAck` is still 2× at c=50 with apply now flat, the
+remaining cost is Node event-loop pressure on shared CPU.
+
+Cheapest knob: `cpu_kind = "performance"` and/or `cpus = 2`.
+Cost decision, not a code change. Track separately — not
+shipped without explicit budget approval.
+
+#### F9.3 — Closes F8 gap #5 (DB time as fraction of p95)
+
+Server-Timing headers on the move POST already split out
+`lookup` and `apply` — both under 20ms p95 even at c=50. So
+for the realtime path, **DB time is a ~50% fraction of total
+movePostAck** (15-20ms server / 30-40ms total minus network).
+That means a Prisma rewrite or driver swap (Phase 5 driver step)
+would cap out at saving ~20ms per move — not the dominant win.
+Confirms Phase 2 (DB indexes) stays "deferred for lack of
+evidence": apply p95 is already <50ms at c=25; no rewrite
+needed before pool-tuning lands.
+
+For non-realtime paths (page Ready, /me/* endpoints), the same
+pattern likely holds — Postgres is fast, but pool wait under
+concurrency turns wall-clock latency into queueing latency
+that no index can fix.
+
+#### F9.4 — Other DB risks (hot-path audit)
+
+Findings ranked by likely impact:
+
+| # | Concern                                                   | Status                | Action                                                     |
+|--:|-----------------------------------------------------------|-----------------------|------------------------------------------------------------|
+| 1 | **`pg.Pool max=10`** (covered in F9.1)                    | Bottleneck under load | Bump to 25–30                                              |
+| 2 | `BaSession` has no `userId` index — only `token` indexed  | OK as-is              | Better Auth's hot path is `token` lookup, which is indexed. `userId`-by-session is admin-panel only — leave |
+| 3 | `Move` has only `gameId` index                            | OK as-is              | `Move` is append-only; never queried by anything else      |
+| 4 | `Game` indexes are good (outcome, endedAt, players)       | OK                    | Already covers leaderboard + history reads                 |
+| 5 | `Table.previewState` is JSONB, full-blob update each move | Acceptable            | <5ms per write at staging size; no normalization needed    |
+| 6 | `db.botSkill.findMany`, `db.user.findMany` — no `take`    | Bounded by WHERE      | Each has tight WHERE clauses (single botId, role filter)   |
+| 7 | `db.log.findMany` paginates with `skip/take`              | Good                  | Already the right pattern                                  |
+
+Net: only F9.1 is a real fix. The rest are non-issues, captured
+here so we don't re-investigate them.
+
+#### F9.5 — Recommended sequence
+
+1. Ship F9.1 (`max: 30`) on dev, validate on staging with the load
+   test before/after. Same /stage cycle as the cold-broker fix.
+2. Re-measure `movePostAck` at c=25 and c=50. If still > 2× the
+   c=1 baseline after pool fix, escalate F9.2 (VM sizing) as a
+   budget decision.
+3. Phase 2 (DB indexes) stays deferred — F9.3 confirms there's no
+   evidence pointing at index gaps as the bottleneck.
+
+---
+
+## Appendix Z — Completed measurement work (archive)
+
+This appendix collects detailed findings from completed instrumentation
+and measurement passes. The summaries that *inform current decisions*
+stay in the active sections above; the verbose detail and historical
+tables live here so the working portion of the plan stays readable.
+
+### Z.1 — Targeted gap measurements (2026-05-04 / 05)
+
+The 0.1 baseline (2026-05-02) left four open questions. New scripts
+plugged each one without waiting on RUM (0.2) or Prometheus (0.3):
+
+- **`perf/perf-inp.js`** — INP per page via `PerformanceObserver({type:
+  'event', durationThreshold: 16})`, 5 runs × desktop+mobile.
+- **`perf/perf-sse-rtt.js`** — SSE connect, POST move ack, POST move →
+  SSE state event, POST move → bot move event, 20 runs.
+- **`perf/perf-backend-p95.js`** — concurrent loader, 200 reqs ×
+  concurrency 5 across the five hot read endpoints.
+- **`perf-v2.js --extended-resources`** — wait 5s post-Ready and
+  re-collect resource bytes, exposing late-loading images that
+  `transferSize` reports as 0 at Ready time.
+
+Saved at `perf/baselines/{inp,sse-rtt,backend-p95,perf}-{env}-*.json`.
+
+#### Z.1.1 — INP — the click-to-paint floor is excellent
+
+Where the script could find a stable interaction, every measured route
+sits **well under the 200ms "good" threshold** on both desktop and
+Moto G4 mobile:
+
+| Interaction              | Desktop p50 | Desktop p95 | Mobile p50 | Mobile p95 |
+|--------------------------|------------:|------------:|-----------:|-----------:|
+| Home — refresh demo      | **24ms**    | 120ms       | 24ms       | 32ms       |
+| Home — open sign-in      | **32ms**    | 32ms        | 24ms       | 40ms       |
+| Puzzles — first button   | **24ms**    | 24ms        | 24ms       | 24ms       |
+
+Two routes (Tournaments filter, Leaderboard "Show bots" toggle) hit
+selector-miss issues during the run; the data we have already says
+**INP is not a problem on the platform today** for the routes that
+landed. Phase 15 (Guide INP audit) drops in priority — the *idle*
+floor is fine.
+
+#### Z.1.2 — SSE round-trip — perceived-latency deep dive
+
+Every PvP / PvB move passes through this path. Headline numbers from
+the 2026-05-05 baseline (post Fly-Replay fix):
+
+| Phase                       | Staging p50 | Staging p95 | Prod p50  | Prod p95   |
+|-----------------------------|------------:|------------:|----------:|-----------:|
+| SSE connect → session       | 194ms       | 258ms       | 179ms     | 263ms      |
+| POST move → ack             | 173ms       | 233ms       | 185ms     | 252ms      |
+| **POST move → SSE state**   | **656ms**   | 902ms       | **577ms** | 926ms      |
+| POST move → bot move event  | 657ms       | 902ms       | 578ms     | 926ms      |
+
+Three load-bearing facts that informed the Tier 0 ranking:
+
+1. **The POST acks at 174–262ms but the SSE event arrives 386–408ms
+   later.** That gap is the SSE pub/sub dispatch — flushing the
+   channel write through to the same client's open EventSource.
+   *This is the perceived-perf bottleneck on every move.*
+2. **Bot move and player move arrive ~simultaneously** because the
+   backend dispatches both state events in the same request handler.
+3. **Prod is ~120ms slower than staging on the SSE round-trip.** Same
+   machine class, same code. Likely cold-machine flap.
+
+#### Z.1.3 — Multi-machine Fly-Replay fix (2026-05-04)
+
+The prod baselines collected on 2026-05-04 surfaced a real production
+bug, not a measurement artifact. The first prod run after the iad
+migration showed **18/20 SSE round-trips failing** with
+`409 SSE_SESSION_EXPIRED`; staging was 0/20.
+
+Root cause: prod runs **2 backend machines** behind Fly's round-robin
+load balancer. The SSE session registry is a per-process `Map` keyed
+by session id, so any `/rt/*` POST that hit the *other* machine looked
+up an unknown session and 409'd. Staging (1 machine) never tripped it.
+
+Fix (commit `0771718`): SSE session ids are now minted with a
+machine-id prefix (`<FLY_MACHINE_ID>.<nanoid>`). The `/rt/*`
+middleware decodes the prefix and, if it doesn't match the current
+machine, returns the `Fly-Replay` header to retry the request on the
+owning machine. ~30 LOC primitive in
+`backend/src/realtime/flyReplay.js` plus 2 call sites.
+
+Post-fix prod baseline: **0/20 failures, 20/20 valid samples.** Code-
+path overhead unchanged (`server.lookup` 4ms, `server.apply` 8ms).
+
+**Baseline discontinuity:**
+`perf/baselines/sse-rtt-prod-2026-05-04T23-53-58-761Z.json` and
+earlier prod F4 baselines were computed over the 2 lucky runs that
+landed on the SSE-owning machine — their p50/p95s look artificially
+low. Use `perf/baselines/sse-rtt-prod-2026-05-05T01-17-08-425Z.json`
+(the first post-fix run) as the new prod F4 reference.
+
+A future Redis-backed session registry (which would replace
+Fly-Replay entirely and enable non-Fly hosting) is captured in
+`doc/Future_Ideas.md` and is deferred until non-Fly hosting is on
+the table.
+
+#### Z.1.4 — Prod re-baseline 2026-05-05 (full suite, post Fly-Replay)
+
+`perf/perf-rebaseline.sh prod` ran all 7 scripts against
+v1.4.0-alpha-4.0 in 555 s. **Headline takeaways:**
+
+- **Backend latency, all green.** No endpoint p95 over 140ms; only
+  flag is the Better Auth rate limit on synthetic `get-session`.
+- **SSE 0/20 failures.** The Fly-Replay fix is doing its job in prod.
+- **Cold-page Ready** — desktop p50 ~750–990 ms; mobile (Moto G4 / 4G)
+  p50 in a tight ~2030–2080 ms band. Mobile dominated by JS parse
+  (496 KB bundle) + the (then-) 888 KB hero image.
+- **TBT** — desktop = 0 ms; mobile Home p50 = 99 ms (p95 121 ms). All
+  TBT lives in mobile JS parse, not application code.
+- **INP** — every measured interaction p50 ≤ 32 ms on both devices.
+
+**Two items the new baselines re-confirmed as load-bearing** (now
+Tier 0): the 888 KB hero image on every cold-anon page (Phase 3 —
+shipped) and POST move → SSE state ~577 ms p50 prod (Phase 5 — open).
+
+#### Z.1.5 — Backend endpoint p95 (2026-05-05)
+
+| Endpoint                          | Stage p50 | Stage p95 | Stage p99 | Prod p50 | Prod p95 | Prod p99 |
+|-----------------------------------|----------:|----------:|----------:|---------:|---------:|---------:|
+| `GET /api/version`                | 52ms      | 135ms     | 225ms     | 54ms     | 139ms    | 158ms    |
+| `GET /api/v1/bots?gameId=xo`      | 72ms      | 184ms     | 305ms     | 68ms     | 140ms    | 157ms    |
+| `GET /api/v1/leaderboard?game=xo` | 52ms      | 113ms     | 137ms     | 53ms     | 120ms    | 144ms    |
+| `GET /api/auth/get-session`       | 57ms      | 139ms     | 147ms     | 57ms     | 135ms    | 206ms    |
+| `GET /api/tournaments`            | 67ms      | 143ms     | 256ms     | 54ms     | 137ms    | 160ms    |
+
+All endpoints 200/200 ok except prod `get-session` at 90/200 (Better
+Auth's default rate limiter trips at concurrency 5; real users won't
+hit it, the synthetic harness needs a whitelist — filed as a Tier 1
+follow-up).
+
+#### Z.1.6 — Hero image: candidates evaluated + shipped (Phase 3)
+
+**Extended-resource capture** confirmed `colosseum-bg.jpg` was 909 KB
+on every measured route, starting around 500–700ms (overlapping the
+Ready window). Original perf-v2 polled `transferSize` while the
+resource was still in flight (Resource Timing reports 0 until body
+fully lands).
+
+**Candidates evaluated 2026-05-05** (in `perf/hero-candidates/`):
+
+| Candidate | Spec                              | Size  | vs original |
+|-----------|-----------------------------------|------:|------------:|
+| Original  | 1920×1279 JPEG                    | 888KB |        —    |
+| A         | 1600w WebP q70                    | 174KB |    **−80%** |
+| B         | 1280w WebP q55 (browser scales)   |  94KB |    **−89%** |
+| C         | 960w WebP q60 + sharpness 7 blur  |  64KB |    **−93%** |
+| D         | 800w WebP q50 + sharpness 7 blur  |  47KB |    **−95%** |
+
+Because the image renders at `--photo-opacity: 0.18` (light) /
+`0.06` (dark), encode-time blur and aggressive downscale are
+imperceptible — the eye sees a tinted wash, not a photograph.
+
+**Shipped 2026-05-05** (commits `28b7aca` + `f14d052` /stage to staging
+v1.4.0-alpha-4.1) — went with a 2-asset responsive setup via CSS
+`@media (min-width: 768px)`:
+
+| Tier   | File                       | Size | Spec                  |
+|--------|----------------------------|-----:|-----------------------|
+| Mobile | `colosseum-mobile.webp`    | 50KB | 800w q55 sharpness 7  |
+| Tablet+| `colosseum-desktop.webp`   |174KB | 1600w q70             |
+
+Original `colosseum-bg.jpg` (888 KB) kept in `/landing/public/` as a
+silent fallback.
+
+**Measured impact** (staging v1.4.0-alpha-4.1, 2026-05-05 baseline):
+
+| Metric (Home, cold-anon)   | Before        | After (staging) | Delta      |
+|----------------------------|--------------:|----------------:|-----------:|
+| `img_kb` mobile            | 888 KB        | **50 KB**       | **−94%**   |
+| `img_kb` desktop           | 888 KB        | **174 KB**      | **−80%**   |
+| Mobile TBT p50             | 62 ms         | 50 ms           | −19%       |
+| Mobile LCP p50             | 1816 ms       | 1792 ms         | −1%        |
+| Mobile Ready p50           | 2052 ms       | 2041 ms         | −1%        |
+
+Ready/LCP movement on mobile is small because mobile cold-anon is
+JS-parse-bound on Moto G4 (Phase 1 territory); the WebP win lands
+primarily on **bytes-over-the-wire** (~838 KB saved per cold mobile
+visit on 4G).
 
 ---
 
