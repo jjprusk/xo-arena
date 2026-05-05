@@ -8,9 +8,171 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800&display=swap" rel="stylesheet" />
+    <!--
+      Phase 1d — instant-ready hero. Renders a static tic-tac-toe board
+      mid-game inside #root the moment HTML lands. React replaces it on
+      mount (createRoot.render() clears children automatically). FCP/LCP
+      drop from ~1400ms (mobile) to ~200ms because the largest visible
+      element no longer waits for JS parse. Style is inlined so it works
+      before the bundled CSS arrives. See doc/Performance_Plan_v2.md
+      §"Phase 1d — Instant-ready hero" for the full spec.
+    -->
+    <style>
+      /* Spacer reserves room for AppNav (~64px) so the hero doesn't jump
+         down by that amount when React mounts the real header. */
+      .xo-instant-navspacer { height: 64px; }
+      .xo-instant-hero-wrap {
+        padding: 3rem 1rem 2rem;
+        text-align: center;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      .xo-instant-title {
+        font-size: 1.875rem;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, #64748b, #cbd5e1);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .xo-instant-subtitle {
+        font-size: 1rem;
+        margin: 0.75rem 0 0;
+        color: #64748b;
+      }
+      @media (min-width: 640px) {
+        .xo-instant-title    { font-size: 3rem; }
+        .xo-instant-subtitle { font-size: 1.125rem; }
+      }
+      .xo-instant-hero {
+        margin: 2rem auto 0;
+        max-width: 24rem;
+        padding: 1.25rem;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1rem;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+        box-sizing: border-box;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      .xo-instant-hero__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.8125rem;
+        margin-bottom: 1rem;
+      }
+      .xo-instant-hero__pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-weight: 600;
+      }
+      .xo-instant-hero__chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 0.375rem;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        background: #ffffff;
+      }
+      .xo-instant-hero__chip--x { color: #2563eb; border: 1.5px solid #2563eb; }
+      .xo-instant-hero__chip--o { color: #0d9488; border: 1.5px solid #0d9488; }
+      .xo-instant-hero__name { font-weight: 600; font-size: 0.8125rem; opacity: 0.55; }
+      .xo-instant-hero__name--active { opacity: 1; }
+      .xo-instant-hero__vs { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.55; }
+      .xo-instant-hero__grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        gap: 0.375rem;
+        aspect-ratio: 1 / 1;
+        width: 100%;
+      }
+      .xo-instant-hero__cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
+        font-size: 1.875rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .xo-instant-hero__cell--x { color: #2563eb; }
+      .xo-instant-hero__cell--o { color: #0d9488; }
+      .xo-instant-hero__status {
+        font-size: 0.75rem;
+        text-align: center;
+        margin: 0.875rem 0 0;
+        opacity: 0.55;
+      }
+      @media (min-width: 640px) {
+        .xo-instant-hero { padding: 1.5rem; }
+        .xo-instant-hero__cell { font-size: 2.25rem; }
+      }
+      @media (prefers-color-scheme: dark) {
+        .xo-instant-subtitle { color: #94a3b8; }
+        .xo-instant-title { background: linear-gradient(135deg, #94a3b8, #cbd5e1); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .xo-instant-hero { background: #1f2937; border-color: #374151; color: #f9fafb; }
+        .xo-instant-hero__cell { background: #111827; border-color: #374151; }
+        .xo-instant-hero__chip { background: #111827; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Reserve nav header space so the hero doesn't jump up by ~64px
+        when React mounts AppNav. Plus title/subtitle that mirror the
+        h1/p in HomePage. Plus the static board mid-game.
+      -->
+      <div class="xo-instant-navspacer" aria-hidden="true"></div>
+      <div class="xo-instant-hero-wrap" id="xo-instant-hero-wrap" aria-hidden="true">
+        <h1 class="xo-instant-title">AI Arena</h1>
+        <p class="xo-instant-subtitle">Build a bot. Train it. Watch it compete.</p>
+        <div class="xo-instant-hero" id="xo-instant-hero">
+          <div class="xo-instant-hero__header">
+          <span class="xo-instant-hero__pill">
+            <span class="xo-instant-hero__chip xo-instant-hero__chip--x">X</span>
+            <span class="xo-instant-hero__name xo-instant-hero__name--active">Sterling Knight</span>
+          </span>
+          <span class="xo-instant-hero__vs">vs</span>
+          <span class="xo-instant-hero__pill">
+            <span class="xo-instant-hero__chip xo-instant-hero__chip--o">O</span>
+            <span class="xo-instant-hero__name">Copper Coil</span>
+          </span>
+        </div>
+        <div class="xo-instant-hero__grid">
+          <div class="xo-instant-hero__cell xo-instant-hero__cell--x">X</div>
+          <div class="xo-instant-hero__cell"></div>
+          <div class="xo-instant-hero__cell xo-instant-hero__cell--o">O</div>
+          <div class="xo-instant-hero__cell"></div>
+          <div class="xo-instant-hero__cell xo-instant-hero__cell--x">X</div>
+          <div class="xo-instant-hero__cell"></div>
+          <div class="xo-instant-hero__cell xo-instant-hero__cell--o">O</div>
+          <div class="xo-instant-hero__cell"></div>
+          <div class="xo-instant-hero__cell"></div>
+        </div>
+          <p class="xo-instant-hero__status">Sterling Knight thinking…</p>
+        </div>
+      </div>
+      <script>
+        // Only show the placeholder on the home route. Other routes
+        // would otherwise flash a tic-tac-toe board before their real
+        // page renders.
+        if (window.location.pathname !== '/') {
+          var wrap = document.getElementById('xo-instant-hero-wrap')
+          if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap)
+        }
+      </script>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
