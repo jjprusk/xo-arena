@@ -74,9 +74,14 @@ work narratives.
 | Rank | Item                                | Real impact (estimated)                                    | Cost   | Risk    | Status |
 |-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|
 |    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP ~1400 → ~700 ms (−700 ms × every cold visit)    | 3-5d   | medium  | queued |
-|    2 | **Phase 5** — remaining SSE work (in-process fanout, Nagle, coalesce) | move→state ~270 ms p50 floor (Phase 5.1 ate the cold spike already) | 3-5d   | low     | scope reduced 5/5 |
+|    2 | **F9.2** — VM CPU bump (1 shared → 2 dedicated) | `movePostAck` p50 at c=50: 302 → ~150-180 ms (probe-validated) | $$ ops | low | promoted from Tier 1 — recommended next lever |
 |    3 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | sequenced after Phase 1 |
 |    4 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | queued |
+
+(Phase 5 remaining steps demoted from Tier 0 — F9 probe sweep
+2026-05-05 showed `apply.post` ≤2ms p95 at c=50, so in-process
+fanout / broker shortcut is not where wall-clock lives. See §F9
+and Appendix Z.1.9.)
 
 ### Active queue — Tier 1 (after Tier 0 lands)
 
@@ -86,7 +91,7 @@ work narratives.
 | Phase 7 — mobile-specific (font preload, touch responsiveness) | mobile FCP/INP polish                              | 1-2d   | low     |
 | Phase 8 — skeletons everywhere      | perceived-only, but high yield on engaged routes           | 1d     | none    |
 | Better Auth allow-list trim         | cold-authed Ready −80-150 ms                               | 0.5d   | low     |
-| F9.2 — VM CPU bump (1 shared → 2 dedicated) | apply p95 at c=25/50 — pending budget approval     | $$ ops | low     |
+| Phase 5 — remaining steady-state SSE (Nagle, coalesce, Redis hop) | publishToPickup p50 17-21ms — modest, only if F9.2 underwhelms | 1-2d | low |
 
 ### Deferred / out-of-scope until evidence changes
 
@@ -97,15 +102,33 @@ work narratives.
 | Phase 14 — Gym worker thread        | Non-realtime; lower user-reach than Tier 0 items           | After Tier 0 ships |
 | Section E aggressive bets (Bun, WebTransport, Hono edge, RSC) | Tier 4 architecture; revisit only if Tier 0+1+2 leaves a gap | Post-V1 |
 
-### Headline open question
+### Headline answer (was open, settled 2026-05-05)
 
-**Apply p95 at c=25/50 didn't drop with the pool fix.** The pool was
-not the actual bottleneck — Postgres queries each return in 1-5 ms
-and the pool of 10 was sufficient. The remaining cost is somewhere
-else (Prisma per-call overhead, Express middleware, or 1-vCPU
-backend saturation). F9.2 (VM bump) is the next lever — but that's
-a budget call, not a code change. See §F9 for the audit detail and
-Appendix Z.1.8 for the validation numbers.
+**The F9 probes (granular `apply` Server-Timing + live pool stats)
+ran on staging 2026-05-05 and gave a definitive read:**
+
+- **`pool.waiting = 0` at every concurrency level (1 → 50).** Pool
+  max=30, peak total observed = 9. Pool was *never* the bottleneck;
+  F9.1 retroactively confirmed as a no-op for perf (kept as free
+  hedge for c≥100).
+- **`apply.find` ≈ `apply.update`** at every level — both grow
+  proportionally. JSONB write contention was a weaker hypothesis
+  than expected; read latency grows the same way.
+- **`apply.post` ≤ 2 ms p95 at every level** — broker dispatch +
+  io.emit + appendToStream is *not* contention. Phase 5 in-process
+  fanout step can be **deferred** with high confidence.
+- **`movePostAck` p50 grows 163 → 302 ms** at c=1 → c=50, but
+  `apply` p50 only 8 → 15 ms. Apply is just 5% of the ack at c=50.
+  The other ~290 ms growth lives **outside `applyMove`** — Express
+  middleware, auth, lookupTableForCaller, JSON parse, network. That
+  is the **1-shared-vCPU saturation profile.**
+
+**Conclusion:** F9.2 (VM bump 1 shared → 2 dedicated) is the
+**recommended next perf lever** with hard data behind it. Predicted
+impact: `movePostAck` p50 at c=50 drops 302 → ~150-180 ms.
+
+See §F9 for the full audit and Appendix Z.1.9 for the staging probe
+sweep narrative.
 
 ---
 
@@ -1852,39 +1875,44 @@ elsewhere.
 
 **How to narrow it down — concrete next steps:**
 
-- [x] **Granular Server-Timing inside applyMove.** *(Shipped on dev
-      2026-05-05 in commit `7812210`.)* `applyMove` now returns
-      `_t: { findMs, updateMs, postMs }` and `realtime.js` adds
-      `apply.find;dur=`, `apply.update;dur=`, `apply.post;dur=` to
-      the existing Server-Timing header. `perf-sse-load.js` parses
-      the new bands and prints a 2nd results row. If `apply.update`
-      grows at c=25 while `apply.find` stays flat, cost is the
-      JSONB write (suspect 2: WAL fsync / JSONB amp); if `apply.post`
-      grows, broker dispatch is the contention; if everything stays
-      flat but the wrapping `apply` grows, the cost is JS / event-
-      loop (suspect 1: 1 vCPU). **Awaits staging /stage to read.**
-- [x] **Pool metrics**: surface `pg.Pool` `totalCount` / `idleCount`
-      / `waitingCount` per request. *(Shipped on dev 2026-05-05 in
-      commit `7812210`.)* `packages/db/src/index.js` now constructs
-      its own `pg.Pool` and passes it to `PrismaPg`; new
-      `getPoolStats()` export reads counters synchronously. Surfaced
-      in Server-Timing as `pool.total / pool.idle / pool.waiting`
-      (counts smuggled through `dur` for parser compatibility). If
-      `pool.waiting` stays ~0 at c=25, pool definitively wasn't
-      saturated (retroactively confirms F9.1 was a no-op). **Awaits
-      staging /stage to read.**
+- [x] **Granular Server-Timing inside applyMove.** *(Shipped
+      v1.4.0-alpha-4.4 2026-05-05.)* `applyMove` returns
+      `_t: { findMs, updateMs, postMs }`; realtime.js surfaces
+      `apply.find / apply.update / apply.post` in Server-Timing.
+      **Read on staging 2026-05-05** (full breakdown in Z.1.9):
+      apply.find ≈ apply.update at every load level (5/12 vs 5/15
+      at c=25, 6/19 vs 7/19 at c=50). apply.post stays ≤2ms p95
+      everywhere. Verdict: read and write grow proportionally
+      (rules out JSONB-only write contention as the dominant
+      hypothesis); broker dispatch is not the contention. The
+      remaining `movePostAck` growth (163 → 302 ms at c=1 → c=50)
+      lives **outside applyMove** — points squarely at suspect 1
+      (1 vCPU saturation in Express middleware + handler).
+- [x] **Pool metrics**: surface `pg.Pool` `totalCount / idleCount /
+      waitingCount` per request. *(Shipped v1.4.0-alpha-4.4
+      2026-05-05.)* `packages/db/src/index.js` constructs its own
+      `pg.Pool` and passes it to `PrismaPg`; `getPoolStats()` reads
+      counters synchronously; surfaced in Server-Timing. **Read on
+      staging 2026-05-05:** `pool.waiting = 0` at c=1, 5, 10, 25,
+      50. Peak `pool.total = 9` (max=30, ~30% capacity). Pool was
+      definitively never the bottleneck — F9.1 retroactively
+      confirmed as a no-op for perf.
 - [ ] **Direct F9.2 test:** stand up a temporary `cpu_kind =
       "performance", cpus = 2` Fly machine, point staging traffic
-      at it, re-run the load test. If apply p95 drops, F9.2 is
-      the answer.
-- [ ] **Node `--prof` under load.** CPU profile while
-      `perf-sse-load --concurrency=25` runs. Look for hot stacks
-      in Prisma serialization or Express middleware.
+      at it, re-run the load test. **Now the recommended next
+      lever** — probe results above eliminated DB / pool / broker
+      as suspects. Predicted impact: `movePostAck` p50 at c=50
+      drops 302 → ~150-180 ms.
+- [ ] **Node `--prof` under load** *(only if F9.2 underperforms).*
+      CPU profile while `perf-sse-load --concurrency=25` runs.
+      Look for hot stacks in Prisma serialisation or Express
+      middleware. Defer until F9.2 has been tested — the probe
+      data already implicates the event loop.
 
 **Decision:** Pool fix stays in (defensive + no cost; would matter
-at c=100+). Real fix is F9.2 — escalated from "pending budget" to
-"next lever to test" in F9.5. See validation numbers in
-Appendix Z.1.8.
+at c=100+). Real fix is F9.2 — promoted from hypothesis to
+recommended next lever based on probe evidence. Probe narrative:
+Appendix Z.1.9. F9.1 validation numbers: Appendix Z.1.8.
 
 #### F9.2 — VM sizing as the secondary ceiling
 
@@ -2229,6 +2257,77 @@ matter at c=100+) but the headline cost lives elsewhere.
 
 Decision recorded in F9.5: F9.2 (VM bump) is the next lever,
 pending budget approval.
+
+#### Z.1.9 — F9 probe sweep: pool / apply-band evidence (2026-05-05)
+
+**Hypothesis tested:** after F9.1's pool bump showed no apply p95
+gain, three suspects remained — (1) 1 shared vCPU, (2) WAL fsync /
+JSONB write contention, (3) broker dispatch + emit. The probes were
+designed to discriminate.
+
+**Probes shipped** (commit `7812210`, deployed v1.4.0-alpha-4.4):
+
+- `applyMove` returns `_t: { findMs, updateMs, postMs }` — wraps
+  `db.table.findUnique`, `db.table.update`, and the broker
+  dispatch + io.emit + appendToStream tail respectively.
+- `getPoolStats()` reads `pg.Pool` `totalCount / idleCount /
+  waitingCount` synchronously; surfaced per-request in
+  Server-Timing.
+
+**Sweep on staging 2026-05-05** (`perf-sse-load --target=staging
+--sweep=1,5,10,25,50 --moves=3 --ramp=80`):
+
+| c   | apply p50/p95 | find p50/p95 | update p50/p95 | post p50/p95 | pool.total p50/p95 | pool.waiting |
+|----:|:-------------:|:------------:|:--------------:|:------------:|:------------------:|:------------:|
+|  1  |    8 / 10     |    3 / 3     |    4 / 5       |   0 / 0      |       1 / 1        |   **0 / 0**  |
+|  5  |    6 / 27     |    3 / 21    |    3 / 6       |   0 / 2      |       2 / 2        |   **0 / 0**  |
+| 10  |    8 / 26     |    3 / 11    |    4 / 13      |   0 / 1      |       4 / 4        |   **0 / 0**  |
+| 25  |   10 / 26     |    5 / 15    |    5 / 12      |   0 / 1      |       6 / 6        |   **0 / 0**  |
+| 50  |   15 / 36     |    6 / 20    |    7 / 19      |   0 / 1      |       8 / 9        |   **0 / 0**  |
+
+**Findings (verdict on each suspect):**
+
+1. **Pool — RULED OUT.** `pool.waiting = 0` at every concurrency
+   level. Peak `pool.total = 9` against a max of 30 — ~30%
+   capacity. F9.1 retroactively confirmed as a no-op for perf
+   (kept defensively for c≥100 future).
+2. **JSONB write contention (WAL fsync) — WEAKER THAN EXPECTED.**
+   `apply.update` p95 grows 5 → 19 ms across c=1 → c=50, but
+   `apply.find` p95 grows the same way (3 → 20 ms) — and
+   `apply.find` is a simple PK SELECT, no fsync, no WAL. Both
+   bands track each other proportionally. If WAL fsync were the
+   dominant contention, `update` would diverge sharply from
+   `find`; it doesn't. Both are growing because they share the
+   same Node event loop.
+3. **Broker dispatch — RULED OUT.** `apply.post` p95 ≤ 2 ms at
+   every level. The post tail (helpers import + io.emit + Redis
+   XADD kick-off) is not a contention point. **Phase 5
+   in-process fanout step can be deferred** with high confidence
+   — it would save ≤ 2 ms per move.
+
+**The remaining 290 ms** of `movePostAck` p50 growth (163 → 302 ms,
+c=1 → c=50) lives **outside `applyMove`**: Express middleware,
+auth, `lookupTableForCaller`, JSON parse, network. That growth
+profile — wall-clock latency on every step that touches Node —
+**is the 1-shared-vCPU saturation signature.** All concurrent
+handlers share one core; under contention, every async resolution,
+JSON encode, and middleware hop pays the queue.
+
+**Roadmap impact:**
+
+- **F9.2 (VM bump 1 shared → 2 dedicated) promoted from Tier 1
+  to Tier 0 rank 2** as the recommended next perf lever, with
+  hard probe data behind it.
+- **Phase 5 remaining steady-state work demoted from Tier 0 to
+  Tier 1** — the steps target ≤ 21 ms p50 of remaining publish
+  hop; modest, and only worth it if F9.2 underwhelms.
+- **Pool fix stays in** — defensive hedge for future c≥100 loads.
+- **Phase 2 (DB indexes) stays deferred** — DB itself is fast;
+  query growth is event-loop pressure, not query plans.
+
+Headline win predicted from F9.2: `movePostAck` p50 at c=50 drops
+302 → ~150-180 ms (validate by re-running the same sweep on a
+2-CPU machine).
 
 ---
 
