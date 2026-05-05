@@ -37,8 +37,8 @@ import { fetchAuthToken } from './helpers.js'
 import { netCleanupByEmailPrefix } from './dbScript.js'
 import { snapshotJourney, assertJourneyTransition } from './journeyAssert.js'
 
+const LANDING_URL   = process.env.LANDING_URL || 'http://localhost:5174'
 const EMAIL_PREFIX  = 'cup+'
-const BACKEND_URL   = process.env.BACKEND_URL || 'http://localhost:3000'
 const SUBMIT_GUARD_MS = 3500
 
 function freshEmail() {
@@ -68,7 +68,7 @@ async function signUp(page, { email, password, displayName }) {
 }
 
 async function createQuickBot(request, token, displayName) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/quick`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { name: displayName, persona: 'aggressive' },
   })
@@ -77,7 +77,7 @@ async function createQuickBot(request, token, displayName) {
 }
 
 async function fetchUserId(request, token) {
-  const sync = await request.post(`${BACKEND_URL}/api/v1/users/sync`, {
+  const sync = await request.post(`${LANDING_URL}/api/v1/users/sync`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!sync.ok()) throw new Error(`users/sync failed: ${sync.status()}`)
@@ -85,7 +85,7 @@ async function fetchUserId(request, token) {
 }
 
 async function fetchJourney(request, token) {
-  const res = await request.get(`${BACKEND_URL}/api/v1/guide/preferences`, {
+  const res = await request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) return []
@@ -129,11 +129,11 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const displayName = `Cup ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const token  = await fetchAuthToken(context.request, LANDING_URL)
     const userId = await fetchUserId(context.request, token)
     await createQuickBot(context.request, token, `CupBot ${Math.random().toString(36).slice(2, 6)}`)
 
-    const before = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const before = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     expect(before.completedSteps.includes(6), 'step 6 must not be pre-credited').toBe(false)
 
     await page.goto('/profile?action=cup')
@@ -171,7 +171,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const completed = await pollForStep(context.request, token, 6, 30_000)
     expect(completed).toEqual(expect.arrayContaining([6]))
 
-    const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const after = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     assertJourneyTransition({
       prev: before, next: after,
       label: 'step 6 via /profile?action=cup',
@@ -194,7 +194,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const displayName = `Cup2 ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const token  = await fetchAuthToken(context.request, LANDING_URL)
     const userId = await fetchUserId(context.request, token)
     await createQuickBot(context.request, token, `CupBot2 ${Math.random().toString(36).slice(2, 6)}`)
 
@@ -206,7 +206,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     // their own dedicated specs (guide-onboarding, journey-train-modal,
     // journey-spar). What this spec uniquely proves is that *clicking*
     // the cup CTA from the rendered panel lands on a tournament page.
-    const patchRes = await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+    const patchRes = await context.request.patch(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5], dismissedAt: null } },
     })
@@ -227,7 +227,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const cupLink = guidePanel.getByRole('link', { name: /Enter Curriculum Cup/i })
     await expect(cupLink).toBeVisible({ timeout: 10_000 })
 
-    const before = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const before = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     await cupLink.click()
 
     await page.waitForURL(/\/tournaments\/[^/?]+\?follow=/, { timeout: 15_000 })
@@ -240,7 +240,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const completed6 = await pollForStep(context.request, token, 6, 30_000)
     expect(completed6).toEqual(expect.arrayContaining([6]))
 
-    const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const after = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     assertJourneyTransition({
       prev: before, next: after,
       label: 'step 6 via Guide-panel CTA click',
@@ -294,19 +294,19 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const displayName = `Cup4 ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const token  = await fetchAuthToken(context.request, LANDING_URL)
     const userId = await fetchUserId(context.request, token)
     await createQuickBot(context.request, token, `CupBot4 ${Math.random().toString(36).slice(2, 6)}`)
 
     // Prefire steps 1-5 — the focus of this spec is post-step-6 mechanics,
     // and the leading steps each have their own dedicated specs.
-    const patchRes = await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+    const patchRes = await context.request.patch(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5], dismissedAt: null } },
     })
     expect(patchRes.ok()).toBeTruthy()
 
-    const before = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const before = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     expect(before.completedSteps).toEqual(expect.arrayContaining([1, 2, 3, 4, 5]))
     expect(before.completedSteps).not.toContain(7)
 
@@ -348,7 +348,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     expect(afterStep7Steps, `step 7 not credited within 240s of cup start (saw [${afterStep7Steps.join(',')}])`).toEqual(expect.arrayContaining([7]))
 
     // The full transition: step 7 done, +50 TC granted, phase flipped.
-    const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const after = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     assertJourneyTransition({
       prev: before, next: after,
       label: 'cup completion → step 7 + +50 TC + specialize',
@@ -485,12 +485,12 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const displayName = `Cup5 ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     await createQuickBot(context.request, token, `CupBot5 ${Math.random().toString(36).slice(2, 6)}`)
 
     // Mid-cup state: steps 1-6 complete, step 7 pending. JourneyCard's
     // nextStep = step 7.
-    const patchRes = await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+    const patchRes = await context.request.patch(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5, 6], dismissedAt: null } },
     })
@@ -534,16 +534,16 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const displayName = `Cup6 ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const token  = await fetchAuthToken(context.request, LANDING_URL)
     const userId = await fetchUserId(context.request, token)
     await createQuickBot(context.request, token, `CupBot6 ${Math.random().toString(36).slice(2, 6)}`)
 
-    await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+    await context.request.patch(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5], dismissedAt: null } },
     })
 
-    const before = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const before = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
 
     // Start the cup.
     await page.goto('/profile?action=cup')
@@ -576,7 +576,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     expect(afterStep7, `step 7 must be credited even when client is offline (saw [${afterStep7.join(',')}])`).toEqual(expect.arrayContaining([7]))
 
     // Phase + credits transitioned correctly.
-    const after = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const after = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     assertJourneyTransition({
       prev: before, next: after,
       label: 'mid-cup refresh → step 7 + +50 TC + specialize',
@@ -619,11 +619,11 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     const displayName = `Cup7 ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const token  = await fetchAuthToken(context.request, LANDING_URL)
     const userId = await fetchUserId(context.request, token)
     await createQuickBot(context.request, token, `CupBot7 ${Math.random().toString(36).slice(2, 6)}`)
 
-    await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+    await context.request.patch(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { journeyProgress: { completedSteps: [1, 2, 3, 4, 5], dismissedAt: null } },
     })
@@ -636,7 +636,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     expect(firstCupId).toBeTruthy()
 
     await pollForStep(context.request, token, 7, 240_000)
-    const afterFirstCup = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const afterFirstCup = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     expect(afterFirstCup.completedSteps, `step 7 not credited within 240s of first cup start (saw [${afterFirstCup.completedSteps.join(',')}])`).toEqual(expect.arrayContaining([7]))
     expect(afterFirstCup.phase).toBe('specialize')
     const tcAfterFirstCup = afterFirstCup.creditsTc
@@ -664,7 +664,7 @@ test.describe('Curriculum step 6 — UI dropoff regression', () => {
     // soak so a buggy bridge would have fired the credit again.
     await page.waitForTimeout(60_000)
 
-    const afterSecondCup = await snapshotJourney(context.request, { backendUrl: BACKEND_URL, token, userId })
+    const afterSecondCup = await snapshotJourney(context.request, { backendUrl: LANDING_URL, token, userId })
     // completedSteps is a Set in deriveCurrentPhase; the snapshot stores
     // sorted unique ints. Step 7 should still be present exactly once
     // (snapshotJourney already deduplicates) and creditsTc must not have

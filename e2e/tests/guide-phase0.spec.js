@@ -28,7 +28,6 @@ import { test, expect } from '@playwright/test'
 import { fetchAuthToken } from './helpers.js'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
 
 // SignInModal has a 3-second submit-too-fast guard (anti-bot). Real users wait
 // at least that long while reading the form; Playwright fills it in <100ms, so
@@ -158,7 +157,7 @@ test.describe('Phase 0 — guest progress credits to new account', () => {
 
     // Server-side: pull the JWT and read journey preferences. Steps 1 and 2
     // must be present in completedSteps.
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     const res   = await context.request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}` },
     })

@@ -5,21 +5,27 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ## Known Critical Bugs
 
-### 🔴 E2E journey suite cannot run against staging or production (cross-origin auth) — logged 2026-05-05
+### ✅ E2E journey suite cross-origin auth — fixed 2026-05-05
 
-**Symptom:** `e2e/tests/guide-onboarding.spec.js` (and any other journey/guide suite using `signUp` + `fetchAuthToken`) fails immediately on staging/prod with `No token in response — user may not be signed in on this context` from `helpers.js:111`.
+**Original symptom:** `e2e/tests/guide-onboarding.spec.js` (and 8 sibling specs) failed immediately on staging/prod with `No token in response — user may not be signed in on this context` from `helpers.js:111`. Test signed up on `xo-landing-*.fly.dev` (cookie on landing origin); `fetchAuthToken` then hit `${BACKEND_URL}/api/token` on `xo-backend-*.fly.dev` — different subdomain → no cookie → 401.
 
-**Root cause:** the test signs up via the landing UI (`page.goto('/')` on `xo-landing-*.fly.dev`) — Better Auth sets the session cookie on the **landing** origin. `fetchAuthToken` then calls `${BACKEND_URL}/api/token` directly on the **backend** origin (`xo-backend-*.fly.dev`). Different fly subdomains → cookies are not sent → 401, no token, every downstream Bearer-auth call fails.
+**Fix:** route every test API call through the landing host so the existing `landing/server.js` proxy (`pathFilter: ['/api', '/socket.io']`) carries the cookie + forwards to backend. Replaced `BACKEND_URL` with `LANDING_URL` across all 9 affected specs (88 references). Backend CORS already allows the landing origin via `FRONTEND_URL`; no backend changes needed. The working pattern was already proven in `smoke.journey.spec.js`.
 
-On localhost both services share `localhost`, so cookies leak across ports and the test "just works." The cross-origin gap was masked by local dev convenience and surfaced the first time we tried `/promote` step "complete journey test on production" (2026-05-05, v1.4.0-alpha-4.5).
+**Verification:** `guide-hook` and `guide-onboarding` against `xo-landing-staging.fly.dev` reach business-logic assertions (steps 1-3 of the 7-step walkthrough credit successfully); auth handshake is no longer the blocker.
 
-**Impact:** the `/stage` and `/promote` flows have no automated journey verification on the deployed environment. Smoke 12/12 covers surface load + version, but the 7-step Hook + Curriculum walkthrough is unverified post-deploy unless a human clicks through `V1_Acceptance.md`.
+**Files patched:** `journey-cup` · `guide-hook` · `guide-onboarding` · `guide-ui-states` · `guide-curriculum` · `journey-spar` · `journey-train-modal` · `journey-spotlight` · `guide-phase0`.
 
-**Likely fix (small):** in `guide-onboarding.spec.js` (and siblings), point `fetchAuthToken` at `LANDING_URL` instead of `BACKEND_URL`. Landing's `server.js` already proxies `/api/*` → backend; cookies match landing's origin so the proxied `/api/token` request authenticates correctly. The remaining ~30 backend API calls all use Bearer auth, which works cross-origin if backend CORS allows it (verify after the patch).
+### Open downstream journey-suite issues surfaced during the cross-origin fix (logged 2026-05-05)
 
-**Effort:** 1 line + verify CORS lets the rest through; ~30–60 min if CORS is permissive, half a day if it isn't and we need to either tighten the proxy coverage or add CORS allowances.
+These are not auth — they're the first time the suite has actually exercised business logic against deployed staging. Each is a separate, smaller item:
 
-**Why critical:** every release ships without journey verification on the deployed surface. The F10 SignInModal change in v1.4.0-alpha-4.5 is exactly the kind of UI tweak this test would catch; we promoted it on smoke + manual eyes only.
+- **`guide-hook` step 1:** `GET /api/v1/guide/preferences` returns non-2xx for a freshly-signed-up user immediately after a PvAI win. May be a race (user-row write vs. preferences-read), may be a real bug. Repro: `BASE_URL=https://...staging.fly.dev npx playwright test guide-hook -g "step 1"`.
+- **`guide-hook` step 2:** demo-watch credit doesn't land within the polling window. May be a slow-machine bot-game completion timing issue or a real `tablePresence`/credit pipeline bug. Same repro pattern.
+- **`guide-hook` private-table filter:** demo `Table` row created with `isPrivate=true` still appears in `GET /api/v1/tables` (no `?mine=true`). Either backend filter regression or test expectation drift.
+- **`guide-onboarding` step 4 `train-guided`:** finalize returns `botModelType: 'minimax'` instead of expected `'qlearning'`. Either ML training pipeline didn't engage on staging, or the test expectation predates a change. `mlService` + `skillService` + `BotSkill` row inspection needed.
+- **Stale slug regex (fixed in same commit):** `guide-hook.spec.js:80` asserted `/^mt-/` but backend uses `nanoid(8)` (no prefix). Updated to `/^[A-Za-z0-9_-]{8}$/`. Mentioned here for completeness.
+
+**Why we now care about journey verification:** the `/stage` and `/promote` flows previously had no automated journey check on the deployed surface. Smoke 12/12 covers surface load + version, but the 7-step Hook + Curriculum walkthrough was unverified post-deploy. With auth unblocked, fixing the four items above turns journey verification into a real gate.
 
 ---
 
