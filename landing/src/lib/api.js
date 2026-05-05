@@ -35,6 +35,11 @@ export function cachedFetch(path, maxAgeMs = 5 * 60_000) {
   return { immediate, refresh }
 }
 
+// Phase 1c — module-level in-flight cache for `users.sync`. Keyed by token
+// so concurrent callers in the same render pass share one HTTP round-trip.
+// See `users.sync` below for the rationale + the perf doc §F11.4.
+const _syncInFlight = new Map() // token → Promise
+
 async function request(method, path, body, token) {
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
@@ -64,7 +69,22 @@ export const api = {
   delete: (path, token) => request('DELETE', path, null, token),
 
   users: {
-    sync:        (token)        => api.post('/users/sync', {}, token),
+    // Phase 1c — cold-authed orchestration cleanup. AppLayout fires two
+    // parallel effects on cold-authed first paint that both need a
+    // hydrated User row (`AppLayout.jsx:288` and `:439`). Without dedupe,
+    // each fired its own /users/sync round-trip — measured ~60ms p50
+    // wasted RTT (perf doc §F11.4, ~30% of cold-authed Ready). Cache the
+    // in-flight promise per token so concurrent callers share one
+    // request; clear on settle so retries refetch fresh.
+    sync:        (token)        => {
+      const key = token || ''
+      const existing = _syncInFlight.get(key)
+      if (existing) return existing
+      const promise = api.post('/users/sync', {}, token)
+        .finally(() => { _syncInFlight.delete(key) })
+      _syncInFlight.set(key, promise)
+      return promise
+    },
     getProfile:  (id)           => api.get(`/users/${id}`),
     stats:       (id)           => api.get(`/users/${id}/stats`),
     eloHistory:  (id)           => api.get(`/users/${id}/elo-history`),

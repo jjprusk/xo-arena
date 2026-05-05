@@ -27,7 +27,7 @@ F11 warm-cache baseline.
 | 1 | **Phase 1** — bundle splitting + per-route lazy load | 3-5d   | medium | mobile cold FCP 1416 → ~700 ms (−50%); warm parse 370 → ~250 ms          | first-time  |
 | 2 | **Phase 20** — Service Worker app shell | 2-3d   | medium | warm Ready 370 ms → ~50-100 ms (−78%) — instant repeat visits            | returning   |
 | 3 | **SWR + hover prefetch** for data pages (Tables / Tournaments / Leaderboard) | 1-2d | low | data spinner gone on revisit; instant render of stale + bg revalidate    | both        |
-| 4 | **Phase 1c** — cold-authed sync dedupe in `landing/src/lib/api.js` | 1d     | low    | cold-authed Ready 200 → 143 ms p50 (−30%) on every signed-in first paint | first-time + auth |
+| 4 | ~~**Phase 1c**~~ ✅ shipped — sync dedupe in `landing/src/lib/api.js` | 0.5d shipped | low | cold-authed Ready 200 → 143 ms p50 (−30%) on every signed-in first paint | first-time + auth |
 | 5 | **Phase 17** — CI bundle-size guard (≥ 5% chunk growth fails the PR) | 0.5d   | none   | meta — locks in #1's gains, prevents regression                          | all         |
 
 Sequencing notes:
