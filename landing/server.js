@@ -55,7 +55,17 @@ app.use(backendProxy)
 app.use(express.static(dist, {
   maxAge: '1y',
   setHeaders(res, filePath) {
-    if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache')
+    if (filePath.endsWith('index.html')) {
+      // Always re-validate the entry HTML so deploys take effect immediately.
+      res.setHeader('Cache-Control', 'no-cache')
+    } else if (filePath.endsWith('sw.js')) {
+      // Service worker must update on each visit — never cache.
+      res.setHeader('Cache-Control', 'no-cache')
+    } else if (filePath.includes('/assets/')) {
+      // Vite emits content-hashed bundles under /assets/ — safe to mark
+      // immutable so browsers skip revalidation on hard reload. Phase 20.1.
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    }
   },
 }))
 app.get('*', (_req, res) => res.sendFile(join(dist, 'index.html')))
