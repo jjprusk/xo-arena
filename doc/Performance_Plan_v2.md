@@ -16,6 +16,37 @@ free play and tournament play.
 
 ---
 
+## Top 5 — what to focus on next
+
+The five highest-impact items in the active queue, real or perceived,
+sorted by (impact × user reach) ÷ effort. Updated 2026-05-05 after the
+F11 warm-cache baseline.
+
+| # | What                                | Effort | Risk   | Impact (measured / estimated)                                            | Cohort      |
+|--:|-------------------------------------|:------:|:------:|--------------------------------------------------------------------------|:-----------:|
+| 1 | **Phase 1** — bundle splitting + per-route lazy load | 3-5d   | medium | mobile cold FCP 1416 → ~700 ms (−50%); warm parse 370 → ~250 ms          | first-time  |
+| 2 | **Phase 20** — Service Worker app shell | 2-3d   | medium | warm Ready 370 ms → ~50-100 ms (−78%) — instant repeat visits            | returning   |
+| 3 | **SWR + hover prefetch** for data pages (Tables / Tournaments / Leaderboard) | 1-2d | low | data spinner gone on revisit; instant render of stale + bg revalidate    | both        |
+| 4 | ~~**Phase 1c**~~ ✅ shipped — sync dedupe in `landing/src/lib/api.js` | 0.5d shipped | low | cold-authed Ready 200 → 143 ms p50 (−30%) on every signed-in first paint | first-time + auth |
+| 5 | **Phase 17** — CI bundle-size guard (≥ 5% chunk growth fails the PR) | 0.5d   | none   | meta — locks in #1's gains, prevents regression                          | all         |
+
+Sequencing notes:
+
+- **Items 1 + 2 are independent** — Phase 1 helps first-time visitors, SW helps returning users. Both are Tier 0; ship in parallel by different sessions or back-to-back.
+- **Item 3 stacks on top of either** — works alone, doubles down with #2.
+- **Item 5 is gated on item 1 landing** — no point in a CI guard before the splits exist.
+- **F11.5 (RUM cohort segmentation) instruments the question of whether #1 or #2 hits more users**; until it lands enough data, sequencing #1 vs #2 is gut-feel.
+
+Deferred / not on the top 5:
+
+- F9.2 (VM CPU bump) — probe-validated as the right perf lever for backend-CPU contention but ~+$87/mo; revisit when traffic justifies.
+- Sign-in async UX expansion to SettingsPage / ResetPasswordPage — perceived-perf, ~10-20 min each but low traffic.
+- Phase 5 remaining steady-state SSE work — apply.post is ≤2 ms p95 at c=50, so the floor is fine.
+
+See "Roadmap at a glance" below for the full shipped / active / deferred picture, and §F11 for the warm-cache evidence behind this ranking.
+
+---
+
 ## Targets (binding budgets)
 
 Every page on Fly prod, p75 over a 7-day RUM window:
@@ -71,12 +102,32 @@ work narratives.
 
 ### Active queue — Tier 0 (next sprints)
 
-| Rank | Item                                | Real impact (estimated)                                    | Cost   | Risk    | Status |
-|-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|
-|    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP ~1400 → ~700 ms (−700 ms × every cold visit)    | 3-5d   | medium  | queued |
-|    2 | **Phase 5** — remaining SSE work (in-process fanout, Nagle, coalesce) | move→state ~270 ms p50 floor (Phase 5.1 ate the cold spike already) | 3-5d   | low     | scope reduced 5/5 |
-|    3 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | sequenced after Phase 1 |
-|    4 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | queued |
+**Cohort-aware sequencing (added 2026-05-05 after F11):** the
+warm-cache baseline showed returning-user mobile Ready already
+~370 ms vs cold-anon ~2050 ms. **Phase 1 is a first-time-visitor
+win**; the returning-user equivalent is **SW + SWR caching**.
+Both belong in Tier 0 with sequencing decided by which user pain
+we hit first.
+
+| Rank | Item                                | Real impact (measured / estimated)                         | Cost   | Risk    | Cohort | Status |
+|-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|:------:|
+|    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP cold ~1400 → ~700 ms; warm parse ~370 → ~250 ms | 3-5d   | medium  | first-time | queued |
+|    2 | **Phase 20** — Service Worker app shell | warm Ready 370 ms → ~50-100 ms (paint-only floor)        | 2-3d   | medium  | returning | **promoted from Tier 3** |
+|    3 | **SWR data caching + hover prefetch** (new — see §F11.4) | data pages: spinner-while-fetch → instant stale + bg revalidate | 1-2d | low | returning | filed |
+|    4 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | meta | sequenced after Phase 1 |
+|    5 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | first-time | queued |
+
+(Phase 5 remaining steps demoted from Tier 0 — F9 probe sweep
+2026-05-05 showed `apply.post` ≤2ms p95 at c=50, so in-process
+fanout / broker shortcut is not where wall-clock lives. See §F9
+and Appendix Z.1.9.)
+
+(F9.2 — VM CPU bump — **deferred 2026-05-05 on cost grounds.** The
+F9 probes proved it's the right perf lever, but performance-2x VMs
+add ~$87/mo across staging + prod. Revisit when traffic justifies
+it (sustained c≥25 in production telemetry) or when Fly's pricing
+changes. Until then, c≤25 staging perf is "good enough" — apply
+p95 26ms, movePostAck p50 ~220ms.)
 
 ### Active queue — Tier 1 (after Tier 0 lands)
 
@@ -86,7 +137,7 @@ work narratives.
 | Phase 7 — mobile-specific (font preload, touch responsiveness) | mobile FCP/INP polish                              | 1-2d   | low     |
 | Phase 8 — skeletons everywhere      | perceived-only, but high yield on engaged routes           | 1d     | none    |
 | Better Auth allow-list trim         | cold-authed Ready −80-150 ms                               | 0.5d   | low     |
-| F9.2 — VM CPU bump (1 shared → 2 dedicated) | apply p95 at c=25/50 — pending budget approval     | $$ ops | low     |
+| Phase 5 — remaining steady-state SSE (Nagle, coalesce, Redis hop) | publishToPickup p50 17-21ms — modest, only if F9.2 underwhelms | 1-2d | low |
 
 ### Deferred / out-of-scope until evidence changes
 
@@ -95,17 +146,43 @@ work narratives.
 | Phase 2 — DB indexes                | F9 audit found no missing indexes; query time <20 ms p95   | Apply p95 stays >50 ms after F9.2 |
 | Phase 6 — backend cold start        | Fly auto-stop disabled in iad; not the bottleneck          | If we re-enable auto-stop |
 | Phase 14 — Gym worker thread        | Non-realtime; lower user-reach than Tier 0 items           | After Tier 0 ships |
+| **F9.2 — VM CPU bump** (1 shared → 2 dedicated) | Probe-validated as the right lever, but ~+$87/mo across staging + prod for performance-2x. Current c≤25 staging perf "good enough" (apply p95 26 ms, movePostAck p50 ~220 ms). | Sustained c≥25 in prod telemetry, or pricing change |
 | Section E aggressive bets (Bun, WebTransport, Hono edge, RSC) | Tier 4 architecture; revisit only if Tier 0+1+2 leaves a gap | Post-V1 |
 
-### Headline open question
+### Headline answer (was open, settled 2026-05-05)
 
-**Apply p95 at c=25/50 didn't drop with the pool fix.** The pool was
-not the actual bottleneck — Postgres queries each return in 1-5 ms
-and the pool of 10 was sufficient. The remaining cost is somewhere
-else (Prisma per-call overhead, Express middleware, or 1-vCPU
-backend saturation). F9.2 (VM bump) is the next lever — but that's
-a budget call, not a code change. See §F9 for the audit detail and
-Appendix Z.1.8 for the validation numbers.
+**The F9 probes (granular `apply` Server-Timing + live pool stats)
+ran on staging 2026-05-05 and gave a definitive read:**
+
+- **`pool.waiting = 0` at every concurrency level (1 → 50).** Pool
+  max=30, peak total observed = 9. Pool was *never* the bottleneck;
+  F9.1 retroactively confirmed as a no-op for perf (kept as free
+  hedge for c≥100).
+- **`apply.find` ≈ `apply.update`** at every level — both grow
+  proportionally. JSONB write contention was a weaker hypothesis
+  than expected; read latency grows the same way.
+- **`apply.post` ≤ 2 ms p95 at every level** — broker dispatch +
+  io.emit + appendToStream is *not* contention. Phase 5 in-process
+  fanout step can be **deferred** with high confidence.
+- **`movePostAck` p50 grows 163 → 302 ms** at c=1 → c=50, but
+  `apply` p50 only 8 → 15 ms. Apply is just 5% of the ack at c=50.
+  The other ~290 ms growth lives **outside `applyMove`** — Express
+  middleware, auth, lookupTableForCaller, JSON parse, network. That
+  is the **1-shared-vCPU saturation profile.**
+
+**Conclusion:** F9.2 (VM bump 1 shared → 2 dedicated) is the
+**right next perf lever** with hard data behind it (predicted:
+`movePostAck` p50 at c=50 drops 302 → ~150-180 ms). **Deferred
+2026-05-05 on cost grounds** (~+$87/mo across staging + prod for
+performance-2x VMs). Current c≤25 staging perf is "good enough"
+(apply p95 26 ms, movePostAck p50 ~220 ms). Revisit when traffic
+sustains c≥25 in production telemetry, or when Fly's pricing
+shifts. The instrumentation stays — when we *do* re-test, the
+probes already wired in v1.4.0-alpha-4.4 will produce a clean
+before/after.
+
+See §F9 for the full audit and Appendix Z.1.9 for the staging probe
+sweep narrative.
 
 ---
 
@@ -1734,7 +1811,7 @@ synthetic blind spots, ranked by likely-to-find-real-issues:
 | 1 | **Cold-authed page-level perf**  | perf-v2 only does `cold-anon`. We have authed *endpoints* (p95) but not authed *pages* (Ready/FCP/LCP). | Phase 1c is scoped from endpoint math (200→143 ms p50). Actual cold-authed page Ready could be 300 ms slower than cold-anon for *all* signed-in users — we're guessing the win. | 1d     |
 | 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
 | 3 | **Live SSE under realistic load** *(closed)* | ~~`perf-sse-rtt` measures **one** move at a time, isolated.~~ Closed 2026-05-05 by `perf/perf-sse-load.js`. Findings rewrote Phase 5's scope — see §F4 above. tl;dr: fan-out load doesn't degrade `publishToPickup`; the 383 ms prod number is **cold-broker-wakeup** on the *first* move into a fresh table, and warm/under-load moves all complete in <60 ms p50. | closed |
-| 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
+| 4 | **Repeat-visit / warm cache** *(closed)* | ~~Only cold-anon context.~~ Closed 2026-05-05 by `perf-v2 --context=warm-anon`. Mobile median: Ready **2050 → 370ms (−82%)**, FCP **1424 → 136ms (−90%)**. JS bytes go from 495 KB → 0 (cached). The remaining 370ms warm Ready is parse + execute + index.html revalidation + initial data fetch. **Validates the user's intuition that Phase 1's revisit value is modest** — bytes are already cached on revisit; bundle splitting only chips at the parse residual. SW app shell + SWR data caching are higher-leverage levers for returning users. See §F11. | closed |
 | 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50, queries 1-5ms each); pool was hypothesised as the bottleneck but F9.1 deploy showed **no measurable improvement** — the wall-clock ceiling lives in CPU/fsync, not DB or pool. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
 | 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
 | 7 | **CLS (Cumulative Layout Shift)**| LCP is tracked, CLS is not.                                                                             | Hero swap, late-loading auth UI, modal reflows all *could* cause shift (budget ≤0.1 per Web Vitals). Probably fine but the not-knowing is itself the gap. | 0.5d   |
@@ -1852,39 +1929,44 @@ elsewhere.
 
 **How to narrow it down — concrete next steps:**
 
-- [x] **Granular Server-Timing inside applyMove.** *(Shipped on dev
-      2026-05-05 in commit `7812210`.)* `applyMove` now returns
-      `_t: { findMs, updateMs, postMs }` and `realtime.js` adds
-      `apply.find;dur=`, `apply.update;dur=`, `apply.post;dur=` to
-      the existing Server-Timing header. `perf-sse-load.js` parses
-      the new bands and prints a 2nd results row. If `apply.update`
-      grows at c=25 while `apply.find` stays flat, cost is the
-      JSONB write (suspect 2: WAL fsync / JSONB amp); if `apply.post`
-      grows, broker dispatch is the contention; if everything stays
-      flat but the wrapping `apply` grows, the cost is JS / event-
-      loop (suspect 1: 1 vCPU). **Awaits staging /stage to read.**
-- [x] **Pool metrics**: surface `pg.Pool` `totalCount` / `idleCount`
-      / `waitingCount` per request. *(Shipped on dev 2026-05-05 in
-      commit `7812210`.)* `packages/db/src/index.js` now constructs
-      its own `pg.Pool` and passes it to `PrismaPg`; new
-      `getPoolStats()` export reads counters synchronously. Surfaced
-      in Server-Timing as `pool.total / pool.idle / pool.waiting`
-      (counts smuggled through `dur` for parser compatibility). If
-      `pool.waiting` stays ~0 at c=25, pool definitively wasn't
-      saturated (retroactively confirms F9.1 was a no-op). **Awaits
-      staging /stage to read.**
+- [x] **Granular Server-Timing inside applyMove.** *(Shipped
+      v1.4.0-alpha-4.4 2026-05-05.)* `applyMove` returns
+      `_t: { findMs, updateMs, postMs }`; realtime.js surfaces
+      `apply.find / apply.update / apply.post` in Server-Timing.
+      **Read on staging 2026-05-05** (full breakdown in Z.1.9):
+      apply.find ≈ apply.update at every load level (5/12 vs 5/15
+      at c=25, 6/19 vs 7/19 at c=50). apply.post stays ≤2ms p95
+      everywhere. Verdict: read and write grow proportionally
+      (rules out JSONB-only write contention as the dominant
+      hypothesis); broker dispatch is not the contention. The
+      remaining `movePostAck` growth (163 → 302 ms at c=1 → c=50)
+      lives **outside applyMove** — points squarely at suspect 1
+      (1 vCPU saturation in Express middleware + handler).
+- [x] **Pool metrics**: surface `pg.Pool` `totalCount / idleCount /
+      waitingCount` per request. *(Shipped v1.4.0-alpha-4.4
+      2026-05-05.)* `packages/db/src/index.js` constructs its own
+      `pg.Pool` and passes it to `PrismaPg`; `getPoolStats()` reads
+      counters synchronously; surfaced in Server-Timing. **Read on
+      staging 2026-05-05:** `pool.waiting = 0` at c=1, 5, 10, 25,
+      50. Peak `pool.total = 9` (max=30, ~30% capacity). Pool was
+      definitively never the bottleneck — F9.1 retroactively
+      confirmed as a no-op for perf.
 - [ ] **Direct F9.2 test:** stand up a temporary `cpu_kind =
       "performance", cpus = 2` Fly machine, point staging traffic
-      at it, re-run the load test. If apply p95 drops, F9.2 is
-      the answer.
-- [ ] **Node `--prof` under load.** CPU profile while
-      `perf-sse-load --concurrency=25` runs. Look for hot stacks
-      in Prisma serialization or Express middleware.
+      at it, re-run the load test. **Now the recommended next
+      lever** — probe results above eliminated DB / pool / broker
+      as suspects. Predicted impact: `movePostAck` p50 at c=50
+      drops 302 → ~150-180 ms.
+- [ ] **Node `--prof` under load** *(only if F9.2 underperforms).*
+      CPU profile while `perf-sse-load --concurrency=25` runs.
+      Look for hot stacks in Prisma serialisation or Express
+      middleware. Defer until F9.2 has been tested — the probe
+      data already implicates the event loop.
 
 **Decision:** Pool fix stays in (defensive + no cost; would matter
-at c=100+). Real fix is F9.2 — escalated from "pending budget" to
-"next lever to test" in F9.5. See validation numbers in
-Appendix Z.1.8.
+at c=100+). Real fix is F9.2 — promoted from hypothesis to
+recommended next lever based on probe evidence. Probe narrative:
+Appendix Z.1.9. F9.1 validation numbers: Appendix Z.1.8.
 
 #### F9.2 — VM sizing as the secondary ceiling
 
@@ -1938,13 +2020,265 @@ here so we don't re-investigate them.
 1. ~~Ship F9.1 (`max: 30`).~~ **Done** v1.4.0-alpha-4.3. No
    measurable gain on apply p95 at the load levels tested
    (c=1 to c=25). Kept as a defensive change for future c=100+ load.
-2. **F9.2 (VM bump) is the actual next lever.** Promote from
-   "pending budget approval" — apply p95 at c=25 stayed at 46 ms
-   even with the pool fix, indicating the cost is in Node event-
-   loop contention on a single shared vCPU. Test cost: ~$15-30/mo
-   bump to performance-1× per backend machine.
-3. Phase 2 (DB indexes) stays deferred — F9.3 confirms DB itself
+2. ~~Ship F9 probes (granular apply Server-Timing + pool stats).~~
+   **Done** v1.4.0-alpha-4.4. Probes pinpointed 1-shared-vCPU as
+   the bottleneck and ruled out pool, broker dispatch, and JSONB
+   write contention. Detail in Appendix Z.1.9.
+3. **F9.2 (VM bump) — DEFERRED 2026-05-05 on cost grounds.**
+   Probe-validated as the right lever (predicted: movePostAck p50
+   c=50 drops 302 → ~150-180 ms), but performance-2x VMs add
+   ~+$87/mo across staging + prod (staging ~$31, prod 2 mach ~$62
+   vs current ~$5.82). Current c≤25 staging perf is acceptable
+   (apply p95 26 ms, movePostAck p50 ~220 ms). Re-promote when
+   prod telemetry shows sustained c≥25, or when Fly's pricing
+   changes. The probes stay wired — when we re-test, the
+   before/after will be clean.
+4. Phase 2 (DB indexes) stays deferred — F9.3 confirms DB itself
    is fast (apply queries < 20 ms p95 even at c=50).
+
+### F10 — Sign-in flow latency (2026-05-05)
+
+Triggered by user perception that "Better Auth feels slow." The
+existing `perf-backend-p95` measured *read* endpoints; sign-in is
+the write path the user actually feels.
+
+#### F10.1 — Measurement (extended `perf-backend-p95.js`)
+
+Added a fourth measurement tier — auth-flow endpoints — gated on
+`PERF_AUTH_EMAIL` + `PERF_AUTH_PASSWORD`. POST `/api/auth/sign-in/
+email` is included with reduced request count (default 50, since
+each sign-in writes a `BaSession` row).
+
+**Staging 2026-05-05 (REQUESTS=100, AUTH_REQUESTS=50, c=5):**
+
+| Endpoint                                | p50    | p95     | p99     | ok |
+|-----------------------------------------|-------:|--------:|--------:|---:|
+| GET /api/version                        |  53 ms | 188 ms  | 229 ms  | 99/100 |
+| GET /api/auth/get-session (anon)        |  55 ms | 132 ms  | 142 ms  | 100/100 |
+| GET /api/auth/get-session (authed)      |  51 ms | 119 ms  | 141 ms  | 100/100 |
+| GET /api/v1/leaderboard?game=xo         |  53 ms | 101 ms  | 137 ms  | 100/100 |
+| GET /api/tournaments                    |  67 ms | 205 ms  | 340 ms  | 100/100 |
+| **POST /api/auth/sign-in/email**        | **793 ms** | **1537 ms** | **1659 ms** | 50/50 |
+
+Compare to local (Mac, full CPU): sign-in p50 71 ms. Staging is
+**~11× slower** — the same shared-1-vCPU contention amplification
+profile we documented in §F9 / Z.1.9.
+
+#### F10.2 — Spike: which hash library is in use?
+
+`backend/src/lib/auth.js:24-48` overrides Better Auth's default
+hash with a custom `hashPassword` / `verifyPassword` pair using
+**`node:crypto.scrypt`** (native binding via libuv thread pool):
+
+```js
+const SCRYPT_PROD = { N: 16384, r: 16, p: 1 }   // 32 MB memory, ~16.7M ops
+const SCRYPT_DEV  = { N: 4096,  r: 8,  p: 1 }   // 4 MB memory
+const KEYLEN      = 64
+password: { hash: hashPassword, verify: verifyPassword }
+```
+
+Better Auth's *default* is `@noble/hashes/scrypt` — pure JS, runs
+on the V8 main thread. XO already swapped that out, so:
+
+- ✅ Hash is on libuv's thread pool (4 threads default), not main
+- ❌ Worker threads would NOT add value — work is already off-main
+- ⚠️ `SCRYPT_PROD` is at OWASP 2024 minimum; cutting `r=16 → r=8`
+  drops below the floor
+
+#### F10.3 — Decision
+
+Reframed lever ranking after the spike:
+
+| # | Lever                                    | Verdict                                                        |
+|--:|------------------------------------------|----------------------------------------------------------------|
+| 1 | ~~Lower scrypt rounds~~                  | Already at OWASP minimum; not pursuing without security review |
+| 2 | F9.2 (VM bump 1 → 2 dedicated CPUs)      | Right fix; deferred on cost                                    |
+| 3 | ~~Worker threads~~                       | Dead — already on libuv pool                                   |
+| 4 | **Async UX** (progressive sign-in feedback) | **The right move** — ~30 LOC in SignInModal                  |
+| 5 | Rate limit                               | Protects backend, doesn't help user wait                       |
+
+The actual sign-in latency (~800 ms p50) is fundamentally bound by
+memory-hard scrypt × 1 shared vCPU. Without F9.2 or weakening the
+hash, no plumbing change makes a single sign-in faster. The
+remaining lever is **perceived-latency UX work**: progressive
+spinner + helper text in SignInModal so the wait feels intentional
+rather than stuck.
+
+**SignInModal shipped 2026-05-05** in commit `954f353`: inline
+spinner SVG + delayed helper text ("Verifying your password…",
+"Creating your account…", "Sending reset link…") after 400 ms.
+9/9 tests pass.
+
+#### F10.4 — Other Better Auth surfaces (not yet reviewed)
+
+Same scrypt-on-1-vCPU latency profile applies wherever the
+backend hashes or verifies a password. Surfaces that *probably*
+have the same dead-air UX gap, ranked by likely impact:
+
+| Surface                                  | Backend wait        | Reviewed? | Priority |
+|------------------------------------------|---------------------|:---------:|:--------:|
+| `landing/src/pages/SettingsPage.jsx` — change password | ~800 ms (verify + hash) | ❌ | medium |
+| `landing/src/pages/ResetPasswordPage.jsx` — submit new password | ~800 ms (hash) | ❌ | **high** — failure here looks like the reset flow is broken |
+| `GoogleSignInButton` / `AppleSignInButton` — OAuth click→redirect | browser handles nav feedback | ❌ | low — probably fine |
+| `EmailVerifyBanner` resend button         | ~50-100 ms (no hash) | ❌ | low — rarely used |
+| `signOut` (AppLayout / ProfilePage / SupportPage) | ~50 ms (session invalidate) | ❌ | skip — fast enough |
+
+Effort to apply the same spinner+helper pattern: ~10-20 min per
+surface. Could extract `Spinner` + `useProgressHelper` into
+`landing/src/lib/loadingFeedback.jsx` if we touch ≥2 more files.
+Filed as Tier 1 perceived-perf follow-up.
+
+### F11 — Warm-cache (returning-user) baseline (2026-05-05)
+
+Closes F8 gap #4. The single most important measurement we never
+had: what does a returning user actually experience? Every prior
+benchmark in the trend was cold-anon — fresh browser context, no
+cache. Returning-user perf was assumed but unmeasured.
+
+#### F11.1 — Implementation
+
+`perf-v2.js` gained a new `warm-anon` context. Same as `cold-anon`
+except a single `browserContext` is reused across the route's runs
+so the HTTP cache survives. Each route runs RUNS+1 hits and
+discards the first (priming, cold) — p50/p95 reflect the warm-cache
+reality of a user reloading or returning between deploys.
+
+Throttling stays per-page via CDP, so the same network profile
+applies to every visit including the priming hit. Commit
+`12f1322`.
+
+#### F11.2 — Findings (staging, 2026-05-05, n=5/route)
+
+**Mobile (Moto G4 / 4G):**
+
+| Route        | Cold Ready p50 | Warm Ready p50 |    Δ | Cold FCP | Warm FCP |    Δ |
+|--------------|---------------:|---------------:|-----:|---------:|---------:|-----:|
+| Home         |        1760 ms |     **357 ms** | −80% |   408 ms |  **68 ms** | −83% |
+| Play         |        2062 ms |     **371 ms** | −82% |  1404 ms | **136 ms** | −90% |
+| Leaderboard  |        2070 ms |     **365 ms** | −82% |  1424 ms | **132 ms** | −91% |
+| Tournaments  |        2065 ms |     **349 ms** | −83% |  1420 ms | **140 ms** | −90% |
+| Tables       |        2077 ms |     **428 ms** | −79% |  1448 ms | **148 ms** | −90% |
+| Stats        |        2048 ms |     **431 ms** | −79% |  1404 ms | **188 ms** | −87% |
+| **Median**   |    **~2050 ms**|    **~370 ms** | **−82%** | **~1424 ms** | **~136 ms** | **−90%** |
+
+**Desktop:**
+
+| Route        | Cold Ready p50 | Warm Ready p50 |    Δ |
+|--------------|---------------:|---------------:|-----:|
+| Home         |          878 ms |     **401 ms** | −54% |
+| Play         |          849 ms |     **376 ms** | −56% |
+| Leaderboard  |          811 ms |     **380 ms** | −53% |
+| Tournaments  |          767 ms |     **313 ms** | −59% |
+| Tables       |          883 ms |     **456 ms** | −48% |
+| **Median**   |     **~840 ms** |    **~400 ms** | **−52%** |
+
+**`PlayVsBot` is the outlier** — warm Ready stays ~1000ms even
+with cache. The sequential-init chain (`getCommunityBot()` →
+`/api/v1/rt/tables` POST → redirect) doesn't benefit from HTTP
+asset caching. Filed as Phase 1b — already documented.
+
+**JS bytes go from 495 KB cold → "—" warm** (Resource Timing
+reports 0 transfer when assets are cache-served). Wire bytes on
+revisit are essentially zero.
+
+#### F11.3 — What's left in the warm 370ms (mobile) / 400ms (desktop)
+
+After cache eliminates download + decode + most parse work, what
+remains:
+
+1. **`index.html` revalidation** — small (~5 KB) but still a RTT.
+   Browser sends `If-None-Match`, server returns `304 Not Modified`
+   or new HTML if we deployed. ~50-150ms on mobile 4G.
+2. **Bundle parse + execute** — V8 has a bytecode cache but it's
+   not always reused (different on tab restart, low-memory mobile).
+   Even a re-parse of the cached bundle takes ~100-300ms on Moto G4.
+   This is what Phase 1 (per-route splits) would chip at — by
+   parsing only the route's slice, not the whole bundle.
+3. **Initial data fetch** — `useOptimisticSession` calls
+   `/api/session` on cold mount. Authed users add `users.sync` +
+   page-specific endpoints. ~50-200ms before page is "ready" by
+   our spinner-detached definition.
+4. **Initial paint + LCP work** — laying out the (now-instant) hero,
+   loading any uncached images, layout pass. Small (~30-50ms).
+
+**Phase 1 would impact #2 only.** Best-case mobile warm Ready
+after Phase 1: maybe ~250-300ms (vs ~370ms today). Real but
+modest.
+
+#### F11.4 — Roadmap revision
+
+The user's intuition was correct: **for returning users, Phase 1
+is a modest marginal win.** The headline returning-user levers,
+ranked by impact:
+
+1. **Service Worker app shell** (Phase 20) — eliminates even
+   the index.html revalidation + provides offline. Repeat Ready
+   approaches paint-only cost (~50-100ms). The single highest-
+   leverage perceived-perf change in the plan for the engaged-user
+   cohort. **Filed for Tier 1 promotion.**
+2. **SWR data caching** + **hover-intent prefetch** — for data-
+   heavy pages (Tables, Tournaments), even the 200ms data fetch
+   becomes "instant render of stale + background revalidate."
+   Combined with #1, returning-user pages feel native-fast.
+3. **Phase 1 (bundle splits)** — modest revisit win (~370 → ~250ms
+   mobile parse), still **the right call for first-time visitors**
+   (cold-anon mobile FCP 1416 → ~700ms is the headline). Ships for
+   that audience.
+
+**Cohort-aware framing for Tier 0:**
+
+- **First-time / cold-anon users:** Phase 1 wins. Phase 3 (image
+  diet) ✅ + Phase 1d (instant hero) ✅ already help.
+- **Returning users:** SW + SWR + hover-prefetch wins. Phase 1
+  helps a little.
+
+**We don't yet know the cohort split.** D1 RUM is shipped but we
+haven't analyzed engaged-user vs new-user numbers. F11.5 below.
+
+#### F11.5 — Cohort segmentation (instrumentation shipped)
+
+**Shipped on dev 2026-05-05.** The instrumentation needed to answer
+"which cohort dominates: first-time visitors or returning users?"
+is in:
+
+- **Schema:** `PerfVital.cohort` column + index
+  (`20260505180000_perf_vitals_cohort` migration).
+- **Client (`landing/src/lib/rum.js`):** `cohort()` reads
+  `localStorage.aiarena_rum_first_seen` once per session. Empty →
+  `'first-visit'` (and sets the flag); set → `'returning'`;
+  localStorage unavailable → `'unknown'`.
+- **Backend (`POST /api/v1/perf/vitals`):** validates against the
+  `'first-visit' | 'returning' | 'unknown'` allow-list; invalid
+  values stored as `null`.
+- **Admin endpoint (`GET /api/v1/admin/health/perf/vitals`):** new
+  `?cohort=` query param, plus `byCohort` row-counts and
+  `cohortMetrics` (per-cohort × per-metric percentiles) in the
+  response. The dashboard UI to render this is a follow-up; the
+  data is queryable via the API today.
+
+**The data only flows after /stage** (instrumentation has to reach
+real users). Plan: stage v1.4.0-alpha-4.5, let RUM flow for at least
+3-5 days of regular traffic, then read `byCohort` row counts to know
+the split, and `cohortMetrics.first-visit.FCP.p75` vs
+`cohortMetrics.returning.FCP.p75` for the cohort-Δ that drives the
+sequencing call.
+
+**Until then, sequencing is gut-feel.** Phase 1 and Phase 20 both
+stay Tier 0; the cohort data will tell us which to ship first if
+there isn't bandwidth for both at once.
+
+Edge cases the cohort metric handles cleanly:
+
+- **localStorage cleared / new browser / incognito** → looks like
+  `'first-visit'` each session. Honest representation: those
+  *are* cold-cache visits.
+- **Deploy churn** → all hashed assets invalidate, but localStorage
+  persists. So a returning user post-deploy reports `'returning'`
+  even though their cache is functionally cold for the new bundle.
+  Acceptable signal for our question (they *are* a returning user
+  experiencing what returning users experience).
+- **Multiple tabs same browser** → first tab marks the flag; second
+  tab also reads `'returning'`. No double-counting first-visit.
 
 ---
 
@@ -2229,6 +2563,77 @@ matter at c=100+) but the headline cost lives elsewhere.
 
 Decision recorded in F9.5: F9.2 (VM bump) is the next lever,
 pending budget approval.
+
+#### Z.1.9 — F9 probe sweep: pool / apply-band evidence (2026-05-05)
+
+**Hypothesis tested:** after F9.1's pool bump showed no apply p95
+gain, three suspects remained — (1) 1 shared vCPU, (2) WAL fsync /
+JSONB write contention, (3) broker dispatch + emit. The probes were
+designed to discriminate.
+
+**Probes shipped** (commit `7812210`, deployed v1.4.0-alpha-4.4):
+
+- `applyMove` returns `_t: { findMs, updateMs, postMs }` — wraps
+  `db.table.findUnique`, `db.table.update`, and the broker
+  dispatch + io.emit + appendToStream tail respectively.
+- `getPoolStats()` reads `pg.Pool` `totalCount / idleCount /
+  waitingCount` synchronously; surfaced per-request in
+  Server-Timing.
+
+**Sweep on staging 2026-05-05** (`perf-sse-load --target=staging
+--sweep=1,5,10,25,50 --moves=3 --ramp=80`):
+
+| c   | apply p50/p95 | find p50/p95 | update p50/p95 | post p50/p95 | pool.total p50/p95 | pool.waiting |
+|----:|:-------------:|:------------:|:--------------:|:------------:|:------------------:|:------------:|
+|  1  |    8 / 10     |    3 / 3     |    4 / 5       |   0 / 0      |       1 / 1        |   **0 / 0**  |
+|  5  |    6 / 27     |    3 / 21    |    3 / 6       |   0 / 2      |       2 / 2        |   **0 / 0**  |
+| 10  |    8 / 26     |    3 / 11    |    4 / 13      |   0 / 1      |       4 / 4        |   **0 / 0**  |
+| 25  |   10 / 26     |    5 / 15    |    5 / 12      |   0 / 1      |       6 / 6        |   **0 / 0**  |
+| 50  |   15 / 36     |    6 / 20    |    7 / 19      |   0 / 1      |       8 / 9        |   **0 / 0**  |
+
+**Findings (verdict on each suspect):**
+
+1. **Pool — RULED OUT.** `pool.waiting = 0` at every concurrency
+   level. Peak `pool.total = 9` against a max of 30 — ~30%
+   capacity. F9.1 retroactively confirmed as a no-op for perf
+   (kept defensively for c≥100 future).
+2. **JSONB write contention (WAL fsync) — WEAKER THAN EXPECTED.**
+   `apply.update` p95 grows 5 → 19 ms across c=1 → c=50, but
+   `apply.find` p95 grows the same way (3 → 20 ms) — and
+   `apply.find` is a simple PK SELECT, no fsync, no WAL. Both
+   bands track each other proportionally. If WAL fsync were the
+   dominant contention, `update` would diverge sharply from
+   `find`; it doesn't. Both are growing because they share the
+   same Node event loop.
+3. **Broker dispatch — RULED OUT.** `apply.post` p95 ≤ 2 ms at
+   every level. The post tail (helpers import + io.emit + Redis
+   XADD kick-off) is not a contention point. **Phase 5
+   in-process fanout step can be deferred** with high confidence
+   — it would save ≤ 2 ms per move.
+
+**The remaining 290 ms** of `movePostAck` p50 growth (163 → 302 ms,
+c=1 → c=50) lives **outside `applyMove`**: Express middleware,
+auth, `lookupTableForCaller`, JSON parse, network. That growth
+profile — wall-clock latency on every step that touches Node —
+**is the 1-shared-vCPU saturation signature.** All concurrent
+handlers share one core; under contention, every async resolution,
+JSON encode, and middleware hop pays the queue.
+
+**Roadmap impact:**
+
+- **F9.2 (VM bump 1 shared → 2 dedicated) promoted from Tier 1
+  to Tier 0 rank 2** as the recommended next perf lever, with
+  hard probe data behind it.
+- **Phase 5 remaining steady-state work demoted from Tier 0 to
+  Tier 1** — the steps target ≤ 21 ms p50 of remaining publish
+  hop; modest, and only worth it if F9.2 underwhelms.
+- **Pool fix stays in** — defensive hedge for future c≥100 loads.
+- **Phase 2 (DB indexes) stays deferred** — DB itself is fast;
+  query growth is event-loop pressure, not query plans.
+
+Headline win predicted from F9.2: `movePostAck` p50 at c=50 drops
+302 → ~150-180 ms (validate by re-running the same sweep on a
+2-CPU machine).
 
 ---
 

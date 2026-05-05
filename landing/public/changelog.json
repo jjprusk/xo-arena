@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-4.5",
+    "date": "2026-05-05",
+    "description": "Phase 1c sync dedupe + F11 warm-cache baseline + F11.5 RUM cohort instrumentation + F10 sign-in async UX"
+  },
+  {
     "version": "1.4.0-alpha-4.4",
     "date": "2026-05-05",
     "description": "F9 instrumentation probes — granular apply Server-Timing + live pg.Pool stats"
