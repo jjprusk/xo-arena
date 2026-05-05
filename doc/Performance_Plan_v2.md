@@ -1741,7 +1741,7 @@ synthetic blind spots, ranked by likely-to-find-real-issues:
 | 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
 | 3 | **Live SSE under realistic load** *(closed)* | ~~`perf-sse-rtt` measures **one** move at a time, isolated.~~ Closed 2026-05-05 by `perf/perf-sse-load.js`. Findings rewrote Phase 5's scope — see §F4 above. tl;dr: fan-out load doesn't degrade `publishToPickup`; the 383 ms prod number is **cold-broker-wakeup** on the *first* move into a fresh table, and warm/under-load moves all complete in <60 ms p50. | closed |
 | 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
-| 5 | **DB time as fraction of p95**   | Endpoint p95 is wall-clock — could be 90% DB or 10% DB. Phase 0.3 (RED metrics) hasn't shipped.        | Phase 2 is "deferred for lack of evidence" — but the evidence collection itself is the deferred work. Circular.                  | 2-3d   |
+| 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50); the wall-clock cost under load is **pool wait**, not query time. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
 | 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
 | 7 | **CLS (Cumulative Layout Shift)**| LCP is tracked, CLS is not.                                                                             | Hero swap, late-loading auth UI, modal reflows all *could* cause shift (budget ≤0.1 per Web Vitals). Probably fine but the not-knowing is itself the gap. | 0.5d   |
 
@@ -1760,6 +1760,106 @@ latency (not actionable from a single test runner), tab-throttling
 behavior (browser-internal, hard to script), and battery / energy
 profiling (not a perf-budget conversation). Those go to RUM /
 production telemetry if they ever become a question.
+
+### F9 — DB audit findings (2026-05-05)
+
+Triggered by the F4 load test surfacing `apply p95` growth (8 → 45ms
+at c=25, 5.6×) — the only metric where load amplification was clean
+and monotone. Audit covers (a) the immediate `applyMove` regression,
+(b) F8 gap #5 (DB time as fraction of p95), and (c) other DB risks
+on hot paths.
+
+#### F9.1 — Connection pool is the bottleneck *(highest leverage)*
+
+`packages/db/src/index.js` constructs `new PrismaPg({ connectionString,
+idleTimeoutMillis: 15_000, connectionTimeoutMillis: 10_000 })`. **No
+`max` is set, so `pg.Pool` defaults to `max: 10`.** Confirmed by
+constructing a fresh pool (`new pg.Pool({...}).options.max === 10`).
+
+At c=50 concurrent moves on staging:
+
+- 50 in-flight HTTP requests × 2 queries each (`findUnique` +
+  `update`) = up to 100 query-acquisitions queueing on 10 slots.
+- Postgres on Fly.io completes each PK lookup / PK update in
+  ~1–5ms (well-indexed, JSONB writes included).
+- Pool wait dominates. Math: 100 acquisitions / 10 slots × 5ms ≈
+  50ms per move queue depth. Matches the observed p95 of 41–45ms
+  vs c=1 baseline of 8ms (~33ms additional).
+
+Fix: bump pool to `max: 25–30`. Postgres' default `max_connections`
+on Fly Postgres is 100+ for small instances, and we have one
+backend service plus tournament service competing — 30 per backend
+machine is well within bounds.
+
+```js
+new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+  max: 30,                     // up from default 10
+  idleTimeoutMillis: 15_000,
+  connectionTimeoutMillis: 10_000,
+})
+```
+
+Estimated win: `apply p95` at c=25 drops from 45ms to ~10–15ms.
+At c=50 from 41ms to ~15ms. Validate with `perf-sse-load.js
+--target=staging --concurrency=25,50` after deploying.
+
+#### F9.2 — VM sizing as the secondary ceiling
+
+`backend/fly.toml`: 1 shared CPU, 512 MB RAM. Even with a larger
+pool, a single shared vCPU caps how much concurrency the Node
+event loop can sustain before `movePostAck` p50 climbs (already
+166 → 396ms c=1 → c=50). Once F9.1 lands, re-measure: if
+`movePostAck` is still 2× at c=50 with apply now flat, the
+remaining cost is Node event-loop pressure on shared CPU.
+
+Cheapest knob: `cpu_kind = "performance"` and/or `cpus = 2`.
+Cost decision, not a code change. Track separately — not
+shipped without explicit budget approval.
+
+#### F9.3 — Closes F8 gap #5 (DB time as fraction of p95)
+
+Server-Timing headers on the move POST already split out
+`lookup` and `apply` — both under 20ms p95 even at c=50. So
+for the realtime path, **DB time is a ~50% fraction of total
+movePostAck** (15-20ms server / 30-40ms total minus network).
+That means a Prisma rewrite or driver swap (Phase 5 driver step)
+would cap out at saving ~20ms per move — not the dominant win.
+Confirms Phase 2 (DB indexes) stays "deferred for lack of
+evidence": apply p95 is already <50ms at c=25; no rewrite
+needed before pool-tuning lands.
+
+For non-realtime paths (page Ready, /me/* endpoints), the same
+pattern likely holds — Postgres is fast, but pool wait under
+concurrency turns wall-clock latency into queueing latency
+that no index can fix.
+
+#### F9.4 — Other DB risks (hot-path audit)
+
+Findings ranked by likely impact:
+
+| # | Concern                                                   | Status                | Action                                                     |
+|--:|-----------------------------------------------------------|-----------------------|------------------------------------------------------------|
+| 1 | **`pg.Pool max=10`** (covered in F9.1)                    | Bottleneck under load | Bump to 25–30                                              |
+| 2 | `BaSession` has no `userId` index — only `token` indexed  | OK as-is              | Better Auth's hot path is `token` lookup, which is indexed. `userId`-by-session is admin-panel only — leave |
+| 3 | `Move` has only `gameId` index                            | OK as-is              | `Move` is append-only; never queried by anything else      |
+| 4 | `Game` indexes are good (outcome, endedAt, players)       | OK                    | Already covers leaderboard + history reads                 |
+| 5 | `Table.previewState` is JSONB, full-blob update each move | Acceptable            | <5ms per write at staging size; no normalization needed    |
+| 6 | `db.botSkill.findMany`, `db.user.findMany` — no `take`    | Bounded by WHERE      | Each has tight WHERE clauses (single botId, role filter)   |
+| 7 | `db.log.findMany` paginates with `skip/take`              | Good                  | Already the right pattern                                  |
+
+Net: only F9.1 is a real fix. The rest are non-issues, captured
+here so we don't re-investigate them.
+
+#### F9.5 — Recommended sequence
+
+1. Ship F9.1 (`max: 30`) on dev, validate on staging with the load
+   test before/after. Same /stage cycle as the cold-broker fix.
+2. Re-measure `movePostAck` at c=25 and c=50. If still > 2× the
+   c=1 baseline after pool fix, escalate F9.2 (VM sizing) as a
+   budget decision.
+3. Phase 2 (DB indexes) stays deferred — F9.3 confirms there's no
+   evidence pointing at index gaps as the bottleneck.
 
 ---
 
