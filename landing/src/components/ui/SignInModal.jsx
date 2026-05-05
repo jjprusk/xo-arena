@@ -28,6 +28,34 @@ import AppleSignInButton from './AppleSignInButton.jsx'
  *     e.g. PlayPage routes the user to `/` so the post-signup landing matches
  *     the V1 acceptance flow instead of leaving them stuck mid-PvAI.
  */
+// Inline spinner — pure SVG + Tailwind animate-spin, no asset / lib import.
+// Used inside the submit button when `loading` is true so the user sees
+// active progress, not a stuck modal. Sign-in is CPU-bound on the backend
+// (scrypt + 1 shared vCPU = ~800ms p50 staging — see doc/Performance_Plan_v2.md
+// §F10), so the visible feedback is the entire fix this side of the wire.
+function Spinner() {
+  return (
+    <svg
+      className="animate-spin h-4 w-4 inline-block mr-2 -mt-0.5 align-middle"
+      fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  )
+}
+
+// Helper-text per view, surfaced 400ms after submit so a fast response
+// (<400ms — local dev, healthy prod) doesn't flash the helper. After 400ms,
+// the staging sign-in (~800ms p50) shows the user we're still working.
+const PROGRESS_HELPER = {
+  'sign-in':         'Verifying your password…',
+  'sign-up':         'Creating your account…',
+  'forgot-password': 'Sending reset link…',
+}
+
 export default function SignInModal({ onClose, onSuccess, defaultView = 'sign-in', context = null }) {
   const [view, setView]                   = useState(defaultView)  // 'sign-in' | 'sign-up' | 'verify-email' | 'forgot-password' | 'reset-sent'
   const [email, setEmail]                 = useState('')
@@ -36,9 +64,20 @@ export default function SignInModal({ onClose, onSuccess, defaultView = 'sign-in
   const [name, setName]                   = useState('')
   const [error, setError]                 = useState('')
   const [loading, setLoading]             = useState(false)
+  const [showProgressHelper, setShowProgressHelper] = useState(false)
   const [resendSent, setResendSent]       = useState(false)
   const [honeypot, setHoneypot]           = useState('')
   const formStartedAt                     = useRef(null)
+
+  // Toggle the progress helper text 400ms into a loading state. Cleared
+  // immediately when loading flips back to false (success or error).
+  useEffect(() => {
+    if (!loading) { setShowProgressHelper(false); return }
+    const t = setTimeout(() => setShowProgressHelper(true), 400)
+    return () => clearTimeout(t)
+  }, [loading])
+
+  const helperText = PROGRESS_HELPER[view]
 
   useEffect(() => {
     setView(defaultView)
@@ -270,8 +309,14 @@ export default function SignInModal({ onClose, onSuccess, defaultView = 'sign-in
             />
             {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
             <button type="submit" disabled={loading} className="btn btn-primary w-full">
+              {loading && <Spinner />}
               {loading ? 'Sending…' : 'Send reset link'}
             </button>
+            {loading && showProgressHelper && helperText && (
+              <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                {helperText}
+              </p>
+            )}
             <div className="text-center">
               <button type="button" onClick={() => switchView('sign-in')} className="text-sm underline" style={{ color: 'var(--color-blue-600)' }}>
                 Back to sign in
@@ -384,8 +429,14 @@ export default function SignInModal({ onClose, onSuccess, defaultView = 'sign-in
                   </div>
                 )}
                 <button type="submit" disabled={loading} className="btn btn-primary w-full">
-                  {loading ? 'Please wait…' : 'Sign in'}
+                  {loading && <Spinner />}
+                  {loading ? 'Signing in…' : 'Sign in'}
                 </button>
+                {loading && showProgressHelper && helperText && (
+                  <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                    {helperText}
+                  </p>
+                )}
               </form>
             )}
 
@@ -442,8 +493,14 @@ export default function SignInModal({ onClose, onSuccess, defaultView = 'sign-in
 
                 {error && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{error}</p>}
                 <button type="submit" disabled={loading} className="btn btn-primary w-full">
+                  {loading && <Spinner />}
                   {loading ? 'Creating account…' : 'Create account'}
                 </button>
+                {loading && showProgressHelper && helperText && (
+                  <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                    {helperText}
+                  </p>
+                )}
               </form>
             )}
           </>
