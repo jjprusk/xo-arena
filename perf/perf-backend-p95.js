@@ -18,6 +18,19 @@
  *   node perf/perf-backend-p95.js --target=prod
  *   node perf/perf-backend-p95.js --requests=500 --concurrency=10
  *
+ * Authed endpoints (optional — gates every cold-authed page render):
+ *   PERF_AUTH_TOKEN=<bearer> node perf/perf-backend-p95.js --target=staging
+ *
+ *   When PERF_AUTH_TOKEN is set, the bench includes the /me/* and
+ *   /bots/mine endpoints that every authed page render waits on. Without
+ *   a token, only the cold-anon endpoints are measured.
+ *
+ *   To obtain a token for staging or prod, sign in with a synthetic
+ *   perf user and copy the Better Auth session token from the cookie
+ *   (or call POST /api/auth/sign-in/email and capture the token from
+ *   the JSON body). The user must already exist in the target env.
+ *   For local: docker compose exec backend node src/cli/um.js create-perf-user
+ *
  * Output:
  *   perf/baselines/backend-p95-<env>-<isoTimestamp>.json
  */
@@ -52,13 +65,30 @@ const ENV_TAG = TARGET ?? (BASES.landing.includes('staging') ? 'staging'
 // Hot read endpoints — chosen because every cold-page benchmark touches
 // at least one, and each one is what page-level optimizations rely on
 // staying fast.
-const ENDPOINTS = [
+const ANON_ENDPOINTS = [
   { name: 'GET /api/version',                    base: 'backend',    path: '/api/version' },
   { name: 'GET /api/v1/bots?gameId=xo',          base: 'backend',    path: '/api/v1/bots?gameId=xo' },
   { name: 'GET /api/v1/leaderboard?game=xo',     base: 'backend',    path: '/api/v1/leaderboard?game=xo' },
   { name: 'GET /api/auth/get-session',           base: 'backend',    path: '/api/auth/get-session' },
   { name: 'GET /api/tournaments',                base: 'tournament', path: '/api/tournaments' },
 ]
+
+// Authed read endpoints — these gate every cold-authed page render. If
+// any are slow, every signed-in user pays the cost on first paint after
+// landing on a route. Only run when PERF_AUTH_TOKEN is set.
+const AUTHED_ENDPOINTS = [
+  { name: 'GET /api/v1/users/me/roles',          base: 'backend', path: '/api/v1/users/me/roles',         authed: true },
+  { name: 'GET /api/v1/users/me/notifications',  base: 'backend', path: '/api/v1/users/me/notifications', authed: true },
+  { name: 'GET /api/v1/users/me/preferences',    base: 'backend', path: '/api/v1/users/me/preferences',   authed: true },
+  { name: 'GET /api/v1/users/me/hints',          base: 'backend', path: '/api/v1/users/me/hints',         authed: true },
+  { name: 'GET /api/v1/bots/mine',               base: 'backend', path: '/api/v1/bots/mine',              authed: true },
+  { name: 'GET /api/v1/guide/preferences',       base: 'backend', path: '/api/v1/guide/preferences',      authed: true },
+]
+
+const AUTH_TOKEN = process.env.PERF_AUTH_TOKEN || null
+const ENDPOINTS = AUTH_TOKEN
+  ? [...ANON_ENDPOINTS, ...AUTHED_ENDPOINTS]
+  : ANON_ENDPOINTS
 
 const BOLD  = s => `\x1b[1m${s}\x1b[0m`
 const DIM   = s => `\x1b[2m${s}\x1b[0m`
@@ -84,11 +114,11 @@ function colorMs(ms, target = 100) {
   return RED(`${ms}ms`)
 }
 
-async function timed(url) {
+async function timed(url, headers = null) {
   const t0 = performance.now()
   let status = 0, sizeKb = 0
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, headers ? { headers } : undefined)
     status = res.status
     const buf = await res.arrayBuffer()
     sizeKb = Math.round(buf.byteLength / 1024)
@@ -98,7 +128,7 @@ async function timed(url) {
   return { ms: Math.round(performance.now() - t0), status, sizeKb }
 }
 
-async function bench(url, n, concurrency) {
+async function bench(url, n, concurrency, headers = null) {
   const samples = []
   const errors  = []
   let inflight = 0
@@ -108,7 +138,7 @@ async function bench(url, n, concurrency) {
     const tick = () => {
       while (inflight < concurrency && dispatched < n) {
         inflight++; dispatched++
-        timed(url).then(r => {
+        timed(url, headers).then(r => {
           if (r.status >= 200 && r.status < 400) samples.push(r.ms)
           else errors.push({ status: r.status, ms: r.ms })
           inflight--
@@ -131,16 +161,18 @@ async function run() {
   console.log(BOLD('XO Arena — Backend Endpoint Latency'))
   console.log(`  Target      : ${ENV_TAG}`)
   console.log(`  Requests    : ${REQUESTS} per endpoint  (concurrency ${CONCURRENCY}, warmup ${WARMUP_REQS})`)
+  console.log(`  Auth        : ${AUTH_TOKEN ? GREEN('PERF_AUTH_TOKEN set — including authed endpoints') : DIM('cold-anon only — set PERF_AUTH_TOKEN to add authed routes')}`)
   console.log()
 
   const results = []
   for (const ep of ENDPOINTS) {
     const url = BASES[ep.base] + ep.path
+    const headers = ep.authed ? { Authorization: `Bearer ${AUTH_TOKEN}` } : null
     process.stdout.write(`  ${ep.name.padEnd(40)} `)
     // Warmup
-    for (let i = 0; i < WARMUP_REQS; i++) await timed(url)
+    for (let i = 0; i < WARMUP_REQS; i++) await timed(url, headers)
     // Bench
-    const { samples, errors } = await bench(url, REQUESTS, CONCURRENCY)
+    const { samples, errors } = await bench(url, REQUESTS, CONCURRENCY, headers)
     const stats = {
       p50: median(samples),
       p95: pctile(samples, 95),
@@ -154,7 +186,7 @@ async function run() {
       `p99 ${colorMs(stats.p99, 500).padEnd(20)} ` +
       DIM(`(ok=${stats.ok}${errors.length ? `, err=${errors.length}` : ''})`)
     )
-    results.push({ name: ep.name, url, base: ep.base, stats, errors: errors.slice(0, 5) })
+    results.push({ name: ep.name, url, base: ep.base, authed: !!ep.authed, stats, errors: errors.slice(0, 5) })
   }
   console.log()
 
@@ -168,6 +200,7 @@ async function run() {
     requests:    REQUESTS,
     concurrency: CONCURRENCY,
     warmup:      WARMUP_REQS,
+    authedIncluded: !!AUTH_TOKEN,
     results,
   }, null, 2))
   console.log(`  Saved → ${outPath.replace(process.cwd() + '/', '')}\n`)
