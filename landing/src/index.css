@@ -127,6 +127,22 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Colosseum platform photo (full-page fixed bg) ─────────── */
+/* Responsive WebP: 800w on mobile (50KB), 1600w on tablet+ (174KB).
+   The element renders at --photo-opacity (0.18 light / 0.06 dark) so
+   pixel-level softness from upscaling is invisible on every display. */
+.colosseum-photo-bg {
+  background-image: url('/colosseum-mobile.webp');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center 40%;
+}
+@media (min-width: 768px) {
+  .colosseum-photo-bg {
+    background-image: url('/colosseum-desktop.webp');
+  }
+}
+
 /* ── Colosseum hero background ────────────────────────────── */
 /* Applied to the full-bleed hero section on the home page */
 .colosseum-bg {
