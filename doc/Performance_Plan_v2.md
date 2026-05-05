@@ -50,6 +50,65 @@ If a phase's measured win doesn't move at least one budgeted metric, mark it
 
 ---
 
+## Roadmap at a glance (2026-05-05)
+
+The single table that says what's shipped, what's queued, and what's
+deferred — with measured impact, cost, and risk for each major item.
+Sorted by **(real ms saved × user reach)**. See per-phase sections
+below for the full design / step list, and Appendix Z for completed-
+work narratives.
+
+### Shipped (2026-05-05)
+
+| Item                                | Real impact (measured)                                     | Cost  | Risk | Where it landed |
+|-------------------------------------|------------------------------------------------------------|:-----:|:----:|:---------------:|
+| Phase 5.1 — Cold-broker XREAD fix   | publishToPickup p95 **740 → 126 ms** at c=5 (−83%); cold first-move p50 **382 → 39 ms** (−90%) | 1h    | none | v1.4.0-alpha-4.3 |
+| F9.1 — pg.Pool max 10 → 30          | apply p95 unchanged at this load — no measurable gain yet (still 45-46ms at c=25); pool was not the actual bottleneck | 1h    | none | v1.4.0-alpha-4.3 |
+| Phase 1d — Instant-ready hero       | mobile FCP **1416 → 432 ms** (−69%), mobile LCP **1792 → 432 ms** (−76%), desktop FCP **804 → 424 ms** (−47%) | 1d    | low  | v1.4.0-alpha-4.2 |
+| Phase 3 — Responsive WebP hero      | mobile img bytes **888 → 50 KB** (−94%); mobile TBT 62 → 50 ms | 1d    | none | v1.4.0-alpha-4.1 |
+| F4 — SSE round-trip decomposition (Server-Timing + `_t` breadcrumbs) | enabled the load-test analysis that found the cold-broker bug | 0.5d  | none | v1.4.0-alpha-3.0 |
+| `perf-sse-load.js` — concurrent harness | closes F8 gap #3 (live SSE under load); proved publishToPickup is wakeup-bound, not load-bound | 0.5d  | none | v1.4.0-alpha-4.3 |
+
+### Active queue — Tier 0 (next sprints)
+
+| Rank | Item                                | Real impact (estimated)                                    | Cost   | Risk    | Status |
+|-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|
+|    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP ~1400 → ~700 ms (−700 ms × every cold visit)    | 3-5d   | medium  | queued |
+|    2 | **Phase 5** — remaining SSE work (in-process fanout, Nagle, coalesce) | move→state ~270 ms p50 floor (Phase 5.1 ate the cold spike already) | 3-5d   | low     | scope reduced 5/5 |
+|    3 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | sequenced after Phase 1 |
+|    4 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | queued |
+
+### Active queue — Tier 1 (after Tier 0 lands)
+
+| Item                                | Real impact (estimated)                                    | Cost   | Risk    |
+|-------------------------------------|------------------------------------------------------------|:------:|:-------:|
+| Phase 13 — TournamentDetail refactor | heaviest single surface, 1900-line render path           | 2-3d   | medium  |
+| Phase 7 — mobile-specific (font preload, touch responsiveness) | mobile FCP/INP polish                              | 1-2d   | low     |
+| Phase 8 — skeletons everywhere      | perceived-only, but high yield on engaged routes           | 1d     | none    |
+| Better Auth allow-list trim         | cold-authed Ready −80-150 ms                               | 0.5d   | low     |
+| F9.2 — VM CPU bump (1 shared → 2 dedicated) | apply p95 at c=25/50 — pending budget approval     | $$ ops | low     |
+
+### Deferred / out-of-scope until evidence changes
+
+| Item                                | Why deferred                                               | Re-promote when |
+|-------------------------------------|------------------------------------------------------------|-----------------|
+| Phase 2 — DB indexes                | F9 audit found no missing indexes; query time <20 ms p95   | Apply p95 stays >50 ms after F9.2 |
+| Phase 6 — backend cold start        | Fly auto-stop disabled in iad; not the bottleneck          | If we re-enable auto-stop |
+| Phase 14 — Gym worker thread        | Non-realtime; lower user-reach than Tier 0 items           | After Tier 0 ships |
+| Section E aggressive bets (Bun, WebTransport, Hono edge, RSC) | Tier 4 architecture; revisit only if Tier 0+1+2 leaves a gap | Post-V1 |
+
+### Headline open question
+
+**Apply p95 at c=25/50 didn't drop with the pool fix.** The pool was
+not the actual bottleneck — Postgres queries each return in 1-5 ms
+and the pool of 10 was sufficient. The remaining cost is somewhere
+else (Prisma per-call overhead, Express middleware, or 1-vCPU
+backend saturation). F9.2 (VM bump) is the next lever — but that's
+a budget call, not a code change. See §F9 for the audit detail and
+Appendix Z.1.8 for the validation numbers.
+
+---
+
 ## Current baseline (2026-05-02 staging, cold-anon)
 
 Full numbers + caveats: `doc/Performance_Snapshot_2026-05-02.md`. The
@@ -486,69 +545,22 @@ If the second perf-v2 run does *not* show these moves, Phase 1 is
 *landed but ineffective* and we go back to the visualizer to find what
 else is stuck in `main`.
 
-### Phase 1d — Instant-ready hero (inline SVG + late hydrate)  *(Tier 0, perceived-only)*
+### Phase 1d — Instant-ready hero  *(shipped 2026-05-05)*
 
-A pure perceived-perf trick that pairs with Phase 1: render a static
-SVG of a tic-tac-toe board (mid-game position) inlined in
-`landing/index.html`. It paints the moment the HTML lands. When the
-JS bundle finishes parsing, `DemoArena` hydrates and the live game
-takes over (cross-fade or in-place swap). The user never sees a blank
-hero or spinner — first paint *is* the hero.
+Inlined a static tic-tac-toe board + `<h1>AI Arena</h1>` in
+`landing/index.html`'s `<div id="root">`. Renders the moment HTML
+lands; React's `createRoot.render()` clears the placeholder on
+mount.
 
-**What it actually buys** (relative to current 2026-05-05 baseline,
-on top of whatever Phase 1 lands):
+**Measured impact** (staging v1.4.0-alpha-4.2):
 
-| Segment                           | FCP today | After Phase 1 | After Phase 1 + 1d |
-|-----------------------------------|----------:|--------------:|-------------------:|
-| Mobile cold-anon (Moto G4 / 4G)   |   1416ms  |    ~700ms     |       **~200ms**   |
-| Desktop cold-anon                 |    676ms  |    ~400ms     |       **~50ms**    |
-| Mobile repeat (cache hit)         |    600ms  |    ~300ms     |       **~150ms**   |
-| Desktop repeat (cache hit)        |    150ms  |    ~150ms     |       **~50ms**    |
+- Mobile FCP **1416 → 432 ms (−69%)**
+- Mobile LCP **1792 → 432 ms (−76%)**
+- Desktop FCP **804 → 424 ms (−47%)**
 
-LCP follows the same delta because the SVG *is* the largest
-contentful element. The Ready metric is unchanged — bundle parse
-still happens — but the perceived "the page is alive" moment slides
-to the HTML-render boundary.
-
-**Why mobile and desktop both win:**
-
-- Mobile: −1200ms is the headline; pushes the "page feel" from
-  "loading" to "instant" (crosses the well-known ~200ms
-  perception threshold).
-- Desktop: −580ms is real even on a fast connection; takes a
-  "loaded fast" feel into "feels native". First-impression /
-  conversion cohort benefits.
-
-**Mechanics:**
-
-- [ ] Author a static SVG of an X-O board mid-game (~1-2 KB markup),
-      inlined in `landing/index.html` inside the hero container.
-      Style with the same Tailwind classes as `DemoArena`'s React
-      render so the visual is identical.
-- [ ] Lock the box dimensions explicitly with CSS `aspect-ratio` and
-      `width`/`height` so the SVG → React-render swap doesn't shift
-      layout (CLS budget ≤ 0.1).
-- [ ] On `DemoArena` mount, fade the static SVG out and the live
-      board in over ~200ms (or snap if the styles are pixel-identical
-      and there's no flash).
-- [ ] Wire any in-hero buttons (`Sign in`, `Watch another match`) so
-      a click before JS-ready queues the action and React Router
-      picks it up on hydrate. No "loading" flash on click.
-
-**Effort:** ~1 day. **Real ms saved:** 0 (page is no faster, just
-appears faster). **Perceived ms saved:** −1200ms FCP/LCP mobile,
-−580ms desktop — bigger than any other single phase. **Stacks with
-Phase 1** — independent code paths, ships in parallel.
-
-**Risks:**
-
-1. *Visual drift between SVG and React render.* Mitigation: generate
-   the SVG from the same Tailwind classes / a shared React component
-   used in both modes, or freeze the styles with a snapshot test.
-2. *CLS on swap.* Mitigation: explicit box dimensions in CSS, verify
-   in measurement gap #7 (CLS).
-3. *Click-before-hydrate.* Mitigation: native anchor links for
-   navigation buttons; queue-and-replay pattern for the rest.
+No bundle parse happens earlier — Ready is unchanged — but the
+visible "page is alive" moment now lands at the HTML-render
+boundary. Cost: 1 day; no risks materialised.
 
 ### Phase 1b — PlayVsBot deep-dive  *(Tier 0, immediate after Phase 1)*
 
@@ -613,37 +625,21 @@ especially the new ones:
       responses, not just static assets — cuts wire bytes 60–80% for
       tournament/leaderboard JSON.
 
-### Phase 3 — Hero image + asset diet  *(Tier 1 — confirm impact first)*
+### Phase 3 — Hero image + asset diet  *(shipped 2026-05-05)*
 
-The 2026-05-02 baseline showed **0 KB image bytes** on every route — the
-`colosseum-bg.jpg` (888 KB) didn't appear in the static byte total. It
-likely loads async after Ready resolves, or via a CSS background not
-caught by the resource-type filter. Before sinking time into AVIF
-encoding, confirm where and when the image actually lands.
+Hero image diet shipped in v1.4.0-alpha-4.1 — responsive WebP via
+CSS `@media (min-width: 768px)`, **mobile 50 KB / desktop 174 KB**
+(was 888 KB JPG, −94% / −80%). Full design, candidates evaluated,
+and measurement table in **Appendix Z.1.6**.
 
-- [ ] **Investigate first.** Open DevTools → Network on `/` cold, filter
-      by Img. Confirm whether `colosseum-bg.jpg` loads at all on cold-
-      anon, when it loads relative to FCP / Ready, and on which routes.
-- [ ] If it loads after Ready: low-priority — it doesn't move the
-      measured budget. Still worth shipping AVIF + responsive sizes for
-      mobile data costs, but demote out of Tier 1.
-- [ ] If it blocks LCP on `/`: keep in Tier 1 — convert to AVIF + WebP +
-      JPEG fallback via `<picture>`; cap mobile delivery at ≤ 1280 wide;
-      preload.
-- [ ] Audit other public images (`landing/public/`); drop anything
-      unused.
-- [ ] Add `loading="lazy"` and explicit `width`/`height` on every `<img>`
-      to stop layout shift (CLS).
-- [ ] Confirm font strategy: `font-display: swap` and self-hosted (no
-      blocking Google fonts).
-- [ ] **Subset fonts** to the glyphs actually used. A full Latin Inter
-      subset is ~25 KB; full font is ~120 KB.
-- [ ] **SVG sprite sheet** for icons. Inline JSX `<svg>` ships inside
-      the JS chunk — moving icons to an external sprite (`<use href />`)
-      lets them stream + cache separately and shrinks `main.supported`.
-- [ ] **Skip the hero on mobile entirely.** A CSS gradient or solid
-      colour as fallback; serve the real image only at ≥ 1024 viewport.
-      Cuts ~200 KB off mobile data on `/`.
+**Remaining open** (not blocking — backlog items):
+
+- [ ] Audit other public images (`landing/public/`); drop unused.
+- [ ] Add `loading="lazy"` + explicit `width`/`height` on every `<img>`.
+- [ ] **Subset fonts** to glyphs actually used (~25 KB vs ~120 KB).
+- [ ] **SVG sprite sheet** for icons (currently inline JSX `<svg>` ships
+      inside the JS chunk — moving to an external sprite would let
+      icons stream and cache separately).
 
 ### Phase 4 — Cross-service network shape
 
@@ -1630,17 +1626,15 @@ quiet services."
       (ack→event − server). **Local sanity-check (n=10):** every leg
       ≤2ms; total matches client-measured `playerEventMs`. Staging +
       prod numbers TBD after promote — that's where the ~400ms lives.
-- [ ] **Keep the broker hot — kill the cold-wake penalty.**
-      *(NEW, top priority based on 2026-05-05 load evidence.)* The
-      cheapest possible fix: add a 1Hz keepalive XADD into
-      `events:tier2:stream` (no-op payload, suppressed at dispatch).
-      Cost: 86k extra stream entries/day, negligible Redis CPU.
-      Benefit: `publishToPickupMs` p50 drops from ~383ms to ~20ms on
-      every quiet-traffic environment (prod nights, staging, dev). Or
-      reduce `XREAD_BLOCK_MS` from 30_000 to 1_000 so the loop iterates
-      every second — same effect via a different lever; pick whichever
-      has cleaner failure modes. Validate with `perf/perf-sse-load.js
-      --concurrency=1` before/after.
+- [x] **Keep the broker hot — kill the cold-wake penalty.** *(Shipped
+      2026-05-05 in v1.4.0-alpha-4.3 — see Appendix Z.1.7.)* Reduced
+      `XREAD_BLOCK_MS` from 30_000 → 1_000 in `backend/src/lib/sseBroker.js`.
+      Validation on staging: cold first-move publishToPickup p50 dropped
+      **382 → 39 ms** (−90%), p95 **740 → 126 ms** (−83%) at c=5. Warm-move
+      latency unchanged. No alert threshold change needed — resourceCounters'
+      90 s staleness window is well above 1 s. **Phase 5 ROI no longer
+      includes this win** — remaining Phase 5 steps target the
+      ~270 ms steady-state floor only.
 - [ ] **Confirm SSE response is unbuffered.** Express + compression
       middleware can buffer SSE frames if not disabled per-route.
       Verify `Content-Encoding: identity` (or no-op compress) on
@@ -1741,7 +1735,7 @@ synthetic blind spots, ranked by likely-to-find-real-issues:
 | 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
 | 3 | **Live SSE under realistic load** *(closed)* | ~~`perf-sse-rtt` measures **one** move at a time, isolated.~~ Closed 2026-05-05 by `perf/perf-sse-load.js`. Findings rewrote Phase 5's scope — see §F4 above. tl;dr: fan-out load doesn't degrade `publishToPickup`; the 383 ms prod number is **cold-broker-wakeup** on the *first* move into a fresh table, and warm/under-load moves all complete in <60 ms p50. | closed |
 | 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
-| 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50); the wall-clock cost under load is **pool wait**, not query time. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
+| 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50, queries 1-5ms each); pool was hypothesised as the bottleneck but F9.1 deploy showed **no measurable improvement** — the wall-clock ceiling lives in CPU/fsync, not DB or pool. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
 | 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
 | 7 | **CLS (Cumulative Layout Shift)**| LCP is tracked, CLS is not.                                                                             | Hero swap, late-loading auth UI, modal reflows all *could* cause shift (budget ≤0.1 per Web Vitals). Probably fine but the not-knowing is itself the gap. | 0.5d   |
 
@@ -1769,7 +1763,7 @@ and monotone. Audit covers (a) the immediate `applyMove` regression,
 (b) F8 gap #5 (DB time as fraction of p95), and (c) other DB risks
 on hot paths.
 
-#### F9.1 — Connection pool is the bottleneck *(highest leverage)*
+#### F9.1 — Connection pool bumped 10 → 30 *(shipped 2026-05-05; no measurable gain at this load)*
 
 `packages/db/src/index.js` constructs `new PrismaPg({ connectionString,
 idleTimeoutMillis: 15_000, connectionTimeoutMillis: 10_000 })`. **No
@@ -1800,9 +1794,97 @@ new PrismaPg({
 })
 ```
 
-Estimated win: `apply p95` at c=25 drops from 45ms to ~10–15ms.
-At c=50 from 41ms to ~15ms. Validate with `perf-sse-load.js
---target=staging --concurrency=25,50` after deploying.
+**Predicted win:** `apply p95` at c=25 drops from 45 ms to ~10–15 ms.
+**Measured (2026-05-05 staging post-deploy v1.4.0-alpha-4.3):**
+
+| Concurrency | apply p50 / p95 — before  | apply p50 / p95 — after | Δ p95     |
+|------------:|---------------------------|-------------------------|-----------|
+| c=1         | 7 / 8 ms                  | 11 / 21 ms              | mild +    |
+| c=5         | 7 / 8 ms                  | 9 / 29 ms               | mild +    |
+| c=10        | 7 / 18 ms                 | 10 / 28 ms              | flat      |
+| c=25        | 15 / 45 ms                | 20 / 46 ms              | **flat**  |
+
+**Pool was not the actual bottleneck.** Postgres queries each
+return in 1–5 ms; with `max=10` the pool was rotating fast enough
+that no significant queue accumulated. The pool bump is a free
+hedge for higher concurrency (we'd hit the wall at c=100+ on the
+old setting), but the headline 5.6× p95 growth comes from
+elsewhere.
+
+**Why pool wasn't actually the bottleneck** (math):
+
+- Each `applyMove` does 2 Prisma calls (`findUnique` + `update`).
+  Each takes 1-5ms on Postgres.
+- At c=25 fully concurrent, peak query load = 50 in-flight.
+- With max=10 and 5ms hold time, the pool services
+  `10 × (1000ms / 5ms) = 2000 q/s` capacity.
+- Test load: 25 users × ~2 q/move ÷ ~600ms/move = **~80 q/s**.
+- We were at **4% of pool capacity** even with max=10.
+  Connection acquisition was never queueing.
+
+**Where the cost actually lives** (ranked by likelihood):
+
+1. **Backend single shared vCPU** (`backend/fly.toml` — 1 cpu,
+   shared). The strongest candidate. At c=25 Node multiplexes 25
+   concurrent in-flight requests on one shared core (effectively
+   ~20-30% of a vCPU under contention). All `await` resolutions,
+   JSON encoding, Prisma client SQL generation, and Redis client
+   work share that single thread. Wall-clock per call grows even
+   while the DB itself stays fast. **F9.2 (VM bump to 2 dedicated)
+   is the direct test.** Predicted apply p95 at c=25: 46 → 15-20ms.
+2. **Postgres WAL fsync per-commit.** Default `synchronous_commit=on`
+   requires fsync on COMMIT. Fly Postgres on shared storage:
+   typically 5-15ms per fsync. At c=25 burst-write (25 COMMITs
+   queued behind one fsync flush window), batching helps but
+   first-in-batch waits up to a full window. Adds ~10-20ms p95
+   under burst. Mitigation: `synchronous_commit=off` (durability
+   loss — not acceptable) or batching across moves (architectural
+   change — not worth it).
+3. **JSONB write amplification.** `Table.previewState` is a 2-3 KB
+   JSON blob, fully rewritten each move. Postgres serialises the
+   blob into TOAST, computes the new heap row size, may rewrite
+   the page. Per-update cost is small (~1-3ms) but stacks under
+   write contention.
+4. **Prisma client JS-layer overhead.** Even with available
+   connections, Prisma generates SQL, sends, parses result on
+   the same Node event loop. ~1-3ms per call wall-clock just in
+   JS. Multiplied across 25 concurrent loops, contributes to (1).
+
+**How to narrow it down — concrete next steps:**
+
+- [x] **Granular Server-Timing inside applyMove.** *(Shipped on dev
+      2026-05-05 in commit `7812210`.)* `applyMove` now returns
+      `_t: { findMs, updateMs, postMs }` and `realtime.js` adds
+      `apply.find;dur=`, `apply.update;dur=`, `apply.post;dur=` to
+      the existing Server-Timing header. `perf-sse-load.js` parses
+      the new bands and prints a 2nd results row. If `apply.update`
+      grows at c=25 while `apply.find` stays flat, cost is the
+      JSONB write (suspect 2: WAL fsync / JSONB amp); if `apply.post`
+      grows, broker dispatch is the contention; if everything stays
+      flat but the wrapping `apply` grows, the cost is JS / event-
+      loop (suspect 1: 1 vCPU). **Awaits staging /stage to read.**
+- [x] **Pool metrics**: surface `pg.Pool` `totalCount` / `idleCount`
+      / `waitingCount` per request. *(Shipped on dev 2026-05-05 in
+      commit `7812210`.)* `packages/db/src/index.js` now constructs
+      its own `pg.Pool` and passes it to `PrismaPg`; new
+      `getPoolStats()` export reads counters synchronously. Surfaced
+      in Server-Timing as `pool.total / pool.idle / pool.waiting`
+      (counts smuggled through `dur` for parser compatibility). If
+      `pool.waiting` stays ~0 at c=25, pool definitively wasn't
+      saturated (retroactively confirms F9.1 was a no-op). **Awaits
+      staging /stage to read.**
+- [ ] **Direct F9.2 test:** stand up a temporary `cpu_kind =
+      "performance", cpus = 2` Fly machine, point staging traffic
+      at it, re-run the load test. If apply p95 drops, F9.2 is
+      the answer.
+- [ ] **Node `--prof` under load.** CPU profile while
+      `perf-sse-load --concurrency=25` runs. Look for hot stacks
+      in Prisma serialization or Express middleware.
+
+**Decision:** Pool fix stays in (defensive + no cost; would matter
+at c=100+). Real fix is F9.2 — escalated from "pending budget" to
+"next lever to test" in F9.5. See validation numbers in
+Appendix Z.1.8.
 
 #### F9.2 — VM sizing as the secondary ceiling
 
@@ -1851,15 +1933,18 @@ Findings ranked by likely impact:
 Net: only F9.1 is a real fix. The rest are non-issues, captured
 here so we don't re-investigate them.
 
-#### F9.5 — Recommended sequence
+#### F9.5 — Recommended sequence *(updated 2026-05-05 post-validation)*
 
-1. Ship F9.1 (`max: 30`) on dev, validate on staging with the load
-   test before/after. Same /stage cycle as the cold-broker fix.
-2. Re-measure `movePostAck` at c=25 and c=50. If still > 2× the
-   c=1 baseline after pool fix, escalate F9.2 (VM sizing) as a
-   budget decision.
-3. Phase 2 (DB indexes) stays deferred — F9.3 confirms there's no
-   evidence pointing at index gaps as the bottleneck.
+1. ~~Ship F9.1 (`max: 30`).~~ **Done** v1.4.0-alpha-4.3. No
+   measurable gain on apply p95 at the load levels tested
+   (c=1 to c=25). Kept as a defensive change for future c=100+ load.
+2. **F9.2 (VM bump) is the actual next lever.** Promote from
+   "pending budget approval" — apply p95 at c=25 stayed at 46 ms
+   even with the pool fix, indicating the cost is in Node event-
+   loop contention on a single shared vCPU. Test cost: ~$15-30/mo
+   bump to performance-1× per backend machine.
+3. Phase 2 (DB indexes) stays deferred — F9.3 confirms DB itself
+   is fast (apply queries < 20 ms p95 even at c=50).
 
 ---
 
@@ -2045,6 +2130,106 @@ JS-parse-bound on Moto G4 (Phase 1 territory); the WebP win lands
 primarily on **bytes-over-the-wire** (~838 KB saved per cold mobile
 visit on 4G).
 
+#### Z.1.7 — Cold-broker XREAD fix (Phase 5.1, 2026-05-05)
+
+**Hypothesis tested:** the 383 ms publishToPickup p50 we'd been
+attributing to Redis fanout is actually broker process wake-up
+cost on a quiet service — under load (broker constantly busy)
+it should drop, on cold first-moves into a fresh table it should
+spike.
+
+**Evidence (`perf/perf-sse-load.js` 2026-05-05 staging, before fix):**
+
+| c   | n   | publishToPickup p50/p95 | apply p50/p95 | movePostAck p50/p95 |
+|----:|----:|:-----------------------:|:-------------:|:-------------------:|
+|  1  |   3 |     55 / 196 ms         |   7 / 8 ms    |   166 / 197 ms      |
+|  5  |  15 |     55 / **740 ms**     |   7 / 8 ms    |   189 / 260 ms      |
+| 10  |  30 |     32 / 406 ms         |   7 / 18 ms   |   195 / 304 ms      |
+| 25  |  75 |     25 / 406 ms         |  15 / 45 ms   |   291 / 556 ms      |
+| 50  | 150 |     21 / 80 ms          |  19 / 41 ms   |   396 / 604 ms      |
+
+The signature: cold first-move (move 0 of each game) p95 was
+**740 ms at c=5 / 676 ms at c=25**, while warm moves (move 1+)
+were < 70 ms regardless of load. At c=50 even move 0 was fast
+(p95 106 ms) because the broker never goes idle.
+
+**Diagnosis:** `backend/src/lib/sseBroker.js` used `XREAD BLOCK 30_000`.
+When the backend is idle, the Node process pages out / scheduler
+deprioritises it / Redis TCP recv buffer empty. The first XADD
+that follows pays a 150–500 ms scheduling tax before
+`Date.now()` is sampled in `dispatchEntry`.
+
+**Fix:** `XREAD_BLOCK_MS = 30_000 → 1_000`. The broker loop now
+iterates every second even when idle. resourceCounters' 90 s
+staleness threshold is well above 1 s; no alert wiring change.
+Code: `0dcb244`. Cost: ~30 idle XREAD/min vs 1; trivial.
+
+**Validation (after deploy v1.4.0-alpha-4.3, sweep 1/5/10/25):**
+
+| c   | publishToPickup p50/p95 — before | publishToPickup p50/p95 — after | p95 Δ      |
+|----:|----------------------------------|---------------------------------|-----------|
+|  1  | 55 / 196 ms                      | 97 / 137 ms                     | **−30%**  |
+|  5  | 55 / **740 ms**                  | 23 / **126 ms**                 | **−83%**  |
+| 10  | 32 / 406 ms                      | 17 / 46 ms                      | **−89%**  |
+| 25  | 25 / 406 ms                      | 31 / 77 ms                      | **−81%**  |
+
+Cold-first-move at c=5: p50 **382 → 39 ms (−90%)**, p95 **740 →
+126 ms (−83%)**. The wake-up tax is gone.
+
+Single-stream `perf-sse-rtt` (n=20) confirms the same win on
+the isolated path:
+
+| Metric          | Before (2026-05-05 06:30 UTC) | After (post-deploy) | Δ      |
+|-----------------|------------------------------:|--------------------:|--------|
+| publishToPickup p50 | 526 ms                    | 113 ms              | −78%   |
+| publishToPickup p95 | 635 ms                    | 191 ms              | −70%   |
+| movePostAck p50     | 200 ms                    | 184 ms              | −8%    |
+
+**Phase 5 ROI rewrite:** The "300 ms saved on every move" pitch
+is downgraded to "300 ms saved on the first move per fresh table,
+*only* on quiet services" — and that's now shipped. Remaining
+Phase 5 steps target the ~270 ms steady-state floor only:
+in-process fanout for same-instance subscribers, Nagle disable,
+event coalescing.
+
+#### Z.1.8 — DB connection pool fix (F9.1, 2026-05-05)
+
+**Hypothesis tested:** the apply p95 5.6× growth at c=25 (8 → 45 ms)
+was pg.Pool default `max=10` saturating under c=25 × 2 queries
+per move = ~50 acquisitions on 10 slots.
+
+**Fix:** `packages/db/src/index.js` — added `max: 30` to
+`PrismaPg({...})`. Code: `3280859`.
+
+**Validation (after deploy v1.4.0-alpha-4.3):**
+
+| c   | apply p50 / p95 — before  | apply p50 / p95 — after | Δ p95       |
+|----:|---------------------------|-------------------------|-------------|
+|  1  | 7 / 8 ms                  | 11 / 21 ms              | mild +      |
+|  5  | 7 / 8 ms                  | 9 / 29 ms               | mild +      |
+| 10  | 7 / 18 ms                 | 10 / 28 ms              | flat        |
+| 25  | **15 / 45 ms**            | **20 / 46 ms**          | **flat**    |
+
+**Result: no measurable improvement.** Pool was not the actual
+bottleneck. Postgres queries each return in 1–5 ms; the pool of
+10 was rotating fast enough that no significant queue accumulated
+at c=25. The fix is kept in (free hedge for higher loads — would
+matter at c=100+) but the headline cost lives elsewhere.
+
+**Revised root-cause hypothesis** (untested, but two suspects):
+
+1. **1 shared vCPU on the backend.** At c=25 the Node event loop
+   contends with itself; Prisma serialization, Express middleware,
+   JSON encode/decode all share one CPU. Manifests as wall-clock
+   on every Prisma call. Addressable via F9.2 (VM bump).
+2. **Postgres WAL fsync per-commit serialization.** 25 concurrent
+   `Table.update` commits each fsync; Postgres serialises commit
+   waits. Fundamental Postgres property; addressable only by
+   `synchronous_commit=off` (durability cost) or batching.
+
+Decision recorded in F9.5: F9.2 (VM bump) is the next lever,
+pending budget approval.
+
 ---
 
 ## Out of scope (and why)
@@ -2075,20 +2260,43 @@ a later phase depends on an earlier one shipping first.
 
 | Rank | Phase | Real ms benefit                                   | Perceived | Effort | Status |
 |-----:|-------|---------------------------------------------------|:---------:|:------:|:------:|
-|    — | 3     | mobile img_kb 888→50, desktop 888→174 (−94/−80%)  | low/mid   | 1d     | ✅ shipped 2026-05-05 |
+|    — | 3     | mobile img_kb 888→50, desktop 888→174 (−94/−80%)  | low/mid   | 1d     | ✅ shipped v1.4.0-alpha-4.1 |
+|    — | 1d    | mobile FCP 1416→432ms (−69%), LCP 1792→432ms (−76%) | **huge**| 1d     | ✅ shipped v1.4.0-alpha-4.2 |
+|    — | 5.1   | publishToPickup p95 740→126ms at c=5 (−83%); cold first-move p50 382→39ms (−90%) | **huge** | 1h | ✅ shipped v1.4.0-alpha-4.3 |
+|    — | F9.1  | pg.Pool max 10→30 — no measurable gain at c≤25 (free hedge for c≥100) | none | 1h | ✅ shipped v1.4.0-alpha-4.3 (ineffective) |
 |    1 | 1     | mobile FCP 1400→~700ms (−700ms × every cold visit)| **huge**  | 3-5d   | next   |
-|    2 | 5     | move→state 577→~270ms p50 (−300ms × every move)   | **huge**  | 3-5d   | sequenced after 1 |
-|    3 | 1d    | mobile FCP/LCP −1200ms, desktop −580ms (perceived)| **huge**  | 1d     | parallel with 1 |
+|    2 | 5     | remaining steady-state SSE work (~270ms floor)    | mid       | 3-5d   | sequenced after 1 |
+|    3 | 1c    | cold-authed Ready 200→143ms p50 (−30%)            | mid       | 0.5d   | queued |
 |    4 | 17    | locks Phase-1 gains; direct ms = 0                | meta      | 0.5d   | sequenced after 1 |
 
 **Completed (this Tier 0 round):**
 
-- ✅ **Phase 3** — Hero image diet. **Shipped 2026-05-05** in
-  v1.4.0-alpha-4.1. Responsive WebP via CSS media query: 50 KB mobile
-  / 174 KB desktop, down from 888 KB single asset. Measured: img_kb on
-  Home Mobile dropped 888 → 50 (−94%); mobile TBT 62 → 50ms (−19%).
-  Mobile Ready/LCP movement small because mobile is JS-parse-bound,
-  not byte-bound — the win lands primarily on bytes-over-the-wire.
+- ✅ **Phase 3** — Hero image diet. **Shipped v1.4.0-alpha-4.1
+  (2026-05-05).** Responsive WebP via CSS media query: 50 KB mobile
+  / 174 KB desktop (−94/−80% from 888 KB JPG). Mobile TBT 62→50ms.
+  Detail in Appendix Z.1.6.
+- ✅ **Phase 1d** — Instant-ready hero. **Shipped v1.4.0-alpha-4.2
+  (2026-05-05)** in commit `d5cfabd`. Inline static board markup in
+  `landing/index.html`; React `createRoot` swap on hydrate. Mobile
+  FCP **1416→432 ms (−69%)**, LCP **1792→432 ms (−76%)**, desktop
+  FCP **804→424 ms (−47%)**. Ready unchanged (bundle parse still
+  dominates) but the *visible* "page is alive" moment now lands at
+  the HTML-render boundary — biggest perceived-perf single move in
+  the plan, delivered for 1 day's work.
+- ✅ **Phase 5.1** — Cold-broker XREAD fix. **Shipped v1.4.0-alpha-4.3
+  (2026-05-05)** in commit `0dcb244`. Reduced `XREAD_BLOCK_MS` from
+  30s → 1s in `backend/src/lib/sseBroker.js`. publishToPickup p95
+  at c=5 **740 → 126 ms (−83%)**; cold first-move p50 **382 → 39 ms
+  (−90%)**. Phase 5's headline ROI was this fix; remaining Phase 5
+  steps target the ~270 ms steady-state floor only. Detail in
+  Appendix Z.1.7.
+- ⚠️ **F9.1** — pg.Pool max 10 → 30. **Shipped v1.4.0-alpha-4.3** in
+  commit `3280859` but **had no measurable gain at c≤25**. Pool was
+  not the actual bottleneck; queries are 1–5 ms each and the pool
+  was rotating fast enough to never queue. Kept in as a free hedge
+  for c≥100. Real apply p95 ceiling is elsewhere (1 shared vCPU
+  + WAL fsync are leading suspects — see §F9). Detail in Appendix
+  Z.1.8.
 
 **Active queue (sorted by combined real + perceived benefit):**
 
@@ -2100,28 +2308,25 @@ a later phase depends on an earlier one shipping first.
    dominates). Real benefit ≈ 700 ms × every cold-anon and cold-authed
    visit; perceived benefit huge (FCP is the most visible user metric).
 
-2. **Phase 5** — SSE round-trip latency. *Scope narrowed after the
-   2026-05-04 Fly-Replay reliability fix.* Remaining: 577 ms p50 /
-   926 ms p95 prod for POST move → SSE state event. F4 decomposition
-   shows the long pole is `publishToPickup` (Fly Upstash pub/sub) at
-   383 ms p50, *not* code we control: `server.lookup` 4 ms,
-   `server.apply` 10 ms, `broker.pickupToWrite` 0 ms. Cutting it
-   further means moving pub/sub closer (Redis on Fly proper, in-region
-   replica) or collapsing the event hop entirely (write directly to
-   the originating connection's response, skipping pub/sub for the
-   single-machine fast path). Real benefit ≈ 300 ms × every PvP / PvB
-   move; perceived benefit huge (this is the click-to-result feel).
-   **Sequenced after Phase 1** — the bundle work likely shrinks the
-   perceived gap on its own; re-measure before scoping.
+2. **Phase 5** — Remaining steady-state SSE work. *Scope narrowed
+   after Phase 5.1 shipped.* Cold-wake spike eliminated; remaining
+   floor is ~270 ms p50 of which `publishToPickup` is now 113 ms p50
+   / 191 ms p95 (single-stream, post-fix). Cutting it further means
+   moving pub/sub closer (Redis on Fly proper, in-region replica) or
+   collapsing the event hop entirely (write directly to the
+   originating connection's response, skipping pub/sub for the
+   single-machine fast path). Concrete steps in §F4: SSE-unbuffered
+   confirm, Nagle disable, in-process fanout, event coalesce.
+   **Sequenced after Phase 1** — re-measure first; bundle work likely
+   shrinks the perceived gap.
 
-3. **Phase 1d** — Instant-ready hero (perceived-only). Inline a
-   static SVG of the demo board in `landing/index.html` so first
-   paint shows the hero without waiting for JS. Live `DemoArena`
-   takes over on hydrate (cross-fade or in-place swap).
-   Real ms = 0; perceived ms = −1200ms FCP/LCP mobile / −580ms
-   desktop — biggest perceived-perf single move available.
-   **Stacks with Phase 1, ships in parallel** — independent code
-   path. ~1 day. (Full spec under "Phase 1d" in Section A.)
+3. **Phase 1c** — Cold-authed orchestration cleanup. Memoize
+   `api.users.sync` with a per-token in-flight `Map<token,Promise>`
+   so the two parallel effects in `AppLayout.jsx` (`:288` and `:439`)
+   share one round-trip. Critical path drops from ~200 ms p50 / 262 ms
+   p95 to ~143 ms p50 / 205 ms p95 — a **30% cut on every cold-authed
+   first paint**. ~30 LOC. Half-day. *Could land in parallel with
+   Phase 1.*
 
 4. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
    *Sequenced after Phase 1.* Direct ms = 0; meta-value high (locks
@@ -2173,8 +2378,8 @@ floor is real, two gaps need to close:
   (wrap `users.sync` in a per-token in-flight `Map<token,Promise>`
   pattern; clear the entry on settle so retries still work).
 
-  Filed as **Phase 1c — cold-authed orchestration cleanup** in Tier 1
-  (rank #1 there — cheapest meaningful authed-paint win in the plan).
+  Filed as **Phase 1c — cold-authed orchestration cleanup** in Tier 0
+  (promoted from Tier 1 — cheap, can ship in parallel with Phase 1).
 - **DB time as a fraction of endpoint p95** — Phase 2 is currently
   deferred for "lack of evidence", but endpoint p95 is wall-clock and
   could be 90% DB or 10% DB; we can't tell. Wire OpenTelemetry or
@@ -2190,39 +2395,39 @@ post-Phase-1 numbers come in.
 
 | Rank | Phase | Real ms benefit                                | Perceived | Effort |
 |-----:|-------|------------------------------------------------|:---------:|:------:|
-|    1 | 1c    | cold-authed FCP 200→143ms p50 (−60ms × every authed paint) | mid       | 0.5d   |
-|    2 | 13    | TournamentDetail render path + memoization     | mid       | 2-3d   |
-|    3 | 7     | mobile critical-CSS, transform-only animations | mid       | 1-2d   |
-|    4 | 8     | skeletons (pure perceived-perf — no real ms)   | high      | 1-2d   |
+|    1 | 13    | TournamentDetail render path + memoization     | mid       | 2-3d   |
+|    2 | 7     | mobile critical-CSS, transform-only animations | mid       | 1-2d   |
+|    3 | 8     | skeletons (pure perceived-perf — no real ms)   | high      | 1-2d   |
+|    4 | F9.2  | VM CPU bump (1 shared → 2 dedicated) — apply p95 ceiling | low | $$ ops |
 |    5 | aux   | Better Auth rate-limit whitelist (synthetic only) | none   | 0.5d   |
 
-1. **Phase 1c — cold-authed orchestration cleanup.** *Filed
-   2026-05-05 from the client orchestration audit (above).* Memoize
-   `api.users.sync` with a per-token in-flight `Map<token,Promise>` so
-   the two parallel effects in `AppLayout.jsx` (`:288` and `:439`)
-   share one round-trip. Critical path drops from ~200 ms p50 / 262 ms
-   p95 to ~143 ms p50 / 205 ms p95 — a **30% cut on every cold-authed
-   first paint**. ~30 LOC in `landing/src/lib/api.js`. **Lands after
-   Phase 1.**
+(Phase 1c promoted to Tier 0 on 2026-05-05 — the dedupe is cheap
+enough to ship in parallel with Phase 1, no longer waits on it.)
 
-2. **Phase 13 — Tournament page** is the heaviest single surface
+1. **Phase 13 — Tournament page** is the heaviest single surface
    (1900-line render path). Phase 1 should already lazy-load it, but
    the page itself still needs Suspense splitting + memoization +
    pagination on the round/match lists. Affects only users on that
    route, but they're our most-engaged cohort.
 
-3. **Phase 7 — Mobile-specific.** Mobile FCP is ~3× desktop today —
+2. **Phase 7 — Mobile-specific.** Mobile FCP is ~3× desktop today —
    parse cost on Moto G4 CPU. If Phase 1 doesn't bring it to budget on
    its own, critical-CSS extraction + transform-only animations are
-   the next levers. Pairs with Phase 1; only ranks below 1c/13 because
+   the next levers. Pairs with Phase 1; only ranks below 13 because
    it's a "mobile remainder" — needs Phase 1 to land first to know the
    actual residual.
 
-4. **Phase 8 — Skeletons everywhere new** (TournamentDetailPage,
+3. **Phase 8 — Skeletons everywhere new** (TournamentDetailPage,
    TournamentsPage, BotProfilePage, ProfilePage). Pure perceived-perf
    pass — the actual route isn't faster, just feels faster while
    chunks load. Pairs with Phase 1's `<Suspense>` boundaries (the
    skeleton *is* the fallback). Real-ms impact = 0.
+
+4. **F9.2 — VM CPU bump (1 shared → 2 dedicated).** Direct test of
+   the leading hypothesis for why F9.1's pool fix didn't budge apply
+   p95 at c=25. Predicted apply p95 c=25: 46 → 15-20ms. Budget call,
+   not a code change — track separately. Validate with `perf-sse-load
+   --concurrency=25,50` before/after.
 
 5. **Better Auth rate-limit whitelist for synthetic.** `get-session`
    90/200 ok at concurrency 5 in prod. Real users won't hit this; the
