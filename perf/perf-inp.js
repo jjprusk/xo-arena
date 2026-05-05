@@ -75,20 +75,25 @@ const INP_INTERACTIONS = [
     },
   },
   {
-    name: 'Tournaments — filter click',
+    name: 'Tournaments — search type',
     path: '/tournaments',
     interact: async (page) => {
-      // FilterBar renders {Open,Live,Completed} pills + a date range select.
-      // After page load, allow extra time for the data fetch to mount the
-      // filter row, then click "Completed" (always present).
-      await page.waitForSelector('button:has-text("Completed")', { timeout: 8_000 })
-      await page.locator('button:has-text("Completed")').first().click({ timeout: 5_000 })
+      // Pill clicks settle in <16ms and slip under the PerformanceObserver
+      // durationThreshold, producing 0 samples. Typing into the SearchBar
+      // input fires keydown/input/keyup with interactionId on every keystroke
+      // and reliably surfaces INP for this route.
+      await page.waitForSelector('input[placeholder^="Search tournaments"]', { timeout: 8_000 })
+      const input = page.locator('input[placeholder^="Search tournaments"]').first()
+      await input.click({ timeout: 5_000 })
+      await input.type('open', { delay: 30 })
     },
   },
   {
-    name: 'Leaderboard — toggle bots',
-    path: '/leaderboard',
+    name: 'Rankings — toggle bots',
+    path: '/rankings',
     interact: async (page) => {
+      // Route is /rankings (RankingsPage), not /leaderboard. The toggle is
+      // a button[role="switch"] inside a label.
       await page.waitForSelector('button[role="switch"]', { timeout: 8_000 })
       await page.locator('button[role="switch"]').first().click({ timeout: 5_000 })
     },

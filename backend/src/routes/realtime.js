@@ -22,6 +22,7 @@
 import { Router } from 'express'
 import { optionalAuth } from '../middleware/auth.js'
 import * as sseSessions from '../realtime/sseSessions.js'
+import { targetMachineFor, sendReplay } from '../realtime/flyReplay.js'
 import { getSystemConfig } from '../services/skillService.js'
 import { handleIdlePong } from '../services/tableService.js'
 import { joinMatchTable, TournamentMatchError } from '../services/tournamentMatchService.js'
@@ -51,6 +52,13 @@ export function requireSseSession(req, res, next) {
   if (!sessionId || typeof sessionId !== 'string') {
     return res.status(409).json({ error: 'sse-session-required', code: 'SSE_SESSION_MISSING' })
   }
+  // Multi-machine routing: the session lives in an in-memory Map on the
+  // machine that opened the SSE connection. The session id encodes that
+  // machine's id as a prefix; if this POST landed on a different machine,
+  // hand it back to Fly's edge proxy with a Fly-Replay header so the right
+  // machine handles it. Off-Fly (no FLY_MACHINE_ID env), this is a no-op.
+  const ownerMachineId = targetMachineFor(sessionId)
+  if (ownerMachineId) return sendReplay(res, ownerMachineId)
   const entry = sseSessions.get(sessionId)
   if (!entry) {
     return res.status(409).json({ error: 'sse-session-required', code: 'SSE_SESSION_EXPIRED' })

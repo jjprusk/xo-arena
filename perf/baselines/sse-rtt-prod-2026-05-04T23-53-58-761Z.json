@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-05-04T23:53:58.761Z",
+  "env": "prod",
+  "baseUrl": "https://xo-landing-prod.fly.dev",
+  "runs": 20,
+  "failures": 18,
+  "summary": {
+    "sseConnect": {
+      "p50": 155,
+      "p95": 158,
+      "n": 2
+    },
+    "movePostAck": {
+      "p50": 196,
+      "p95": 223,
+      "n": 2
+    },
+    "playerEvent": {
+      "p50": 202,
+      "p95": 224,
+      "n": 2
+    },
+    "botMoveTotal": {
+      "p50": 202,
+      "p95": 224,
+      "n": 2
+    },
+    "lookup": {
+      "p50": 4,
+      "p95": 4,
+      "n": 2
+    },
+    "apply": {
+      "p50": 9,
+      "p95": 10,
+      "n": 2
+    },
+    "publishToPickup": {
+      "p50": 13,
+      "p95": 14,
+      "n": 2
+    },
+    "pickupToWrite": {
+      "p50": 0,
+      "p95": 0,
+      "n": 2
+    },
+    "postNetwork": {
+      "p50": 184,
+      "p95": 209,
+      "n": 2
+    },
+    "sseNetwork": {
+      "p50": 0,
+      "p95": 0,
+      "n": 2
+    }
+  },
+  "samples": {
+    "sseConnectMs": [
+      158,
+      152
+    ],
+    "movePostAckMs": [
+      223,
+      169
+    ],
+    "playerEventMs": [
+      224,
+      180
+    ],
+    "botMoveTotalMs": [
+      224,
+      180
+    ],
+    "lookupMs": [
+      4,
+      3
+    ],
+    "applyMs": [
+      10,
+      8
+    ],
+    "publishToPickupMs": [
+      14,
+      12
+    ],
+    "pickupToWriteMs": [
+      0,
+      0
+    ]
+  }
+}
