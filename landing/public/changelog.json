@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-4.0",
+    "date": "2026-05-04",
+    "description": "Multi-machine fly fix"
+  },
+  {
     "version": "1.4.0-alpha-3.0",
     "date": "2026-05-04",
     "description": "Performance instrumentation continued"
@@ -17,12 +22,12 @@
   {
     "version": "1.3.0-alpha-8.0",
     "date": "2026-05-01",
-    "description": "Journey fixes — cup step 7 credits round-1 losers, broken render loop blocking post-cup CTA, isTest template/scheduler guards, faster cup pace for e2e"
+    "description": "Journey fixes \u2014 cup step 7 credits round-1 losers, broken render loop blocking post-cup CTA, isTest template/scheduler guards, faster cup pace for e2e"
   },
   {
     "version": "1.3.0-alpha-4.0",
     "date": "2026-04-27",
-    "description": "Table fixes — slug redesign, seat-release on every COMPLETED transition, Safari pagehide graceful close, table.released telemetry"
+    "description": "Table fixes \u2014 slug redesign, seat-release on every COMPLETED transition, Safari pagehide graceful close, table.released telemetry"
   },
   {
     "version": "1.3.0-alpha-3.0",
@@ -42,7 +47,7 @@
   {
     "version": "1.3.0-alpha-1.34",
     "date": "2026-04-24",
-    "description": "Tournament service reliability — always-on machine + prod-bringup secrets documented"
+    "description": "Tournament service reliability \u2014 always-on machine + prod-bringup secrets documented"
   },
   {
     "version": "1.3.0-alpha-1.33",
@@ -87,12 +92,12 @@
   {
     "version": "1.3.0-alpha-1.24",
     "date": "2026-04-22",
-    "description": "Symmetric seat pods — avatars straddle panel rim"
+    "description": "Symmetric seat pods \u2014 avatars straddle panel rim"
   },
   {
     "version": "1.3.0-alpha-1.23",
     "date": "2026-04-22",
-    "description": "Landing build fix — ship v1.20–v1.22 UI changes"
+    "description": "Landing build fix \u2014 ship v1.20\u2013v1.22 UI changes"
   },
   {
     "version": "1.3.0-alpha-1.22",
