@@ -29,6 +29,10 @@
  *   - `isStale`     — true while serving cached-but-revalidating data
  *   - `error`       — last fetcher rejection (or null)
  *   - `refresh`     — re-run the fetcher imperatively
+ *   - `mutate(next)` — overwrite the cached data without refetching.
+ *                     `next` can be a value or `(prev) => updated` for
+ *                     functional updates. Used for optimistic UI on
+ *                     local mutations (e.g. TablesPage create).
  *
  * The fetcher reference can change between renders (typical inline
  * arrow). The hook re-runs when **key** changes; fetcher is captured
@@ -101,6 +105,20 @@ export function useSWRish(key, fetcher, options = {}) {
     }
   }, [cacheKey])
 
+  const mutate = useCallback((next) => {
+    setData(prev => {
+      const updated = typeof next === 'function' ? next(prev) : next
+      writeCache(cacheKey, updated)
+      return updated
+    })
+    // Optimistic mutates clear the stale flag — caller is asserting
+    // the new value is the truth. Background revalidate is still
+    // available via refresh() if the caller wants to confirm.
+    setIsStale(false)
+    setIsLoading(false)
+    setError(null)
+  }, [cacheKey])
+
   useEffect(() => {
     aliveRef.current = true
     // Re-read the cache for the *new* key so prior-key data isn't
@@ -117,5 +135,5 @@ export function useSWRish(key, fetcher, options = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
-  return { data, error, isLoading, isStale, refresh: run }
+  return { data, error, isLoading, isStale, refresh: run, mutate }
 }

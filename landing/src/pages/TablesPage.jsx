@@ -14,6 +14,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
+import { useSWRish } from '../lib/swr.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useEventStream } from '../lib/useEventStream.js'
@@ -104,13 +105,9 @@ export default function TablesPage() {
   // Local input state for the search box; debounced writes land in the URL.
   const [searchInput, setSearchInput] = useState(searchTerm)
 
-  const [tables,     setTables]     = useState(null)
-  const [total,      setTotal]      = useState(0)
-  const [error,      setError]      = useState(null)
   const [showCreate, setShowCreate] = useState(false)
 
   const LIMIT = 20
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
 
   function updateParams(updates, replace = true) {
     setSearchParams(prev => {
@@ -141,25 +138,35 @@ export default function TablesPage() {
     return () => clearTimeout(t)
   }, [searchInput]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchTables = useCallback(async () => {
-    try {
-      const token = await getToken().catch(() => null)
-      const opts = { limit: LIMIT, page }
-      if (statusSel.length > 0) opts.status = statusSel.join(',')
-      if (gameFilter)           opts.gameId = gameFilter
-      if (searchTerm)           opts.search = searchTerm
-      const since = dateRangeSince(dateRange)
-      if (since) opts.since = since
-      const res = await api.tables.list(opts, token)
-      setTables(res.tables ?? [])
-      setTotal(res.total ?? 0)
-      setError(null)
-    } catch (err) {
-      setError(err.message || 'Failed to load tables')
-    }
+  // Phase 20.3b — SWR via the shared hook. Cache key encodes every
+  // filter so each combination has its own entry; on revisit the
+  // cached page paints in the same frame as mount before the network
+  // round-trip lands. Mutate is exposed to keep the optimistic-prepend
+  // on table create working.
+  const swrKey = `tables:list:${page}:${statusSel.join('|')}:${gameFilter}:${dateRange}:${searchTerm}`
+  const tablesFetcher = useCallback(async () => {
+    const token = await getToken().catch(() => null)
+    const opts = { limit: LIMIT, page }
+    if (statusSel.length > 0) opts.status = statusSel.join(',')
+    if (gameFilter)           opts.gameId = gameFilter
+    if (searchTerm)           opts.search = searchTerm
+    const since = dateRangeSince(dateRange)
+    if (since) opts.since = since
+    const res = await api.tables.list(opts, token)
+    return { tables: res.tables ?? [], total: res.total ?? 0 }
   }, [statusSel, gameFilter, dateRange, searchTerm, page])
-
-  useEffect(() => { fetchTables() }, [fetchTables])
+  const {
+    data:    tablesData,
+    error:   listError,
+    refresh: fetchTables,
+    mutate:  mutateTables,
+  } = useSWRish(swrKey, tablesFetcher, { maxAgeMs: 60_000 })
+  // Cold load → null (matches the prior `useState(null)` semantics so
+  // callers that distinguish "loading" from "empty" still work).
+  const tables = tablesData?.tables ?? null
+  const total  = tablesData?.total  ?? 0
+  const error  = listError ? (listError.message || 'Failed to load tables') : null
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
 
   // Real-time: listen to table.* bus events via SSE and refresh the list.
   // Small events stream, so a full re-fetch is simpler and correct vs.
@@ -258,9 +265,13 @@ export default function TablesPage() {
           onClose={() => setShowCreate(false)}
           onCreated={table => {
             setShowCreate(false)
-            // Optimistic prepend so the newly-created table appears immediately
-            // — the next poll / real-time event will reconcile.
-            setTables(curr => curr ? [table, ...curr] : [table])
+            // Optimistic prepend so the newly-created table appears
+            // immediately — the next poll / real-time event reconciles.
+            // Routed through the SWR mutate so the cache stays in sync.
+            mutateTables(prev => ({
+              tables: prev?.tables ? [table, ...prev.tables] : [table],
+              total:  (prev?.total ?? 0) + 1,
+            }))
           }}
         />
       )}

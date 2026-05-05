@@ -139,6 +139,57 @@ describe('useSWRish — refresh()', () => {
   })
 })
 
+describe('useSWRish — mutate()', () => {
+  it('overwrites data with a value and writes through to the cache', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ tables: ['a'] })
+    const { result } = renderHook(() => useSWRish('mutate-value', fetcher))
+    await waitFor(() => expect(result.current.data).toEqual({ tables: ['a'] }))
+
+    act(() => { result.current.mutate({ tables: ['b'] }) })
+    expect(result.current.data).toEqual({ tables: ['b'] })
+
+    const raw = JSON.parse(localStorage.getItem('xo_swr_mutate-value'))
+    expect(raw.data).toEqual({ tables: ['b'] })
+  })
+
+  it('supports a functional updater for optimistic prepend', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ tables: ['existing'] })
+    const { result } = renderHook(() => useSWRish('mutate-fn', fetcher))
+    await waitFor(() => expect(result.current.data).toEqual({ tables: ['existing'] }))
+
+    act(() => {
+      result.current.mutate(prev => ({
+        ...prev,
+        tables: ['new', ...(prev?.tables ?? [])],
+      }))
+    })
+    expect(result.current.data).toEqual({ tables: ['new', 'existing'] })
+  })
+
+  it('does NOT call the fetcher (optimistic-only — caller decides whether to refresh)', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ x: 0 })
+    const { result } = renderHook(() => useSWRish('mutate-no-refetch', fetcher))
+    await waitFor(() => expect(result.current.data).toEqual({ x: 0 }))
+    fetcher.mockClear()
+
+    act(() => { result.current.mutate({ x: 1 }) })
+    expect(result.current.data).toEqual({ x: 1 })
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('clears isStale + error so optimistic data is treated as fresh', async () => {
+    localStorage.setItem('xo_swr_mutate-stale', JSON.stringify({ data: { x: 'cached' }, ts: Date.now() }))
+    const fetcher = vi.fn().mockRejectedValue(new Error('fail'))
+    const { result } = renderHook(() => useSWRish('mutate-stale', fetcher))
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+    expect(result.current.isStale).toBe(true)
+
+    act(() => { result.current.mutate({ x: 'optimistic' }) })
+    expect(result.current.isStale).toBe(false)
+    expect(result.current.error).toBeNull()
+  })
+})
+
 describe('useSWRish — defensive', () => {
   it('does not throw if localStorage is unavailable', async () => {
     const orig = Storage.prototype.getItem
