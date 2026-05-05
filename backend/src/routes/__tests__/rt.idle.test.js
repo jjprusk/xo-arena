@@ -75,6 +75,42 @@ describe('POST /api/v1/rt/tables/:slug/idle/pong', () => {
     expect(res.body.code).toBe('SSE_SESSION_EXPIRED')
   })
 
+  it('emits Fly-Replay when sessionId pins to a different machine', async () => {
+    const orig = process.env.FLY_MACHINE_ID
+    process.env.FLY_MACHINE_ID = 'machineA'
+    try {
+      const app = makeApp()
+      const res = await request(app)
+        .post('/api/v1/rt/tables/abc/idle/pong')
+        .set('X-SSE-Session', 'machineB.someid')
+        .send({})
+      expect(res.status).toBe(200)
+      expect(res.headers['fly-replay']).toBe('instance=machineB')
+      expect(res.body).toEqual({ replay: 'machineB' })
+    } finally {
+      if (orig === undefined) delete process.env.FLY_MACHINE_ID
+      else process.env.FLY_MACHINE_ID = orig
+    }
+  })
+
+  it('falls through to local lookup when sessionId pins to this machine', async () => {
+    const orig = process.env.FLY_MACHINE_ID
+    process.env.FLY_MACHINE_ID = 'machineA'
+    try {
+      const app = makeApp()
+      // No registered session — should still 409 EXPIRED, not replay.
+      const res = await request(app)
+        .post('/api/v1/rt/tables/abc/idle/pong')
+        .set('X-SSE-Session', 'machineA.unknownid')
+        .send({})
+      expect(res.status).toBe(409)
+      expect(res.body.code).toBe('SSE_SESSION_EXPIRED')
+    } finally {
+      if (orig === undefined) delete process.env.FLY_MACHINE_ID
+      else process.env.FLY_MACHINE_ID = orig
+    }
+  })
+
   it('returns 200 + ok=true when handleIdlePong succeeds', async () => {
     const app = makeApp()
     sseSessions.register('s1', { userId: 'user_1' })

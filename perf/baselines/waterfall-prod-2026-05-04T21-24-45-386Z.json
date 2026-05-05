@@ -1,0 +1,576 @@
+{
+  "timestamp": "2026-05-04T21:24:45.386Z",
+  "env": "prod",
+  "baseUrl": "https://xo-landing-prod.fly.dev",
+  "runs": 5,
+  "results": [
+    {
+      "route": "Home",
+      "path": "/",
+      "primaryApi": "/api/v1/bots",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": 548,
+          "p95": 635,
+          "n": 5
+        },
+        "apiTotal": {
+          "p50": 78,
+          "p95": 138,
+          "n": 5
+        },
+        "apiEnd": {
+          "p50": 624,
+          "p95": 773,
+          "n": 5
+        },
+        "lcp": {
+          "p50": 768,
+          "p95": 840,
+          "n": 5
+        },
+        "loadEnd": {
+          "p50": 386,
+          "p95": 518,
+          "n": 5
+        }
+      },
+      "raw": {
+        "apiStart": [
+          635,
+          548,
+          508,
+          549,
+          514
+        ],
+        "apiTotal": [
+          138,
+          76,
+          74,
+          124,
+          78
+        ],
+        "apiEnd": [
+          773,
+          624,
+          582,
+          673,
+          592
+        ],
+        "lcp": [
+          840,
+          792,
+          768,
+          752,
+          740
+        ],
+        "loadEnd": [
+          518,
+          400,
+          365,
+          379,
+          386
+        ]
+      },
+      "apiSummary": [
+        {
+          "name": "/api/session",
+          "requestStart": 513,
+          "responseEnd": 583
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 583,
+          "responseEnd": 649
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 649,
+          "responseEnd": 719
+        },
+        {
+          "name": "/api/v1/bots",
+          "requestStart": 514,
+          "responseEnd": 592
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 719,
+          "responseEnd": 790
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "primaryApi": "/api/tournaments",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": 547,
+          "p95": 558,
+          "n": 5
+        },
+        "apiTotal": {
+          "p50": 113,
+          "p95": 217,
+          "n": 5
+        },
+        "apiEnd": {
+          "p50": 662,
+          "p95": 747,
+          "n": 5
+        },
+        "lcp": {
+          "p50": 560,
+          "p95": 564,
+          "n": 5
+        },
+        "loadEnd": {
+          "p50": 375,
+          "p95": 385,
+          "n": 5
+        }
+      },
+      "raw": {
+        "apiStart": [
+          528,
+          558,
+          547,
+          551,
+          526
+        ],
+        "apiTotal": [
+          217,
+          104,
+          200,
+          102,
+          113
+        ],
+        "apiEnd": [
+          745,
+          662,
+          747,
+          653,
+          639
+        ],
+        "lcp": [
+          564,
+          564,
+          556,
+          560,
+          560
+        ],
+        "loadEnd": [
+          385,
+          376,
+          375,
+          375,
+          374
+        ]
+      },
+      "apiSummary": [
+        {
+          "name": "/api/session",
+          "requestStart": 526,
+          "responseEnd": 593
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 593,
+          "responseEnd": 663
+        },
+        {
+          "name": "/api/tournaments",
+          "requestStart": 526,
+          "responseEnd": 639
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 663,
+          "responseEnd": 730
+        }
+      ]
+    },
+    {
+      "route": "Rankings",
+      "path": "/rankings",
+      "primaryApi": "/api/v1/leaderboard",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": 548,
+          "p95": 676,
+          "n": 5
+        },
+        "apiTotal": {
+          "p50": 82,
+          "p95": 212,
+          "n": 5
+        },
+        "apiEnd": {
+          "p50": 630,
+          "p95": 888,
+          "n": 5
+        },
+        "lcp": {
+          "p50": 564,
+          "p95": 912,
+          "n": 5
+        },
+        "loadEnd": {
+          "p50": 383,
+          "p95": 487,
+          "n": 5
+        }
+      },
+      "raw": {
+        "apiStart": [
+          534,
+          676,
+          549,
+          548,
+          526
+        ],
+        "apiTotal": [
+          109,
+          212,
+          76,
+          82,
+          77
+        ],
+        "apiEnd": [
+          643,
+          888,
+          625,
+          630,
+          603
+        ],
+        "lcp": [
+          572,
+          912,
+          560,
+          560,
+          564
+        ],
+        "loadEnd": [
+          384,
+          487,
+          380,
+          383,
+          377
+        ]
+      },
+      "apiSummary": [
+        {
+          "name": "/api/session",
+          "requestStart": 526,
+          "responseEnd": 607
+        },
+        {
+          "name": "/api/v1/leaderboard?period=all&mode=all&includeBots=false",
+          "requestStart": 526,
+          "responseEnd": 603
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 607,
+          "responseEnd": 679
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 679,
+          "responseEnd": 748
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "primaryApi": "/api/v1/bots",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": 1391,
+          "p95": 1416,
+          "n": 5
+        },
+        "apiTotal": {
+          "p50": 94,
+          "p95": 98,
+          "n": 5
+        },
+        "apiEnd": {
+          "p50": 1476,
+          "p95": 1510,
+          "n": 5
+        },
+        "lcp": {
+          "p50": 1796,
+          "p95": 1840,
+          "n": 5
+        },
+        "loadEnd": {
+          "p50": 519,
+          "p95": 551,
+          "n": 5
+        }
+      },
+      "raw": {
+        "apiStart": [
+          1416,
+          1381,
+          1391,
+          1411,
+          1380
+        ],
+        "apiTotal": [
+          94,
+          95,
+          80,
+          98,
+          85
+        ],
+        "apiEnd": [
+          1510,
+          1476,
+          1471,
+          1509,
+          1465
+        ],
+        "lcp": [
+          1840,
+          1796,
+          1400,
+          1824,
+          1788
+        ],
+        "loadEnd": [
+          551,
+          507,
+          521,
+          517,
+          519
+        ]
+      },
+      "apiSummary": [
+        {
+          "name": "/api/session",
+          "requestStart": 1379,
+          "responseEnd": 1450
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 1451,
+          "responseEnd": 1531
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 1531,
+          "responseEnd": 1611
+        },
+        {
+          "name": "/api/v1/bots",
+          "requestStart": 1380,
+          "responseEnd": 1465
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 1611,
+          "responseEnd": 1695
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "primaryApi": "/api/tournaments",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": 1360,
+          "p95": 1404,
+          "n": 5
+        },
+        "apiTotal": {
+          "p50": 114,
+          "p95": 213,
+          "n": 5
+        },
+        "apiEnd": {
+          "p50": 1474,
+          "p95": 1617,
+          "n": 5
+        },
+        "lcp": {
+          "p50": 1392,
+          "p95": 1412,
+          "n": 5
+        },
+        "loadEnd": {
+          "p50": 523,
+          "p95": 531,
+          "n": 5
+        }
+      },
+      "raw": {
+        "apiStart": [
+          1355,
+          1360,
+          1404,
+          1338,
+          1367
+        ],
+        "apiTotal": [
+          115,
+          114,
+          213,
+          112,
+          109
+        ],
+        "apiEnd": [
+          1470,
+          1474,
+          1617,
+          1450,
+          1476
+        ],
+        "lcp": [
+          1388,
+          1392,
+          1412,
+          1372,
+          1400
+        ],
+        "loadEnd": [
+          523,
+          526,
+          531,
+          515,
+          511
+        ]
+      },
+      "apiSummary": [
+        {
+          "name": "/api/session",
+          "requestStart": 1366,
+          "responseEnd": 1451
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 1451,
+          "responseEnd": 1526
+        },
+        {
+          "name": "/api/tournaments",
+          "requestStart": 1367,
+          "responseEnd": 1476
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 1526,
+          "responseEnd": 1609
+        }
+      ]
+    },
+    {
+      "route": "Rankings",
+      "path": "/rankings",
+      "primaryApi": "/api/v1/leaderboard",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": 1386,
+          "p95": 1668,
+          "n": 5
+        },
+        "apiTotal": {
+          "p50": 92,
+          "p95": 102,
+          "n": 5
+        },
+        "apiEnd": {
+          "p50": 1488,
+          "p95": 1760,
+          "n": 5
+        },
+        "lcp": {
+          "p50": 1408,
+          "p95": 1676,
+          "n": 5
+        },
+        "loadEnd": {
+          "p50": 527,
+          "p95": 826,
+          "n": 5
+        }
+      },
+      "raw": {
+        "apiStart": [
+          1668,
+          1407,
+          1386,
+          1369,
+          1373
+        ],
+        "apiTotal": [
+          92,
+          89,
+          102,
+          81,
+          101
+        ],
+        "apiEnd": [
+          1760,
+          1496,
+          1488,
+          1450,
+          1474
+        ],
+        "lcp": [
+          1676,
+          1416,
+          1396,
+          1380,
+          1408
+        ],
+        "loadEnd": [
+          826,
+          561,
+          524,
+          513,
+          527
+        ]
+      },
+      "apiSummary": [
+        {
+          "name": "/api/session",
+          "requestStart": 1373,
+          "responseEnd": 1459
+        },
+        {
+          "name": "/api/v1/leaderboard?period=all&mode=all&includeBots=false",
+          "requestStart": 1373,
+          "responseEnd": 1474
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 1459,
+          "responseEnd": 1535
+        },
+        {
+          "name": "/api/session",
+          "requestStart": 1535,
+          "responseEnd": 1611
+        }
+      ]
+    }
+  ]
+}
