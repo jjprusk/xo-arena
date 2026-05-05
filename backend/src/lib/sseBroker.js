@@ -37,10 +37,14 @@ const _clients = new Map()
 let _redis         = null
 let _loopRunning   = false
 // Liveness: updated on every XREAD return (entries or timeout). Used by
-// resourceCounters to detect a silently-dead loop. BLOCK is 30s so this
-// ticks at least that often even with zero activity.
+// resourceCounters to detect a silently-dead loop. BLOCK is 1s so the loop
+// iterates at least once per second even with zero activity — this keeps the
+// Node process from going deeply idle, which would otherwise add a
+// 150–500 ms wake-up tax to the *first* event after a quiet period
+// (publishToPickup p50 of 383 ms on quiet prod, 2026-05-05 measurement).
+// resourceCounters' staleness threshold is 90 s, well above 1 s.
 let _lastXreadAt   = null
-const XREAD_BLOCK_MS = 30_000
+const XREAD_BLOCK_MS = 1_000
 
 function ensureLoop() {
   if (_loopRunning) return

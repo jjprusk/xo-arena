@@ -1555,10 +1555,67 @@ Phase 2 mentions PgBouncer; doesn't audit what's already in place.
 
 ### F4 — Phase 5 (SSE round-trip) decomposition (concrete steps)
 
-The 0.4 data shows POST move → SSE event = 560ms / 670ms p50, with
-~400ms unaccounted for between POST ack and event arrival. The
-existing Phase 5 lists this at a high level; here's the specific
-sequence.
+The 0.4 data showed POST move → SSE event = 560ms / 670ms p50, with
+~400ms unaccounted for between POST ack and event arrival. The single-
+stream `perf-sse-rtt` decomposition (2026-05-05) put 383ms p50 of
+that on `publishToPickup` (Redis XADD → broker XREAD wake). The
+follow-up concurrent load test (`perf/perf-sse-load.js`,
+2026-05-05) sharply rewrote what that number represents:
+
+- **It is not Redis throughput** — `pickupToWrite` is < 1ms p50 at
+  every load level, and `apply` (which includes the XADD) is < 20ms
+  p50 even at c=50.
+- **It is not load-related** — at c=50 concurrent users the
+  publishToPickup p50 is **21ms** (vs 383ms quiet), p95 106ms.
+- **It is the broker's process wake-up cost on a quiet service.**
+  The broker uses `XREAD BLOCK 30_000` (`backend/src/lib/sseBroker.js:43`).
+  When the backend is idle, the Node process pages out / scheduler
+  deprioritises it / Redis TCP connection's recv-buffer is empty.
+  The first XADD that follows pays a measurable wake-up tax
+  (~150–500ms) before `Date.now()` is sampled in `dispatchEntry`.
+  Once the loop is hot — i.e. any time the broker has dispatched an
+  event in the last few hundred ms — that tax is ~20ms.
+- **By move-index** (staging, c=5, n=5 each):
+  - move 0 (cold table, may also catch broker idle): **382ms p50, 740ms p95**
+  - move 1 (warm channel): 35ms p50, 49ms p95
+  - move 2 (warm channel): 55ms p50, 69ms p95
+
+#### Concurrency sweep — staging, 2026-05-05
+
+`perf/perf-sse-load.js --target=staging --sweep=1,5,10,25` then a
+follow-up `--concurrency=50`. 3 moves per virtual user, 80ms ramp.
+
+| c   | n   | apply p50/p95 | publishToPickup p50/p95 | pickupToWrite p50/p95 | movePostAck p50/p95 | botMoveTotal p50/p95 |
+|----:|----:|:-------------:|:-----------------------:|:---------------------:|:-------------------:|:--------------------:|
+|  1  |   3 |   7 / 8 ms    |     55 / 196 ms         |     0 / 1 ms          |   166 / 197 ms      |   257 / 367 ms       |
+|  5  |  15 |   7 / 8 ms    |     55 / **740 ms**     |     0 / 0 ms          |   189 / 260 ms      |   324 / 932 ms       |
+| 10  |  30 |   7 / 18 ms   |     32 / 406 ms         |     0 / 0 ms          |   195 / 304 ms      |   278 / 612 ms       |
+| 25  |  75 |  15 / 45 ms   |     25 / 406 ms         |     0 / 0 ms          |   291 / 556 ms      |   391 / 721 ms       |
+| 50  | 150 |  19 / 41 ms   |     21 / 80 ms          |     0 / 0 ms          |   396 / 604 ms      |   453 / 633 ms       |
+
+Reading the table:
+
+- **`publishToPickup` p50 *drops* with load**, from 55 → 21ms. p95
+  spikes at c=5/10 (740 / 406ms) but is dominated by move-0
+  cold-wake (see breakdown above). At c=50 the p95 is back to 80ms
+  because the broker loop never goes idle long enough to catch a
+  cold wake-up.
+- **`apply` p95 climbs cleanly** (8 → 45 ms = 5.6× at c=25, then
+  41ms at c=50 — Postgres holds up). This is the only metric where
+  load amplification is monotone and clean.
+- **`pickupToWrite` is flat at 0** at every level — broker dispatch
+  loop is not a bottleneck, which kills one Phase 5 sub-task ("audit
+  redis pub/sub round-trip" — answer: it's fine).
+- **`movePostAck` p50 ~doubles** by c=50 (166 → 396 ms), driven by
+  apply growth + Node event-loop pressure. This is the dominant
+  user-perceptible regression under load.
+- **No fatal failures** at c=50 (50/50 users completed all 3 moves).
+
+This rewrites Phase 5's ROI math and step list. The original
+in-process-fanout / pubsub-shortcut steps below are still valid,
+but the headline win is no longer "~300 ms saved on every move":
+it's "~300 ms saved on the *first* move per fresh table, *only* on
+quiet services."
 
 - [x] **Time-trace one move end to end.** *(spike landed 2026-05-04 on
       `dev`)* — `backend/src/routes/realtime.js` POST `/rt/tables/:slug/move`
@@ -1573,6 +1630,17 @@ sequence.
       (ack→event − server). **Local sanity-check (n=10):** every leg
       ≤2ms; total matches client-measured `playerEventMs`. Staging +
       prod numbers TBD after promote — that's where the ~400ms lives.
+- [ ] **Keep the broker hot — kill the cold-wake penalty.**
+      *(NEW, top priority based on 2026-05-05 load evidence.)* The
+      cheapest possible fix: add a 1Hz keepalive XADD into
+      `events:tier2:stream` (no-op payload, suppressed at dispatch).
+      Cost: 86k extra stream entries/day, negligible Redis CPU.
+      Benefit: `publishToPickupMs` p50 drops from ~383ms to ~20ms on
+      every quiet-traffic environment (prod nights, staging, dev). Or
+      reduce `XREAD_BLOCK_MS` from 30_000 to 1_000 so the loop iterates
+      every second — same effect via a different lever; pick whichever
+      has cleaner failure modes. Validate with `perf/perf-sse-load.js
+      --concurrency=1` before/after.
 - [ ] **Confirm SSE response is unbuffered.** Express + compression
       middleware can buffer SSE frames if not disabled per-route.
       Verify `Content-Encoding: identity` (or no-op compress) on
@@ -1671,7 +1739,7 @@ synthetic blind spots, ranked by likely-to-find-real-issues:
 |--:|----------------------------------|---------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|:------:|
 | 1 | **Cold-authed page-level perf**  | perf-v2 only does `cold-anon`. We have authed *endpoints* (p95) but not authed *pages* (Ready/FCP/LCP). | Phase 1c is scoped from endpoint math (200→143 ms p50). Actual cold-authed page Ready could be 300 ms slower than cold-anon for *all* signed-in users — we're guessing the win. | 1d     |
 | 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
-| 3 | **Live SSE under realistic load**| `perf-sse-rtt` measures **one** move at a time, isolated. Real games are: rapid-fire move sequences, 2 concurrent games per machine, 10 spectators on a table, tournament fan-out to 50 users. | The `publishToPickup` 383 ms p50 is on a *quiet* prod. Under fan-out load it could be much worse. The Phase 5 ROI estimate ("move pub/sub closer = ~300 ms saved") is unvalidated under load. | 2-3d   |
+| 3 | **Live SSE under realistic load** *(closed)* | ~~`perf-sse-rtt` measures **one** move at a time, isolated.~~ Closed 2026-05-05 by `perf/perf-sse-load.js`. Findings rewrote Phase 5's scope — see §F4 above. tl;dr: fan-out load doesn't degrade `publishToPickup`; the 383 ms prod number is **cold-broker-wakeup** on the *first* move into a fresh table, and warm/under-load moves all complete in <60 ms p50. | closed |
 | 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
 | 5 | **DB time as fraction of p95**   | Endpoint p95 is wall-clock — could be 90% DB or 10% DB. Phase 0.3 (RED metrics) hasn't shipped.        | Phase 2 is "deferred for lack of evidence" — but the evidence collection itself is the deferred work. Circular.                  | 2-3d   |
 | 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
@@ -1683,9 +1751,9 @@ batch — each gap-closing PR is its own measurement → finding cycle.
 **My recommendation for next gap to close** (after Phase 1 lands):
 gap **#1 (cold-authed pages)**. It directly validates Phase 1c's
 expected ROI, and we already have the `xo_perf` token plumbing from
-the `um perfuser` CLI. Gap #3 (SSE under load) is the biggest blind
-spot for *quality*, but requires more fixture work — better as a
-pair with Phase 5 when it's time to scope that.
+the `um perfuser` CLI. Gap **#3 (SSE under load)** closed
+2026-05-05 — see §F4 above for the full evidence and revised
+Phase 5 scope.
 
 What stays *out of scope* for the synthetic harness even now: cross-region
 latency (not actionable from a single test runner), tab-throttling
