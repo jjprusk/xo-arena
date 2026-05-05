@@ -74,14 +74,20 @@ work narratives.
 | Rank | Item                                | Real impact (estimated)                                    | Cost   | Risk    | Status |
 |-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|
 |    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP ~1400 → ~700 ms (−700 ms × every cold visit)    | 3-5d   | medium  | queued |
-|    2 | **F9.2** — VM CPU bump (1 shared → 2 dedicated) | `movePostAck` p50 at c=50: 302 → ~150-180 ms (probe-validated) | $$ ops | low | promoted from Tier 1 — recommended next lever |
-|    3 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | sequenced after Phase 1 |
-|    4 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | queued |
+|    2 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | sequenced after Phase 1 |
+|    3 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | queued |
 
 (Phase 5 remaining steps demoted from Tier 0 — F9 probe sweep
 2026-05-05 showed `apply.post` ≤2ms p95 at c=50, so in-process
 fanout / broker shortcut is not where wall-clock lives. See §F9
 and Appendix Z.1.9.)
+
+(F9.2 — VM CPU bump — **deferred 2026-05-05 on cost grounds.** The
+F9 probes proved it's the right perf lever, but performance-2x VMs
+add ~$87/mo across staging + prod. Revisit when traffic justifies
+it (sustained c≥25 in production telemetry) or when Fly's pricing
+changes. Until then, c≤25 staging perf is "good enough" — apply
+p95 26ms, movePostAck p50 ~220ms.)
 
 ### Active queue — Tier 1 (after Tier 0 lands)
 
@@ -100,6 +106,7 @@ and Appendix Z.1.9.)
 | Phase 2 — DB indexes                | F9 audit found no missing indexes; query time <20 ms p95   | Apply p95 stays >50 ms after F9.2 |
 | Phase 6 — backend cold start        | Fly auto-stop disabled in iad; not the bottleneck          | If we re-enable auto-stop |
 | Phase 14 — Gym worker thread        | Non-realtime; lower user-reach than Tier 0 items           | After Tier 0 ships |
+| **F9.2 — VM CPU bump** (1 shared → 2 dedicated) | Probe-validated as the right lever, but ~+$87/mo across staging + prod for performance-2x. Current c≤25 staging perf "good enough" (apply p95 26 ms, movePostAck p50 ~220 ms). | Sustained c≥25 in prod telemetry, or pricing change |
 | Section E aggressive bets (Bun, WebTransport, Hono edge, RSC) | Tier 4 architecture; revisit only if Tier 0+1+2 leaves a gap | Post-V1 |
 
 ### Headline answer (was open, settled 2026-05-05)
@@ -124,8 +131,15 @@ ran on staging 2026-05-05 and gave a definitive read:**
   is the **1-shared-vCPU saturation profile.**
 
 **Conclusion:** F9.2 (VM bump 1 shared → 2 dedicated) is the
-**recommended next perf lever** with hard data behind it. Predicted
-impact: `movePostAck` p50 at c=50 drops 302 → ~150-180 ms.
+**right next perf lever** with hard data behind it (predicted:
+`movePostAck` p50 at c=50 drops 302 → ~150-180 ms). **Deferred
+2026-05-05 on cost grounds** (~+$87/mo across staging + prod for
+performance-2x VMs). Current c≤25 staging perf is "good enough"
+(apply p95 26 ms, movePostAck p50 ~220 ms). Revisit when traffic
+sustains c≥25 in production telemetry, or when Fly's pricing
+shifts. The instrumentation stays — when we *do* re-test, the
+probes already wired in v1.4.0-alpha-4.4 will produce a clean
+before/after.
 
 See §F9 for the full audit and Appendix Z.1.9 for the staging probe
 sweep narrative.
@@ -1966,12 +1980,20 @@ here so we don't re-investigate them.
 1. ~~Ship F9.1 (`max: 30`).~~ **Done** v1.4.0-alpha-4.3. No
    measurable gain on apply p95 at the load levels tested
    (c=1 to c=25). Kept as a defensive change for future c=100+ load.
-2. **F9.2 (VM bump) is the actual next lever.** Promote from
-   "pending budget approval" — apply p95 at c=25 stayed at 46 ms
-   even with the pool fix, indicating the cost is in Node event-
-   loop contention on a single shared vCPU. Test cost: ~$15-30/mo
-   bump to performance-1× per backend machine.
-3. Phase 2 (DB indexes) stays deferred — F9.3 confirms DB itself
+2. ~~Ship F9 probes (granular apply Server-Timing + pool stats).~~
+   **Done** v1.4.0-alpha-4.4. Probes pinpointed 1-shared-vCPU as
+   the bottleneck and ruled out pool, broker dispatch, and JSONB
+   write contention. Detail in Appendix Z.1.9.
+3. **F9.2 (VM bump) — DEFERRED 2026-05-05 on cost grounds.**
+   Probe-validated as the right lever (predicted: movePostAck p50
+   c=50 drops 302 → ~150-180 ms), but performance-2x VMs add
+   ~+$87/mo across staging + prod (staging ~$31, prod 2 mach ~$62
+   vs current ~$5.82). Current c≤25 staging perf is acceptable
+   (apply p95 26 ms, movePostAck p50 ~220 ms). Re-promote when
+   prod telemetry shows sustained c≥25, or when Fly's pricing
+   changes. The probes stay wired — when we re-test, the
+   before/after will be clean.
+4. Phase 2 (DB indexes) stays deferred — F9.3 confirms DB itself
    is fast (apply queries < 20 ms p95 even at c=50).
 
 ---
