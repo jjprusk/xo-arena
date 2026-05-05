@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-4.1",
+    "date": "2026-05-05",
+    "description": "Perf - hero update"
+  },
+  {
     "version": "1.4.0-alpha-4.0",
     "date": "2026-05-04",
     "description": "Multi-machine fly fix"
