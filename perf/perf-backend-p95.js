@@ -31,6 +31,17 @@
  *   the JSON body). The user must already exist in the target env.
  *   For local: docker compose exec backend node src/cli/um.js create-perf-user
  *
+ * Auth-flow endpoints (optional — measures the sign-in click path):
+ *   PERF_AUTH_EMAIL=<email> PERF_AUTH_PASSWORD=<pwd> \
+ *     node perf/perf-backend-p95.js --target=staging
+ *
+ *   When both env vars are set, the bench measures POST sign-in/email,
+ *   POST token (the perfuser CLI's JWT-mint hop), and GET get-session
+ *   with auth header. Each sign-in creates a BaSession row, so
+ *   --requests defaults to 50 for those endpoints (easy cleanup).
+ *   Use perfuser CLI defaults for staging:
+ *     PERF_AUTH_EMAIL=xo_perf@dev.local PERF_AUTH_PASSWORD=xo_perf_pwd_2026
+ *
  * Output:
  *   perf/baselines/backend-p95-<env>-<isoTimestamp>.json
  */
@@ -85,10 +96,36 @@ const AUTHED_ENDPOINTS = [
   { name: 'GET /api/v1/guide/preferences',       base: 'backend', path: '/api/v1/guide/preferences',      authed: true },
 ]
 
-const AUTH_TOKEN = process.env.PERF_AUTH_TOKEN || null
-const ENDPOINTS = AUTH_TOKEN
-  ? [...ANON_ENDPOINTS, ...AUTHED_ENDPOINTS]
-  : ANON_ENDPOINTS
+const AUTH_TOKEN    = process.env.PERF_AUTH_TOKEN    || null
+const AUTH_EMAIL    = process.env.PERF_AUTH_EMAIL    || null
+const AUTH_PASSWORD = process.env.PERF_AUTH_PASSWORD || null
+
+// Auth-flow endpoints — measure the actual sign-in click path. Each
+// sign-in call creates a BaSession row so we cap at ~50 requests by
+// default (overrideable via --auth-requests=N).
+const AUTH_REQUESTS = parseInt(args.find(a => a.startsWith('--auth-requests='))?.split('=')[1] ?? '50') || 50
+function makeAuthFlowEndpoints() {
+  if (!(AUTH_EMAIL && AUTH_PASSWORD)) return []
+  // Better Auth requires Origin to match trustedOrigins. Use the landing
+  // URL we already resolved for the target env.
+  const origin = BASES.landing
+  const body = JSON.stringify({ email: AUTH_EMAIL, password: AUTH_PASSWORD })
+  return [
+    { name: 'POST /api/auth/sign-in/email',        base: 'backend', path: '/api/auth/sign-in/email', method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: origin }, body, requests: AUTH_REQUESTS,
+      authFlow: true, note: 'bcrypt verify + BaSession write' },
+    { name: 'GET /api/auth/get-session (authed)',  base: 'backend', path: '/api/auth/get-session',
+      headers: { Authorization: `Bearer ${AUTH_TOKEN || ''}`, Origin: origin },
+      authFlow: true, note: 'authed path; contrast with anon' },
+  ]
+}
+const AUTH_FLOW_ENDPOINTS = makeAuthFlowEndpoints()
+
+const ENDPOINTS = [
+  ...ANON_ENDPOINTS,
+  ...(AUTH_TOKEN ? AUTHED_ENDPOINTS : []),
+  ...AUTH_FLOW_ENDPOINTS,
+]
 
 const BOLD  = s => `\x1b[1m${s}\x1b[0m`
 const DIM   = s => `\x1b[2m${s}\x1b[0m`
@@ -114,11 +151,15 @@ function colorMs(ms, target = 100) {
   return RED(`${ms}ms`)
 }
 
-async function timed(url, headers = null) {
+async function timed(url, opts = {}) {
+  const { headers, method = 'GET', body = null } = opts
   const t0 = performance.now()
   let status = 0, sizeKb = 0
   try {
-    const res = await fetch(url, headers ? { headers } : undefined)
+    const init = { method }
+    if (headers) init.headers = headers
+    if (body)    init.body    = body
+    const res = await fetch(url, init)
     status = res.status
     const buf = await res.arrayBuffer()
     sizeKb = Math.round(buf.byteLength / 1024)
@@ -128,7 +169,7 @@ async function timed(url, headers = null) {
   return { ms: Math.round(performance.now() - t0), status, sizeKb }
 }
 
-async function bench(url, n, concurrency, headers = null) {
+async function bench(url, n, concurrency, opts = {}) {
   const samples = []
   const errors  = []
   let inflight = 0
@@ -138,7 +179,7 @@ async function bench(url, n, concurrency, headers = null) {
     const tick = () => {
       while (inflight < concurrency && dispatched < n) {
         inflight++; dispatched++
-        timed(url, headers).then(r => {
+        timed(url, opts).then(r => {
           if (r.status >= 200 && r.status < 400) samples.push(r.ms)
           else errors.push({ status: r.status, ms: r.ms })
           inflight--
@@ -162,17 +203,24 @@ async function run() {
   console.log(`  Target      : ${ENV_TAG}`)
   console.log(`  Requests    : ${REQUESTS} per endpoint  (concurrency ${CONCURRENCY}, warmup ${WARMUP_REQS})`)
   console.log(`  Auth        : ${AUTH_TOKEN ? GREEN('PERF_AUTH_TOKEN set — including authed endpoints') : DIM('cold-anon only — set PERF_AUTH_TOKEN to add authed routes')}`)
+  console.log(`  Auth-flow   : ${AUTH_EMAIL && AUTH_PASSWORD ? GREEN(`PERF_AUTH_EMAIL set — sign-in path measured (${AUTH_REQUESTS} req)`) : DIM('skipped — set PERF_AUTH_EMAIL + PERF_AUTH_PASSWORD to add')}`)
   console.log()
 
   const results = []
   for (const ep of ENDPOINTS) {
     const url = BASES[ep.base] + ep.path
-    const headers = ep.authed ? { Authorization: `Bearer ${AUTH_TOKEN}` } : null
+    const headers = ep.headers
+      ? ep.headers
+      : ep.authed
+        ? { Authorization: `Bearer ${AUTH_TOKEN}` }
+        : null
+    const opts = { headers, method: ep.method ?? 'GET', body: ep.body ?? null }
+    const reqCount = ep.requests ?? REQUESTS
     process.stdout.write(`  ${ep.name.padEnd(40)} `)
     // Warmup
-    for (let i = 0; i < WARMUP_REQS; i++) await timed(url, headers)
+    for (let i = 0; i < WARMUP_REQS; i++) await timed(url, opts)
     // Bench
-    const { samples, errors } = await bench(url, REQUESTS, CONCURRENCY, headers)
+    const { samples, errors } = await bench(url, reqCount, CONCURRENCY, opts)
     const stats = {
       p50: median(samples),
       p95: pctile(samples, 95),
@@ -186,7 +234,13 @@ async function run() {
       `p99 ${colorMs(stats.p99, 500).padEnd(20)} ` +
       DIM(`(ok=${stats.ok}${errors.length ? `, err=${errors.length}` : ''})`)
     )
-    results.push({ name: ep.name, url, base: ep.base, authed: !!ep.authed, stats, errors: errors.slice(0, 5) })
+    results.push({
+      name: ep.name, url, base: ep.base,
+      authed: !!ep.authed, authFlow: !!ep.authFlow,
+      method: ep.method ?? 'GET',
+      requests: reqCount,
+      stats, errors: errors.slice(0, 5),
+    })
   }
   console.log()
 

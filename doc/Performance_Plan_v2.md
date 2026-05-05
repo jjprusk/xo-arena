@@ -1996,6 +1996,79 @@ here so we don't re-investigate them.
 4. Phase 2 (DB indexes) stays deferred — F9.3 confirms DB itself
    is fast (apply queries < 20 ms p95 even at c=50).
 
+### F10 — Sign-in flow latency (2026-05-05)
+
+Triggered by user perception that "Better Auth feels slow." The
+existing `perf-backend-p95` measured *read* endpoints; sign-in is
+the write path the user actually feels.
+
+#### F10.1 — Measurement (extended `perf-backend-p95.js`)
+
+Added a fourth measurement tier — auth-flow endpoints — gated on
+`PERF_AUTH_EMAIL` + `PERF_AUTH_PASSWORD`. POST `/api/auth/sign-in/
+email` is included with reduced request count (default 50, since
+each sign-in writes a `BaSession` row).
+
+**Staging 2026-05-05 (REQUESTS=100, AUTH_REQUESTS=50, c=5):**
+
+| Endpoint                                | p50    | p95     | p99     | ok |
+|-----------------------------------------|-------:|--------:|--------:|---:|
+| GET /api/version                        |  53 ms | 188 ms  | 229 ms  | 99/100 |
+| GET /api/auth/get-session (anon)        |  55 ms | 132 ms  | 142 ms  | 100/100 |
+| GET /api/auth/get-session (authed)      |  51 ms | 119 ms  | 141 ms  | 100/100 |
+| GET /api/v1/leaderboard?game=xo         |  53 ms | 101 ms  | 137 ms  | 100/100 |
+| GET /api/tournaments                    |  67 ms | 205 ms  | 340 ms  | 100/100 |
+| **POST /api/auth/sign-in/email**        | **793 ms** | **1537 ms** | **1659 ms** | 50/50 |
+
+Compare to local (Mac, full CPU): sign-in p50 71 ms. Staging is
+**~11× slower** — the same shared-1-vCPU contention amplification
+profile we documented in §F9 / Z.1.9.
+
+#### F10.2 — Spike: which hash library is in use?
+
+`backend/src/lib/auth.js:24-48` overrides Better Auth's default
+hash with a custom `hashPassword` / `verifyPassword` pair using
+**`node:crypto.scrypt`** (native binding via libuv thread pool):
+
+```js
+const SCRYPT_PROD = { N: 16384, r: 16, p: 1 }   // 32 MB memory, ~16.7M ops
+const SCRYPT_DEV  = { N: 4096,  r: 8,  p: 1 }   // 4 MB memory
+const KEYLEN      = 64
+password: { hash: hashPassword, verify: verifyPassword }
+```
+
+Better Auth's *default* is `@noble/hashes/scrypt` — pure JS, runs
+on the V8 main thread. XO already swapped that out, so:
+
+- ✅ Hash is on libuv's thread pool (4 threads default), not main
+- ❌ Worker threads would NOT add value — work is already off-main
+- ⚠️ `SCRYPT_PROD` is at OWASP 2024 minimum; cutting `r=16 → r=8`
+  drops below the floor
+
+#### F10.3 — Decision
+
+Reframed lever ranking after the spike:
+
+| # | Lever                                    | Verdict                                                        |
+|--:|------------------------------------------|----------------------------------------------------------------|
+| 1 | ~~Lower scrypt rounds~~                  | Already at OWASP minimum; not pursuing without security review |
+| 2 | F9.2 (VM bump 1 → 2 dedicated CPUs)      | Right fix; deferred on cost                                    |
+| 3 | ~~Worker threads~~                       | Dead — already on libuv pool                                   |
+| 4 | **Async UX** (progressive sign-in feedback) | **The right move** — ~30 LOC in SignInModal                  |
+| 5 | Rate limit                               | Protects backend, doesn't help user wait                       |
+
+The actual sign-in latency (~800 ms p50) is fundamentally bound by
+memory-hard scrypt × 1 shared vCPU. Without F9.2 or weakening the
+hash, no plumbing change makes a single sign-in faster. The
+remaining lever is **perceived-latency UX work**: progressive
+spinner + helper text in SignInModal so the wait feels intentional
+rather than stuck.
+
+**Filed as a Tier 1 perceived-perf item.** Audit shows the modal
+already has button disable + text swap (`'Please wait…'`); missing
+piece is a spinner glyph + delayed helper text after ~400 ms.
+~15-30 minutes of work, no security trade-off.
+
 ---
 
 ## Appendix Z — Completed measurement work (archive)
