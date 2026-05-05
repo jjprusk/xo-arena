@@ -1,0 +1,758 @@
+{
+  "timestamp": "2026-05-05T19:34:19.115Z",
+  "env": "prod",
+  "baseUrl": "https://xo-landing-prod.fly.dev",
+  "runs": 5,
+  "results": [
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "sumLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "maxLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "tbt": {
+          "p50": 0,
+          "p95": 0
+        }
+      },
+      "raw": {
+        "count": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "sum": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "max": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "tbt": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top3": []
+    },
+    {
+      "route": "Play",
+      "path": "/play",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "sumLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "maxLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "tbt": {
+          "p50": 0,
+          "p95": 0
+        }
+      },
+      "raw": {
+        "count": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "sum": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "max": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "tbt": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top3": []
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "sumLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "maxLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "tbt": {
+          "p50": 0,
+          "p95": 0
+        }
+      },
+      "raw": {
+        "count": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "sum": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "max": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "tbt": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top3": []
+    },
+    {
+      "route": "Rankings",
+      "path": "/rankings",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "sumLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "maxLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "tbt": {
+          "p50": 0,
+          "p95": 0
+        }
+      },
+      "raw": {
+        "count": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "sum": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "max": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "tbt": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top3": []
+    },
+    {
+      "route": "Tables",
+      "path": "/tables",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "sumLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "maxLT": {
+          "p50": 0,
+          "p95": 0
+        },
+        "tbt": {
+          "p50": 0,
+          "p95": 0
+        }
+      },
+      "raw": {
+        "count": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "sum": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "max": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "tbt": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top3": []
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 3,
+          "p95": 3
+        },
+        "sumLT": {
+          "p50": 197,
+          "p95": 208
+        },
+        "maxLT": {
+          "p50": 87,
+          "p95": 93
+        },
+        "tbt": {
+          "p50": 47,
+          "p95": 58
+        }
+      },
+      "raw": {
+        "count": [
+          3,
+          3,
+          2,
+          3,
+          3
+        ],
+        "sum": [
+          195,
+          197,
+          141,
+          208,
+          197
+        ],
+        "max": [
+          87,
+          93,
+          86,
+          87,
+          93
+        ],
+        "tbt": [
+          45,
+          47,
+          41,
+          58,
+          47
+        ]
+      },
+      "top3": [
+        {
+          "start": 1512,
+          "duration": 93,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1541,
+          "duration": 93,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1537,
+          "duration": 87,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Play",
+      "path": "/play",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 3,
+          "p95": 4
+        },
+        "sumLT": {
+          "p50": 160,
+          "p95": 226
+        },
+        "maxLT": {
+          "p50": 61,
+          "p95": 64
+        },
+        "tbt": {
+          "p50": 12,
+          "p95": 26
+        }
+      },
+      "raw": {
+        "count": [
+          3,
+          4,
+          2,
+          3,
+          2
+        ],
+        "sum": [
+          160,
+          226,
+          116,
+          162,
+          105
+        ],
+        "max": [
+          56,
+          64,
+          61,
+          61,
+          55
+        ],
+        "tbt": [
+          10,
+          26,
+          16,
+          12,
+          5
+        ]
+      },
+      "top3": [
+        {
+          "start": 1393,
+          "duration": 64,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1457,
+          "duration": 61,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1793,
+          "duration": 61,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 2,
+          "p95": 3
+        },
+        "sumLT": {
+          "p50": 141,
+          "p95": 179
+        },
+        "maxLT": {
+          "p50": 70,
+          "p95": 78
+        },
+        "tbt": {
+          "p50": 29,
+          "p95": 41
+        }
+      },
+      "raw": {
+        "count": [
+          3,
+          2,
+          2,
+          3,
+          2
+        ],
+        "sum": [
+          179,
+          129,
+          141,
+          173,
+          141
+        ],
+        "max": [
+          70,
+          66,
+          78,
+          65,
+          78
+        ],
+        "tbt": [
+          29,
+          29,
+          41,
+          23,
+          41
+        ]
+      },
+      "top3": [
+        {
+          "start": 1404,
+          "duration": 78,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1446,
+          "duration": 78,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1804,
+          "duration": 70,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Rankings",
+      "path": "/rankings",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 2,
+          "p95": 3
+        },
+        "sumLT": {
+          "p50": 151,
+          "p95": 193
+        },
+        "maxLT": {
+          "p50": 80,
+          "p95": 90
+        },
+        "tbt": {
+          "p50": 43,
+          "p95": 56
+        }
+      },
+      "raw": {
+        "count": [
+          2,
+          2,
+          2,
+          3,
+          2
+        ],
+        "sum": [
+          156,
+          126,
+          125,
+          193,
+          151
+        ],
+        "max": [
+          90,
+          64,
+          63,
+          80,
+          86
+        ],
+        "tbt": [
+          56,
+          26,
+          25,
+          43,
+          51
+        ]
+      },
+      "top3": [
+        {
+          "start": 1453,
+          "duration": 90,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1454,
+          "duration": 86,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1415,
+          "duration": 80,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "route": "Tables",
+      "path": "/tables",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "countLT": {
+          "p50": 3,
+          "p95": 3
+        },
+        "sumLT": {
+          "p50": 194,
+          "p95": 196
+        },
+        "maxLT": {
+          "p50": 79,
+          "p95": 84
+        },
+        "tbt": {
+          "p50": 45,
+          "p95": 46
+        }
+      },
+      "raw": {
+        "count": [
+          3,
+          2,
+          3,
+          2,
+          3
+        ],
+        "sum": [
+          194,
+          145,
+          195,
+          128,
+          196
+        ],
+        "max": [
+          79,
+          84,
+          78,
+          67,
+          81
+        ],
+        "tbt": [
+          44,
+          45,
+          45,
+          28,
+          46
+        ]
+      },
+      "top3": [
+        {
+          "start": 1460,
+          "duration": 84,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1452,
+          "duration": 81,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        },
+        {
+          "start": 1444,
+          "duration": 79,
+          "name": "unknown",
+          "attribution": [
+            {
+              "name": "unknown",
+              "containerType": "window",
+              "containerName": "",
+              "containerSrc": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

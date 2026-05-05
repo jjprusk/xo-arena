@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { tournamentApi } from '../lib/tournamentApi.js'
 import { api } from '../lib/api.js'
+import { useSWRish } from '../lib/swr.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useEventStream } from '../lib/useEventStream.js'
@@ -554,9 +555,6 @@ export default function TournamentsPage() {
   const { data: session } = useOptimisticSession()
   const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [tournaments, setTournaments] = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [error, setError]             = useState(null)
   const [token, setToken]             = useState(null)
   const [dbUserId, setDbUserId]       = useState(null)
   const [showTutorial, setShowTutorial] = useState(false)
@@ -647,21 +645,26 @@ export default function TournamentsPage() {
     }).catch(() => {})
   }, [session?.user?.id])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await tournamentApi.list({}, token)
-      const list = Array.isArray(data) ? data : (data.tournaments ?? [])
-      setTournaments(list.filter(t => t.status !== 'DRAFT' && t.status !== 'CANCELLED'))
-    } catch {
-      setError('Failed to load tournaments.')
-    } finally {
-      setLoading(false)
-    }
+  // Phase 20.3 — SWR via the shared hook. Cache key flips on token
+  // presence so anon / authed lists don't share an entry. The fetcher
+  // returns the filtered list directly so consumers see a stable shape.
+  const tournamentsFetcher = useCallback(async () => {
+    const data = await tournamentApi.list({}, token)
+    const list = Array.isArray(data) ? data : (data.tournaments ?? [])
+    return list.filter(t => t.status !== 'DRAFT' && t.status !== 'CANCELLED')
   }, [token])
-
-  useEffect(() => { load() }, [load])
+  const {
+    data:    tournamentsData,
+    isLoading: loading,
+    error:   listError,
+    refresh: load,
+  } = useSWRish(
+    `tournaments:list:${token ? 'authed' : 'anon'}`,
+    tournamentsFetcher,
+    { maxAgeMs: 60_000 },
+  )
+  const tournaments = tournamentsData ?? []
+  const error = listError ? 'Failed to load tournaments.' : null
 
   useEffect(() => {
     if (!autoRegisterId || !token || loading || tournaments.length === 0) return
