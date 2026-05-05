@@ -71,11 +71,20 @@ work narratives.
 
 ### Active queue — Tier 0 (next sprints)
 
-| Rank | Item                                | Real impact (estimated)                                    | Cost   | Risk    | Status |
-|-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|
-|    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP ~1400 → ~700 ms (−700 ms × every cold visit)    | 3-5d   | medium  | queued |
-|    2 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | sequenced after Phase 1 |
-|    3 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | queued |
+**Cohort-aware sequencing (added 2026-05-05 after F11):** the
+warm-cache baseline showed returning-user mobile Ready already
+~370 ms vs cold-anon ~2050 ms. **Phase 1 is a first-time-visitor
+win**; the returning-user equivalent is **SW + SWR caching**.
+Both belong in Tier 0 with sequencing decided by which user pain
+we hit first.
+
+| Rank | Item                                | Real impact (measured / estimated)                         | Cost   | Risk    | Cohort | Status |
+|-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|:------:|
+|    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP cold ~1400 → ~700 ms; warm parse ~370 → ~250 ms | 3-5d   | medium  | first-time | queued |
+|    2 | **Phase 20** — Service Worker app shell | warm Ready 370 ms → ~50-100 ms (paint-only floor)        | 2-3d   | medium  | returning | **promoted from Tier 3** |
+|    3 | **SWR data caching + hover prefetch** (new — see §F11.4) | data pages: spinner-while-fetch → instant stale + bg revalidate | 1-2d | low | returning | filed |
+|    4 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | meta | sequenced after Phase 1 |
+|    5 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | first-time | queued |
 
 (Phase 5 remaining steps demoted from Tier 0 — F9 probe sweep
 2026-05-05 showed `apply.post` ≤2ms p95 at c=50, so in-process
@@ -1771,7 +1780,7 @@ synthetic blind spots, ranked by likely-to-find-real-issues:
 | 1 | **Cold-authed page-level perf**  | perf-v2 only does `cold-anon`. We have authed *endpoints* (p95) but not authed *pages* (Ready/FCP/LCP). | Phase 1c is scoped from endpoint math (200→143 ms p50). Actual cold-authed page Ready could be 300 ms slower than cold-anon for *all* signed-in users — we're guessing the win. | 1d     |
 | 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
 | 3 | **Live SSE under realistic load** *(closed)* | ~~`perf-sse-rtt` measures **one** move at a time, isolated.~~ Closed 2026-05-05 by `perf/perf-sse-load.js`. Findings rewrote Phase 5's scope — see §F4 above. tl;dr: fan-out load doesn't degrade `publishToPickup`; the 383 ms prod number is **cold-broker-wakeup** on the *first* move into a fresh table, and warm/under-load moves all complete in <60 ms p50. | closed |
-| 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
+| 4 | **Repeat-visit / warm cache** *(closed)* | ~~Only cold-anon context.~~ Closed 2026-05-05 by `perf-v2 --context=warm-anon`. Mobile median: Ready **2050 → 370ms (−82%)**, FCP **1424 → 136ms (−90%)**. JS bytes go from 495 KB → 0 (cached). The remaining 370ms warm Ready is parse + execute + index.html revalidation + initial data fetch. **Validates the user's intuition that Phase 1's revisit value is modest** — bytes are already cached on revisit; bundle splitting only chips at the parse residual. SW app shell + SWR data caching are higher-leverage levers for returning users. See §F11. | closed |
 | 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50, queries 1-5ms each); pool was hypothesised as the bottleneck but F9.1 deploy showed **no measurable improvement** — the wall-clock ceiling lives in CPU/fsync, not DB or pool. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
 | 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
 | 7 | **CLS (Cumulative Layout Shift)**| LCP is tracked, CLS is not.                                                                             | Hero swap, late-loading auth UI, modal reflows all *could* cause shift (budget ≤0.1 per Web Vitals). Probably fine but the not-knowing is itself the gap. | 0.5d   |
@@ -2087,6 +2096,129 @@ Effort to apply the same spinner+helper pattern: ~10-20 min per
 surface. Could extract `Spinner` + `useProgressHelper` into
 `landing/src/lib/loadingFeedback.jsx` if we touch ≥2 more files.
 Filed as Tier 1 perceived-perf follow-up.
+
+### F11 — Warm-cache (returning-user) baseline (2026-05-05)
+
+Closes F8 gap #4. The single most important measurement we never
+had: what does a returning user actually experience? Every prior
+benchmark in the trend was cold-anon — fresh browser context, no
+cache. Returning-user perf was assumed but unmeasured.
+
+#### F11.1 — Implementation
+
+`perf-v2.js` gained a new `warm-anon` context. Same as `cold-anon`
+except a single `browserContext` is reused across the route's runs
+so the HTTP cache survives. Each route runs RUNS+1 hits and
+discards the first (priming, cold) — p50/p95 reflect the warm-cache
+reality of a user reloading or returning between deploys.
+
+Throttling stays per-page via CDP, so the same network profile
+applies to every visit including the priming hit. Commit
+`12f1322`.
+
+#### F11.2 — Findings (staging, 2026-05-05, n=5/route)
+
+**Mobile (Moto G4 / 4G):**
+
+| Route        | Cold Ready p50 | Warm Ready p50 |    Δ | Cold FCP | Warm FCP |    Δ |
+|--------------|---------------:|---------------:|-----:|---------:|---------:|-----:|
+| Home         |        1760 ms |     **357 ms** | −80% |   408 ms |  **68 ms** | −83% |
+| Play         |        2062 ms |     **371 ms** | −82% |  1404 ms | **136 ms** | −90% |
+| Leaderboard  |        2070 ms |     **365 ms** | −82% |  1424 ms | **132 ms** | −91% |
+| Tournaments  |        2065 ms |     **349 ms** | −83% |  1420 ms | **140 ms** | −90% |
+| Tables       |        2077 ms |     **428 ms** | −79% |  1448 ms | **148 ms** | −90% |
+| Stats        |        2048 ms |     **431 ms** | −79% |  1404 ms | **188 ms** | −87% |
+| **Median**   |    **~2050 ms**|    **~370 ms** | **−82%** | **~1424 ms** | **~136 ms** | **−90%** |
+
+**Desktop:**
+
+| Route        | Cold Ready p50 | Warm Ready p50 |    Δ |
+|--------------|---------------:|---------------:|-----:|
+| Home         |          878 ms |     **401 ms** | −54% |
+| Play         |          849 ms |     **376 ms** | −56% |
+| Leaderboard  |          811 ms |     **380 ms** | −53% |
+| Tournaments  |          767 ms |     **313 ms** | −59% |
+| Tables       |          883 ms |     **456 ms** | −48% |
+| **Median**   |     **~840 ms** |    **~400 ms** | **−52%** |
+
+**`PlayVsBot` is the outlier** — warm Ready stays ~1000ms even
+with cache. The sequential-init chain (`getCommunityBot()` →
+`/api/v1/rt/tables` POST → redirect) doesn't benefit from HTTP
+asset caching. Filed as Phase 1b — already documented.
+
+**JS bytes go from 495 KB cold → "—" warm** (Resource Timing
+reports 0 transfer when assets are cache-served). Wire bytes on
+revisit are essentially zero.
+
+#### F11.3 — What's left in the warm 370ms (mobile) / 400ms (desktop)
+
+After cache eliminates download + decode + most parse work, what
+remains:
+
+1. **`index.html` revalidation** — small (~5 KB) but still a RTT.
+   Browser sends `If-None-Match`, server returns `304 Not Modified`
+   or new HTML if we deployed. ~50-150ms on mobile 4G.
+2. **Bundle parse + execute** — V8 has a bytecode cache but it's
+   not always reused (different on tab restart, low-memory mobile).
+   Even a re-parse of the cached bundle takes ~100-300ms on Moto G4.
+   This is what Phase 1 (per-route splits) would chip at — by
+   parsing only the route's slice, not the whole bundle.
+3. **Initial data fetch** — `useOptimisticSession` calls
+   `/api/session` on cold mount. Authed users add `users.sync` +
+   page-specific endpoints. ~50-200ms before page is "ready" by
+   our spinner-detached definition.
+4. **Initial paint + LCP work** — laying out the (now-instant) hero,
+   loading any uncached images, layout pass. Small (~30-50ms).
+
+**Phase 1 would impact #2 only.** Best-case mobile warm Ready
+after Phase 1: maybe ~250-300ms (vs ~370ms today). Real but
+modest.
+
+#### F11.4 — Roadmap revision
+
+The user's intuition was correct: **for returning users, Phase 1
+is a modest marginal win.** The headline returning-user levers,
+ranked by impact:
+
+1. **Service Worker app shell** (Phase 20) — eliminates even
+   the index.html revalidation + provides offline. Repeat Ready
+   approaches paint-only cost (~50-100ms). The single highest-
+   leverage perceived-perf change in the plan for the engaged-user
+   cohort. **Filed for Tier 1 promotion.**
+2. **SWR data caching** + **hover-intent prefetch** — for data-
+   heavy pages (Tables, Tournaments), even the 200ms data fetch
+   becomes "instant render of stale + background revalidate."
+   Combined with #1, returning-user pages feel native-fast.
+3. **Phase 1 (bundle splits)** — modest revisit win (~370 → ~250ms
+   mobile parse), still **the right call for first-time visitors**
+   (cold-anon mobile FCP 1416 → ~700ms is the headline). Ships for
+   that audience.
+
+**Cohort-aware framing for Tier 0:**
+
+- **First-time / cold-anon users:** Phase 1 wins. Phase 3 (image
+  diet) ✅ + Phase 1d (instant hero) ✅ already help.
+- **Returning users:** SW + SWR + hover-prefetch wins. Phase 1
+  helps a little.
+
+**We don't yet know the cohort split.** D1 RUM is shipped but we
+haven't analyzed engaged-user vs new-user numbers. F11.5 below.
+
+#### F11.5 — Open question: cohort split in production
+
+Until we segment RUM data by returning-vs-new, we can't say which
+cohort dominates. The work required:
+
+- Use the existing RUM beacon's cookie-set timestamp to segment
+  `cold-first-visit` vs `repeat-visit` in the admin Web Vitals
+  dashboard.
+- 1-2 hours of admin panel work + a SQL `GROUP BY` on a synthetic
+  "first-visit" flag.
+
+Filed as Phase 0.2 follow-up. Until we have that data, treat
+Phase 1 (cold-anon win) and SW + SWR (returning-user win) as
+**both Tier 0** with sequencing decided by which user pain we
+hit first in support / dogfood.
 
 ---
 

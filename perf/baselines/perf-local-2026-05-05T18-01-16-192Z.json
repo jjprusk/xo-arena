@@ -1,0 +1,107 @@
+{
+  "timestamp": "2026-05-05T18:01:16.192Z",
+  "env": "local",
+  "baseUrl": "http://localhost:5174",
+  "runs": 2,
+  "auth": false,
+  "warmup": false,
+  "devices": [
+    "desktop"
+  ],
+  "contexts": [
+    "cold-anon",
+    "warm-anon"
+  ],
+  "results": [
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 2,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 844,
+        "ready_p95": 985,
+        "ttfb_p50": 14,
+        "fcp_p50": 318,
+        "lcp_p50": 706,
+        "js_kb": 5388,
+        "static_kb": 5647,
+        "img_kb": 174,
+        "requests": 166
+      },
+      "raw": [
+        {
+          "readyMs": 985,
+          "ttfb": 10,
+          "fcp": 396,
+          "lcp": 852,
+          "domContentLoaded": 429,
+          "requests": 166,
+          "staticKb": 5647,
+          "jsKb": 5388,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 702,
+          "ttfb": 17,
+          "fcp": 240,
+          "lcp": 560,
+          "domContentLoaded": 274,
+          "requests": 166,
+          "staticKb": 5647,
+          "jsKb": 5388,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 2,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 410,
+        "ready_p95": 420,
+        "ttfb_p50": 5,
+        "fcp_p50": 32,
+        "lcp_p50": 32,
+        "js_kb": 15,
+        "static_kb": 16,
+        "img_kb": null,
+        "requests": 166
+      },
+      "raw": [
+        {
+          "readyMs": 399,
+          "ttfb": 5,
+          "fcp": 32,
+          "lcp": 32,
+          "domContentLoaded": 46,
+          "requests": 166,
+          "staticKb": 16,
+          "jsKb": 15,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 420,
+          "ttfb": 4,
+          "fcp": 32,
+          "lcp": 32,
+          "domContentLoaded": 46,
+          "requests": 165,
+          "staticKb": 15,
+          "jsKb": 15,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    }
+  ]
+}
