@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-4.4",
+    "date": "2026-05-05",
+    "description": "F9 instrumentation probes — granular apply Server-Timing + live pg.Pool stats"
+  },
+  {
     "version": "1.4.0-alpha-4.3",
     "date": "2026-05-05",
     "description": "Phase 5 cold-broker fix + DB pool 10→30 (F9.1)"
