@@ -41,6 +41,32 @@ function effectiveType() {
   try { return navigator.connection?.effectiveType ?? 'unknown' } catch { return 'unknown' }
 }
 
+// F11.5 — cohort detection. Reads/writes a localStorage flag to classify
+// the *current* session as 'first-visit' (no prior visit recorded) or
+// 'returning' (flag was already set). Computed once per tab and cached
+// on `window` so the same value lands on every beacon for the session.
+// See doc/Performance_Plan_v2.md §F11.5.
+const RUM_FIRST_SEEN_KEY = 'aiarena_rum_first_seen'
+function cohort() {
+  if (window.__rumCohort) return window.__rumCohort
+  let result = 'unknown'
+  try {
+    const existing = localStorage.getItem(RUM_FIRST_SEEN_KEY)
+    if (existing) {
+      result = 'returning'
+    } else {
+      localStorage.setItem(RUM_FIRST_SEEN_KEY, String(Date.now()))
+      result = 'first-visit'
+    }
+  } catch {
+    // localStorage unavailable (incognito with quota, disabled, etc.).
+    // Fall through with 'unknown' — backend keeps the row, just
+    // ungrouped in cohort breakdowns.
+  }
+  window.__rumCohort = result
+  return result
+}
+
 function sessionId() {
   if (window.__rumSessionId) return window.__rumSessionId
   let id = 'sess_'
@@ -75,6 +101,7 @@ function flush() {
     sessionId:      sessionId(),
     deviceClass:    deviceClass(),
     effectiveType:  effectiveType(),
+    cohort:         cohort(),
     releaseVersion: import.meta.env.VITE_APP_VERSION ?? null,
     userAgent:      (navigator.userAgent || '').slice(0, 200),
     vitals:         _queue.splice(0),

@@ -1,5 +1,30 @@
 [
   {
+    "version": "1.4.0-alpha-4.5",
+    "date": "2026-05-05",
+    "description": "Phase 1c sync dedupe + F11 warm-cache baseline + F11.5 RUM cohort instrumentation + F10 sign-in async UX"
+  },
+  {
+    "version": "1.4.0-alpha-4.4",
+    "date": "2026-05-05",
+    "description": "F9 instrumentation probes — granular apply Server-Timing + live pg.Pool stats"
+  },
+  {
+    "version": "1.4.0-alpha-4.3",
+    "date": "2026-05-05",
+    "description": "Phase 5 cold-broker fix + DB pool 10→30 (F9.1)"
+  },
+  {
+    "version": "1.4.0-alpha-4.2",
+    "date": "2026-05-05",
+    "description": "Phase 1d hero + perfuser"
+  },
+  {
+    "version": "1.4.0-alpha-4.1",
+    "date": "2026-05-05",
+    "description": "Perf - hero update"
+  },
+  {
     "version": "1.4.0-alpha-4.0",
     "date": "2026-05-04",
     "description": "Multi-machine fly fix"

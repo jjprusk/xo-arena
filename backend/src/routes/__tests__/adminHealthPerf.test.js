@@ -61,6 +61,17 @@ const envRows = [
   { env: 'staging', cnt: 87 },
   { env: 'prod',    cnt: 940 },
 ]
+// F11.5 — cohort breakdown rows. Two new $queryRaw calls land between the
+// agg + env queries so every mock chain needs four steps to drain.
+const cohortRows = [
+  { cohort: 'first-visit', cnt: 320 },
+  { cohort: 'returning',   cnt: 600 },
+  { cohort: 'unknown',     cnt: 119 },
+]
+const cohortMetricRows = [
+  { cohort: 'first-visit', name: 'FCP', cnt: 320, p50: 800,  p75: 1200, p95: 2100 },
+  { cohort: 'returning',   name: 'FCP', cnt: 600, p50: 120,  p75: 200,  p95: 400  },
+]
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -69,8 +80,10 @@ beforeEach(() => {
 describe('GET /api/v1/admin/health/perf/vitals', () => {
   it('aggregates rows into per-route / per-metric percentiles + rating buckets', async () => {
     db.$queryRaw
-      .mockResolvedValueOnce(aggRows)   // first query → percentiles
-      .mockResolvedValueOnce(envRows)   // second query → env counts
+      .mockResolvedValueOnce(aggRows)         // 1: percentiles
+      .mockResolvedValueOnce(envRows)         // 2: env counts
+      .mockResolvedValueOnce(cohortRows)      // 3: cohort counts
+      .mockResolvedValueOnce(cohortMetricRows) // 4: cohort × metric percentiles
 
     const res = await request(makeApp()).get('/api/v1/admin/health/perf/vitals')
 
@@ -78,9 +91,13 @@ describe('GET /api/v1/admin/health/perf/vitals', () => {
     expect(res.body).toMatchObject({
       window:    '24h',
       env:       null,
+      cohort:    null,
       totalRows: 12 + 87 + 940,
       byEnv:     { local: 12, staging: 87, prod: 940 },
+      byCohort:  { 'first-visit': 320, returning: 600, unknown: 119 },
     })
+    expect(res.body.cohortMetrics['first-visit'].FCP).toMatchObject({ count: 320, p50: 800, p75: 1200, p95: 2100 })
+    expect(res.body.cohortMetrics.returning.FCP).toMatchObject({ count: 600, p50: 120, p75: 200, p95: 400 })
     expect(typeof res.body.since).toBe('string')
 
     const byRoute = Object.fromEntries(res.body.routes.map(r => [r.route, r.metrics]))
@@ -93,7 +110,11 @@ describe('GET /api/v1/admin/health/perf/vitals', () => {
   })
 
   it('defaults the window to 24h when an unknown value is supplied', async () => {
-    db.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    db.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
 
     const res = await request(makeApp()).get('/api/v1/admin/health/perf/vitals?window=42m')
 
@@ -104,17 +125,38 @@ describe('GET /api/v1/admin/health/perf/vitals', () => {
   })
 
   it('honors the 7d window', async () => {
-    db.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    db.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
     const res = await request(makeApp()).get('/api/v1/admin/health/perf/vitals?window=7d')
     expect(res.status).toBe(200)
     expect(res.body.window).toBe('7d')
   })
 
   it('echoes the env filter when supplied', async () => {
-    db.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    db.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
     const res = await request(makeApp()).get('/api/v1/admin/health/perf/vitals?env=prod')
     expect(res.status).toBe(200)
     expect(res.body.env).toBe('prod')
+  })
+
+  it('echoes the cohort filter and surfaces byCohort + cohortMetrics', async () => {
+    db.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(cohortRows)
+      .mockResolvedValueOnce(cohortMetricRows)
+    const res = await request(makeApp()).get('/api/v1/admin/health/perf/vitals?cohort=returning')
+    expect(res.status).toBe(200)
+    expect(res.body.cohort).toBe('returning')
+    expect(res.body.byCohort).toMatchObject({ 'first-visit': 320, returning: 600, unknown: 119 })
+    expect(res.body.cohortMetrics.returning.FCP).toMatchObject({ p50: 120, p75: 200, p95: 400 })
   })
 
   it('returns 500 when the underlying query throws', async () => {
@@ -128,6 +170,8 @@ describe('GET /api/v1/admin/health/perf/vitals', () => {
       .mockResolvedValueOnce([
         { route: '/empty', name: 'CLS', cnt: 0, p50: null, p75: null, p95: null, good: 0, needs: 0, poor: 0 },
       ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
     const res = await request(makeApp()).get('/api/v1/admin/health/perf/vitals')
     expect(res.status).toBe(200)

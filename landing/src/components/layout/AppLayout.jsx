@@ -472,17 +472,15 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen flex flex-col relative overflow-x-hidden" style={{ backgroundColor: 'var(--bg-page)' }}>
 
-      {/* Colosseum background — aiarena platform visual identity */}
+      {/* Colosseum background — aiarena platform visual identity.
+          Responsive WebP via .colosseum-photo-bg: mobile=800w (50KB),
+          desktop=1600w (174KB). Total down from 888KB single asset. */}
       <div
         aria-hidden="true"
-        className="fixed inset-0 pointer-events-none select-none"
+        className="fixed inset-0 pointer-events-none select-none colosseum-photo-bg"
         style={{
           zIndex: 0,
           opacity: 'var(--photo-opacity)',
-          backgroundImage: 'url(/colosseum-bg.jpg)',
-          backgroundSize: 'cover',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center 40%',
         }}
       />
 

@@ -28,6 +28,7 @@ import { envCommand }          from './commands/env.js'
 import { testbotsCommand }     from './commands/testbots.js'
 import { testuserCommand }     from './commands/testuser.js'
 import { rewardsCommand }      from './commands/rewards.js'
+import { perfuserCommand }     from './commands/perfuser.js'
 
 guardProduction()
 await ensureProxy()
@@ -84,6 +85,7 @@ envCommand(program)
 testbotsCommand(program)
 testuserCommand(program)
 rewardsCommand(program)
+perfuserCommand(program)
 
 program.hook('postAction', () => disconnect())
 program.parse()

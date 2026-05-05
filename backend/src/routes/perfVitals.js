@@ -38,6 +38,7 @@ const router = Router()
 const ALLOWED_NAMES   = new Set(['FCP', 'LCP', 'INP', 'CLS', 'TTFB'])
 const ALLOWED_DEVICES = new Set(['desktop', 'mobile', 'unknown'])
 const ALLOWED_RATINGS = new Set(['good', 'needs-improvement', 'poor'])
+const ALLOWED_COHORTS = new Set(['first-visit', 'returning', 'unknown'])
 const MAX_VITALS_PER_BEACON = 32
 
 function s(val, max = 64) {
@@ -72,6 +73,7 @@ router.post('/vitals', async (req, res) => {
     const effectiveType = s(body.effectiveType, 16)
     const releaseVersion = s(body.releaseVersion, 64)
     const userAgent      = s(body.userAgent, 200)
+    const cohort         = ALLOWED_COHORTS.has(body.cohort) ? body.cohort : null
     const env            = deriveEnv()
 
     const rows = []
@@ -98,6 +100,7 @@ router.post('/vitals', async (req, res) => {
         deviceClass,
         effectiveType,
         userAgent,
+        cohort,
       })
     }
     if (rows.length === 0) return res.status(204).end()

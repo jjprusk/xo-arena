@@ -81,6 +81,26 @@ describe('POST /api/v1/perf/vitals', () => {
     expect(data.every(d => d.deviceClass === 'unknown')).toBe(true)
   })
 
+  it('persists a valid cohort and drops invalid ones (F11.5)', async () => {
+    // Allowed: 'first-visit' | 'returning' | 'unknown'.
+    await request(makeApp()).post('/api/v1/perf/vitals').send(validBody({
+      overrides: { cohort: 'first-visit' },
+    }))
+    expect(db.perfVital.createMany.mock.calls[0][0].data[0].cohort).toBe('first-visit')
+
+    db.perfVital.createMany.mockClear()
+    await request(makeApp()).post('/api/v1/perf/vitals').send(validBody({
+      overrides: { cohort: 'returning' },
+    }))
+    expect(db.perfVital.createMany.mock.calls[0][0].data[0].cohort).toBe('returning')
+
+    db.perfVital.createMany.mockClear()
+    await request(makeApp()).post('/api/v1/perf/vitals').send(validBody({
+      overrides: { cohort: 'spy' },           // invalid → null (don't pollute the column)
+    }))
+    expect(db.perfVital.createMany.mock.calls[0][0].data[0].cohort).toBeNull()
+  })
+
   it('drops vitals with non-finite or out-of-range values', async () => {
     await request(makeApp()).post('/api/v1/perf/vitals').send(validBody({
       vitalsOverrides: [

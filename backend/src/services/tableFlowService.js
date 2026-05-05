@@ -191,7 +191,12 @@ export async function cancelTable({ io, tableId }) {
  */
 export async function applyMove({ io, tableId, userId, cellIndex }) {
   if (!tableId)                                   return { ok: false, code: 'NOT_IN_TABLE',     message: 'Not in a room' }
+  // F9 probe: split apply into find / update / post bands so we can tell
+  // whether the c=25 ceiling is PG round-trip vs JSONB write vs Node CPU
+  // (broker dispatch + emit). See doc/Performance_Plan_v2.md §F9.
+  const tFindStart = Date.now()
   const table = await db.table.findUnique({ where: { id: tableId } })
+  const tFindEnd = Date.now()
   if (!table)                                      return { ok: false, code: 'TABLE_NOT_FOUND', message: 'Room not found' }
   if (table.status !== 'ACTIVE')                   return { ok: false, code: 'NOT_ACTIVE',      message: 'Game not in progress' }
 
@@ -226,10 +231,12 @@ export async function applyMove({ io, tableId, userId, cellIndex }) {
     ps.currentTurn = playerMark === 'X' ? 'O' : 'X'
   }
 
+  const tUpdateStart = Date.now()
   const updated = await db.table.update({
     where: { id: tableId },
     data:  { previewState: ps, status: newStatus },
   })
+  const tUpdateEnd = Date.now()
 
   const { mapStatus, clearAllIdleTimersForTable, broadcastTablePresence, recordPvpGame, dispatchBotMove } =
     await getSocketHandlerHelpers()
@@ -246,19 +253,26 @@ export async function applyMove({ io, tableId, userId, cellIndex }) {
   }
   if (io) io.to(`table:${tableId}`).emit('game:moved', movedPayload)
   appendToStream(`table:${tableId}:state`, { kind: 'moved', ...movedPayload }, { userId: '*' }).catch(() => {})
+  const tPostEnd = Date.now()
+
+  const _t = {
+    findMs:   tFindEnd - tFindStart,
+    updateMs: tUpdateEnd - tUpdateStart,
+    postMs:   tPostEnd - tUpdateEnd,
+  }
 
   if (newStatus === 'COMPLETED') {
     clearAllIdleTimersForTable(tableId)
     dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.GAME_END, { trigger: 'game-move' })
     broadcastTablePresence(io, tableId)
     recordPvpGame(updated, io).catch((err) => logger.warn({ err }, 'Failed to record PvP game'))
-    return { ok: true, completed: true, table: updated, mark: playerMark }
+    return { ok: true, completed: true, table: updated, mark: playerMark, _t }
   }
 
   if (table.isHvb) {
     dispatchBotMove(updated, io).catch((err) => logger.warn({ err }, 'Failed to dispatch bot move'))
   }
-  return { ok: true, completed: false, table: updated, mark: playerMark }
+  return { ok: true, completed: false, table: updated, mark: playerMark, _t }
 }
 
 /**

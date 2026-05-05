@@ -917,9 +917,13 @@ model PerfVital {
   deviceClass     String?
   effectiveType   String?
   userAgent       String?
+  // F11.5 — 'first-visit' | 'returning' | 'unknown'.
+  // Drives admin dashboard cohort split (returning-user vs new-user perf).
+  cohort          String?
 
   @@index([name, route, createdAt])
   @@index([env, name, createdAt])
+  @@index([cohort, name, createdAt])
   @@map("perf_vitals")
 }
 

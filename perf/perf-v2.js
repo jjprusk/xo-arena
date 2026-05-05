@@ -109,9 +109,15 @@ const DEVICE_PROFILES = [
 ]
 
 // ── Contexts ──────────────────────────────────────────────────────────────────
+// 'warm-anon' is the same as 'cold-anon' except the browserContext is reused
+// across the route's runs after one priming visit, so the second-visit-onward
+// numbers reflect what a returning user with HTTP-cached assets actually
+// experiences. Closes F8 gap #4 (Repeat-visit / warm cache). See
+// doc/Performance_Plan_v2.md §F11.
 const HAVE_AUTH = !!(process.env.TEST_USER_EMAIL && process.env.TEST_USER_PASSWORD)
 const CONTEXTS = [
   { id: 'cold-anon', label: 'Cold anon', requiresAuth: false, warmCache: false },
+  { id: 'warm-anon', label: 'Warm anon (cached)', requiresAuth: false, warmCache: true },
   // signed-in contexts — only when creds are present
   { id: 'cold-signed-in',  label: 'Cold signed-in',  requiresAuth: true,  warmCache: false },
   { id: 'warm-signed-in',  label: 'Warm signed-in',  requiresAuth: true,  warmCache: true  },
@@ -150,8 +156,12 @@ function fms(n) { return n != null ? `${n}ms` : '—' }
 function fkb(n) { return n != null ? `${n}KB` : '—' }
 
 // ── Measurement ───────────────────────────────────────────────────────────────
-async function measure({ browser, url, profile, contextOpts }) {
-  const browserContext = await browser.newContext({
+// `existingContext` (optional) reuses a caller-managed browserContext so its
+// HTTP cache + storageState persist across runs (warm-anon, warm-signed-in).
+// When omitted, a fresh context is created and disposed per measurement —
+// the cold-anon path.
+async function measure({ browser, url, profile, contextOpts, existingContext }) {
+  const browserContext = existingContext || await browser.newContext({
     ...profile.options,
     ...contextOpts,    // storageState etc. for warm/signed-in
   })
@@ -247,7 +257,13 @@ async function measure({ browser, url, profile, contextOpts }) {
     }
   })
 
-  await browserContext.close()
+  // Close the page but keep the context alive when the caller owns it
+  // (warm-anon reuses the same context across runs to keep HTTP cache hot).
+  if (existingContext) {
+    await page.close()
+  } else {
+    await browserContext.close()
+  }
   return { readyMs, ...perf }
 }
 
@@ -313,32 +329,49 @@ async function run() {
         const runs = []
         process.stdout.write(`    ${route.name.padEnd(16)} `)
 
-        for (let i = 0; i < RUNS; i++) {
+        // For warm-cache contexts, hold one browserContext across all runs
+        // so the HTTP cache survives. Each `measure()` page sets its own
+        // CDP throttling, so the same network profile applies to every hit
+        // (including the first/priming hit).
+        let warmContext = null
+        if (ctx.warmCache) {
+          warmContext = await browser.newContext({ ...profile.options, ...contextOpts })
+          // The first measured run will be cold (cache empty); subsequent
+          // runs reuse the same context so their HTTP cache is warm. We
+          // measure RUNS+1 hits and discard run[0] from the warm stats so
+          // p50/p95 reflect "returning user" reality, not the first visit.
+        }
+
+        const totalRuns = ctx.warmCache ? RUNS + 1 : RUNS
+        for (let i = 0; i < totalRuns; i++) {
           try {
-            const m = await measure({ browser, url, profile, contextOpts })
+            const m = await measure({ browser, url, profile, contextOpts, existingContext: warmContext })
             runs.push(m)
             process.stdout.write('.')
           } catch (err) {
             process.stdout.write(RED('!'))
           }
         }
+        if (warmContext) await warmContext.close()
+        // Discard the priming run (cold cache) for warm-cache contexts.
+        const measuredRuns = ctx.warmCache ? runs.slice(1) : runs
 
-        if (!runs.length) {
+        if (!measuredRuns.length) {
           console.log(`  ${RED('all failed')}`)
           results.push({ route: route.name, path: route.path, device: profile.id, context: ctx.id, error: 'all-failed' })
           continue
         }
 
         const stats = {
-          ready_p50: median(pick(runs, 'readyMs')),
-          ready_p95: pctile(pick(runs, 'readyMs'), 95),
-          ttfb_p50:  median(pick(runs, 'ttfb')),
-          fcp_p50:   median(pick(runs, 'fcp')),
-          lcp_p50:   median(pick(runs, 'lcp')),
-          js_kb:     median(pick(runs, 'jsKb')),
-          static_kb: median(pick(runs, 'staticKb')),
-          img_kb:    median(pick(runs, 'imgKb')),
-          requests:  median(pick(runs, 'requests')),
+          ready_p50: median(pick(measuredRuns, 'readyMs')),
+          ready_p95: pctile(pick(measuredRuns, 'readyMs'), 95),
+          ttfb_p50:  median(pick(measuredRuns, 'ttfb')),
+          fcp_p50:   median(pick(measuredRuns, 'fcp')),
+          lcp_p50:   median(pick(measuredRuns, 'lcp')),
+          js_kb:     median(pick(measuredRuns, 'jsKb')),
+          static_kb: median(pick(measuredRuns, 'staticKb')),
+          img_kb:    median(pick(measuredRuns, 'imgKb')),
+          requests:  median(pick(measuredRuns, 'requests')),
         }
 
         console.log(
@@ -348,13 +381,14 @@ async function run() {
         )
 
         results.push({
-          route:   route.name,
-          path:    route.path,
-          device:  profile.id,
-          context: ctx.id,
-          runs:    runs.length,
+          route:        route.name,
+          path:         route.path,
+          device:       profile.id,
+          context:      ctx.id,
+          runs:         measuredRuns.length,
+          primingRuns:  ctx.warmCache ? 1 : 0,
           stats,
-          raw:     runs,
+          raw:          measuredRuns,
         })
       }
       console.log()
