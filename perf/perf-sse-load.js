@@ -261,6 +261,15 @@ async function runOneUser({ botId, userIdx, getConcurrency }) {
       movePostAckMs, playerEventMs, botMoveTotalMs,
       lookupMs:          st.lookup ?? null,
       applyMs:           st.apply  ?? null,
+      // F9 probe — granular apply bands + live pool stats. Surfaced via
+      // Server-Timing as `apply.find / apply.update / apply.post / pool.*`
+      // (counts smuggled through the `dur` field — see realtime.js).
+      applyFindMs:       st['apply.find']   ?? null,
+      applyUpdateMs:     st['apply.update'] ?? null,
+      applyPostMs:       st['apply.post']   ?? null,
+      poolTotal:         st['pool.total']   ?? null,
+      poolIdle:          st['pool.idle']    ?? null,
+      poolWaiting:       st['pool.waiting'] ?? null,
       publishToPickupMs: t?.publishToPickupMs ?? null,
       pickupToWriteMs:   t?.pickupToWriteMs   ?? null,
     })
@@ -326,6 +335,11 @@ async function runHarness({ botId, concurrency, label }) {
     botMoveTotal:    summarize('botMoveTotalMs'),
     lookup:          summarize('lookupMs'),
     apply:           summarize('applyMs'),
+    applyFind:       summarize('applyFindMs'),
+    applyUpdate:     summarize('applyUpdateMs'),
+    applyPost:       summarize('applyPostMs'),
+    poolTotal:       summarize('poolTotal'),
+    poolWaiting:     summarize('poolWaiting'),
     publishToPickup: summarize('publishToPickupMs'),
     pickupToWrite:   summarize('pickupToWriteMs'),
   }
@@ -349,6 +363,20 @@ function printRow(level) {
     `   pick→wr ${colorMs(s.pickupToWrite.p50, 5)}/${colorMs(s.pickupToWrite.p95, 25)}` +
     `   moveAck ${colorMs(s.movePostAck.p50, 100)}/${colorMs(s.movePostAck.p95, 300)}` +
     `   bot ${colorMs(s.botMoveTotal.p50, 200)}/${colorMs(s.botMoveTotal.p95, 600)}`
+  )
+}
+
+function printApplyBreakdown(level) {
+  const s = level.summary
+  // F9 probe: split apply into find/update/post + live pool stats. The
+  // pool fields aren't real ms — they're counts smuggled through `dur`.
+  console.log(
+    `  c=${String(level.concurrency).padStart(3)}` +
+    `   find ${colorMs(s.applyFind.p50, 5)}/${colorMs(s.applyFind.p95, 15)}` +
+    `   update ${colorMs(s.applyUpdate.p50, 10)}/${colorMs(s.applyUpdate.p95, 30)}` +
+    `   post ${colorMs(s.applyPost.p50, 5)}/${colorMs(s.applyPost.p95, 15)}` +
+    `   pool.total ${String(s.poolTotal.p50 ?? '—').padStart(2)}/${String(s.poolTotal.p95 ?? '—').padStart(2)}` +
+    `   pool.waiting ${String(s.poolWaiting.p50 ?? '—').padStart(2)}/${String(s.poolWaiting.p95 ?? '—').padStart(2)}`
   )
 }
 
@@ -380,6 +408,10 @@ async function run() {
   console.log(BOLD('  Results — p50/p95 by load level'))
   console.log(DIM('  apply / publishToPickup / pickupToWrite / movePostAck / botMoveTotal'))
   for (const lv of levels) printRow(lv)
+  console.log()
+  console.log(BOLD('  Apply breakdown + pool stats — p50/p95'))
+  console.log(DIM('  find / update / post / pool.total / pool.waiting (counts not ms)'))
+  for (const lv of levels) printApplyBreakdown(lv)
   console.log()
 
   const outDir = join(dirname(fileURLToPath(import.meta.url)), 'baselines')

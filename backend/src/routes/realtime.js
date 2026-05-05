@@ -38,6 +38,7 @@ import * as tableFlow from '../services/tableFlowService.js'
 import { cancelForfeitFor } from '../services/disconnectForfeitService.js'
 import * as idleTimers from '../realtime/idleTimers.js'
 import db from '../lib/db.js'
+import { getPoolStats } from '@xo-arena/db'
 import logger from '../logger.js'
 
 /**
@@ -644,7 +645,23 @@ router.post('/tables/:slug/move', async (req, res) => {
     } else if (result.completed) {
       idleTimers.cancelAllForTable(table.id)
     }
-    res.set('Server-Timing', `lookup;dur=${t1 - t0}, apply;dur=${t2 - t1}`)
+    // F9 probe: granular apply bands + live pool stats. The pool counts are
+    // smuggled into Server-Timing as `dur` values so perf-sse-load.js parses
+    // them with the existing parser. Read after applyMove returns so we
+    // capture the post-move steady state, not the in-flight peak.
+    const t = result._t || {}
+    const pool = getPoolStats()
+    const parts = [
+      `lookup;dur=${t1 - t0}`,
+      `apply;dur=${t2 - t1}`,
+      `apply.find;dur=${t.findMs ?? 0}`,
+      `apply.update;dur=${t.updateMs ?? 0}`,
+      `apply.post;dur=${t.postMs ?? 0}`,
+      `pool.total;dur=${pool.total}`,
+      `pool.idle;dur=${pool.idle}`,
+      `pool.waiting;dur=${pool.waiting}`,
+    ]
+    res.set('Server-Timing', parts.join(', '))
     return res.json({ ok: true, completed: !!result.completed, mark: result.mark })
   } catch (err) {
     logger.error({ err, slug: req.params.slug }, 'POST /rt/tables/:slug/move failed')
