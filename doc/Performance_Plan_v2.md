@@ -1735,7 +1735,7 @@ synthetic blind spots, ranked by likely-to-find-real-issues:
 | 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
 | 3 | **Live SSE under realistic load** *(closed)* | ~~`perf-sse-rtt` measures **one** move at a time, isolated.~~ Closed 2026-05-05 by `perf/perf-sse-load.js`. Findings rewrote Phase 5's scope — see §F4 above. tl;dr: fan-out load doesn't degrade `publishToPickup`; the 383 ms prod number is **cold-broker-wakeup** on the *first* move into a fresh table, and warm/under-load moves all complete in <60 ms p50. | closed |
 | 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
-| 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50); the wall-clock cost under load is **pool wait**, not query time. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
+| 5 | **DB time as fraction of p95** *(closed)* | ~~Endpoint p95 is wall-clock — could be 90% DB or 10% DB.~~ Closed 2026-05-05 by F4 load test + F9 audit. DB itself is fast (apply <20ms p95 at c=50, queries 1-5ms each); pool was hypothesised as the bottleneck but F9.1 deploy showed **no measurable improvement** — the wall-clock ceiling lives in CPU/fsync, not DB or pool. Confirms Phase 2 (DB indexes) stays deferred — see §F9. | closed |
 | 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
 | 7 | **CLS (Cumulative Layout Shift)**| LCP is tracked, CLS is not.                                                                             | Hero swap, late-loading auth UI, modal reflows all *could* cause shift (budget ≤0.1 per Web Vitals). Probably fine but the not-knowing is itself the gap. | 0.5d   |
 
@@ -2248,20 +2248,43 @@ a later phase depends on an earlier one shipping first.
 
 | Rank | Phase | Real ms benefit                                   | Perceived | Effort | Status |
 |-----:|-------|---------------------------------------------------|:---------:|:------:|:------:|
-|    — | 3     | mobile img_kb 888→50, desktop 888→174 (−94/−80%)  | low/mid   | 1d     | ✅ shipped 2026-05-05 |
+|    — | 3     | mobile img_kb 888→50, desktop 888→174 (−94/−80%)  | low/mid   | 1d     | ✅ shipped v1.4.0-alpha-4.1 |
+|    — | 1d    | mobile FCP 1416→432ms (−69%), LCP 1792→432ms (−76%) | **huge**| 1d     | ✅ shipped v1.4.0-alpha-4.2 |
+|    — | 5.1   | publishToPickup p95 740→126ms at c=5 (−83%); cold first-move p50 382→39ms (−90%) | **huge** | 1h | ✅ shipped v1.4.0-alpha-4.3 |
+|    — | F9.1  | pg.Pool max 10→30 — no measurable gain at c≤25 (free hedge for c≥100) | none | 1h | ✅ shipped v1.4.0-alpha-4.3 (ineffective) |
 |    1 | 1     | mobile FCP 1400→~700ms (−700ms × every cold visit)| **huge**  | 3-5d   | next   |
-|    2 | 5     | move→state 577→~270ms p50 (−300ms × every move)   | **huge**  | 3-5d   | sequenced after 1 |
-|    3 | 1d    | mobile FCP/LCP −1200ms, desktop −580ms (perceived)| **huge**  | 1d     | parallel with 1 |
+|    2 | 5     | remaining steady-state SSE work (~270ms floor)    | mid       | 3-5d   | sequenced after 1 |
+|    3 | 1c    | cold-authed Ready 200→143ms p50 (−30%)            | mid       | 0.5d   | queued |
 |    4 | 17    | locks Phase-1 gains; direct ms = 0                | meta      | 0.5d   | sequenced after 1 |
 
 **Completed (this Tier 0 round):**
 
-- ✅ **Phase 3** — Hero image diet. **Shipped 2026-05-05** in
-  v1.4.0-alpha-4.1. Responsive WebP via CSS media query: 50 KB mobile
-  / 174 KB desktop, down from 888 KB single asset. Measured: img_kb on
-  Home Mobile dropped 888 → 50 (−94%); mobile TBT 62 → 50ms (−19%).
-  Mobile Ready/LCP movement small because mobile is JS-parse-bound,
-  not byte-bound — the win lands primarily on bytes-over-the-wire.
+- ✅ **Phase 3** — Hero image diet. **Shipped v1.4.0-alpha-4.1
+  (2026-05-05).** Responsive WebP via CSS media query: 50 KB mobile
+  / 174 KB desktop (−94/−80% from 888 KB JPG). Mobile TBT 62→50ms.
+  Detail in Appendix Z.1.6.
+- ✅ **Phase 1d** — Instant-ready hero. **Shipped v1.4.0-alpha-4.2
+  (2026-05-05)** in commit `d5cfabd`. Inline static board markup in
+  `landing/index.html`; React `createRoot` swap on hydrate. Mobile
+  FCP **1416→432 ms (−69%)**, LCP **1792→432 ms (−76%)**, desktop
+  FCP **804→424 ms (−47%)**. Ready unchanged (bundle parse still
+  dominates) but the *visible* "page is alive" moment now lands at
+  the HTML-render boundary — biggest perceived-perf single move in
+  the plan, delivered for 1 day's work.
+- ✅ **Phase 5.1** — Cold-broker XREAD fix. **Shipped v1.4.0-alpha-4.3
+  (2026-05-05)** in commit `0dcb244`. Reduced `XREAD_BLOCK_MS` from
+  30s → 1s in `backend/src/lib/sseBroker.js`. publishToPickup p95
+  at c=5 **740 → 126 ms (−83%)**; cold first-move p50 **382 → 39 ms
+  (−90%)**. Phase 5's headline ROI was this fix; remaining Phase 5
+  steps target the ~270 ms steady-state floor only. Detail in
+  Appendix Z.1.7.
+- ⚠️ **F9.1** — pg.Pool max 10 → 30. **Shipped v1.4.0-alpha-4.3** in
+  commit `3280859` but **had no measurable gain at c≤25**. Pool was
+  not the actual bottleneck; queries are 1–5 ms each and the pool
+  was rotating fast enough to never queue. Kept in as a free hedge
+  for c≥100. Real apply p95 ceiling is elsewhere (1 shared vCPU
+  + WAL fsync are leading suspects — see §F9). Detail in Appendix
+  Z.1.8.
 
 **Active queue (sorted by combined real + perceived benefit):**
 
@@ -2273,28 +2296,25 @@ a later phase depends on an earlier one shipping first.
    dominates). Real benefit ≈ 700 ms × every cold-anon and cold-authed
    visit; perceived benefit huge (FCP is the most visible user metric).
 
-2. **Phase 5** — SSE round-trip latency. *Scope narrowed after the
-   2026-05-04 Fly-Replay reliability fix.* Remaining: 577 ms p50 /
-   926 ms p95 prod for POST move → SSE state event. F4 decomposition
-   shows the long pole is `publishToPickup` (Fly Upstash pub/sub) at
-   383 ms p50, *not* code we control: `server.lookup` 4 ms,
-   `server.apply` 10 ms, `broker.pickupToWrite` 0 ms. Cutting it
-   further means moving pub/sub closer (Redis on Fly proper, in-region
-   replica) or collapsing the event hop entirely (write directly to
-   the originating connection's response, skipping pub/sub for the
-   single-machine fast path). Real benefit ≈ 300 ms × every PvP / PvB
-   move; perceived benefit huge (this is the click-to-result feel).
-   **Sequenced after Phase 1** — the bundle work likely shrinks the
-   perceived gap on its own; re-measure before scoping.
+2. **Phase 5** — Remaining steady-state SSE work. *Scope narrowed
+   after Phase 5.1 shipped.* Cold-wake spike eliminated; remaining
+   floor is ~270 ms p50 of which `publishToPickup` is now 113 ms p50
+   / 191 ms p95 (single-stream, post-fix). Cutting it further means
+   moving pub/sub closer (Redis on Fly proper, in-region replica) or
+   collapsing the event hop entirely (write directly to the
+   originating connection's response, skipping pub/sub for the
+   single-machine fast path). Concrete steps in §F4: SSE-unbuffered
+   confirm, Nagle disable, in-process fanout, event coalesce.
+   **Sequenced after Phase 1** — re-measure first; bundle work likely
+   shrinks the perceived gap.
 
-3. **Phase 1d** — Instant-ready hero (perceived-only). Inline a
-   static SVG of the demo board in `landing/index.html` so first
-   paint shows the hero without waiting for JS. Live `DemoArena`
-   takes over on hydrate (cross-fade or in-place swap).
-   Real ms = 0; perceived ms = −1200ms FCP/LCP mobile / −580ms
-   desktop — biggest perceived-perf single move available.
-   **Stacks with Phase 1, ships in parallel** — independent code
-   path. ~1 day. (Full spec under "Phase 1d" in Section A.)
+3. **Phase 1c** — Cold-authed orchestration cleanup. Memoize
+   `api.users.sync` with a per-token in-flight `Map<token,Promise>`
+   so the two parallel effects in `AppLayout.jsx` (`:288` and `:439`)
+   share one round-trip. Critical path drops from ~200 ms p50 / 262 ms
+   p95 to ~143 ms p50 / 205 ms p95 — a **30% cut on every cold-authed
+   first paint**. ~30 LOC. Half-day. *Could land in parallel with
+   Phase 1.*
 
 4. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
    *Sequenced after Phase 1.* Direct ms = 0; meta-value high (locks
@@ -2346,8 +2366,8 @@ floor is real, two gaps need to close:
   (wrap `users.sync` in a per-token in-flight `Map<token,Promise>`
   pattern; clear the entry on settle so retries still work).
 
-  Filed as **Phase 1c — cold-authed orchestration cleanup** in Tier 1
-  (rank #1 there — cheapest meaningful authed-paint win in the plan).
+  Filed as **Phase 1c — cold-authed orchestration cleanup** in Tier 0
+  (promoted from Tier 1 — cheap, can ship in parallel with Phase 1).
 - **DB time as a fraction of endpoint p95** — Phase 2 is currently
   deferred for "lack of evidence", but endpoint p95 is wall-clock and
   could be 90% DB or 10% DB; we can't tell. Wire OpenTelemetry or
@@ -2363,39 +2383,39 @@ post-Phase-1 numbers come in.
 
 | Rank | Phase | Real ms benefit                                | Perceived | Effort |
 |-----:|-------|------------------------------------------------|:---------:|:------:|
-|    1 | 1c    | cold-authed FCP 200→143ms p50 (−60ms × every authed paint) | mid       | 0.5d   |
-|    2 | 13    | TournamentDetail render path + memoization     | mid       | 2-3d   |
-|    3 | 7     | mobile critical-CSS, transform-only animations | mid       | 1-2d   |
-|    4 | 8     | skeletons (pure perceived-perf — no real ms)   | high      | 1-2d   |
+|    1 | 13    | TournamentDetail render path + memoization     | mid       | 2-3d   |
+|    2 | 7     | mobile critical-CSS, transform-only animations | mid       | 1-2d   |
+|    3 | 8     | skeletons (pure perceived-perf — no real ms)   | high      | 1-2d   |
+|    4 | F9.2  | VM CPU bump (1 shared → 2 dedicated) — apply p95 ceiling | low | $$ ops |
 |    5 | aux   | Better Auth rate-limit whitelist (synthetic only) | none   | 0.5d   |
 
-1. **Phase 1c — cold-authed orchestration cleanup.** *Filed
-   2026-05-05 from the client orchestration audit (above).* Memoize
-   `api.users.sync` with a per-token in-flight `Map<token,Promise>` so
-   the two parallel effects in `AppLayout.jsx` (`:288` and `:439`)
-   share one round-trip. Critical path drops from ~200 ms p50 / 262 ms
-   p95 to ~143 ms p50 / 205 ms p95 — a **30% cut on every cold-authed
-   first paint**. ~30 LOC in `landing/src/lib/api.js`. **Lands after
-   Phase 1.**
+(Phase 1c promoted to Tier 0 on 2026-05-05 — the dedupe is cheap
+enough to ship in parallel with Phase 1, no longer waits on it.)
 
-2. **Phase 13 — Tournament page** is the heaviest single surface
+1. **Phase 13 — Tournament page** is the heaviest single surface
    (1900-line render path). Phase 1 should already lazy-load it, but
    the page itself still needs Suspense splitting + memoization +
    pagination on the round/match lists. Affects only users on that
    route, but they're our most-engaged cohort.
 
-3. **Phase 7 — Mobile-specific.** Mobile FCP is ~3× desktop today —
+2. **Phase 7 — Mobile-specific.** Mobile FCP is ~3× desktop today —
    parse cost on Moto G4 CPU. If Phase 1 doesn't bring it to budget on
    its own, critical-CSS extraction + transform-only animations are
-   the next levers. Pairs with Phase 1; only ranks below 1c/13 because
+   the next levers. Pairs with Phase 1; only ranks below 13 because
    it's a "mobile remainder" — needs Phase 1 to land first to know the
    actual residual.
 
-4. **Phase 8 — Skeletons everywhere new** (TournamentDetailPage,
+3. **Phase 8 — Skeletons everywhere new** (TournamentDetailPage,
    TournamentsPage, BotProfilePage, ProfilePage). Pure perceived-perf
    pass — the actual route isn't faster, just feels faster while
    chunks load. Pairs with Phase 1's `<Suspense>` boundaries (the
    skeleton *is* the fallback). Real-ms impact = 0.
+
+4. **F9.2 — VM CPU bump (1 shared → 2 dedicated).** Direct test of
+   the leading hypothesis for why F9.1's pool fix didn't budge apply
+   p95 at c=25. Predicted apply p95 c=25: 46 → 15-20ms. Budget call,
+   not a code change — track separately. Validate with `perf-sse-load
+   --concurrency=25,50` before/after.
 
 5. **Better Auth rate-limit whitelist for synthetic.** `get-session`
    90/200 ok at concurrency 5 in prod. Real users won't hit this; the
