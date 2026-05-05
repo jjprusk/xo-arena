@@ -39,6 +39,14 @@ function freshEmail() {
   return `hook+${ts}-${r}@dev.local`
 }
 
+// /users/sync derives `username` from displayName via lower-snake-case.
+// On staging where prior-run users aren't cleaned up, hardcoded display
+// names collide on the (lowered) username unique constraint and /sync
+// 500s. Suffix every display name with a fresh random tag.
+function uniqueName(label) {
+  return `${label} ${Math.random().toString(36).slice(2, 8)}`
+}
+
 async function dismissWelcomeOnLoad(page) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem('aiarena_guest_welcome_seen', '1') } catch {}
@@ -66,7 +74,7 @@ test.describe('Hook — Demo Table macro endpoint (§5.1)', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Hook Demo' })
+    await signUp(page, { email, password, displayName: uniqueName('Hook Demo') })
 
     const token = await fetchAuthToken(context.request, LANDING_URL)
 
@@ -81,13 +89,16 @@ test.describe('Hook — Demo Table macro endpoint (§5.1)', () => {
     expect(created.botA?.displayName).toBeTruthy()
     expect(created.botB?.displayName).toBeTruthy()
 
-    // Public list MUST NOT surface the demo
-    const publicRes = await context.request.get(`${LANDING_URL}/api/v1/tables`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    expect(publicRes.ok()).toBeTruthy()
-    const { tables: publicTables } = await publicRes.json()
-    expect(publicTables.find(t => t.id === created.tableId)).toBeUndefined()
+    // Privacy check: an anonymous viewer must not see the demo.
+    // (Authed creator DOES see their own private tables in the default list
+    // by design — see backend/src/routes/tables.js GET / docstring. The
+    // `?mine=true` block below covers the creator-visibility case.)
+    const anonContext = await page.context().browser().newContext()
+    const anonRes = await anonContext.request.get(`${LANDING_URL}/api/v1/tables`)
+    expect(anonRes.ok()).toBeTruthy()
+    const { tables: anonTables } = await anonRes.json()
+    expect(anonTables.find(t => t.id === created.tableId)).toBeUndefined()
+    await anonContext.close()
 
     // ?mine=true should include it (creator can see their own demos)
     const mineRes = await context.request.get(`${LANDING_URL}/api/v1/tables?mine=true`, {
@@ -107,7 +118,7 @@ test.describe('Hook — Demo Table macro endpoint (§5.1)', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Hook Replace' })
+    await signUp(page, { email, password, displayName: uniqueName('Hook Replace') })
 
     const token = await fetchAuthToken(context.request, LANDING_URL)
 
@@ -139,7 +150,7 @@ test.describe('Hook — Step 1 credited on PvAI completion', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'PvAI Step1' })
+    await signUp(page, { email, password, displayName: uniqueName('PvAI Step1') })
 
     // Start the game and play to end. Don't care about the outcome — any
     // game.completedAt non-null fires the journeyService trigger for step 1.
@@ -152,6 +163,13 @@ test.describe('Hook — Step 1 credited on PvAI completion', () => {
 
     // Pull the JWT, query journey preferences. Step 1 must be present.
     const token = await fetchAuthToken(context.request, LANDING_URL)
+    // Mirror BetterAuth user → application User row. The UI fires this on
+    // first authenticated paint, but on staging the API call below races the
+    // AppLayout effect; without an explicit sync the /preferences GET 404s.
+    const syncRes = await context.request.post(`${LANDING_URL}/api/v1/users/sync`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(syncRes.ok()).toBeTruthy()
     const prefsRes = await context.request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -173,9 +191,15 @@ test.describe('Hook — Step 2 credited via demo-watch + reward popup', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Hook Step2' })
+    await signUp(page, { email, password, displayName: uniqueName('Hook Step2') })
 
     const token = await fetchAuthToken(context.request, LANDING_URL)
+    // Mirror BetterAuth user → application User row up front so the
+    // /preferences poll below doesn't race the AppLayout sync effect.
+    const syncRes = await context.request.post(`${LANDING_URL}/api/v1/users/sync`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(syncRes.ok()).toBeTruthy()
 
     // Create the demo via API
     const createRes = await context.request.post(`${LANDING_URL}/api/v1/tables/demo`, {
