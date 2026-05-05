@@ -43,7 +43,7 @@ Bundle budgets per route:
 
 - Initial parse on `/`: ≤ 120 KB gz JS, ≤ 20 KB CSS
 - Largest other route: ≤ +60 KB gz over baseline
-- Hero image: ≤ 200 KB on mobile (today: `colosseum-bg.jpg` is **888 KB** — see Phase 3)
+- Hero image: ≤ 200 KB on mobile (~~today: 888 KB~~ → **shipped 2026-05-05 at 50 KB mobile / 174 KB desktop** via responsive WebP, see Phase 3)
 
 If a phase's measured win doesn't move at least one budgeted metric, mark it
 *landed but ineffective* and revisit the assumption.
@@ -591,9 +591,42 @@ opacity makes invisible).
 Because the image renders at `--photo-opacity: 0.18` (light) /
 `0.06` (dark), encode-time blur and aggressive downscale are
 imperceptible — the eye sees a tinted wash, not a photograph.
-Recommendation: ship **B** as the default with WebP, keep the JPG as
-a fallback for the ~3% browsers without WebP support. Mobile alone
-saves ~800KB per cold-anon visit on 4G.
+Recommendation was: ship **B** as the default with WebP, keep the JPG as
+a fallback for the ~3% browsers without WebP support.
+
+**Shipped 2026-05-05** (commits `28b7aca` + `f14d052` /stage to staging
+v1.4.0-alpha-4.1) — went with a 2-asset responsive setup via CSS
+`@media (min-width: 768px)` instead of a single B candidate, so 4G
+mobile gets the smaller 800w/q55+blur asset (D) and tablet+ gets the
+1600w/q70 asset (A):
+
+| Tier   | File                       | Size | Spec                  |
+|--------|----------------------------|-----:|-----------------------|
+| Mobile | `colosseum-mobile.webp`    | 50KB | 800w q55 sharpness 7  |
+| Tablet+| `colosseum-desktop.webp`   |174KB | 1600w q70             |
+
+Original `colosseum-bg.jpg` (888 KB) kept in `/landing/public/` as a
+silent fallback for any future need.
+
+**Measured impact (staging v1.4.0-alpha-4.1, 2026-05-05 baseline):**
+
+| Metric (Home, cold-anon)   | Before        | After (staging) | Delta      |
+|----------------------------|--------------:|----------------:|-----------:|
+| `img_kb` mobile            | 888 KB        | **50 KB**       | **−94%**   |
+| `img_kb` desktop           | 888 KB        | **174 KB**      | **−80%**   |
+| Mobile TBT p50             | 62 ms         | 50 ms           | −19%       |
+| Mobile LCP p50             | 1816 ms       | 1792 ms         | −1%        |
+| Mobile Ready p50           | 2052 ms       | 2041 ms         | −1%        |
+
+The Ready/LCP movement on mobile is small because mobile cold-anon is
+JS-parse-bound on Moto G4 (Phase 1 territory); the WebP win lands
+primarily on **bytes-over-the-wire** (~838 KB saved per cold mobile
+visit on 4G) and **TBT** (less main-thread image-decode work), not on
+synthetic Ready. Real users on metered networks feel the byte savings
+more than the synthetic harness does.
+
+This **closes Phase 3** as Tier 0. The next Tier 0 item is Phase 1
+(JS bundle splitting).
 
 **Deliverable:** a single `Performance_Snapshot_<date>.md` checked in next to
 this plan, showing where every route currently sits vs the targets above.
@@ -1807,16 +1840,17 @@ benchmark slot** — otherwise the bundle floor masks any other win.
 
 ### Tier 0 — re-ordered after the 2026-05-05 prod re-baseline
 
-Two independent dominant costs remain after Phase 5's reliability bug
-was fixed (Fly-Replay, 2026-05-04): the JS bundle (cold-page Ready,
-mobile FCP) and the 888 KB hero image (the only single asset that
-shows up on every route). The image win is *shovel-ready* (candidates
-already encoded); the bundle win is bigger but takes more lift.
+After Phase 3 (hero image diet) and Phase 5's reliability fix shipped
+on 2026-05-04 / 05, the remaining Tier 0 weight sits on the JS bundle.
+Mobile cold-anon Ready stays in a flat ~2050 ms band — JS parse is the
+load-bearing cost.
 
-1. **Phase 3** — Hero image diet. *Ship first.* Candidates encoded
-   (`perf/hero-candidates/`); B (1280w WebP q55, 94 KB) is a 10× cut
-   with no perceptible change at 6–18% photo opacity. Mobile cold-anon
-   saves ~800 KB per visit. **Single PR. Expected within a day.**
+1. ✅ **Phase 3** — Hero image diet. **Shipped 2026-05-05** in
+   v1.4.0-alpha-4.1. Responsive WebP via CSS media query: 50 KB mobile
+   / 174 KB desktop, down from 888 KB single asset. Measured: img_kb on
+   Home Mobile dropped 888 → 50 (−94%); mobile TBT 62 → 50ms (−19%).
+   Mobile Ready/LCP movement small because mobile is JS-parse-bound,
+   not byte-bound — the win lands primarily on bytes-over-the-wire.
 2. **Phase 1** — Bundle audit + per-route splitting. Concrete sub-steps
    come from the visualizer; expected to drop `main` from 411 KB gz to
    ≤ 200 KB gz and mobile FCP from ~1400 ms to ~700 ms (mobile Ready
