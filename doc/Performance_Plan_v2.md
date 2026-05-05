@@ -1838,12 +1838,19 @@ The original sequencing was a guess; the snapshot data lets us tier the
 phases by expected impact. **Tier 0 must land before Tier 1 even gets a
 benchmark slot** — otherwise the bundle floor masks any other win.
 
-### Tier 0 — re-ordered after the 2026-05-05 prod re-baseline
+### Tier 0 — sorted by combined real + perceived benefit (2026-05-05)
 
-After Phase 3 (hero image diet) and Phase 5's reliability fix shipped
-on 2026-05-04 / 05, the remaining Tier 0 weight sits on the JS bundle.
-Mobile cold-anon Ready stays in a flat ~2050 ms band — JS parse is the
-load-bearing cost.
+Ranking criteria: **(1) ms saved per request × frequency × user reach
+= total real impact**, **(2) user-visible delta on the click-to-feel
+floor = perceived impact**. Sequencing constraints noted inline where
+a later phase depends on an earlier one shipping first.
+
+| Rank | Phase | Real ms benefit                                   | Perceived | Effort | Status |
+|-----:|-------|---------------------------------------------------|:---------:|:------:|:------:|
+|    — | 3     | mobile img_kb 888→50, desktop 888→174 (−94/−80%)  | low/mid   | 1d     | ✅ shipped 2026-05-05 |
+|    1 | 1     | mobile FCP 1400→~700ms (−700ms × every cold visit)| **huge**  | 3-5d   | next   |
+|    2 | 5     | move→state 577→~270ms p50 (−300ms × every move)   | **huge**  | 3-5d   | sequenced after 1 |
+|    3 | 17    | locks Phase-1 gains; direct ms = 0                | meta      | 0.5d   | sequenced after 1 |
 
 1. ✅ **Phase 3** — Hero image diet. **Shipped 2026-05-05** in
    v1.4.0-alpha-4.1. Responsive WebP via CSS media query: 50 KB mobile
@@ -1852,30 +1859,32 @@ load-bearing cost.
    Mobile Ready/LCP movement small because mobile is JS-parse-bound,
    not byte-bound — the win lands primarily on bytes-over-the-wire.
 
-2. **Phase 1** — Bundle audit + per-route splitting. Concrete sub-steps
-   come from the visualizer; expected to drop `main` from 411 KB gz to
-   ≤ 200 KB gz and mobile FCP from ~1400 ms to ~700 ms (mobile Ready
-   is currently a flat ~2050 ms band — JS parse dominates). **This is
-   the single biggest remaining Tier 0 lever.**
+2. **Phase 1** — Bundle audit + per-route splitting. **The single
+   biggest remaining Tier 0 lever** — affects every cold visitor on
+   every page. Concrete sub-steps come from the visualizer; expected
+   to drop `main` from 411 KB gz to ≤ 200 KB gz and mobile FCP from
+   ~1400 ms to ~700 ms (mobile Ready is a flat ~2050 ms band — JS parse
+   dominates). Real benefit ≈ 700 ms × every cold-anon and cold-authed
+   visit; perceived benefit huge (FCP is the most visible user metric).
 
-3. **Phase 17** — CI bundle-size guard. *Sequenced after Phase 1, not
-   before.* Fail PR on > 5% chunk growth. The gate locks in the
-   *post-Phase-1 floor*, so doing it before Phase 1 just protects the
-   stale state. Land the moment Phase 1's main commit merges to dev.
+3. **Phase 5** — SSE round-trip latency. *Scope narrowed after the
+   2026-05-04 Fly-Replay reliability fix.* Remaining: 577 ms p50 /
+   926 ms p95 prod for POST move → SSE state event. F4 decomposition
+   shows the long pole is `publishToPickup` (Fly Upstash pub/sub) at
+   383 ms p50, *not* code we control: `server.lookup` 4 ms,
+   `server.apply` 10 ms, `broker.pickupToWrite` 0 ms. Cutting it
+   further means moving pub/sub closer (Redis on Fly proper, in-region
+   replica) or collapsing the event hop entirely (write directly to
+   the originating connection's response, skipping pub/sub for the
+   single-machine fast path). Real benefit ≈ 300 ms × every PvP / PvB
+   move; perceived benefit huge (this is the click-to-result feel).
+   **Sequenced after Phase 1** — the bundle work likely shrinks the
+   perceived gap on its own; re-measure before scoping.
 
-4. **Phase 5** — SSE round-trip. *Scope narrowed after 2026-05-04.* The
-   reliability half (multi-machine routing producing 90% failures on
-   prod) is **fixed** — Fly-Replay short-circuits cross-machine POSTs.
-   The latency half remains: 577 ms p50 / 926 ms p95 prod for POST
-   move → SSE state event. F4 decomposition shows the long pole is
-   `publishToPickup` (Fly Upstash pub/sub) at 383 ms p50, *not* code
-   we control: `server.lookup` 4 ms, `server.apply` 10 ms,
-   `broker.pickupToWrite` 0 ms. Cutting this further means moving
-   pub/sub closer (Redis on Fly proper, in-region replica) or
-   collapsing the event hop entirely (write directly to the
-   originating connection's response, skipping pub/sub for
-   single-machine fast path). **Promote only after Phase 1 lands** —
-   the bundle work likely shrinks the perceived gap on its own.
+4. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
+   *Sequenced after Phase 1.* Direct ms = 0; meta-value high (locks
+   in Phase 1's gains so future feature work doesn't re-bloat them).
+   Half-day to wire.
 
 (**Phase 1b — PlayVsBot deep-dive** dropped from Tier 0 on
 2026-05-05. The latest baseline shows PlayVsBot Ready at 991 ms desktop
@@ -1922,33 +1931,62 @@ floor is real, two gaps need to close:
   (wrap `users.sync` in a per-token in-flight `Map<token,Promise>`
   pattern; clear the entry on settle so retries still work).
 
-  Adding to Tier 1 as **Phase 1c — cold-authed orchestration cleanup**
-  (size: half-day). Lands after Phase 1.
+  Filed as **Phase 1c — cold-authed orchestration cleanup** in Tier 1
+  (rank #1 there — cheapest meaningful authed-paint win in the plan).
 - **DB time as a fraction of endpoint p95** — Phase 2 is currently
   deferred for "lack of evidence", but endpoint p95 is wall-clock and
   could be 90% DB or 10% DB; we can't tell. Wire OpenTelemetry or
   pino-trace into the endpoint hot paths (Phase 0.3) to settle the
   Phase 2 stay-or-promote question definitively.
 
-### Tier 1 — confirm budget after Tier 0, then attack what the data still shows
+### Tier 1 — sorted by combined real + perceived benefit
 
 After Tier 0, **re-run `perf-v2.js`** and re-measure. The remaining gap
-between the new numbers and the budgets table determines what comes
-next. Likely candidates, not committed:
+between the new numbers and the budgets table determines what stays.
+Sort below is best-current-estimate; promote / demote as the
+post-Phase-1 numbers come in.
 
-- **Phase 8** — Skeletons everywhere new (TournamentDetailPage,
-  TournamentsPage, BotProfilePage, ProfilePage). Pairs with Phase 1's
-  `<Suspense>` boundaries — the skeleton *is* the fallback.
-- **Phase 13** — Tournament page. The heaviest single surface; Phase 1
-  should already lazy-load it, but the page itself still has a 1900-line
-  render path that needs Suspense splitting + memo / pagination.
-- **Phase 7** — Mobile-specific. Mobile FCP is ~3× desktop today —
-  parse cost on Moto G4 CPU. If Phase 1 doesn't bring it to budget,
-  critical-CSS extraction + transform-only animations are the next levers.
-- **Better Auth rate-limit whitelist for synthetic** — `get-session`
-  90/200 ok at concurrency 5 in prod. Real users won't hit this; the
-  synthetic harness needs an exemption (allowlist by IP or signed
-  header) so future perf runs aren't polluted by 429s.
+| Rank | Phase | Real ms benefit                                | Perceived | Effort |
+|-----:|-------|------------------------------------------------|:---------:|:------:|
+|    1 | 1c    | cold-authed FCP 200→143ms p50 (−60ms × every authed paint) | mid       | 0.5d   |
+|    2 | 13    | TournamentDetail render path + memoization     | mid       | 2-3d   |
+|    3 | 7     | mobile critical-CSS, transform-only animations | mid       | 1-2d   |
+|    4 | 8     | skeletons (pure perceived-perf — no real ms)   | high      | 1-2d   |
+|    5 | aux   | Better Auth rate-limit whitelist (synthetic only) | none   | 0.5d   |
+
+1. **Phase 1c — cold-authed orchestration cleanup.** *Filed
+   2026-05-05 from the client orchestration audit (above).* Memoize
+   `api.users.sync` with a per-token in-flight `Map<token,Promise>` so
+   the two parallel effects in `AppLayout.jsx` (`:288` and `:439`)
+   share one round-trip. Critical path drops from ~200 ms p50 / 262 ms
+   p95 to ~143 ms p50 / 205 ms p95 — a **30% cut on every cold-authed
+   first paint**. ~30 LOC in `landing/src/lib/api.js`. **Lands after
+   Phase 1.**
+
+2. **Phase 13 — Tournament page** is the heaviest single surface
+   (1900-line render path). Phase 1 should already lazy-load it, but
+   the page itself still needs Suspense splitting + memoization +
+   pagination on the round/match lists. Affects only users on that
+   route, but they're our most-engaged cohort.
+
+3. **Phase 7 — Mobile-specific.** Mobile FCP is ~3× desktop today —
+   parse cost on Moto G4 CPU. If Phase 1 doesn't bring it to budget on
+   its own, critical-CSS extraction + transform-only animations are
+   the next levers. Pairs with Phase 1; only ranks below 1c/13 because
+   it's a "mobile remainder" — needs Phase 1 to land first to know the
+   actual residual.
+
+4. **Phase 8 — Skeletons everywhere new** (TournamentDetailPage,
+   TournamentsPage, BotProfilePage, ProfilePage). Pure perceived-perf
+   pass — the actual route isn't faster, just feels faster while
+   chunks load. Pairs with Phase 1's `<Suspense>` boundaries (the
+   skeleton *is* the fallback). Real-ms impact = 0.
+
+5. **Better Auth rate-limit whitelist for synthetic.** `get-session`
+   90/200 ok at concurrency 5 in prod. Real users won't hit this; the
+   synthetic harness needs an exemption (allowlist by IP or signed
+   header) so future perf runs aren't polluted by 429s. **Measurement
+   hygiene only — no user-visible benefit.**
 
 (Phase 0.2 RUM dropped from this list — D1 RUM beacon and admin Web
 Vitals dashboards already shipped via `f6b7079` and `507f7f6`.)
