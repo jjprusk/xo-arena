@@ -1852,15 +1852,27 @@ elsewhere.
 
 **How to narrow it down — concrete next steps:**
 
-- [ ] **Granular Server-Timing inside applyMove.** Split `apply`
-      into `parse;dur=`, `logic;dur=`, `db.findUnique;dur=`,
-      `db.update;dur=`, `xadd;dur=`. If `db.update` itself stays
-      flat at c=25 but `apply` total grows, the cost is JS / event-
-      loop, not DB.
-- [ ] **Pool metrics**: log `pg.Pool` `totalCount`, `idleCount`,
-      `waitingCount` once per second under load. If `waitingCount`
-      is ~0 during c=25, pool definitively wasn't saturated
-      (would also retroactively confirm F9.1 was a no-op).
+- [x] **Granular Server-Timing inside applyMove.** *(Shipped on dev
+      2026-05-05 in commit `7812210`.)* `applyMove` now returns
+      `_t: { findMs, updateMs, postMs }` and `realtime.js` adds
+      `apply.find;dur=`, `apply.update;dur=`, `apply.post;dur=` to
+      the existing Server-Timing header. `perf-sse-load.js` parses
+      the new bands and prints a 2nd results row. If `apply.update`
+      grows at c=25 while `apply.find` stays flat, cost is the
+      JSONB write (suspect 2: WAL fsync / JSONB amp); if `apply.post`
+      grows, broker dispatch is the contention; if everything stays
+      flat but the wrapping `apply` grows, the cost is JS / event-
+      loop (suspect 1: 1 vCPU). **Awaits staging /stage to read.**
+- [x] **Pool metrics**: surface `pg.Pool` `totalCount` / `idleCount`
+      / `waitingCount` per request. *(Shipped on dev 2026-05-05 in
+      commit `7812210`.)* `packages/db/src/index.js` now constructs
+      its own `pg.Pool` and passes it to `PrismaPg`; new
+      `getPoolStats()` export reads counters synchronously. Surfaced
+      in Server-Timing as `pool.total / pool.idle / pool.waiting`
+      (counts smuggled through `dur` for parser compatibility). If
+      `pool.waiting` stays ~0 at c=25, pool definitively wasn't
+      saturated (retroactively confirms F9.1 was a no-op). **Awaits
+      staging /stage to read.**
 - [ ] **Direct F9.2 test:** stand up a temporary `cpu_kind =
       "performance", cpus = 2` Fly machine, point staging traffic
       at it, re-run the load test. If apply p95 drops, F9.2 is
