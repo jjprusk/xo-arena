@@ -1851,17 +1851,19 @@ load-bearing cost.
    Home Mobile dropped 888 → 50 (−94%); mobile TBT 62 → 50ms (−19%).
    Mobile Ready/LCP movement small because mobile is JS-parse-bound,
    not byte-bound — the win lands primarily on bytes-over-the-wire.
+
 2. **Phase 1** — Bundle audit + per-route splitting. Concrete sub-steps
    come from the visualizer; expected to drop `main` from 411 KB gz to
    ≤ 200 KB gz and mobile FCP from ~1400 ms to ~700 ms (mobile Ready
-   is currently a flat ~2050 ms band — JS parse dominates).
-3. **Phase 1b** — PlayVsBot deep-dive (independent path bug — different
-   root cause than bundle, but same blast radius for that one user
-   journey).
-4. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
-   Lock in Tier 0's gains before any new feature work bloats them back.
+   is currently a flat ~2050 ms band — JS parse dominates). **This is
+   the single biggest remaining Tier 0 lever.**
 
-5. **Phase 5** — SSE round-trip. *Scope narrowed after 2026-05-04.* The
+3. **Phase 17** — CI bundle-size guard. *Sequenced after Phase 1, not
+   before.* Fail PR on > 5% chunk growth. The gate locks in the
+   *post-Phase-1 floor*, so doing it before Phase 1 just protects the
+   stale state. Land the moment Phase 1's main commit merges to dev.
+
+4. **Phase 5** — SSE round-trip. *Scope narrowed after 2026-05-04.* The
    reliability half (multi-machine routing producing 90% failures on
    prod) is **fixed** — Fly-Replay short-circuits cross-machine POSTs.
    The latency half remains: 577 ms p50 / 926 ms p95 prod for POST
@@ -1872,9 +1874,31 @@ load-bearing cost.
    pub/sub closer (Redis on Fly proper, in-region replica) or
    collapsing the event hop entirely (write directly to the
    originating connection's response, skipping pub/sub for
-   single-machine fast path). **Promote only after Phase 3 + Phase 1
-   are merged** — those two free up bandwidth and likely shrink the
-   perceived gap on their own.
+   single-machine fast path). **Promote only after Phase 1 lands** —
+   the bundle work likely shrinks the perceived gap on its own.
+
+(**Phase 1b — PlayVsBot deep-dive** dropped from Tier 0 on
+2026-05-05. The latest baseline shows PlayVsBot Ready at 991 ms desktop
+/ 2058 ms mobile — same band as every other route. The "uniquely slow"
+rationale is gone. Moved to Tier 2; will be re-promoted only if
+post-Phase-1 measurements show PlayVsBot specifically lagging.)
+
+#### Measurement gaps to close before declaring Tier 0 "done"
+
+Today we baseline cold-anon synthetic only. Before claiming the Tier 0
+floor is real, two gaps need to close:
+
+- **Authenticated-route p95** — `perf-backend-p95.js` now supports
+  `PERF_AUTH_TOKEN` to include `/users/me/*`, `/bots/mine`, and
+  `/guide/preferences`. These gate every cold-authed page render. If
+  any are slow, every signed-in user pays the cost on first paint.
+  Run with a synthetic perf-user token after Phase 1 lands; if any
+  endpoint is over the 200 ms p95 budget, that's the next Tier 0 item.
+- **DB time as a fraction of endpoint p95** — Phase 2 is currently
+  deferred for "lack of evidence", but endpoint p95 is wall-clock and
+  could be 90% DB or 10% DB; we can't tell. Wire OpenTelemetry or
+  pino-trace into the endpoint hot paths (Phase 0.3) to settle the
+  Phase 2 stay-or-promote question definitively.
 
 ### Tier 1 — confirm budget after Tier 0, then attack what the data still shows
 
@@ -1949,6 +1973,10 @@ shows them on the critical path.
 - **Phase 6** — Backend cold start. Now in iad with `auto_stop_machines`
   policy in place from `29542f7`. Needs cold-start measurement to
   decide whether the policy is worth the cost.
+- **Phase 1b** — PlayVsBot deep-dive. *Demoted from Tier 0 on 2026-05-05.*
+  Latest baseline shows PlayVsBot Ready at 991 ms desktop / 2058 ms
+  mobile — within the same band as every other route. Re-promote only
+  if post-Phase-1 numbers show PlayVsBot specifically lagging.
 
 (Phase 5 was here in the 0.4 draft. Promoted to Tier 0 — see above.)
 
