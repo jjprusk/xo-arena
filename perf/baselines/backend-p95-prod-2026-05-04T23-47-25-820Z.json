@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-05-04T23:47:25.820Z",
+  "env": "prod",
+  "bases": {
+    "landing": "https://xo-landing-prod.fly.dev",
+    "backend": "https://xo-backend-prod.fly.dev",
+    "tournament": "https://xo-tournament-prod.fly.dev"
+  },
+  "requests": 200,
+  "concurrency": 5,
+  "warmup": 10,
+  "results": [
+    {
+      "name": "GET /api/version",
+      "url": "https://xo-backend-prod.fly.dev/api/version",
+      "base": "backend",
+      "stats": {
+        "p50": 51,
+        "p95": 78,
+        "p99": 164,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/v1/bots?gameId=xo",
+      "url": "https://xo-backend-prod.fly.dev/api/v1/bots?gameId=xo",
+      "base": "backend",
+      "stats": {
+        "p50": 58,
+        "p95": 106,
+        "p99": 167,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/v1/leaderboard?game=xo",
+      "url": "https://xo-backend-prod.fly.dev/api/v1/leaderboard?game=xo",
+      "base": "backend",
+      "stats": {
+        "p50": 53,
+        "p95": 58,
+        "p99": 83,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/auth/get-session",
+      "url": "https://xo-backend-prod.fly.dev/api/auth/get-session",
+      "base": "backend",
+      "stats": {
+        "p50": 54,
+        "p95": 123,
+        "p99": 407,
+        "ok": 190,
+        "err": 10
+      },
+      "errors": [
+        {
+          "status": 429,
+          "ms": 66
+        },
+        {
+          "status": 429,
+          "ms": 55
+        },
+        {
+          "status": 429,
+          "ms": 50
+        },
+        {
+          "status": 429,
+          "ms": 56
+        },
+        {
+          "status": 429,
+          "ms": 49
+        }
+      ]
+    },
+    {
+      "name": "GET /api/tournaments",
+      "url": "https://xo-tournament-prod.fly.dev/api/tournaments",
+      "base": "tournament",
+      "stats": {
+        "p50": 55,
+        "p95": 79,
+        "p99": 166,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    }
+  ]
+}

@@ -17,11 +17,11 @@
  * the tab regains focus after being hidden.
  */
 import { Router } from 'express'
-import { nanoid } from 'nanoid'
 import { requireAuth } from '../middleware/auth.js'
 import { readStream, getStreamTailId } from '../lib/eventStream.js'
 import * as sseBroker from '../lib/sseBroker.js'
 import * as sseSessions from '../realtime/sseSessions.js'
+import { mintSessionId } from '../realtime/flyReplay.js'
 import { auth } from '../lib/auth.js'
 import db from '../lib/db.js'
 import logger from '../logger.js'
@@ -153,7 +153,7 @@ router.get('/stream', optionalSessionCookie, async (req, res) => {
   // a reopen that happens before any real event arrives starts the new
   // connection with no resume cursor, and any event published in the gap
   // (e.g. `guide:journeyStep` fired by a completing POST) is silently lost.
-  const sseSessionId = nanoid(16)
+  const sseSessionId = mintSessionId()
   const tailId = await getStreamTailId().catch(() => null)
   if (tailId) res.write(`id: ${tailId}\n`)
   res.write(`event: session\ndata: ${JSON.stringify({ sseSessionId })}\n\n`)
