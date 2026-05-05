@@ -1895,11 +1895,35 @@ floor is real, two gaps need to close:
   p95 budget**: `/users/me/roles` 142ms, `/notifications` 119ms,
   `/preferences` 137ms, `/hints` 127ms, `/bots/mine` 157ms,
   `/guide/preferences` 135ms. Authed dispatch adds ~10ms p50 over
-  anon — negligible. **The remaining concern is client-side
-  orchestration**: every cold-authed page fires ~6 of these. Parallel
-  fan-out (React Query default) → 157 ms p95. Serial fan-out → 420 ms
-  (6 × 70 ms p50). Verify the landing client doesn't accidentally
-  serialize them.
+  anon — negligible.
+
+  **Client orchestration audit (2026-05-05).** Reviewed the actual
+  cold-authed critical path in `landing/src/components/layout/AppLayout.jsx`
+  + `landing/src/store/guideStore.js`. The fan-out is *less wasteful
+  than feared* (only 2-3 endpoints, not 6 — `/me/roles`,
+  `/me/preferences`, `/bots/mine` are page-specific not on landing) but
+  still has avoidable serialization:
+
+  | # | Issue | Location | Impact (p50) |
+  |---|-------|----------|--------------|
+  | 1 | `api.users.sync` called **twice** in two parallel effects | `AppLayout.jsx:288` and `:439` | +70ms wasted RTT |
+  | 2 | Effect 1 serializes sync → `guide/preferences` | `AppLayout.jsx:288→296` (`hydrate()`) | unavoidable (hydrate needs User row) |
+  | 3 | Effect 2 serializes sync → `users/me/notifications` | `AppLayout.jsx:439→441` | could parallelize *if* sync is dedupe'd |
+  | 4 | `api.users.sync` is not memoized — no in-flight promise share | `landing/src/lib/api.js:139` | ground-truth for #1 / #3 |
+
+  **Critical path today:** max(effect 1, effect 2) ≈ **200 ms p50 / 262 ms p95**.
+  - Effect 1: sync (70ms) → guide/prefs (64ms) = 134-205ms serial
+  - Effect 2: sync (70ms) → notifications (73ms) = 143-262ms serial, runs in parallel to Effect 1.
+
+  **With sync deduplication** (memoize the in-flight `users/sync`
+  promise so both effects share one round-trip): critical path drops
+  to ~143 ms p50 / ~205 ms p95 — a **~60 ms / 30% cut** on every
+  cold-authed first paint. Single-PR fix in `landing/src/lib/api.js`
+  (wrap `users.sync` in a per-token in-flight `Map<token,Promise>`
+  pattern; clear the entry on settle so retries still work).
+
+  Adding to Tier 1 as **Phase 1c — cold-authed orchestration cleanup**
+  (size: half-day). Lands after Phase 1.
 - **DB time as a fraction of endpoint p95** — Phase 2 is currently
   deferred for "lack of evidence", but endpoint p95 is wall-clock and
   could be 90% DB or 10% DB; we can't tell. Wire OpenTelemetry or
