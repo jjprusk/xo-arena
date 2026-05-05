@@ -1888,12 +1888,18 @@ post-Phase-1 measurements show PlayVsBot specifically lagging.)
 Today we baseline cold-anon synthetic only. Before claiming the Tier 0
 floor is real, two gaps need to close:
 
-- **Authenticated-route p95** — `perf-backend-p95.js` now supports
-  `PERF_AUTH_TOKEN` to include `/users/me/*`, `/bots/mine`, and
-  `/guide/preferences`. These gate every cold-authed page render. If
-  any are slow, every signed-in user pays the cost on first paint.
-  Run with a synthetic perf-user token after Phase 1 lands; if any
-  endpoint is over the 200 ms p95 budget, that's the next Tier 0 item.
+- ✅ **Authenticated-route p95** — *Measured 2026-05-05 staging.*
+  Wired via `um perfuser` (CLI command that creates a synthetic test
+  user and mints a Better Auth JWT) + `PERF_AUTH_TOKEN` in
+  `perf-backend-p95.js`. **All 6 authed endpoints under the 200 ms
+  p95 budget**: `/users/me/roles` 142ms, `/notifications` 119ms,
+  `/preferences` 137ms, `/hints` 127ms, `/bots/mine` 157ms,
+  `/guide/preferences` 135ms. Authed dispatch adds ~10ms p50 over
+  anon — negligible. **The remaining concern is client-side
+  orchestration**: every cold-authed page fires ~6 of these. Parallel
+  fan-out (React Query default) → 157 ms p95. Serial fan-out → 420 ms
+  (6 × 70 ms p50). Verify the landing client doesn't accidentally
+  serialize them.
 - **DB time as a fraction of endpoint p95** — Phase 2 is currently
   deferred for "lack of evidence", but endpoint p95 is wall-clock and
   could be 90% DB or 10% DB; we can't tell. Wire OpenTelemetry or
