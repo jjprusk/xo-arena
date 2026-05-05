@@ -16,6 +16,37 @@ free play and tournament play.
 
 ---
 
+## Top 5 — what to focus on next
+
+The five highest-impact items in the active queue, real or perceived,
+sorted by (impact × user reach) ÷ effort. Updated 2026-05-05 after the
+F11 warm-cache baseline.
+
+| # | What                                | Effort | Risk   | Impact (measured / estimated)                                            | Cohort      |
+|--:|-------------------------------------|:------:|:------:|--------------------------------------------------------------------------|:-----------:|
+| 1 | **Phase 1** — bundle splitting + per-route lazy load | 3-5d   | medium | mobile cold FCP 1416 → ~700 ms (−50%); warm parse 370 → ~250 ms          | first-time  |
+| 2 | **Phase 20** — Service Worker app shell | 2-3d   | medium | warm Ready 370 ms → ~50-100 ms (−78%) — instant repeat visits            | returning   |
+| 3 | **SWR + hover prefetch** for data pages (Tables / Tournaments / Leaderboard) | 1-2d | low | data spinner gone on revisit; instant render of stale + bg revalidate    | both        |
+| 4 | **Phase 1c** — cold-authed sync dedupe in `landing/src/lib/api.js` | 1d     | low    | cold-authed Ready 200 → 143 ms p50 (−30%) on every signed-in first paint | first-time + auth |
+| 5 | **Phase 17** — CI bundle-size guard (≥ 5% chunk growth fails the PR) | 0.5d   | none   | meta — locks in #1's gains, prevents regression                          | all         |
+
+Sequencing notes:
+
+- **Items 1 + 2 are independent** — Phase 1 helps first-time visitors, SW helps returning users. Both are Tier 0; ship in parallel by different sessions or back-to-back.
+- **Item 3 stacks on top of either** — works alone, doubles down with #2.
+- **Item 5 is gated on item 1 landing** — no point in a CI guard before the splits exist.
+- **F11.5 (RUM cohort segmentation) instruments the question of whether #1 or #2 hits more users**; until it lands enough data, sequencing #1 vs #2 is gut-feel.
+
+Deferred / not on the top 5:
+
+- F9.2 (VM CPU bump) — probe-validated as the right perf lever for backend-CPU contention but ~+$87/mo; revisit when traffic justifies.
+- Sign-in async UX expansion to SettingsPage / ResetPasswordPage — perceived-perf, ~10-20 min each but low traffic.
+- Phase 5 remaining steady-state SSE work — apply.post is ≤2 ms p95 at c=50, so the floor is fine.
+
+See "Roadmap at a glance" below for the full shipped / active / deferred picture, and §F11 for the warm-cache evidence behind this ranking.
+
+---
+
 ## Targets (binding budgets)
 
 Every page on Fly prod, p75 over a 7-day RUM window:
@@ -2204,21 +2235,50 @@ ranked by impact:
 **We don't yet know the cohort split.** D1 RUM is shipped but we
 haven't analyzed engaged-user vs new-user numbers. F11.5 below.
 
-#### F11.5 — Open question: cohort split in production
+#### F11.5 — Cohort segmentation (instrumentation shipped)
 
-Until we segment RUM data by returning-vs-new, we can't say which
-cohort dominates. The work required:
+**Shipped on dev 2026-05-05.** The instrumentation needed to answer
+"which cohort dominates: first-time visitors or returning users?"
+is in:
 
-- Use the existing RUM beacon's cookie-set timestamp to segment
-  `cold-first-visit` vs `repeat-visit` in the admin Web Vitals
-  dashboard.
-- 1-2 hours of admin panel work + a SQL `GROUP BY` on a synthetic
-  "first-visit" flag.
+- **Schema:** `PerfVital.cohort` column + index
+  (`20260505180000_perf_vitals_cohort` migration).
+- **Client (`landing/src/lib/rum.js`):** `cohort()` reads
+  `localStorage.aiarena_rum_first_seen` once per session. Empty →
+  `'first-visit'` (and sets the flag); set → `'returning'`;
+  localStorage unavailable → `'unknown'`.
+- **Backend (`POST /api/v1/perf/vitals`):** validates against the
+  `'first-visit' | 'returning' | 'unknown'` allow-list; invalid
+  values stored as `null`.
+- **Admin endpoint (`GET /api/v1/admin/health/perf/vitals`):** new
+  `?cohort=` query param, plus `byCohort` row-counts and
+  `cohortMetrics` (per-cohort × per-metric percentiles) in the
+  response. The dashboard UI to render this is a follow-up; the
+  data is queryable via the API today.
 
-Filed as Phase 0.2 follow-up. Until we have that data, treat
-Phase 1 (cold-anon win) and SW + SWR (returning-user win) as
-**both Tier 0** with sequencing decided by which user pain we
-hit first in support / dogfood.
+**The data only flows after /stage** (instrumentation has to reach
+real users). Plan: stage v1.4.0-alpha-4.5, let RUM flow for at least
+3-5 days of regular traffic, then read `byCohort` row counts to know
+the split, and `cohortMetrics.first-visit.FCP.p75` vs
+`cohortMetrics.returning.FCP.p75` for the cohort-Δ that drives the
+sequencing call.
+
+**Until then, sequencing is gut-feel.** Phase 1 and Phase 20 both
+stay Tier 0; the cohort data will tell us which to ship first if
+there isn't bandwidth for both at once.
+
+Edge cases the cohort metric handles cleanly:
+
+- **localStorage cleared / new browser / incognito** → looks like
+  `'first-visit'` each session. Honest representation: those
+  *are* cold-cache visits.
+- **Deploy churn** → all hashed assets invalidate, but localStorage
+  persists. So a returning user post-deploy reports `'returning'`
+  even though their cache is functionally cold for the new bundle.
+  Acceptable signal for our question (they *are* a returning user
+  experiencing what returning users experience).
+- **Multiple tabs same browser** → first tab marks the flag; second
+  tab also reads `'returning'`. No double-counting first-visit.
 
 ---
 

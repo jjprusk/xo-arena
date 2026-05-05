@@ -141,8 +141,12 @@ router.get('/health/perf/vitals', async (req, res, next) => {
     const since = new Date(Date.now() - PERF_WINDOW_MS[windowKey])
     const env = typeof req.query.env === 'string' && req.query.env ? req.query.env : null
     const envFilter = env ? Prisma.sql`AND env = ${env}` : Prisma.empty
+    // F11.5 — cohort filter. 'first-visit' | 'returning' | 'unknown' | null
+    // (null = all cohorts merged, default).
+    const cohort = typeof req.query.cohort === 'string' && req.query.cohort ? req.query.cohort : null
+    const cohortFilter = cohort ? Prisma.sql`AND cohort = ${cohort}` : Prisma.empty
 
-    const [rows, envCounts] = await Promise.all([
+    const [rows, envCounts, cohortCounts, cohortByMetric] = await Promise.all([
       db.$queryRaw`
         SELECT
           route,
@@ -155,7 +159,7 @@ router.get('/health/perf/vitals', async (req, res, next) => {
           COUNT(*) FILTER (WHERE rating = 'needs-improvement')::int        AS needs,
           COUNT(*) FILTER (WHERE rating = 'poor')::int                     AS poor
         FROM perf_vitals
-        WHERE "createdAt" >= ${since} ${envFilter}
+        WHERE "createdAt" >= ${since} ${envFilter} ${cohortFilter}
         GROUP BY route, name
         ORDER BY route, name
       `,
@@ -165,6 +169,28 @@ router.get('/health/perf/vitals', async (req, res, next) => {
         WHERE "createdAt" >= ${since}
         GROUP BY env
         ORDER BY env
+      `,
+      db.$queryRaw`
+        SELECT COALESCE(cohort, 'unset') AS cohort, COUNT(*)::int AS cnt
+        FROM perf_vitals
+        WHERE "createdAt" >= ${since} ${envFilter}
+        GROUP BY cohort
+        ORDER BY cohort
+      `,
+      // Per-metric p75 by cohort — the comparison that drives the
+      // Phase 1 (cold) vs Phase 20 (returning) sequencing question.
+      db.$queryRaw`
+        SELECT
+          COALESCE(cohort, 'unset')                                      AS cohort,
+          name,
+          COUNT(*)::int                                                  AS cnt,
+          PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY value)            AS p50,
+          PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY value)            AS p75,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY value)            AS p95
+        FROM perf_vitals
+        WHERE "createdAt" >= ${since} ${envFilter}
+        GROUP BY cohort, name
+        ORDER BY cohort, name
       `,
     ])
 
@@ -189,12 +215,32 @@ router.get('/health/perf/vitals', async (req, res, next) => {
       totalRows += r.cnt
     }
 
+    // F11.5 — cohort breakdown. `byCohort` is the row count per cohort
+    // (filtered by env when set) and `cohortMetrics` is the per-cohort
+    // per-metric percentiles, the comparison the dashboard uses to
+    // surface returning-vs-new perf gap.
+    const byCohort = {}
+    for (const r of cohortCounts) byCohort[r.cohort] = r.cnt
+    const cohortMetrics = {}
+    for (const r of cohortByMetric) {
+      if (!cohortMetrics[r.cohort]) cohortMetrics[r.cohort] = {}
+      cohortMetrics[r.cohort][r.name] = {
+        count: r.cnt,
+        p50: r.p50 == null ? null : Number(r.p50),
+        p75: r.p75 == null ? null : Number(r.p75),
+        p95: r.p95 == null ? null : Number(r.p95),
+      }
+    }
+
     res.json({
       window: windowKey,
       since:  since.toISOString(),
       env,
+      cohort,
       totalRows,
       byEnv,
+      byCohort,
+      cohortMetrics,
       routes,
     })
   } catch (err) {
