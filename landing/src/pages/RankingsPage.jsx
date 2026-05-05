@@ -1,7 +1,8 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, cachedFetch } from '../lib/api.js'
+import { api } from '../lib/api.js'
+import { useSWRish } from '../lib/swr.js'
 import {
   ListTable, ListTh, ListTd, ListTr,
   UserAvatar, SearchBar,
@@ -22,13 +23,10 @@ const MODE_LABELS = { all: 'All', hvh: 'HvH', hva: 'HvA' }
 const LS_SHOW_BOTS = 'xo-leaderboard-show-bots'
 
 export default function RankingsPage() {
-  const [board, setBoard] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [justUpdated, setJustUpdated] = useState(false)
   const [period, setPeriod] = useState('all')
   const [mode, setMode] = useState('all')
   const [search, setSearch] = useState('')
+  const [justUpdated, setJustUpdated] = useState(false)
   const [showBots, setShowBots] = useState(() => {
     try { return localStorage.getItem(LS_SHOW_BOTS) === 'true' } catch { return false }
   })
@@ -37,31 +35,32 @@ export default function RankingsPage() {
     try { localStorage.setItem(LS_SHOW_BOTS, showBots) } catch {}
   }, [showBots])
 
+  // Phase 20.3 — SWR via the shared hook. Cache key encodes filters so
+  // each filter combo has its own entry; the cached read paints in the
+  // same frame as mount on revisit.
+  const path = `/leaderboard?period=${period}&mode=${mode}&includeBots=${showBots}`
+  const { data, isLoading, isStale } = useSWRish(
+    `leaderboard:${period}:${mode}:${showBots}`,
+    () => api.get(path),
+    { maxAgeMs: 5 * 60_000 },
+  )
+  const board = data?.leaderboard ?? []
+  const loading = isLoading
+  const refreshing = isStale
+
+  // Brief "just updated" flash on the stale → fresh transition only,
+  // matching the prior UX cue. Tracking `isStale` via a ref keeps the
+  // effect inert on cold loads (where isStale was already false).
+  const wasStaleRef = useRef(false)
   useEffect(() => {
-    let cancelled = false
-    const path = `/leaderboard?period=${period}&mode=${mode}&includeBots=${showBots}`
-    const { immediate, refresh } = cachedFetch(path, 5 * 60_000)
-    if (immediate) {
-      setBoard(immediate.leaderboard || [])
-      setLoading(false)
-      setRefreshing(true)
-    } else {
-      setLoading(true)
+    if (wasStaleRef.current && !isStale) {
+      setJustUpdated(true)
+      const t = setTimeout(() => setJustUpdated(false), 2000)
+      wasStaleRef.current = false
+      return () => clearTimeout(t)
     }
-    refresh
-      .then(res => {
-        if (!cancelled) {
-          setBoard(res.leaderboard || [])
-          if (immediate) {
-            setJustUpdated(true)
-            setTimeout(() => { if (!cancelled) setJustUpdated(false) }, 2000)
-          }
-        }
-      })
-      .catch(() => { if (!cancelled && !immediate) setBoard([]) })
-      .finally(() => { if (!cancelled) { setLoading(false); setRefreshing(false) } })
-    return () => { cancelled = true }
-  }, [period, mode, showBots])
+    wasStaleRef.current = isStale
+  }, [isStale])
 
   const { data: session } = useOptimisticSession()
   const viewerBaId = session?.user?.id
