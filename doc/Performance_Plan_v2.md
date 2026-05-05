@@ -990,6 +990,67 @@ HTML / JS / CSS still hits the network every time.
 - [ ] **Persist Zustand stores** so warm boot has full state — guide
       progress, sound prefs, ui sort orders, etc.
 
+#### Phase 20 — implementation scoping (logged 2026-05-05)
+
+Phase 20 is the highest-leverage perceived-perf change still pending in v2 and the #2 slot on the Top-5 chart. The single sub-item that delivers the headline (warm Ready 370 ms → ~50–100 ms) is the Service Worker app shell; the rest are supporting cleanups. This subsection captures the audit + ordering done before kicking off implementation so the work doesn't drift.
+
+##### Current state (verified on prod 2026-05-05, v1.4.0-alpha-4.5)
+
+- ✅ `index.html` → `cache-control: no-cache` (correct — forces revalidation so deploys take effect immediately).
+- ✅ Hashed assets under `/assets/*` → `cache-control: public, max-age=31536000` (1y, correct).
+- ⚠️ **Missing `immutable` keyword** on hashed assets — browsers may still send revalidation requests on hard reload. Cheap fix.
+- ✅ A hand-rolled SW already lives at `landing/public/sw.js` — single-purpose Web Push handler. Registers **lazily** via `landing/src/lib/pushSubscribe.js` only when the user opts into push, and explicitly does **no** caching ("the app is an online experience"). Phase 20 needs to extend this SW (not replace) and switch to **eager** registration on app boot.
+- ✅ Zustand `persist` middleware is already on 3 of 4 stores (`guideStore`, `notifSoundStore`, `soundStore`). `gymStore` is the only outlier — easy completion.
+- ✅ Compression on at the express layer (`compression()` middleware in `landing/server.js`); brotli is added by Fly's edge.
+- The existing `pushSubscribe.js` already does `navigator.serviceWorker.register('/sw.js')` — Phase 20.2 only needs to add an *eager* call from `main.supported.jsx` (not a duplicate, since `register` is idempotent on the same URL).
+
+##### Sub-items, ordered by leverage / risk
+
+| # | Item | Effort | Risk | Real impact | Notes |
+|---|---|---|---|---|---|
+| **20.1** | Add `immutable` to asset cache headers | 30 min | low | Saves a few revalidation HEADs on hard reload | One-line tweak in `landing/server.js` static middleware (`setHeaders` branch for non-`index.html`). Cheap warm-up before doing the SW work. |
+| **20.2** | Eager SW registration + extend `sw.js` for app-shell caching | 1.5 days | **medium** | Warm Ready 370 ms → ~50–100 ms (the **headline** Phase 20 win) | Extend existing push SW (don't replace). Add `install` precache of build manifest, `fetch` handler with cache-first for hashed `/assets/*` and stale-while-revalidate for `/`+`index.html`. Register on app boot in `main.supported.jsx`. **Risk**: SW bugs persist on user devices — needs versioning + kill switch from day one. |
+| **20.3** | SWR data layer for public reads (`/leaderboard`, `/tournaments`, `/bots`) | 1 day | low–medium | Cuts perceived wait on Tables / Tournaments / Rankings from "spinner" to "instant + refresh" | New `useSWRish(key, fetcher)` hook in `landing/src/lib/swr.js`. Reads from cache synchronously, kicks off fetch, swaps result. **Risk**: stale UI showing wrong leaderboard for ~1 s on revisit — acceptable. |
+| **20.4** | IndexedDB for cached lists | 0.5 day | low | Storage-limit relief vs localStorage; JSON survives reload | Wrapper around `idb` package. Replaces the localStorage backings inside the SWR cache from 20.3. Trivially deferrable to after 20.3 if localStorage payload sizes prove fine. |
+| **20.5** | Persist `gymStore` | 30 min | low | Marginal — completes the "warm boot has full state" story | One-line `persist()` wrapper. |
+
+**Total: ~3 dev-days. Highest-leverage unit is 20.2.** That alone closes the Top-5 #2 slot.
+
+##### Critical risks to plan around (20.2 specifically)
+
+1. **SW persistence.** A buggy SW lives on user devices until it self-updates. Mitigations:
+   - Version constant in the SW (`SW_VERSION`) wired in at build time via Vite `define` so cache keys cycle on deploy.
+   - **Admin kill switch** — backend endpoint (`/api/v1/admin/sw/kill`) that returns a tombstone JSON the SW reads on each `fetch`; on tombstone the SW calls `registration.unregister()` and clears all caches. Build this **before** the SW ships, not after.
+   - Keep `skipWaiting()` and `clients.claim()` on `install`/`activate` (already in place) so updates roll out without requiring a tab close.
+
+2. **Cache invalidation on deploy.** Strategy: precache list keyed by `SW_VERSION`; `activate` handler deletes any cache whose name doesn't match the current version. Pair with `index.html` already being `no-cache` — first byte after deploy is fresh, asset URLs are content-hashed and immutable, so the precache list rebuilds cleanly per deploy.
+
+3. **Push handler must keep working.** Extending the SW means adding `install` / `activate` / `fetch` to the same file — push code untouched. Smoke-test both paths (push receive + asset cache hit) on every SW change.
+
+4. **Cookie + auth on `/` revalidation.** The SW must NOT cache `/api/*` (auth, session, mutations). Cache scope is strictly: `/`, `/index.html`, `/assets/*`, `/favicon.svg`, fonts/icons. Runtime fetches for `/api/v1/auth/get-session` and friends bypass the SW entirely. Confirm via the `fetch` event request URL filter on the first commit.
+
+5. **Better Auth flow.** Sign-in posts to `/api/auth/sign-in/email` and reads cookies — both must bypass SW. The path filter from #4 covers this; explicit test: sign in with a fresh user behind a registered SW and confirm the session cookie lands.
+
+##### Explicitly out of scope for Phase 20 itself
+
+- **E5 supercharger items** (SW as canonical realtime SSE substrate, Background Sync for offline moves, IDB SSE replay, Periodic Background Sync, Push for cup events, WebShare). Each is multi-day with its own risk profile. Tracked separately at §E5 — pursue only after Phase 20 base ships and RUM cohort data validates the cache-shell win.
+- **Edge response cache on Fly** (currently bulleted under Phase 20 above). Fly's HTTP cache requires app-level config + invalidation strategy that interacts with Better Auth cookies. **Recommendation:** pull this bullet out of Phase 20 and create a separate Phase 20.6 for it post-base. Lower priority once SW + SWR are in place — they capture most of the same win client-side without the auth-cache footgun.
+
+##### Rollout sequence (calendar)
+
+1. **Day 1 AM:** 20.1 (`immutable` header) + 20.5 (`gymStore` persist). Cheap wins, low-risk warm-up. Land + deploy + verify on staging.
+2. **Day 1 PM:** Build the SW kill-switch endpoint + admin runbook entry in `Guide_Operations.md`. Insurance **before** the SW ships, not after.
+3. **Day 2:** 20.2 — extend `sw.js`, add precache + cache-first/SWR fetch, eager registration in `main.supported.jsx`. Ship behind a `?sw=1` query-param flag for staged rollout. Add a unit test for the SW's `fetch` event filter (`/api/*` must miss the cache, `/assets/*` must hit it).
+4. **Day 3 AM:** 20.3 — SWR hook + retrofit `TablesPage`, `TournamentsPage`, `RankingsPage`.
+5. **Day 3 PM:** 20.4 — promote SWR backing to IDB if payload sizes warrant; else close as YAGNI.
+6. **Day 4:** RUM verification. F11.5 cohort data should be flowing by then. Compare returning-cohort Ready on staging pre-/post-Phase-20; if it's not ≤100 ms, debug before declaring done. Update Top-5 chart with measured delta.
+
+##### Verification plan
+
+- **Synthetic:** add a `--cache-warmed` mode to `perf/perf-v2.js` that registers + warms the SW, then measures Ready on a second visit. Expected delta on cold-anon mobile: 370 ms → ~50–100 ms.
+- **RUM:** the F11.5 cohort split (`returning` vs `first-visit`) is the production read. Returning-cohort Ready p50 should drop into double digits. Tracked alongside FCP / LCP per cohort in the admin perf vitals dashboard.
+- **Smoke:** add a Playwright assertion that, after a navigation in a context with the SW registered, a second navigation reads `/assets/*` from disk cache (response time ≤5 ms via Performance API).
+
 ### Phase 21 — Architecture experiments (longshots)
 
 Each is a meaningful re-architecture; pursue only if Tier 0 + Tier 1

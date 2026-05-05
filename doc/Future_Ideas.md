@@ -3,6 +3,26 @@
 
 Deferred features and improvements that are worth revisiting but not currently prioritized.
 
+## Known Critical Bugs
+
+### 🔴 E2E journey suite cannot run against staging or production (cross-origin auth) — logged 2026-05-05
+
+**Symptom:** `e2e/tests/guide-onboarding.spec.js` (and any other journey/guide suite using `signUp` + `fetchAuthToken`) fails immediately on staging/prod with `No token in response — user may not be signed in on this context` from `helpers.js:111`.
+
+**Root cause:** the test signs up via the landing UI (`page.goto('/')` on `xo-landing-*.fly.dev`) — Better Auth sets the session cookie on the **landing** origin. `fetchAuthToken` then calls `${BACKEND_URL}/api/token` directly on the **backend** origin (`xo-backend-*.fly.dev`). Different fly subdomains → cookies are not sent → 401, no token, every downstream Bearer-auth call fails.
+
+On localhost both services share `localhost`, so cookies leak across ports and the test "just works." The cross-origin gap was masked by local dev convenience and surfaced the first time we tried `/promote` step "complete journey test on production" (2026-05-05, v1.4.0-alpha-4.5).
+
+**Impact:** the `/stage` and `/promote` flows have no automated journey verification on the deployed environment. Smoke 12/12 covers surface load + version, but the 7-step Hook + Curriculum walkthrough is unverified post-deploy unless a human clicks through `V1_Acceptance.md`.
+
+**Likely fix (small):** in `guide-onboarding.spec.js` (and siblings), point `fetchAuthToken` at `LANDING_URL` instead of `BACKEND_URL`. Landing's `server.js` already proxies `/api/*` → backend; cookies match landing's origin so the proxied `/api/token` request authenticates correctly. The remaining ~30 backend API calls all use Bearer auth, which works cross-origin if backend CORS allows it (verify after the patch).
+
+**Effort:** 1 line + verify CORS lets the rest through; ~30–60 min if CORS is permissive, half a day if it isn't and we need to either tighten the proxy coverage or add CORS allowances.
+
+**Why critical:** every release ships without journey verification on the deployed surface. The F10 SignInModal change in v1.4.0-alpha-4.5 is exactly the kind of UI tweak this test would catch; we promoted it on smoke + manual eyes only.
+
+---
+
 ## Journey CTA spotlight — wiring leftovers
 
 The reusable `<Spotlight target={ref} active={...} onDismiss={...} />` component shipped on 2026-04-29 (`landing/src/components/guide/Spotlight.jsx`) and replaces the ad-hoc per-page `xo-spotlight-pulse` toggle. Wired so far:
