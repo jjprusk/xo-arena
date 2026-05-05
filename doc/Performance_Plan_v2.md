@@ -451,6 +451,42 @@ Three load-bearing facts here:
    Same machine class; same code. Likely cold-machine flap on the
    move POST handler — Phase 6 input.
 
+##### Multi-machine Fly-Replay fix — 2026-05-04
+
+The prod baselines collected on 2026-05-04 surfaced a real production
+bug, not a measurement artifact. The first prod run after the iad
+migration showed **18/20 SSE round-trips failing** with
+`409 SSE_SESSION_EXPIRED`; staging was 0/20.
+
+Root cause: prod runs **2 backend machines** behind Fly's round-robin
+load balancer. The SSE session registry is a per-process `Map` keyed
+by session id, so any `/rt/*` POST that hits the *other* machine looks
+up an unknown session and 409s. Staging (1 machine) never tripped it.
+
+Fix (commit `0771718`): SSE session ids are now minted with a
+machine-id prefix (`<FLY_MACHINE_ID>.<nanoid>`). The `/rt/*`
+middleware decodes the prefix and, if it doesn't match the current
+machine, returns the `Fly-Replay` header to retry the request on the
+owning machine. ~30 LOC primitive in
+`backend/src/realtime/flyReplay.js` plus 2 call sites.
+
+Post-fix prod baseline: **0/20 failures, 20/20 valid samples.** Code-
+path overhead is unchanged (`server.lookup` 4ms, `server.apply` 8ms).
+
+**Baseline discontinuity to know about:**
+`perf/baselines/sse-rtt-prod-2026-05-04T23-53-58-761Z.json` and
+earlier prod F4 baselines were computed over the 2 lucky runs that
+landed on the SSE-owning machine, so their p50/p95s look
+artificially low. Use
+`perf/baselines/sse-rtt-prod-2026-05-05T01-17-08-425Z.json` (the
+first post-fix run) as the new prod F4 reference. Staging baselines
+are unaffected — staging never had the bug.
+
+A future Redis-backed session registry (which would replace
+Fly-Replay entirely and enable non-Fly hosting) is captured in
+`doc/Future_Ideas.md` and is deferred until non-Fly hosting is on
+the table.
+
 #### Backend endpoint p95 — healthy across the board
 
 | Endpoint                        | Staging p50 | Staging p95 | Staging p99 | Prod p50 | Prod p95 | Prod p99 |
