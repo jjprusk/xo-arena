@@ -2064,10 +2064,29 @@ remaining lever is **perceived-latency UX work**: progressive
 spinner + helper text in SignInModal so the wait feels intentional
 rather than stuck.
 
-**Filed as a Tier 1 perceived-perf item.** Audit shows the modal
-already has button disable + text swap (`'Please wait…'`); missing
-piece is a spinner glyph + delayed helper text after ~400 ms.
-~15-30 minutes of work, no security trade-off.
+**SignInModal shipped 2026-05-05** in commit `954f353`: inline
+spinner SVG + delayed helper text ("Verifying your password…",
+"Creating your account…", "Sending reset link…") after 400 ms.
+9/9 tests pass.
+
+#### F10.4 — Other Better Auth surfaces (not yet reviewed)
+
+Same scrypt-on-1-vCPU latency profile applies wherever the
+backend hashes or verifies a password. Surfaces that *probably*
+have the same dead-air UX gap, ranked by likely impact:
+
+| Surface                                  | Backend wait        | Reviewed? | Priority |
+|------------------------------------------|---------------------|:---------:|:--------:|
+| `landing/src/pages/SettingsPage.jsx` — change password | ~800 ms (verify + hash) | ❌ | medium |
+| `landing/src/pages/ResetPasswordPage.jsx` — submit new password | ~800 ms (hash) | ❌ | **high** — failure here looks like the reset flow is broken |
+| `GoogleSignInButton` / `AppleSignInButton` — OAuth click→redirect | browser handles nav feedback | ❌ | low — probably fine |
+| `EmailVerifyBanner` resend button         | ~50-100 ms (no hash) | ❌ | low — rarely used |
+| `signOut` (AppLayout / ProfilePage / SupportPage) | ~50 ms (session invalidate) | ❌ | skip — fast enough |
+
+Effort to apply the same spinner+helper pattern: ~10-20 min per
+surface. Could extract `Spinner` + `useProgressHelper` into
+`landing/src/lib/loadingFeedback.jsx` if we touch ≥2 more files.
+Filed as Tier 1 perceived-perf follow-up.
 
 ---
 
