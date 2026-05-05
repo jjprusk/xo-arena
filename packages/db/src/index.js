@@ -57,5 +57,20 @@ export function getPoolStats() {
   return { total: p.totalCount, idle: p.idleCount, waiting: p.waitingCount }
 }
 
+/**
+ * End the underlying pg.Pool. `prisma.$disconnect()` releases Prisma's
+ * adapter but does NOT close connections owned by a manually-constructed
+ * pool; without this, short-lived processes (the `um` CLI) hang for
+ * `idleTimeoutMillis` (15s) before Node's event loop drains. Long-lived
+ * services (the backend server) never call this — pool lifetime matches
+ * the process.
+ */
+export async function closePool() {
+  const p = globalForPrisma.pgPool
+  if (!p) return
+  globalForPrisma.pgPool = null
+  try { await p.end() } catch { /* idempotent — already ended */ }
+}
+
 export const db = globalForPrisma.prisma
 export default db
