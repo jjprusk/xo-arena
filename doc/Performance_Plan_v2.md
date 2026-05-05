@@ -705,6 +705,70 @@ If the second perf-v2 run does *not* show these moves, Phase 1 is
 *landed but ineffective* and we go back to the visualizer to find what
 else is stuck in `main`.
 
+### Phase 1d — Instant-ready hero (inline SVG + late hydrate)  *(Tier 0, perceived-only)*
+
+A pure perceived-perf trick that pairs with Phase 1: render a static
+SVG of a tic-tac-toe board (mid-game position) inlined in
+`landing/index.html`. It paints the moment the HTML lands. When the
+JS bundle finishes parsing, `DemoArena` hydrates and the live game
+takes over (cross-fade or in-place swap). The user never sees a blank
+hero or spinner — first paint *is* the hero.
+
+**What it actually buys** (relative to current 2026-05-05 baseline,
+on top of whatever Phase 1 lands):
+
+| Segment                           | FCP today | After Phase 1 | After Phase 1 + 1d |
+|-----------------------------------|----------:|--------------:|-------------------:|
+| Mobile cold-anon (Moto G4 / 4G)   |   1416ms  |    ~700ms     |       **~200ms**   |
+| Desktop cold-anon                 |    676ms  |    ~400ms     |       **~50ms**    |
+| Mobile repeat (cache hit)         |    600ms  |    ~300ms     |       **~150ms**   |
+| Desktop repeat (cache hit)        |    150ms  |    ~150ms     |       **~50ms**    |
+
+LCP follows the same delta because the SVG *is* the largest
+contentful element. The Ready metric is unchanged — bundle parse
+still happens — but the perceived "the page is alive" moment slides
+to the HTML-render boundary.
+
+**Why mobile and desktop both win:**
+
+- Mobile: −1200ms is the headline; pushes the "page feel" from
+  "loading" to "instant" (crosses the well-known ~200ms
+  perception threshold).
+- Desktop: −580ms is real even on a fast connection; takes a
+  "loaded fast" feel into "feels native". First-impression /
+  conversion cohort benefits.
+
+**Mechanics:**
+
+- [ ] Author a static SVG of an X-O board mid-game (~1-2 KB markup),
+      inlined in `landing/index.html` inside the hero container.
+      Style with the same Tailwind classes as `DemoArena`'s React
+      render so the visual is identical.
+- [ ] Lock the box dimensions explicitly with CSS `aspect-ratio` and
+      `width`/`height` so the SVG → React-render swap doesn't shift
+      layout (CLS budget ≤ 0.1).
+- [ ] On `DemoArena` mount, fade the static SVG out and the live
+      board in over ~200ms (or snap if the styles are pixel-identical
+      and there's no flash).
+- [ ] Wire any in-hero buttons (`Sign in`, `Watch another match`) so
+      a click before JS-ready queues the action and React Router
+      picks it up on hydrate. No "loading" flash on click.
+
+**Effort:** ~1 day. **Real ms saved:** 0 (page is no faster, just
+appears faster). **Perceived ms saved:** −1200ms FCP/LCP mobile,
+−580ms desktop — bigger than any other single phase. **Stacks with
+Phase 1** — independent code paths, ships in parallel.
+
+**Risks:**
+
+1. *Visual drift between SVG and React render.* Mitigation: generate
+   the SVG from the same Tailwind classes / a shared React component
+   used in both modes, or freeze the styles with a snapshot test.
+2. *CLS on swap.* Mitigation: explicit box dimensions in CSS, verify
+   in measurement gap #7 (CLS).
+3. *Click-before-hydrate.* Mitigation: native anchor links for
+   navigation buttons; queue-and-replay pattern for the rest.
+
 ### Phase 1b — PlayVsBot deep-dive  *(Tier 0, immediate after Phase 1)*
 
 The 10-run confirmation showed `/play?action=vs-community-bot` is
@@ -1881,7 +1945,8 @@ a later phase depends on an earlier one shipping first.
 |    — | 3     | mobile img_kb 888→50, desktop 888→174 (−94/−80%)  | low/mid   | 1d     | ✅ shipped 2026-05-05 |
 |    1 | 1     | mobile FCP 1400→~700ms (−700ms × every cold visit)| **huge**  | 3-5d   | next   |
 |    2 | 5     | move→state 577→~270ms p50 (−300ms × every move)   | **huge**  | 3-5d   | sequenced after 1 |
-|    3 | 17    | locks Phase-1 gains; direct ms = 0                | meta      | 0.5d   | sequenced after 1 |
+|    3 | 1d    | mobile FCP/LCP −1200ms, desktop −580ms (perceived)| **huge**  | 1d     | parallel with 1 |
+|    4 | 17    | locks Phase-1 gains; direct ms = 0                | meta      | 0.5d   | sequenced after 1 |
 
 1. ✅ **Phase 3** — Hero image diet. **Shipped 2026-05-05** in
    v1.4.0-alpha-4.1. Responsive WebP via CSS media query: 50 KB mobile
@@ -1912,7 +1977,16 @@ a later phase depends on an earlier one shipping first.
    **Sequenced after Phase 1** — the bundle work likely shrinks the
    perceived gap on its own; re-measure before scoping.
 
-4. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
+4. **Phase 1d** — Instant-ready hero (perceived-only). Inline a
+   static SVG of the demo board in `landing/index.html` so first
+   paint shows the hero without waiting for JS. Live `DemoArena`
+   takes over on hydrate (cross-fade or in-place swap).
+   Real ms = 0; perceived ms = −1200ms FCP/LCP mobile / −580ms
+   desktop — biggest perceived-perf single move available.
+   **Stacks with Phase 1, ships in parallel** — independent code
+   path. ~1 day. (Full spec under "Phase 1d" in Section A.)
+
+5. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
    *Sequenced after Phase 1.* Direct ms = 0; meta-value high (locks
    in Phase 1's gains so future feature work doesn't re-bloat them).
    Half-day to wire.
