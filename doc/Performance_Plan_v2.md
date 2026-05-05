@@ -1948,14 +1948,18 @@ a later phase depends on an earlier one shipping first.
 |    3 | 1d    | mobile FCP/LCP −1200ms, desktop −580ms (perceived)| **huge**  | 1d     | parallel with 1 |
 |    4 | 17    | locks Phase-1 gains; direct ms = 0                | meta      | 0.5d   | sequenced after 1 |
 
-1. ✅ **Phase 3** — Hero image diet. **Shipped 2026-05-05** in
-   v1.4.0-alpha-4.1. Responsive WebP via CSS media query: 50 KB mobile
-   / 174 KB desktop, down from 888 KB single asset. Measured: img_kb on
-   Home Mobile dropped 888 → 50 (−94%); mobile TBT 62 → 50ms (−19%).
-   Mobile Ready/LCP movement small because mobile is JS-parse-bound,
-   not byte-bound — the win lands primarily on bytes-over-the-wire.
+**Completed (this Tier 0 round):**
 
-2. **Phase 1** — Bundle audit + per-route splitting. **The single
+- ✅ **Phase 3** — Hero image diet. **Shipped 2026-05-05** in
+  v1.4.0-alpha-4.1. Responsive WebP via CSS media query: 50 KB mobile
+  / 174 KB desktop, down from 888 KB single asset. Measured: img_kb on
+  Home Mobile dropped 888 → 50 (−94%); mobile TBT 62 → 50ms (−19%).
+  Mobile Ready/LCP movement small because mobile is JS-parse-bound,
+  not byte-bound — the win lands primarily on bytes-over-the-wire.
+
+**Active queue (sorted by combined real + perceived benefit):**
+
+1. **Phase 1** — Bundle audit + per-route splitting. **The single
    biggest remaining Tier 0 lever** — affects every cold visitor on
    every page. Concrete sub-steps come from the visualizer; expected
    to drop `main` from 411 KB gz to ≤ 200 KB gz and mobile FCP from
@@ -1963,7 +1967,7 @@ a later phase depends on an earlier one shipping first.
    dominates). Real benefit ≈ 700 ms × every cold-anon and cold-authed
    visit; perceived benefit huge (FCP is the most visible user metric).
 
-3. **Phase 5** — SSE round-trip latency. *Scope narrowed after the
+2. **Phase 5** — SSE round-trip latency. *Scope narrowed after the
    2026-05-04 Fly-Replay reliability fix.* Remaining: 577 ms p50 /
    926 ms p95 prod for POST move → SSE state event. F4 decomposition
    shows the long pole is `publishToPickup` (Fly Upstash pub/sub) at
@@ -1977,7 +1981,7 @@ a later phase depends on an earlier one shipping first.
    **Sequenced after Phase 1** — the bundle work likely shrinks the
    perceived gap on its own; re-measure before scoping.
 
-4. **Phase 1d** — Instant-ready hero (perceived-only). Inline a
+3. **Phase 1d** — Instant-ready hero (perceived-only). Inline a
    static SVG of the demo board in `landing/index.html` so first
    paint shows the hero without waiting for JS. Live `DemoArena`
    takes over on hydrate (cross-fade or in-place swap).
@@ -1986,7 +1990,7 @@ a later phase depends on an earlier one shipping first.
    **Stacks with Phase 1, ships in parallel** — independent code
    path. ~1 day. (Full spec under "Phase 1d" in Section A.)
 
-5. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
+4. **Phase 17** — CI bundle-size guard. Fail PR on > 5% chunk growth.
    *Sequenced after Phase 1.* Direct ms = 0; meta-value high (locks
    in Phase 1's gains so future feature work doesn't re-bloat them).
    Half-day to wire.
