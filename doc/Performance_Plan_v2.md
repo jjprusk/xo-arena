@@ -1817,6 +1817,37 @@ strategy. Expand:
       cause layout flicker on resolve and read as worse than no
       skeleton at all.
 
+### F8 — Open measurement gaps (2026-05-05)
+
+After closing the authed-endpoint gap on 2026-05-05, the remaining
+synthetic blind spots, ranked by likely-to-find-real-issues:
+
+| # | Gap                              | What's missing                                                                                          | Why it matters                                                                                                                  | Effort |
+|--:|----------------------------------|---------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|:------:|
+| 1 | **Cold-authed page-level perf**  | perf-v2 only does `cold-anon`. We have authed *endpoints* (p95) but not authed *pages* (Ready/FCP/LCP). | Phase 1c is scoped from endpoint math (200→143 ms p50). Actual cold-authed page Ready could be 300 ms slower than cold-anon for *all* signed-in users — we're guessing the win. | 1d     |
+| 2 | **TournamentDetail page**        | Not in `perf-v2`'s route list. The 1900-line render path Phase 13 calls out.                            | Heaviest single surface, most-engaged users, completely unmeasured. Can't tell if Phase 1's lazy-load helps until we benchmark. | 1d     |
+| 3 | **Live SSE under realistic load**| `perf-sse-rtt` measures **one** move at a time, isolated. Real games are: rapid-fire move sequences, 2 concurrent games per machine, 10 spectators on a table, tournament fan-out to 50 users. | The `publishToPickup` 383 ms p50 is on a *quiet* prod. Under fan-out load it could be much worse. The Phase 5 ROI estimate ("move pub/sub closer = ~300 ms saved") is unvalidated under load. | 2-3d   |
+| 4 | **Repeat-visit / warm cache**    | Only cold-anon context. SW app shell (Phase 20) promises ~0 ms repeat Ready — completely unvalidated. HTTP cache hit-rates unknown. | Repeat visits are the *majority* of sessions for engaged users. Zero data on the cache regime that matters most.                 | 1d     |
+| 5 | **DB time as fraction of p95**   | Endpoint p95 is wall-clock — could be 90% DB or 10% DB. Phase 0.3 (RED metrics) hasn't shipped.        | Phase 2 is "deferred for lack of evidence" — but the evidence collection itself is the deferred work. Circular.                  | 2-3d   |
+| 6 | **iOS Safari**                   | Moto G4 (Chromium emulation) is the only mobile signal.                                                 | iOS Safari has different scheduling, cache eviction, and SSE handling (6-conn limit per origin is a known footgun). Significant market segment, zero data. | 1d     |
+| 7 | **CLS (Cumulative Layout Shift)**| LCP is tracked, CLS is not.                                                                             | Hero swap, late-loading auth UI, modal reflows all *could* cause shift (budget ≤0.1 per Web Vitals). Probably fine but the not-knowing is itself the gap. | 0.5d   |
+
+**Suggested cadence:** add one gap per sprint, in rank order. Don't
+batch — each gap-closing PR is its own measurement → finding cycle.
+
+**My recommendation for next gap to close** (after Phase 1 lands):
+gap **#1 (cold-authed pages)**. It directly validates Phase 1c's
+expected ROI, and we already have the `xo_perf` token plumbing from
+the `um perfuser` CLI. Gap #3 (SSE under load) is the biggest blind
+spot for *quality*, but requires more fixture work — better as a
+pair with Phase 5 when it's time to scope that.
+
+What stays *out of scope* for the synthetic harness even now: cross-region
+latency (not actionable from a single test runner), tab-throttling
+behavior (browser-internal, hard to script), and battery / energy
+profiling (not a perf-budget conversation). Those go to RUM /
+production telemetry if they ever become a question.
+
 ---
 
 ## Out of scope (and why)
