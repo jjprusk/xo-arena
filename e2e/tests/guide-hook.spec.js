@@ -29,7 +29,6 @@ import { test, expect } from '@playwright/test'
 import { fetchAuthToken, playPvAIToEnd, startPvAIGame } from './helpers.js'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
 
 // SignInModal anti-bot 3-second guard.
 const SUBMIT_GUARD_MS = 3500
@@ -38,6 +37,14 @@ function freshEmail() {
   const ts = Date.now().toString(36)
   const r  = Math.random().toString(36).slice(2, 8)
   return `hook+${ts}-${r}@dev.local`
+}
+
+// /users/sync derives `username` from displayName via lower-snake-case.
+// On staging where prior-run users aren't cleaned up, hardcoded display
+// names collide on the (lowered) username unique constraint and /sync
+// 500s. Suffix every display name with a fresh random tag.
+function uniqueName(label) {
+  return `${label} ${Math.random().toString(36).slice(2, 8)}`
 }
 
 async function dismissWelcomeOnLoad(page) {
@@ -67,31 +74,34 @@ test.describe('Hook — Demo Table macro endpoint (§5.1)', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Hook Demo' })
+    await signUp(page, { email, password, displayName: uniqueName('Hook Demo') })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
 
     // Create the demo
-    const createRes = await context.request.post(`${BACKEND_URL}/api/v1/tables/demo`, {
+    const createRes = await context.request.post(`${LANDING_URL}/api/v1/tables/demo`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
     expect(createRes.ok()).toBeTruthy()
     const created = await createRes.json()
     expect(created.tableId).toBeTruthy()
-    expect(created.slug).toMatch(/^mt-/)
+    expect(created.slug).toMatch(/^[A-Za-z0-9_-]{8}$/)
     expect(created.botA?.displayName).toBeTruthy()
     expect(created.botB?.displayName).toBeTruthy()
 
-    // Public list MUST NOT surface the demo
-    const publicRes = await context.request.get(`${BACKEND_URL}/api/v1/tables`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    expect(publicRes.ok()).toBeTruthy()
-    const { tables: publicTables } = await publicRes.json()
-    expect(publicTables.find(t => t.id === created.tableId)).toBeUndefined()
+    // Privacy check: an anonymous viewer must not see the demo.
+    // (Authed creator DOES see their own private tables in the default list
+    // by design — see backend/src/routes/tables.js GET / docstring. The
+    // `?mine=true` block below covers the creator-visibility case.)
+    const anonContext = await page.context().browser().newContext()
+    const anonRes = await anonContext.request.get(`${LANDING_URL}/api/v1/tables`)
+    expect(anonRes.ok()).toBeTruthy()
+    const { tables: anonTables } = await anonRes.json()
+    expect(anonTables.find(t => t.id === created.tableId)).toBeUndefined()
+    await anonContext.close()
 
     // ?mine=true should include it (creator can see their own demos)
-    const mineRes = await context.request.get(`${BACKEND_URL}/api/v1/tables?mine=true`, {
+    const mineRes = await context.request.get(`${LANDING_URL}/api/v1/tables?mine=true`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(mineRes.ok()).toBeTruthy()
@@ -108,17 +118,17 @@ test.describe('Hook — Demo Table macro endpoint (§5.1)', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Hook Replace' })
+    await signUp(page, { email, password, displayName: uniqueName('Hook Replace') })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
 
-    const first = await context.request.post(`${BACKEND_URL}/api/v1/tables/demo`, {
+    const first = await context.request.post(`${LANDING_URL}/api/v1/tables/demo`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(first.ok()).toBeTruthy()
     const firstId = (await first.json()).tableId
 
-    const second = await context.request.post(`${BACKEND_URL}/api/v1/tables/demo`, {
+    const second = await context.request.post(`${LANDING_URL}/api/v1/tables/demo`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(second.ok()).toBeTruthy()
@@ -126,7 +136,7 @@ test.describe('Hook — Demo Table macro endpoint (§5.1)', () => {
     expect(secondId).not.toBe(firstId)
 
     // First demo should be gone (deleted, not just COMPLETED)
-    const firstLookup = await context.request.get(`${BACKEND_URL}/api/v1/tables/${firstId}`, {
+    const firstLookup = await context.request.get(`${LANDING_URL}/api/v1/tables/${firstId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(firstLookup.status()).toBe(404)
@@ -140,7 +150,7 @@ test.describe('Hook — Step 1 credited on PvAI completion', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'PvAI Step1' })
+    await signUp(page, { email, password, displayName: uniqueName('PvAI Step1') })
 
     // Start the game and play to end. Don't care about the outcome — any
     // game.completedAt non-null fires the journeyService trigger for step 1.
@@ -152,8 +162,15 @@ test.describe('Hook — Step 1 credited on PvAI completion', () => {
     expect(result === null || typeof result === 'string').toBeTruthy()
 
     // Pull the JWT, query journey preferences. Step 1 must be present.
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
-    const prefsRes = await context.request.get(`${BACKEND_URL}/api/v1/guide/preferences`, {
+    const token = await fetchAuthToken(context.request, LANDING_URL)
+    // Mirror BetterAuth user → application User row. The UI fires this on
+    // first authenticated paint, but on staging the API call below races the
+    // AppLayout effect; without an explicit sync the /preferences GET 404s.
+    const syncRes = await context.request.post(`${LANDING_URL}/api/v1/users/sync`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(syncRes.ok()).toBeTruthy()
+    const prefsRes = await context.request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(prefsRes.ok()).toBeTruthy()
@@ -174,12 +191,18 @@ test.describe('Hook — Step 2 credited via demo-watch + reward popup', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'hook-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Hook Step2' })
+    await signUp(page, { email, password, displayName: uniqueName('Hook Step2') })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
+    // Mirror BetterAuth user → application User row up front so the
+    // /preferences poll below doesn't race the AppLayout sync effect.
+    const syncRes = await context.request.post(`${LANDING_URL}/api/v1/users/sync`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(syncRes.ok()).toBeTruthy()
 
     // Create the demo via API
-    const createRes = await context.request.post(`${BACKEND_URL}/api/v1/tables/demo`, {
+    const createRes = await context.request.post(`${LANDING_URL}/api/v1/tables/demo`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(createRes.ok()).toBeTruthy()
@@ -195,7 +218,7 @@ test.describe('Hook — Step 2 credited via demo-watch + reward popup', () => {
     const deadline = Date.now() + 90_000
     let completed = []
     while (Date.now() < deadline) {
-      const prefsRes = await context.request.get(`${BACKEND_URL}/api/v1/guide/preferences`, {
+      const prefsRes = await context.request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (prefsRes.ok()) {

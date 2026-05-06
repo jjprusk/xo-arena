@@ -77,24 +77,33 @@ const trainingQueue = []
  *
  * Best-effort: returns `false` on any failure (logged at warn). BotSkill.botId
  * is a plain String — no FK relation back to User — so the bot is resolved in
- * two steps.
+ * two steps. Also writes `botModelType` derived from the skill's `algorithm`
+ * — see the matching comment in mlService.js for the half-converted-state
+ * bug this avoids.
  */
 export async function repointBotPrimarySkill(modelId) {
   try {
     const skillRow = await db.botSkill.findUnique({
       where:  { id: modelId },
-      select: { botId: true },
+      select: { botId: true, algorithm: true },
     })
     if (!skillRow?.botId) return false
+    const modelType = botModelTypeFromAlgorithm(skillRow.algorithm)
     await db.user.update({
       where: { id: skillRow.botId },
-      data:  { botModelId: modelId },
+      data:  { botModelId: modelId, ...(modelType ? { botModelType: modelType } : {}) },
     })
     return true
   } catch (e) {
     logger.warn({ err: e?.message, modelId }, 'auto-repoint botModelId failed')
     return false
   }
+}
+
+// Mirror of mlService.js helper — keep in sync.
+function botModelTypeFromAlgorithm(alg) {
+  if (!alg || typeof alg !== 'string') return null
+  return alg.toLowerCase().replace(/_/g, '')
 }
 
 // ─── Model CRUD ─────────────────────────────────────────────────────────────

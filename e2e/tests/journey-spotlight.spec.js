@@ -27,8 +27,8 @@ import { test, expect } from '@playwright/test'
 import { fetchAuthToken } from './helpers.js'
 import { netCleanupByEmailPrefix } from './dbScript.js'
 
+const LANDING_URL   = process.env.LANDING_URL || 'http://localhost:5174'
 const EMAIL_PREFIX  = 'spt+'
-const BACKEND_URL   = process.env.BACKEND_URL || 'http://localhost:3000'
 const SUBMIT_GUARD_MS = 3500
 
 function freshEmail() {
@@ -58,7 +58,7 @@ async function signUp(page, { email, password, displayName }) {
 }
 
 async function createQuickBot(request, token, displayName) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/quick`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { name: displayName, persona: 'aggressive' },
   })
@@ -82,7 +82,7 @@ test.describe('Journey CTA spotlight', () => {
     const displayName = `Spt ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot = await createQuickBot(context.request, token, `SptBot ${Math.random().toString(36).slice(2, 6)}`)
 
     // ── Step 4: ?action=train-bot ────────────────────────────────────────
@@ -118,7 +118,7 @@ test.describe('Journey CTA spotlight', () => {
     const password    = 'spt-test-pw-1234'
     const displayName = `Spt2 ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot = await createQuickBot(context.request, token, `SptBot2 ${Math.random().toString(36).slice(2, 6)}`)
 
     await page.goto(`/bots/${bot.id}`)

@@ -50,8 +50,8 @@ import { test, expect } from '@playwright/test'
 import { fetchAuthToken } from './helpers.js'
 import { netCleanupByEmailPrefix } from './dbScript.js'
 
+const LANDING_URL   = process.env.LANDING_URL || 'http://localhost:5174'
 const EMAIL_PREFIX  = 'spr+'
-const BACKEND_URL   = process.env.BACKEND_URL || 'http://localhost:3000'
 const SUBMIT_GUARD_MS = 3500
 
 function freshEmail() {
@@ -81,7 +81,7 @@ async function signUp(page, { email, password, displayName }) {
 }
 
 async function createQuickBot(request, token, displayName) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/quick`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { name: displayName, persona: 'aggressive' },
   })
@@ -92,7 +92,7 @@ async function createQuickBot(request, token, displayName) {
 async function startSpar(request, token, myBotId) {
   // moveDelayMs: 50 keeps the bot-vs-bot loop snappy so the spec runs in
   // ~1s of game time instead of ~15s; the production default is 1500.
-  const res = await request.post(`${BACKEND_URL}/api/v1/bot-games/practice`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bot-games/practice`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { myBotId, opponentTier: 'easy', moveDelayMs: 50 },
   })
@@ -101,7 +101,7 @@ async function startSpar(request, token, myBotId) {
 }
 
 async function fetchJourney(request, token) {
-  const res = await request.get(`${BACKEND_URL}/api/v1/guide/preferences`, {
+  const res = await request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) return []
@@ -137,7 +137,7 @@ test.describe('Curriculum step 5 — Spar via UI', () => {
     const displayName = `Spr ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     await createQuickBot(context.request, token, `SprBot ${Math.random().toString(36).slice(2, 6)}`)
 
     await page.goto('/profile?action=spar')
@@ -182,7 +182,7 @@ test.describe('Curriculum step 5 — Spar via UI', () => {
     const displayName = `SprX ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot   = await createQuickBot(context.request, token, `SprBot ${Math.random().toString(36).slice(2, 6)}`)
 
     // Pre-fire steps 1-4 so the JourneyCard's "first missing step" picker
@@ -190,7 +190,7 @@ test.describe('Curriculum step 5 — Spar via UI', () => {
     // before the spar runs and step 6 immediately after. Each preceding
     // step has its own dedicated spec; this test's contribution is the
     // step-5 → step-6 transition specifically.
-    const patchRes = await context.request.patch(`${BACKEND_URL}/api/v1/guide/preferences`, {
+    const patchRes = await context.request.patch(`${LANDING_URL}/api/v1/guide/preferences`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { journeyProgress: { completedSteps: [1, 2, 3, 4], dismissedAt: null } },
     })

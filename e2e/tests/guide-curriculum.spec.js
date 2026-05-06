@@ -31,7 +31,6 @@ import { test, expect } from '@playwright/test'
 import { fetchAuthToken } from './helpers.js'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
 
 const SUBMIT_GUARD_MS = 3500
 
@@ -39,6 +38,13 @@ function freshEmail() {
   const ts = Date.now().toString(36)
   const r  = Math.random().toString(36).slice(2, 8)
   return `curr+${ts}-${r}@dev.local`
+}
+
+// Hardcoded display names collide on staging where prior-run users aren't
+// cleaned. /users/sync slugs displayName into username (lowered, snake-cased)
+// and the unique constraint trips. Suffix every display name with a random tag.
+function uniqueName(label) {
+  return `${label} ${Math.random().toString(36).slice(2, 8)}`
 }
 
 async function dismissWelcomeOnLoad(page) {
@@ -62,7 +68,7 @@ async function signUp(page, { email, password, displayName }) {
 }
 
 async function createQuickBot(request, token, displayName) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/quick`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { name: displayName, persona: 'aggressive' },
   })
@@ -72,7 +78,7 @@ async function createQuickBot(request, token, displayName) {
 }
 
 async function fetchJourney(request, token) {
-  const res = await request.get(`${BACKEND_URL}/api/v1/guide/preferences`, {
+  const res = await request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) return []
@@ -99,19 +105,19 @@ test.describe('Curriculum — Spar endpoint credits step 5 (§5.2)', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'curr-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Curr Spar' })
+    await signUp(page, { email, password, displayName: uniqueName('Curr Spar') })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot   = await createQuickBot(context.request, token, 'SparBot')
 
     // Kick off the spar — fastest tier so the test wraps quickly.
-    const sparRes = await context.request.post(`${BACKEND_URL}/api/v1/bot-games/practice`, {
+    const sparRes = await context.request.post(`${LANDING_URL}/api/v1/bot-games/practice`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { myBotId: bot.id, opponentTier: 'easy', moveDelayMs: 200 },
     })
     expect(sparRes.ok()).toBeTruthy()
     const sparBody = await sparRes.json()
-    expect(sparBody.slug).toMatch(/^mt-/)
+    expect(sparBody.slug).toMatch(/^[A-Za-z0-9_-]{8}$/)
     expect(sparBody.opponentTier).toBe('easy')
 
     // Single game with 200ms/move × ≤9 moves = under ~2s, plus the record-
@@ -128,9 +134,9 @@ test.describe('Curriculum — Cup clone fires step 6 immediately', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'curr-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Curr Cup6' })
+    await signUp(page, { email, password, displayName: uniqueName('Curr Cup6') })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot   = await createQuickBot(context.request, token, 'CupBot6')
 
     // The tournament service is reachable through the landing dev proxy.
@@ -162,9 +168,9 @@ test.describe('Curriculum — Cup runs to completion → step 7 (§5.4 + §5.5)'
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'curr-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Curr Cup7' })
+    await signUp(page, { email, password, displayName: uniqueName('Curr Cup7') })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
+    const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot   = await createQuickBot(context.request, token, 'CupBot7')
 
     const cloneRes = await context.request.post(`${LANDING_URL}/api/tournaments/curriculum-cup/clone`, {

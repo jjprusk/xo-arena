@@ -46,7 +46,6 @@ import { snapshotJourney, assertJourneyTransition } from './journeyAssert.js'
 const EMAIL_PREFIX = 'onb+'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
 
 // SignInModal anti-bot 3s submit guard.
 const SUBMIT_GUARD_MS = 3500
@@ -96,7 +95,7 @@ async function signUp(page, { email, password, displayName }) {
 }
 
 async function fetchProgress(request, token) {
-  const res = await request.get(`${BACKEND_URL}/api/v1/guide/preferences`, {
+  const res = await request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) return { completedSteps: [], creditsTc: null }
@@ -110,7 +109,7 @@ async function fetchProgress(request, token) {
 
 async function fetchCreditsTc(request, token, userId) {
   if (!userId) return null
-  const res = await request.get(`${BACKEND_URL}/api/v1/users/${userId}/credits`, {
+  const res = await request.get(`${LANDING_URL}/api/v1/users/${userId}/credits`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) return null
@@ -129,7 +128,7 @@ async function pollForStep(request, token, stepIndex, deadlineMs) {
 }
 
 async function createDemoTable(request, token) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/tables/demo`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/tables/demo`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) throw new Error(`demo create failed: ${res.status()} ${await res.text()}`)
@@ -137,7 +136,7 @@ async function createDemoTable(request, token) {
 }
 
 async function createQuickBot(request, token, displayName) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/quick`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { name: displayName, persona: 'aggressive' },
   })
@@ -146,7 +145,7 @@ async function createQuickBot(request, token, displayName) {
 }
 
 async function quickTrain(request, token, botId) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/${botId}/train-quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/${botId}/train-quick`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) throw new Error(`train-quick failed: ${res.status()} ${await res.text()}`)
@@ -161,7 +160,7 @@ async function quickTrain(request, token, botId) {
  * then fires `completeStep(caller.id, 4)`. ~5-10s in dev.
  */
 async function trainGuided(request, token, botId) {
-  const startRes = await request.post(`${BACKEND_URL}/api/v1/bots/${botId}/train-guided`, {
+  const startRes = await request.post(`${LANDING_URL}/api/v1/bots/${botId}/train-guided`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!startRes.ok()) throw new Error(`train-guided start failed: ${startRes.status()} ${await startRes.text()}`)
@@ -171,7 +170,7 @@ async function trainGuided(request, token, botId) {
   const deadline = Date.now() + 60_000
   let lastErr = null
   while (Date.now() < deadline) {
-    const finRes = await request.post(`${BACKEND_URL}/api/v1/bots/${botId}/train-guided/finalize`, {
+    const finRes = await request.post(`${LANDING_URL}/api/v1/bots/${botId}/train-guided/finalize`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { sessionId, skillId },
     })
@@ -188,7 +187,7 @@ async function trainGuided(request, token, botId) {
 }
 
 async function spar(request, token, botId) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bot-games/practice`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bot-games/practice`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { myBotId: botId, opponentTier: 'easy', moveDelayMs: 200 },
   })
@@ -370,12 +369,12 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
     const displayName = `Onboard ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const token  = await fetchAuthToken(context.request, LANDING_URL)
 
     // /users/sync mirrors the BetterAuth user → application User row. The UI
     // does this on first authenticated page load; in the API-only test path we
     // call it explicitly so subsequent endpoints can find the User row.
-    const syncRes = await context.request.post(`${BACKEND_URL}/api/v1/users/sync`, {
+    const syncRes = await context.request.post(`${LANDING_URL}/api/v1/users/sync`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(syncRes.ok()).toBeTruthy()
@@ -388,7 +387,7 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
     // transition is consistent (monotonic, expected step landed, credit delta,
     // phase, bot side-effects). Catches: step regression, future-step leak,
     // wrong reward firing, train-guided "succeeded" but no model swap, etc.
-    const snapCtx = { backendUrl: BACKEND_URL, token, userId: created.userId }
+    const snapCtx = { backendUrl: LANDING_URL, token, userId: created.userId }
     const snap = () => snapshotJourney(context.request, snapCtx)
 
     let prev = await snap()
@@ -410,7 +409,7 @@ test.describe('Intelligent Guide v1 — single-user onboarding (Stages 1-5)', ()
     // when localStorage has hookStep1CompletedAt, but it depends on UI timing.
     // Hit the backend directly so the test is deterministic.
     await step('step1: guest-credit', async () => {
-      const r = await context.request.post(`${BACKEND_URL}/api/v1/guide/guest-credit`, {
+      const r = await context.request.post(`${LANDING_URL}/api/v1/guide/guest-credit`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data:    { hookStep1CompletedAt: new Date().toISOString() },
       })

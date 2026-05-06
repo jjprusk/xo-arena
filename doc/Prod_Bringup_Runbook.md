@@ -59,7 +59,7 @@ fly secrets set -a xo-backend-prod \
   BETTER_AUTH_URL="https://xo-backend-prod.fly.dev" \
   JWT_SECRET="$(openssl rand -hex 32)" \
   FRONTEND_URL="https://xo-landing-prod.fly.dev,https://aiarena.callidity.com" \
-  TOURNAMENT_SERVICE_URL="http://xo-tournament-prod.flycast:3001" \
+  TOURNAMENT_SERVICE_URL="http://xo-tournament-prod.internal:3001" \
   INTERNAL_SECRET="$INTERNAL_SECRET"
 ```
 
@@ -78,6 +78,18 @@ fly secrets set -a xo-backend-prod \
 >   the endpoint gates on `x-internal-secret` header matching
 >   `INTERNAL_SECRET`, and an empty secret falls through to JWT-only
 >   auth. Set the SAME value on both services.
+>
+> **Lesson from staging 2026-05-05:** the URL must be `.internal:3001`,
+> not `.flycast:3001`. `.flycast` is Fly's anycast private DNS but only
+> resolves when the target app has a private v6 IP allocated
+> (`fly ips allocate-v6 --private`). Our deploy doesn't allocate one —
+> `.flycast` lookups returned `ENOTFOUND` and every cup match completion
+> POST silently failed (errors logged at warn, swallowed). Bracket
+> never advanced; tournament_matches stuck `IN_PROGRESS` with
+> `p1Wins=p2Wins=0`; journey step 7 never fired; e2e cup-soak suites
+> timed out at 240s. `.internal` resolves via Fly's standard 6PN DNS
+> without any IP allocation and works on both staging + prod. Same
+> private network, same latency profile.
 
 > **Lesson from staging 2026-04-23:** `FRONTEND_URL` is the CORS allowlist
 > (comma-separated). It must include **every** origin the site may be

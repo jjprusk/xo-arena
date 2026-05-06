@@ -85,8 +85,8 @@ describe('resolveSkillForGame', () => {
 describe('repointBotPrimarySkill', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('updates User.botModelId on the bot that owns the skill', async () => {
-    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_owner' })
+  it('updates User.botModelId AND botModelType on the bot that owns the skill', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_owner', algorithm: 'Q_LEARNING' })
     db.user.update.mockResolvedValue({ id: 'bot_owner' })
 
     const ok = await repointBotPrimarySkill('skill_xo_42')
@@ -94,11 +94,21 @@ describe('repointBotPrimarySkill', () => {
     expect(ok).toBe(true)
     expect(db.botSkill.findUnique).toHaveBeenCalledWith({
       where:  { id: 'skill_xo_42' },
-      select: { botId: true },
+      select: { botId: true, algorithm: true },
     })
     expect(db.user.update).toHaveBeenCalledWith({
       where: { id: 'bot_owner' },
-      data:  { botModelId: 'skill_xo_42' },
+      data:  { botModelId: 'skill_xo_42', botModelType: 'qlearning' },
+    })
+  })
+
+  it('skips botModelType when algorithm is missing/null', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_no_alg', algorithm: null })
+    db.user.update.mockResolvedValue({ id: 'bot_no_alg' })
+    expect(await repointBotPrimarySkill('skill_no_alg')).toBe(true)
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'bot_no_alg' },
+      data:  { botModelId: 'skill_no_alg' },
     })
   })
 

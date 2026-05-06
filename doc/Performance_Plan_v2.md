@@ -1074,6 +1074,37 @@ localStorage quota is ~5 MB → **7–15× headroom**. Moving to IDB now would c
 - **RUM:** the F11.5 cohort split (`returning` vs `first-visit`) is the production read. Returning-cohort Ready p50 should drop into double digits. Tracked alongside FCP / LCP per cohort in the admin perf vitals dashboard.
 - **Smoke:** add a Playwright assertion that, after a navigation in a context with the SW registered, a second navigation reads `/assets/*` from disk cache (response time ≤5 ms via Performance API).
 
+##### Phase 20 — RUM verification baseline (locked 2026-05-05)
+
+`v1.4.0-alpha-4.6` deployed to staging at the start of the verification window with only ~4 RUM rows accrued; insufficient for percentiles. The pre-Phase-20 reference is `v1.4.0-alpha-4.5` on staging (614 rows over the prior 7 days, 494 returning + 120 first-visit). Locking the **returning-cohort** numbers here so the post-Phase-20 comparison isn't a moving target.
+
+**v4.5 staging — returning cohort, p75 (ms), n ≥ 5:**
+
+| Route | FCP p75 | LCP p75 | n |
+|---|---:|---:|---:|
+| `/` | 162 | 184 | 39–40 |
+| `/play` | 164 | 169 | 8–9 |
+| `/profile` | 179 | 342 | 18–20 |
+| `/tables` | 166 | 367 | 10 |
+| `/tournaments` | 148 | 154 | 10 |
+
+**v4.5 staging — first-visit cohort `/`, p75 (ms):** FCP 1162, LCP 1184 (n=11). Phase 20 should NOT move these — first-visit has no SW or SWR cache to read from. Acts as the control group.
+
+**Pass criteria for Phase 20 on staging (gates prod /promote):**
+
+1. **Returning-cohort wins on cache-bound routes.** `/profile` and `/tables` LCP p75 should drop ≥30% (target: ~342 → ≤240 ms, ~367 → ≤260 ms). These are the routes whose first contentful paint includes data the SWR layer now caches.
+2. **Returning-cohort already-fast routes hold.** `/`, `/play`, `/tournaments` should not regress more than +20% (these were already paint-floor-bound; SW registration + revalidation overhead must not undo that).
+3. **First-visit cohort unchanged.** First-visit `/` LCP p75 within ±15% of 1184 ms — confirms the SW isn't blocking the cold path.
+4. **Volume.** ≥30 rows per (route, metric, cohort) cell before reading the result.
+
+**Re-check protocol** (run when staging has ≥1 day of v4.6 traffic):
+
+```
+fly ssh console -a xo-backend-staging -C 'node -e "import(\"@xo-arena/db\").then(async ({default: db}) => { const r = await db.\$queryRawUnsafe(\`SELECT \\\"releaseVersion\\\" AS v, cohort, name, route, COUNT(*)::int AS cnt, ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY value)::numeric, 0) AS p75 FROM perf_vitals WHERE env = '\''staging'\'' AND \\\"releaseVersion\\\" IN ('\''1.4.0-alpha-4.5'\'', '\''1.4.0-alpha-4.6'\'') AND name IN ('\''FCP'\'', '\''LCP'\'') AND route IN ('\''/'\'', '\''/play'\'', '\''/profile'\'', '\''/tables'\'', '\''/tournaments'\'') GROUP BY 1,2,3,4 HAVING COUNT(*) >= 5 ORDER BY route, name, cohort, v\`); console.log(JSON.stringify(r, null, 2)); await db.\$disconnect(); })"'
+```
+
+If criteria met → mark Phase 20 verified and clear the gate on Top-5 #4. If criteria miss → debug (kill-switch flip + investigate) before promoting.
+
 ### Phase 21 — Architecture experiments (longshots)
 
 Each is a meaningful re-architecture; pursue only if Tier 0 + Tier 1

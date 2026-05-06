@@ -34,7 +34,6 @@ import { snapshotJourney, assertJourneyTransition } from './journeyAssert.js'
 const EMAIL_PREFIX = 'gui+'
 
 const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000'
 const SUBMIT_GUARD_MS = 3500
 
 function freshEmail() {
@@ -75,7 +74,7 @@ async function signUp(page, { email, password, displayName }) {
 }
 
 async function fetchProgress(request, token) {
-  const res = await request.get(`${BACKEND_URL}/api/v1/guide/preferences`, {
+  const res = await request.get(`${LANDING_URL}/api/v1/guide/preferences`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) return { completedSteps: [] }
@@ -98,7 +97,7 @@ async function pollForStep(request, token, stepIndex, deadlineMs) {
 }
 
 async function createDemoTable(request, token) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/tables/demo`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/tables/demo`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok()) throw new Error(`demo create failed: ${res.status()}`)
@@ -106,7 +105,7 @@ async function createDemoTable(request, token) {
 }
 
 async function createQuickBot(request, token, displayName) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/quick`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { name: displayName, persona: 'aggressive' },
   })
@@ -115,14 +114,14 @@ async function createQuickBot(request, token, displayName) {
 }
 
 async function trainGuided(request, token, botId) {
-  const startRes = await request.post(`${BACKEND_URL}/api/v1/bots/${botId}/train-guided`, {
+  const startRes = await request.post(`${LANDING_URL}/api/v1/bots/${botId}/train-guided`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!startRes.ok()) throw new Error(`train-guided start: ${startRes.status()}`)
   const { sessionId, skillId } = await startRes.json()
   const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {
-    const finRes = await request.post(`${BACKEND_URL}/api/v1/bots/${botId}/train-guided/finalize`, {
+    const finRes = await request.post(`${LANDING_URL}/api/v1/bots/${botId}/train-guided/finalize`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { sessionId, skillId },
     })
@@ -134,7 +133,7 @@ async function trainGuided(request, token, botId) {
 }
 
 async function spar(request, token, botId) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bot-games/practice`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bot-games/practice`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { myBotId: botId, opponentTier: 'easy', moveDelayMs: 200 },
   })
@@ -271,8 +270,8 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     created.email = email
     await signUp(page, { email, password, displayName })
 
-    const token = await fetchAuthToken(context.request, BACKEND_URL)
-    const sync = await context.request.post(`${BACKEND_URL}/api/v1/users/sync`, {
+    const token = await fetchAuthToken(context.request, LANDING_URL)
+    const sync = await context.request.post(`${LANDING_URL}/api/v1/users/sync`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(sync.ok()).toBeTruthy()
@@ -282,12 +281,12 @@ test.describe('Guide UI — phase + popup state across the journey', () => {
     // creditsTc, owned-bot list, derived phase. We snap before+after every
     // step and call assertJourneyTransition between them — catches step
     // regression, future-step leak, missing/duplicate Hook reward, etc.
-    const snapCtx = { backendUrl: BACKEND_URL, token, userId: created.userId }
+    const snapCtx = { backendUrl: LANDING_URL, token, userId: created.userId }
     let prevSnap = await snapshotJourney(context.request, snapCtx)
 
     // ── Phase 0 → Hook ─────────────────────────────────────────────────────
     // Belt-and-suspenders: post the guest-credit explicitly so step 1 lands.
-    await context.request.post(`${BACKEND_URL}/api/v1/guide/guest-credit`, {
+    await context.request.post(`${LANDING_URL}/api/v1/guide/guest-credit`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data:    { hookStep1CompletedAt: new Date().toISOString() },
     })

@@ -457,8 +457,8 @@ describe('listModels', () => {
 describe('repointBotPrimarySkill', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('updates User.botModelId on the bot that owns the skill', async () => {
-    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_123' })
+  it('updates User.botModelId AND botModelType on the bot that owns the skill', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_123', algorithm: 'Q_LEARNING' })
     db.user.update.mockResolvedValue({ id: 'bot_123' })
 
     const ok = await repointBotPrimarySkill('skill_xo')
@@ -466,11 +466,43 @@ describe('repointBotPrimarySkill', () => {
     expect(ok).toBe(true)
     expect(db.botSkill.findUnique).toHaveBeenCalledWith({
       where:  { id: 'skill_xo' },
-      select: { botId: true },
+      select: { botId: true, algorithm: true },
     })
     expect(db.user.update).toHaveBeenCalledWith({
       where: { id: 'bot_123' },
-      data:  { botModelId: 'skill_xo' },
+      data:  { botModelId: 'skill_xo', botModelType: 'qlearning' },
+    })
+  })
+
+  it('maps every supported algorithm to the canonical lower/no-underscore botModelType', async () => {
+    const cases = [
+      ['Q_LEARNING',      'qlearning'],
+      ['SARSA',           'sarsa'],
+      ['MONTE_CARLO',     'montecarlo'],
+      ['POLICY_GRADIENT', 'policygradient'],
+      ['DQN',             'dqn'],
+      ['ALPHAZERO',       'alphazero'],
+    ]
+    for (const [alg, expectedType] of cases) {
+      db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_x', algorithm: alg })
+      db.user.update.mockResolvedValue({ id: 'bot_x' })
+      const ok = await repointBotPrimarySkill('skill_x')
+      expect(ok).toBe(true)
+      expect(db.user.update).toHaveBeenLastCalledWith({
+        where: { id: 'bot_x' },
+        data:  { botModelId: 'skill_x', botModelType: expectedType },
+      })
+    }
+  })
+
+  it('only writes botModelId when algorithm is missing/null (no botModelType clobber)', async () => {
+    db.botSkill.findUnique.mockResolvedValue({ botId: 'bot_no_alg', algorithm: null })
+    db.user.update.mockResolvedValue({ id: 'bot_no_alg' })
+    const ok = await repointBotPrimarySkill('skill_no_alg')
+    expect(ok).toBe(true)
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'bot_no_alg' },
+      data:  { botModelId: 'skill_no_alg' },
     })
   })
 
