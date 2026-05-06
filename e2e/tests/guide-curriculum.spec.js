@@ -40,6 +40,13 @@ function freshEmail() {
   return `curr+${ts}-${r}@dev.local`
 }
 
+// Hardcoded display names collide on staging where prior-run users aren't
+// cleaned. /users/sync slugs displayName into username (lowered, snake-cased)
+// and the unique constraint trips. Suffix every display name with a random tag.
+function uniqueName(label) {
+  return `${label} ${Math.random().toString(36).slice(2, 8)}`
+}
+
 async function dismissWelcomeOnLoad(page) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem('aiarena_guest_welcome_seen', '1') } catch {}
@@ -98,7 +105,7 @@ test.describe('Curriculum — Spar endpoint credits step 5 (§5.2)', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'curr-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Curr Spar' })
+    await signUp(page, { email, password, displayName: uniqueName('Curr Spar') })
 
     const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot   = await createQuickBot(context.request, token, 'SparBot')
@@ -110,7 +117,7 @@ test.describe('Curriculum — Spar endpoint credits step 5 (§5.2)', () => {
     })
     expect(sparRes.ok()).toBeTruthy()
     const sparBody = await sparRes.json()
-    expect(sparBody.slug).toMatch(/^mt-/)
+    expect(sparBody.slug).toMatch(/^[A-Za-z0-9_-]{8}$/)
     expect(sparBody.opponentTier).toBe('easy')
 
     // Single game with 200ms/move × ≤9 moves = under ~2s, plus the record-
@@ -127,7 +134,7 @@ test.describe('Curriculum — Cup clone fires step 6 immediately', () => {
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'curr-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Curr Cup6' })
+    await signUp(page, { email, password, displayName: uniqueName('Curr Cup6') })
 
     const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot   = await createQuickBot(context.request, token, 'CupBot6')
@@ -161,7 +168,7 @@ test.describe('Curriculum — Cup runs to completion → step 7 (§5.4 + §5.5)'
     await dismissWelcomeOnLoad(page)
     const email    = freshEmail()
     const password = 'curr-test-pw-1234'
-    await signUp(page, { email, password, displayName: 'Curr Cup7' })
+    await signUp(page, { email, password, displayName: uniqueName('Curr Cup7') })
 
     const token = await fetchAuthToken(context.request, LANDING_URL)
     const bot   = await createQuickBot(context.request, token, 'CupBot7')

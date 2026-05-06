@@ -5,6 +5,29 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ## Known Critical Bugs
 
+### 🔴 Tournament bot matches stuck IN_PROGRESS on staging — logged 2026-05-05
+
+**Symptom:** every Curriculum Cup created on staging in the last 2 hours (10+ cups inspected) is `IN_PROGRESS` with `updatedAt === createdAt`. Round 1 is created with 2 matches each, but every match is `IN_PROGRESS` with `p1Wins=0, p2Wins=0`. No bot games ever start. journey-cup, journey-cup mid-cup-refresh, journey-cup sequential-cups, and guide-curriculum cup→step-7 all fail because step 7 only fires from `tournamentBridge` after `tournament:completed`, which depends on bracket completion.
+
+**Likely scope:** the tournament service creates the bracket (inserts `tournament_matches` rows), but the bot-game runner in `backend` never picks up tournament matches on staging. The recent `e137e1a fix(cup): mint backing Table for tournament bot matches` and `408ec7f fix(cup): flip tournamentMatch to IN_PROGRESS on bot game start` commits suggest this surface was just modified — possible regression in the tournament-match → bot-game wiring.
+
+**Repro on staging:**
+```
+fly ssh console -a xo-tournament-staging -C 'node -e "import(\"@xo-arena/db\").then(async ({default: db}) => { const r = await db.\$queryRawUnsafe(\`SELECT id, status, \\\"createdAt\\\", \\\"completedAt\\\", \\\"p1Wins\\\", \\\"p2Wins\\\" FROM tournament_matches WHERE \\\"createdAt\\\" > NOW() - INTERVAL '\''30 minutes'\'' ORDER BY \\\"createdAt\\\" DESC LIMIT 10\`); console.log(JSON.stringify(r, null, 2)); await db.\$disconnect(); })"'
+```
+
+**Why critical:** journey verification on staging is half-blocked. Smoke + most journey/guide suites pass with the cross-origin fix; this gates the cup-completion subset. Also user-facing: real users running the curriculum cup get a stuck cup with no signal that anything's wrong.
+
+**Investigation hints:** check whether the `tournament:bracket:created` (or equivalent) event fires from tournament service → backend correctly on staging; check whether `botGameRunner` listens for tournament-match-start signals; check Fly internal networking between `xo-tournament-staging` and `xo-backend-staging` (if they exchange via stream/topic, the broker must be reachable from both apps).
+
+### ✅ Bot model half-converted state after train-guided — fixed 2026-05-05
+
+**Symptom:** after `POST /api/v1/bots/:id/train-guided/finalize`, the bot ended up with `botModelType: 'minimax'` (unchanged) but `botModelId: <BotSkill UUID>` — half-way between Quick Bot and trained ML bot. Caused journey step-4 e2e tests (`guide-onboarding`, `guide-ui-states`, `journey-train-modal`) to fail asserting `botModelType === 'qlearning'`.
+
+**Root cause:** `mlService.js#repointBotPrimarySkill` (and the duplicate in `skillService.js`) updated `User.botModelId` when training completed but didn't touch `botModelType`. The finalize handler at `bots.js:469` then saw `bot.botModelId === skillId` (already aligned) and skipped the qlearning flip. Verified on staging — DB rows for recent train-guided bots showed exactly this state.
+
+**Fix:** both `repointBotPrimarySkill` functions now read `algorithm` from the BotSkill row and write `botModelType` derived from it (lower-snake-no-underscore: `Q_LEARNING → qlearning`, `MONTE_CARLO → montecarlo`, etc.). Backwards-compatible — no botModelType write when algorithm is null. 7 new unit tests across mlService + skillService.
+
 ### ✅ E2E journey suite cross-origin auth — fixed 2026-05-05
 
 **Original symptom:** `e2e/tests/guide-onboarding.spec.js` (and 8 sibling specs) failed immediately on staging/prod with `No token in response — user may not be signed in on this context` from `helpers.js:111`. Test signed up on `xo-landing-*.fly.dev` (cookie on landing origin); `fetchAuthToken` then hit `${BACKEND_URL}/api/token` on `xo-backend-*.fly.dev` — different subdomain → no cookie → 401.

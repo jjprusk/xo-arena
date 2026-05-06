@@ -70,8 +70,10 @@ test.describe('Phase 0 — hero CTAs for guests', () => {
 
     // Modal heading switches to the contextual variant
     await expect(page.getByRole('heading', { name: /build your first bot/i })).toBeVisible()
-    // …and the supporting copy mentions tournaments
-    await expect(page.getByText(/competes in tournaments/i)).toBeVisible()
+    // …and the supporting copy mentions tournaments. Two different blocks
+    // can match (modal subtitle + footer fine-print, both reworded over time);
+    // assert at least one is visible without tripping strict-mode.
+    await expect(page.getByText(/competes in tournaments/i).first()).toBeVisible()
   })
 })
 
@@ -88,7 +90,7 @@ test.describe('Phase 0 — deferred email verification on signup', () => {
     const email    = freshEmail()
     const password = 'phase0-test-pw-1234'
 
-    await page.getByPlaceholder(/^display name$/i).fill('Phase Zero')
+    await page.getByPlaceholder(/^display name$/i).fill(`Phase Zero ${Math.random().toString(36).slice(2, 8)}`)
     await page.getByPlaceholder(/^email$/i).fill(email)
     await page.getByPlaceholder(/min\. 8/i).fill(password)
     await page.getByPlaceholder(/confirm password/i).fill(password)
@@ -136,7 +138,7 @@ test.describe('Phase 0 — guest progress credits to new account', () => {
     const email    = freshEmail()
     const password = 'phase0-test-pw-1234'
 
-    await page.getByPlaceholder(/^display name$/i).fill('Guest Credit')
+    await page.getByPlaceholder(/^display name$/i).fill(`Guest Credit ${Math.random().toString(36).slice(2, 8)}`)
     await page.getByPlaceholder(/^email$/i).fill(email)
     await page.getByPlaceholder(/min\. 8/i).fill(password)
     await page.getByPlaceholder(/confirm password/i).fill(password)
