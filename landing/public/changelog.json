@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-4.7",
+    "date": "2026-05-05",
+    "description": "Journey fixes — cup runner unblocked, repointBotPrimarySkill flip, journey suite green on staging"
+  },
+  {
     "version": "1.4.0-alpha-4.6",
     "date": "2026-05-05",
     "description": "Phase 20 — SW app shell + SWR data layer + um CLI exit fix"
