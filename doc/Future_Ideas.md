@@ -5,20 +5,13 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ## Known Critical Bugs
 
-### 🔴 Tournament bot matches stuck IN_PROGRESS on staging — logged 2026-05-05
+### ✅ Tournament bot matches stuck IN_PROGRESS — fixed 2026-05-05
 
-**Symptom:** every Curriculum Cup created on staging in the last 2 hours (10+ cups inspected) is `IN_PROGRESS` with `updatedAt === createdAt`. Round 1 is created with 2 matches each, but every match is `IN_PROGRESS` with `p1Wins=0, p2Wins=0`. No bot games ever start. journey-cup, journey-cup mid-cup-refresh, journey-cup sequential-cups, and guide-curriculum cup→step-7 all fail because step 7 only fires from `tournamentBridge` after `tournament:completed`, which depends on bracket completion.
+**Original symptom:** every Curriculum Cup on staging stuck `IN_PROGRESS` with `updatedAt === createdAt` and `p1Wins=p2Wins=0`. Bot games actually completed in-memory but the bracket never advanced; journey step 7 never fired; 4 cup-soak e2e suites timed out at 240s.
 
-**Likely scope:** the tournament service creates the bracket (inserts `tournament_matches` rows), but the bot-game runner in `backend` never picks up tournament matches on staging. The recent `e137e1a fix(cup): mint backing Table for tournament bot matches` and `408ec7f fix(cup): flip tournamentMatch to IN_PROGRESS on bot game start` commits suggest this surface was just modified — possible regression in the tournament-match → bot-game wiring.
+**Root cause:** `TOURNAMENT_SERVICE_URL` secret on staging was set to `http://xo-tournament-staging.flycast:3001`. `.flycast` is Fly's anycast private DNS, but only resolves when the target app has a private IPv6 IP allocated (`fly ips allocate-v6 --private`). Our deploy doesn't allocate one, so DNS lookups returned `ENOTFOUND`, every cup match completion POST silently failed (errors logged at `warn` then swallowed), and the bracket-advance pipeline never ran. Prod was using `https://xo-tournament-prod.fly.dev` (public hop) so it worked but at extra latency.
 
-**Repro on staging:**
-```
-fly ssh console -a xo-tournament-staging -C 'node -e "import(\"@xo-arena/db\").then(async ({default: db}) => { const r = await db.\$queryRawUnsafe(\`SELECT id, status, \\\"createdAt\\\", \\\"completedAt\\\", \\\"p1Wins\\\", \\\"p2Wins\\\" FROM tournament_matches WHERE \\\"createdAt\\\" > NOW() - INTERVAL '\''30 minutes'\'' ORDER BY \\\"createdAt\\\" DESC LIMIT 10\`); console.log(JSON.stringify(r, null, 2)); await db.\$disconnect(); })"'
-```
-
-**Why critical:** journey verification on staging is half-blocked. Smoke + most journey/guide suites pass with the cross-origin fix; this gates the cup-completion subset. Also user-facing: real users running the curriculum cup get a stuck cup with no signal that anything's wrong.
-
-**Investigation hints:** check whether the `tournament:bracket:created` (or equivalent) event fires from tournament service → backend correctly on staging; check whether `botGameRunner` listens for tournament-match-start signals; check Fly internal networking between `xo-tournament-staging` and `xo-backend-staging` (if they exchange via stream/topic, the broker must be reachable from both apps).
+**Fix:** flip both backend services to `http://xo-<env>-tournament.internal:3001` (Fly 6PN private DNS — resolves without any IP allocation, same private network as `.flycast` would have provided). Verified: a clean cup against staging now completes in ~1 minute and step 7 credits. Runbook updated (`Prod_Bringup_Runbook.md` §xo-backend-prod) so this doesn't recur.
 
 ### ✅ Bot model half-converted state after train-guided — fixed 2026-05-05
 
