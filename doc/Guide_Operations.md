@@ -232,6 +232,39 @@ docker compose logs backend | grep "Hook complete\|Curriculum complete"
 
 If the reward log line is missing, the trigger never fired (root cause is upstream). If the log line is there but the user reports no TC, something failed in the DB write — re-run the audit + manually grant via Prisma if necessary, but log the manual grant.
 
+### 5.8 Service Worker kill switch
+
+The landing app's Service Worker (Phase 20, app-shell caching) reads two SystemConfig keys on each `install` / `activate` and on tab visibility-change, via the public `GET /api/v1/config/sw` endpoint:
+
+- **`sw.enabled`** *(bool, default true)* — the kill switch. Flip to `false` and every SW in the wild self-unregisters and clears all caches on its next check-in (within ~30s, bounded by the response's `Cache-Control: max-age=30`).
+- **`sw.version`** *(int, default 1)* — bump to invalidate the SW's precache without unregistering the worker. Use this when a cached asset URL is wrong or poisoned but the SW logic itself is fine.
+
+**When to flip the kill switch:**
+- A bad SW deploy is serving stale or corrupted assets to users and you can't roll forward fast.
+- Auth or `/api/*` requests are mysteriously hitting cached responses (the SW should never cache `/api/*` — if you suspect it is, kill it while you debug).
+- A user reports "I see an old version of the app even after a hard reload" and you need a fleet-wide eject.
+
+**To kill the SW (revert when fixed):**
+
+```sh
+# Set sw.enabled = false
+docker compose exec -T backend node --experimental-transform-types --no-warnings -e "
+  import('./src/lib/db.js').then(async ({ default: db }) => {
+    await db.systemConfig.upsert({
+      where:  { key: 'sw.enabled' },
+      create: { key: 'sw.enabled', value: false },
+      update: { value: false },
+    })
+    console.log('sw.enabled = false — SWs will self-unregister on next check-in')
+    await db.\$disconnect()
+  })
+"
+```
+
+Re-enable by upserting `value: true` (or deleting the row, since the default is true). Bump cache version with `key: 'sw.version', value: <currentVersion + 1>`.
+
+**Verification:** open DevTools → Application → Service Workers on a tab you know had the SW registered; within 30s of flipping `sw.enabled=false`, the SW should disappear and `caches.keys()` in the console should return `[]`.
+
 ---
 
 ## 6. References

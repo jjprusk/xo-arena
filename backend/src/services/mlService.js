@@ -82,23 +82,40 @@ const trainingQueue = []
  * is a plain String — no FK relation back to User — so the bot is resolved in
  * two steps. Exported so the same logic can be tested in isolation and is
  * reused by both the backend training loop and the frontend completion path.
+ *
+ * Also writes `botModelType` derived from the skill's `algorithm`. Without
+ * this, a bot that started life as a minimax Quick Bot (botModelType='minimax',
+ * botModelId='user:…:minimax:…') would land in a half-converted state after
+ * the first ML training: botModelId pointing at the new skill UUID but
+ * botModelType still saying 'minimax'. That broke journey step 4's
+ * `train-guided/finalize` flip because the finalize handler's "did model
+ * change?" guard checks botModelId equality and finds them already aligned.
  */
 export async function repointBotPrimarySkill(modelId) {
   try {
     const skillRow = await db.botSkill.findUnique({
       where:  { id: modelId },
-      select: { botId: true },
+      select: { botId: true, algorithm: true },
     })
     if (!skillRow?.botId) return false
+    const modelType = botModelTypeFromAlgorithm(skillRow.algorithm)
     await db.user.update({
       where: { id: skillRow.botId },
-      data:  { botModelId: modelId },
+      data:  { botModelId: modelId, ...(modelType ? { botModelType: modelType } : {}) },
     })
     return true
   } catch (e) {
     logger.warn({ err: e?.message, modelId }, 'auto-repoint botModelId failed')
     return false
   }
+}
+
+// BotSkill.algorithm uses Prisma-style upper-snake-case ('Q_LEARNING',
+// 'MONTE_CARLO'); User.botModelType uses lowercase no-underscore
+// ('qlearning', 'montecarlo'). Same mapping in skillService.js — keep in sync.
+function botModelTypeFromAlgorithm(alg) {
+  if (!alg || typeof alg !== 'string') return null
+  return alg.toLowerCase().replace(/_/g, '')
 }
 
 // ─── Model CRUD ─────────────────────────────────────────────────────────────

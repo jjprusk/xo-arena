@@ -88,4 +88,7 @@ rewardsCommand(program)
 perfuserCommand(program)
 
 program.hook('postAction', () => disconnect())
-program.parse()
+// parseAsync (not parse) so commander awaits async action handlers and the
+// postAction `disconnect()` hook. With sync parse(), Prisma's connection pool
+// stayed open after the action resolved and the CLI hung instead of exiting.
+await program.parseAsync()

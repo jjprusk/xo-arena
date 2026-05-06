@@ -33,8 +33,8 @@ import { fetchAuthToken } from './helpers.js'
 import { netCleanupByEmailPrefix } from './dbScript.js'
 import { snapshotJourney, assertJourneyTransition } from './journeyAssert.js'
 
+const LANDING_URL   = process.env.LANDING_URL || 'http://localhost:5174'
 const EMAIL_PREFIX  = 'tgm+'
-const BACKEND_URL   = process.env.BACKEND_URL || 'http://localhost:3000'
 const SUBMIT_GUARD_MS = 3500
 
 function freshEmail() {
@@ -64,7 +64,7 @@ async function signUp(page, { email, password, displayName }) {
 }
 
 async function createQuickBot(request, token, displayName) {
-  const res = await request.post(`${BACKEND_URL}/api/v1/bots/quick`, {
+  const res = await request.post(`${LANDING_URL}/api/v1/bots/quick`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data:    { name: displayName, persona: 'aggressive' },
   })
@@ -73,7 +73,7 @@ async function createQuickBot(request, token, displayName) {
 }
 
 async function fetchUserId(request, token) {
-  const sync = await request.post(`${BACKEND_URL}/api/v1/users/sync`, {
+  const sync = await request.post(`${LANDING_URL}/api/v1/users/sync`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!sync.ok()) throw new Error(`users/sync failed: ${sync.status()}`)
@@ -99,13 +99,13 @@ test.describe('TrainGuidedModal — end-to-end', () => {
     const displayName = `Tgm ${Math.random().toString(36).slice(2, 8)}`
     await signUp(page, { email, password, displayName })
 
-    const token  = await fetchAuthToken(context.request, BACKEND_URL)
+    const token  = await fetchAuthToken(context.request, LANDING_URL)
     const userId = await fetchUserId(context.request, token)
     const bot    = await createQuickBot(context.request, token, `TgmBot ${Math.random().toString(36).slice(2, 6)}`)
 
     // Pre-modal snapshot: bot should still be a fresh minimax Quick Bot —
     // the post-modal assertion needs this baseline to compute Δ.
-    const snapCtx = { backendUrl: BACKEND_URL, token, userId }
+    const snapCtx = { backendUrl: LANDING_URL, token, userId }
     const before  = await snapshotJourney(context.request, snapCtx)
     const beforeBot = before.bots.find(b => b.id === bot.id)
     expect(beforeBot, 'newly-created quick bot must appear in snapshot').toBeTruthy()

@@ -19,29 +19,35 @@ free play and tournament play.
 ## Top 5 — what to focus on next
 
 The five highest-impact items in the active queue, real or perceived,
-sorted by (impact × user reach) ÷ effort. Updated 2026-05-05 after the
-F11 warm-cache baseline.
+sorted by (impact × user reach) ÷ effort. Updated 2026-05-05 after
+Phase 20 shipped to dev.
+
+**Recently shipped to dev (v1.4.0-alpha-4.6 candidate, awaiting RUM verification on staging):**
+~~Phase 20 — Service Worker app shell + SWR data layer~~ ✅. RankingsPage / TournamentsPage / TablesPage now paint cached data in the same frame as mount; SW caches `/assets/*` and the entry HTML so repeat-visit Ready ≈ paint floor. Kill switch (`/api/v1/config/sw`) is live in case anything goes sideways. Cohort impact (returning Ready ≤ 100 ms target) lands on staging once F11.5 data accrues.
 
 | # | What                                | Effort | Risk   | Impact (measured / estimated)                                            | Cohort      |
 |--:|-------------------------------------|:------:|:------:|--------------------------------------------------------------------------|:-----------:|
 | 1 | **Phase 1** — bundle splitting + per-route lazy load | 3-5d   | medium | mobile cold FCP 1416 → ~700 ms (−50%); warm parse 370 → ~250 ms          | first-time  |
-| 2 | **Phase 20** — Service Worker app shell | 2-3d   | medium | warm Ready 370 ms → ~50-100 ms (−78%) — instant repeat visits            | returning   |
-| 3 | **SWR + hover prefetch** for data pages (Tables / Tournaments / Leaderboard) | 1-2d | low | data spinner gone on revisit; instant render of stale + bg revalidate    | both        |
-| 4 | ~~**Phase 1c**~~ ✅ shipped — sync dedupe in `landing/src/lib/api.js` | 0.5d shipped | low | cold-authed Ready 200 → 143 ms p50 (−30%) on every signed-in first paint | first-time + auth |
-| 5 | **Phase 17** — CI bundle-size guard (≥ 5% chunk growth fails the PR) | 0.5d   | none   | meta — locks in #1's gains, prevents regression                          | all         |
+| 2 | **Hover prefetch** on Tournaments / Tables / Rankings links — pre-warm SWR cache from `mouseenter` intent | 0.5d | low | click feels instant; pairs naturally with 20.3 SWR cache | both |
+| 3 | **Phase 17** — CI bundle-size guard (≥ 5% chunk growth fails the PR) | 0.5d | none | meta — locks in #1's gains, prevents regression | all |
+| 4 | **RUM verification of Phase 20** — confirm returning-cohort Ready ≤ 100 ms on staging before promoting to prod | 0.5d | none | confirmation, not new work — gates the prod promote | returning |
+| 5 | **Phase 20.6** — Edge response cache on Fly for `/leaderboard`, `/bots`, `/tournaments` *(split out from Phase 20 base)* | 1-2d | medium | backend never sees cached requests; doubles down on SW + SWR | both |
 
 Sequencing notes:
 
-- **Items 1 + 2 are independent** — Phase 1 helps first-time visitors, SW helps returning users. Both are Tier 0; ship in parallel by different sessions or back-to-back.
-- **Item 3 stacks on top of either** — works alone, doubles down with #2.
-- **Item 5 is gated on item 1 landing** — no point in a CI guard before the splits exist.
-- **F11.5 (RUM cohort segmentation) instruments the question of whether #1 or #2 hits more users**; until it lands enough data, sequencing #1 vs #2 is gut-feel.
+- **Item 1 (Phase 1) is the remaining headline** — first-time-visitor cold FCP is still the biggest user-visible miss vs the budget after Phase 20.
+- **Item 2 (hover prefetch) stacks on Phase 20.3** — the SWR cache is already there; hover is just the trigger to warm it before the click.
+- **Item 3 is gated on item 1 landing** — no point in a CI guard before the splits exist.
+- **Item 4 is a verification gate, not new work** — but it sits in the queue because the prod /promote of Phase 20 is blocked on it.
+- **Item 5 (Phase 20.6) is opportunistic** — defer unless `/leaderboard`, `/bots`, or `/tournaments` show up as backend hot paths in p95.
 
 Deferred / not on the top 5:
 
-- F9.2 (VM CPU bump) — probe-validated as the right perf lever for backend-CPU contention but ~+$87/mo; revisit when traffic justifies.
-- Sign-in async UX expansion to SettingsPage / ResetPasswordPage — perceived-perf, ~10-20 min each but low traffic.
-- Phase 5 remaining steady-state SSE work — apply.post is ≤2 ms p95 at c=50, so the floor is fine.
+- **Phase 1c** ✅ shipped 2026-05-05 — cold-authed Ready 200 → 143 ms p50 (−30%) on every signed-in first paint.
+- **Phase 20.4 (IDB backing)** — closed as YAGNI 2026-05-05; storage math + same-frame-paint conflict in §Phase 20.
+- **F9.2 (VM CPU bump)** — probe-validated as the right perf lever for backend-CPU contention but ~+$87/mo; revisit when traffic justifies.
+- **Sign-in async UX expansion** to SettingsPage / ResetPasswordPage — perceived-perf, ~10-20 min each but low traffic.
+- **Phase 5 remaining steady-state SSE work** — apply.post is ≤2 ms p95 at c=50, so the floor is fine.
 
 See "Roadmap at a glance" below for the full shipped / active / deferred picture, and §F11 for the warm-cache evidence behind this ranking.
 
@@ -105,17 +111,22 @@ work narratives.
 **Cohort-aware sequencing (added 2026-05-05 after F11):** the
 warm-cache baseline showed returning-user mobile Ready already
 ~370 ms vs cold-anon ~2050 ms. **Phase 1 is a first-time-visitor
-win**; the returning-user equivalent is **SW + SWR caching**.
-Both belong in Tier 0 with sequencing decided by which user pain
-we hit first.
+win**; the returning-user equivalent (SW + SWR) shipped to dev
+2026-05-05 and is awaiting staging RUM verification before prod
+promotion. The remaining Tier 0 work is now first-time-visitor
+heavy.
 
 | Rank | Item                                | Real impact (measured / estimated)                         | Cost   | Risk    | Cohort | Status |
 |-----:|-------------------------------------|------------------------------------------------------------|:------:|:-------:|:------:|:------:|
 |    1 | **Phase 1** — bundle splitting + per-route lazy load | mobile FCP cold ~1400 → ~700 ms; warm parse ~370 → ~250 ms | 3-5d   | medium  | first-time | queued |
-|    2 | **Phase 20** — Service Worker app shell | warm Ready 370 ms → ~50-100 ms (paint-only floor)        | 2-3d   | medium  | returning | **promoted from Tier 3** |
-|    3 | **SWR data caching + hover prefetch** (new — see §F11.4) | data pages: spinner-while-fetch → instant stale + bg revalidate | 1-2d | low | returning | filed |
-|    4 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | meta | sequenced after Phase 1 |
-|    5 | **Phase 1c** — cold-authed orchestration (sync dedupe) | cold-authed Ready ~−30%                                | 1d     | low     | first-time | queued |
+|    2 | **Hover prefetch** on data-page links | click feels instant; pairs with 20.3 SWR cache | 0.5d | low | both | filed |
+|    3 | **Phase 17** — per-PR perf gates    | locks in Phase 1 win; meta — direct ms = 0                 | 0.5d   | none    | meta | sequenced after Phase 1 |
+|    4 | **RUM verification of Phase 20** — confirm returning-cohort Ready ≤ 100 ms on staging | gates prod promote of Phase 20 | 0.5d | none | returning | gating /promote |
+|    5 | **Phase 20.6** — Fly edge response cache for public reads | backend skipped for `/leaderboard`, `/tournaments`, `/bots` | 1-2d | medium | both | filed |
+
+**Recently shipped from Tier 0:**
+- ✅ **Phase 20 base** (20.1 + 20.1b + 20.2 + 20.3 + 20.3b) — SW app shell + SWR data layer, on dev 2026-05-05.
+- ✅ **Phase 1c** — cold-authed sync dedupe, in prod via v1.4.0-alpha-4.5 (Ready 200 → 143 ms p50, -30%).
 
 (Phase 5 remaining steps demoted from Tier 0 — F9 probe sweep
 2026-05-05 showed `apply.post` ≤2ms p95 at c=50, so in-process
@@ -973,22 +984,126 @@ Targets after this phase:
 
 ### Phase 20 — Cache & app shell
 
-Today: warm visits read from `localStorage` for some stores, but the
-HTML / JS / CSS still hits the network every time.
+Today: the SW shell + SWR data layer are live on `dev` (v1.4.0-alpha-4.6 candidate); HTML / JS / CSS revisit cost is now ~paint-floor instead of full re-fetch. RUM verification on staging is the remaining gate before promotion.
 
-- [ ] **Service Worker app shell.** Cache the index HTML + the vendor
-      chunks; serve from cache on second visit; revalidate in background.
-      Repeat-visit Ready ≈ 0ms. Highest-leverage perceived-perf change
-      not yet in v2.
-- [ ] **IndexedDB for tournament/leaderboard JSON.** Faster than
-      localStorage at size; survives reload. Stale-while-revalidate
-      directly off IDB.
-- [ ] **Edge response cache** on Fly for public reads (`/leaderboard`,
-      `/bots`, `/tournaments`). Backend never sees cached requests.
-- [ ] **HTTP `immutable` cache headers** on hashed asset URLs
-      (`max-age=31536000, immutable`). Confirm Fly is doing this.
-- [ ] **Persist Zustand stores** so warm boot has full state — guide
-      progress, sound prefs, ui sort orders, etc.
+- [x] **Service Worker app shell** *(Phase 20.2 — shipped to dev 2026-05-05)*. Cache-first for `/assets/*`, SWR for navigation, network-only for `/api/*` and `/socket.io/*`. Eager registration via `requestIdleCallback`; coexists with the existing push handler. Kill switch (`GET /api/v1/config/sw`) is the rollback.
+- [x] **HTTP `immutable` cache headers** *(Phase 20.1 — shipped 2026-05-05)*. `landing/server.js` emits `public, max-age=31536000, immutable` for `/assets/*` and `no-cache` for `sw.js`.
+- [x] **SWR data layer for public reads** *(Phase 20.3 + 20.3b — shipped to dev 2026-05-05)*. `useSWRish` hook (synchronous cached paint + background revalidate + `mutate()` for optimistic updates). RankingsPage / TournamentsPage / TablesPage retrofitted. 14 unit tests.
+- [x] **SW kill-switch endpoint** *(Phase 20.1b — shipped 2026-05-05)*. `GET /api/v1/config/sw` → `{ enabled, version }` from SystemConfig. Operator runbook in `Guide_Operations.md` §5.8. 7 unit tests.
+- [x] **Persist Zustand stores** *(Phase 20.5 — closed as no-op 2026-05-05)*. 3 of 4 stores already use `persist`. The fourth (`gymStore.isTraining`) is intentionally transient — persisting it would keep idle-logout suppressed across closed-tab sessions.
+- [x] **IndexedDB for tournament/leaderboard JSON** *(Phase 20.4 — closed as YAGNI 2026-05-05)*. Storage analysis in §Phase 20 — implementation scoping below. tl;dr: worst-case localStorage footprint is ~300–750 KB vs 5 MB quota (7–15× headroom), and IDB's async API would cost the same-frame-paint property of `useSWRish`. Re-open if a single cache entry grows past ~500 KB or we want offline-survival across browser-data clears.
+- [ ] **Edge response cache on Fly for public reads** *(Phase 20.6 — split out from Phase 20 base, deferred)*. Fly's HTTP cache requires app-level config + invalidation strategy that interacts with Better Auth cookies. SW + SWR (above) capture most of the same win client-side without the auth-cache footgun. Promote if backend p95 telemetry shows `/leaderboard`, `/tournaments`, or `/bots` becoming a hot path.
+
+#### Phase 20 — implementation scoping (logged 2026-05-05)
+
+Phase 20 is the highest-leverage perceived-perf change still pending in v2 and the #2 slot on the Top-5 chart. The single sub-item that delivers the headline (warm Ready 370 ms → ~50–100 ms) is the Service Worker app shell; the rest are supporting cleanups. This subsection captures the audit + ordering done before kicking off implementation so the work doesn't drift.
+
+##### Current state (verified on prod 2026-05-05, v1.4.0-alpha-4.5)
+
+- ✅ `index.html` → `cache-control: no-cache` (correct — forces revalidation so deploys take effect immediately).
+- ✅ Hashed assets under `/assets/*` → `cache-control: public, max-age=31536000` (1y, correct).
+- ⚠️ **Missing `immutable` keyword** on hashed assets — browsers may still send revalidation requests on hard reload. Cheap fix.
+- ✅ A hand-rolled SW already lives at `landing/public/sw.js` — single-purpose Web Push handler. Registers **lazily** via `landing/src/lib/pushSubscribe.js` only when the user opts into push, and explicitly does **no** caching ("the app is an online experience"). Phase 20 needs to extend this SW (not replace) and switch to **eager** registration on app boot.
+- ✅ Zustand `persist` middleware is already on 3 of 4 stores (`guideStore`, `notifSoundStore`, `soundStore`). `gymStore` is **intentionally** transient — its only field (`isTraining`) suppresses idle logout during a training session and must NOT survive a closed tab, otherwise idle-logout stays suppressed across sessions. **20.5 closes as a no-op** — the audit conclusion supersedes the original "easy completion" framing.
+- ✅ Compression on at the express layer (`compression()` middleware in `landing/server.js`); brotli is added by Fly's edge.
+- The existing `pushSubscribe.js` already does `navigator.serviceWorker.register('/sw.js')` — Phase 20.2 only needs to add an *eager* call from `main.supported.jsx` (not a duplicate, since `register` is idempotent on the same URL).
+
+##### Sub-items, ordered by leverage / risk
+
+| # | Item | Effort | Risk | Real impact | Notes |
+|---|---|---|---|---|---|
+| **20.1** | Add `immutable` to asset cache headers | 30 min | low | Saves a few revalidation HEADs on hard reload | ✅ Shipped 2026-05-05. `landing/server.js` `setHeaders` now emits `public, max-age=31536000, immutable` for `/assets/*` and `no-cache` for `sw.js` (was implicitly 1y). |
+| **20.1b** | SW kill-switch endpoint (insurance) | 1 hour | low | Operator can flip a config flag and every SW in the wild self-unregisters within ~30s | ✅ Shipped 2026-05-05. `GET /api/v1/config/sw` returns `{ enabled, version }` from SystemConfig keys `sw.enabled` / `sw.version`. Authless, `Cache-Control: max-age=30`. Runbook in `Guide_Operations.md` §5.8. **Built before 20.2** so we never ship an SW we can't kill. |
+| **20.2** | Eager SW registration + extend `sw.js` for app-shell caching | 1.5 days | **medium** | Warm Ready 370 ms → ~50–100 ms (the **headline** Phase 20 win) | ✅ Shipped to dev 2026-05-05 (verification on staging pending). `landing/public/sw.js` extended with `install` (skipWaiting), `activate` (cache cleanup + kill-switch consult), and `fetch` (cache-first for `/assets/*`, SWR for navigation, network-first for static, never for `/api/*` or `/socket.io/*`). Eager registration via `requestIdleCallback` in `main.supported.jsx`. Push handler unchanged. `SW_VERSION` constant (currently 1) scopes cache names so a bump auto-cycles caches. Skipped runtime precache — first navigation populates cache, second is warm; simpler than parsing the Vite manifest. |
+| **20.3** | SWR data layer for public reads (`/leaderboard`, `/tournaments`, `/bots`) | 1 day | low–medium | Cuts perceived wait on Tournaments / Rankings from "spinner" to "instant + refresh" | ✅ Shipped to dev 2026-05-05. New `useSWRish(key, fetcher, { maxAgeMs })` hook in `landing/src/lib/swr.js` (10 unit tests). RankingsPage and TournamentsPage retrofitted off the older `cachedFetch` / hand-rolled `load()` paths. Public bots index doesn't exist as a page so the third bullet is a no-op. **TablesPage deferred** — it's authed, SSE-driven (real-time freshness wins over cache-first paint), and has an optimistic-create branch that needs a `mutate()` extension on the hook. Tracked as 20.3b below. |
+| **20.3b** | TablesPage SWR retrofit | 30 min | low | Authed users get a cached-paint on revisit before the network round-trip; SSE handler still drives live updates | ✅ Shipped to dev 2026-05-05. Added `mutate(updater)` to `useSWRish` (functional-update aware, cache-write-through, clears `isStale`/`error`) so the optimistic-prepend on table create still works. Cache key encodes all five filter dimensions (`page:status:game:date:q`). 4 new mutate tests. |
+| **20.4** | IndexedDB for cached lists | — | — | — | **Closed as YAGNI 2026-05-05.** Storage analysis (below) shows 7–15× headroom vs the 5 MB localStorage quota; IDB's async API conflicts with `useSWRish`'s synchronous-paint property (the whole point of the hook). Re-open if a single cache entry grows past ~500 KB or we want cross-clear durability. |
+| **20.5** | Persist `gymStore` | — | — | — | **Closed as no-op 2026-05-05.** `gymStore.isTraining` is intentionally transient; persisting it would keep idle-logout suppressed across sessions. The other 3 stores already use `persist`. |
+
+**Total: ~3 dev-days. Highest-leverage unit is 20.2.** That alone closes the Top-5 #2 slot.
+
+##### 20.4 storage analysis (the YAGNI math)
+
+Worst-case localStorage footprint after 20.3 + 20.3b shipped:
+
+| Page | Per-entry | Distinct keys | Subtotal |
+|---|---|---|---|
+| Rankings | 5–20 KB | ~9 (3 periods × 3 modes × 1 bots-toggle) | ~50–150 KB |
+| Tournaments | 25–50 KB | 2 (anon / authed) | ~50–100 KB |
+| Tables | 20–50 KB | ~10 realistic filter combos | ~200–500 KB |
+| **Total** | | | **~300–750 KB worst case** |
+
+localStorage quota is ~5 MB → **7–15× headroom**. Moving to IDB now would cost the same-frame-paint property of `useSWRish` (IDB reads are async; the hook's `useState(() => readCache(...))` initializer needs to be sync) for no measurable storage win. Tradeoff is recorded so this doesn't get re-litigated without new evidence. Triggers to re-open:
+
+- A real cache entry grows past ~500 KB (e.g. a "recent games" list with thousands of rows lands in SWR scope).
+- We want offline cache survival across the user clearing browser data — IDB is more durable than localStorage for that, but this is not a Phase 20 goal.
+
+##### Critical risks to plan around (20.2 specifically)
+
+1. **SW persistence.** A buggy SW lives on user devices until it self-updates. Mitigations:
+   - Version constant in the SW (`SW_VERSION`) wired in at build time via Vite `define` so cache keys cycle on deploy.
+   - **Admin kill switch** — backend endpoint (`/api/v1/admin/sw/kill`) that returns a tombstone JSON the SW reads on each `fetch`; on tombstone the SW calls `registration.unregister()` and clears all caches. Build this **before** the SW ships, not after.
+   - Keep `skipWaiting()` and `clients.claim()` on `install`/`activate` (already in place) so updates roll out without requiring a tab close.
+
+2. **Cache invalidation on deploy.** Strategy: precache list keyed by `SW_VERSION`; `activate` handler deletes any cache whose name doesn't match the current version. Pair with `index.html` already being `no-cache` — first byte after deploy is fresh, asset URLs are content-hashed and immutable, so the precache list rebuilds cleanly per deploy.
+
+3. **Push handler must keep working.** Extending the SW means adding `install` / `activate` / `fetch` to the same file — push code untouched. Smoke-test both paths (push receive + asset cache hit) on every SW change.
+
+4. **Cookie + auth on `/` revalidation.** The SW must NOT cache `/api/*` (auth, session, mutations). Cache scope is strictly: `/`, `/index.html`, `/assets/*`, `/favicon.svg`, fonts/icons. Runtime fetches for `/api/v1/auth/get-session` and friends bypass the SW entirely. Confirm via the `fetch` event request URL filter on the first commit.
+
+5. **Better Auth flow.** Sign-in posts to `/api/auth/sign-in/email` and reads cookies — both must bypass SW. The path filter from #4 covers this; explicit test: sign in with a fresh user behind a registered SW and confirm the session cookie lands.
+
+##### Explicitly out of scope for Phase 20 itself
+
+- **E5 supercharger items** (SW as canonical realtime SSE substrate, Background Sync for offline moves, IDB SSE replay, Periodic Background Sync, Push for cup events, WebShare). Each is multi-day with its own risk profile. Tracked separately at §E5 — pursue only after Phase 20 base ships and RUM cohort data validates the cache-shell win.
+- **Edge response cache on Fly** (currently bulleted under Phase 20 above). Fly's HTTP cache requires app-level config + invalidation strategy that interacts with Better Auth cookies. **Recommendation:** pull this bullet out of Phase 20 and create a separate Phase 20.6 for it post-base. Lower priority once SW + SWR are in place — they capture most of the same win client-side without the auth-cache footgun.
+
+##### Rollout sequence (calendar)
+
+1. **Day 1 AM:** 20.1 (`immutable` header) + 20.5 (closed as no-op — see audit row above). ✅ Shipped 2026-05-05.
+2. **Day 1 PM:** SW kill-switch endpoint (20.1b) + runbook entry in `Guide_Operations.md` §5.8. ✅ Shipped 2026-05-05.
+3. **Day 2:** 20.2 — extend `sw.js`, eager registration in `main.supported.jsx`. ✅ Shipped to dev 2026-05-05; ship-on-by-default rather than `?sw=1` flag because the kill switch (20.1b) is the rollback. Verification on staging pending.
+4. **Day 3 AM:** 20.3 — SWR hook + retrofit `TournamentsPage` + `RankingsPage`. ✅ Shipped to dev 2026-05-05. `TablesPage` deferred to 20.3b.
+5. **Day 3 PM:** 20.4 — closed as YAGNI 2026-05-05; storage analysis recorded above.
+6. **Day 4:** 20.3b — TablesPage retrofit + `mutate()` extension. ✅ Shipped to dev 2026-05-05.
+7. **Day 5:** RUM verification on staging. F11.5 cohort data should be flowing by then. Compare returning-cohort Ready on staging pre-/post-Phase-20; if it's not ≤100 ms, debug before declaring done. Update Top-5 chart with measured delta.
+
+##### Verification plan
+
+- **Synthetic:** add a `--cache-warmed` mode to `perf/perf-v2.js` that registers + warms the SW, then measures Ready on a second visit. Expected delta on cold-anon mobile: 370 ms → ~50–100 ms.
+- **RUM:** the F11.5 cohort split (`returning` vs `first-visit`) is the production read. Returning-cohort Ready p50 should drop into double digits. Tracked alongside FCP / LCP per cohort in the admin perf vitals dashboard.
+- **Smoke:** add a Playwright assertion that, after a navigation in a context with the SW registered, a second navigation reads `/assets/*` from disk cache (response time ≤5 ms via Performance API).
+
+##### Phase 20 — RUM verification baseline (locked 2026-05-05)
+
+`v1.4.0-alpha-4.6` deployed to staging at the start of the verification window with only ~4 RUM rows accrued; insufficient for percentiles. The pre-Phase-20 reference is `v1.4.0-alpha-4.5` on staging (614 rows over the prior 7 days, 494 returning + 120 first-visit). Locking the **returning-cohort** numbers here so the post-Phase-20 comparison isn't a moving target.
+
+**v4.5 staging — returning cohort, p75 (ms), n ≥ 5:**
+
+| Route | FCP p75 | LCP p75 | n |
+|---|---:|---:|---:|
+| `/` | 162 | 184 | 39–40 |
+| `/play` | 164 | 169 | 8–9 |
+| `/profile` | 179 | 342 | 18–20 |
+| `/tables` | 166 | 367 | 10 |
+| `/tournaments` | 148 | 154 | 10 |
+
+**v4.5 staging — first-visit cohort `/`, p75 (ms):** FCP 1162, LCP 1184 (n=11). Phase 20 should NOT move these — first-visit has no SW or SWR cache to read from. Acts as the control group.
+
+**Pass criteria for Phase 20 on staging (gates prod /promote):**
+
+1. **Returning-cohort wins on cache-bound routes.** `/profile` and `/tables` LCP p75 should drop ≥30% (target: ~342 → ≤240 ms, ~367 → ≤260 ms). These are the routes whose first contentful paint includes data the SWR layer now caches.
+2. **Returning-cohort already-fast routes hold.** `/`, `/play`, `/tournaments` should not regress more than +20% (these were already paint-floor-bound; SW registration + revalidation overhead must not undo that).
+3. **First-visit cohort unchanged.** First-visit `/` LCP p75 within ±15% of 1184 ms — confirms the SW isn't blocking the cold path.
+4. **Volume.** ≥30 rows per (route, metric, cohort) cell before reading the result.
+
+**Re-check protocol** (run when staging has ≥1 day of v4.6 traffic):
+
+```
+fly ssh console -a xo-backend-staging -C 'node -e "import(\"@xo-arena/db\").then(async ({default: db}) => { const r = await db.\$queryRawUnsafe(\`SELECT \\\"releaseVersion\\\" AS v, cohort, name, route, COUNT(*)::int AS cnt, ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY value)::numeric, 0) AS p75 FROM perf_vitals WHERE env = '\''staging'\'' AND \\\"releaseVersion\\\" IN ('\''1.4.0-alpha-4.5'\'', '\''1.4.0-alpha-4.6'\'') AND name IN ('\''FCP'\'', '\''LCP'\'') AND route IN ('\''/'\'', '\''/play'\'', '\''/profile'\'', '\''/tables'\'', '\''/tournaments'\'') GROUP BY 1,2,3,4 HAVING COUNT(*) >= 5 ORDER BY route, name, cohort, v\`); console.log(JSON.stringify(r, null, 2)); await db.\$disconnect(); })"'
+```
+
+If criteria met → mark Phase 20 verified and clear the gate on Top-5 #4. If criteria miss → debug (kill-switch flip + investigate) before promoting.
 
 ### Phase 21 — Architecture experiments (longshots)
 
