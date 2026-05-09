@@ -1,0 +1,193 @@
+{
+  "timestamp": "2026-05-09T06:04:30.588Z",
+  "env": "staging",
+  "baseUrl": "https://xo-landing-staging.fly.dev",
+  "runs": 5,
+  "results": [
+    {
+      "name": "Home — refresh demo",
+      "path": "/",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 88,
+        "inp_p95": 400,
+        "samples": 4,
+        "misses": 0
+      },
+      "raw": [
+        136,
+        40,
+        400,
+        32
+      ]
+    },
+    {
+      "name": "Home — open sign-in",
+      "path": "/",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 40,
+        "inp_p95": 72,
+        "samples": 3,
+        "misses": 2
+      },
+      "raw": [
+        24,
+        40,
+        72
+      ]
+    },
+    {
+      "name": "Tournaments — search type",
+      "path": "/tournaments",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 56,
+        "inp_p95": 80,
+        "samples": 5,
+        "misses": 0
+      },
+      "raw": [
+        80,
+        56,
+        48,
+        48,
+        56
+      ]
+    },
+    {
+      "name": "Rankings — toggle bots",
+      "path": "/rankings",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 16,
+        "inp_p95": 40,
+        "samples": 3,
+        "misses": 1
+      },
+      "raw": [
+        16,
+        16,
+        40
+      ]
+    },
+    {
+      "name": "Puzzles — first button",
+      "path": "/puzzles",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 64,
+        "inp_p95": 208,
+        "samples": 5,
+        "misses": 0
+      },
+      "raw": [
+        32,
+        24,
+        208,
+        136,
+        64
+      ]
+    },
+    {
+      "name": "Home — refresh demo",
+      "path": "/",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 80,
+        "inp_p95": 88,
+        "samples": 5,
+        "misses": 0
+      },
+      "raw": [
+        88,
+        80,
+        80,
+        56,
+        72
+      ]
+    },
+    {
+      "name": "Home — open sign-in",
+      "path": "/",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 40,
+        "inp_p95": 96,
+        "samples": 5,
+        "misses": 0
+      },
+      "raw": [
+        64,
+        40,
+        96,
+        32,
+        40
+      ]
+    },
+    {
+      "name": "Tournaments — search type",
+      "path": "/tournaments",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 24,
+        "inp_p95": 24,
+        "samples": 5,
+        "misses": 0
+      },
+      "raw": [
+        24,
+        24,
+        24,
+        24,
+        24
+      ]
+    },
+    {
+      "name": "Rankings — toggle bots",
+      "path": "/rankings",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 16,
+        "inp_p95": 752,
+        "samples": 5,
+        "misses": 0
+      },
+      "raw": [
+        16,
+        752,
+        16,
+        32,
+        16
+      ]
+    },
+    {
+      "name": "Puzzles — first button",
+      "path": "/puzzles",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "inp_p50": 48,
+        "inp_p95": 72,
+        "samples": 5,
+        "misses": 0
+      },
+      "raw": [
+        56,
+        72,
+        48,
+        32,
+        32
+      ]
+    }
+  ]
+}
