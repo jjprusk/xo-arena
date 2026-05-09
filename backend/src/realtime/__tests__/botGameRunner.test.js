@@ -59,7 +59,7 @@ vi.mock('../logger.js', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 }))
 
-const { botGameRunner } = await import('../botGameRunner.js')
+const { botGameRunner, seriesGameCap } = await import('../botGameRunner.js')
 
 // ---------------------------------------------------------------------------
 // Shared test fixture — a game that will never advance (moveDelayMs huge)
@@ -93,6 +93,35 @@ beforeEach(() => {
   mockTableFindFirst.mockClear()
   mockTableFindFirst.mockResolvedValue(null)
   mockTableCreate.mockResolvedValue({ id: 'tbl-created' })
+})
+
+// ---------------------------------------------------------------------------
+// seriesGameCap — regression for prod 2026-05-09
+// ---------------------------------------------------------------------------
+// The old formula `bestOfN * 2 - 1` capped a bestOf3 series at 5 games, so
+// minimax-vs-minimax matches that drew every game ran 5× before the
+// deterministic tiebreaker resolved them — inflating tournament game counts
+// ~30% over the bracket ceiling. `bestOfN` is "max games" in this codebase
+// (winsNeeded = ⌈N/2⌉), so the cap is just N.
+
+describe('seriesGameCap', () => {
+  it('caps a bestOf3 series at 3 games (not 5)', () => {
+    expect(seriesGameCap(3)).toBe(3)
+  })
+
+  it('caps a bestOf5 series at 5 games (not 9)', () => {
+    expect(seriesGameCap(5)).toBe(5)
+  })
+
+  it('caps a bestOf1 series at 1 game', () => {
+    expect(seriesGameCap(1)).toBe(1)
+  })
+
+  it('returns at least 1 for nullish input', () => {
+    expect(seriesGameCap(null)).toBe(1)
+    expect(seriesGameCap(undefined)).toBe(1)
+    expect(seriesGameCap(0)).toBe(1)
+  })
 })
 
 // ---------------------------------------------------------------------------
