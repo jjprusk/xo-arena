@@ -25,7 +25,7 @@ async function getIdleConfig() {
 export function listCommand(program) {
   program
     .command('list [username|email|pattern]')
-    .description('List users. Pass a username/email for exact match or a regex pattern (quoted) to filter. IDLE reflects the last Postgres flush — may lag up to 60s behind real activity.')
+    .description('List users. Pass a username/email for exact match or a regex pattern (quoted) to filter — regex matches against username AND email. IDLE reflects the last Postgres flush — may lag up to 60s behind real activity.')
     .option('--limit <n>', 'Max rows to show', '20')
     .option('--unverified', 'Show only unverified accounts')
     .action(async (usernameOrEmail, opts) => {
@@ -36,15 +36,20 @@ export function listCommand(program) {
       let regexFilter = null
 
       if (usernameOrEmail) {
-        if (usernameOrEmail.includes('@')) {
-          userFilter = { isBot: false, email: usernameOrEmail }
-        } else if (/[.*+?^${}()|[\]\\]/.test(usernameOrEmail)) {
+        // `.` is excluded from the regex-detector — it's far too common in
+        // real emails (joe@callidity.com would otherwise be mis-classified as
+        // a regex). Anything with anchors, escapes, alternation, brackets,
+        // or quantifiers is treated as a pattern; bare `@` keeps the exact-
+        // email semantics.
+        if (/[*+?^${}()|[\]\\]/.test(usernameOrEmail)) {
           // Regex pattern — fetch all and filter in JS
           try { regexFilter = new RegExp(usernameOrEmail, 'i') } catch {
             console.error(`um: invalid regex: ${usernameOrEmail}`)
             process.exit(1)
           }
           userFilter = { isBot: false }
+        } else if (usernameOrEmail.includes('@')) {
+          userFilter = { isBot: false, email: usernameOrEmail }
         } else {
           userFilter = { isBot: false, username: usernameOrEmail }
         }
@@ -63,7 +68,7 @@ export function listCommand(program) {
       ])
 
       const users = regexFilter
-        ? allUsers.filter(u => regexFilter.test(u.username))
+        ? allUsers.filter(u => regexFilter.test(u.username) || regexFilter.test(u.email ?? ''))
         : allUsers
 
       // Fetch verification status and active sessions from BetterAuth

@@ -1,13 +1,18 @@
 [
   {
+    "version": "1.4.0-alpha-4.8",
+    "date": "2026-05-08",
+    "description": "Tournament form: explicit no-end-date toggle"
+  },
+  {
     "version": "1.4.0-alpha-4.7",
     "date": "2026-05-05",
-    "description": "Journey fixes — cup runner unblocked, repointBotPrimarySkill flip, journey suite green on staging"
+    "description": "Journey fixes \u2014 cup runner unblocked, repointBotPrimarySkill flip, journey suite green on staging"
   },
   {
     "version": "1.4.0-alpha-4.6",
     "date": "2026-05-05",
-    "description": "Phase 20 — SW app shell + SWR data layer + um CLI exit fix"
+    "description": "Phase 20 \u2014 SW app shell + SWR data layer + um CLI exit fix"
   },
   {
     "version": "1.4.0-alpha-4.5",
@@ -17,12 +22,12 @@
   {
     "version": "1.4.0-alpha-4.4",
     "date": "2026-05-05",
-    "description": "F9 instrumentation probes — granular apply Server-Timing + live pg.Pool stats"
+    "description": "F9 instrumentation probes \u2014 granular apply Server-Timing + live pg.Pool stats"
   },
   {
     "version": "1.4.0-alpha-4.3",
     "date": "2026-05-05",
-    "description": "Phase 5 cold-broker fix + DB pool 10→30 (F9.1)"
+    "description": "Phase 5 cold-broker fix + DB pool 10\u219230 (F9.1)"
   },
   {
     "version": "1.4.0-alpha-4.2",

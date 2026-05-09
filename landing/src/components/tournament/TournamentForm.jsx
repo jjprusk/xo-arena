@@ -269,9 +269,27 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
                 <option value="MONTHLY">Monthly</option>
               </select>
             </Field>
-            <Field label="Recurrence End Date" hint="Optional — leave blank to recur indefinitely">
-              <input type="date" value={form.recurrenceEndDate} onChange={e => set('recurrenceEndDate', e.target.value)}
-                className={INPUT_CLASS} style={FIELD_STYLE} />
+            <Field label="Recurrence End Date" hint="Recur indefinitely unless an end date is set">
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox"
+                    checked={form.recurrenceEndDate === ''}
+                    onChange={e => set('recurrenceEndDate', e.target.checked ? '' : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))}
+                    className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>No end date — recur forever</span>
+                </label>
+                {form.recurrenceEndDate !== '' && (
+                  <div className="flex items-center gap-2">
+                    <input type="date" value={form.recurrenceEndDate} onChange={e => set('recurrenceEndDate', e.target.value)}
+                      className={INPUT_CLASS} style={FIELD_STYLE} />
+                    <button type="button" onClick={() => set('recurrenceEndDate', '')}
+                      className="text-xs px-2 py-1 rounded-md transition-colors hover:bg-[var(--bg-surface-hover)]"
+                      style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
             </Field>
           </div>
           <Field label="Auto-opt-out after missed occurrences" hint="0 = never">
