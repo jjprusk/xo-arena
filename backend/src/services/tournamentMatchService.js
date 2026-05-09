@@ -72,7 +72,7 @@ export async function joinMatchTable({ user, matchId }) {
   if (!matchId) throw new TournamentMatchError('NOT_FOUND', 'matchId required')
   if (!user?.betterAuthId) throw new TournamentMatchError('NOT_PARTICIPANT', 'authentication required')
 
-  const pending = getPendingPvpMatch(matchId)
+  const pending = await getPendingPvpMatch(matchId)
   if (!pending) throw new TournamentMatchError('NOT_FOUND', 'Tournament match not found or already started')
 
   const { tournamentId, participant1UserId, participant2UserId, bestOfN } = pending
@@ -107,7 +107,7 @@ export async function joinMatchTable({ user, matchId }) {
         previewState: makePreviewState({ marks }),
       },
     })
-    setPendingPvpMatchSlug(matchId, slug)
+    await setPendingPvpMatchSlug(matchId, slug)
     return {
       action: 'created',
       slug,

@@ -196,7 +196,7 @@ async function processTable({ io, userId, sessionId, tableId }) {
     if (table.createdById === 'anonymous') {
       await db.table.delete({ where: { id: tableId } }).catch(() => {})
     }
-    if (table.tournamentMatchId) setPendingPvpMatchSlug(table.tournamentMatchId, null)
+    if (table.tournamentMatchId) await setPendingPvpMatchSlug(table.tournamentMatchId, null)
     dualEmitLifecycle(io, tableId, 'cancelled')
     return
   }
@@ -231,7 +231,7 @@ async function processTable({ io, userId, sessionId, tableId }) {
       if (table.createdById === 'anonymous') {
         await db.table.delete({ where: { id: tableId } }).catch(() => {})
       }
-      if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
+      if (table.tournamentMatchId) await deletePendingPvpMatch(table.tournamentMatchId)
       return
     }
   }

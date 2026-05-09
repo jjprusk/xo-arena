@@ -169,7 +169,7 @@ export async function cancelTable({ io, tableId }) {
     dispatchTableReleased(tableId, TABLE_RELEASED_REASONS.LEAVE, { trigger: 'room-cancel' })
     const { deleteIfGuestTable } = await getSocketHandlerHelpers()
     await deleteIfGuestTable(table)
-    if (table.tournamentMatchId) deletePendingPvpMatch(table.tournamentMatchId)
+    if (table.tournamentMatchId) await deletePendingPvpMatch(table.tournamentMatchId)
   }
 
   dualEmitLifecycle(io, tableId, 'cancelled')
