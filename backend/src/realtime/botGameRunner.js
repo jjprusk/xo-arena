@@ -43,6 +43,22 @@ async function completeTournamentMatch(matchId, winnerId, p1Wins, p2Wins, drawGa
 const DEFAULT_MOVE_DELAY_MS = 1500
 
 /**
+ * Maximum games in a best-of-N series.
+ *
+ * `bestOfN` here means *max games* (3 → first-to-2-wins, max 3 games), which
+ * matches the field used by `bracketMath.expectedGameCount` and `winsNeeded =
+ * ⌈N/2⌉`. The cap is therefore just `bestOfN` itself — not `2N − 1` (that
+ * formula belongs to the *other* convention where N is wins-required).
+ *
+ * Prod incident 2026-05-09: bestOf3 minimax-vs-minimax matches were running
+ * to 5 all-draw games before the deterministic-tiebreaker resolved them,
+ * inflating tournament game counts ~30% over the bracket ceiling.
+ */
+export function seriesGameCap(bestOfN) {
+  return Math.max(bestOfN ?? 1, 1)
+}
+
+/**
  * Parse a botModelId string into { impl, difficulty }.
  * Falls back to minimax/intermediate if the implementation isn't registered.
  */
@@ -226,8 +242,7 @@ class BotGameRunner {
     }
 
     const winsNeeded = Math.ceil(game.bestOfN / 2)
-    // Hard cap: maximum possible games in a best-of-N series (e.g. best-of-3 → 5 max)
-    const hardCap = Math.max(game.bestOfN * 2 - 1, 1)
+    const hardCap    = seriesGameCap(game.bestOfN)
 
     // Series loop
     while (true) {
