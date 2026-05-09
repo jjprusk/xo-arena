@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-4.9",
+    "date": "2026-05-09",
+    "description": "Multi-machine synchronization fix"
+  },
+  {
     "version": "1.4.0-alpha-4.8",
     "date": "2026-05-08",
     "description": "Tournament form: explicit no-end-date toggle"
