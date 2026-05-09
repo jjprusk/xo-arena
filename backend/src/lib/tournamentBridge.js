@@ -14,47 +14,135 @@ import { completeStep as completeJourneyStep } from '../services/journeyService.
 import { grantDiscoveryReward } from '../services/discoveryRewardsService.js'
 import { pickCoachingCard } from '../config/coachingCardRules.js'
 
-// ─── Pending PVP match registry ───────────────────────────────────────────────
+// ─── Pending PVP match registry (Redis-backed) ────────────────────────────────
 // Stores state for PVP tournament matches waiting for players to join the
 // match table. matchId → { tournamentId, participant1UserId, participant2UserId,
-// bestOfN, slug, expiresAt }. "slug" is null until the first player requests
-// the match table via `tournament:table:join` (legacy: `tournament:room:join`)
-// or POST /api/v1/rt/tournaments/matches/:id/table.
-// Entries expire after PENDING_MATCH_TTL_MS to prevent unbounded growth.
+// bestOfN, slug }. "slug" is null until the first player requests the match
+// table via POST /api/v1/rt/tournaments/matches/:id/table.
+//
+// Backed by a Redis hash per matchId so the entry is shared across all
+// backend processes. Without this, a multi-machine deploy would diverge:
+// machine A sees the publish via pub/sub and sets the entry; machine B
+// (started after publish, redeployed, or transiently disconnected from
+// Redis) has nothing in its local map and 404s the second player's claim.
+//
+// Falls back to an in-memory Map when REDIS_URL is unset (test/local-only
+// runs without Redis still work).
 
-const _pendingPvpMatches = new Map()
 const PENDING_MATCH_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
+const PENDING_MATCH_TTL_S  = Math.floor(PENDING_MATCH_TTL_MS / 1000)
+const KEY = (matchId) => `tournament:pending:${matchId}`
 
-function _pruneStalePendingMatches() {
-  const now = Date.now()
-  for (const [matchId, entry] of _pendingPvpMatches) {
-    if (entry.expiresAt < now) {
+let _redisClient = null
+function getRedisClient() {
+  if (_redisClient) return _redisClient
+  if (!process.env.REDIS_URL) return null
+  _redisClient = new Redis(process.env.REDIS_URL)
+  _redisClient.on('error', err => logger.error({ err }, 'tournamentBridge pending-match Redis error'))
+  return _redisClient
+}
+
+// In-memory fallback for tests / no-Redis dev. Same shape as the Redis hash.
+const _pendingPvpMatches = new Map()
+
+export async function getPendingPvpMatch(matchId) {
+  if (!matchId) return null
+  const redis = getRedisClient()
+  if (!redis) {
+    const entry = _pendingPvpMatches.get(matchId)
+    if (!entry) return null
+    if (entry.expiresAt && entry.expiresAt < Date.now()) {
       _pendingPvpMatches.delete(matchId)
-      logger.warn({ matchId }, 'Pruned stale pending PVP match (TTL expired)')
+      return null
     }
+    return entry
+  }
+  const h = await redis.hgetall(KEY(matchId))
+  if (!h || Object.keys(h).length === 0) return null
+  return {
+    tournamentId:        h.tournamentId,
+    participant1UserId:  h.participant1UserId,
+    participant2UserId:  h.participant2UserId,
+    bestOfN:             Number(h.bestOfN || 1),
+    slug:                h.slug || null,
   }
 }
 
-export function getPendingPvpMatch(matchId) {
-  const entry = _pendingPvpMatches.get(matchId)
-  if (!entry) return null
-  if (entry.expiresAt < Date.now()) {
+export async function setPendingPvpMatch(matchId, entry) {
+  if (!matchId || !entry) return
+  const redis = getRedisClient()
+  const value = {
+    tournamentId:       String(entry.tournamentId ?? ''),
+    participant1UserId: String(entry.participant1UserId ?? ''),
+    participant2UserId: String(entry.participant2UserId ?? ''),
+    bestOfN:            String(entry.bestOfN ?? 1),
+    // hset can't store null. Empty string sentinel — getPendingPvpMatch
+    // collapses '' back to null on read.
+    slug:               entry.slug ? String(entry.slug) : '',
+  }
+  if (!redis) {
+    _pendingPvpMatches.set(matchId, {
+      ...value,
+      bestOfN: Number(value.bestOfN),
+      slug:    value.slug || null,
+      expiresAt: Date.now() + PENDING_MATCH_TTL_MS,
+    })
+    return
+  }
+  await redis.multi()
+    .hset(KEY(matchId), value)
+    .expire(KEY(matchId), PENDING_MATCH_TTL_S)
+    .exec()
+}
+
+export async function setPendingPvpMatchSlug(matchId, slug) {
+  if (!matchId) return
+  const redis = getRedisClient()
+  if (!redis) {
+    const entry = _pendingPvpMatches.get(matchId)
+    if (entry) entry.slug = slug || null
+    return
+  }
+  // hset on a missing key creates a new hash without TTL — guard with
+  // an exists check so we don't resurrect a key the prune already
+  // removed (and so we don't leak un-expired keys).
+  const exists = await redis.exists(KEY(matchId))
+  if (!exists) return
+  await redis.hset(KEY(matchId), 'slug', slug ? String(slug) : '')
+}
+
+export async function deletePendingPvpMatch(matchId) {
+  if (!matchId) return
+  const redis = getRedisClient()
+  if (!redis) {
     _pendingPvpMatches.delete(matchId)
-    return null
+    return
   }
-  return entry
+  await redis.del(KEY(matchId))
 }
 
-export function setPendingPvpMatchSlug(matchId, slug) {
-  const entry = _pendingPvpMatches.get(matchId)
-  if (entry) entry.slug = slug
+/**
+ * Approximate count of pending matches. Uses Redis SCAN — cheap when the
+ * cardinality is small (typical: 0–50 in flight). Returned as a number for
+ * the resourceCounters snapshot.
+ */
+export async function getPendingPvpMatchCount() {
+  const redis = getRedisClient()
+  if (!redis) return _pendingPvpMatches.size
+  let cursor = '0'
+  let count = 0
+  do {
+    const [next, keys] = await redis.scan(cursor, 'MATCH', 'tournament:pending:*', 'COUNT', 100)
+    count += keys.length
+    cursor = next
+  } while (cursor !== '0')
+  return count
 }
 
-export function deletePendingPvpMatch(matchId) {
-  _pendingPvpMatches.delete(matchId)
+/** Test-only escape hatch — flush the in-memory fallback between tests. */
+export function _resetPendingPvpMatchesForTest() {
+  _pendingPvpMatches.clear()
 }
-
-export function getPendingPvpMatchCount() { return _pendingPvpMatches.size }
 
 // Channels to subscribe to
 const CHANNELS = [
@@ -101,10 +189,9 @@ export function startTournamentBridge(_io) {
     }
   })
 
-  // Periodically prune stale pending PVP match entries so the in-memory map
-  // doesn't accumulate entries from matches that never started.
-  const pruneTimer = setInterval(() => _pruneStalePendingMatches(), 30 * 60_000)
-  pruneTimer.unref()
+  // Pending-PVP-match keys carry a Redis TTL so no periodic prune is needed
+  // (Redis itself evicts on EXPIRE). Fallback in-memory map is only used in
+  // tests; its entries also carry expiresAt and are read-time-pruned.
 }
 
 export async function handleEvent(_io, channel, data) {
@@ -207,16 +294,16 @@ export async function handleEvent(_io, channel, data) {
       const { tournamentId, matchId, participant1UserId, participant2UserId, bestOfN } = data
       const userIds = [participant1UserId, participant2UserId].filter(Boolean)
 
-      // Store pending PVP match so socketHandler can create/join the room on demand
+      // Store pending PVP match in shared Redis so any backend machine
+      // handling the first/second player's claim POST sees the entry —
+      // not just the machine that received the pub/sub event.
       if (participant1UserId && participant2UserId) {
-        _pruneStalePendingMatches()
-        _pendingPvpMatches.set(matchId, {
+        await setPendingPvpMatch(matchId, {
           tournamentId,
           participant1UserId,
           participant2UserId,
           bestOfN: bestOfN ?? 1,
           slug: null,
-          expiresAt: Date.now() + PENDING_MATCH_TTL_MS,
         })
       }
 

@@ -403,7 +403,7 @@ export async function recordPvpGame(table, _io) {
       }
 
       const completed = await completeTournamentMatch(table.tournamentMatchId, winnerParticipantId, xWins, oWins, drawGames)
-      if (completed) deletePendingPvpMatch(table.tournamentMatchId)
+      if (completed) await deletePendingPvpMatch(table.tournamentMatchId)
 
       const seriesPayload = {
         tournamentId: table.tournamentId,

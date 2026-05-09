@@ -171,18 +171,19 @@ export function startSnapshotInterval() {
 }
 
 async function takeBusSnapshot() {
-  const [queueDepth, pending, running, failed] = await Promise.all([
+  const [queueDepth, pending, running, failed, pvpMatchMapSize] = await Promise.all([
     db.userNotification.count({ where: { deliveredAt: null } }),
     db.scheduledJob.count({ where: { status: 'PENDING' } }),
     db.scheduledJob.count({ where: { status: 'RUNNING' } }),
     db.scheduledJob.count({ where: { status: 'FAILED'  } }),
+    getPendingPvpMatchCount().catch(() => 0),
   ])
   return {
     notifQueueDepth:      queueDepth,
     schedulerPending:     pending,
     schedulerRunning:     running,
     schedulerFailed:      failed,
-    pvpMatchMapSize:      getPendingPvpMatchCount(),
+    pvpMatchMapSize,
     dispatcherLastTickAt: getDispatcherHeartbeat(),
     dispatchCounters:     getDispatchCounters(),
   }
