@@ -26,6 +26,12 @@ export function roleCommand(program) {
             continue
           }
           await db.userRole.delete({ where: { id: existing.id } })
+          // Mirror ADMIN revoke into ba_user.role so the BetterAuth session
+          // (which the frontend gates on) reflects the change. Without this,
+          // the app userRole table and ba_user.role drift apart.
+          if (normalised === 'ADMIN' && user.betterAuthId) {
+            await db.baUser.update({ where: { id: user.betterAuthId }, data: { role: null } })
+          }
           ok(`Revoked ${normalised} from "${user.username}"`)
         } else {
           const already = user.userRoles.some(r => r.role === normalised)
@@ -34,6 +40,12 @@ export function roleCommand(program) {
             continue
           }
           await db.userRole.create({ data: { userId: user.id, role: normalised, grantedById: user.id } })
+          // Mirror ADMIN grant into ba_user.role (BetterAuth's admin plugin
+          // reads `role === 'admin'` from there; the session payload is what
+          // the landing dropdown checks).
+          if (normalised === 'ADMIN' && user.betterAuthId) {
+            await db.baUser.update({ where: { id: user.betterAuthId }, data: { role: 'admin' } })
+          }
           ok(`Granted ${normalised} to "${user.username}"`)
           // §2 metrics-pollution prevention: granting ADMIN flags the user as
           // a test user. Reversal is manual via `um testuser <user> --off`,
