@@ -78,6 +78,7 @@ const MENU = [
   I('Template create endpoint (Phase 3.7a s2)',        () => pw('tournament-template-create'), 'TEST_ADMIN_EMAIL'),
   I('Follow-player spectate (5-step verification)',    () => pw('tournament-follow-player'),   'TEST_ADMIN_EMAIL'),
   I('Tournament runaway-loop guards',                  () => pw('tournament-guards'),          'no auth'),
+  I('2-human MIXED match claim (regression)',          () => pw('tournament-2human-match-claim'), 'TEST_ADMIN + TEST_USER + TEST_USER2'),
   I('All Playwright (chromium)',                        () => pw(null)),
   D(),
   S('Long-running'),
