@@ -1,6 +1,6 @@
 {
   "name": "xo-arena",
-  "version": "1.4.0-alpha-4.7",
+  "version": "1.4.0-alpha-4.8",
   "private": true,
   "workspaces": [
     "backend",
