@@ -10,6 +10,7 @@ import {
 import { LeaderboardSkeleton } from '../components/ui/Skeleton.jsx'
 import { disambiguateBotLabels } from '../lib/botLabels.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
+import ChallengeButton from '../components/bots/ChallengeButton.jsx'
 
 const PODIUM_COLORS = {
   0: { bg: 'var(--color-amber-100)', border: 'var(--color-amber-500)', label: '👑' },
@@ -174,6 +175,7 @@ export default function RankingsPage() {
                 <ListTh align="right" className="hidden sm:table-cell">Games</ListTh>
                 <ListTh align="right" className="hidden sm:table-cell">Wins</ListTh>
                 <ListTh>Win Rate</ListTh>
+                <ListTh align="right" className="w-12">Play</ListTh>
               </tr>
             </thead>
             <tbody>
@@ -219,6 +221,17 @@ export default function RankingsPage() {
                         {Math.round(entry.winRate * 100)}%
                       </span>
                     </div>
+                  </ListTd>
+                  <ListTd align="right">
+                    {entry.user.isBot ? (
+                      <ChallengeButton
+                        botUserId={entry.user.id}
+                        variant="icon"
+                        source="rankings"
+                      />
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    )}
                   </ListTd>
                 </ListTr>
               ))}

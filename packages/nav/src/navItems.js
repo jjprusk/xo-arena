@@ -7,13 +7,17 @@
  * When item.app === appId (the current site), render as <NavLink> (internal routing).
  * Otherwise, build a cross-site <a href> using appUrls[item.app].
  */
+// Phase B.1.x of the Bot Challenge & Discovery plan: About moved to the
+// footer; Bots takes its primary-nav slot. Bots is high-frequency, action-
+// oriented, broad-audience, and onboarding-critical; About is one-time-read.
+// Slot count stays at 6 (under the 5-7 soft ceiling).
 export const PRIMARY_NAV = [
   { key: 'tables',      label: 'Tables',      app: 'landing', to: '/tables'      },
   { key: 'tournaments', label: 'Tournaments', app: 'landing', to: '/tournaments' },
   { key: 'gym',         label: 'Gym',         app: 'landing', to: '/gym'         },
   { key: 'rankings',    label: 'Rankings',    app: 'landing', to: '/rankings'    },
+  { key: 'bots',        label: 'Bots',        app: 'landing', to: '/bots'        },
   { key: 'profile',     label: 'Profile',     app: 'landing', to: '/profile'     },
-  { key: 'about',       label: 'About',       app: 'landing', to: '/about'       },
 ]
 
 /**
