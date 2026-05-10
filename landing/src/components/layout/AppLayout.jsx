@@ -593,11 +593,16 @@ export default function AppLayout() {
       </main>
 
       {/* ── Footer ───────────────────────────────────────────── */}
+      {/* About lives here (not the primary nav) — moved per the
+          Bot_Challenge_Plan B.1.x decision. About is one-time-read
+          material; the primary-nav slot it freed up is now Bots. */}
       <footer
-        className="relative text-center py-6 text-xs"
+        className="relative text-center py-6 text-xs space-x-3"
         style={{ zIndex: 1, color: 'var(--text-secondary)', borderTop: '1px solid var(--border-default)' }}
       >
-        © 2026 AI Arena · callidity.com
+        <span>© 2026 AI Arena · callidity.com</span>
+        <Link to="/about" className="underline" style={{ color: 'var(--text-secondary)' }}>About</Link>
+        <Link to="/faq" className="underline" style={{ color: 'var(--text-secondary)' }}>FAQ</Link>
       </footer>
 
       <GuidePanel isAdmin={user?.role === 'admin'} />

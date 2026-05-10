@@ -6,6 +6,7 @@ import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import TrainGuidedModal from '../components/guide/TrainGuidedModal.jsx'
 import Spotlight from '../components/guide/Spotlight.jsx'
+import ChallengeButton from '../components/bots/ChallengeButton.jsx'
 
 const ALGORITHM_LABELS = {
   Q_LEARNING: 'Q-Learning',
@@ -303,6 +304,28 @@ export default function BotProfilePage() {
           onComplete={handleTrainGuidedComplete}
           onClose={() => setTrainOpen(false)}
         />
+      )}
+
+      {/* Challenge — Phase B.2 of the Bot Challenge & Discovery plan.
+          One-click HvB game vs this bot. Visible to ALL viewers (including
+          guests + non-owners): every bot is a potential opponent. The
+          ChallengeButton primitive handles the POST + navigate; this
+          section just provides framing copy + visibility gating. */}
+      {bot.botActive && (
+        <section className="space-y-2" data-testid="bot-profile-challenge">
+          <SectionLabel>Play this bot</SectionLabel>
+          <div
+            className="rounded-xl border p-4 space-y-3 flex items-center justify-between gap-4"
+            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}
+          >
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {isOwner
+                ? 'Test your bot from the human side — sit at the other seat and play.'
+                : 'Take your shot. One click and the table opens.'}
+            </p>
+            <ChallengeButton botUserId={bot.id} source="bot-profile" />
+          </div>
+        </section>
       )}
 
       {/* Spar (Curriculum step 5 — §5.2). Owner-only. Tier picker → kicks off

@@ -168,6 +168,16 @@ export const api = {
     },
     mine:       (token)             => request('GET',    '/bots/mine', null, token),
     checkName:  (name, token)       => request('GET',    `/bots/check-name?name=${encodeURIComponent(name)}`, null, token),
+    /**
+     * Phase C.2 — pick one active bot near the caller's ELO. Auth is
+     * optional; guests get matched against a default rating of 1500.
+     * Returns { botUserId, displayName, rating } on success, throws
+     * on 404 NO_CANDIDATES when even the widened ±300 window is empty.
+     */
+    quickMatch: ({ gameId = 'xo', eloWindow = 100, token } = {}) => {
+      const p = new URLSearchParams({ gameId, eloWindow: String(eloWindow) })
+      return request('GET', `/bots/quick-match?${p}`, null, token)
+    },
     create:     (body, token)       => request('POST',   '/bots', body, token),
     quickCreate:(body, token)       => request('POST',   '/bots/quick', body, token),
     update:     (id, body, token)   => request('PATCH',  `/bots/${id}`, body, token),
