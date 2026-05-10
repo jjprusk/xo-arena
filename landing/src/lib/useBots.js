@@ -25,6 +25,15 @@ import { api } from './api.js'
 
 export const BOTS_FETCH_KEY = 'bots:list:v1'
 
+export function isBotPlayableFor(bot, gameId) {
+  if (!gameId) return true
+  // Source of truth = playableGameIds from /api/v1/bots, which the
+  // backend derives from BotSkill rows (the same source the play path
+  // resolves). If the field is missing the bot is treated as unplayable
+  // — better a false negative than a click that 400s on the server.
+  return Array.isArray(bot?.playableGameIds) && bot.playableGameIds.includes(gameId)
+}
+
 function applyFilters(bots, filters, currentUserId) {
   if (!Array.isArray(bots)) return []
   let out = bots
@@ -38,6 +47,14 @@ function applyFilters(bots, filters, currentUserId) {
     out = out.filter(b => !b.botOwnerId)
   }
   // 'all' or undefined → no owner filter
+
+  // Game-skill filter: hide bots that can't actually play the selected
+  // game unless the user has explicitly opted to "Show all bots". When
+  // showAll is true we keep them in the list but the row's
+  // ChallengeButton renders disabled.
+  if (filters.gameId && !filters.showAll) {
+    out = out.filter(b => isBotPlayableFor(b, filters.gameId))
+  }
 
   if (filters.eloMin != null || filters.eloMax != null) {
     const min = filters.eloMin ?? -Infinity
@@ -74,7 +91,7 @@ export function useBots(filters = {}, currentUserId = null) {
     () => applyFilters(allBots, filters, currentUserId),
     // The filter object is created inline by callers; depend on its
     // primitive fields rather than identity to avoid spurious recomputes.
-    [allBots, filters.ownerId, filters.owner, filters.eloMin, filters.eloMax, filters.search, currentUserId],
+    [allBots, filters.ownerId, filters.owner, filters.eloMin, filters.eloMax, filters.search, filters.gameId, filters.showAll, currentUserId],
   )
   return { bots, allBots, isLoading, isStale, error, refresh }
 }

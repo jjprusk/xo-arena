@@ -11,6 +11,10 @@ const { mockUseBots, mockUseSession } = vi.hoisted(() => ({
 
 vi.mock('../../lib/useBots.js', () => ({
   useBots: mockUseBots,
+  isBotPlayableFor: (bot, gameId) =>
+    Array.isArray(bot?.playableGameIds)
+      ? bot.playableGameIds.includes(gameId)
+      : (gameId === 'xo' && bot?.botModelType === 'minimax'),
 }))
 vi.mock('../../lib/useOptimisticSession.js', () => ({
   useOptimisticSession: mockUseSession,
@@ -99,7 +103,7 @@ describe('<BotDirectoryPage />', () => {
     mockUseBots.mockReturnValue({ bots: BOTS, allBots: BOTS, isLoading: false, isStale: false, error: null })
     renderAt('/bots?owner=community&eloMin=1200&search=copper')
     const filtersArg = mockUseBots.mock.calls[0][0]
-    expect(filtersArg).toEqual({ owner: 'community', eloMin: 1200, search: 'copper' })
+    expect(filtersArg).toMatchObject({ owner: 'community', eloMin: 1200, search: 'copper', gameId: 'xo', showAll: false })
   })
 
   it('writes filter changes back to the URL via the filter bar', async () => {

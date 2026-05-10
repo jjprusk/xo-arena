@@ -39,7 +39,7 @@ describe('<ChallengeButton />', () => {
     expect(mockRtFetch).toHaveBeenCalledWith('/rt/tables', {
       body: { kind: 'hvb', botUserId: 'bot_xyz', gameId: 'xo', spectatorAllowed: true },
     })
-    expect(mockNavigate).toHaveBeenCalledWith('/play?join=abc123')
+    expect(mockNavigate).toHaveBeenCalledWith('/play?join=abc123', expect.objectContaining({ state: expect.objectContaining({ from: expect.any(String) }) }))
   })
 
   it('does NOT navigate when the server returns no slug', async () => {
@@ -80,7 +80,7 @@ describe('<ChallengeButton />', () => {
     expect(mockRtFetch).toHaveBeenCalledTimes(1)
 
     resolve({ slug: 's1' })
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/play?join=s1'))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/play?join=s1', expect.objectContaining({ state: expect.objectContaining({ from: expect.any(String) }) })))
   })
 
   it('icon variant: still POSTs and navigates; aria-label set', async () => {
@@ -90,7 +90,7 @@ describe('<ChallengeButton />', () => {
     const btn = screen.getByTestId('challenge-button')
     expect(btn.getAttribute('aria-label')).toMatch(/challenge/i)
     fireEvent.click(btn)
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/play?join=icon-slug'))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/play?join=icon-slug', expect.objectContaining({ state: expect.objectContaining({ from: expect.any(String) }) })))
   })
 
   it('does nothing when botUserId is missing', () => {

@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { getToken } from '../lib/getToken.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
@@ -23,6 +23,17 @@ const ALGORITHM_LABELS = {
 export default function BotProfilePage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Context-sensitive back. Linkers that open this page (BotDirectory,
+  // Rankings, ProfilePage's "My bots") pass state.from = their full path
+  // (incl. search) so /bots filters are preserved on return. State
+  // survives browser back/forward, so flows like /bots → /bots/:id →
+  // /play → (browser back) → /bots/:id still resolve to the original
+  // /bots entry. Deep-linked visits (no state) fall back to /bots.
+  const handleBack = () => {
+    const from = location.state?.from
+    navigate(from && typeof from === 'string' ? from : '/bots')
+  }
   const { data: session } = useOptimisticSession()
   const [bot, setBot] = useState(null)
   const [botStats, setBotStats] = useState(null)
@@ -107,9 +118,14 @@ export default function BotProfilePage() {
           {error || 'Bot not found.'}
         </p>
         <div className="text-center">
-          <Link to="/profile" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
-            ← Back to profile
-          </Link>
+          <button
+            type="button"
+            onClick={handleBack}
+            className="text-sm"
+            style={{ color: 'var(--color-blue-600)' }}
+          >
+            ← Back
+          </button>
         </div>
       </div>
     )
@@ -191,10 +207,15 @@ export default function BotProfilePage() {
         onDismiss={() => setSparSpotlightOn(false)}
       />
 
-      {/* Back link */}
-      <Link to="/profile" className="text-sm" style={{ color: 'var(--color-blue-600)' }}>
-        ← Back to profile
-      </Link>
+      {/* Back link — context-sensitive (history pop, fallback /bots) */}
+      <button
+        type="button"
+        onClick={handleBack}
+        className="text-sm"
+        style={{ color: 'var(--color-blue-600)' }}
+      >
+        ← Back
+      </button>
 
       {/* Identity card */}
       <div

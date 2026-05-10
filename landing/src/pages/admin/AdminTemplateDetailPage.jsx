@@ -20,6 +20,7 @@ import { tournamentApi } from '../../lib/tournamentApi.js'
 import { api } from '../../lib/api.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../../components/ui/ListTable.jsx'
+import DateTimePicker, { LocalTZ } from '../../components/ui/DateTimePicker.jsx'
 
 function Spinner() {
   return <div className="w-6 h-6 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
@@ -135,22 +136,23 @@ function EditForm({ template, onCancel, onSave, busy }) {
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Next start</p>
-          <Input type="datetime-local" value={form.recurrenceStart} onChange={v => set('recurrenceStart', v)} required />
+          <DateTimePicker value={form.recurrenceStart} onChange={v => set('recurrenceStart', v)} />
+          <LocalTZ value={form.recurrenceStart} className="mt-1 block" />
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>End date (optional)</p>
-          <Input type="datetime-local" value={form.recurrenceEndDate} onChange={v => set('recurrenceEndDate', v)} />
+          <DateTimePicker value={form.recurrenceEndDate} onChange={v => set('recurrenceEndDate', v)} />
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Registration opens (optional)</p>
-          <Input type="datetime-local" value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
+          <DateTimePicker value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
           <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
             Blank → opens when scheduler spawns the occurrence.
           </p>
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Registration closes (optional)</p>
-          <Input type="datetime-local" value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
+          <DateTimePicker value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
           <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
             Blank → closes at Next start.
           </p>

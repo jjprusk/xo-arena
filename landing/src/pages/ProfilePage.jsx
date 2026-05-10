@@ -972,6 +972,7 @@ export default function ProfilePage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <Link
                             to={`/bots/${bot.id}`}
+                            state={{ from: '/profile' }}
                             className="font-semibold hover:underline"
                             style={{ color: 'var(--text-primary)' }}
                           >

@@ -892,7 +892,12 @@ function InFlightWidget({ tournaments }) {
 // ── Create / Edit modal ───────────────────────────────────────────────────────
 
 function TournamentModal({ tournament, token, onSaved, onClose }) {
-  const isEdit = !!tournament
+  const isEdit             = !!tournament
+  // Phase (c) — template-vs-occurrence awareness. If the tournament being
+  // edited is an occurrence spawned from a recurring template, surface a
+  // banner so admins know this edit is local to *this* occurrence — the
+  // template (which controls future runs) is edited elsewhere.
+  const isOccurrenceOfTpl  = !!(tournament?.templateId)
 
   async function handleSubmit(data) {
     if (isEdit) {
@@ -929,6 +934,32 @@ function TournamentModal({ tournament, token, onSaved, onClose }) {
             </svg>
           </button>
         </div>
+        {isOccurrenceOfTpl && (
+          <div
+            className="rounded-lg border p-3 text-xs"
+            style={{
+              backgroundColor: 'var(--color-amber-50)',
+              borderColor:     'var(--color-amber-300)',
+              color:           'var(--color-amber-800)',
+            }}
+            role="status"
+            data-testid="tournament-modal-occurrence-banner"
+          >
+            <p className="font-semibold mb-0.5">Editing one occurrence</p>
+            <p>
+              This tournament is a single occurrence of a recurring series. Changes here apply
+              only to this run; future occurrences are spawned from the{' '}
+              <Link
+                to={`/admin/templates/${tournament.templateId}`}
+                className="underline font-medium"
+                style={{ color: 'var(--color-amber-900)' }}
+              >
+                template
+              </Link>
+              .
+            </p>
+          </div>
+        )}
         <TournamentForm initialValues={tournament} onSubmit={handleSubmit} onCancel={onClose}
           submitLabel={isEdit ? 'Save Changes' : 'Create Tournament'} />
       </div>

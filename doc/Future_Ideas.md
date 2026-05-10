@@ -213,6 +213,8 @@ The schema refactor (Phase 3.7a — `TournamentTemplate` + `templateId`) shipped
 
 **Effort:** Medium-large (~3–5 days). Most of it is React surfaces; the backend is fine. Suggest tackling in the order above (a→i) so each piece is independently shippable.
 
+**Planned foundation sprint (~1.5–2 days):** `(h) → (i) → (c)` — date picker consistency, then `TournamentForm` reorg into Basics / Schedule / Advanced, then the template-vs-occurrence edit-mode branching. Items (a) and (f) are already shipped (the template pages + `SeedBotsPanel` exist); (b)(d)(e)(g) become parallel leaves once (c) lands.
+
 **Why now (vs deferred again):** the schema refactor shipped without the matching operator UX, so admins have been running on the worse-of-both-worlds — new schema complexity, old single-form ergonomics. The Cora-3 / Cora-1 admin flows from 2026-05-09 surfaced this concretely.
 
 ---
@@ -271,6 +273,22 @@ Trigger on any of:
 # Appendix — Resolved & Obsolete
 
 Entries that were once "future ideas" or open bugs but have since been fixed, superseded, or rendered obsolete. Kept for archaeology — they often explain *why* the current architecture looks the way it does. Newest at top.
+
+## ✅ Bot Challenge & Discovery — shipped 2026-05-10
+
+**Problem:** "play another player's bot" was the platform's stated key differentiator but had no UX path. `POST /rt/tables { kind: 'hvb', botUserId }` and `GET /api/v1/bots` already supported it server-side; the gap was discovery + a one-click action surface.
+
+**What shipped (Phases A → C):**
+
+- **Primitives** (Phase A): `useBots()` SWR hook over the public bot list, `<BotCard>`, `<ChallengeButton>` (default + icon variants, guest-friendly, posts `/rt/tables` and navigates to `/play?join=<slug>`), `<BotFilterBar>` (search, ELO range, owner toggle, game select, "show all bots" toggle).
+- **Surfaces** (Phase B): new `/bots` directory (scrollable `ListTable` of Bot/Owner/ELO/Games/Play); "Challenge" sections on `BotProfilePage` and the `/rankings` bot rows; "Challenge any bot" link on Home below "Watch another match"; About moved out of primary nav into the footer, replaced by Bots.
+- **Pickers** (Phase C): tabbed bot picker in the Create Table modal (My / Community / All); Quick Match button on the directory header — calls new `GET /api/v1/bots/quick-match` (guest-OK, ELO-window candidate picker that excludes own bots).
+- **Skill-gating:** backend `listBots()` now returns `playableGameIds` per bot, sourced strictly from `BotSkill` rows (legacy `botModelType='minimax'` bots without a skill row were false-positives — they reject at table-create with `NO_SKILL`). The directory filters to playable bots by default; a "Show all bots" toggle reveals the rest with a greyed-out Challenge button and a "No skill for XO" hint.
+- **Context-aware navigation:** every linker to `/bots/:id` (directory rows, Rankings, ProfilePage's "My bots") passes `state.from`; `BotProfilePage`'s back link prefers state with a `/bots` fallback. `ChallengeButton`/`QuickMatchButton` thread the same state into `/play`; `PlayPage.leaveHref` honors it so "Leave Table" returns the user to the directory they came from instead of a hardcoded `/tables`.
+- **Guest path:** every challenge surface works for unauthenticated visitors; the existing post-game signup CTA fires after the first finished game, not as a gate.
+- **Tests:** unit coverage on each primitive + page + the quick-match route; new `e2e/tests/bot-challenge-flow.spec.js` covers the guest path through directory, profile, Quick Match, and Rankings.
+
+**Original plan doc:** `Bot_Challenge_Plan.md` (deleted on completion — this entry is the digest).
 
 ## ✅ Bot best-of-N series cap mis-formula — fixed 2026-05-09
 
