@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-4.11",
+    "date": "2026-05-10",
+    "description": "Bot directory polish + tournament admin foundation (h/i/c)"
+  },
+  {
     "version": "1.4.0-alpha-4.10",
     "date": "2026-05-10",
     "description": "Bot Challenge & Discovery + multi-machine fixes"
