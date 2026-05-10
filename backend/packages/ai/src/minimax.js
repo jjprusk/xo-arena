@@ -16,6 +16,15 @@ function randomChoice(arr) {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
+/** Fisher–Yates in-place shuffle. Returns the same array for chaining. */
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
 /**
  * Transposition table — persists across calls.
  * Key: 9-char board string + 1-char current player ('X' or 'O').
@@ -58,13 +67,24 @@ function negamax(board, currentPlayer) {
 
 /**
  * Master: best move via Negamax + transposition table.
- * Immediate wins and blocks are checked first for performance and determinism.
+ * Immediate wins and blocks are checked first for performance.
+ *
+ * Cells are visited in a shuffled order so that among moves tied for the
+ * best score (e.g. all four corners + the center on an empty board, all
+ * scoring 0 = "draw vs optimal play"), the first-seen one is uniformly
+ * random. Optimality is preserved because we only ever pick from moves
+ * the engine considers equally best — never an inferior one.
+ *
+ * Without this shuffle, master-vs-master games always replay the exact
+ * same opening from cell 0, then identical mid-game positions resolve to
+ * identical move sequences — every series ended with the same all-draw
+ * games. Shuffling restores variety with zero loss in correctness.
  */
 function masterMove(board, player) {
-  const empty = getEmptyCells(board)
+  const empty = shuffle(getEmptyCells(board))
   const opp = opponent(player)
 
-  // Take immediate win
+  // Take immediate win — random tie-break across all winning moves.
   for (const i of empty) {
     board[i] = player
     const wins = getWinner(board) === player
@@ -72,7 +92,7 @@ function masterMove(board, player) {
     if (wins) return i
   }
 
-  // Block immediate opponent win
+  // Block immediate opponent win — random tie-break.
   for (const i of empty) {
     board[i] = opp
     const oppWins = getWinner(board) === opp
@@ -80,20 +100,34 @@ function masterMove(board, player) {
     if (oppWins) return i
   }
 
+  // Score every move and collect everything tied at the best score. All
+  // 9 cells from an empty board score 0 (TTT is a forced draw under
+  // optimal play, so every opening "draws" formally), but tactically
+  // center + corners create more fork opportunities against suboptimal
+  // opponents than edges do.
   let bestScore = -Infinity
-  let bestMove = empty[0]
-
+  const bestMoves = []
   for (const i of empty) {
     board[i] = player
     const score = -negamax(board, opp)
     board[i] = null
     if (score > bestScore) {
       bestScore = score
-      bestMove = i
-      if (bestScore === 1) break  // found a winning move, stop searching
+      bestMoves.length = 0
+      bestMoves.push(i)
+    } else if (score === bestScore) {
+      bestMoves.push(i)
     }
   }
-  return bestMove
+
+  // Tactical preference among score-tied moves: center + corners over
+  // edges. Within that pool, uniform random. This keeps master strictly
+  // never-losing (we only ever pick from moves the engine considers
+  // equally best) while making it a stronger threat against suboptimal
+  // play AND giving spectators variety across games.
+  const tactical = bestMoves.filter(i => i === 4 || i === 0 || i === 2 || i === 6 || i === 8)
+  const pool = tactical.length > 0 ? tactical : bestMoves
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 /**
