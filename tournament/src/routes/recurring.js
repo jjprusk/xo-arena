@@ -79,22 +79,26 @@ router.delete('/:templateId/register', requireAuth, async (req, res, next) => {
 })
 
 // GET /api/recurring/:templateId/registrations
+// Admin lookup. ?includeOptedOut=true returns users who have opted out so
+// admins can audit the full subscriber history; default hides them so the
+// UI defaults match the standing-subscription semantics used elsewhere.
 router.get('/:templateId/registrations', requireTournamentAdmin, async (req, res, next) => {
   try {
     const { templateId } = req.params
+    const includeOptedOut = req.query.includeOptedOut === 'true' || req.query.includeOptedOut === '1'
 
     const registrations = await db.recurringTournamentRegistration.findMany({
       where: {
         templateId,
-        optedOutAt: null,
+        ...(includeOptedOut ? {} : { optedOutAt: null }),
       },
+      orderBy: [{ optedOutAt: 'asc' }, { createdAt: 'asc' }],
     })
 
-    // Fetch user info for each registration
     const userIds = registrations.map(r => r.userId)
     const users = await db.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, displayName: true, avatarUrl: true },
+      select: { id: true, username: true, displayName: true, avatarUrl: true, isBot: true },
     })
 
     const userMap = Object.fromEntries(users.map(u => [u.id, u]))
@@ -105,6 +109,64 @@ router.get('/:templateId/registrations', requireTournamentAdmin, async (req, res
     }))
 
     res.json({ registrations: enriched })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/recurring/:templateId/registrations
+// Admin enrol — opt a user *in* (or undo a prior opt-out). Body accepts
+// either { userId } or { username }; one is required. Idempotent: if the
+// user is already registered (and not opted out), no-op returns the
+// existing row.
+router.post('/:templateId/registrations', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const { templateId } = req.params
+    const { userId: bodyUserId, username } = req.body ?? {}
+
+    let userId = typeof bodyUserId === 'string' && bodyUserId.trim() ? bodyUserId.trim() : null
+    if (!userId && typeof username === 'string' && username.trim()) {
+      const u = await db.user.findFirst({
+        where:  { username: username.trim() },
+        select: { id: true },
+      })
+      if (!u) return res.status(404).json({ error: `No user with username "${username.trim()}"` })
+      userId = u.id
+    }
+    if (!userId) return res.status(400).json({ error: 'userId or username is required' })
+
+    // Verify the template exists so we don't silently create orphan rows.
+    const template = await db.tournamentTemplate.findUnique({ where: { id: templateId }, select: { id: true } })
+    if (!template) return res.status(404).json({ error: 'Template not found' })
+
+    const registration = await db.recurringTournamentRegistration.upsert({
+      where:  { templateId_userId: { templateId, userId } },
+      create: { templateId, userId },
+      update: { optedOutAt: null, missedCount: 0 },
+    })
+    res.status(201).json({ registration })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// DELETE /api/recurring/:templateId/registrations/:userId
+// Admin opt-out — sets optedOutAt rather than hard-deleting so missed-count
+// history survives. Idempotent.
+router.delete('/:templateId/registrations/:userId', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const { templateId, userId } = req.params
+    const existing = await db.recurringTournamentRegistration.findUnique({
+      where: { templateId_userId: { templateId, userId } },
+    })
+    if (!existing) return res.status(404).json({ error: 'Registration not found' })
+    if (existing.optedOutAt) return res.status(204).send()
+
+    await db.recurringTournamentRegistration.update({
+      where: { templateId_userId: { templateId, userId } },
+      data:  { optedOutAt: new Date() },
+    })
+    res.status(204).send()
   } catch (e) {
     next(e)
   }

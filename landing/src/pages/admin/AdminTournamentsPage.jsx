@@ -659,68 +659,6 @@ function ClassificationConfigPanel({ token }) {
   )
 }
 
-// ── Recurring registrations panel ─────────────────────────────────────────────
-
-function RecurringRegistrations({ token }) {
-  const [templateId, setTemplateId]   = useState('')
-  const [registrations, setRegistrations] = useState(null)
-  const [loadErr, setLoadErr]         = useState(null)
-  const [loading, setLoading]         = useState(false)
-
-  async function handleLookup() {
-    if (!templateId.trim()) return
-    setLoading(true); setLoadErr(null); setRegistrations(null)
-    try {
-      const d = await tournamentApi.listRecurringRegistrations(templateId.trim(), token)
-      setRegistrations(Array.isArray(d) ? d : (d.registrations ?? d.data ?? []))
-    } catch (e) { setLoadErr(e.message || 'Failed to load registrations.') }
-    finally { setLoading(false) }
-  }
-
-  return (
-    <div className="rounded-xl border p-4 space-y-3" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-card)' }}>
-      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recurring Registrations</p>
-      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end">
-        <div className="flex flex-col gap-1 flex-1">
-          <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Look up by Template ID</label>
-          <input type="text" placeholder="Recurring tournament template ID…" value={templateId}
-            onChange={e => setTemplateId(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLookup()}
-            className="px-2 py-1.5 rounded-lg border text-sm"
-            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-        </div>
-        <button onClick={handleLookup} disabled={loading || !templateId.trim()}
-          className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40"
-          style={{ background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-700))' }}>
-          {loading ? 'Loading…' : 'Look Up'}
-        </button>
-      </div>
-      {loadErr && <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{loadErr}</p>}
-      {registrations !== null && (
-        registrations.length === 0 ? (
-          <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>No standing registrations for this template.</p>
-        ) : (
-          <ListTable maxHeight="40vh">
-            <thead><tr>
-              <ListTh>Template ID</ListTh><ListTh>User ID</ListTh>
-              <ListTh align="right">Missed</ListTh><ListTh className="hidden sm:table-cell">Opted Out At</ListTh>
-            </tr></thead>
-            <tbody>
-              {registrations.map((r, i) => (
-                <ListTr key={r.id ?? i} last={i === registrations.length - 1}>
-                  <ListTd><span className="font-mono text-xs" title={r.templateId}>{r.templateId ? r.templateId.slice(0, 12) + (r.templateId.length > 12 ? '\u2026' : '') : '—'}</span></ListTd>
-                  <ListTd><span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }} title={r.userId}>{r.userId ? r.userId.slice(0, 12) + (r.userId.length > 12 ? '\u2026' : '') : '—'}</span></ListTd>
-                  <ListTd align="right"><span className="text-xs tabular-nums" style={{ color: (r.missedCount ?? 0) > 0 ? 'var(--color-amber-700)' : 'var(--text-muted)' }}>{r.missedCount ?? 0}</span></ListTd>
-                  <ListTd className="hidden sm:table-cell"><span className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.optedOutAt ? new Date(r.optedOutAt).toLocaleDateString() : '—'}</span></ListTd>
-                </ListTr>
-              ))}
-            </tbody>
-          </ListTable>
-        )
-      )}
-    </div>
-  )
-}
-
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 const STATUS_STYLES = {
@@ -891,13 +829,49 @@ function InFlightWidget({ tournaments }) {
 
 // ── Create / Edit modal ───────────────────────────────────────────────────────
 
-function TournamentModal({ tournament, token, onSaved, onClose }) {
-  const isEdit             = !!tournament
+/**
+ * Strip a tournament row down to a clone-friendly prefill: copy config but
+ * drop identity (id, status, dates, templateId) so the form opens in create
+ * mode with sensible defaults the admin can adjust.
+ */
+function buildClonePrefill(t) {
+  return {
+    name:                     `${t.name ?? ''} (Copy)`.trim(),
+    description:              t.description ?? '',
+    game:                     t.game,
+    mode:                     t.mode,
+    format:                   t.format,
+    bracketType:              t.bracketType,
+    bestOfN:                  t.bestOfN,
+    minParticipants:          t.minParticipants,
+    maxParticipants:          t.maxParticipants ?? null,
+    startMode:                t.startMode,
+    botMinGamesPlayed:        t.botMinGamesPlayed ?? null,
+    allowNonCompetitiveBots:  t.allowNonCompetitiveBots,
+    allowSpectators:          t.allowSpectators,
+    paceMs:                   t.paceMs ?? null,
+    noticePeriodMinutes:      t.noticePeriodMinutes ?? null,
+    durationMinutes:          t.durationMinutes ?? null,
+    isTest:                   t.isTest,
+    // Clear identity / scheduling — admin chooses fresh dates and the
+    // backend assigns a new id. isRecurring / templateId intentionally
+    // omitted (cloning produces a one-off; turn into a recurring template
+    // via the templates page instead).
+    startTime:           null,
+    registrationOpenAt:  null,
+    registrationCloseAt: null,
+  }
+}
+
+function TournamentModal({ tournament, mode = 'edit', token, onSaved, onClose }) {
+  const isEdit             = !!tournament && mode === 'edit'
+  const isClone            = mode === 'clone'
   // Phase (c) — template-vs-occurrence awareness. If the tournament being
   // edited is an occurrence spawned from a recurring template, surface a
   // banner so admins know this edit is local to *this* occurrence — the
-  // template (which controls future runs) is edited elsewhere.
-  const isOccurrenceOfTpl  = !!(tournament?.templateId)
+  // template (which controls future runs) is edited elsewhere. Clone path
+  // skips the banner since cloning produces a fresh independent tournament.
+  const isOccurrenceOfTpl  = !isClone && !!(tournament?.templateId)
 
   async function handleSubmit(data) {
     if (isEdit) {
@@ -925,7 +899,7 @@ function TournamentModal({ tournament, token, onSaved, onClose }) {
         style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}>
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
-            {isEdit ? 'Edit Tournament' : 'Create Tournament'}
+            {isEdit ? 'Edit Tournament' : isClone ? 'Clone Tournament' : 'Create Tournament'}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--bg-surface-hover)]"
             style={{ color: 'var(--text-muted)' }} aria-label="Close">
@@ -961,7 +935,7 @@ function TournamentModal({ tournament, token, onSaved, onClose }) {
           </div>
         )}
         <TournamentForm initialValues={tournament} onSubmit={handleSubmit} onCancel={onClose}
-          submitLabel={isEdit ? 'Save Changes' : 'Create Tournament'} />
+          submitLabel={isEdit ? 'Save Changes' : isClone ? 'Create Clone' : 'Create Tournament'} />
       </div>
     </div>
   )
@@ -1430,7 +1404,8 @@ export default function AdminTournamentsPage() {
                           // ?watch=1 makes the detail page auto-open the
                           // spectate modal on the first IN_PROGRESS match.
                           t.status === 'IN_PROGRESS' && { label: '👁 Watch live', href: `/tournaments/${t.id}?watch=1`, state: { from: '/admin/tournaments' } },
-                          canEdit                && { label: 'Edit',    onSelect: () => setModal({ tournament: t }) },
+                          canEdit                && { label: 'Edit',    onSelect: () => setModal({ tournament: t, mode: 'edit' }) },
+                          { label: 'Clone',                onSelect: () => setModal({ tournament: buildClonePrefill(t), mode: 'clone' }) },
                           canPublish             && { label: 'Publish', onSelect: () => performAction('publish', t, 'Publish') },
                           canStart               && { label: 'Start',   onSelect: () => performAction('start',   t, 'Start') },
                           canCancel              && { label: 'Cancel',  onSelect: () => performAction('cancel',  t, 'Cancel'), tone: 'danger' },
@@ -1473,15 +1448,10 @@ export default function AdminTournamentsPage() {
         <ClassificationConfigPanel token={token} />
       </div>
 
-      {/* Recurring */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Recurring Registrations</h2>
-        <RecurringRegistrations token={token} />
-      </div>
-
       {modal && (
         <TournamentModal
           tournament={modal === 'create' ? null : modal.tournament}
+          mode={modal === 'create' ? 'create' : (modal.mode ?? 'edit')}
           token={token}
           onSaved={() => { setModal(null); load(page, statusFilters, showTest) }}
           onClose={() => setModal(null)}

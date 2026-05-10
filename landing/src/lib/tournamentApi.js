@@ -77,7 +77,12 @@ export const tournamentApi = {
 
   recurringRegister:            (templateId, token) => request('POST',   `/api/recurring/${templateId}/register`, {}, token),
   recurringWithdraw:            (templateId, token) => request('DELETE', `/api/recurring/${templateId}/register`, undefined, token),
-  listRecurringRegistrations:   (templateId, token) => request('GET',    `/api/recurring/${templateId}/registrations`, undefined, token),
+  listRecurringRegistrations:   (templateId, token, opts = {}) => {
+    const qs = opts.includeOptedOut ? '?includeOptedOut=true' : ''
+    return request('GET', `/api/recurring/${templateId}/registrations${qs}`, undefined, token)
+  },
+  adminAddRecurringRegistration:    (templateId, body, token) => request('POST',   `/api/recurring/${templateId}/registrations`, body, token),
+  adminRemoveRecurringRegistration: (templateId, userId, token) => request('DELETE', `/api/recurring/${templateId}/registrations/${userId}`, undefined, token),
   listMyRecurring:              (token)             => request('GET',    '/api/recurring/my', undefined, token),
   triggerRecurringCheck:        (token)             => request('POST',   '/api/tournaments/admin/scheduler/check-recurring', {}, token),
 
@@ -89,6 +94,8 @@ export const tournamentApi = {
   deleteTemplate:   (id, token)           => request('DELETE', `/api/tournaments/admin/templates/${id}`, undefined, token),
   pauseTemplate:    (id, token)           => request('POST',   `/api/tournaments/admin/templates/${id}/pause`, {}, token),
   unpauseTemplate:  (id, token)           => request('POST',   `/api/tournaments/admin/templates/${id}/unpause`, {}, token),
+  stopTemplate:     (id, token)           => request('POST',   `/api/tournaments/admin/templates/${id}/stop`, {}, token),
+  cloneTemplate:    (id, token, body={})  => request('POST',   `/api/tournaments/admin/templates/${id}/clone`, body, token),
   // Two modes:
   //   (A) addTemplateSeed(id, { userId }, token)                         — seed an existing system bot
   //   (B) addTemplateSeed(id, { personaBotId, displayName }, token)      — clone persona + seed
