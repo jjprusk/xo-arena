@@ -21,6 +21,12 @@ const OWNER_TABS = [
   { key: 'all',       label: 'All bots'  },
 ]
 
+// Game catalog for the filter dropdown. Only xo ships today; the constant
+// is here so the picker is in place when the second game lands.
+const GAMES = [
+  { id: 'xo', label: 'Tic-tac-toe' },
+]
+
 export default function BotFilterBar({
   value = {},
   onChange,
@@ -38,6 +44,8 @@ export default function BotFilterBar({
   const activeOwner = value.owner ?? 'all'
   const eloMin = value.eloMin ?? ''
   const eloMax = value.eloMax ?? ''
+  const gameId = value.gameId ?? GAMES[0].id
+  const showAll = !!value.showAll
 
   return (
     <div
@@ -67,6 +75,23 @@ export default function BotFilterBar({
       )}
 
       <div className="flex flex-wrap gap-2 items-end">
+        <label className="flex flex-col gap-1 min-w-[8rem]">
+          <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Game
+          </span>
+          <select
+            value={gameId}
+            onChange={e => update({ gameId: e.target.value })}
+            className="px-2 py-2 rounded-lg border text-sm"
+            style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            data-testid="bot-filter-game"
+          >
+            {GAMES.map(g => (
+              <option key={g.id} value={g.id}>{g.label}</option>
+            ))}
+          </select>
+        </label>
+
         <label className="flex flex-col gap-1 flex-1 min-w-[12rem]">
           <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
             Search by name
@@ -129,6 +154,16 @@ export default function BotFilterBar({
           Reset
         </button>
       </div>
+
+      <label className="inline-flex items-center gap-2 text-xs select-none" style={{ color: 'var(--text-secondary)' }}>
+        <input
+          type="checkbox"
+          checked={showAll}
+          onChange={e => update({ showAll: e.target.checked })}
+          data-testid="bot-filter-show-all"
+        />
+        Show all bots (including those without a skill for the selected game)
+      </label>
     </div>
   )
 }

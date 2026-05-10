@@ -6,7 +6,6 @@ import { prefetchCommunityBot } from '../lib/communityBotCache.js'
 import DemoArena from '../components/home/DemoArena.jsx'
 import SignInModal from '../components/ui/SignInModal.jsx'
 import { readGuestJourney } from '../lib/guestMode.js'
-import QuickMatchButton from '../components/bots/QuickMatchButton.jsx'
 
 /**
  * HomePage — Phase 0 redesign (Intelligent Guide v1, §3.5.1).
@@ -196,12 +195,6 @@ export default function HomePage() {
               </button>
             )}
           </div>
-          {/* Phase C.2 — Quick Match. Drops the user into a one-click HvB
-              game against a randomly-picked active bot near their ELO.
-              Sits between the action CTAs and the demo-refresh button so
-              it's the next-most-prominent action after "Play against a
-              bot" without competing for the primary spot. */}
-          <QuickMatchButton />
           <button
             onClick={() => setDemoKey(k => k + 1)}
             className="btn btn-secondary btn-sm w-full"
@@ -210,6 +203,13 @@ export default function HomePage() {
           >
             ↻ Watch another match
           </button>
+          <Link
+            to="/bots"
+            className="btn btn-secondary btn-sm w-full"
+            aria-label="Challenge any bot"
+          >
+            Challenge any bot
+          </Link>
         </div>
 
         {/* Sub-line beneath the CTAs reinforcing the unique value prop */}

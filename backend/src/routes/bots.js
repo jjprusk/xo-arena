@@ -43,19 +43,13 @@ router.get('/', async (req, res, next) => {
 
     // Phase 3.8.2.6 — gameId filter for community bot pickers. Bypasses the
     // public cache because the filter dimension would multiply cache entries
-    // for what is a relatively rare query path.
+    // for what is a relatively rare query path. listBots() already attaches
+    // playableGameIds (BotSkill rows + 'xo' for minimax bots), so we can
+    // just filter on it without a second DB roundtrip.
     if (gameId && typeof gameId === 'string') {
-      const skillRows = await db.botSkill.findMany({
-        where:    { gameId, botId: { not: null } },
-        select:   { botId: true },
-        distinct: ['botId'],
-      })
-      const botIds = skillRows.map((s) => s.botId).filter(Boolean)
-      if (botIds.length === 0) return res.json({ bots: [] })
-
       const all = await listBots({ includeInactive: includeInactive === 'true' })
-      const idSet = new Set(botIds)
-      return res.json({ bots: all.filter((b) => idSet.has(b.id)) })
+      const playable = all.filter((b) => Array.isArray(b.playableGameIds) && b.playableGameIds.includes(gameId))
+      return res.json({ bots: playable })
     }
 
     // Public active bot list — cacheable.

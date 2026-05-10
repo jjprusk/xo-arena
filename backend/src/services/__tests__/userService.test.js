@@ -388,9 +388,12 @@ describe('listBots — includeSkills', () => {
     db.botSkill.findMany.mockResolvedValue([])
   })
 
-  it('default (no includeSkills) returns the legacy shape — no skills key, no botSkill query', async () => {
+  it('default (no includeSkills) returns the legacy shape plus playableGameIds via one batched botSkill query', async () => {
     db.user.findMany.mockResolvedValue([
       { id: 'b1', displayName: 'A', botModelType: 'ml', gameElo: [{ rating: 1300 }] },
+    ])
+    db.botSkill.findMany.mockResolvedValue([
+      { id: 's1', botId: 'b1', gameId: 'xo', algorithm: 'qlearning' },
     ])
 
     const result = await listBots({ ownerId: 'owner_1' })
@@ -398,8 +401,12 @@ describe('listBots — includeSkills', () => {
     expect(result).toHaveLength(1)
     expect(result[0]).not.toHaveProperty('skills')
     expect(result[0].eloRating).toBe(1300)
-    // Hard guard: the skills batch query must not fire when not requested.
-    expect(db.botSkill.findMany).not.toHaveBeenCalled()
+    expect(result[0].playableGameIds).toEqual(['xo'])
+    // Even without includeSkills we issue a single botSkill query to
+    // build playableGameIds — but only one, never per-bot.
+    expect(db.botSkill.findMany).toHaveBeenCalledTimes(1)
+    // ELO fan-out is the includeSkills path only.
+    expect(db.gameElo.findMany).not.toHaveBeenCalled()
   })
 
   it('includeSkills attaches skills + per-skill ELO via two batched queries (no N+1)', async () => {

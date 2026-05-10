@@ -192,6 +192,7 @@ export default function RankingsPage() {
                       {entry.user.isBot ? (
                         <Link
                           to={`/bots/${entry.user.id}`}
+                          state={{ from: '/rankings' }}
                           className="flex items-center gap-1 font-medium truncate max-w-[180px] hover:underline"
                           style={{ color: 'var(--text-primary)' }}
                         >

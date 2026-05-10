@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { lazy, useEffect, useState } from 'react'
-import { useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
+import { useLocation, useSearchParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
 import { useGameSDK } from '../lib/useGameSDK.js'
 import { getCommunityBot } from '../lib/communityBotCache.js'
@@ -38,6 +38,7 @@ function Spinner() {
 // Exported so TableDetailPage can render a table-routed game without duplicating this logic.
 export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSession, botConfig, spectatingCount = 0, spectate = false }) {
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Load game meta asynchronously — see comment at top of file. While null we
   // use 'standard' width and no theme tokens. By the time phase === 'playing'
@@ -80,11 +81,15 @@ export function GameView({ joinSlug, tournamentMatchId, tournamentId, authSessio
   // funnel is supposed to lead back to the landing page. Once they've cleared
   // Hook (Curriculum / Specialize), /tables is the right destination because
   // they're navigating around an arena, not being onboarded.
+  // Linkers (ChallengeButton, QuickMatchButton) pass `state.from` when they
+  // navigate into /play; if present that wins, so a user who started from
+  // /bots returns to /bots, not /tables.
   const completedSteps = useGuideStore(s => s.journeyProgress?.completedSteps ?? [])
   const inHookPhase = deriveCurrentPhase(completedSteps) === 'hook'
+  const explicitFrom = typeof location.state?.from === 'string' ? location.state.from : null
   const leaveHref = tournamentId
     ? `/tournaments/${tournamentId}`
-    : (inHookPhase ? '/' : '/tables')
+    : (explicitFrom ?? (inHookPhase ? '/' : '/tables'))
 
   // Register leave-table callback so sdk.leaveTable() navigates away
   useEffect(() => {

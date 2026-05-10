@@ -1,6 +1,7 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState } from 'react'
 import { GAMES } from '../../lib/gameRegistry.js'
+import DateTimePicker, { DatePicker, LocalTZ } from '../ui/DateTimePicker.jsx'
 
 const FIELD_STYLE = {
   backgroundColor: 'var(--bg-base)',
@@ -25,30 +26,33 @@ const INPUT_CLASS = 'w-full px-3 py-2 rounded-lg border text-sm focus:outline-no
 const SELECT_CLASS = INPUT_CLASS
 
 /**
- * Separate date + time inputs combined into YYYY-MM-DDTHH:mm.
- * Avoids Safari's broken datetime-local behavior.
+ * Foundation-sprint section wrapper (i). Each top-level group of the
+ * form gets one — visually distinct, screen-reader-labelled, and easy
+ * to hide/show in future when (c) wants to render the form in
+ * template-edit mode (it can choose to show only the Schedule section,
+ * for example).
  */
-function DateTimePicker({ value, onChange }) {
-  const datePart = value ? value.slice(0, 10) : ''
-  const timePart = value ? value.slice(11, 16) : ''
-  function handleDate(e) {
-    const d = e.target.value
-    if (!d) { onChange(''); return }
-    onChange(`${d}T${timePart || '00:00'}`)
-  }
-  function handleTime(e) {
-    const t = e.target.value
-    if (datePart) onChange(`${datePart}T${t || '00:00'}`)
-  }
+function FormSection({ title, hint, children, id }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      <input type="date" value={datePart} onChange={handleDate}
-        className="flex-1 min-w-[9rem] px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors"
-        style={FIELD_STYLE} />
-      <input type="time" value={timePart} onChange={handleTime}
-        className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-300)] transition-colors w-36 shrink-0"
-        style={FIELD_STYLE} />
-    </div>
+    <section
+      aria-labelledby={id}
+      className="rounded-xl border p-4 space-y-4"
+      style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-base)' }}
+    >
+      <div>
+        <h3
+          id={id}
+          className="text-xs font-bold uppercase tracking-widest"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {title}
+        </h3>
+        {hint && (
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{hint}</p>
+        )}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -176,239 +180,266 @@ export default function TournamentForm({ initialValues, onSubmit, onCancel, subm
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-      <Field label="Name" required>
-        <input type="text" value={form.name} onChange={e => set('name', e.target.value)}
-          placeholder="Summer Championship 2026" className={INPUT_CLASS} style={FIELD_STYLE} maxLength={120} />
-        {errors.name && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.name}</span>}
-      </Field>
-
-      <Field label="Description">
-        <textarea value={form.description} onChange={e => set('description', e.target.value)}
-          placeholder="Optional description…" rows={3} className={INPUT_CLASS + ' resize-y'} style={FIELD_STYLE} maxLength={1000} />
-      </Field>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Game" required>
-          <select value={form.game} onChange={e => set('game', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-          </select>
+      {/* ── Basics ─────────────────────────────────────────────────── */}
+      <FormSection id="form-basics" title="Basics" hint="Name, game, and core format.">
+        <Field label="Name" required>
+          <input type="text" value={form.name} onChange={e => set('name', e.target.value)}
+            placeholder="Summer Championship 2026" className={INPUT_CLASS} style={FIELD_STYLE} maxLength={120} />
+          {errors.name && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.name}</span>}
         </Field>
-        <Field label="Mode" required>
-          <select value={form.mode} onChange={e => set('mode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            <option value="HVH">HvH (Human vs Human)</option>
-            <option value="BOT_VS_BOT">Bot vs Bot</option>
-            <option value="MIXED">Mixed</option>
-          </select>
-        </Field>
-        <Field label="Format" required>
-          <select value={form.format} onChange={e => set('format', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            <option value="PLANNED">Planned</option>
-            <option value="OPEN">Open</option>
-            <option value="FLASH">Flash</option>
-          </select>
-        </Field>
-        <Field label="Bracket Type" required>
-          <select value={form.bracketType} onChange={e => set('bracketType', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            <option value="SINGLE_ELIM">Single Elimination</option>
-            <option value="ROUND_ROBIN">Round Robin</option>
-          </select>
-        </Field>
-      </div>
 
-      {form.format === 'FLASH' && (
-        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Flash Tournament Settings</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Notice Period (minutes)">
-              <input type="number" min="0" value={form.noticePeriodMinutes} onChange={e => set('noticePeriodMinutes', e.target.value)}
-                placeholder="e.g. 15" className={INPUT_CLASS} style={FIELD_STYLE} />
-            </Field>
-            <Field label="Duration (minutes)">
-              <input type="number" min="1" value={form.durationMinutes} onChange={e => set('durationMinutes', e.target.value)}
-                placeholder="e.g. 60" className={INPUT_CLASS} style={FIELD_STYLE} />
-            </Field>
-          </div>
-        </div>
-      )}
+        <Field label="Description">
+          <textarea value={form.description} onChange={e => set('description', e.target.value)}
+            placeholder="Optional description…" rows={3} className={INPUT_CLASS + ' resize-y'} style={FIELD_STYLE} maxLength={1000} />
+        </Field>
 
-      {form.mode === 'BOT_VS_BOT' && (
-        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Bot Settings</p>
-          <Field label="Min Games Played">
-            <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
-              value={form.botMinGamesPlayed} onChange={e => setForm(f => ({ ...f, botMinGamesPlayed: e.target.value }))}
-              placeholder="System default" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Game" required>
+            <select value={form.game} onChange={e => set('game', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+              {GAMES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </select>
           </Field>
-          <Field label="Pace (ms between dispatches)">
-            <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
-              value={form.paceMs} onChange={e => setForm(f => ({ ...f, paceMs: e.target.value }))}
-              placeholder="System default" />
+          <Field label="Mode" required>
+            <select value={form.mode} onChange={e => set('mode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+              <option value="HVH">HvH (Human vs Human)</option>
+              <option value="BOT_VS_BOT">Bot vs Bot</option>
+              <option value="MIXED">Mixed</option>
+            </select>
           </Field>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={form.allowNonCompetitiveBots}
-              onChange={e => setForm(f => ({ ...f, allowNonCompetitiveBots: e.target.checked }))} className="w-4 h-4 rounded" />
-            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Allow non-competitive bots</span>
-          </label>
+          <Field label="Format" required>
+            <select value={form.format} onChange={e => set('format', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+              <option value="PLANNED">Planned</option>
+              <option value="OPEN">Open</option>
+              <option value="FLASH">Flash</option>
+            </select>
+          </Field>
+          <Field label="Bracket Type" required>
+            <select value={form.bracketType} onChange={e => set('bracketType', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+              <option value="SINGLE_ELIM">Single Elimination</option>
+              <option value="ROUND_ROBIN">Round Robin</option>
+            </select>
+          </Field>
         </div>
-      )}
+      </FormSection>
 
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input type="checkbox" checked={form.isRecurring} onChange={e => set('isRecurring', e.target.checked)}
-          className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
-        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Recurring Tournament</span>
-      </label>
+      {/* ── Schedule ───────────────────────────────────────────────── */}
+      <FormSection
+        id="form-schedule"
+        title="Schedule"
+        hint="When this tournament runs — and, if recurring, how often."
+      >
+        <Field label="Start Mode" hint="Controls how the tournament begins after registration closes">
+          <select value={form.startMode} onChange={e => set('startMode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+            <option value="AUTO">Auto — starts automatically when registration closes</option>
+            <option value="SCHEDULED">Scheduled — starts at a specific date and time</option>
+            <option value="MANUAL">Manual — admin clicks Start</option>
+          </select>
+        </Field>
 
-      {form.isRecurring && (
-        <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Recurring Settings</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Recurrence Interval" required>
-              <select value={form.recurrenceInterval} onChange={e => set('recurrenceInterval', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-                <option value="DAILY">Daily</option>
-                <option value="WEEKLY">Weekly</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
-            </Field>
-            <Field label="Recurrence End Date" hint="Recur indefinitely unless an end date is set">
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox"
-                    checked={form.recurrenceEndDate === ''}
-                    onChange={e => set('recurrenceEndDate', e.target.checked ? '' : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))}
-                    className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>No end date — recur forever</span>
-                </label>
-                {form.recurrenceEndDate !== '' && (
-                  <div className="flex items-center gap-2">
-                    <input type="date" value={form.recurrenceEndDate} onChange={e => set('recurrenceEndDate', e.target.value)}
-                      className={INPUT_CLASS} style={FIELD_STYLE} />
-                    <button type="button" onClick={() => set('recurrenceEndDate', '')}
-                      className="text-xs px-2 py-1 rounded-md transition-colors hover:bg-[var(--bg-surface-hover)]"
-                      style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
-                      Clear
-                    </button>
-                  </div>
-                )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Start Time" hint={
+            form.startMode === 'SCHEDULED' ? 'Required — tournament starts at this time'
+            : form.startMode === 'AUTO'    ? 'Optional — anchor time for each occurrence (e.g. 3pm daily)'
+            :                                'Optional'
+          } as="div">
+            {form.startTime ? (
+              <div className="flex flex-col gap-1">
+                <DateTimePicker value={form.startTime} onChange={v => set('startTime', v)} />
+                <LocalTZ value={form.startTime} />
+                <button type="button" onClick={() => set('startTime', '')}
+                  className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
               </div>
-            </Field>
-          </div>
-          <Field label="Auto-opt-out after missed occurrences" hint="0 = never">
-            <input type="number" min="0" value={form.autoOptOutAfterMissed}
-              onChange={e => set('autoOptOutAfterMissed', e.target.value)} placeholder="0" className={INPUT_CLASS} style={FIELD_STYLE} />
+            ) : (
+              <button type="button" onClick={() => set('startTime', toLocalDatetimeValue(new Date()))}
+                className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+                — not set —
+              </button>
+            )}
+            {errors.startTime && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.startTime}</span>}
           </Field>
+          <Field label="Registration Opens At" hint="Optional" as="div">
+            {form.registrationOpenAt ? (
+              <div className="flex flex-col gap-1">
+                <DateTimePicker value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
+                <LocalTZ value={form.registrationOpenAt} />
+                <button type="button" onClick={() => set('registrationOpenAt', '')}
+                  className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => set('registrationOpenAt', toLocalDatetimeValue(new Date()))}
+                className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+                — not set —
+              </button>
+            )}
+          </Field>
+          <Field label="Registration Closes At" hint="Optional — defaults to start time" as="div">
+            {form.registrationCloseAt ? (
+              <div className="flex flex-col gap-1">
+                <DateTimePicker value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
+                <LocalTZ value={form.registrationCloseAt} />
+                <button type="button" onClick={() => set('registrationCloseAt', '')}
+                  className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => {
+                // Default to 1 hour after Opens At (if set) to avoid AM/PM trap
+                const base = form.registrationOpenAt ? new Date(form.registrationOpenAt) : new Date()
+                base.setHours(base.getHours() + 1)
+                set('registrationCloseAt', toLocalDatetimeValue(base))
+              }}
+                className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
+                — not set —
+              </button>
+            )}
+            {errors.registrationCloseAt && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.registrationCloseAt}</span>}
+          </Field>
+        </div>
+
+        {/* Recurrence — first-class subsection under Schedule (i). */}
+        <div
+          className="rounded-lg border p-3 space-y-3"
+          style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+        >
           <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={form.recurrencePaused} onChange={e => set('recurrencePaused', e.target.checked)}
-              className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Pause recurrence
-              <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                — stop generating new occurrences without cancelling the template. Resume by unchecking.
-              </span>
+            <input type="checkbox" checked={form.isRecurring} onChange={e => set('isRecurring', e.target.checked)}
+              className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recurring tournament</span>
+            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              — runs on a schedule, spawns a new occurrence each interval
             </span>
           </label>
+
+          {form.isRecurring && (
+            <div className="space-y-3 pl-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Recurrence Interval" required>
+                  <select value={form.recurrenceInterval} onChange={e => set('recurrenceInterval', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+                    <option value="DAILY">Daily</option>
+                    <option value="WEEKLY">Weekly</option>
+                    <option value="MONTHLY">Monthly</option>
+                  </select>
+                </Field>
+                <Field label="Recurrence End Date" hint="Recur indefinitely unless an end date is set">
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox"
+                        checked={form.recurrenceEndDate === ''}
+                        onChange={e => set('recurrenceEndDate', e.target.checked ? '' : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))}
+                        className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
+                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>No end date — recur forever</span>
+                    </label>
+                    {form.recurrenceEndDate !== '' && (
+                      <div className="flex items-center gap-2">
+                        <DatePicker value={form.recurrenceEndDate} onChange={v => set('recurrenceEndDate', v)} />
+                        <button type="button" onClick={() => set('recurrenceEndDate', '')}
+                          className="text-xs px-2 py-1 rounded-md transition-colors hover:bg-[var(--bg-surface-hover)]"
+                          style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </Field>
+              </div>
+              <Field label="Auto-opt-out after missed occurrences" hint="0 = never">
+                <input type="number" min="0" value={form.autoOptOutAfterMissed}
+                  onChange={e => set('autoOptOutAfterMissed', e.target.value)} placeholder="0" className={INPUT_CLASS} style={FIELD_STYLE} />
+              </Field>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={form.recurrencePaused} onChange={e => set('recurrencePaused', e.target.checked)}
+                  className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
+                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Pause recurrence
+                  <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    — stop generating new occurrences without cancelling the template. Resume by unchecking.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
         </div>
-      )}
+      </FormSection>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Field label="Best of N" required>
-          <select value={form.bestOfN} onChange={e => set('bestOfN', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-            {[1, 3, 5, 7].map(n => <option key={n} value={n}>Best of {n}</option>)}
-          </select>
-        </Field>
-        <Field label="Min Participants" required>
-          <input type="number" min={2} max={256} value={form.minParticipants} onChange={e => set('minParticipants', e.target.value)}
-            className={INPUT_CLASS} style={FIELD_STYLE} />
-        </Field>
-        <Field label="Max Participants" hint="Leave blank for no limit">
-          <input type="number" min={2} max={256} value={form.maxParticipants} onChange={e => set('maxParticipants', e.target.value)}
-            placeholder="—" className={INPUT_CLASS} style={FIELD_STYLE} />
-          {errors.maxParticipants && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.maxParticipants}</span>}
-        </Field>
-      </div>
+      {/* ── Advanced ───────────────────────────────────────────────── */}
+      <FormSection
+        id="form-advanced"
+        title="Advanced"
+        hint="Series length, participation limits, mode-specific knobs."
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Best of N" required>
+            <select value={form.bestOfN} onChange={e => set('bestOfN', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
+              {[1, 3, 5, 7].map(n => <option key={n} value={n}>Best of {n}</option>)}
+            </select>
+          </Field>
+          <Field label="Min Participants" required>
+            <input type="number" min={2} max={256} value={form.minParticipants} onChange={e => set('minParticipants', e.target.value)}
+              className={INPUT_CLASS} style={FIELD_STYLE} />
+          </Field>
+          <Field label="Max Participants" hint="Leave blank for no limit">
+            <input type="number" min={2} max={256} value={form.maxParticipants} onChange={e => set('maxParticipants', e.target.value)}
+              placeholder="—" className={INPUT_CLASS} style={FIELD_STYLE} />
+            {errors.maxParticipants && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.maxParticipants}</span>}
+          </Field>
+        </div>
 
-      <Field label="Start Mode" hint="Controls how the tournament begins after registration closes">
-        <select value={form.startMode} onChange={e => set('startMode', e.target.value)} className={SELECT_CLASS} style={FIELD_STYLE}>
-          <option value="AUTO">Auto — starts automatically when registration closes</option>
-          <option value="SCHEDULED">Scheduled — starts at a specific date and time</option>
-          <option value="MANUAL">Manual — admin clicks Start</option>
-        </select>
-      </Field>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Start Time" hint={
-          form.startMode === 'SCHEDULED' ? 'Required — tournament starts at this time'
-          : form.startMode === 'AUTO'    ? 'Optional — anchor time for each occurrence (e.g. 3pm daily)'
-          :                                'Optional'
-        } as="div">
-          {form.startTime ? (
-            <div className="flex flex-col gap-1">
-              <DateTimePicker value={form.startTime} onChange={v => set('startTime', v)} />
-              <button type="button" onClick={() => set('startTime', '')}
-                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
+        {form.format === 'FLASH' && (
+          <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+            <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Flash Tournament Settings</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Notice Period (minutes)">
+                <input type="number" min="0" value={form.noticePeriodMinutes} onChange={e => set('noticePeriodMinutes', e.target.value)}
+                  placeholder="e.g. 15" className={INPUT_CLASS} style={FIELD_STYLE} />
+              </Field>
+              <Field label="Duration (minutes)">
+                <input type="number" min="1" value={form.durationMinutes} onChange={e => set('durationMinutes', e.target.value)}
+                  placeholder="e.g. 60" className={INPUT_CLASS} style={FIELD_STYLE} />
+              </Field>
             </div>
-          ) : (
-            <button type="button" onClick={() => set('startTime', toLocalDatetimeValue(new Date()))}
-              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
-              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
-              — not set —
-            </button>
-          )}
-          {errors.startTime && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.startTime}</span>}
-        </Field>
-        <Field label="Registration Opens At" hint="Optional" as="div">
-          {form.registrationOpenAt ? (
-            <div className="flex flex-col gap-1">
-              <DateTimePicker value={form.registrationOpenAt} onChange={v => set('registrationOpenAt', v)} />
-              <button type="button" onClick={() => set('registrationOpenAt', '')}
-                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => set('registrationOpenAt', toLocalDatetimeValue(new Date()))}
-              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
-              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
-              — not set —
-            </button>
-          )}
-        </Field>
-        <Field label="Registration Closes At" hint="Optional — defaults to start time" as="div">
-          {form.registrationCloseAt ? (
-            <div className="flex flex-col gap-1">
-              <DateTimePicker value={form.registrationCloseAt} onChange={v => set('registrationCloseAt', v)} />
-              <button type="button" onClick={() => set('registrationCloseAt', '')}
-                className="text-xs text-left hover:underline underline-offset-2 w-fit font-medium" style={{ color: 'var(--color-blue-600)' }}>Clear</button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => {
-              // Default to 1 hour after Opens At (if set) to avoid AM/PM trap
-              const base = form.registrationOpenAt ? new Date(form.registrationOpenAt) : new Date()
-              base.setHours(base.getHours() + 1)
-              set('registrationCloseAt', toLocalDatetimeValue(base))
-            }}
-              className="text-sm px-3 py-2 rounded-lg border w-full text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
-              style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)', ...FIELD_STYLE }}>
-              — not set —
-            </button>
-          )}
-          {errors.registrationCloseAt && <span className="text-[10px]" style={{ color: 'var(--color-red-600)' }}>{errors.registrationCloseAt}</span>}
-        </Field>
-      </div>
+          </div>
+        )}
 
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input type="checkbox" checked={form.allowSpectators} onChange={e => set('allowSpectators', e.target.checked)}
-          className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
-        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Allow spectators</span>
-      </label>
+        {form.mode === 'BOT_VS_BOT' && (
+          <div className="flex flex-col gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>
+            <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Bot Settings</p>
+            <Field label="Min Games Played">
+              <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
+                value={form.botMinGamesPlayed} onChange={e => setForm(f => ({ ...f, botMinGamesPlayed: e.target.value }))}
+                placeholder="System default" />
+            </Field>
+            <Field label="Pace (ms between dispatches)">
+              <input type="number" min="0" className={INPUT_CLASS} style={FIELD_STYLE}
+                value={form.paceMs} onChange={e => setForm(f => ({ ...f, paceMs: e.target.value }))}
+                placeholder="System default" />
+            </Field>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={form.allowNonCompetitiveBots}
+                onChange={e => setForm(f => ({ ...f, allowNonCompetitiveBots: e.target.checked }))} className="w-4 h-4 rounded" />
+              <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Allow non-competitive bots</span>
+            </label>
+          </div>
+        )}
 
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input type="checkbox" checked={form.isTest} onChange={e => set('isTest', e.target.checked)}
-          className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
-        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Mark as test tournament
-          <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-            — hidden from the public tournaments page; only visible to admins with the "Show test" toggle.
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={form.allowSpectators} onChange={e => set('allowSpectators', e.target.checked)}
+            className="w-4 h-4 rounded accent-[var(--color-blue-600)]" />
+          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Allow spectators</span>
+        </label>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={form.isTest} onChange={e => set('isTest', e.target.checked)}
+            className="w-4 h-4 rounded accent-[var(--color-amber-600)]" />
+          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Mark as test tournament
+            <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+              — hidden from the public tournaments page; only visible to admins with the "Show test" toggle.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      </FormSection>
 
       {apiErr && <p className="text-sm" style={{ color: 'var(--color-red-600)' }}>{apiErr}</p>}
 

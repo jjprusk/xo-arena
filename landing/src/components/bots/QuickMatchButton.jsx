@@ -15,7 +15,7 @@
  * Bot_Challenge_Plan "guest-friendly by default" decision.
  */
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api.js'
 import { rtFetch } from '../../lib/rtSession.js'
 import { getToken } from '../../lib/getToken.js'
@@ -27,6 +27,7 @@ export default function QuickMatchButton({
   source    = 'quick-match',
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [busy, setBusy] = useState(false)
   const [err,  setErr]  = useState(null)
 
@@ -46,7 +47,10 @@ export default function QuickMatchButton({
         body: { kind: 'hvb', botUserId: pick.botUserId, gameId, spectatorAllowed: true },
       })
       if (!res?.slug) throw new Error('Table create returned no slug')
-      navigate(`/play?join=${encodeURIComponent(res.slug)}`)
+      const origin = location?.pathname?.startsWith('/bots/')
+        ? '/bots'
+        : `${location.pathname}${location.search ?? ''}`
+      navigate(`/play?join=${encodeURIComponent(res.slug)}`, { state: { from: origin } })
     } catch (e2) {
       setBusy(false)
       const status = e2?.status

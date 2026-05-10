@@ -11,23 +11,30 @@
  *   /bots?owner=community&eloMin=1500&search=copper
  */
 import React, { useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { useBots } from '../lib/useBots.js'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useBots, isBotPlayableFor } from '../lib/useBots.js'
 import { useOptimisticSession } from '../lib/useOptimisticSession.js'
-import BotCard from '../components/bots/BotCard.jsx'
+import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.jsx'
 import BotFilterBar from '../components/bots/BotFilterBar.jsx'
 import ChallengeButton from '../components/bots/ChallengeButton.jsx'
+import QuickMatchButton from '../components/bots/QuickMatchButton.jsx'
+
+const DEFAULT_GAME_ID = 'xo'
 
 function paramsToFilters(sp) {
-  const owner = sp.get('owner')
-  const eloMin = sp.get('eloMin')
-  const eloMax = sp.get('eloMax')
-  const search = sp.get('search')
+  const owner   = sp.get('owner')
+  const eloMin  = sp.get('eloMin')
+  const eloMax  = sp.get('eloMax')
+  const search  = sp.get('search')
+  const game    = sp.get('game')
+  const showAll = sp.get('showAll')
   return {
-    owner:  owner && ['mine', 'community', 'all'].includes(owner) ? owner : undefined,
-    eloMin: eloMin && !Number.isNaN(Number(eloMin)) ? Number(eloMin) : undefined,
-    eloMax: eloMax && !Number.isNaN(Number(eloMax)) ? Number(eloMax) : undefined,
-    search: search ?? undefined,
+    owner:   owner && ['mine', 'community', 'all'].includes(owner) ? owner : undefined,
+    eloMin:  eloMin && !Number.isNaN(Number(eloMin)) ? Number(eloMin) : undefined,
+    eloMax:  eloMax && !Number.isNaN(Number(eloMax)) ? Number(eloMax) : undefined,
+    search:  search ?? undefined,
+    gameId:  game ?? DEFAULT_GAME_ID,
+    showAll: showAll === 'true',
   }
 }
 
@@ -37,10 +44,18 @@ function filtersToParams(filters) {
   if (filters.eloMin != null) out.eloMin = String(filters.eloMin)
   if (filters.eloMax != null) out.eloMax = String(filters.eloMax)
   if (filters.search)       out.search = filters.search
+  if (filters.gameId && filters.gameId !== DEFAULT_GAME_ID) out.game = filters.gameId
+  if (filters.showAll)      out.showAll = 'true'
   return out
 }
 
+function ratingFromGameElo(bot) {
+  const row = Array.isArray(bot?.gameElo) ? bot.gameElo[0] : null
+  return row?.rating != null ? Math.round(row.rating) : null
+}
+
 export default function BotDirectoryPage() {
+  const navigate = useNavigate()
   const [sp, setSp] = useSearchParams()
   const filters = useMemo(() => paramsToFilters(sp), [sp])
 
@@ -52,13 +67,16 @@ export default function BotDirectoryPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-          Bots
-        </h1>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          {allBots.length} active · pick any opponent and play right away.
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+            Bots
+          </h1>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {allBots.length} active · pick any opponent or let us match you.
+          </p>
+        </div>
+        <QuickMatchButton source="directory-quick-match" />
       </header>
 
       <BotFilterBar
@@ -94,27 +112,93 @@ export default function BotDirectoryPage() {
           </button>
         </p>
       ) : (
-        <div className="grid gap-2.5" data-testid="bot-directory-grid">
-          {bots.map(b => (
-            <Link
-              key={b.id}
-              to={`/bots/${b.id}`}
-              className="block no-underline"
-              data-testid={`bot-directory-row-${b.id}`}
-            >
-              <BotCard
-                bot={b}
-                variant="list"
-                actions={
-                  <ChallengeButton
-                    botUserId={b.id}
-                    variant="icon"
-                    source="directory"
-                  />
-                }
-              />
-            </Link>
-          ))}
+        <div data-testid="bot-directory-grid">
+          <ListTable maxHeight="clamp(240px, calc(100dvh - 320px), 800px)">
+            <thead>
+              <tr>
+                <ListTh>Bot</ListTh>
+                <ListTh className="hidden sm:table-cell">Owner</ListTh>
+                <ListTh align="right" className="hidden sm:table-cell">ELO</ListTh>
+                <ListTh align="right" className="hidden sm:table-cell">Games</ListTh>
+                <ListTh align="right">Play</ListTh>
+              </tr>
+            </thead>
+            <tbody>
+              {bots.map((b, i) => {
+                const rating      = ratingFromGameElo(b)
+                const isCommunity = !b.botOwnerId
+                const playable    = isBotPlayableFor(b, filters.gameId)
+                return (
+                  <ListTr
+                    key={b.id}
+                    last={i === bots.length - 1}
+                    onClick={() => navigate(`/bots/${b.id}`, {
+                      state: { from: `/bots${sp.toString() ? `?${sp.toString()}` : ''}` },
+                    })}
+                  >
+                    <ListTd>
+                      <span
+                        data-testid={`bot-directory-row-${b.id}`}
+                        className="flex items-center gap-2.5"
+                      >
+                        <span
+                          className="shrink-0 rounded-full overflow-hidden flex items-center justify-center"
+                          style={{ width: '2rem', height: '2rem', backgroundColor: 'var(--color-slate-100)' }}
+                          aria-hidden="true"
+                        >
+                          {b.avatarUrl
+                            ? <img src={b.avatarUrl} alt="" className="w-full h-full object-cover" />
+                            : <span style={{ fontSize: '0.95rem' }}>🤖</span>}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5">
+                            <span
+                              className="text-sm font-semibold truncate max-w-[180px]"
+                              style={{ color: 'var(--text-primary)' }}
+                              title={b.displayName}
+                            >
+                              {b.displayName ?? '—'}
+                            </span>
+                            {b.botProvisional && (
+                              <span
+                                className="text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded"
+                                style={{ backgroundColor: 'var(--color-amber-50)', color: 'var(--color-amber-700)' }}
+                                title="Bot has played fewer than the provisional-games threshold"
+                              >
+                                new
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </span>
+                    </ListTd>
+                    <ListTd className="hidden sm:table-cell">
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {isCommunity ? 'Community' : 'Player bot'}
+                      </span>
+                    </ListTd>
+                    <ListTd align="right" className="hidden sm:table-cell">
+                      <span className="tabular-nums text-sm">{rating ?? '—'}</span>
+                    </ListTd>
+                    <ListTd align="right" className="hidden sm:table-cell">
+                      <span className="tabular-nums text-sm">{b.botGamesPlayed ?? 0}</span>
+                    </ListTd>
+                    <ListTd align="right">
+                      <div className="inline-flex">
+                        <ChallengeButton
+                          botUserId={b.id}
+                          gameId={filters.gameId}
+                          disabled={!playable}
+                          unavailableReason={!playable ? `No skill for ${filters.gameId.toUpperCase()}` : null}
+                          source="directory"
+                        />
+                      </div>
+                    </ListTd>
+                  </ListTr>
+                )
+              })}
+            </tbody>
+          </ListTable>
         </div>
       )}
 

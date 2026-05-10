@@ -199,15 +199,12 @@ describe('GET /api/v1/bots', () => {
     expect(getTierLimit).not.toHaveBeenCalled()
   })
 
-  it('gameId filter → returns only bots that have a BotSkill for that game; bypasses cache', async () => {
-    mockDb.botSkill.findMany = vi.fn().mockResolvedValue([
-      { botId: 'bot_xo_a' },
-      { botId: 'bot_xo_b' },
-    ])
+  it('gameId filter → returns only bots whose playableGameIds include that game; bypasses cache', async () => {
     listBots.mockResolvedValue([
-      { id: 'bot_xo_a', displayName: 'A' },
-      { id: 'bot_xo_b', displayName: 'B' },
-      { id: 'bot_other', displayName: 'C' },
+      { id: 'bot_xo_a',  displayName: 'A', playableGameIds: ['xo'] },
+      { id: 'bot_xo_b',  displayName: 'B', playableGameIds: ['xo', 'connect4'] },
+      { id: 'bot_other', displayName: 'C', playableGameIds: ['connect4'] },
+      { id: 'bot_none',  displayName: 'D', playableGameIds: [] },
     ])
     cache.get.mockReturnValue('SHOULD-NOT-BE-USED')
 
@@ -216,23 +213,19 @@ describe('GET /api/v1/bots', () => {
     expect(res.status).toBe(200)
     expect(res.body.bots).toHaveLength(2)
     expect(res.body.bots.map(b => b.id)).toEqual(['bot_xo_a', 'bot_xo_b'])
-    expect(mockDb.botSkill.findMany).toHaveBeenCalledWith({
-      where:    { gameId: 'xo', botId: { not: null } },
-      select:   { botId: true },
-      distinct: ['botId'],
-    })
     // Cache untouched
     expect(cache.set).not.toHaveBeenCalled()
   })
 
-  it('gameId filter with no matching skills → empty list, listBots not called', async () => {
-    mockDb.botSkill.findMany = vi.fn().mockResolvedValue([])
+  it('gameId filter with no matching skills → empty list', async () => {
+    listBots.mockResolvedValue([
+      { id: 'bot_a', playableGameIds: ['xo'] },
+    ])
 
     const res = await request(app).get('/api/v1/bots?gameId=connect4')
 
     expect(res.status).toBe(200)
     expect(res.body.bots).toEqual([])
-    expect(listBots).not.toHaveBeenCalled()
   })
 
   it('includeInactive=true is passed through to listBots', async () => {

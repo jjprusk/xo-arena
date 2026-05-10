@@ -43,7 +43,7 @@ describe('<QuickMatchButton />', () => {
     expect(mockRtFetch).toHaveBeenCalledWith('/rt/tables', {
       body: { kind: 'hvb', botUserId: 'b_picked', gameId: 'xo', spectatorAllowed: true },
     })
-    expect(mockNavigate).toHaveBeenCalledWith('/play?join=qm-slug')
+    expect(mockNavigate).toHaveBeenCalledWith('/play?join=qm-slug', expect.objectContaining({ state: expect.objectContaining({ from: expect.any(String) }) }))
   })
 
   it('shows the friendly empty-pool message on 404 NO_CANDIDATES', async () => {
