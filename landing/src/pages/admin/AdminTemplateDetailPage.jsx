@@ -21,6 +21,7 @@ import { api } from '../../lib/api.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
 import { ListTable, ListTh, ListTr, ListTd } from '../../components/ui/ListTable.jsx'
 import DateTimePicker, { LocalTZ } from '../../components/ui/DateTimePicker.jsx'
+import { nextOccurrences } from '../../lib/recurrence.js'
 
 function Spinner() {
   return <div className="w-6 h-6 border-2 border-[var(--color-blue-600)] border-t-transparent rounded-full animate-spin" />
@@ -384,6 +385,201 @@ function SeedBotsPanel({ template, token, onChange }) {
   )
 }
 
+function SchedulePreviewPanel({ template }) {
+  const upcoming = nextOccurrences({
+    recurrenceStart:    template.recurrenceStart,
+    recurrenceInterval: template.recurrenceInterval,
+    recurrenceEndDate:  template.recurrenceEndDate,
+    paused:             template.paused,
+    count: 5,
+  })
+
+  if (template.paused) {
+    return (
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        Series is paused — no new occurrences will be spawned. Resume to project the next runs.
+      </p>
+    )
+  }
+  if (upcoming.length === 0) {
+    return (
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        No future occurrences. {template.recurrenceEndDate ? 'Series end date has passed.' : 'Set a Next start in the future to spawn occurrences.'}
+      </p>
+    )
+  }
+  return (
+    <ol className="space-y-1.5" data-testid="schedule-preview-list">
+      {upcoming.map((d, i) => (
+        <li key={d.toISOString()} className="flex items-baseline gap-3">
+          <span className="text-[11px] tabular-nums w-5 text-right" style={{ color: 'var(--text-muted)' }}>
+            {i + 1}.
+          </span>
+          <span className="text-sm tabular-nums" style={{ color: 'var(--text-primary)' }}>
+            {d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+          </span>
+          <LocalTZ value={d.toISOString()} />
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function RegistrationsPanel({ templateId, token }) {
+  const [registrations, setRegistrations] = useState([])
+  const [includeOptedOut, setIncludeOptedOut] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr]         = useState(null)
+  const [addInput, setAddInput] = useState('')
+  const [busy, setBusy]       = useState(false)
+
+  const load = useCallback(async () => {
+    if (!token) return
+    setLoading(true); setErr(null)
+    try {
+      const data = await tournamentApi.listRecurringRegistrations(templateId, token, { includeOptedOut })
+      setRegistrations(data?.registrations ?? [])
+    } catch (e) {
+      setErr(e.message || 'Failed to load registrations.')
+    } finally {
+      setLoading(false)
+    }
+  }, [templateId, token, includeOptedOut])
+
+  useEffect(() => { load() }, [load])
+
+  async function add() {
+    const raw = addInput.trim()
+    if (!raw) return
+    setBusy(true); setErr(null)
+    try {
+      // Heuristic: cuids are alphanumeric and ~25 chars; usernames may be
+      // shorter and contain non-alnum. Send both fields and let the backend
+      // resolve — userId wins if it matches, else username.
+      const looksLikeId = /^[a-z0-9]{20,}$/.test(raw)
+      const body = looksLikeId ? { userId: raw } : { username: raw }
+      await tournamentApi.adminAddRecurringRegistration(templateId, body, token)
+      setAddInput('')
+      await load()
+    } catch (e) {
+      setErr(e.message || 'Failed to add subscriber.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(userId) {
+    setBusy(true); setErr(null)
+    try {
+      await tournamentApi.adminRemoveRecurringRegistration(templateId, userId, token)
+      await load()
+    } catch (e) {
+      setErr(e.message || 'Failed to opt user out.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div id="registrations" className="space-y-4">
+      {err && (
+        <p className="text-xs" style={{ color: 'var(--color-red-600)' }}>{err}</p>
+      )}
+      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+        Standing subscribers are auto-registered when each occurrence opens. Missed counts increment when the scheduler can't enrol them (e.g., they didn't claim their spot before reg-close). Opting a user out preserves history; they can re-subscribe themselves from the Tournaments page.
+      </p>
+
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Add subscriber
+        </p>
+        <div className="flex items-center gap-2">
+          <Input
+            value={addInput}
+            onChange={setAddInput}
+            placeholder="username or user id"
+            disabled={busy}
+          />
+          <button type="button" onClick={add} disabled={busy || !addInput.trim()}
+            className="text-sm px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50 whitespace-nowrap"
+            style={{ backgroundColor: 'var(--color-blue-600)' }}>
+            Add
+          </button>
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+        <input type="checkbox"
+          checked={includeOptedOut}
+          onChange={e => setIncludeOptedOut(e.target.checked)}
+          data-testid="include-opted-out"
+        />
+        Include opted-out users
+      </label>
+
+      {loading ? (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      ) : registrations.length === 0 ? (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          {includeOptedOut ? 'No subscribers, past or present.' : 'No active subscribers.'}
+        </p>
+      ) : (
+        <ListTable>
+          <thead>
+            <tr>
+              <ListTh>User</ListTh>
+              <ListTh align="right">Missed</ListTh>
+              <ListTh>Joined</ListTh>
+              <ListTh>Opted out</ListTh>
+              <ListTh align="right">Action</ListTh>
+            </tr>
+          </thead>
+          <tbody>
+            {registrations.map((r, i) => (
+              <ListTr key={r.id ?? r.userId} last={i === registrations.length - 1}>
+                <ListTd>
+                  <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
+                    {r.user?.displayName ?? r.user?.username ?? '—'}
+                  </span>
+                  {r.user?.username && r.user?.displayName && r.user.username !== r.user.displayName && (
+                    <span className="text-[10px] ml-1" style={{ color: 'var(--text-muted)' }}>@{r.user.username}</span>
+                  )}
+                </ListTd>
+                <ListTd align="right">
+                  <span className="text-xs tabular-nums" style={{ color: (r.missedCount ?? 0) > 0 ? 'var(--color-amber-700)' : 'var(--text-muted)' }}>
+                    {r.missedCount ?? 0}
+                  </span>
+                </ListTd>
+                <ListTd>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}
+                  </span>
+                </ListTd>
+                <ListTd>
+                  <span className="text-xs" style={{ color: r.optedOutAt ? 'var(--color-amber-700)' : 'var(--text-muted)' }}>
+                    {r.optedOutAt ? new Date(r.optedOutAt).toLocaleDateString() : '—'}
+                  </span>
+                </ListTd>
+                <ListTd align="right">
+                  {r.optedOutAt ? (
+                    <span className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>—</span>
+                  ) : (
+                    <button onClick={() => remove(r.userId)} disabled={busy}
+                      className="text-xs font-semibold px-2.5 py-1 rounded border"
+                      style={{ backgroundColor: 'var(--color-red-50)', color: 'var(--color-red-700)', borderColor: 'var(--color-red-200)' }}>
+                      Opt out
+                    </button>
+                  )}
+                </ListTd>
+              </ListTr>
+            ))}
+          </tbody>
+        </ListTable>
+      )}
+    </div>
+  )
+}
+
 function OccurrencesPanel({ occurrences }) {
   if (!occurrences || occurrences.length === 0) {
     return <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No occurrences spawned yet.</p>
@@ -534,8 +730,16 @@ export default function AdminTemplateDetailPage() {
             )}
           </Panel>
 
+          <Panel title="Schedule preview">
+            <SchedulePreviewPanel template={template} />
+          </Panel>
+
           <Panel title="Seed bots">
             <SeedBotsPanel template={template} token={token} onChange={load} />
+          </Panel>
+
+          <Panel title="Standing registrations">
+            <RegistrationsPanel templateId={template.id} token={token} />
           </Panel>
 
           <Panel title="Occurrences">

@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getToken } from '../../lib/getToken.js'
 import { tournamentApi } from '../../lib/tournamentApi.js'
 import { useOptimisticSession } from '../../lib/useOptimisticSession.js'
@@ -37,6 +37,42 @@ function formatDateTime(d) {
   if (!d) return '—'
   try { return new Date(d).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) }
   catch { return String(d) }
+}
+
+function StopConfirm({ template, onCancel, onConfirm, busy }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={() => !busy && onCancel()}>
+      <div className="w-full max-w-md rounded-xl border p-5 space-y-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
+        onClick={e => e.stopPropagation()}>
+        <div>
+          <h2 className="text-base font-bold leading-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+            Stop series "{template.name}"?
+          </h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            No future occurrences will be spawned. Already-running occurrences continue to completion. Subscribers and seed bots are preserved — you can clone the template later if you want to restart the series.
+          </p>
+          <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+            Subscribers: {template.subscriberCount} · Seed bots: {template.seedBotCount}
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} disabled={busy}
+            className="text-sm px-4 py-2 rounded-lg border font-semibold disabled:opacity-50"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={busy}
+            className="text-sm px-4 py-2 rounded-lg font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-amber-700)' }}>
+            {busy ? 'Stopping…' : 'Stop series'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function DeleteConfirm({ template, onCancel, onConfirm, busy }) {
@@ -77,6 +113,7 @@ function DeleteConfirm({ template, onCancel, onConfirm, busy }) {
 
 export default function AdminTemplatesPage() {
   const { data: session } = useOptimisticSession()
+  const navigate = useNavigate()
   const [token, setToken]         = useState(null)
   const [templates, setTemplates] = useState([])
   const [loading, setLoading]     = useState(false)
@@ -84,6 +121,7 @@ export default function AdminTemplatesPage() {
   const [actionError, setActionError] = useState(null)
   const [busyId, setBusyId]       = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [confirmStop, setConfirmStop]     = useState(null)
   const isAdmin = session?.user?.role === 'admin'
 
   useEffect(() => {
@@ -127,6 +165,32 @@ export default function AdminTemplatesPage() {
       await load()
     } catch (err) {
       setActionError(err.message || 'Delete failed.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function doStop() {
+    if (!confirmStop) return
+    setBusyId(confirmStop.id); setActionError(null)
+    try {
+      await tournamentApi.stopTemplate(confirmStop.id, token)
+      setConfirmStop(null)
+      await load()
+    } catch (err) {
+      setActionError(err.message || 'Stop failed.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function doClone(template) {
+    setBusyId(template.id); setActionError(null)
+    try {
+      const { template: clone } = await tournamentApi.cloneTemplate(template.id, token)
+      navigate(`/admin/templates/${clone.id}?edit=1`)
+    } catch (err) {
+      setActionError(err.message || 'Clone failed.')
     } finally {
       setBusyId(null)
     }
@@ -227,7 +291,9 @@ export default function AdminTemplatesPage() {
                   <ActionMenu
                     trigger={<ActionMenuTrigger aria-label={`Actions for ${t.name}`} />}
                     items={[
-                      { label: t.paused ? 'Unpause' : 'Pause', onSelect: () => togglePause(t), disabled: busyId === t.id },
+                      { label: t.paused ? 'Resume series' : 'Pause series', onSelect: () => togglePause(t), disabled: busyId === t.id },
+                      { label: 'Stop series', onSelect: () => setConfirmStop(t), tone: 'danger', disabled: busyId === t.id },
+                      { label: 'Clone',       onSelect: () => doClone(t), disabled: busyId === t.id },
                       { label: 'View',        href: `/admin/templates/${t.id}` },
                       { label: 'Edit',        href: `/admin/templates/${t.id}?edit=1` },
                       { label: 'Manage seed bots', href: `/admin/templates/${t.id}#seed-bots` },
@@ -248,6 +314,15 @@ export default function AdminTemplatesPage() {
           onCancel={() => setConfirmDelete(null)}
           onConfirm={doDelete}
           busy={busyId === confirmDelete.id}
+        />
+      )}
+
+      {confirmStop && (
+        <StopConfirm
+          template={confirmStop}
+          onCancel={() => setConfirmStop(null)}
+          onConfirm={doStop}
+          busy={busyId === confirmStop.id}
         />
       )}
     </div>

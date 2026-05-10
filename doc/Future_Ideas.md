@@ -181,7 +181,9 @@ Low priority, mentioned for completeness:
 
 ---
 
-## Tournament admin UX overhaul
+## Tournament admin UX overhaul — ✅ SHIPPED 2026-05-10 (see Appendix)
+
+(Original analysis kept below for archaeology — the sprint covering items (a)–(i) is described in the Appendix entry "Tournament admin UX overhaul — shipped 2026-05-10".)
 
 The schema refactor (Phase 3.7a — `TournamentTemplate` + `templateId`) shipped: see the Appendix entry. What did **not** ship is the operator-facing UX that takes advantage of the cleaner model. Today the create/edit/manage flow for recurring tournaments is clumsy in nine concrete ways, all of which an admin runs into within their first few minutes of use.
 
@@ -273,6 +275,20 @@ Trigger on any of:
 # Appendix — Resolved & Obsolete
 
 Entries that were once "future ideas" or open bugs but have since been fixed, superseded, or rendered obsolete. Kept for archaeology — they often explain *why* the current architecture looks the way it does. Newest at top.
+
+## ✅ Tournament admin UX overhaul — shipped 2026-05-10
+
+**Problem:** Phase 3.7a separated `TournamentTemplate` from `Tournament` in the schema, but the operator-facing UI never caught up — the create/edit/manage flow for recurring tournaments was clumsy across nine specific dimensions catalogued in the original "Tournament admin UX overhaul" section earlier in this doc.
+
+**What shipped (foundation sprint then final sprint):**
+
+- **Foundation sprint** (h → i → c): bare `<input type="date">` and `datetime-local` were swapped for the shared `<DateTimePicker>` (Safari-safe) plus a `<LocalTZ>` line showing "14:00 EDT / 18:00 UTC"; `TournamentForm` reorganised into three top-level groups — Basics / Schedule / Advanced — with recurrence promoted to a first-class subsection under Schedule; `TournamentModal` detects an occurrence's `templateId` and renders an amber banner linking to the template editor so admins know edits there are local to *this* run.
+- **Schedule preview** (b): pure helper `landing/src/lib/recurrence.js#nextOccurrences` mirrors the scheduler's `advanceOne` math. New "Schedule preview" panel on `/admin/templates/:id` renders the next 5 spawn times honoring `recurrenceEndDate` and `paused` (paused → "no occurrences" message).
+- **Row-level series actions** (d): templates list `ActionMenu` now offers Pause/Resume series, **Stop series** (sets `recurrenceEndDate=now()` + `paused=true` so the scheduler permanently halts; reversible via clearing the end date but distinct from Delete), and **Clone** (deep-copies template config + seed bots, drops subscriptions, opens the clone in edit mode). New backend routes: `POST /admin/templates/:id/stop` and `POST /admin/templates/:id/clone`.
+- **Embedded standing-registrations panel** (e): replaces the orphaned "look up by Template ID" form on `AdminTournamentsPage` with a "Standing registrations" panel directly on the template detail page. Shows display-named subscribers with missed-counts, opt-out toggle, an "Add subscriber" input that accepts username or userId, and an "Include opted-out users" checkbox for audit. New tournament-service routes: `POST /api/recurring/:templateId/registrations` (admin enrol by username/userId, idempotent), `DELETE /api/recurring/:templateId/registrations/:userId` (sets `optedOutAt`, preserves history), and `?includeOptedOut=true` query on the existing list endpoint.
+- **Clone-from on tournament rows** (g): `AdminTournamentsPage` row `ActionMenu` gained a Clone item that opens `TournamentModal` in a new `mode='clone'` — `TournamentForm` is prefilled from the source row with name suffix " (Copy)" and `startTime` / `registrationOpenAt` / `registrationCloseAt` cleared, falling through to `tournamentApi.create()` (not update).
+
+**What did not ship:** items (a) and (f) were already present from earlier work — `AdminTemplatesPage` exists at `/admin/templates` and `SeedBotsPanel` is embedded on the template detail page.
 
 ## ✅ Bot Challenge & Discovery — shipped 2026-05-10
 

@@ -1295,6 +1295,86 @@ router.post('/admin/templates/:id/unpause', requireTournamentAdmin, async (req, 
   }
 })
 
+// POST /api/tournaments/admin/templates/:id/stop
+// Permanently stop the recurring series: pause it AND set recurrenceEndDate
+// to now so the scheduler will never spawn another occurrence even if a
+// future admin clears the paused flag without thinking. Already-spawned
+// occurrences are unaffected (their lifecycles continue independently).
+// Distinct from Delete (which drops the row entirely) and Pause (which can
+// be undone trivially).
+router.post('/admin/templates/:id/stop', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const template = await db.tournamentTemplate.update({
+      where: { id: req.params.id },
+      data:  { paused: true, recurrenceEndDate: new Date() },
+    })
+    res.json({ template })
+  } catch (e) {
+    if (e?.code === 'P2025') return res.status(404).json({ error: 'Template not found' })
+    next(e)
+  }
+})
+
+// POST /api/tournaments/admin/templates/:id/clone
+// Deep-copy a template into a new one. Copies template config + seed bots;
+// drops subscriptions (humans must opt in fresh) and occurrence history.
+// New template starts paused so the admin can review/edit before it goes
+// live. Name suffix " (Copy)" by default; caller can override via body.
+router.post('/admin/templates/:id/clone', requireTournamentAdmin, async (req, res, next) => {
+  try {
+    const src = await db.tournamentTemplate.findUnique({
+      where:   { id: req.params.id },
+      include: { seedBots: { select: { userId: true } } },
+    })
+    if (!src) return res.status(404).json({ error: 'Template not found' })
+
+    const overrideName = typeof req.body?.name === 'string' ? req.body.name.trim() : ''
+    const newName = overrideName || `${src.name} (Copy)`
+
+    const cloneData = {
+      name:                    newName,
+      description:             src.description,
+      game:                    src.game,
+      mode:                    src.mode,
+      format:                  src.format,
+      bracketType:             src.bracketType,
+      minParticipants:         src.minParticipants,
+      maxParticipants:         src.maxParticipants,
+      bestOfN:                 src.bestOfN,
+      botMinGamesPlayed:       src.botMinGamesPlayed,
+      allowNonCompetitiveBots: src.allowNonCompetitiveBots,
+      allowSpectators:         src.allowSpectators,
+      noticePeriodMinutes:     src.noticePeriodMinutes,
+      durationMinutes:         src.durationMinutes,
+      paceMs:                  src.paceMs,
+      startMode:               src.startMode,
+      recurrenceInterval:      src.recurrenceInterval,
+      recurrenceStart:         src.recurrenceStart,
+      recurrenceEndDate:       src.recurrenceEndDate,
+      registrationOpenAt:      src.registrationOpenAt,
+      registrationCloseAt:     src.registrationCloseAt,
+      paused:                  true, // safe default — admin reviews before activating
+      autoOptOutAfterMissed:   src.autoOptOutAfterMissed,
+      isTest:                  src.isTest,
+      seedingMode:             src.seedingMode,
+      createdById:             req.auth.userId,
+    }
+
+    const clone = await db.tournamentTemplate.create({ data: cloneData })
+
+    if (src.seedBots.length > 0) {
+      await db.tournamentTemplateSeedBot.createMany({
+        data: src.seedBots.map(sb => ({ templateId: clone.id, userId: sb.userId })),
+        skipDuplicates: true,
+      })
+    }
+
+    res.status(201).json({ template: clone })
+  } catch (e) {
+    next(e)
+  }
+})
+
 // GET /api/tournaments/admin/templates/:id
 // Single template detail with counts + recent occurrences. Drives the
 // admin drill-in page.
