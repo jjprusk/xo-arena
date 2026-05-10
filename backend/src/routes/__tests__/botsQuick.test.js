@@ -19,6 +19,10 @@ vi.mock('../../middleware/auth.js', () => ({
     req.auth = { userId: 'ba_user_1' }
     next()
   },
+  optionalAuth: (req, _res, next) => {
+    req.auth = { userId: 'ba_user_1' }
+    next()
+  },
 }))
 
 vi.mock('../../lib/db.js', () => ({

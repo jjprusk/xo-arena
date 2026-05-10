@@ -4,6 +4,7 @@ import request from 'supertest'
 
 vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req, _res, next) => { req.auth = { userId: 'ba_user_1' }; next() },
+  optionalAuth: (req, _res, next) => { req.auth = { userId: 'ba_user_1' }; next() },
 }))
 
 const mockDb = {

@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import { Router } from 'express'
-import { requireAuth } from '../middleware/auth.js'
+import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import db from '../lib/db.js'
 import { createBot, listBots, checkBotName } from '../services/userService.js'
 import { getSystemConfig } from '../services/skillService.js'
@@ -120,6 +120,103 @@ router.get('/check-name', requireAuth, async (req, res, next) => {
  * `GameElo (userId=botId, gameId=skill.gameId)` so the client doesn't need a
  * second fetch.
  */
+/**
+ * GET /api/v1/bots/quick-match
+ *
+ * Phase C.2 of the Bot Challenge & Discovery plan. Returns a single
+ * active bot near the caller's ELO so the home-page Quick Match CTA
+ * can route directly to a one-click HvB game.
+ *
+ * Query params (all optional):
+ *   gameId      string  default 'xo'
+ *   eloWindow   number  default 100  — rating tolerance in either direction
+ *
+ * Response:
+ *   200 { botUserId, displayName, rating }    — picked uniformly at random
+ *                                               from the candidate pool
+ *   404 { error: 'No bots available' }        — no candidates even after
+ *                                               widening once to ±300
+ *
+ * Behavior notes:
+ * - Authenticated callers are matched against their own GameElo for `gameId`.
+ *   Guests + missing-ELO callers default to 1500 (a neutral target).
+ * - The caller's own bots are excluded so "Find an opponent" never
+ *   matches you against yourself.
+ * - Inactive bots are excluded (mirrors the public bot list).
+ * - If no bot fits the requested window, the route widens once to ±300
+ *   before returning 404; this keeps the CTA usable on a small bot
+ *   population (early-platform reality).
+ *
+ * Guest-friendly per the plan's "guest-friendly by default" decision:
+ * `optionalAuth` lets the route serve unauthenticated callers; the
+ * client follows up by hitting `<ChallengeButton>` which also accepts
+ * guests via the anonymous SSE-session path.
+ */
+router.get('/quick-match', optionalAuth, async (req, res, next) => {
+  try {
+    const gameId    = typeof req.query.gameId === 'string' && req.query.gameId.length
+      ? req.query.gameId
+      : 'xo'
+    const eloWindowRaw = Number(req.query.eloWindow ?? 100)
+    const eloWindow    = Number.isFinite(eloWindowRaw) && eloWindowRaw > 0 ? eloWindowRaw : 100
+
+    // Resolve caller (if any) to their own User.id so we can exclude bots
+    // they own and read their GameElo for the rating target.
+    let callerId   = null
+    let targetElo  = 1500
+    if (req.auth?.userId) {
+      const caller = await db.user.findUnique({
+        where:  { betterAuthId: req.auth.userId },
+        select: { id: true },
+      })
+      if (caller?.id) {
+        callerId = caller.id
+        const eloRow = await db.gameElo.findUnique({
+          where: { userId_gameId: { userId: caller.id, gameId } },
+        }).catch(() => null)
+        if (eloRow?.rating != null) targetElo = eloRow.rating
+      }
+    }
+
+    async function findInWindow(windowSize) {
+      const min = targetElo - windowSize
+      const max = targetElo + windowSize
+      const candidates = await db.user.findMany({
+        where: {
+          isBot:     true,
+          botActive: true,
+          ...(callerId ? { botOwnerId: { not: callerId } } : {}),
+          gameElo: { some: { gameId, rating: { gte: min, lte: max } } },
+        },
+        select: {
+          id: true,
+          displayName: true,
+          gameElo: { where: { gameId }, select: { rating: true } },
+        },
+      })
+      return candidates
+    }
+
+    let pool = await findInWindow(eloWindow)
+    // Widen once if nothing matched in the requested window — keeps the
+    // CTA usable on a sparse bot population.
+    if (pool.length === 0 && eloWindow < 300) pool = await findInWindow(300)
+
+    if (pool.length === 0) {
+      return res.status(404).json({ error: 'No bots available', code: 'NO_CANDIDATES' })
+    }
+
+    const pick = pool[Math.floor(Math.random() * pool.length)]
+    return res.json({
+      botUserId:   pick.id,
+      displayName: pick.displayName,
+      rating:      pick.gameElo?.[0]?.rating ?? null,
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.get('/:id', async (req, res, next) => {
   try {
     const bot = await db.user.findUnique({
