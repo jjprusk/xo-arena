@@ -1,0 +1,121 @@
+{
+  "timestamp": "2026-05-11T01:39:24.004Z",
+  "env": "staging",
+  "bases": {
+    "landing": "https://xo-landing-staging.fly.dev",
+    "backend": "https://xo-backend-staging.fly.dev",
+    "tournament": "https://xo-tournament-staging.fly.dev"
+  },
+  "requests": 200,
+  "concurrency": 5,
+  "warmup": 10,
+  "authedIncluded": false,
+  "results": [
+    {
+      "name": "GET /api/version",
+      "url": "https://xo-backend-staging.fly.dev/api/version",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 59,
+        "p95": 95,
+        "p99": 178,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/v1/bots?gameId=xo",
+      "url": "https://xo-backend-staging.fly.dev/api/v1/bots?gameId=xo",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 130,
+        "p95": 254,
+        "p99": 290,
+        "ok": 195,
+        "err": 5
+      },
+      "errors": [
+        {
+          "status": -1,
+          "ms": 2158811
+        },
+        {
+          "status": -1,
+          "ms": 2159139
+        },
+        {
+          "status": -1,
+          "ms": 2159282
+        },
+        {
+          "status": -1,
+          "ms": 2159469
+        },
+        {
+          "status": -1,
+          "ms": 2159575
+        }
+      ]
+    },
+    {
+      "name": "GET /api/v1/leaderboard?game=xo",
+      "url": "https://xo-backend-staging.fly.dev/api/v1/leaderboard?game=xo",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 57,
+        "p95": 67,
+        "p99": 76,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/auth/get-session",
+      "url": "https://xo-backend-staging.fly.dev/api/auth/get-session",
+      "base": "backend",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 59,
+        "p95": 81,
+        "p99": 107,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    },
+    {
+      "name": "GET /api/tournaments",
+      "url": "https://xo-tournament-staging.fly.dev/api/tournaments",
+      "base": "tournament",
+      "authed": false,
+      "authFlow": false,
+      "method": "GET",
+      "requests": 200,
+      "stats": {
+        "p50": 74,
+        "p95": 132,
+        "p99": 178,
+        "ok": 200,
+        "err": 0
+      },
+      "errors": []
+    }
+  ]
+}
