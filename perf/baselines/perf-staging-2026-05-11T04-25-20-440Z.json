@@ -1,0 +1,4122 @@
+{
+  "timestamp": "2026-05-11T04:25:20.440Z",
+  "env": "staging",
+  "baseUrl": "https://xo-landing-staging.fly.dev",
+  "runs": 5,
+  "auth": false,
+  "warmup": false,
+  "devices": [
+    "desktop",
+    "mobile"
+  ],
+  "contexts": [
+    "cold-anon",
+    "warm-anon"
+  ],
+  "results": [
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1423,
+        "ready_p95": 1964,
+        "ttfb_p50": 58,
+        "fcp_p50": 284,
+        "lcp_p50": 1164,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 1270,
+          "ttfb": 62,
+          "fcp": 364,
+          "lcp": 1056,
+          "domContentLoaded": 414,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1162,
+          "ttfb": 58,
+          "fcp": 248,
+          "lcp": 924,
+          "domContentLoaded": 306,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1423,
+          "ttfb": 57,
+          "fcp": 360,
+          "lcp": 1164,
+          "domContentLoaded": 474,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1964,
+          "ttfb": 56,
+          "fcp": 284,
+          "lcp": 1236,
+          "domContentLoaded": 318,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1757,
+          "ttfb": 60,
+          "fcp": 272,
+          "lcp": 1512,
+          "domContentLoaded": 372,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Play",
+      "path": "/play",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1302,
+        "ready_p95": 1307,
+        "ttfb_p50": 62,
+        "fcp_p50": 872,
+        "lcp_p50": 872,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 13
+      },
+      "raw": [
+        {
+          "readyMs": 1306,
+          "ttfb": 62,
+          "fcp": 888,
+          "lcp": 888,
+          "domContentLoaded": 484,
+          "requests": 13,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1302,
+          "ttfb": 59,
+          "fcp": 912,
+          "lcp": 912,
+          "domContentLoaded": 481,
+          "requests": 13,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 947,
+          "ttfb": 59,
+          "fcp": 248,
+          "lcp": 644,
+          "domContentLoaded": 301,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1307,
+          "ttfb": 103,
+          "fcp": 872,
+          "lcp": 872,
+          "domContentLoaded": 466,
+          "requests": 13,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 953,
+          "ttfb": 63,
+          "fcp": 696,
+          "lcp": 816,
+          "domContentLoaded": 312,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "PlayVsBot",
+      "path": "/play?action=vs-community-bot",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1373,
+        "ready_p95": 998835,
+        "ttfb_p50": 78,
+        "fcp_p50": 674,
+        "lcp_p50": 674,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 14
+      },
+      "raw": [
+        {
+          "readyMs": 1265,
+          "ttfb": 62,
+          "fcp": 776,
+          "lcp": 776,
+          "domContentLoaded": 341,
+          "requests": 13,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 877,
+          "ttfb": 64,
+          "fcp": 212,
+          "lcp": 536,
+          "domContentLoaded": 310,
+          "requests": 14,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 998835,
+          "ttfb": 147,
+          "fcp": null,
+          "lcp": null,
+          "domContentLoaded": 380,
+          "requests": 5,
+          "staticKb": 109,
+          "jsKb": 96,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1681,
+          "ttfb": 83,
+          "fcp": 856,
+          "lcp": 856,
+          "domContentLoaded": 613,
+          "requests": 14,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1373,
+          "ttfb": 78,
+          "fcp": 572,
+          "lcp": 572,
+          "domContentLoaded": 322,
+          "requests": 14,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Leaderboard",
+      "path": "/leaderboard",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 796,
+        "ready_p95": 962280,
+        "ttfb_p50": 61,
+        "fcp_p50": 504,
+        "lcp_p50": 636,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 796,
+          "ttfb": 83,
+          "fcp": 604,
+          "lcp": 676,
+          "domContentLoaded": 324,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 741,
+          "ttfb": 61,
+          "fcp": 504,
+          "lcp": 580,
+          "domContentLoaded": 282,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 962280,
+          "ttfb": 57,
+          "fcp": 200,
+          "lcp": null,
+          "domContentLoaded": 285,
+          "requests": 5,
+          "staticKb": 109,
+          "jsKb": 96,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1120,
+          "ttfb": 83,
+          "fcp": 912,
+          "lcp": 1012,
+          "domContentLoaded": 631,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 762,
+          "ttfb": 60,
+          "fcp": 200,
+          "lcp": 596,
+          "domContentLoaded": 299,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Puzzles",
+      "path": "/puzzles",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1276,
+        "ready_p95": 2256,
+        "ttfb_p50": 59,
+        "fcp_p50": 332,
+        "lcp_p50": 916,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 687,
+          "ttfb": 81,
+          "fcp": 248,
+          "lcp": 568,
+          "domContentLoaded": 322,
+          "requests": 9,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1353,
+          "ttfb": 56,
+          "fcp": 196,
+          "lcp": 868,
+          "domContentLoaded": 275,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2256,
+          "ttfb": 59,
+          "fcp": 1208,
+          "lcp": 1592,
+          "domContentLoaded": 307,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1276,
+          "ttfb": 59,
+          "fcp": 816,
+          "lcp": 952,
+          "domContentLoaded": 376,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1143,
+          "ttfb": 85,
+          "fcp": 332,
+          "lcp": 916,
+          "domContentLoaded": 368,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1016,
+        "ready_p95": 1133,
+        "ttfb_p50": 61,
+        "fcp_p50": 744,
+        "lcp_p50": 744,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 1118,
+          "ttfb": 59,
+          "fcp": 768,
+          "lcp": 768,
+          "domContentLoaded": 327,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1133,
+          "ttfb": 64,
+          "fcp": 744,
+          "lcp": 744,
+          "domContentLoaded": 348,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 791,
+          "ttfb": 64,
+          "fcp": 248,
+          "lcp": 648,
+          "domContentLoaded": 309,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 990,
+          "ttfb": 61,
+          "fcp": 744,
+          "lcp": 744,
+          "domContentLoaded": 340,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1016,
+          "ttfb": 59,
+          "fcp": 768,
+          "lcp": 768,
+          "domContentLoaded": 310,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tables",
+      "path": "/tables",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1359,
+        "ready_p95": 2967,
+        "ttfb_p50": 61,
+        "fcp_p50": 856,
+        "lcp_p50": 1112,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 1292,
+          "ttfb": 59,
+          "fcp": 824,
+          "lcp": 1044,
+          "domContentLoaded": 321,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1359,
+          "ttfb": 60,
+          "fcp": 856,
+          "lcp": 1112,
+          "domContentLoaded": 371,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1116,
+          "ttfb": 61,
+          "fcp": 800,
+          "lcp": 1008,
+          "domContentLoaded": 350,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2091,
+          "ttfb": 134,
+          "fcp": 1488,
+          "lcp": 1788,
+          "domContentLoaded": 637,
+          "requests": 11,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2967,
+          "ttfb": 238,
+          "fcp": 2448,
+          "lcp": 2920,
+          "domContentLoaded": 803,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Spar",
+      "path": "/spar",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1155,
+        "ready_p95": 1253,
+        "ttfb_p50": 60,
+        "fcp_p50": 744,
+        "lcp_p50": 832,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 1155,
+          "ttfb": 58,
+          "fcp": 756,
+          "lcp": 948,
+          "domContentLoaded": 320,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1253,
+          "ttfb": 61,
+          "fcp": 752,
+          "lcp": 752,
+          "domContentLoaded": 310,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 965,
+          "ttfb": 60,
+          "fcp": 692,
+          "lcp": 832,
+          "domContentLoaded": 313,
+          "requests": 11,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1220,
+          "ttfb": 83,
+          "fcp": 744,
+          "lcp": 1024,
+          "domContentLoaded": 342,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 917,
+          "ttfb": 56,
+          "fcp": 672,
+          "lcp": 804,
+          "domContentLoaded": 304,
+          "requests": 12,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Stats",
+      "path": "/stats",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1068,
+        "ready_p95": 1428,
+        "ttfb_p50": 56,
+        "fcp_p50": 784,
+        "lcp_p50": 940,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 1068,
+          "ttfb": 67,
+          "fcp": 268,
+          "lcp": 912,
+          "domContentLoaded": 321,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1024,
+          "ttfb": 56,
+          "fcp": 700,
+          "lcp": 840,
+          "domContentLoaded": 307,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1428,
+          "ttfb": 55,
+          "fcp": 816,
+          "lcp": 976,
+          "domContentLoaded": 313,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1002,
+          "ttfb": 66,
+          "fcp": 784,
+          "lcp": 940,
+          "domContentLoaded": 350,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1227,
+          "ttfb": 54,
+          "fcp": 856,
+          "lcp": 988,
+          "domContentLoaded": 329,
+          "requests": 9,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Profile",
+      "path": "/profile",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 860,
+        "ready_p95": 920,
+        "ttfb_p50": 59,
+        "fcp_p50": 660,
+        "lcp_p50": 736,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 883,
+          "ttfb": 59,
+          "fcp": 660,
+          "lcp": 816,
+          "domContentLoaded": 304,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 860,
+          "ttfb": 59,
+          "fcp": 736,
+          "lcp": 736,
+          "domContentLoaded": 317,
+          "requests": 9,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 832,
+          "ttfb": 61,
+          "fcp": 660,
+          "lcp": 660,
+          "domContentLoaded": 316,
+          "requests": 9,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 920,
+          "ttfb": 59,
+          "fcp": 680,
+          "lcp": 792,
+          "domContentLoaded": 307,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 728,
+          "ttfb": 60,
+          "fcp": 212,
+          "lcp": 644,
+          "domContentLoaded": 282,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "ProfileBots",
+      "path": "/profile?section=bots",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 4,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 784,
+        "ready_p95": 2398,
+        "ttfb_p50": 59,
+        "fcp_p50": 416,
+        "lcp_p50": 728,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 735,
+          "ttfb": 58,
+          "fcp": 200,
+          "lcp": 668,
+          "domContentLoaded": 281,
+          "requests": 9,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2398,
+          "ttfb": 68,
+          "fcp": 1952,
+          "lcp": 2128,
+          "domContentLoaded": 793,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 751,
+          "ttfb": 57,
+          "fcp": 204,
+          "lcp": 696,
+          "domContentLoaded": 274,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 817,
+          "ttfb": 60,
+          "fcp": 628,
+          "lcp": 760,
+          "domContentLoaded": 329,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Gym",
+      "path": "/gym",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 4,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 858,
+        "ready_p95": 1944,
+        "ttfb_p50": 61,
+        "fcp_p50": 442,
+        "lcp_p50": 638,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 779,
+          "ttfb": 59,
+          "fcp": 212,
+          "lcp": 520,
+          "domContentLoaded": 294,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1944,
+          "ttfb": 102,
+          "fcp": 812,
+          "lcp": 1304,
+          "domContentLoaded": 863,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 865,
+          "ttfb": 61,
+          "fcp": 672,
+          "lcp": 672,
+          "domContentLoaded": 286,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 850,
+          "ttfb": 60,
+          "fcp": 196,
+          "lcp": 604,
+          "domContentLoaded": 284,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Settings",
+      "path": "/settings",
+      "device": "desktop",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 1249,
+        "ready_p95": 1807,
+        "ttfb_p50": 58,
+        "fcp_p50": 832,
+        "lcp_p50": 832,
+        "js_kb": 504,
+        "static_kb": 691,
+        "img_kb": 174,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 1540,
+          "ttfb": 55,
+          "fcp": 236,
+          "lcp": 804,
+          "domContentLoaded": 286,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1807,
+          "ttfb": 64,
+          "fcp": 1172,
+          "lcp": 1172,
+          "domContentLoaded": 422,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1073,
+          "ttfb": 61,
+          "fcp": 832,
+          "lcp": 832,
+          "domContentLoaded": 331,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1064,
+          "ttfb": 55,
+          "fcp": 856,
+          "lcp": 856,
+          "domContentLoaded": 373,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1249,
+          "ttfb": 58,
+          "fcp": 748,
+          "lcp": 748,
+          "domContentLoaded": 331,
+          "requests": 10,
+          "staticKb": 691,
+          "jsKb": 504,
+          "imgKb": 174,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 859,
+        "ready_p95": 977,
+        "ttfb_p50": 4,
+        "fcp_p50": 124,
+        "lcp_p50": 124,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 977,
+          "ttfb": 91,
+          "fcp": 228,
+          "lcp": 228,
+          "domContentLoaded": 193,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 974,
+          "ttfb": 6,
+          "fcp": 124,
+          "lcp": 124,
+          "domContentLoaded": 95,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 707,
+          "ttfb": 4,
+          "fcp": 100,
+          "lcp": 100,
+          "domContentLoaded": 86,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 690,
+          "ttfb": 3,
+          "fcp": 92,
+          "lcp": 92,
+          "domContentLoaded": 75,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 859,
+          "ttfb": 4,
+          "fcp": 128,
+          "lcp": 128,
+          "domContentLoaded": 116,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Play",
+      "path": "/play",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 793,
+        "ready_p95": 1184,
+        "ttfb_p50": 8,
+        "fcp_p50": 404,
+        "lcp_p50": 404,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 793,
+          "ttfb": 127,
+          "fcp": 456,
+          "lcp": 456,
+          "domContentLoaded": 196,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 671,
+          "ttfb": 2,
+          "fcp": 404,
+          "lcp": 404,
+          "domContentLoaded": 58,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1184,
+          "ttfb": 8,
+          "fcp": 448,
+          "lcp": 448,
+          "domContentLoaded": 87,
+          "requests": 13,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 789,
+          "ttfb": 6,
+          "fcp": 340,
+          "lcp": 340,
+          "domContentLoaded": 77,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 810,
+          "ttfb": 9,
+          "fcp": 348,
+          "lcp": 348,
+          "domContentLoaded": 76,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "PlayVsBot",
+      "path": "/play?action=vs-community-bot",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 874,
+        "ready_p95": 1022,
+        "ttfb_p50": 3,
+        "fcp_p50": 404,
+        "lcp_p50": 404,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 14
+      },
+      "raw": [
+        {
+          "readyMs": 998,
+          "ttfb": 75,
+          "fcp": 576,
+          "lcp": 576,
+          "domContentLoaded": 149,
+          "requests": 13,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 874,
+          "ttfb": 6,
+          "fcp": 388,
+          "lcp": 388,
+          "domContentLoaded": 77,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 868,
+          "ttfb": 3,
+          "fcp": 404,
+          "lcp": 404,
+          "domContentLoaded": 75,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1022,
+          "ttfb": 3,
+          "fcp": 492,
+          "lcp": 492,
+          "domContentLoaded": 96,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 864,
+          "ttfb": 3,
+          "fcp": 344,
+          "lcp": 344,
+          "domContentLoaded": 56,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Leaderboard",
+      "path": "/leaderboard",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 913,
+        "ready_p95": 962,
+        "ttfb_p50": 4,
+        "fcp_p50": 464,
+        "lcp_p50": 464,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 913,
+          "ttfb": 64,
+          "fcp": 504,
+          "lcp": 504,
+          "domContentLoaded": 138,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 950,
+          "ttfb": 4,
+          "fcp": 496,
+          "lcp": 496,
+          "domContentLoaded": 86,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 751,
+          "ttfb": 3,
+          "fcp": 356,
+          "lcp": 356,
+          "domContentLoaded": 65,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 764,
+          "ttfb": 5,
+          "fcp": 464,
+          "lcp": 464,
+          "domContentLoaded": 70,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 962,
+          "ttfb": 4,
+          "fcp": 424,
+          "lcp": 424,
+          "domContentLoaded": 90,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Puzzles",
+      "path": "/puzzles",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 860,
+        "ready_p95": 1057,
+        "ttfb_p50": 4,
+        "fcp_p50": 572,
+        "lcp_p50": 668,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 9
+      },
+      "raw": [
+        {
+          "readyMs": 1057,
+          "ttfb": 89,
+          "fcp": 748,
+          "lcp": 852,
+          "domContentLoaded": 267,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 860,
+          "ttfb": 4,
+          "fcp": 572,
+          "lcp": 668,
+          "domContentLoaded": 79,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 756,
+          "ttfb": 3,
+          "fcp": 440,
+          "lcp": 636,
+          "domContentLoaded": 66,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1012,
+          "ttfb": 5,
+          "fcp": 572,
+          "lcp": 720,
+          "domContentLoaded": 88,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 845,
+          "ttfb": 2,
+          "fcp": 508,
+          "lcp": 656,
+          "domContentLoaded": 53,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 841,
+        "ready_p95": 1053,
+        "ttfb_p50": 5,
+        "fcp_p50": 572,
+        "lcp_p50": 572,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 1053,
+          "ttfb": 88,
+          "fcp": 848,
+          "lcp": 848,
+          "domContentLoaded": 217,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 843,
+          "ttfb": 6,
+          "fcp": 588,
+          "lcp": 588,
+          "domContentLoaded": 83,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 696,
+          "ttfb": 5,
+          "fcp": 460,
+          "lcp": 460,
+          "domContentLoaded": 68,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 774,
+          "ttfb": 5,
+          "fcp": 516,
+          "lcp": 516,
+          "domContentLoaded": 75,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 841,
+          "ttfb": 3,
+          "fcp": 572,
+          "lcp": 572,
+          "domContentLoaded": 62,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tables",
+      "path": "/tables",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 735,
+        "ready_p95": 811,
+        "ttfb_p50": 4,
+        "fcp_p50": 456,
+        "lcp_p50": 456,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 811,
+          "ttfb": 68,
+          "fcp": 548,
+          "lcp": 548,
+          "domContentLoaded": 153,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 735,
+          "ttfb": 4,
+          "fcp": 456,
+          "lcp": 456,
+          "domContentLoaded": 65,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 630,
+          "ttfb": 4,
+          "fcp": 432,
+          "lcp": 432,
+          "domContentLoaded": 64,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 771,
+          "ttfb": 5,
+          "fcp": 460,
+          "lcp": 460,
+          "domContentLoaded": 98,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 613,
+          "ttfb": 3,
+          "fcp": 424,
+          "lcp": 424,
+          "domContentLoaded": 63,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Spar",
+      "path": "/spar",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 341,
+        "ready_p95": 28012,
+        "ttfb_p50": 1,
+        "fcp_p50": 88,
+        "lcp_p50": 88,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 7
+      },
+      "raw": [
+        {
+          "readyMs": 384,
+          "ttfb": 55,
+          "fcp": 148,
+          "lcp": 148,
+          "domContentLoaded": 70,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 316,
+          "ttfb": 1,
+          "fcp": 88,
+          "lcp": 88,
+          "domContentLoaded": 14,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 28012,
+          "ttfb": 1,
+          "fcp": 84,
+          "lcp": 84,
+          "domContentLoaded": 14,
+          "requests": 7,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 327,
+          "ttfb": 1,
+          "fcp": 88,
+          "lcp": 88,
+          "domContentLoaded": 17,
+          "requests": 7,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 341,
+          "ttfb": 1,
+          "fcp": 88,
+          "lcp": 88,
+          "domContentLoaded": 15,
+          "requests": 7,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Stats",
+      "path": "/stats",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 318,
+        "ready_p95": 381,
+        "ttfb_p50": 1,
+        "fcp_p50": 92,
+        "lcp_p50": 236,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 381,
+          "ttfb": 59,
+          "fcp": 156,
+          "lcp": 308,
+          "domContentLoaded": 75,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 318,
+          "ttfb": 1,
+          "fcp": 92,
+          "lcp": 240,
+          "domContentLoaded": 14,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 310,
+          "ttfb": 1,
+          "fcp": 88,
+          "lcp": 236,
+          "domContentLoaded": 14,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 330,
+          "ttfb": 1,
+          "fcp": 88,
+          "lcp": 232,
+          "domContentLoaded": 13,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 315,
+          "ttfb": 1,
+          "fcp": 92,
+          "lcp": 204,
+          "domContentLoaded": 14,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Profile",
+      "path": "/profile",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 358,
+        "ready_p95": 2019,
+        "ttfb_p50": 3,
+        "fcp_p50": 224,
+        "lcp_p50": 332,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 358,
+          "ttfb": 56,
+          "fcp": 224,
+          "lcp": 332,
+          "domContentLoaded": 82,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2019,
+          "ttfb": 2,
+          "fcp": 1132,
+          "lcp": 1644,
+          "domContentLoaded": 51,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 943,
+          "ttfb": 4,
+          "fcp": 436,
+          "lcp": 596,
+          "domContentLoaded": 83,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 302,
+          "ttfb": 0,
+          "fcp": 84,
+          "lcp": 232,
+          "domContentLoaded": 14,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 302,
+          "ttfb": 1,
+          "fcp": 84,
+          "lcp": 228,
+          "domContentLoaded": 14,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "ProfileBots",
+      "path": "/profile?section=bots",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 4,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 309,
+        "ready_p95": 3396,
+        "ttfb_p50": 1,
+        "fcp_p50": 86,
+        "lcp_p50": 234,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 3396,
+          "ttfb": 222,
+          "fcp": 2580,
+          "lcp": 2940,
+          "domContentLoaded": 2500,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 318,
+          "ttfb": 1,
+          "fcp": 84,
+          "lcp": 236,
+          "domContentLoaded": 14,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 300,
+          "ttfb": 1,
+          "fcp": 88,
+          "lcp": 208,
+          "domContentLoaded": 15,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 299,
+          "ttfb": 1,
+          "fcp": 84,
+          "lcp": 232,
+          "domContentLoaded": 14,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Gym",
+      "path": "/gym",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 3,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 1042,
+        "ready_p95": 2744,
+        "ttfb_p50": 79,
+        "fcp_p50": 776,
+        "lcp_p50": 776,
+        "js_kb": 407,
+        "static_kb": 582,
+        "img_kb": 174,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 2744,
+          "ttfb": 171,
+          "fcp": 2276,
+          "lcp": 2276,
+          "domContentLoaded": 438,
+          "requests": 10,
+          "staticKb": 582,
+          "jsKb": 407,
+          "imgKb": 174,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1042,
+          "ttfb": 79,
+          "fcp": 776,
+          "lcp": 776,
+          "domContentLoaded": 205,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 778,
+          "ttfb": 3,
+          "fcp": 492,
+          "lcp": 492,
+          "domContentLoaded": 89,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Settings",
+      "path": "/settings",
+      "device": "desktop",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 669,
+        "ready_p95": 722,
+        "ttfb_p50": 4,
+        "fcp_p50": 400,
+        "lcp_p50": 400,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 722,
+          "ttfb": 73,
+          "fcp": 460,
+          "lcp": 460,
+          "domContentLoaded": 134,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 652,
+          "ttfb": 4,
+          "fcp": 388,
+          "lcp": 388,
+          "domContentLoaded": 75,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 663,
+          "ttfb": 5,
+          "fcp": 384,
+          "lcp": 384,
+          "domContentLoaded": 68,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 686,
+          "ttfb": 3,
+          "fcp": 476,
+          "lcp": 476,
+          "domContentLoaded": 69,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 669,
+          "ttfb": 3,
+          "fcp": 400,
+          "lcp": 400,
+          "domContentLoaded": 67,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2278,
+        "ready_p95": 991047,
+        "ttfb_p50": 60,
+        "fcp_p50": 272,
+        "lcp_p50": 1892,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 2272,
+          "ttfb": 60,
+          "fcp": 272,
+          "lcp": 1924,
+          "domContentLoaded": 539,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2278,
+          "ttfb": 56,
+          "fcp": 268,
+          "lcp": 1892,
+          "domContentLoaded": 551,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 991047,
+          "ttfb": 57,
+          "fcp": 276,
+          "lcp": 1792,
+          "domContentLoaded": 561,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2593,
+          "ttfb": 67,
+          "fcp": 680,
+          "lcp": 2188,
+          "domContentLoaded": 986,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2143,
+          "ttfb": 85,
+          "fcp": 244,
+          "lcp": 1744,
+          "domContentLoaded": 542,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Play",
+      "path": "/play",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 3,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2547,
+        "ready_p95": 2582,
+        "ttfb_p50": 76,
+        "fcp_p50": 624,
+        "lcp_p50": 2228,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 13
+      },
+      "raw": [
+        {
+          "readyMs": 2582,
+          "ttfb": 97,
+          "fcp": 732,
+          "lcp": 2244,
+          "domContentLoaded": 994,
+          "requests": 13,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2150,
+          "ttfb": 60,
+          "fcp": 248,
+          "lcp": 1716,
+          "domContentLoaded": 552,
+          "requests": 13,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2547,
+          "ttfb": 76,
+          "fcp": 624,
+          "lcp": 2228,
+          "domContentLoaded": 960,
+          "requests": 13,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "PlayVsBot",
+      "path": "/play?action=vs-community-bot",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 4,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2407,
+        "ready_p95": 3743,
+        "ttfb_p50": 60,
+        "fcp_p50": 1132,
+        "lcp_p50": 1768,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 14
+      },
+      "raw": [
+        {
+          "readyMs": 2096,
+          "ttfb": 56,
+          "fcp": 200,
+          "lcp": 1440,
+          "domContentLoaded": 485,
+          "requests": 14,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2718,
+          "ttfb": 107,
+          "fcp": 800,
+          "lcp": 2072,
+          "domContentLoaded": 1113,
+          "requests": 14,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1884,
+          "ttfb": 57,
+          "fcp": 1464,
+          "lcp": 1464,
+          "domContentLoaded": 432,
+          "requests": 14,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 3743,
+          "ttfb": 63,
+          "fcp": 2892,
+          "lcp": 2892,
+          "domContentLoaded": 921,
+          "requests": 14,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Leaderboard",
+      "path": "/leaderboard",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2228,
+        "ready_p95": 3542,
+        "ttfb_p50": 57,
+        "fcp_p50": 1736,
+        "lcp_p50": 2088,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 2087,
+          "ttfb": 60,
+          "fcp": 1724,
+          "lcp": 2100,
+          "domContentLoaded": 510,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2401,
+          "ttfb": 57,
+          "fcp": 248,
+          "lcp": 2088,
+          "domContentLoaded": 535,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2228,
+          "ttfb": 57,
+          "fcp": 1988,
+          "lcp": 1988,
+          "domContentLoaded": 522,
+          "requests": 8,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 3542,
+          "ttfb": 222,
+          "fcp": 3164,
+          "lcp": 3164,
+          "domContentLoaded": 1106,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2031,
+          "ttfb": 56,
+          "fcp": 1736,
+          "lcp": 1736,
+          "domContentLoaded": 463,
+          "requests": 11,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Puzzles",
+      "path": "/puzzles",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2215,
+        "ready_p95": 927537,
+        "ttfb_p50": 82,
+        "fcp_p50": 1364,
+        "lcp_p50": 2180,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 2215,
+          "ttfb": 322,
+          "fcp": 2024,
+          "lcp": 2180,
+          "domContentLoaded": 894,
+          "requests": 8,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 927537,
+          "ttfb": 127,
+          "fcp": 3088,
+          "lcp": 3088,
+          "domContentLoaded": 1058,
+          "requests": 6,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2813,
+          "ttfb": 82,
+          "fcp": 828,
+          "lcp": 2240,
+          "domContentLoaded": 1154,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2100,
+          "ttfb": 58,
+          "fcp": 200,
+          "lcp": 1636,
+          "domContentLoaded": 502,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1976,
+          "ttfb": 56,
+          "fcp": 1364,
+          "lcp": 1476,
+          "domContentLoaded": 389,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 3774,
+        "ready_p95": 990981,
+        "ttfb_p50": 64,
+        "fcp_p50": 204,
+        "lcp_p50": 1818,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 990981,
+          "ttfb": 55,
+          "fcp": 200,
+          "lcp": null,
+          "domContentLoaded": 484,
+          "requests": 5,
+          "staticKb": 109,
+          "jsKb": 96,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2959,
+          "ttfb": 85,
+          "fcp": 1064,
+          "lcp": 2324,
+          "domContentLoaded": 1366,
+          "requests": 11,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 4382,
+          "ttfb": 64,
+          "fcp": 204,
+          "lcp": 1480,
+          "domContentLoaded": 512,
+          "requests": 11,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2441,
+          "ttfb": 72,
+          "fcp": 568,
+          "lcp": 1848,
+          "domContentLoaded": 852,
+          "requests": 11,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 3774,
+          "ttfb": 59,
+          "fcp": 200,
+          "lcp": 1788,
+          "domContentLoaded": 485,
+          "requests": 11,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tables",
+      "path": "/tables",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2150,
+        "ready_p95": 2869,
+        "ttfb_p50": 61,
+        "fcp_p50": 1760,
+        "lcp_p50": 1904,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 1966,
+          "ttfb": 61,
+          "fcp": 1796,
+          "lcp": 1960,
+          "domContentLoaded": 479,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2228,
+          "ttfb": 62,
+          "fcp": 1692,
+          "lcp": 1872,
+          "domContentLoaded": 498,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2150,
+          "ttfb": 57,
+          "fcp": 1588,
+          "lcp": 1764,
+          "domContentLoaded": 460,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2054,
+          "ttfb": 67,
+          "fcp": 1760,
+          "lcp": 1904,
+          "domContentLoaded": 462,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2869,
+          "ttfb": 60,
+          "fcp": 2056,
+          "lcp": 2212,
+          "domContentLoaded": 561,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Spar",
+      "path": "/spar",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2615,
+        "ready_p95": 399955,
+        "ttfb_p50": 61,
+        "fcp_p50": 552,
+        "lcp_p50": 2080,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 2675,
+          "ttfb": 60,
+          "fcp": 1776,
+          "lcp": 2180,
+          "domContentLoaded": 498,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 399955,
+          "ttfb": 148,
+          "fcp": null,
+          "lcp": null,
+          "domContentLoaded": 914,
+          "requests": 5,
+          "staticKb": 109,
+          "jsKb": 96,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2615,
+          "ttfb": 105,
+          "fcp": 696,
+          "lcp": 2148,
+          "domContentLoaded": 966,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2118,
+          "ttfb": 61,
+          "fcp": 212,
+          "lcp": 1744,
+          "domContentLoaded": 498,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2059,
+          "ttfb": 56,
+          "fcp": 408,
+          "lcp": 2012,
+          "domContentLoaded": 541,
+          "requests": 12,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Stats",
+      "path": "/stats",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2180,
+        "ready_p95": 2268,
+        "ttfb_p50": 58,
+        "fcp_p50": 1628,
+        "lcp_p50": 1800,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 2180,
+          "ttfb": 56,
+          "fcp": 1580,
+          "lcp": 1748,
+          "domContentLoaded": 438,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2252,
+          "ttfb": 58,
+          "fcp": 1628,
+          "lcp": 1800,
+          "domContentLoaded": 580,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1986,
+          "ttfb": 57,
+          "fcp": 228,
+          "lcp": 1808,
+          "domContentLoaded": 512,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2268,
+          "ttfb": 62,
+          "fcp": 1660,
+          "lcp": 1756,
+          "domContentLoaded": 476,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2165,
+          "ttfb": 61,
+          "fcp": 1644,
+          "lcp": 1812,
+          "domContentLoaded": 462,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Profile",
+      "path": "/profile",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2173,
+        "ready_p95": 3255,
+        "ttfb_p50": 61,
+        "fcp_p50": 252,
+        "lcp_p50": 1972,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 2173,
+          "ttfb": 61,
+          "fcp": 252,
+          "lcp": 1972,
+          "domContentLoaded": 548,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 3255,
+          "ttfb": 136,
+          "fcp": 2952,
+          "lcp": 2952,
+          "domContentLoaded": 983,
+          "requests": 9,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2761,
+          "ttfb": 176,
+          "fcp": 2204,
+          "lcp": 2304,
+          "domContentLoaded": 985,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2136,
+          "ttfb": 56,
+          "fcp": 248,
+          "lcp": 1664,
+          "domContentLoaded": 514,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2132,
+          "ttfb": 58,
+          "fcp": 224,
+          "lcp": 1692,
+          "domContentLoaded": 506,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "ProfileBots",
+      "path": "/profile?section=bots",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2112,
+        "ready_p95": 2171,
+        "ttfb_p50": 56,
+        "fcp_p50": 1388,
+        "lcp_p50": 1612,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 2171,
+          "ttfb": 59,
+          "fcp": 1540,
+          "lcp": 1652,
+          "domContentLoaded": 426,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2032,
+          "ttfb": 58,
+          "fcp": 1400,
+          "lcp": 1572,
+          "domContentLoaded": 418,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2145,
+          "ttfb": 56,
+          "fcp": 204,
+          "lcp": 1612,
+          "domContentLoaded": 497,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2112,
+          "ttfb": 56,
+          "fcp": 208,
+          "lcp": 1612,
+          "domContentLoaded": 496,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1576,
+          "ttfb": 55,
+          "fcp": 1388,
+          "lcp": 1560,
+          "domContentLoaded": 411,
+          "requests": 8,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Gym",
+      "path": "/gym",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 4,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2231,
+        "ready_p95": 575403,
+        "ttfb_p50": 57,
+        "fcp_p50": 208,
+        "lcp_p50": 1504,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 2108,
+          "ttfb": 56,
+          "fcp": 212,
+          "lcp": 1472,
+          "domContentLoaded": 496,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 575403,
+          "ttfb": 54,
+          "fcp": 204,
+          "lcp": null,
+          "domContentLoaded": 490,
+          "requests": 5,
+          "staticKb": 109,
+          "jsKb": 96,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2330,
+          "ttfb": 86,
+          "fcp": 1692,
+          "lcp": 1692,
+          "domContentLoaded": 710,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2131,
+          "ttfb": 57,
+          "fcp": 204,
+          "lcp": 1504,
+          "domContentLoaded": 507,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Settings",
+      "path": "/settings",
+      "device": "mobile",
+      "context": "cold-anon",
+      "runs": 5,
+      "primingRuns": 0,
+      "stats": {
+        "ready_p50": 2342,
+        "ready_p95": 3827,
+        "ttfb_p50": 60,
+        "fcp_p50": 1960,
+        "lcp_p50": 1960,
+        "js_kb": 504,
+        "static_kb": 566,
+        "img_kb": 50,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 2127,
+          "ttfb": 59,
+          "fcp": 220,
+          "lcp": 1480,
+          "domContentLoaded": 507,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 3827,
+          "ttfb": 63,
+          "fcp": 3596,
+          "lcp": 3596,
+          "domContentLoaded": 1361,
+          "requests": 9,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2697,
+          "ttfb": 59,
+          "fcp": 2012,
+          "lcp": 2012,
+          "domContentLoaded": 479,
+          "requests": 9,
+          "staticKb": 516,
+          "jsKb": 504,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2342,
+          "ttfb": 64,
+          "fcp": 1960,
+          "lcp": 1960,
+          "domContentLoaded": 501,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 2223,
+          "ttfb": 60,
+          "fcp": 1600,
+          "lcp": 1600,
+          "domContentLoaded": 474,
+          "requests": 10,
+          "staticKb": 566,
+          "jsKb": 504,
+          "imgKb": 50,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 725,
+        "ready_p95": 936,
+        "ttfb_p50": 3,
+        "fcp_p50": 100,
+        "lcp_p50": 100,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 9
+      },
+      "raw": [
+        {
+          "readyMs": 936,
+          "ttfb": 130,
+          "fcp": 216,
+          "lcp": 216,
+          "domContentLoaded": 265,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 749,
+          "ttfb": 3,
+          "fcp": 108,
+          "lcp": 108,
+          "domContentLoaded": 92,
+          "requests": 8,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 672,
+          "ttfb": 3,
+          "fcp": 76,
+          "lcp": 76,
+          "domContentLoaded": 75,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 725,
+          "ttfb": 3,
+          "fcp": 100,
+          "lcp": 100,
+          "domContentLoaded": 86,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 661,
+          "ttfb": 3,
+          "fcp": 88,
+          "lcp": 88,
+          "domContentLoaded": 89,
+          "requests": 6,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Play",
+      "path": "/play",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 329,
+        "ready_p95": 93294,
+        "ttfb_p50": 1,
+        "fcp_p50": 80,
+        "lcp_p50": 80,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 397,
+          "ttfb": 72,
+          "fcp": 92,
+          "lcp": 160,
+          "domContentLoaded": 92,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 315,
+          "ttfb": 1,
+          "fcp": 112,
+          "lcp": 112,
+          "domContentLoaded": 15,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 329,
+          "ttfb": 1,
+          "fcp": 80,
+          "lcp": 80,
+          "domContentLoaded": 15,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 312,
+          "ttfb": 1,
+          "fcp": 76,
+          "lcp": 76,
+          "domContentLoaded": 15,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 93294,
+          "ttfb": 1,
+          "fcp": 80,
+          "lcp": 80,
+          "domContentLoaded": 18,
+          "requests": 7,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "PlayVsBot",
+      "path": "/play?action=vs-community-bot",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 940,
+        "ready_p95": 1359,
+        "ttfb_p50": 2,
+        "fcp_p50": 152,
+        "lcp_p50": 152,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 14
+      },
+      "raw": [
+        {
+          "readyMs": 989,
+          "ttfb": 55,
+          "fcp": 152,
+          "lcp": 152,
+          "domContentLoaded": 75,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 919,
+          "ttfb": 1,
+          "fcp": 96,
+          "lcp": 96,
+          "domContentLoaded": 15,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 940,
+          "ttfb": 1,
+          "fcp": 112,
+          "lcp": 112,
+          "domContentLoaded": 20,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 916,
+          "ttfb": 2,
+          "fcp": 304,
+          "lcp": 304,
+          "domContentLoaded": 49,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1359,
+          "ttfb": 7,
+          "fcp": 692,
+          "lcp": 692,
+          "domContentLoaded": 229,
+          "requests": 14,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Leaderboard",
+      "path": "/leaderboard",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 639,
+        "ready_p95": 722,
+        "ttfb_p50": 3,
+        "fcp_p50": 376,
+        "lcp_p50": 376,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 631,
+          "ttfb": 59,
+          "fcp": 336,
+          "lcp": 336,
+          "domContentLoaded": 111,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 629,
+          "ttfb": 3,
+          "fcp": 388,
+          "lcp": 388,
+          "domContentLoaded": 61,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 722,
+          "ttfb": 2,
+          "fcp": 376,
+          "lcp": 376,
+          "domContentLoaded": 53,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 639,
+          "ttfb": 1,
+          "fcp": 316,
+          "lcp": 316,
+          "domContentLoaded": 60,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 706,
+          "ttfb": 3,
+          "fcp": 456,
+          "lcp": 456,
+          "domContentLoaded": 75,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Puzzles",
+      "path": "/puzzles",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 631,
+        "ready_p95": 833,
+        "ttfb_p50": 3,
+        "fcp_p50": 364,
+        "lcp_p50": 468,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 452,
+          "ttfb": 56,
+          "fcp": 224,
+          "lcp": 280,
+          "domContentLoaded": 84,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 388,
+          "ttfb": 1,
+          "fcp": 284,
+          "lcp": 384,
+          "domContentLoaded": 37,
+          "requests": 8,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 639,
+          "ttfb": 3,
+          "fcp": 480,
+          "lcp": 612,
+          "domContentLoaded": 62,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 833,
+          "ttfb": 4,
+          "fcp": 528,
+          "lcp": 624,
+          "domContentLoaded": 133,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 631,
+          "ttfb": 3,
+          "fcp": 364,
+          "lcp": 468,
+          "domContentLoaded": 69,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 718,
+        "ready_p95": 1556,
+        "ttfb_p50": 3,
+        "fcp_p50": 444,
+        "lcp_p50": 480,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 11
+      },
+      "raw": [
+        {
+          "readyMs": 683,
+          "ttfb": 163,
+          "fcp": 224,
+          "lcp": 480,
+          "domContentLoaded": 225,
+          "requests": 8,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1556,
+          "ttfb": 4,
+          "fcp": 1220,
+          "lcp": 1220,
+          "domContentLoaded": 80,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 758,
+          "ttfb": 3,
+          "fcp": 484,
+          "lcp": 484,
+          "domContentLoaded": 93,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 718,
+          "ttfb": 3,
+          "fcp": 444,
+          "lcp": 444,
+          "domContentLoaded": 72,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 672,
+          "ttfb": 3,
+          "fcp": 420,
+          "lcp": 420,
+          "domContentLoaded": 67,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Tables",
+      "path": "/tables",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 908,
+        "ready_p95": 11369,
+        "ttfb_p50": 13,
+        "fcp_p50": 528,
+        "lcp_p50": 528,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 9
+      },
+      "raw": [
+        {
+          "readyMs": 11369,
+          "ttfb": 62,
+          "fcp": 10804,
+          "lcp": 11016,
+          "domContentLoaded": 10026,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 908,
+          "ttfb": 141,
+          "fcp": 700,
+          "lcp": 700,
+          "domContentLoaded": 229,
+          "requests": 6,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 949,
+          "ttfb": 13,
+          "fcp": 528,
+          "lcp": 528,
+          "domContentLoaded": 109,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 680,
+          "ttfb": 3,
+          "fcp": 448,
+          "lcp": 448,
+          "domContentLoaded": 85,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 615,
+          "ttfb": 3,
+          "fcp": 364,
+          "lcp": 364,
+          "domContentLoaded": 56,
+          "requests": 8,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Spar",
+      "path": "/spar",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 832,
+        "ready_p95": 1306,
+        "ttfb_p50": 6,
+        "fcp_p50": 496,
+        "lcp_p50": 532,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 12
+      },
+      "raw": [
+        {
+          "readyMs": 1043,
+          "ttfb": 105,
+          "fcp": 224,
+          "lcp": 788,
+          "domContentLoaded": 255,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 818,
+          "ttfb": 6,
+          "fcp": 548,
+          "lcp": 548,
+          "domContentLoaded": 95,
+          "requests": 11,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 832,
+          "ttfb": 3,
+          "fcp": 488,
+          "lcp": 488,
+          "domContentLoaded": 106,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 717,
+          "ttfb": 9,
+          "fcp": 496,
+          "lcp": 496,
+          "domContentLoaded": 99,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1306,
+          "ttfb": 2,
+          "fcp": 532,
+          "lcp": 532,
+          "domContentLoaded": 69,
+          "requests": 12,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Stats",
+      "path": "/stats",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 782,
+        "ready_p95": 1432,
+        "ttfb_p50": 3,
+        "fcp_p50": 460,
+        "lcp_p50": 568,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 778,
+          "ttfb": 80,
+          "fcp": 140,
+          "lcp": 568,
+          "domContentLoaded": 158,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 782,
+          "ttfb": 2,
+          "fcp": 460,
+          "lcp": 548,
+          "domContentLoaded": 56,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 724,
+          "ttfb": 3,
+          "fcp": 412,
+          "lcp": 496,
+          "domContentLoaded": 72,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1157,
+          "ttfb": 2,
+          "fcp": 592,
+          "lcp": 808,
+          "domContentLoaded": 98,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1432,
+          "ttfb": 4,
+          "fcp": 620,
+          "lcp": 948,
+          "domContentLoaded": 112,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Profile",
+      "path": "/profile",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 710,
+        "ready_p95": 871,
+        "ttfb_p50": 3,
+        "fcp_p50": 424,
+        "lcp_p50": 616,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 9
+      },
+      "raw": [
+        {
+          "readyMs": 751,
+          "ttfb": 73,
+          "fcp": 536,
+          "lcp": 736,
+          "domContentLoaded": 134,
+          "requests": 8,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 607,
+          "ttfb": 3,
+          "fcp": 388,
+          "lcp": 572,
+          "domContentLoaded": 92,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 871,
+          "ttfb": 2,
+          "fcp": 424,
+          "lcp": 616,
+          "domContentLoaded": 62,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 573,
+          "ttfb": 1,
+          "fcp": 392,
+          "lcp": 504,
+          "domContentLoaded": 52,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 710,
+          "ttfb": 3,
+          "fcp": 492,
+          "lcp": 696,
+          "domContentLoaded": 98,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "ProfileBots",
+      "path": "/profile?section=bots",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 779,
+        "ready_p95": 1049,
+        "ttfb_p50": 4,
+        "fcp_p50": 420,
+        "lcp_p50": 628,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 9
+      },
+      "raw": [
+        {
+          "readyMs": 923,
+          "ttfb": 116,
+          "fcp": 800,
+          "lcp": 800,
+          "domContentLoaded": 256,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 1049,
+          "ttfb": 4,
+          "fcp": 700,
+          "lcp": 848,
+          "domContentLoaded": 243,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 779,
+          "ttfb": 4,
+          "fcp": 420,
+          "lcp": 628,
+          "domContentLoaded": 69,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 547,
+          "ttfb": 4,
+          "fcp": 412,
+          "lcp": 536,
+          "domContentLoaded": 73,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 603,
+          "ttfb": 8,
+          "fcp": 392,
+          "lcp": 572,
+          "domContentLoaded": 94,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Gym",
+      "path": "/gym",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 721,
+        "ready_p95": 754,
+        "ttfb_p50": 14,
+        "fcp_p50": 456,
+        "lcp_p50": 456,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 9
+      },
+      "raw": [
+        {
+          "readyMs": 688,
+          "ttfb": 60,
+          "fcp": 444,
+          "lcp": 444,
+          "domContentLoaded": 116,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 676,
+          "ttfb": 3,
+          "fcp": 464,
+          "lcp": 464,
+          "domContentLoaded": 72,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 721,
+          "ttfb": 14,
+          "fcp": 448,
+          "lcp": 448,
+          "domContentLoaded": 95,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 753,
+          "ttfb": 17,
+          "fcp": 456,
+          "lcp": 456,
+          "domContentLoaded": 95,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 754,
+          "ttfb": 5,
+          "fcp": 504,
+          "lcp": 504,
+          "domContentLoaded": 106,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    },
+    {
+      "route": "Settings",
+      "path": "/settings",
+      "device": "mobile",
+      "context": "warm-anon",
+      "runs": 5,
+      "primingRuns": 1,
+      "stats": {
+        "ready_p50": 680,
+        "ready_p95": 810,
+        "ttfb_p50": 4,
+        "fcp_p50": 392,
+        "lcp_p50": 392,
+        "js_kb": null,
+        "static_kb": null,
+        "img_kb": null,
+        "requests": 10
+      },
+      "raw": [
+        {
+          "readyMs": 670,
+          "ttfb": 59,
+          "fcp": 372,
+          "lcp": 372,
+          "domContentLoaded": 109,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 810,
+          "ttfb": 5,
+          "fcp": 592,
+          "lcp": 592,
+          "domContentLoaded": 106,
+          "requests": 9,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 765,
+          "ttfb": 4,
+          "fcp": 400,
+          "lcp": 400,
+          "domContentLoaded": 72,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 680,
+          "ttfb": 4,
+          "fcp": 392,
+          "lcp": 392,
+          "domContentLoaded": 97,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        },
+        {
+          "readyMs": 657,
+          "ttfb": 4,
+          "fcp": 384,
+          "lcp": 384,
+          "domContentLoaded": 73,
+          "requests": 10,
+          "staticKb": 0,
+          "jsKb": 0,
+          "imgKb": 0,
+          "lateLoaded": []
+        }
+      ]
+    }
+  ]
+}
