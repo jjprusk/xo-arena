@@ -203,6 +203,13 @@ export default function HomePage() {
           >
             ↻ Watch another match
           </button>
+          <Link
+            to="/bots"
+            className="btn btn-secondary btn-sm w-full"
+            aria-label="Challenge any bot"
+          >
+            Challenge any bot
+          </Link>
         </div>
 
         {/* Sub-line beneath the CTAs reinforcing the unique value prop */}

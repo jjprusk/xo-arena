@@ -40,7 +40,8 @@ Effort: ~30 minutes per remaining wiring site once the destination handler is in
 | Configurable Guide | ❌ Obsolete (iframe guide retired; premise gone) |
 | Multi-Game Architecture | ✅ Largely done as the Game SDK (Phases 1.1–1.4) — remaining games are their own phases |
 | Tier 2/3 instrumentation | 🟡 Partly done (3 counters live; rest in `doc/Observability_Plan.md`) |
-| Recurring tournaments refactor (now Phase 3.7a) | 🚧 In-plan (scheduled as Phase 3.7a of the Implementation Plan, pre-prod window) |
+| Recurring tournaments schema refactor (Phase 3.7a) | ✅ Shipped — `TournamentTemplate` + `templateId` FK live; `AdminTemplatesPage` + `AdminTemplateDetailPage` exist (see Appendix) |
+| Tournament admin UX overhaul | ⏳ Open — operator-facing surfaces around recurring tournaments are clumsy; entry below |
 | `table.released` per-reason soak monitor | ⏳ Open (post-prod-launch — needs real traffic to be meaningful) |
 
 ## Migration-sensitivity audit (2026-04-23)
@@ -180,25 +181,43 @@ Low priority, mentioned for completeness:
 
 ---
 
-## Recurring tournaments — template vs occurrence semantic refactor
+## Tournament admin UX overhaul — ✅ SHIPPED 2026-05-10 (see Appendix)
 
-Today a recurring tournament is modelled as a single `Tournament` row with `isRecurring: true` that *also runs as the first occurrence*. When that row transitions to COMPLETED, the sweep creates child rows with `isRecurring: false` (the "occurrences"). The chain continues because `_nextOccurrenceStart` keeps advancing from the template's startTime and the dedup check keeps spawns unique.
+(Original analysis kept below for archaeology — the sprint covering items (a)–(i) is described in the Appendix entry "Tournament admin UX overhaul — shipped 2026-05-10".)
 
-This works and ships, but is awkward:
+The schema refactor (Phase 3.7a — `TournamentTemplate` + `templateId`) shipped: see the Appendix entry. What did **not** ship is the operator-facing UX that takes advantage of the cleaner model. Today the create/edit/manage flow for recurring tournaments is clumsy in nine concrete ways, all of which an admin runs into within their first few minutes of use.
 
-- The template is both a configuration row *and* a historical record of the first occurrence's results. You can't edit the template without risking weird side-effects on the past run.
-- Admins conflate "cancel this occurrence" with "stop the whole series." The `recurrencePaused` flag added in this sweep addresses the second part but doesn't resolve the semantic mix.
-- Querying "what recurring series exist?" means filtering tournaments by `isRecurring: true`, which excludes paused templates *and* all historical occurrences.
+**Symptoms of the clumsiness (observed on prod 2026-05-09):**
 
-**Cleaner model (refactor deferred):**
+1. **One form does both jobs.** `landing/src/components/tournament/TournamentForm.jsx` (431 lines) creates a one-off tournament *and* a recurring template by toggling `isRecurring`. Recurrence config (interval, end date, pause, opt-out) is buried in a sub-section near the bottom of a single-column form.
+2. **No schedule preview.** After creating a weekly template, nothing shows "next runs: Wed Apr 22, Wed Apr 29, Wed May 6 …". Admins can't sanity-check the schedule without waiting for the sweep to spawn the next occurrence.
+3. **Looking up a recurring series is broken.** `RecurringRegistrations` (`AdminTournamentsPage.jsx:664`) requires the admin to **paste a Template ID** into a text input. There's no clickthrough from the tournaments list to its registrations.
+4. **Pause / Stop / Cancel-this-occurrence semantics aren't surfaced.** `recurrencePaused` is a checkbox inside the edit modal. There's no row-level "Pause series" / "Stop series" action; admins conflate cancelling one occurrence with stopping the whole thing.
+5. **No edit-template-vs-edit-occurrence branching in the UI.** The schema separates them, but the form doesn't visually distinguish "you are editing the template (affects all future runs)" from "you are editing this occurrence."
+6. **Seed bots and standing human registrations are managed in a separate panel.** Most "I want a weekly cup with these 4 bots" workflows take 3 surfaces — create form, seed-bots tab, registrations panel — when they should be one.
+7. **No clone affordance.** Common operator action ("make another one like this on a different day") requires retyping every field.
+8. **Date input inconsistency.** `startTime` uses the custom `DateTimePicker` (Safari-safe); `recurrenceEndDate` is a bare `<input type="date">` with the just-shipped "no end date" toggle as a workaround. The fix is to drop bare native date inputs entirely and use the same picker.
+9. **No timezone affordance.** Datetimes are entered in browser-local time with no display of the resolved UTC or "tournament starts 14:00 UTC for users in TZ X."
 
-- Add a `TournamentTemplate` table that holds the recurrence config (interval, end date, paused, seed bots, human subscriptions) but never itself runs.
-- Every tournament row becomes a pure occurrence with `templateId?: string`.
-- Admin create-recurring UI creates the template first, then the sweep spawns the first occurrence on `startTime`.
-- Human subscriptions + seed bots attach to the template, not the first occurrence.
-- `GET /api/tournaments` filters stay on `Tournament`; `GET /api/templates` becomes the admin view.
+**Plus a structural near-miss:** `isTest` and `isRecurring` are 150 lines apart in the form — creating a test recurring series for QA is undocumented.
 
-**Effort:** ~4–6 hours. Schema migration + data backfill (split existing templates into their config rows + preserved-as-occurrence rows) + rewriting the sweep + updating 3-4 UI surfaces. No functional gain for users in isolation — only worth doing when the current model actively causes a bug or a planned feature requires separating config from history.
+**Proposed scope (do as a single sprint):**
+
+- **(a)** Recurring-series list view at `/admin/templates` with status pills (active / paused / stopped), next-run timestamp, subscriber count, seed-bot count. Click row → template detail page.
+- **(b)** Schedule preview on the template detail page — render the next 5 occurrences (computed from `recurrenceInterval` + `recurrenceEndDate` + `recurrencePaused`) so admins can verify the schedule visually.
+- **(c)** Edit-template vs edit-occurrence branching. The current `TournamentModal` should detect `templateId` and route to a "Template editor" mode with explicit "this affects all future runs" messaging; otherwise the existing single-occurrence edit.
+- **(d)** Row-level actions on the templates list: **Pause series**, **Resume series**, **Stop series**, **Clone**. Mirror these on the template detail page.
+- **(e)** Embedded standing-registration management — a panel inside the template detail page (not a separate lookup). Add/remove humans, view missed-counts, opt-out users.
+- **(f)** Embedded seed-bot management — same idea: a panel on the template detail page, not a separate tab.
+- **(g)** Clone-from action on every tournament row in `AdminTournamentsPage` — pre-fills `TournamentForm` with the source's config, clears name + dates.
+- **(h)** Replace every bare `<input type="date">` with the existing `DateTimePicker`. Add a small TZ display next to start times (e.g. "14:00 ET / 18:00 UTC").
+- **(i)** Reorganise `TournamentForm` into three top-level groups: **Basics** (name, game, mode, format), **Schedule** (start, registration, recurrence), **Advanced** (seed bots, pace, opt-out, isTest). Recurrence becomes a first-class section, not a buried sub-section.
+
+**Effort:** Medium-large (~3–5 days). Most of it is React surfaces; the backend is fine. Suggest tackling in the order above (a→i) so each piece is independently shippable.
+
+**Planned foundation sprint (~1.5–2 days):** `(h) → (i) → (c)` — date picker consistency, then `TournamentForm` reorg into Basics / Schedule / Advanced, then the template-vs-occurrence edit-mode branching. Items (a) and (f) are already shipped (the template pages + `SeedBotsPanel` exist); (b)(d)(e)(g) become parallel leaves once (c) lands.
+
+**Why now (vs deferred again):** the schema refactor shipped without the matching operator UX, so admins have been running on the worse-of-both-worlds — new schema complexity, old single-form ergonomics. The Cora-3 / Cora-1 admin flows from 2026-05-09 surfaced this concretely.
 
 ---
 
@@ -256,6 +275,73 @@ Trigger on any of:
 # Appendix — Resolved & Obsolete
 
 Entries that were once "future ideas" or open bugs but have since been fixed, superseded, or rendered obsolete. Kept for archaeology — they often explain *why* the current architecture looks the way it does. Newest at top.
+
+## ✅ Tournament admin UX overhaul — shipped 2026-05-10
+
+**Problem:** Phase 3.7a separated `TournamentTemplate` from `Tournament` in the schema, but the operator-facing UI never caught up — the create/edit/manage flow for recurring tournaments was clumsy across nine specific dimensions catalogued in the original "Tournament admin UX overhaul" section earlier in this doc.
+
+**What shipped (foundation sprint then final sprint):**
+
+- **Foundation sprint** (h → i → c): bare `<input type="date">` and `datetime-local` were swapped for the shared `<DateTimePicker>` (Safari-safe) plus a `<LocalTZ>` line showing "14:00 EDT / 18:00 UTC"; `TournamentForm` reorganised into three top-level groups — Basics / Schedule / Advanced — with recurrence promoted to a first-class subsection under Schedule; `TournamentModal` detects an occurrence's `templateId` and renders an amber banner linking to the template editor so admins know edits there are local to *this* run.
+- **Schedule preview** (b): pure helper `landing/src/lib/recurrence.js#nextOccurrences` mirrors the scheduler's `advanceOne` math. New "Schedule preview" panel on `/admin/templates/:id` renders the next 5 spawn times honoring `recurrenceEndDate` and `paused` (paused → "no occurrences" message).
+- **Row-level series actions** (d): templates list `ActionMenu` now offers Pause/Resume series, **Stop series** (sets `recurrenceEndDate=now()` + `paused=true` so the scheduler permanently halts; reversible via clearing the end date but distinct from Delete), and **Clone** (deep-copies template config + seed bots, drops subscriptions, opens the clone in edit mode). New backend routes: `POST /admin/templates/:id/stop` and `POST /admin/templates/:id/clone`.
+- **Embedded standing-registrations panel** (e): replaces the orphaned "look up by Template ID" form on `AdminTournamentsPage` with a "Standing registrations" panel directly on the template detail page. Shows display-named subscribers with missed-counts, opt-out toggle, an "Add subscriber" input that accepts username or userId, and an "Include opted-out users" checkbox for audit. New tournament-service routes: `POST /api/recurring/:templateId/registrations` (admin enrol by username/userId, idempotent), `DELETE /api/recurring/:templateId/registrations/:userId` (sets `optedOutAt`, preserves history), and `?includeOptedOut=true` query on the existing list endpoint.
+- **Clone-from on tournament rows** (g): `AdminTournamentsPage` row `ActionMenu` gained a Clone item that opens `TournamentModal` in a new `mode='clone'` — `TournamentForm` is prefilled from the source row with name suffix " (Copy)" and `startTime` / `registrationOpenAt` / `registrationCloseAt` cleared, falling through to `tournamentApi.create()` (not update).
+
+**What did not ship:** items (a) and (f) were already present from earlier work — `AdminTemplatesPage` exists at `/admin/templates` and `SeedBotsPanel` is embedded on the template detail page.
+
+## ✅ Bot Challenge & Discovery — shipped 2026-05-10
+
+**Problem:** "play another player's bot" was the platform's stated key differentiator but had no UX path. `POST /rt/tables { kind: 'hvb', botUserId }` and `GET /api/v1/bots` already supported it server-side; the gap was discovery + a one-click action surface.
+
+**What shipped (Phases A → C):**
+
+- **Primitives** (Phase A): `useBots()` SWR hook over the public bot list, `<BotCard>`, `<ChallengeButton>` (default + icon variants, guest-friendly, posts `/rt/tables` and navigates to `/play?join=<slug>`), `<BotFilterBar>` (search, ELO range, owner toggle, game select, "show all bots" toggle).
+- **Surfaces** (Phase B): new `/bots` directory (scrollable `ListTable` of Bot/Owner/ELO/Games/Play); "Challenge" sections on `BotProfilePage` and the `/rankings` bot rows; "Challenge any bot" link on Home below "Watch another match"; About moved out of primary nav into the footer, replaced by Bots.
+- **Pickers** (Phase C): tabbed bot picker in the Create Table modal (My / Community / All); Quick Match button on the directory header — calls new `GET /api/v1/bots/quick-match` (guest-OK, ELO-window candidate picker that excludes own bots).
+- **Skill-gating:** backend `listBots()` now returns `playableGameIds` per bot, sourced strictly from `BotSkill` rows (legacy `botModelType='minimax'` bots without a skill row were false-positives — they reject at table-create with `NO_SKILL`). The directory filters to playable bots by default; a "Show all bots" toggle reveals the rest with a greyed-out Challenge button and a "No skill for XO" hint.
+- **Context-aware navigation:** every linker to `/bots/:id` (directory rows, Rankings, ProfilePage's "My bots") passes `state.from`; `BotProfilePage`'s back link prefers state with a `/bots` fallback. `ChallengeButton`/`QuickMatchButton` thread the same state into `/play`; `PlayPage.leaveHref` honors it so "Leave Table" returns the user to the directory they came from instead of a hardcoded `/tables`.
+- **Guest path:** every challenge surface works for unauthenticated visitors; the existing post-game signup CTA fires after the first finished game, not as a gate.
+- **Tests:** unit coverage on each primitive + page + the quick-match route; new `e2e/tests/bot-challenge-flow.spec.js` covers the guest path through directory, profile, Quick Match, and Rankings.
+
+**Original plan doc:** `Bot_Challenge_Plan.md` (deleted on completion — this entry is the digest).
+
+## ✅ Bot best-of-N series cap mis-formula — fixed 2026-05-09
+
+**Symptom:** every prod tournament with bot-vs-bot matches came in 10–35% over its theoretical bracket-game ceiling. Cora 3 (6-team SINGLE_ELIM bestOf3, all bots) played 20 games against an expected 15 — three of five played matches recorded `p1Wins=0, p2Wins=0` despite COMPLETED status, and showed exactly 5 games each (all draws + deterministic-tiebreaker resolution).
+
+**Root cause:** `backend/src/realtime/botGameRunner.js:230` had `const hardCap = Math.max(bestOfN * 2 - 1, 1)`. The `2N − 1` formula is correct for the *other* bestOf convention (where N is the wins required and `2N − 1` is the max games — e.g. "best of 3 wins" = max 5 games). But this codebase uses `bestOfN` to mean **max games** (`winsNeeded = ⌈N/2⌉` a few lines above), so the cap should just be N. For bestOf3 the cap was 5 games instead of 3. Two minimax bots playing optimally always draw → series ran the full 5-draw stretch every time before the deterministic tiebreaker resolved it.
+
+**Fix:** extracted `seriesGameCap(bestOfN) = max(bestOfN, 1)` and used it. Existing tests only covered `bestOfN: 1`, so the broken path was never exercised. Added 4 new unit-test assertions covering bestOf1/3/5 + nullish-fallback. Bot-vs-bot tournaments now run noticeably faster and tournament game counts match the bracket math used by `expectedGameCount` and the runaway-loop guard.
+
+## ✅ Pending PVP match registry per-process race — fixed 2026-05-09
+
+**Symptom:** in a MIXED tournament with two human players paired in a round-1 HvH match, the second human's "Play Match" click could return "Table closed due to inactivity" — surfacing as `useGameSDK setAbandoned({reason:'stale'})` from a 404 on `POST /api/v1/rt/tournaments/matches/:id/table`. Single-machine staging never reproduced; prod intermittently did.
+
+**Root cause:** `_pendingPvpMatches` in `backend/src/lib/tournamentBridge.js` was a per-process in-memory `Map`, populated from a Redis **pub/sub** subscription (not a stream — pub/sub does not replay missed messages). On multi-machine prod, three failure modes diverged the maps:
+
+1. **Autoscale-up** — a new backend machine spawned after `tournament:match:ready` was published never received the event; its map stayed empty.
+2. **Rolling deploy** — a redeployed machine lost its in-memory map; existing tournaments lost their entries on the restarted node.
+3. **Transient Redis disconnect** — any subscriber gap during the publish missed the event.
+
+`/rt/*` POSTs are routed via Fly-Replay to the SSE-owning machine. If user-1 and user-2's SSE sessions landed on different machines, and user-2's machine didn't have the entry, the claim returned `NOT_FOUND` → 404.
+
+**Fix:** replaced the in-memory `Map` with a Redis hash `tournament:pending:<matchId>` (TTL via `EXPIRE`, no JS-side prune needed). Falls back to in-memory when `REDIS_URL` is unset (tests / local-only). All four operations became async; six caller sites await them. Added 9 unit tests covering get/set/delete/count round-trips, slug-only updates, null-clear-on-disconnect, missing-key no-op, and bestOfN type coercion.
+
+**Verified on 2-machine staging:** pre-fix the same shape caught 2/10 failures during a new-machine warmup window. Post-fix: 25/25 across 25 runs on a fresh 2-machine deploy. The race window structurally closes — there is no per-process state to diverge.
+
+## ✅ Recurring tournaments — template/occurrence schema refactor — shipped (Phase 3.7a)
+
+**Original problem:** a recurring tournament was modelled as a single `Tournament` row with `isRecurring: true` that *also ran as the first occurrence*. The template was both a configuration row *and* a historical record of the first run, and "what recurring series exist?" couldn't be answered without filtering. Admins also conflated "cancel this occurrence" with "stop the whole series."
+
+**What shipped (Phase 3.7a):**
+
+- New `TournamentTemplate` table holds the recurrence config (interval, end date, paused, seed bots, human subscriptions). It never itself runs.
+- Every `Tournament` row is now a pure occurrence with `templateId?: string`. The schema removed `isRecurring` / `recurrenceInterval` / `recurrencePaused` from `Tournament`.
+- New `TournamentTemplateSeedBot` and `TournamentRecurringRegistration` tables key on `templateId`, not the first occurrence's tournament id.
+- Admin surfaces shipped: `landing/src/pages/admin/AdminTemplatesPage.jsx` + `AdminTemplateDetailPage.jsx`. The recurring scheduler in the tournament service was rewritten to advance from the template, not the first row.
+
+**What this entry left behind for the operator UX:** see the open "Tournament admin UX overhaul" entry above. The schema landed cleanly; the operator-facing surfaces around it (schedule preview, embedded seed/registration mgmt, edit-template-vs-occurrence branching, clone, TZ display, …) did not. That work is tracked separately.
 
 ## ✅ Tournament bot matches stuck IN_PROGRESS — fixed 2026-05-05
 

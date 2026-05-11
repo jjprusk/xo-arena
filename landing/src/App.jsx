@@ -29,6 +29,7 @@ import GuideMetricsPage from './pages/admin/GuideMetricsPage.jsx'
 import RankingsPage from './pages/RankingsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
+import BotDirectoryPage from './pages/BotDirectoryPage.jsx'
 import PublicProfilePage from './pages/PublicProfilePage.jsx'
 import SupportPage from './pages/SupportPage.jsx'
 import GymPage from './pages/GymPage.jsx'
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/rankings" element={<RankingsPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/bots" element={<BotDirectoryPage />} />
           <Route path="/bots/:id" element={<BotProfilePage />} />
           <Route path="/users/:username" element={<PublicProfilePage />} />
           <Route path="/support" element={<SupportPage />} />

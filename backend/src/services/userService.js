@@ -612,27 +612,47 @@ export async function listBots({ ownerId, includeInactive = false, includeSkills
     orderBy: { createdAt: 'desc' },
   })
 
-  let skillsByBot = new Map()
-  if (includeSkills && bots.length > 0) {
+  // One BotSkill query covers both:
+  //   - playableGameIds (always returned) — which games can the bot actually
+  //     play. Source-of-truth is the BotSkill table because the play path
+  //     resolves a (botId, gameId) row before the match starts
+  //     (`resolveSkillForGame` in tableFlowService); botModel fields like
+  //     `botModelType='minimax'` aren't sufficient on their own (legacy
+  //     test bots have the type but no skill row and reject with NO_SKILL).
+  //   - skills (optional, when includeSkills=true) — full BotSkill rows
+  //     keyed by botId, with per-skill ELO joined in.
+  // Cost stays O(1) in DB roundtrips regardless of bot count.
+  let skillsByBot   = new Map()
+  let playableByBot = new Map()
+  if (bots.length > 0) {
     const botIds = bots.map(b => b.id)
     const allSkills = await db.botSkill.findMany({
       where:   { botId: { in: botIds } },
       orderBy: { createdAt: 'asc' },
     })
-    // Per-skill ELO is keyed by (userId=botId, gameId). Pull all rows for
-    // any (botId, gameId) pair we hold a skill for, then index.
-    const eloPairs = allSkills.map(s => ({ userId: s.botId, gameId: s.gameId }))
-    const eloRows  = eloPairs.length === 0 ? [] : await db.gameElo.findMany({
-      where:  { OR: eloPairs },
-      select: { userId: true, gameId: true, rating: true, gamesPlayed: true },
-    })
-    const eloKey = (uid, gid) => `${uid}|${gid}`
-    const eloByPair = new Map(eloRows.map(r => [eloKey(r.userId, r.gameId), r]))
 
     for (const s of allSkills) {
-      const arr = skillsByBot.get(s.botId) ?? []
-      arr.push({ ...s, elo: eloByPair.get(eloKey(s.botId, s.gameId)) ?? null })
-      skillsByBot.set(s.botId, arr)
+      const arr = playableByBot.get(s.botId) ?? []
+      if (!arr.includes(s.gameId)) arr.push(s.gameId)
+      playableByBot.set(s.botId, arr)
+    }
+
+    if (includeSkills) {
+      // Per-skill ELO is keyed by (userId=botId, gameId). Pull all rows for
+      // any (botId, gameId) pair we hold a skill for, then index.
+      const eloPairs = allSkills.map(s => ({ userId: s.botId, gameId: s.gameId }))
+      const eloRows  = eloPairs.length === 0 ? [] : await db.gameElo.findMany({
+        where:  { OR: eloPairs },
+        select: { userId: true, gameId: true, rating: true, gamesPlayed: true },
+      })
+      const eloKey = (uid, gid) => `${uid}|${gid}`
+      const eloByPair = new Map(eloRows.map(r => [eloKey(r.userId, r.gameId), r]))
+
+      for (const s of allSkills) {
+        const arr = skillsByBot.get(s.botId) ?? []
+        arr.push({ ...s, elo: eloByPair.get(eloKey(s.botId, s.gameId)) ?? null })
+        skillsByBot.set(s.botId, arr)
+      }
     }
   }
 
@@ -641,6 +661,7 @@ export async function listBots({ ownerId, includeInactive = false, includeSkills
     ...b,
     eloRating: b.gameElo?.[0]?.rating ?? 1200,
     gameElo: undefined,
+    playableGameIds: playableByBot.get(b.id) ?? [],
     ...(includeSkills ? { skills: skillsByBot.get(b.id) ?? [] } : {}),
   }))
 }

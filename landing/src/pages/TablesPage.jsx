@@ -22,6 +22,9 @@ import { ListTable, ListTh, ListTd, ListTr, ListPagination, SearchBar } from '..
 import ShareTableButton from '../components/tables/ShareTableButton.jsx'
 import { BoardPreview as XoBoardPreview } from '@callidity/game-xo'
 import { GAMES } from '../lib/gameRegistry.js'
+import { useBots } from '../lib/useBots.js'
+import BotCard from '../components/bots/BotCard.jsx'
+import BotFilterBar from '../components/bots/BotFilterBar.jsx'
 
 // Map game IDs to their preview component. Add new games here as they ship.
 const GAME_PREVIEWS = { xo: XoBoardPreview }
@@ -525,39 +528,45 @@ function EmptyState({ canCreate, onCreate }) {
   )
 }
 
-function CreateTableModal({ onClose, onCreated }) {
+// Exported so tests can render the modal directly without the full page +
+// auth-gated trigger. Keeps the page→modal control flow unchanged.
+export function CreateTableModal({ onClose, onCreated }) {
   const navigate = useNavigate()
-  const [gameId,     setGameId]     = useState(GAME_OPTIONS[0].id)
-  const [isPrivate,  setIsPrivate]  = useState(false)
-  const [opponentId, setOpponentId] = useState('human')  // 'human' | bot domain User.id
-  const [myBots,     setMyBots]     = useState([])
-  const [busy,       setBusy]       = useState(false)
-  const [err,        setErr]        = useState(null)
+  const { data: session } = useOptimisticSession()
+  const userId   = session?.user?.id ?? null
+  const isGuest  = !session?.user
+
+  const [gameId,       setGameId]       = useState(GAME_OPTIONS[0].id)
+  const [isPrivate,    setIsPrivate]    = useState(false)
+  // 'human' = open-seat PvP; 'bot' = pick a specific bot from any owner.
+  // Default 'human' preserves the prior modal's first-render behavior;
+  // users opt into the bot picker explicitly.
+  const [opponentType, setOpponentType] = useState('human')
+  const [filters,      setFilters]      = useState(() =>
+    isGuest ? { owner: 'all' } : { owner: 'mine' },
+  )
+  const [busy,         setBusy]         = useState(false)
+  const [err,          setErr]          = useState(null)
 
   const game = useMemo(() => GAME_OPTIONS.find(g => g.id === gameId) ?? GAME_OPTIONS[0], [gameId])
 
-  // Fetch the user's own bots to populate the opponent dropdown
-  useEffect(() => {
-    getToken().then(token => {
-      if (!token) return
-      api.bots.mine(token).then(res => setMyBots(res.bots ?? [])).catch(() => {})
-    })
-  }, [])
+  // Phase C.1 — pull from the public bot list, owner-filtered client-side.
+  // Replaces the old `api.bots.mine` dropdown which was constrained to
+  // the caller's own bots.
+  const { bots, allBots, isLoading: botsLoading } = useBots(filters, userId)
+
+  function pickBot(bot) {
+    if (!bot?.id) return
+    const qs = new URLSearchParams({ botUserId: bot.id })
+    navigate(`/play?${qs}`)
+    onClose()
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (opponentType !== 'human') return  // bots use direct click, not submit
     setBusy(true); setErr(null)
     try {
-      if (opponentId !== 'human') {
-        const bot = myBots.find(b => b.id === opponentId)
-        if (!bot) throw new Error('Bot not found')
-        // Phase 3.8.5.2 — picker carries only botId; the server resolves
-        // the skill from (botId, gameId) at match start.
-        const qs = new URLSearchParams({ botUserId: bot.id })
-        navigate(`/play?${qs}`)
-        onClose()
-        return
-      }
       const token = await getToken()
       if (!token) throw new Error('Sign in to create a table.')
       const { table } = await api.tables.create({
@@ -574,7 +583,7 @@ function CreateTableModal({ onClose, onCreated }) {
     }
   }
 
-  const hasBots = myBots.length > 0
+  const showingBotPicker = opponentType === 'bot'
 
   return (
     <div
@@ -584,9 +593,10 @@ function CreateTableModal({ onClose, onCreated }) {
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-2xl p-5 space-y-4"
-        style={{ background: 'var(--bg-surface)', boxShadow: 'var(--shadow-md)' }}
+        className={`w-full ${showingBotPicker ? 'max-w-2xl' : 'max-w-sm'} rounded-2xl p-5 space-y-4`}
+        style={{ background: 'var(--bg-surface)', boxShadow: 'var(--shadow-md)', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}
+        data-testid="create-table-modal"
       >
         <header className="flex items-center justify-between">
           <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>Create table</h2>
@@ -608,24 +618,70 @@ function CreateTableModal({ onClose, onCreated }) {
           </select>
         </label>
 
-        {hasBots && (
-          <label className="block space-y-1">
-            <span className="text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Opponent</span>
-            <select
-              value={opponentId}
-              onChange={e => setOpponentId(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-            >
-              <option value="human">Human (open seat)</option>
-              {myBots.map(b => (
-                <option key={b.id} value={b.id}>{b.displayName}</option>
-              ))}
-            </select>
-          </label>
+        <fieldset className="space-y-2">
+          <legend className="text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Opponent
+          </legend>
+          <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-default)' }}>
+            {[
+              { key: 'human', label: 'Human (open seat)' },
+              { key: 'bot',   label: 'Bot' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setOpponentType(opt.key)}
+                className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  backgroundColor: opponentType === opt.key ? 'var(--color-slate-100)' : 'transparent',
+                  color:           opponentType === opt.key ? 'var(--text-primary)'   : 'var(--text-muted)',
+                }}
+                data-active={opponentType === opt.key ? 'true' : 'false'}
+                data-testid={`create-table-opponent-${opt.key}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        {showingBotPicker && (
+          <div className="space-y-3" data-testid="create-table-bot-picker">
+            <BotFilterBar
+              value={filters}
+              onChange={setFilters}
+              ownerToggleAllowsMine={!isGuest}
+            />
+            {botsLoading && allBots.length === 0 ? (
+              <p className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }} data-testid="create-table-bots-loading">
+                Loading bots…
+              </p>
+            ) : bots.length === 0 ? (
+              <p className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }} data-testid="create-table-bots-empty">
+                No bots match these filters.
+              </p>
+            ) : (
+              <div
+                className="grid gap-2 max-h-[40vh] overflow-y-auto pr-1"
+                data-testid="create-table-bot-grid"
+              >
+                {bots.map(b => (
+                  <BotCard
+                    key={b.id}
+                    bot={b}
+                    variant="select"
+                    onSelect={pickBot}
+                  />
+                ))}
+              </div>
+            )}
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              Click a bot to start playing — no Create needed.
+            </p>
+          </div>
         )}
 
-        {opponentId === 'human' && (
+        {opponentType === 'human' && (
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
@@ -649,15 +705,17 @@ function CreateTableModal({ onClose, onCreated }) {
           </p>
         )}
 
-        <div className="flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy}
-                  className="btn btn-ghost btn-sm">
-            Cancel
-          </button>
-          <button type="submit" disabled={busy} className="btn btn-primary btn-sm">
-            {busy ? 'Creating…' : 'Create table'}
-          </button>
-        </div>
+        {opponentType === 'human' && (
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={onClose} disabled={busy}
+                    className="btn btn-ghost btn-sm">
+              Cancel
+            </button>
+            <button type="submit" disabled={busy} className="btn btn-primary btn-sm">
+              {busy ? 'Creating…' : 'Create table'}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   )
