@@ -57,6 +57,10 @@ services:
       - ./packages/ai:/app/packages/ai
       - ./packages/db:/app/packages/db
       - ./perf/baselines:/app/perf/baselines:ro
+      # Read-only mount of the markdown help corpus for the seeder. New
+      # files appear on next backend restart; the seeder is additive only
+      # (never overwrites existing DB rows — DB is canonical after seed).
+      - ./doc/Help_Corpus:/app/doc/Help_Corpus:ro
       - /app/node_modules
     depends_on:
       postgres:

@@ -8,6 +8,7 @@ import app, { registerRoutes } from './app.js'
 import logger from './logger.js'
 import db from './lib/db.js'
 import { runSeed } from '../prisma/seed.js'
+import { seedCorpus as seedHelpCorpus } from './services/help/corpusSeeder.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -20,6 +21,7 @@ import skillsRouter from './routes/skills.js'
 import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
 import adminPerfBaselinesRouter from './routes/adminPerfBaselines.js'
+import helpAdminRouter from './routes/helpAdmin.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
@@ -53,6 +55,7 @@ registerRoutes(app, {
   // '/rooms' removed in Phase 3.4 — Tables are the only game primitive
   '/admin/ai': adminAiRouter,
   '/admin/perf': adminPerfBaselinesRouter,
+  '/admin/help': helpAdminRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,
@@ -111,6 +114,15 @@ try {
   logger.info('DB seed complete')
 } catch (err) {
   logger.warn({ err: err.message }, 'DB seed failed (non-fatal)')
+}
+
+// Seed the Help corpus from /doc/Help_Corpus (additive — never overwrites
+// existing slugs). DB is canonical after seed; admin editor handles updates.
+try {
+  const r = await seedHelpCorpus()
+  if (r.inserted > 0) logger.info(r, 'Help corpus seeded')
+} catch (err) {
+  logger.warn({ err: err.message }, 'Help corpus seed failed (non-fatal)')
 }
 
 // Pre-warm the DB connection pool so first requests don't pay connection cost
