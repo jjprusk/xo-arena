@@ -1,0 +1,260 @@
+{
+  "timestamp": "2026-05-13T20:54:06.356Z",
+  "env": "staging",
+  "baseUrl": "https://xo-landing-staging.fly.dev",
+  "runs": 5,
+  "results": [
+    {
+      "route": "Home",
+      "path": "/",
+      "primaryApi": "/api/v1/bots",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiTotal": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "lcp": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "loadEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        }
+      },
+      "raw": {
+        "apiStart": [],
+        "apiTotal": [],
+        "apiEnd": [],
+        "lcp": [],
+        "loadEnd": []
+      },
+      "apiSummary": null
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "primaryApi": "/api/tournaments",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiTotal": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "lcp": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "loadEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        }
+      },
+      "raw": {
+        "apiStart": [],
+        "apiTotal": [],
+        "apiEnd": [],
+        "lcp": [],
+        "loadEnd": []
+      },
+      "apiSummary": null
+    },
+    {
+      "route": "Rankings",
+      "path": "/rankings",
+      "primaryApi": "/api/v1/leaderboard",
+      "device": "desktop",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiTotal": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "lcp": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "loadEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        }
+      },
+      "raw": {
+        "apiStart": [],
+        "apiTotal": [],
+        "apiEnd": [],
+        "lcp": [],
+        "loadEnd": []
+      },
+      "apiSummary": null
+    },
+    {
+      "route": "Home",
+      "path": "/",
+      "primaryApi": "/api/v1/bots",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiTotal": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "lcp": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "loadEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        }
+      },
+      "raw": {
+        "apiStart": [],
+        "apiTotal": [],
+        "apiEnd": [],
+        "lcp": [],
+        "loadEnd": []
+      },
+      "apiSummary": null
+    },
+    {
+      "route": "Tournaments",
+      "path": "/tournaments",
+      "primaryApi": "/api/tournaments",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiTotal": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "lcp": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "loadEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        }
+      },
+      "raw": {
+        "apiStart": [],
+        "apiTotal": [],
+        "apiEnd": [],
+        "lcp": [],
+        "loadEnd": []
+      },
+      "apiSummary": null
+    },
+    {
+      "route": "Rankings",
+      "path": "/rankings",
+      "primaryApi": "/api/v1/leaderboard",
+      "device": "mobile",
+      "runs": 5,
+      "stats": {
+        "apiStart": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiTotal": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "apiEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "lcp": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        },
+        "loadEnd": {
+          "p50": null,
+          "p95": null,
+          "n": 0
+        }
+      },
+      "raw": {
+        "apiStart": [],
+        "apiTotal": [],
+        "apiEnd": [],
+        "lcp": [],
+        "loadEnd": []
+      },
+      "apiSummary": null
+    }
+  ]
+}

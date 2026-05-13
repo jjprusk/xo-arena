@@ -1,6 +1,6 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `dev`; Sprint 4 corpus pulled forward.
+**Status:** Sprint 1 complete on `staging` (v1.4.0-alpha-4.15); Sprint 4 corpus pulled forward.
 **Last updated:** 2026-05-13
 **Companion to:** `Help_System_Plan.md`
 
@@ -25,7 +25,7 @@ This is the checkbox-form task tracker for the Help System implementation. The a
 - [x] Add `HelpAnswer` model (`id`, `queryId`, `chunkIds`, `rendered`, `rank`, `tokensIn`, `tokensOut`, `stopReason`, `contentFilterTriggered`, `contentFilterTerms`)
 - [x] Add `HelpFeedback` model (`id`, `userId`, `queryId`, `answerId`, `signal NULL`, `category NULL`, `comment NULL`, `implicit`, `createdAt`, `updatedAt`); unique (`userId`, `queryId`, `answerId`)
 - [x] Run `docker compose run --rm backend npx prisma migrate deploy` on dev
-- [ ] Apply migration to staging via `/stage` once verified locally
+- [x] Apply migration to staging via `/stage` once verified locally — deployed `v1.4.0-alpha-4.13` (Sprint 1) and `v1.4.0-alpha-4.15` (corpus-bundle fix)
 
 **Notes:** Migration `20260513120000_help_system_foundation` applied cleanly. Dev postgres image switched to `pgvector/pgvector:pg16` (volume-compatible). Tsvector triggers wired on `help_chunks` and `help_queries`. Before `/stage`, Fly Postgres needs `CREATE EXTENSION vector` enabled (pgvector ships with Fly's PG image since 2024).
 
@@ -124,16 +124,16 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 - [x] Also shipped: `um help-list` (table of all docs) and `um help-reindex [slug]`
 - [x] Manual round-trip verified: export → re-seed → DB state matches
 
-### 1.11 Sprint 1 acceptance (complete modulo /stage)
+### 1.11 Sprint 1 acceptance — COMPLETE
 
 - [x] All Prisma models live in dev
-- [ ] Live in staging — pending `/stage` (waiting on user invocation)
+- [x] Live in staging — `v1.4.0-alpha-4.15` deployed; smoke 12/12 green; HelpDoc corpus bundled into prod image (Dockerfile fix `55fe905`)
 - [x] Admin user can sign in, navigate to `/admin/help`, create/edit/archive a doc — verified via E2E `help-admin.spec.js`
 - [x] A HELP_ADMIN-only test user redirects from `/admin` to `/admin/help` — verified in `AdminLandingRoute.test.jsx`
 - [x] Hybrid search returns sensible results — verified on 20+ hand-curated queries across iterations
 - [x] `seed:help` (automatic on boot) + `um help-reindex` + `um help-export` round-trip cleanly
 - [x] Full backend test suite passes: **1647 tests** via `docker compose exec -T backend npx vitest run`. Landing: **344 tests**. E2E `help-admin`: **2 tests**. All green.
-- [ ] CI green; ready for `/stage` — pending push verification
+- [x] CI green; ready for `/stage` — confirmed on every commit through `55fe905`
 
 ---
 
