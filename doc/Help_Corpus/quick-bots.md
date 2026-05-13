@@ -15,9 +15,11 @@ A **Quick Bot** is the fastest way to get a bot of your own. It takes about thir
 
 Under the hood, a Quick Bot is a **minimax engine** — the same algorithm the built-in bots (Rusty/Copper/Sterling/Magnus) use — with a difficulty label that controls how it plays.
 
-"Training" a Quick Bot does **not** change any weights or run any episodes. It's a tier-bump operation: you pick a difficulty and the platform assigns that difficulty to a bot record under your account. The behaviour is identical to the matching built-in bot for that tier.
+"Training" a Quick Bot does **not** change any weights or run any episodes. It's a **tier-bump operation**: you pick a difficulty and the platform assigns that difficulty to a bot record under your account. The behaviour is identical to the matching built-in bot for that tier.
 
-This is intentional: a fast, predictable, zero-cost way to get a bot for first-time owners, tournament slot-filling, and Curriculum step 4.
+This is intentional. A new user's first encounter with "training" should be one click that produces a visibly different bot, not a 10-minute server job. The Curriculum journey credits step 4 ("Train your bot") when you bump a Quick Bot — and the Guide framing is honest about it: this is *configuring difficulty*, not actually learning. The real ML training (where weights actually change from gameplay) is in the **Gym**, and it's a separate, deeper journey.
+
+The platform's default Quick Bot tier and the "first training bump" tier are configurable via SystemConfig (`guide.quickBot.defaultTier`, `guide.quickBot.firstTrainingTier`). Defaults are `novice` and `intermediate`.
 
 ## The four tiers (XO)
 

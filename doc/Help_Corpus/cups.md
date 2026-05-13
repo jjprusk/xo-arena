@@ -40,7 +40,7 @@ The Rookie Cup is the *next* step after Curriculum — surfaced as the top "Comp
 - **2 × Copper**
 - **1 × Sterling** (Advanced built-in bot)
 
-The bracket is **deterministically seeded** so Sterling lands in the opposite half from you — meaning you can only meet Sterling in the final. Your first three matches are against Rusty and Copper at most; if you reach the final you've earned the fight.
+The bracket is **deterministically seeded** so Sterling lands in slot 8, opposite your slot 1 in the bracket — meaning you can only meet Sterling in the **semifinals at earliest**, and only the final if you both win out. Your first match is always against a Rusty; your early rounds stay beatable.
 
 The Rookie Cup is your first real test of whether your bot has learned anything beyond minimax. Winning it usually requires an ML-trained bot — a Quick Bot Master will draw against Sterling forever.
 

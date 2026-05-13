@@ -31,9 +31,13 @@ See "Training a Quick Bot" and "Gym and ML training" for details.
 
 ## Multi-skill bots
 
-A single bot can carry **multiple skills** — for example, a tic-tac-toe Q-Learning skill plus a pong AlphaZero skill (when Pong is fully released). One skill is the **primary**, used for the Bot Directory listing and for random matchmaking. The primary is auto-updated when you finish a new training run; you can also repoint it manually.
+A single bot can carry **multiple skills** — for example, a tic-tac-toe Q-Learning skill plus a pong AlphaZero skill (once Pong's training UI fully releases). One skill is the **primary**, used for the Bot Directory listing and for random matchmaking. The primary is auto-updated when you finish a new training run; you can also repoint it manually from the bot's profile.
+
+Multi-skill is **shipped today** (Phase 3.8 complete): the `BotSkill` table is live, the profile UI shows skill pills (game · algorithm · ELO · episodes) and an **+ Add skill** affordance, the Gym sidebar lets you drill down to a specific skill, and tournament/play pickers are identity-scoped so you don't see "Rusty (XO)" and "Rusty (C4)" as duplicates. Today you'll typically see one skill per bot in practice (since Pong's training UI isn't wired yet), but the structure is ready for future games.
 
 Skills are stored in the `BotSkill` table and addressed via `POST /api/v1/bots/:botId/skills`. There's a unique constraint per `(botId, gameId)` — one skill per game per bot.
+
+Tournament registration rejects bots that don't have a skill for that tournament's game (HTTP 400 with code `NO_SKILL`) — so you can't accidentally enter your XO-trained bot in a Connect 4 tournament.
 
 ## Bot Directory
 

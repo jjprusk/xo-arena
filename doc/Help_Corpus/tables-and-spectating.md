@@ -62,6 +62,17 @@ The matchup is picked from a curated allowlist (e.g., Copper vs. Sterling, Rusty
 
 A **Spar** is a casual training match between your own bot and a built-in opponent at easy / medium / hard. Spar runs on a Table like any other match. It's part of Curriculum step 5; see the "Spar" doc.
 
+Unlike demo Tables (which are GC'd aggressively), **spar matches are retained for 30 days** — you can review a practice match from earlier in the week from your bot's profile.
+
+## Spectator badge
+
+Spectator presence renders two ways:
+
+- **At the table** — a low-density pill at the edge of the table surface shows a count plus a live dot. Click to expand a popover listing watcher names.
+- **In the sidebar** — the table-context sidebar lists watchers by name as a secondary view.
+
+Both are read-only — there's no way to interact with watchers in v1.
+
 ## Lifecycle and cleanup
 
 Table statuses you'll see: `FORMING` (waiting for second player), `ACTIVE` (game in progress), `COMPLETED` (game ended; preserved briefly so spectators can see the result), `ABANDONED` (no-show or both players left), and various end states.

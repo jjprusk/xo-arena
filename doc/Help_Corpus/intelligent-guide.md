@@ -13,10 +13,12 @@ The Intelligent Guide is AI Arena's onboarding companion. It walks you through a
 
 ## Where the Guide lives
 
-- **Guide orb** — a 44x44 circular button with an animated progress ring, top-right of the header. It pulses amber when you have an urgent next step and blue when you're idle. The ring fills as you complete journey steps.
-- **Guide drawer** — opens when you click the orb. A right-side slide-in panel (320px on desktop, full-width on mobile) showing your current step, a checklist of past steps, and a notification feed. Close it with Escape, by clicking the backdrop, or by clicking the orb again.
+The Guide has two surfaces that work together:
 
-The drawer contains an **"Ask Guide anything…"** input — this is the Learnable Help chat (Sprint 2 onward).
+- **Guide orb** — a 44×44 circular button with an animated progress ring, top-right of the header. The ring fills as you complete journey steps. It pulses amber when you have an urgent next step and blue when idle. A red badge counts unread urgent items (e.g., "3 cards waiting" in Specialize).
+- **Guide panel** — appears at right. During **Hook and Curriculum**, the panel is **always visible** as the primary onboarding surface (it's not really "a drawer you open" during the journey — it's the home base). In **Specialize**, the panel transforms into a tabbed interface with **What's Next** (recommendation cards) and **Shortcuts** (a SlotGrid of common actions). The SlotGrid is **hidden during Hook and Curriculum** — it unlocks when you complete step 7.
+
+The panel contains an **"Ask Guide anything…"** input — this is the Learnable Help chat.
 
 ## The three phases
 
@@ -33,7 +35,7 @@ Phase derivation is **purely server-side** (`deriveCurrentPhase()` in `journeySe
 | # | Phase | Step | Trigger |
 |---|---|---|---|
 | 1 | Hook | Play your first game | Complete one PvAI game (any outcome) |
-| 2 | Hook | Watch bots battle | Watch a demo Table for the watch threshold (~2 min) |
+| 2 | Hook | Watch bots battle | Watch a demo Table for **≥2 minutes OR to completion**, whichever comes first |
 | 3 | Curriculum | Create your bot | Bot creation wizard completes |
 | 4 | Curriculum | Train your bot | Quick Bot tier bump or ML training run completes |
 | 5 | Curriculum | Spar your bot | Spar match completes (any outcome) |
@@ -46,7 +48,12 @@ Step triggers are **server-detected**. The client never posts "I completed step 
 
 Completing Hook (step 2) pays **+20 TC**. Completing Curriculum (step 7) pays **+50 TC**. Both amounts are admin-tunable in SystemConfig (`guide.rewards.hookComplete` and `guide.rewards.curriculumComplete`).
 
-A **Reward Popup** appears when a phase completes — a celebration toast naming the reward. The popup auto-dismisses after a few seconds or on click.
+A **Reward Popup** appears whenever any reward fires:
+
+- Phase completions: `guide:hook_complete` → +20 TC, `guide:curriculum_complete` → +50 TC.
+- **Discovery rewards** (one-shot, idempotent): first real tournament win (+25 TC), first Specialize action (+10 TC), first non-default algorithm (+10 TC), first template clone (+10 TC). Each fires its own popup with the reason and amount.
+
+The popup auto-dismisses after a few seconds or on click. Your TC balance updates immediately.
 
 ## Guest mode
 
@@ -54,9 +61,14 @@ You can play through the Hook phase **without an account**. Guest progress is st
 
 ## Specialize phase
 
-Once step 7 is done you enter Specialize. The Guide drawer shows a celebration state and the next-step prompts stop. The platform's full feature surface (recurring tournaments, multi-skill bots, advanced training algorithms, leaderboards) opens up. The Guide is still available if you want to ask questions, but it no longer pushes you.
+Once step 7 is done you enter Specialize. The Guide panel transforms:
 
-This is intentional: the Guide is training wheels, not a permanent overlay.
+- **What's Next** tab — recommendation cards (Competitor, Trainer, Explorer buckets) suggest next moves tailored to your archetype. Dismissing a card **suppresses it for 7 days**; a replacement appears in the same view. Dismissal is forgiveness, not punishment — the card returns after the grace.
+- **Shortcuts** tab — the SlotGrid of quick actions (start training, find a tournament, etc.) unlocks now. Hidden during the journey.
+
+The platform's full feature surface (recurring tournaments, multi-skill bots, advanced algorithms, leaderboards) opens up. The Guide doesn't push you anymore, just suggests.
+
+**Inactivity nudge** — if you go 14 days without taking a Specialize action, a `guide:notification` event fires and the orb pulses for 30 seconds; if ignored for another 2 minutes, a non-modal slide-in panel appears from the bottom. This is the only automatic attention-grab in v1 — no emails, no forced modals.
 
 ## Restarting or skipping
 
