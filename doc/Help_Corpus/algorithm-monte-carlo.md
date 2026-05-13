@@ -1,15 +1,15 @@
 ---
 slug: algorithm-monte-carlo
-title: Monte Carlo Brain — training a Monte Carlo bot
+title: Monte Carlo — training a Monte Carlo skill
 category: training
-tags: [monte-carlo, training, tabular, episode-level, brain]
+tags: [monte-carlo, training, tabular, episode-level, algorithm]
 status: PUBLISHED
 admin_only: false
 ---
 
-# Monte Carlo Brain
+# Monte Carlo
 
-Monte Carlo is **the most explainable Brain**. It learns from *complete episode outcomes* rather than step-by-step updates — and its credit assignment is dead simple: every move in a winning game is credited, every move in a losing game is penalized.
+Monte Carlo is **the most explainable algorithm**. It learns from *complete episode outcomes* rather than step-by-step updates — and its credit assignment is dead simple: every move in a winning game is credited, every move in a losing game is penalized.
 
 ## How Monte Carlo thinks
 

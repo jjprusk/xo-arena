@@ -1,13 +1,15 @@
-# XO Arena — Bot Training Guide
+# AI Arena — Bot Training Guide
 
-## Getting Started: Bots, Brains & the Gym
+## Getting Started: Bots, skills & the Gym
 
-Every bot in XO Arena is powered by an **AI model** — its "Brain". Before you can train a bot, you need to create one on your Profile page and choose which Brain it will use. The Brain is the learning algorithm at the heart of your bot: it determines how the bot thinks, how it learns from experience, and ultimately how strong it can become.
+Every bot in AI Arena learns through one or more **skills**. A skill is an AI model tied to a specific game — its learning algorithm plus the trained weights. As AI Arena expands across multiple games (XO today, Pong and others to come), a bot can carry **multiple skills** — one per game — each trained independently.
 
-XO Arena offers six Brain types, ranging from classic tabular methods to neural-network approaches:
+Before you can train, you need to **create a bot** on your Profile page, then **add a skill** for the game you want to play. Adding a skill means choosing an algorithm — the method by which the skill learns from experience.
 
-| Brain | Style | Best For |
-|-------|-------|----------|
+AI Arena offers six algorithms, ranging from classic tabular methods to neural-network approaches:
+
+| Algorithm | Style | Best For |
+|-----------|-------|----------|
 | **Q-Learning** | Tabular, off-policy | Fast, reliable, great starting point |
 | **SARSA** | Tabular, on-policy | Conservative, less exploitable play |
 | **Monte Carlo** | Tabular, episode-level | Clean credit assignment, no bias |
@@ -15,9 +17,9 @@ XO Arena offers six Brain types, ranging from classic tabular methods to neural-
 | **DQN** | Neural network | Generalises unseen board states |
 | **AlphaZero** | Neural network + MCTS | Strongest ceiling, lookahead search |
 
-Once your bot exists and has a Brain, you bring it to the **Gym** to train. Training runs in sessions — you pick a mode (self-play, vs minimax, alternating), configure the exploration settings, and run a batch of episodes. Each episode is a full game your bot plays and learns from. Over many sessions you build up a trained, competitive bot ready to challenge others on the leaderboard.
+Once your bot has a skill, you bring it to the **Gym** to train. Training runs in sessions — you pick a mode (self-play, vs minimax, alternating), configure the exploration settings, and run a batch of episodes. Each episode is a full game your bot plays and learns from. Over many sessions you build up a trained, competitive skill ready to challenge others on the leaderboard.
 
-This guide is your training manual. It explains the core concepts that apply to all Brains, then goes deep on each algorithm — what it does differently, which settings to use, and session-by-session recipes for getting the best results. The [Benchmarking](#benchmarking--evaluation) and [Troubleshooting](#troubleshooting) sections at the end help you measure progress and diagnose problems.
+This guide is your training manual. It explains the core concepts that apply to all algorithms, then goes deep on each one — what it does differently, which settings to use, and session-by-session recipes for getting the best results. The [Benchmarking](#benchmarking--evaluation) and [Troubleshooting](#troubleshooting) sections at the end help you measure progress and diagnose problems.
 
 ---
 

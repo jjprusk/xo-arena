@@ -1,15 +1,15 @@
 ---
 slug: algorithm-q-learning
-title: Q-Learning Brain — training a Q-Learning bot
+title: Q-Learning — training a Q-Learning skill
 category: training
-tags: [q-learning, training, tabular, off-policy, brain]
+tags: [q-learning, training, tabular, off-policy, algorithm]
 status: PUBLISHED
 admin_only: false
 ---
 
-# Q-Learning Brain
+# Q-Learning
 
-Q-Learning is the **recommended starting Brain** for new bot trainers. It's fast, debuggable, and reaches a competitive policy in a few thousand episodes.
+Q-Learning is the **recommended starting algorithm** for new bot trainers. It's fast, debuggable, and reaches a competitive policy in a few thousand episodes.
 
 ## How Q-Learning thinks
 

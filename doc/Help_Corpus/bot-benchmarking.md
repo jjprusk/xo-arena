@@ -74,7 +74,7 @@ Conversely, training-time win rate can also be inflated when the *opponent* in s
 - **After every training session** — confirm the new version is better than the previous.
 - **Before promoting a version** from version history to active — your version-history view shows benchmark scores so you can pick the strongest.
 - **Before entering a tournament** — make sure the bot is at least benchmark-ELO ≥ 1,200 if you want a meaningful chance in the Rookie Cup or beyond.
-- **After parameter sweeps** — the Auto-Tuner can sweep α / γ / ε settings for tabular Brains; benchmark each candidate.
+- **After parameter sweeps** — the Auto-Tuner can sweep α / γ / ε settings for tabular algorithms; benchmark each candidate.
 
 ## Reading the analytics chart
 
@@ -83,7 +83,7 @@ The Analytics tab visualizes benchmark trends over training sessions:
 - **Win rate per opponent tier** plotted over training time — useful to see if a particular tier (e.g., Hard) is the choke point.
 - **ELO trajectory** estimated from benchmark scores — gives you a sense of whether the bot is plateauing.
 
-A bot that's been training for 20,000 episodes with no benchmark improvement is plateaued. Either change architecture (DQN), switch Brain (Q-Learning → AlphaZero), or accept the ceiling.
+A bot that's been training for 20,000 episodes with no benchmark improvement is plateaued. Either change architecture (DQN), switch algorithm (Q-Learning → AlphaZero), or accept the ceiling.
 
 ## Common benchmark surprises
 

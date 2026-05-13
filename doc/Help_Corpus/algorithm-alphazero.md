@@ -1,15 +1,15 @@
 ---
 slug: algorithm-alphazero
-title: AlphaZero Brain — training an AlphaZero bot
+title: AlphaZero — training an AlphaZero skill
 category: training
-tags: [alphazero, mcts, training, neural-network, brain]
+tags: [alphazero, mcts, training, neural-network, algorithm]
 status: PUBLISHED
 admin_only: false
 ---
 
-# AlphaZero Brain
+# AlphaZero
 
-AlphaZero is the **strongest possible Brain** on AI Arena, given enough training time. It combines Monte Carlo Tree Search (MCTS) lookahead with two neural networks — and consistently produces the highest win rates against perfect minimax play.
+AlphaZero is the **strongest possible algorithm** on AI Arena, given enough training time. It combines Monte Carlo Tree Search (MCTS) lookahead with two neural networks — and consistently produces the highest win rates against perfect minimax play.
 
 ## How AlphaZero thinks
 
@@ -24,7 +24,7 @@ Each move runs `numSimulations` MCTS rollouts to build a visit-count distributio
 
 - **Lookahead built-in** — MCTS considers multiple future paths before each move; not just the immediate Q-value.
 - **No epsilon** — exploration is naturally handled by the PUCT formula inside the tree search. There is no "Exploration" section for AlphaZero in the Train tab.
-- **Strongest ceiling** of all six Brains, with sufficient episodes.
+- **Strongest ceiling** of all six algorithms, with sufficient episodes.
 
 AlphaZero runs as a **server-side training job** — episodes are slow because of the per-move MCTS rollouts.
 
@@ -38,7 +38,7 @@ AlphaZero runs as a **server-side training job** — episodes are slow because o
 | Learning rate (α) | 0.001 | Shared α for policy + value nets | Hardcoded |
 | Discount factor (γ) | 0.99 | Future reward weighting | Hardcoded |
 
-AlphaZero **has no epsilon** — exploration is naturally built into the PUCT tree search. There is no epsilon control in the Train tab for this Brain.
+AlphaZero **has no epsilon** — exploration is naturally built into the PUCT tree search. There is no epsilon control in the Train tab for this algorithm.
 
 ## Recommended settings
 
@@ -72,7 +72,7 @@ AlphaZero **has no epsilon** — exploration is naturally built into the PUCT tr
 | 10,000 | 87–93% | 75–85% | 55–70% |
 | 15,000+ | 92–97% | 82–90% | 65–80% |
 
-AlphaZero reaches competency **faster per-episode** than any other Brain because MCTS provides strong implicit lookahead from the start. The total episode count is lower, but wall-clock time is higher.
+AlphaZero reaches competency **faster per-episode** than any other algorithm because MCTS provides strong implicit lookahead from the start. The total episode count is lower, but wall-clock time is higher.
 
 ## The three knobs explained
 

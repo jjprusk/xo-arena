@@ -11,13 +11,13 @@ admin_only: false
 
 The **Gym** is where you train AI Arena bots — bots whose behavior is *learned* through play, rather than just labeled with a difficulty like Quick Bots. Open it from the main nav at `/gym`.
 
-This doc is the entry-point. For the *concepts* (Brain, epsilon, gamma, training modes), see **Bot training concepts**. For *specific algorithms*, see the per-Brain docs (Q-Learning, SARSA, Monte Carlo, Policy Gradient, DQN, AlphaZero). For *evaluation*, see **Benchmarking your bot**. For *problems*, see **Bot training — troubleshooting**.
+This doc is the entry-point. For the *concepts* (skill, epsilon, gamma, training modes), see **Bot training concepts**. For *specific algorithms*, see the per-algorithm docs (Q-Learning, SARSA, Monte Carlo, Policy Gradient, DQN, AlphaZero). For *evaluation*, see **Benchmarking your bot**. For *problems*, see **Bot training — troubleshooting**.
 
-## Brains — the six trainable algorithms
+## Skills — the six trainable algorithms
 
-Every bot in AI Arena has a **Brain** — its learning algorithm. You pick the Brain when you create the bot. AI Arena offers six Brain types, all user-facing in the Gym today:
+A **skill** is the bot's AI model for a specific game — an algorithm plus its trained weights. A bot can carry multiple skills (one per game) as AI Arena expands across XO, Pong, and future games; each skill is trained independently. You pick the **algorithm** when you create or add the skill. AI Arena offers six algorithms, all user-facing in the Gym today:
 
-| Brain | Style | Best for |
+| Algorithm | Style | Best for |
 |---|---|---|
 | **Q-Learning** | Tabular, off-policy | Fast, reliable starting point |
 | **SARSA** | Tabular, on-policy | Conservative, less exploitable |
@@ -32,12 +32,12 @@ The first four ("tabular") learn an explicit table mapping board state → actio
 
 If you're new to bot training, the recommended path is:
 
-1. **Create a bot** with a **Q-Learning Brain** (Profile → My bots → Create bot wizard).
+1. **Create a bot** and **add a Q-Learning skill** for XO (Profile → My bots → Create bot, then + Add skill).
 2. **Run the Q-Learning session recipe** (7,000 episodes across 3 sessions). See the Q-Learning doc.
 3. **Benchmark** the result in the Evaluation tab to see where it stands.
-4. **Iterate**: try a different Brain on a second bot, compare via head-to-head.
+4. **Iterate**: try a different algorithm on a new skill or a second bot, compare via head-to-head.
 
-You'll find that Q-Learning takes about 30 minutes wall-clock to fully train and produces a bot that beats Easy minimax around 80% of the time. From there, the journey extends in many directions — neural Brains, hyperparameter sweeps via the Auto-Tuner, multi-skill bots, tournaments.
+You'll find that Q-Learning takes about 30 minutes wall-clock to fully train and produces a bot that beats Easy minimax around 80% of the time. From there, the journey extends in many directions — neural algorithms, hyperparameter sweeps via the Auto-Tuner, multi-skill bots, tournaments.
 
 ## Layout — 8 tabs
 
@@ -66,7 +66,7 @@ AI Arena's ML architecture splits learning into two categories:
 
 So XO bots can use *either* paradigm — your XO bot might be Q-Learning (browser) or AlphaZero (server). Pong and future games are server-only.
 
-## Training-job lifecycle (neural Brains)
+## Training-job lifecycle (neural algorithms)
 
 Server-side neural jobs are tracked as `TrainingJob` records:
 
@@ -78,7 +78,7 @@ While running, the UI polls job status every **5 seconds**. The progress bar ref
 
 ## Version history
 
-Every completed (non-pruned) training run becomes a version of the corresponding bot **skill** (the platform's DB term for a Brain attached to a specific bot/game). The Sessions tab shows your full history per skill:
+Every completed (non-pruned) training run becomes a new **version** of the corresponding skill. The Sessions tab shows your full history per skill:
 
 | Version | Algorithm | Epochs | Completed | Action |
 |---|---|---|---|---|
@@ -102,7 +102,7 @@ Sessions are bounded by your activity tier:
 | Platinum | 50,000 |
 | Diamond | 100,000 |
 
-Limits are admin-tunable in SystemConfig. To run the full 35k-episode DQN recipe, you need Platinum tier (50k cap) or above. Most starter Brains (Q-Learning at 7k episodes) fit in Silver.
+Limits are admin-tunable in SystemConfig. To run the full 35k-episode DQN recipe, you need Platinum tier (50k cap) or above. Most starter algorithms (Q-Learning at 7k episodes) fit in Silver.
 
 ## Cost
 
@@ -112,7 +112,7 @@ Discovery reward: training with a non-default algorithm (anything other than the
 
 ## The Auto-Tuner tab
 
-For tabular Brains, the **Auto-Tuner** can sweep hyperparameters automatically:
+For tabular algorithms, the **Auto-Tuner** can sweep hyperparameters automatically:
 
 - **α (learning rate)** — usually hardcoded at 0.3 (or 0.2 for MC); sweep to find your bot's optimum.
 - **γ (discount factor)** — usually 0.9; sweep for sensitivity testing.
@@ -136,7 +136,7 @@ The **Explainability** tab loads a position and shows:
 
 - The **value estimate** for that position (how good is it for the bot to move?).
 - The **policy** — which move would the bot pick, with probabilities or Q-values per cell.
-- For neural Brains, attention or activation diagnostics.
+- For neural algorithms, attention or activation diagnostics.
 
 Use it to debug why your bot keeps losing in certain positions — often it points to a hole in the training distribution.
 
@@ -151,6 +151,6 @@ A Quick Bot will draw a Master forever. A well-trained Q-Learning bot won't.
 ## Where to go next
 
 - **Concepts** — see "Bot training concepts" for epsilon, gamma, modes, curriculum.
-- **Per-Brain deep-dives** — Q-Learning, SARSA, Monte Carlo, Policy Gradient, DQN, AlphaZero each have their own doc with settings, session recipes, and expected results.
+- **Per-algorithm deep-dives** — Q-Learning, SARSA, Monte Carlo, Policy Gradient, DQN, AlphaZero each have their own doc with settings, session recipes, and expected results.
 - **Benchmarking** — see "Benchmarking your bot" for the 5-tier evaluation + ELO correlation.
 - **Stuck?** — see "Bot training — troubleshooting" for diagnosis flowcharts.

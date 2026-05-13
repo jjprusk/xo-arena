@@ -1,21 +1,21 @@
 ---
 slug: bot-training-concepts
-title: Bot training concepts — Brains, epsilon, gamma, and modes
+title: Bot training concepts — skills, epsilon, gamma, and modes
 category: training
-tags: [training, brain, epsilon, gamma, exploration, curriculum, modes]
+tags: [training, skill, epsilon, gamma, exploration, curriculum, modes]
 status: PUBLISHED
 admin_only: false
 ---
 
-# Bot training concepts — Brains, epsilon, gamma, and modes
+# Bot training concepts — skills, epsilon, gamma, and modes
 
-Every bot in AI Arena is powered by an **AI model** called its **Brain**. The Brain is the learning algorithm — it determines how the bot thinks, how it learns from experience, and how strong it can become.
+Every bot in AI Arena learns through one or more **skills**. A skill is the bot's AI model for a specific game — its learning algorithm plus the trained weights. A bot can carry multiple skills (one per game) as AI Arena expands across XO, Pong, and future games; each skill is trained independently.
 
-You choose your Brain when you create the bot. Training the bot means running its Brain through many games (called **episodes**) and letting it learn. This doc covers the concepts that apply to *all* Brain types. See the per-algorithm docs (Q-Learning, SARSA, etc.) for the specifics of each Brain.
+You choose the **algorithm** for a skill when you create or add the skill. Training the skill means running it through many games (called **episodes**) and letting it learn. This doc covers the concepts that apply to *all* algorithms. See the per-algorithm docs (Q-Learning, SARSA, etc.) for the specifics of each.
 
-## The six Brain types
+## The six algorithms
 
-| Brain | Style | Best for |
+| Algorithm | Style | Best for |
 |---|---|---|
 | **Q-Learning** | Tabular, off-policy | Fast, reliable, great starting point |
 | **SARSA** | Tabular, on-policy | Conservative, less exploitable play |
@@ -30,7 +30,7 @@ The first four ("tabular") learn an explicit table mapping board state → actio
 
 ## Episodes — the unit of training
 
-An **episode** is one full game your bot plays. Each episode produces learning updates that adjust the bot's Brain. You configure how many episodes to run per session in the Train tab. Typical totals:
+An **episode** is one full game your bot plays. Each episode produces learning updates that adjust the skill. You configure how many episodes to run per session in the Train tab. Typical totals:
 
 - Q-Learning / SARSA: 5,000–10,000 episodes
 - Monte Carlo / Policy Gradient: 10,000–20,000
@@ -95,7 +95,7 @@ Lower γ → the bot plays for quick wins. Higher γ → it sacrifices short-ter
 
 ## Learning rate (α)
 
-Learning rate controls how aggressively the Brain updates per step.
+Learning rate controls how aggressively the skill updates per step.
 
 - **Tabular methods**: α = 0.3–0.5 is safe. Higher = faster but noisier convergence.
 - **Neural methods (DQN, AlphaZero)**: α = 0.001. Higher causes divergence.
@@ -140,13 +140,13 @@ Long training runs are divided into **sessions** of a few thousand episodes each
 
 Each session ends with a saved snapshot; you can roll back via the **Checkpoints** tab or compare versions via the **Sessions** tab. See the "Gym and ML training" doc for the version-history workflow.
 
-## Which Brain should I pick?
+## Which algorithm should I pick?
 
-- **If you want a strong bot fast** → Q-Learning. 7,000 episodes total; reaches ~85% vs random.
+- **If you want a strong skill fast** → Q-Learning. 7,000 episodes total; reaches ~85% vs random.
 - **If you want the highest ceiling** → AlphaZero. 15,000 episodes but each is slow. Top win rates against perfect play.
 - **If you want unpredictable, human-like play** → Policy Gradient. Stochastic; harder for opponents to memorize.
-- **If you want a draw-y, defensive bot** → SARSA. Conservative play; rarely gambles.
+- **If you want a draw-y, defensive skill** → SARSA. Conservative play; rarely gambles.
 - **If you want to learn how RL works conceptually** → Monte Carlo. Clean episode-level credit assignment; easiest to explain.
 - **If you want to explore neural-net behavior** → DQN. The first step into "real" deep RL.
 
-Detailed settings, session recipes, and expected results per algorithm are in the per-Brain docs.
+Detailed settings, session recipes, and expected results per algorithm are in the per-algorithm docs.

@@ -21,7 +21,7 @@ Common training problems and how to fix them. Each section is a symptom; the fix
 
 4. **Too few episodes before vs-Minimax.** Always do **self-play first** to bootstrap states/weights before switching to a fixed opponent. Self-play covers both X and O perspectives in parallel; vs-Minimax only one.
 
-5. **Wrong Brain for the task.** Some bots plateau because their Brain has a hard ceiling. Q-Learning, SARSA, and Monte Carlo all cap around 80% vs Hard. If you need higher, switch to **DQN or AlphaZero**.
+5. **Wrong algorithm for the task.** Some skills plateau because their algorithm has a hard ceiling. Q-Learning, SARSA, and Monte Carlo all cap around 80% vs Hard. If you need higher, switch to **DQN or AlphaZero**.
 
 ## Win rate is oscillating wildly
 

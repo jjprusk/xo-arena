@@ -1,15 +1,15 @@
 ---
 slug: algorithm-policy-gradient
-title: Policy Gradient Brain — training a Policy Gradient bot
+title: Policy Gradient — training a Policy Gradient skill
 category: training
-tags: [policy-gradient, reinforce, training, tabular, softmax, brain]
+tags: [policy-gradient, reinforce, training, tabular, softmax, algorithm]
 status: PUBLISHED
 admin_only: false
 ---
 
-# Policy Gradient Brain
+# Policy Gradient
 
-Policy Gradient (PG) is the **stochastic** Brain — its play is naturally unpredictable, making it harder for opponents (especially humans) to exploit. It learns a probability distribution over moves rather than a single "best move" per state.
+Policy Gradient (PG) is the **stochastic** algorithm — its play is naturally unpredictable, making it harder for opponents (especially humans) to exploit. It learns a probability distribution over moves rather than a single "best move" per state.
 
 ## How Policy Gradient thinks
 
@@ -42,7 +42,7 @@ PG's gradient updates can oscillate if epsilon shifts abruptly. The cosine sched
 | 3 | 5,000 | vs Minimax | Curriculum (novice → advanced) | Sharpen vs deterministic opponent |
 | 4 | 3,000 | vs Minimax | Master | Final polish |
 
-**Total: ~18,000 episodes** — the most data-hungry tabular Brain.
+**Total: ~18,000 episodes** — the most data-hungry tabular algorithm.
 
 Uncheck "Reset ε to 1.0" for sessions 2–4.
 

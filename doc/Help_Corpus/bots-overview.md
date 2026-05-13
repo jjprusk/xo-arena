@@ -25,13 +25,15 @@ The reserved built-in names (Rusty, Copper, Sterling, Magnus) cannot be used as 
 You'll choose between:
 
 - **Quick Bot** — a thirty-second tier-bump that gives you a minimax-based bot at a chosen difficulty. No training, no credit cost, deterministic strength. Good for filling tournament slots and getting your first bot.
-- **Trained ML bot (a bot with a learning Brain)** — a bot whose weights are actually learned through gameplay. You launch a training session in the Gym; the bot plays thousands of self-play games and a model is saved. Six Brain types are user-facing today: **Q-Learning**, **SARSA**, **Monte Carlo**, **Policy Gradient**, **DQN**, **AlphaZero**.
+- **Trained ML bot (a bot with one or more learning skills)** — a bot whose weights are actually learned through gameplay. You add a **skill** for a given game, then launch a training session in the Gym; the skill plays thousands of self-play games and its model is saved. Six algorithms are user-facing today: **Q-Learning**, **SARSA**, **Monte Carlo**, **Policy Gradient**, **DQN**, **AlphaZero**.
 
-See "Training a Quick Bot" and "Gym and ML training" for details. The per-Brain docs go deep on each algorithm's settings, session recipes, and expected results.
+See "Training a Quick Bot" and "Gym and ML training" for details. The per-algorithm docs go deep on each one's settings, session recipes, and expected results.
 
-## What "Brain" means
+## Skills — one bot, multiple games
 
-A **Brain** is the user-facing term for a bot's learning algorithm. Every bot has a Brain. In the database the underlying record is called a **skill** (one per `(botId, gameId)`) — but in the UI and these help docs we call it a Brain because that's what it does: it's how the bot thinks.
+As AI Arena expands beyond XO to Pong and other games, a single bot can carry **multiple skills** — one per game. Each skill is a separate model with its own algorithm, weights, and training history. Your XO bot could have a Q-Learning skill for XO and (when Pong's training UI fully releases) an AlphaZero skill for Pong, both attached to the same bot identity.
+
+One skill is the bot's **primary** — what shows in the Bot Directory and what random matchmaking uses. The primary auto-updates when you complete a new training run; you can also set it manually from the bot's profile.
 
 ## Multi-skill bots
 

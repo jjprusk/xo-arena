@@ -1,13 +1,13 @@
 ---
 slug: algorithm-dqn
-title: DQN Brain — training a Deep Q-Network bot
+title: DQN — training a Deep Q-Network skill
 category: training
-tags: [dqn, training, neural-network, replay-buffer, brain]
+tags: [dqn, training, neural-network, replay-buffer, algorithm]
 status: PUBLISHED
 admin_only: false
 ---
 
-# DQN Brain — Deep Q-Network
+# DQN — Deep Q-Network
 
 DQN is your **first step into neural-network RL**. Instead of an explicit Q-table, DQN uses a small neural network to estimate Q-values — which means it can **generalize** to board states it has never exactly seen during training.
 
@@ -24,7 +24,7 @@ DQN runs as a **server-side training job** — unlike tabular methods which run 
 
 ## DQN Train tab controls
 
-DQN has more controls than tabular Brains:
+DQN has more controls than tabular algorithms:
 
 | UI label | Default | Description | Configurable? |
 |---|---|---|---|
@@ -143,4 +143,4 @@ For tic-tac-toe, `[64, 64]` is the sweet spot — larger nets don't raise the ce
 
 - **Small budget** — Q-Learning gets you 80% of the way for 1/5 the episodes.
 - **Highest possible ceiling** — AlphaZero exceeds DQN's strength given enough wall-clock time.
-- **Browser-only training** — DQN runs server-side; if you want offline-style local training, pick a tabular Brain.
+- **Browser-only training** — DQN runs server-side; if you want offline-style local training, pick a tabular algorithm.

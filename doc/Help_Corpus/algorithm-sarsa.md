@@ -1,13 +1,13 @@
 ---
 slug: algorithm-sarsa
-title: SARSA Brain — training a SARSA bot
+title: SARSA — training a SARSA skill
 category: training
-tags: [sarsa, training, tabular, on-policy, brain]
+tags: [sarsa, training, tabular, on-policy, algorithm]
 status: PUBLISHED
 admin_only: false
 ---
 
-# SARSA Brain
+# SARSA
 
 SARSA is Q-Learning's **conservative cousin**. Same tabular state-action representation, same overall pipeline — but updates Q using the action that *will actually be taken next*, not the max-value action. This produces a safer, less exploitable policy.
 
