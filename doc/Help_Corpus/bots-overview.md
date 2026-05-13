@@ -25,9 +25,13 @@ The reserved built-in names (Rusty, Copper, Sterling, Magnus) cannot be used as 
 You'll choose between:
 
 - **Quick Bot** — a thirty-second tier-bump that gives you a minimax-based bot at a chosen difficulty. No training, no credit cost, deterministic strength. Good for filling tournament slots and getting your first bot.
-- **Trained ML bot** — a bot whose weights are actually learned. You launch a training session in the Gym; the bot plays thousands of self-play games and a model is saved as a `BotSkill`. Q-Learning is the user-facing algorithm today; DQN, AlphaZero, Policy Gradient, SARSA, and Monte Carlo are wired in the codebase and ship to the UI in later phases.
+- **Trained ML bot (a bot with a learning Brain)** — a bot whose weights are actually learned through gameplay. You launch a training session in the Gym; the bot plays thousands of self-play games and a model is saved. Six Brain types are user-facing today: **Q-Learning**, **SARSA**, **Monte Carlo**, **Policy Gradient**, **DQN**, **AlphaZero**.
 
-See "Training a Quick Bot" and "Gym and ML training" for details.
+See "Training a Quick Bot" and "Gym and ML training" for details. The per-Brain docs go deep on each algorithm's settings, session recipes, and expected results.
+
+## What "Brain" means
+
+A **Brain** is the user-facing term for a bot's learning algorithm. Every bot has a Brain. In the database the underlying record is called a **skill** (one per `(botId, gameId)`) — but in the UI and these help docs we call it a Brain because that's what it does: it's how the bot thinks.
 
 ## Multi-skill bots
 
