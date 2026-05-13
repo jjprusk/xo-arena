@@ -139,9 +139,19 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 
 ## Sprint 2 — LLM proxy + ask endpoint + content filter pipeline
 
-**Goal:** `xo-llm` Fly app live with `/generate` (Groq) and `/embed` (MiniLM). `helpService.ask` orchestrates retrieve → prompt → stream → filter → persist. Rate limiter. Adversarial prompt fixtures green.
+**Goal:** `xo-llm` Fly app live with `/generate` (Groq) and `/embed` (MiniLM). `helpService.ask` orchestrates retrieve → prompt → stream → filter → persist. Rate limiter. Adversarial prompt fixtures green. **Also bundles the PlayVsBot critical-bug fix** filed in `Future_Ideas.md` (Known Critical Bugs).
 
-**Estimated effort:** ~1.5 dev weeks.
+**Estimated effort:** ~1.5 dev weeks (Help) + ~2–3 days (PlayVsBot).
+
+### 2.0 PlayVsBot start-flow collapse (critical bug — see `Future_Ideas.md`)
+
+- [ ] Add a 60s in-memory cache to the `gameId=` branch of `GET /api/v1/bots` (`backend/src/routes/bots.js:44-53`). Removes 1 RTT from every PlayVsBot landing.
+- [ ] New `POST /api/v1/play/bot` server endpoint that internally performs token issuance + table create + table join + initial state computation, returning `{ tableId, sseChannel, initialState }` in a single round-trip. Saves ~3 RTTs.
+- [ ] Backend: push the initial state event eagerly on table-create rather than after join, to eliminate the post-join idle wait.
+- [ ] Landing: update `PlayPage.jsx` + `useGameSDK` to use the new endpoint when `action === 'vs-community-bot'` (keep the multi-step path for non-bot game flows).
+- [ ] Backend tests: unit test for the cache TTL + invalidation; integration test for the new `/play/bot` endpoint covering happy path, missing bot, and concurrent-join idempotency.
+- [ ] Add `[data-perf-ready]` marker to PlayPage that flips when the spinner detaches, and update `perf/perf-v2.js` to prefer per-route ready markers when present (drops the bimodal `.animate-spin` artifact).
+- [ ] Re-baseline PlayVsBot warm-anon: target p50 ≤ 500 ms desktop / ≤ 800 ms mobile.
 
 ### 2.1 `xo-llm` Fly app
 
