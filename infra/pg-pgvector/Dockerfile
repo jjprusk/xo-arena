@@ -6,27 +6,38 @@
 # official Fly Postgres flex image and apt-installs the pgvector
 # extension package so `CREATE EXTENSION vector` works post-deploy.
 #
-# Build + push (one-shot):
+# Status: applied to both xo-db-staging and xo-db-prod as of 2026-05-13.
+# Re-run only when the base flyio/postgres-flex image bumps and you want
+# to rebuild on the newer Postgres version.
+#
+# Build + push (one-shot, per environment):
 #
 #   flyctl auth docker
 #   docker build --platform linux/amd64 \
-#     -t registry.fly.io/xo-db-staging:pgvector-v1 \
+#     -t registry.fly.io/xo-db-<env>:pgvector-v1 \
 #     infra/pg-pgvector
-#   docker push registry.fly.io/xo-db-staging:pgvector-v1
+#   docker push registry.fly.io/xo-db-<env>:pgvector-v1
 #
 # Apply to the running cluster:
 #
-#   flyctl image update --image registry.fly.io/xo-db-staging:pgvector-v1 \
-#     -a xo-db-staging --yes
+#   flyctl image update --image registry.fly.io/xo-db-<env>:pgvector-v1 \
+#     -a xo-db-<env> --yes
+#
+# (~30-60s downtime on single-machine clusters during the image swap.)
 #
 # Verify after the update lands:
 #
-#   flyctl ssh console -a xo-db-staging -C \
-#     "sh -c 'PGPASSWORD=<pw> psql -h 127.0.0.1 -U xo_backend_staging \
-#       -d xo_backend_staging -c \"CREATE EXTENSION IF NOT EXISTS vector;\"'"
+#   flyctl ssh console -a xo-db-<env> -C \
+#     "sh -c 'PGPASSWORD=<pw> psql -h 127.0.0.1 -U xo_backend_<env> \
+#       -d xo_backend_<env> -c \"CREATE EXTENSION IF NOT EXISTS vector;\"'"
 #
-# When promoting to prod, repeat the build + push against `xo-db-prod`
-# and bump the tag (e.g., pgvector-v2).
+#   flyctl ssh console -a xo-db-<env> -C \
+#     "sh -c 'PGPASSWORD=<pw> psql -h 127.0.0.1 -U xo_backend_<env> \
+#       -d xo_backend_<env> -c \"SELECT pg_typeof(ARRAY[1,2,3]::vector);\"'"
+#
+# DB names per environment (the Fly DATABASE_URL secret value):
+#   staging: xo_backend_staging (user + db share the name)
+#   prod:    xo_backend_prod    (user + db share the name)
 
 FROM flyio/postgres-flex:17.2
 
