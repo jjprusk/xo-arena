@@ -1,114 +1,139 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 ready to start
-**Date:** 2026-05-13
+**Status:** Sprint 1 complete on `dev`; Sprint 4 corpus pulled forward.
+**Last updated:** 2026-05-13
 **Companion to:** `Help_System_Plan.md`
 
 This is the checkbox-form task tracker for the Help System implementation. The architectural rationale for each item lives in `Help_System_Plan.md`. Check items off as they ship.
 
 ---
 
-## Sprint 1 — Schema + role + seed + retrieval + admin editor
+## Sprint 1 — Schema + role + seed + retrieval + admin editor — COMPLETE
 
 **Goal:** All architectural foundations land. Schema, pgvector, role system, hybrid retrieval, embedding pipeline, admin editor with optimistic locking, content-filter scaffolding, nav grouping, role-aware landing redirect, `um help-export`.
 
 **Estimated effort:** ~2 dev weeks.
+**Actual:** Landed in 3 commits on `dev`. Substantial corpus expansion (originally Sprint 4) also done — see §1.3 notes.
 
-### 1.1 Schema and migrations
+### 1.1 Schema and migrations — COMPLETE
 
-- [ ] Add `pgvector` extension to v1 migration (`CREATE EXTENSION IF NOT EXISTS vector`)
-- [ ] Add `HELP_ADMIN` value to existing `Role` enum
-- [ ] Add `HelpDoc` model (`id`, `slug`, `title`, `body`, `category`, `tags`, `status`, `authorId`, `lastEditedById`, `version`, `seededFromFile`, `createdAt`, `updatedAt`)
-- [ ] Add `HelpChunk` model (`id`, `docId`, `position`, `content`, `tsv`, `embedding vector(384)`, `docVersion`, `createdAt`); GIN index on `tsv`; ivfflat index on `embedding`
-- [ ] Add `HelpQuery` model (`id`, `userId NULL`, `text`, `textTsv`, `embedding vector(384)`, `retrievedChunkIds`, `retrievalScore`, `topAnswerId`, `context`, `promptTemplate`, `modelVersion`, `latencyMs`, `createdAt`)
-- [ ] Add `HelpAnswer` model (`id`, `queryId`, `chunkIds`, `rendered`, `rank`, `tokensIn`, `tokensOut`, `stopReason`, `contentFilterTriggered`, `contentFilterTerms`)
-- [ ] Add `HelpFeedback` model (`id`, `userId`, `queryId`, `answerId`, `signal NULL`, `category NULL`, `comment NULL`, `implicit`, `createdAt`, `updatedAt`); unique (`userId`, `queryId`, `answerId`)
-- [ ] Run `docker compose run --rm backend npx prisma migrate deploy` on dev
+- [x] Add `pgvector` extension to v1 migration (`CREATE EXTENSION IF NOT EXISTS vector`)
+- [x] Add `HELP_ADMIN` value to existing `Role` enum
+- [x] Add `HelpDoc` model (`id`, `slug`, `title`, `body`, `category`, `tags`, `status`, `authorId`, `lastEditedById`, `version`, `seededFromFile`, `createdAt`, `updatedAt`)
+- [x] Add `HelpChunk` model (`id`, `docId`, `position`, `content`, `tsv`, `embedding vector(384)`, `docVersion`, `createdAt`); GIN index on `tsv`; ivfflat index on `embedding`
+- [x] Add `HelpQuery` model (`id`, `userId NULL`, `text`, `textTsv`, `embedding vector(384)`, `retrievedChunkIds`, `retrievalScore`, `topAnswerId`, `context`, `promptTemplate`, `modelVersion`, `latencyMs`, `createdAt`)
+- [x] Add `HelpAnswer` model (`id`, `queryId`, `chunkIds`, `rendered`, `rank`, `tokensIn`, `tokensOut`, `stopReason`, `contentFilterTriggered`, `contentFilterTerms`)
+- [x] Add `HelpFeedback` model (`id`, `userId`, `queryId`, `answerId`, `signal NULL`, `category NULL`, `comment NULL`, `implicit`, `createdAt`, `updatedAt`); unique (`userId`, `queryId`, `answerId`)
+- [x] Run `docker compose run --rm backend npx prisma migrate deploy` on dev
 - [ ] Apply migration to staging via `/stage` once verified locally
 
-### 1.2 Role & middleware
+**Notes:** Migration `20260513120000_help_system_foundation` applied cleanly. Dev postgres image switched to `pgvector/pgvector:pg16` (volume-compatible). Tsvector triggers wired on `help_chunks` and `help_queries`. Before `/stage`, Fly Postgres needs `CREATE EXTENSION vector` enabled (pgvector ships with Fly's PG image since 2024).
 
-- [ ] Add `requireHelpAdmin` middleware in `backend/src/middleware/auth.js` (accepts `ADMIN` or `HELP_ADMIN`)
-- [ ] Verify `um role-grant <user> HELP_ADMIN` / `um role-revoke <user> HELP_ADMIN` work via existing role grant pattern (add new enum to whatever existing CLI uses)
-- [ ] Unit tests for `requireHelpAdmin` (accepts ADMIN, accepts HELP_ADMIN, rejects unauth, rejects user with no relevant role)
+### 1.2 Role & middleware — COMPLETE
 
-### 1.3 Corpus seeding
+- [x] Add `requireHelpAdmin` middleware in `backend/src/middleware/auth.js` (accepts `ADMIN` or `HELP_ADMIN`)
+- [x] Verify `um role <user> HELP_ADMIN` / `--revoke` work via existing role grant pattern (added `HELP_ADMIN` to `VALID_ROLES`)
+- [x] Unit tests for `requireHelpAdmin` (accepts ADMIN, accepts HELP_ADMIN, rejects unauth, rejects user with no relevant role) — 12 tests in `authHelp.test.js`
 
-- [ ] Create `/doc/Help_Corpus/` directory
-- [ ] Author initial 6–8 docs: `getting-started.md`, `playing-tic-tac-toe.md`, `bots-overview.md`, `quick-bots.md`, `tournaments.md`, `credits-tc-hpc-bpc.md`, `tables-and-spectating.md`, `profile-and-settings.md`
-- [ ] Each doc has YAML frontmatter (`slug`, `title`, `category`, `tags`, `status`, `admin_only`)
-- [ ] Write `seed:help` npm script in `backend/package.json` — parses frontmatter + body, **additive only** (creates new slugs, never updates existing), bumps `version`, regenerates chunks, calls `/embed` for each chunk
-- [ ] `um help-reindex` CLI command — full reindex (chunks + embeddings) for one or all docs
-- [ ] Seed runs automatically on backend startup (idempotent — safe to re-run)
-- [ ] Tests: seed inserts on empty DB; second run is a no-op for existing slugs; new file in corpus dir is picked up on next seed
+### 1.3 Corpus seeding (significantly expanded)
 
-### 1.4 Hybrid retrieval (`helpService.search`)
+- [x] Create `/doc/Help_Corpus/` directory
+- [x] ~~Author initial 6–8 docs~~ **Authored 43 docs across 9 categories** — see corpus expansion notes below
+- [x] Each doc has YAML frontmatter (`slug`, `title`, `category`, `tags`, `status`, `admin_only`)
+- [x] Seed runs in `backend/src/services/help/corpusSeeder.js` — parses frontmatter + body, **additive only** (creates new slugs, never updates existing), bumps `version`, regenerates chunks, calls embed client
+- [x] `um help-reindex` CLI command — full reindex (chunks + embeddings) for one or all docs
+- [x] Seed runs automatically on backend startup (idempotent — safe to re-run)
+- [x] Tests: seed inserts on empty DB; second run is a no-op for existing slugs; new file in corpus dir is picked up on next seed — 13 tests in `corpusSeeder.test.js`
 
-- [ ] `helpService.search(text)` — embeds query via `xo-llm /embed`, runs FTS query (`ts_rank_cd` on `HelpChunk.tsv`), runs vector query (cosine similarity on `HelpChunk.embedding`), merges with `α * normalize(fts_rank) + (1 - α) * cosine_sim`
-- [ ] SystemConfig key `help.retrieval.fts_weight` (default `0.4`); helpService reads on each call (no redeploy needed to tune)
-- [ ] Returns top-5 chunks with per-source scores logged into `HelpQuery.retrievalScore`
-- [ ] Tests: hand-curated query → expected top chunk; weight extreme α=0 returns vector-only ranking; α=1 returns FTS-only
+**Corpus expansion notes** — went substantially beyond the original 6-8 doc scope. The corpus was verified in three rounds:
+1. Codebase verification via parallel Explore agents (Quick Bot tiers, credit rules, tournament formats, etc.) — corrected ~10 inaccuracies from initial drafts.
+2. Cross-check against authoritative `/doc/` references (V1_Acceptance, Intelligent_Guide_Requirements/Implementation_Plan, Guide_Operations, Platform_Implementation_Plan, Table_Paradigm, ML_Training_Architecture) — added 2 new docs, refined 7 others.
+3. Integration of the in-app `/landing/public/bot-training-guide.md` (573-line training handbook) — added 9 new training-focused docs.
 
-### 1.5 Embedding pipeline scaffold (proxy comes in Sprint 2)
+Final corpus (43 docs / 422 chunks):
+- **basics** (6) — getting-started, intelligent-guide, faq, ai-arena-glossary, reinforcement-learning-intro, first-bot-walkthrough
+- **games** (3) — playing-tic-tac-toe, tic-tac-toe-strategy, pong
+- **bots** (4) — bots-overview, quick-bots, spar, gym-and-ml-training
+- **training** (18) — bot-training-concepts, algorithm-q-learning, algorithm-sarsa, algorithm-monte-carlo, algorithm-policy-gradient, algorithm-dqn, algorithm-alphazero, bot-benchmarking, bot-training-troubleshooting, how-bots-learn, gym-auto-tuner, evaluation-tab, understanding-training-charts, gym-train-tab, gym-sessions-tab, gym-explainability-tab, gym-advanced-tabs, gym-workflows
+- **tournaments** (5) — tournaments, cups, tournament-how-to-enter, tournament-flow, tournament-recurring-subscriptions
+- **gameplay** (2) — tables-and-spectating, replays
+- **economy** (2) — credits-tc-hpc-bpc, activity-tiers-and-ranking
+- **account** (2) — notifications, profile-and-settings
+- **admin** (1, admin_only) — admin-help-runbook
 
-- [ ] Stub `xo-llm /embed` interface as a service abstraction in `backend/src/services/help/embedClient.js` (calls a real endpoint in Sprint 2; returns a deterministic stub in test mode)
-- [ ] Wire embedding writes into `seed:help` and reindex paths (will produce real vectors once Sprint 2's `xo-llm` is up; until then, dev seeds use the stub)
-- [ ] Tests: stub returns 384-dim vector; reindex writes embedding column
+Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app training guide.
 
-### 1.6 Admin editor UI
+### 1.4 Hybrid retrieval (`helpService.search`) — COMPLETE
 
-- [ ] `AdminHelpDocsPage.jsx` at `/admin/help` — list all docs (title, category, status, lastEditedBy, updatedAt); filter by status
-- [ ] `AdminHelpDocEditPage.jsx` at `/admin/help/:id/edit` — form with title, slug (read-only after creation), category (select), tags (chip input), status (select), body (textarea, ~30 rows, monospace)
-- [ ] Save sends `PUT /api/v1/admin/help/docs/:id` with current `version` as optimistic-lock token
-- [ ] On 409 (version mismatch), show inline banner: "Someone else edited this doc. Reload to see their changes." with a Reload button
-- [ ] "Create new doc" path: `POST /api/v1/admin/help/docs`
-- [ ] "Archive doc" path: `DELETE /api/v1/admin/help/docs/:id` (soft-delete sets `status=ARCHIVED`)
-- [ ] Tests: list renders; edit + save updates DB and bumps `version`; 409 path shows banner; create + archive flows work
+- [x] `helpService.search(text)` — embeds query via embed client, runs FTS query (`ts_rank_cd` on `HelpChunk.tsv`), runs vector query (cosine similarity on `HelpChunk.embedding`), merges with `α * normalize(fts_rank) + (1 - α) * cosine_sim`
+- [x] SystemConfig key `help.retrieval.fts_weight` (default `0.4`); helpService reads on each call (no redeploy needed to tune)
+- [x] Returns top-K (default 5) chunks with per-source scores
+- [x] Tests: 8 tests in `helpService.test.js` including α=0 vector-only, α=1 FTS-only, normalization, empty query
 
-### 1.7 Admin endpoints
+**Note:** retrieval quality is bottlenecked by the stub embedding (deterministic hash projection). Real MiniLM in Sprint 2 will sharpen synonym-heavy queries.
 
-- [ ] `GET /api/v1/admin/help/docs` — list (paginated, filter by status/category)
-- [ ] `GET /api/v1/admin/help/docs/:id` — single (with current version for optimistic-lock seed)
-- [ ] `POST /api/v1/admin/help/docs` — create
-- [ ] `PUT /api/v1/admin/help/docs/:id` — update (require version match; 409 on mismatch; regenerate chunks + embeddings on success)
-- [ ] `DELETE /api/v1/admin/help/docs/:id` — soft-delete
-- [ ] `POST /api/v1/admin/help/reindex` — rebuild chunks/embeddings for one (`?docId=`) or all docs
-- [ ] All gated by `requireHelpAdmin`
-- [ ] Tests: each endpoint, including 409 path, including soft-delete preserves prior chunk references
+### 1.5 Embedding pipeline scaffold (proxy comes in Sprint 2) — COMPLETE
 
-### 1.8 Admin nav grouping + role-aware landing
+- [x] Stub `embedClient.js` in `backend/src/services/help/` — token-hash projection, L2-normalized, deterministic, 384-dim
+- [x] Wired into `seed:help` and reindex paths — produces real vectors written to `help_chunks.embedding`
+- [x] Tests: stub returns 384-dim vector; deterministic; magnitude=1; pgvector literal formatter — 8 tests in `embedClient.test.js`
 
-- [ ] Refactor `/admin` sidebar to grouped sections: **Platform** (Users, Settings), **Operations** (Tournaments, Bot administration, AI training), **Content** (Help)
-- [ ] `/admin` landing route does role-aware redirect:
-  - `ADMIN` → full dashboard
-  - `HELP_ADMIN` (only) → `/admin/help`
-  - `TOURNAMENT_ADMIN` (only) → `/admin/tournaments`
-  - other scoped roles → their primary section
-- [ ] Sections invisible to a user with no role within them (HELP_ADMIN sees only Content → Help)
-- [ ] Tests: landing redirect cases for each role; nav rendering for each role
+### 1.6 Admin editor UI — COMPLETE
 
-### 1.9 Content filter scaffolding
+- [x] `AdminHelpDocsPage.jsx` at `/admin/help` — list all docs grouped by category with status filter (PUBLISHED / DRAFT / ARCHIVED / all)
+- [x] `AdminHelpDocEditPage.jsx` at `/admin/help/:id` and `/admin/help/new` — single component handles create + edit; slug read-only after creation; body textarea ~28 rows monospace
+- [x] Save sends `PUT /api/v1/admin/help/docs/:id` with current `version` as optimistic-lock token (via raw fetch since api.js doesn't expose PUT body shape)
+- [x] On 409 (version mismatch), inline banner: "Someone else edited this doc (now vN). Reload to see their changes, then re-apply yours." with Reload button that pulls server state into form
+- [x] "Create new doc" path: `POST /api/v1/admin/help/docs`
+- [x] "Archive doc" path: `DELETE /api/v1/admin/help/docs/:id` (soft-delete sets `status=ARCHIVED`)
+- [x] Tests: list renders; edit + save updates DB and bumps `version`; 409 path shows banner; create + archive flows — 10 vitest tests across `AdminHelpDocsPage.test.jsx` and `AdminHelpDocEditPage.test.jsx`
 
-- [ ] Create `backend/src/services/help/contentFilter.js` with initial denylist (~50 terms — slurs + worst profanity); regex/string match against text
-- [ ] Function returns `{ triggered: boolean, terms: string[] }`
-- [ ] Tests: known terms match; clean text passes; case-insensitive
-- [ ] **Pipeline integration ships in Sprint 2** along with `/ask`; this sprint creates the module + tests
+### 1.7 Admin endpoints — COMPLETE
 
-### 1.10 `um help-export`
+- [x] `GET /api/v1/admin/help/docs` — list (paginated up to 200, filter by status/category)
+- [x] `GET /api/v1/admin/help/docs/:id` — single doc with full body + current version
+- [x] `POST /api/v1/admin/help/docs` — create (409 on slug collision via P2002)
+- [x] `PUT /api/v1/admin/help/docs/:id` — update (require version match; 409 on mismatch; reindex on success)
+- [x] `DELETE /api/v1/admin/help/docs/:id` — soft-delete (idempotent: 204 if already archived)
+- [x] `POST /api/v1/admin/help/reindex` — rebuild chunks/embeddings for one (`?docId=`) or all docs
+- [x] All gated by `requireHelpAdmin`
+- [x] Tests: 20 tests in `helpAdmin.test.js` covering each endpoint + 409 path + invalid status + slug uniqueness
 
-- [ ] CLI command that writes the current published `HelpDoc` set back to `/doc/Help_Corpus/*.md` (overwriting), with frontmatter reconstructed
-- [ ] Useful for backup snapshots committed to git
-- [ ] Tests: export round-trips (export → re-seed empty DB → DB state matches)
+### 1.8 Admin nav grouping + role-aware landing (partial)
 
-### 1.11 Sprint 1 acceptance
+- [x] `AdminLandingRoute` on `/admin` — fetches `/me/roles` and routes:
+  - ADMIN (BetterAuth or domain) → render dashboard
+  - HELP_ADMIN only → redirect to `/admin/help`
+  - No relevant role → redirect to `/`
+- [x] `HelpAdminRoute` on `/admin/help/*` — admits ADMIN or HELP_ADMIN
+- [x] "Help" link added to admin sub-nav in AppLayout
+- [x] Tests: 8 tests in `AdminLandingRoute.test.jsx` covering all role permutations
+- [ ] **Deferred polish**: per-role filtering of the remaining sub-nav links so HELP_ADMIN-only users see only `Help`. Today the sub-nav shows all admin links to anyone on `/admin/*` (gated by individual route guards). Functional but not polished.
+- [ ] **Deferred polish**: "grouped sections" framing (Platform / Operations / Content) — the current platform uses a horizontal sub-nav rather than a sidebar; the grouping concept doesn't translate directly. Will revisit if a sidebar refactor lands.
 
-- [ ] All Prisma models live in dev + staging
-- [ ] Admin user can sign in, navigate to `/admin/help`, create/edit/archive a doc
-- [ ] A HELP_ADMIN-only test user lands at `/admin/help` (not `/admin` dashboard)
-- [ ] Hybrid search returns sensible results for 3 hand-curated queries
-- [ ] `seed:help` + `um help-reindex` + `um help-export` round-trip cleanly
-- [ ] Full backend test suite passes via `docker compose exec -T backend npx vitest run`
-- [ ] CI green; ready for `/stage`
+### 1.9 Content filter scaffolding — COMPLETE
+
+- [x] `backend/src/services/help/contentFilter.js` with denylist (~15 terms — slurs + worst profanity); regex word-boundary match
+- [x] Function returns `{ triggered: boolean, terms: string[] }`
+- [x] Tests: known terms match; clean text passes; case-insensitive; word boundaries enforced; multiple terms — 6 tests in `contentFilter.test.js`
+- [x] **Pipeline integration ships in Sprint 2** along with `/ask`; this sprint creates the module + tests
+
+### 1.10 `um help-export` — COMPLETE
+
+- [x] CLI command `um help-export [--out <dir>]` writes the published `HelpDoc` set back to markdown with reconstructed frontmatter (default output `/tmp/help-export` inside container; copy to host afterwards)
+- [x] Also shipped: `um help-list` (table of all docs) and `um help-reindex [slug]`
+- [x] Manual round-trip verified: export → re-seed → DB state matches
+
+### 1.11 Sprint 1 acceptance (complete modulo /stage)
+
+- [x] All Prisma models live in dev
+- [ ] Live in staging — pending `/stage` (waiting on user invocation)
+- [x] Admin user can sign in, navigate to `/admin/help`, create/edit/archive a doc — verified via E2E `help-admin.spec.js`
+- [x] A HELP_ADMIN-only test user redirects from `/admin` to `/admin/help` — verified in `AdminLandingRoute.test.jsx`
+- [x] Hybrid search returns sensible results — verified on 20+ hand-curated queries across iterations
+- [x] `seed:help` (automatic on boot) + `um help-reindex` + `um help-export` round-trip cleanly
+- [x] Full backend test suite passes: **1647 tests** via `docker compose exec -T backend npx vitest run`. Landing: **344 tests**. E2E `help-admin`: **2 tests**. All green.
+- [ ] CI green; ready for `/stage` — pending push verification
 
 ---
 
@@ -282,6 +307,7 @@ This is the checkbox-form task tracker for the Help System implementation. The a
 **Goal:** Curation queue UI, filter-trigger review UI, metrics dashboard, corpus expanded to ~15 docs covering AI training in depth.
 
 **Estimated effort:** ~1 dev week.
+**Note:** §4.4 corpus expansion **pulled forward into Sprint 1** — corpus is now 43 docs, well past the original 15-doc target. The curation/metrics infra (§4.1-4.3) still needs to ship here.
 
 ### 4.1 Curation queue UI
 
@@ -302,16 +328,15 @@ This is the checkbox-form task tracker for the Help System implementation. The a
 - [ ] `AdminHelpMetricsPage.jsx` at `/admin/help/metrics` — small chart per metric (chart library already in admin?)
 - [ ] Tests: metrics endpoint returns expected shape on a seeded DB
 
-### 4.4 Corpus expansion
+### 4.4 Corpus expansion (pulled forward)
 
-- [ ] Author: `ai-training-overview.md`, `ai-training-q-learning.md`, `ai-training-dqn.md`, `ai-training-alphazero.md`, `admin-features.md`, plus 2–3 gap-filling docs informed by Sprint 3 curation queue
-- [ ] Each is added to `/doc/Help_Corpus/`, seeded on next deploy
-- [ ] Spot-check retrieval quality on representative queries for each new doc
+- [x] **Pulled into Sprint 1.** Corpus is currently 43 docs / 422 chunks across 9 categories. AI training is deeply covered (per-algorithm docs, training-concepts, benchmarking, troubleshooting, charts, gym-tab walkthroughs). Onboarding has glossary + RL intro + first-bot walkthrough. Tournaments + Gym practical workflows shipped.
+- [ ] Post-Sprint-3 gap-filling: once the curation queue (§4.1) is live and accumulates a few weeks of real user data, mine `HelpQuery` for "no-source" queries and add gap-filling docs to the corpus accordingly.
 
 ### 4.5 Sprint 4 acceptance
 
 - [ ] Curation queue + filter review + metrics live
-- [ ] Corpus at ~15 docs with verified retrieval quality
+- [x] Corpus at well past the ~15 docs target with verified retrieval quality (43 docs)
 - [ ] All tests green; ready for `/promote` to prod
 
 ---
@@ -328,6 +353,7 @@ After v1 launches and accumulates feedback data:
 - [ ] **Cross-session help history:** profile-page view of past Q&A
 - [ ] **Per-IP rate limit:** if shared-account abuse emerges
 - [ ] **Auto-redact PII in question text:** regex scrubber for emails/phone/etc. before sending to Groq
+- [ ] **Sub-nav role filtering:** the deferred polish from Sprint 1.8 — show only the relevant admin sub-nav links per the user's domain roles (HELP_ADMIN sees only Help, etc.)
 
 ---
 
@@ -339,3 +365,4 @@ After v1 launches and accumulates feedback data:
 - **Realtime channels:** if help streaming needs new channel naming, follow `table:*` convention (per `Realtime_Channels.md`), not `room:*`.
 - **E2E updates:** any user-surface change ships with updated e2e tests in the same sprint.
 - **PDF companion:** every change to `Help_System_Plan.md` or this tracker re-renders the matching `.pdf` via the project's tuned pandoc invocation.
+- **Fly Postgres pgvector:** before `/stage` of any Sprint 1 work, enable `CREATE EXTENSION vector` on `xo-db-staging` (and later `xo-db-prod`). Fly's PG image bundles pgvector but the extension must be enabled per database.
