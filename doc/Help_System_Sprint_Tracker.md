@@ -108,8 +108,8 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 - [x] `HelpAdminRoute` on `/admin/help/*` — admits ADMIN or HELP_ADMIN
 - [x] "Help" link added to admin sub-nav in AppLayout
 - [x] Tests: 8 tests in `AdminLandingRoute.test.jsx` covering all role permutations
-- [ ] **Deferred polish**: per-role filtering of the remaining sub-nav links so HELP_ADMIN-only users see only `Help`. Today the sub-nav shows all admin links to anyone on `/admin/*` (gated by individual route guards). Functional but not polished.
-- [ ] **Deferred polish**: "grouped sections" framing (Platform / Operations / Content) — the current platform uses a horizontal sub-nav rather than a sidebar; the grouping concept doesn't translate directly. Will revisit if a sidebar refactor lands.
+- [ ] **Deferred polish → Sprint 4.0**: per-role filtering of the remaining sub-nav links so HELP_ADMIN-only users see only `Help`. Today the sub-nav shows all admin links to anyone on `/admin/*` (gated by individual route guards). Functional but not polished.
+- [ ] **Deferred polish → Sprint 4.0**: "grouped sections" framing (Platform / Operations / Content) — adapted to the current horizontal sub-nav rather than a sidebar refactor.
 
 ### 1.9 Content filter scaffolding — COMPLETE
 
@@ -307,7 +307,15 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 **Goal:** Curation queue UI, filter-trigger review UI, metrics dashboard, corpus expanded to ~15 docs covering AI training in depth.
 
 **Estimated effort:** ~1 dev week.
-**Note:** §4.4 corpus expansion **pulled forward into Sprint 1** — corpus is now 43 docs, well past the original 15-doc target. The curation/metrics infra (§4.1-4.3) still needs to ship here.
+**Note:** §4.4 corpus expansion **pulled forward into Sprint 1** — corpus is now 43 docs, well past the original 15-doc target. The curation/metrics infra (§4.1-4.3) still needs to ship here, alongside the admin nav polish carried from Sprint 1.8 (§4.0).
+
+### 4.0 Admin nav polish (carried from Sprint 1.8)
+
+Pairs naturally with the new admin surfaces in §4.1-4.3 — better to land all the admin UI work together than to bolt nav polish on after curation/metrics ship.
+
+- [ ] Per-role filtering of the admin sub-nav in `AppLayout.jsx`: fetch `/me/roles` once on admin-path navigation and render only the links the user is gated for. HELP_ADMIN-only users see `Help` (and any future content links); TOURNAMENT_ADMIN-only sees `Tournaments`; ADMIN sees all.
+- [ ] Visual grouping in the sub-nav: insert section labels or dividers between **Platform** (Users, Settings), **Operations** (Tournaments, Bot administration, AI training, Games, ML Models, Bots, Health, Logs, Feedback), and **Content** (Help, plus future curation/metrics links).
+- [ ] Tests: nav rendering per role (ADMIN sees all; HELP_ADMIN sees only Content; etc.); existing route guard tests stay green.
 
 ### 4.1 Curation queue UI
 
@@ -353,7 +361,6 @@ After v1 launches and accumulates feedback data:
 - [ ] **Cross-session help history:** profile-page view of past Q&A
 - [ ] **Per-IP rate limit:** if shared-account abuse emerges
 - [ ] **Auto-redact PII in question text:** regex scrubber for emails/phone/etc. before sending to Groq
-- [ ] **Sub-nav role filtering:** the deferred polish from Sprint 1.8 — show only the relevant admin sub-nav links per the user's domain roles (HELP_ADMIN sees only Help, etc.)
 
 ---
 
