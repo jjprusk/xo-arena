@@ -5,7 +5,48 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ## Known Critical Bugs
 
-_None currently open. See **Appendix — Resolved & Obsolete** at the end of this doc for fixed entries._
+### PlayVsBot — 6-step serial join chain inflates ready time to ~900 ms (filed 2026-05-13)
+
+A guest landing on `/play?action=vs-community-bot` waits **~900 ms** from navigate start to interactive (perf-v2 warm-anon p50 on prod v1.4.0-alpha-4.15; live network trace 778–1189 ms). Of that, ~600–700 ms is pure backend orchestration: **six** sequential round-trips before the spinner can detach.
+
+**Trace (warm context, prod):**
+
+```
+   0ms  navigate
+  74ms  load fired
+ 334ms  main.supported.js lazy chunk loaded
+ 359ms  GET /api/v1/bots?gameId=xo  (uncacheable path in bots.js:44-53)
+ 431ms  bots returns (72ms)
+ 440ms  GET /api/token
+ 511ms  token returns (71ms)
+ 512ms  POST /api/v1/rt/tables       (create)
+ 604ms  table created (92ms)
+ 604ms  POST /api/v1/rt/tables/:id/join
+ 778ms  joined (174ms)
+1189ms  SSE state event → spinner detaches (411ms idle wait)
+```
+
+This is the **structural cost** of the current start-a-bot-game flow, not a regression from any recent change — but it was masked in older perf baselines by a measurement artifact (the spinner-detach gate sometimes early-exited, producing fake ~440 ms readings). v1.4.0-alpha-4.15's "+107% warm regression" turned out to be the median snapping onto the real plateau, not a true slowdown.
+
+**Why it's filed as critical:**
+
+- This is the **primary path** a new visitor takes off HomePage's "Play" CTA. ~900 ms to interactive on a fast desktop is well outside the platform's 200 ms desktop / 500 ms mobile target.
+- On mobile + slow networks the chain compounds — every 75 ms RTT becomes ~450 ms across the six round-trips.
+- The route powers the journey-step-1 (Hook) experience for anon visitors; first impression speed matters.
+
+**Fix sketch (server-side, ~2–3 dev days):**
+
+1. **Collapse `/api/token` + `/rt/tables` create + `/rt/tables/:id/join` into a single `POST /api/v1/play/bot` call** that returns `{ tableId, sseChannel, initialState }` in one round-trip. Saves ~3 RTTs (~250–400 ms).
+2. **Cache `/api/v1/bots?gameId=xo` with a short TTL (30s–60s)** — the gameId-filter branch in `bots.js:44-53` was intentionally uncached because it was assumed rare, but `getCommunityBot()` is now the hottest caller. Removes one RTT.
+3. **Issue the initial state event eagerly** on table-create rather than after join, so the 411 ms post-join idle wait disappears.
+
+**Related cleanup:** the perf-v2 "ready" detector waits for `.animate-spin` to detach — this is fragile across pages where a different spinner appears later in the flow. Switch to a route-specific `[data-perf-ready]` marker on PlayPage (and on every other route that has a multi-step load) so the measurement isn't bimodal.
+
+**Files:** `backend/src/routes/bots.js`, `backend/src/routes/tables.js` (or wherever `/rt/tables` lives), `landing/src/lib/communityBotCache.js`, `landing/src/pages/PlayPage.jsx`, `perf/perf-v2.js`.
+
+---
+
+_See **Appendix — Resolved & Obsolete** at the end of this doc for fixed entries._
 
 ---
 
