@@ -2,41 +2,68 @@
 slug: tables-and-spectating
 title: Tables and spectating
 category: gameplay
-tags: [tables, spectating, realtime]
+tags: [tables, spectating, realtime, demo-tables, tournament-matches]
 status: PUBLISHED
 admin_only: false
 ---
 
 # Tables and spectating
 
-A **Table** is the unit of live gameplay on AI Arena. Every game — PvP, PvBot, BotvBot, tournament match — runs on a table. Tables are also where spectating happens.
+A **Table** is the unit of live gameplay on AI Arena. Every game — Quick Play, PvP, bot challenges, tournament matches, demo tables — runs on a Table. Tables are also where spectating happens.
 
 ## Seats and spectators
 
-A table has two **seats** (the two players) plus an unbounded list of **spectators**. Seated players move the pieces. Spectators see the board update in real time but can't move.
+A Table has two **seats** (the two players) and an unbounded list of **spectators**:
 
-If you join a table that already has two seated players, you join as a spectator automatically. You can leave any time without affecting the game.
+- **Seated players** move pieces and influence the game state.
+- **Spectators** see the board update in real time but cannot move. They're tracked in-memory by socket connection — authenticated watchers are deduped by user ID, guests by socket. The list is per-session only (no DB row).
 
-## Creating a table
+If you join a Table that already has two seated players, you join as a spectator automatically. You can leave any time without affecting the game.
 
-From the Tables page click **New Table**. Pick a game and choose whether the table is **public** (anyone can join either seat) or **private** (link-only). A private table is invite-link based — share the link with whoever you want to play.
+There is **no spectator chat** in v1. Spectators see the board and can leave — that's it. Keeping the surface quiet was intentional: tournament matches especially benefit from a focused viewing experience.
+
+## Creating a Table
+
+From the Tables page click **New Table**. You pick:
+
+- **Game** — XO (default) or Pong (experimental).
+- **Public vs private** — public Tables appear on the Tables list for anyone to join; private Tables are link-only.
+
+Once seated, the game starts as soon as both seats are filled. A `FORMING` Table that sits idle past the no-show window may be garbage-collected.
 
 ## Joining an open seat
 
-Public tables waiting for a second player are listed on the Tables page with a **Join** button. One click seats you; the game starts as soon as both seats are filled.
+Public Tables waiting for a second player are listed on the Tables page with a **Join** button. One click seats you; the game starts immediately.
 
-## Bot-game tables
+If the host left before you joined, you'll see an "abandoned" indicator — pick another Table.
 
-When you challenge a bot from the Bot Directory, the platform creates a table with you on one seat and the bot on the other. Other players can spectate the match in real time. Bot games behave like PvP from the spectator's point of view.
+## Bot-game Tables
 
-## Tournament-match tables
+When you challenge a bot from the Bot Directory, the platform creates a Table with you on one seat and the bot on the other. Other players can spectate the match in real time. Bot games behave like PvP from the spectator's point of view; the bot just makes its moves automatically.
 
-Every tournament match runs on its own table, created automatically when the match becomes ready. You'll be notified when your match's table is live; click the notification to go there.
+## Tournament-match Tables
 
-## Demo tables
+Every tournament match runs on its own Table, created on demand when the match becomes ready. The first player to navigate to the match creates the Table (seat 0, X); the second player joins, the Table flips from `FORMING` to `ACTIVE`, and the games begin.
 
-If you're early in the Guide journey, you may see a **demo table** for step 2 of onboarding. Demo tables are private bot-vs-bot games created just for you to watch. They never appear on the public Tables list.
+Tournament-match Tables are always **private** — they don't appear on the public Tables list. Your bracket page is how you reach them.
 
-## Spectator chat
+## Demo Tables
 
-Spectators can react with quick emoji to keep the room lively. Full chat is disabled by default to keep tournament matches focused; admins can enable it per-table for casual rooms.
+If you're in the Hook phase of the Intelligent Guide, the platform creates a **demo Table** for step 2 — a bot-vs-bot match you watch without participating. Demo Tables are:
+
+- **Private** — only the creator (you) can see them; never appear on the public list.
+- **Marked** `isDemo=true` in the schema.
+- **Bot-vs-bot** — both seats are built-in bots; you watch.
+- **Garbage-collected aggressively** — one active per user (a new demo replaces the old), two-minute grace after completion, one-hour hard TTL.
+
+The matchup is picked from a curated allowlist (e.g., Copper vs. Sterling, Rusty vs. Copper) so beginners see interesting, asymmetric play. Completion of the watch threshold credits Hook step 2 and pays +20 TC.
+
+## Spar Tables
+
+A **Spar** is a casual training match between your own bot and a built-in opponent at easy / medium / hard. Spar runs on a Table like any other match. It's part of Curriculum step 5; see the "Spar" doc.
+
+## Lifecycle and cleanup
+
+Table statuses you'll see: `FORMING` (waiting for second player), `ACTIVE` (game in progress), `COMPLETED` (game ended; preserved briefly so spectators can see the result), `ABANDONED` (no-show or both players left), and various end states.
+
+Abandoned and stale Tables are periodically garbage-collected by `tableGcService`. Late-joining spectators have a brief grace window to see the final result before cleanup.

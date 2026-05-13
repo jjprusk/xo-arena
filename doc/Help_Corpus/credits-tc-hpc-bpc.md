@@ -2,48 +2,72 @@
 slug: credits-tc-hpc-bpc
 title: Credits — TC, HPC, BPC
 category: economy
-tags: [credits, economy, training, tournaments]
+tags: [credits, economy, rewards, tier, activity]
 status: PUBLISHED
 admin_only: false
 ---
 
 # Credits — TC, HPC, BPC
 
-AI Arena uses three distinct credit currencies. Each one funds a different part of the platform.
+AI Arena uses three credit currencies. In v1 they are **earned, not spent** — there are no entry fees or training costs. The currencies signal activity and unlock tiers; eventually some surfaces may charge credits, but today everything on the platform is free.
 
-## TC — Tournament Credits
+## What each currency means
 
-Tournament Credits are the currency you spend to enter tournaments and that you win as tournament prizes. Most tournaments have a TC entry fee that funds the prize pool; the platform may also add a guaranteed minimum.
+- **TC — Tournament Credits.** Awarded for journey milestones, tournament wins, and discovery rewards. The activity-score formula gives TC a 5× weight, so a single TC counts more than a single HPC or BPC.
+- **HPC — Human Play Credits.** Awarded +1 to each human player who plays a game (HVH, HVB, HVA). Casual signal that you're active.
+- **BPC — Bot Play Credits.** Awarded +1 to the bot owner when their bot plays an *external* opponent (not the same owner, not self-play). Rewards letting your bots out into the wild.
 
-You can also earn TC from:
+You start with **0 of all three** when you create your account.
 
-- Cups tied to the Guide (Curriculum Cup, Rookie Cup) award TC on completion.
-- A small daily login allotment, if enabled.
+## How you earn each currency
 
-## HPC — Human Play Credits
+### TC — journey + discovery + tournament wins
 
-HPC funds human-vs-human matches that involve platform infrastructure beyond a simple table — for example, ranked ladder games that update a global ELO. Casual PvP at a table costs 0 HPC; only ranked play debits HPC.
+| Source | Amount | When |
+|---|---|---|
+| **Hook phase complete** (steps 1+2 done) | +20 TC | After watching the bot-vs-bot demo to threshold |
+| **Curriculum phase complete** (step 7) | +50 TC | When your first tournament finishes |
+| **First Specialize action** | +10 TC | First action after graduating Curriculum |
+| **First real tournament win** | +25 TC | Idempotent; only the first counts |
+| **First non-default algorithm** | +10 TC | First time you train a non-Q-Learning bot |
+| **First template clone** | +10 TC | First time you clone a tournament template |
 
-You earn HPC by:
+All journey/discovery rewards are **idempotent** — the same milestone never pays twice.
 
-- Winning ranked PvP games.
-- Spectating and engaging with the platform (small drip-feed).
+The journey reward amounts (`+20` for Hook, `+50` for Curriculum) are stored in SystemConfig and admin-tunable.
 
-## BPC — Bot Play Credits
+### HPC — human play
 
-BPC funds anything bot-related: training a Quick Bot, running an ML training job, challenging a bot in a non-tournament context, and entering bots in tournaments.
+Every game a human plays awards +1 HPC to that human. This applies to:
 
-Larger ML training jobs cost more BPC (training takes minutes-to-hours of compute). Quick Bots cost a fixed BPC amount per tier.
+- **HVH** (human vs. human) — both players get +1.
+- **HVB** (human vs. bot) — the human gets +1.
+- **HVA** (human vs. AI) — the human gets +1. *Note: pure AI-vs-AI demo watches don't award HPC.*
 
-You earn BPC by:
+### BPC — bot play
 
-- Winning bot-vs-bot games where you're the owner of the winning bot.
-- Daily allotment for active players.
+When your bot plays against a bot or human owned by someone else, you earn +1 BPC. Self-play (your bot vs. your bot, your bot vs. you) does not award BPC — that would let a single user farm credits.
 
-## Why three currencies
+## What credits get you
 
-The split keeps the three sides of the platform — tournaments, human PvP, and bot training — economically separate. You can be a heavy ML trainer without being forced into tournaments to fund it, and you can be a tournament player without grinding out training BPC.
+Today credits unlock your **activity tier** — a public ranking from Bronze upward (Silver, Gold, Platinum, Diamond). Your tier:
 
-## Where to see your balance
+- Sets the **maximum number of bots** you can own (Bronze 3 → Silver 5 → Gold 8 → Platinum 15 → Diamond unlimited).
+- Sets the **maximum episodes per training session** (Bronze 1k → Silver 5k → Gold 20k → Platinum 50k → Diamond 100k).
+- Appears on your profile and on leaderboards.
 
-Your three balances are visible at the top of the home page and on your profile page. Every credit transaction is logged — you can audit your history from settings.
+Tier thresholds are admin-tunable. As you accumulate credits your tier upgrades automatically; the Notifications panel can ping you on tier upgrades.
+
+The **activity score** is calculated as `HPC + BPC + (TC × tcMultiplier)`. The default multiplier is 5, so 1 TC is worth 5 HPC or BPC for tier purposes.
+
+## Refunds and admin grants
+
+In v1 there's no automatic refund flow (because there's no spending). Admins can adjust SystemConfig reward values, but there is no per-user credit-grant endpoint in the public API.
+
+## Where you see your balance
+
+Your three balances surface on your profile page, in the credits panel, and via the public endpoint `GET /api/v1/users/:id/credits`. The endpoint returns balances plus your activity score, current tier, tier icon, next tier, and points to the next tier.
+
+## Looking ahead
+
+If the platform later introduces spending — bot training that consumes BPC, premium tournament entry in TC, ranked PvP in HPC — those rules will be added per surface and rolled out with notice. v1's contract is "free everything; credits = recognition only."
