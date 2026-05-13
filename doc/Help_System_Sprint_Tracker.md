@@ -99,7 +99,7 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 - [x] All gated by `requireHelpAdmin`
 - [x] Tests: 20 tests in `helpAdmin.test.js` covering each endpoint + 409 path + invalid status + slug uniqueness
 
-### 1.8 Admin nav grouping + role-aware landing (partial)
+### 1.8 Admin nav grouping + role-aware landing — COMPLETE
 
 - [x] `AdminLandingRoute` on `/admin` — fetches `/me/roles` and routes:
   - ADMIN (BetterAuth or domain) → render dashboard
@@ -108,8 +108,8 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 - [x] `HelpAdminRoute` on `/admin/help/*` — admits ADMIN or HELP_ADMIN
 - [x] "Help" link added to admin sub-nav in AppLayout
 - [x] Tests: 8 tests in `AdminLandingRoute.test.jsx` covering all role permutations
-- [ ] **Deferred polish → Sprint 4.0**: per-role filtering of the remaining sub-nav links so HELP_ADMIN-only users see only `Help`. Today the sub-nav shows all admin links to anyone on `/admin/*` (gated by individual route guards). Functional but not polished.
-- [ ] **Deferred polish → Sprint 4.0**: "grouped sections" framing (Platform / Operations / Content) — adapted to the current horizontal sub-nav rather than a sidebar refactor.
+
+**Polish moved to Sprint 4.0**: per-role filtering of the remaining sub-nav links and grouped-sections (Platform / Operations / Content) visual framing. Both pair more naturally with §4.1-4.3's new admin surfaces.
 
 ### 1.9 Content filter scaffolding — COMPLETE
 
