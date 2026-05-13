@@ -202,6 +202,48 @@ export async function requireTournament(req, res, next) {
 }
 
 /**
+ * Returns true if the given Better Auth user ID has the HELP_ADMIN role (or ADMIN).
+ * Safe to call without an active request/response — never throws.
+ */
+export async function isHelpAdmin(userId) {
+  try {
+    const [baUser, domainUser] = await Promise.all([
+      db.baUser.findUnique({ where: { id: userId }, select: { role: true } }),
+      db.user.findUnique({
+        where: { betterAuthId: userId },
+        select: { userRoles: { select: { role: true } } },
+      }),
+    ])
+    const roles = domainUser?.userRoles?.map(r => r.role) ?? []
+    return (
+      baUser?.role === 'admin' ||
+      roles.includes('ADMIN') ||
+      roles.includes('HELP_ADMIN')
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Middleware: requires auth AND help-admin (or admin) role.
+ */
+export async function requireHelpAdmin(req, res, next) {
+  if (!req.auth) return res.status(401).json({ error: 'Authentication required' })
+
+  try {
+    const ok = await isHelpAdmin(req.auth.userId)
+    if (!ok) {
+      return res.status(403).json({ error: 'Help admin access required' })
+    }
+    next()
+  } catch (err) {
+    logger.error({ err }, 'Help admin role check failed')
+    res.status(500).json({ error: 'Authorization check failed' })
+  }
+}
+
+/**
  * Returns true if the given Better Auth user ID has the SUPPORT role (or ADMIN).
  * Safe to call without an active request/response — never throws.
  */

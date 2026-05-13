@@ -319,6 +319,29 @@ export const api = {
     // 13-key map.
     getGuideConfig: (token)       => api.get('/admin/guide-config', token),
     setGuideConfig: (body, token) => api.patch('/admin/guide-config', body, token),
+
+    // ── Learnable Help System (Sprint 1) ────────────────────────────────
+    help: {
+      listDocs: (token, opts = {}) => {
+        const p = new URLSearchParams()
+        if (opts.status)   p.set('status',   opts.status)
+        if (opts.category) p.set('category', opts.category)
+        if (opts.limit)    p.set('limit',    opts.limit)
+        if (opts.offset)   p.set('offset',   opts.offset)
+        const qs = p.toString()
+        return api.get(`/admin/help/docs${qs ? `?${qs}` : ''}`, token)
+      },
+      getDoc:    (id, token)             => api.get(`/admin/help/docs/${id}`, token),
+      createDoc: (body, token)           => api.post('/admin/help/docs', body, token),
+      updateDoc: (id, body, token)       => request('PUT', `/admin/help/docs/${id}`, body, token),
+      archiveDoc: (id, token)            => request('DELETE', `/admin/help/docs/${id}`, null, token),
+      reindex:   (docId, token)          => api.post(`/admin/help/reindex${docId ? `?docId=${docId}` : ''}`, {}, token),
+    },
+  },
+
+  // ── /me endpoints ────────────────────────────────────────────────────
+  me: {
+    getRoles: (token) => api.get('/me/roles', token),
   },
   games: {
     getReplay:    (id, token)      => api.get(`/games/${id}/replay`, token),

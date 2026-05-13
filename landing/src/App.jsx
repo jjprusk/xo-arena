@@ -3,6 +3,8 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout.jsx'
 import AdminRoute from './components/admin/AdminRoute.jsx'
+import AdminLandingRoute from './components/admin/AdminLandingRoute.jsx'
+import HelpAdminRoute from './components/admin/HelpAdminRoute.jsx'
 import HomePage from './pages/HomePage.jsx'
 import TournamentsPage from './pages/TournamentsPage.jsx'
 import TournamentDetailPage from './pages/TournamentDetailPage.jsx'
@@ -26,6 +28,8 @@ import AdminFeedbackPage from './pages/admin/AdminFeedbackPage.jsx'
 import AdminHealthPage from './pages/admin/AdminHealthPage.jsx'
 import LogViewerPage from './pages/admin/LogViewerPage.jsx'
 import GuideMetricsPage from './pages/admin/GuideMetricsPage.jsx'
+import AdminHelpDocsPage from './pages/admin/AdminHelpDocsPage.jsx'
+import AdminHelpDocEditPage from './pages/admin/AdminHelpDocEditPage.jsx'
 import RankingsPage from './pages/RankingsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
@@ -66,8 +70,13 @@ export default function App() {
           <Route path="/tables" element={<TablesPage />} />
           <Route path="/tables/:id" element={<TableDetailPage />} />
 
-          {/* Admin routes — all guarded by AdminRoute */}
-          <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          {/* Admin routes — all guarded by AdminRoute, except /admin which
+              uses AdminLandingRoute so HELP_ADMIN-only users land on their
+              section instead of being bounced home. */}
+          <Route path="/admin" element={<AdminLandingRoute><AdminDashboard /></AdminLandingRoute>} />
+          <Route path="/admin/help"        element={<HelpAdminRoute><AdminHelpDocsPage /></HelpAdminRoute>} />
+          <Route path="/admin/help/new"    element={<HelpAdminRoute><AdminHelpDocEditPage /></HelpAdminRoute>} />
+          <Route path="/admin/help/:id"    element={<HelpAdminRoute><AdminHelpDocEditPage /></HelpAdminRoute>} />
           <Route path="/admin/tournaments" element={<AdminRoute><AdminTournamentsPage /></AdminRoute>} />
           <Route path="/admin/templates"       element={<AdminRoute><AdminTemplatesPage      /></AdminRoute>} />
           <Route path="/admin/templates/:id"   element={<AdminRoute><AdminTemplateDetailPage /></AdminRoute>} />

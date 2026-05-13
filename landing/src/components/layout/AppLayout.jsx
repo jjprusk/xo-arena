@@ -565,6 +565,11 @@ export default function AppLayout() {
             { to: '/admin/feedback',    label: 'Feedback'    },
             { to: '/admin/logs',        label: 'Logs'        },
             { to: '/admin/health',      label: 'Health'      },
+            // Content group — currently single-item. When more
+            // content-team surfaces ship (curation queue, metrics in
+            // Sprint 4), they go here. Per-role filtering of the rest of
+            // the sub-nav for HELP_ADMIN-only users is a follow-up.
+            { to: '/admin/help',        label: 'Help'        },
           ].map(({ to, label }) => (
             <NavLink
               key={to}

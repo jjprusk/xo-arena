@@ -29,6 +29,7 @@ import { testbotsCommand }     from './commands/testbots.js'
 import { testuserCommand }     from './commands/testuser.js'
 import { rewardsCommand }      from './commands/rewards.js'
 import { perfuserCommand }     from './commands/perfuser.js'
+import { helpCommand }         from './commands/help.js'
 
 guardProduction()
 await ensureProxy()
@@ -86,6 +87,7 @@ testbotsCommand(program)
 testuserCommand(program)
 rewardsCommand(program)
 perfuserCommand(program)
+helpCommand(program)
 
 program.hook('postAction', () => disconnect())
 // parseAsync (not parse) so commander awaits async action handlers and the

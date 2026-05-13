@@ -927,6 +927,121 @@ model PerfVital {
   @@map("perf_vitals")
 }
 
+/// Learnable Help System — see doc/Help_System_Plan.md.
+/// HelpDoc is the canonical source of a help article after seeding. The
+/// markdown corpus in /doc/Help_Corpus/ is additive-only on boot (new slugs
+/// are created; existing rows are never overwritten by the seeder). The
+/// `version` field doubles as an optimistic-locking token for the admin
+/// editor and as the chunk-invalidation key: chunks are regenerated whenever
+/// `version` is bumped.
+model HelpDoc {
+  id              String        @id @default(cuid())
+  slug            String        @unique
+  title           String
+  body            String
+  category        String
+  tags            String[]      @default([])
+  status          HelpDocStatus @default(PUBLISHED)
+  authorId        String?
+  lastEditedById  String?
+  version         Int           @default(1)
+  seededFromFile  String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  chunks          HelpChunk[]
+
+  @@index([status])
+  @@index([category])
+  @@map("help_docs")
+}
+
+/// Chunked, indexed view of a HelpDoc for retrieval. `tsv` is the FTS column
+/// (English config) populated via a trigger; `embedding` is a pgvector
+/// column (384-dim MiniLM-L6-v2 in v1) for cosine-similarity search. Both
+/// indexes (GIN on tsv, ivfflat on embedding) are created in the migration
+/// since Prisma cannot express them in schema.prisma.
+model HelpChunk {
+  id          String                 @id @default(cuid())
+  docId       String
+  position    Int
+  content     String
+  tsv         Unsupported("tsvector")?
+  embedding   Unsupported("vector(384)")?
+  docVersion  Int
+  createdAt   DateTime               @default(now())
+  doc         HelpDoc                @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@index([docId])
+  @@map("help_chunks")
+}
+
+/// Records every help query for retrieval-quality analysis and the curation
+/// queue. `userId` is nullable so we can later opt-in to logging guest
+/// queries; v1 returns 401 to guests so this is unused until then.
+model HelpQuery {
+  id                 String                       @id @default(cuid())
+  userId             String?
+  text               String
+  textTsv            Unsupported("tsvector")?
+  embedding          Unsupported("vector(384)")?
+  retrievedChunkIds  String[]                     @default([])
+  retrievalScore     Json                         @default("{}")
+  topAnswerId        String?
+  context            Json                         @default("{}")
+  promptTemplate     String?
+  modelVersion       String?
+  latencyMs          Int?
+  createdAt          DateTime                     @default(now())
+  answers            HelpAnswer[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("help_queries")
+}
+
+/// One HelpAnswer per generated response. `contentFilterTriggered` flips
+/// when the post-stream denylist matches; `rendered` is then replaced with
+/// the refusal phrase before persistence (see Help_System_Plan §7.6).
+model HelpAnswer {
+  id                      String         @id @default(cuid())
+  queryId                 String
+  chunkIds                String[]       @default([])
+  rendered                String
+  rank                    Int            @default(0)
+  tokensIn                Int?
+  tokensOut               Int?
+  stopReason              String?
+  contentFilterTriggered  Boolean        @default(false)
+  contentFilterTerms      String[]       @default([])
+  createdAt               DateTime       @default(now())
+  query                   HelpQuery      @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  feedback                HelpFeedback[]
+
+  @@index([queryId])
+  @@map("help_answers")
+}
+
+/// Upsert-shaped — unique on (userId, queryId, answerId). `signal` is
+/// nullable so we can record implicit signals (followUpWithin60s,
+/// docLinkClicked) without forcing a thumb vote.
+model HelpFeedback {
+  id         String                @id @default(cuid())
+  userId     String
+  queryId    String
+  answerId   String
+  signal     HelpFeedbackSignal?
+  category   HelpFeedbackCategory?
+  comment    String?
+  implicit   Json                  @default("{}")
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  answer     HelpAnswer            @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, queryId, answerId])
+  @@index([answerId])
+  @@map("help_feedback")
+}
+
 enum ScheduledJobStatus {
   PENDING
   RUNNING
@@ -939,6 +1054,25 @@ enum Role {
   BOT_ADMIN
   TOURNAMENT_ADMIN
   SUPPORT
+  HELP_ADMIN
+}
+
+enum HelpDocStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum HelpFeedbackSignal {
+  HELPFUL
+  NOT_HELPFUL
+}
+
+enum HelpFeedbackCategory {
+  OFF_TOPIC
+  OUTDATED
+  WRONG
+  INCOMPLETE
 }
 
 enum FeedbackCategory {
