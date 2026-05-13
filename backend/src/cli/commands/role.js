@@ -2,7 +2,7 @@
 import db from '../lib/db.js'
 import { resolveUsers, ok, fail } from '../lib/safety.js'
 
-const VALID_ROLES = ['ADMIN', 'SUPPORT', 'BOT_ADMIN']
+const VALID_ROLES = ['ADMIN', 'SUPPORT', 'BOT_ADMIN', 'HELP_ADMIN']
 
 export function roleCommand(program) {
   program

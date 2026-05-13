@@ -14,6 +14,10 @@ COPY backend/src/ ./backend/src/
 COPY backend/prisma/ ./backend/prisma/
 COPY backend/prisma.config.ts ./backend/
 
+# Help corpus markdown files — seedHelpCorpus() reads /app/doc/Help_Corpus
+# on every boot and inserts new slugs into HelpDoc.
+COPY doc/Help_Corpus/ ./doc/Help_Corpus/
+
 WORKDIR /app/backend
 RUN npx prisma generate --schema=../packages/db/prisma/schema.prisma
 

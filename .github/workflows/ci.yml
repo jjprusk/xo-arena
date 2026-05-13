@@ -16,7 +16,10 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector-bundled PG 16 image — matches the dev docker-compose
+        # postgres service. The Help System migration requires the
+        # `vector` extension; the stock postgres image lacks it.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: xo
           POSTGRES_PASSWORD: xo
