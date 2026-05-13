@@ -21,7 +21,18 @@ When you're playing against a bot, the bot moves automatically after you. Strong
 
 If both sides play optimally, Tic-Tac-Toe is a forced draw. There is no winning strategy against a perfect opponent. That's why high-tier bots almost always draw against each other and against expert players.
 
-The skill, then, is in **punishing mistakes**. The center cell, the four corners, and forced double-threats are the main levers strong play uses. Weak bots make small mistakes that good players can exploit.
+The skill, then, is in **punishing mistakes**. The center cell, the four corners, and forced double-threats (called **forks**) are the main levers strong play uses. Weak bots make small mistakes that good players can exploit.
+
+## Quick strategy summary
+
+For a deeper guide, see **Tic-Tac-Toe strategy**. The short version:
+
+1. **Take the center (cell 5) first** — it's part of 4 winning lines; everything else is part of 3 or fewer.
+2. **Use the move priority list**: win if you can, else block, else create a fork, else block their fork, else take center, else corner, else edge.
+3. **Set up forks** to beat anything weaker than Magnus. A fork is one move that creates two simultaneous winning threats; your opponent can only block one.
+4. **You cannot beat Magnus** — Magnus plays perfect minimax. Best case is a draw.
+
+After a loss, replay the game move-by-move and ask "which priority-list step did I skip?" That's the lesson.
 
 ## Match modes
 
