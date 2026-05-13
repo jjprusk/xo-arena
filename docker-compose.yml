@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector-bundled PG 16 image — same wire/file format as
+    # postgres:16-alpine so the existing volume is compatible. Required
+    # for the Help System (vector(384) MiniLM embeddings).
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: xo
