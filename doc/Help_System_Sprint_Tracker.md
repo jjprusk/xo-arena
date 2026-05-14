@@ -1,6 +1,6 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `staging` (v1.4.0-alpha-4.15); Sprint 4 corpus pulled forward.
+**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); Sprint 2 plan revised per ADR-001 (managed inference, no `xo-llm` proxy); Sprint 4 corpus pulled forward.
 **Last updated:** 2026-05-13
 **Companion to:** `Help_System_Plan.md`
 
@@ -137,11 +137,13 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 
 ---
 
-## Sprint 2 — LLM proxy + ask endpoint + content filter pipeline
+## Sprint 2 — managed inference + ask endpoint + content filter pipeline
 
-**Goal:** `xo-llm` Fly app live with `/generate` (Groq) and `/embed` (MiniLM). `helpService.ask` orchestrates retrieve → prompt → stream → filter → persist. Rate limiter. Adversarial prompt fixtures green. **Also bundles the PlayVsBot critical-bug fix** filed in `Future_Ideas.md` (Known Critical Bugs).
+**Decision:** Per **ADR-001** in `Help_System_Plan.md`, this sprint adopts **Option B (direct Groq + managed embeddings)** rather than the originally planned `xo-llm` proxy app. No new Fly apps; the backend gains two outbound SaaS deps (Groq + OpenAI). See ADR-001 for the full rationale, costs, and migration path back to the proxy architecture if ever needed.
 
-**Estimated effort:** ~1.5 dev weeks (Help) + ~2–3 days (PlayVsBot).
+**Goal:** `helpService.ask` orchestrates embed → retrieve → prompt → stream → filter → persist using Groq for chat and OpenAI for embeddings. Rate limiter. Adversarial prompt fixtures green. **Also bundles the PlayVsBot critical-bug fix** filed in `Future_Ideas.md` (Known Critical Bugs).
+
+**Estimated effort:** ~1 dev week (Help, reduced from the original 1.5w because §2.1 + §2.2 dropped) + ~2–3 days (PlayVsBot).
 
 ### 2.0 PlayVsBot start-flow collapse (critical bug — see `Future_Ideas.md`)
 
@@ -153,37 +155,49 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 - [ ] Add `[data-perf-ready]` marker to PlayPage that flips when the spinner detaches, and update `perf/perf-v2.js` to prefer per-route ready markers when present (drops the bimodal `.animate-spin` artifact).
 - [ ] Re-baseline PlayVsBot warm-anon: target p50 ≤ 500 ms desktop / ≤ 800 ms mobile.
 
-### 2.1 `xo-llm` Fly app
+### 2.1 Embedding client — swap stub for OpenAI
 
-- [ ] Create `xo-llm-staging` Fly app + `xo-llm-prod`
-- [ ] Dockerfile: bun + `xo-llm/src/index.ts` (~50-line proxy) + bundled MiniLM-L6-v2 model (~80 MB)
-- [ ] Fly secrets: `GROQ_API_KEY`, `INTERNAL_SECRET`, `LLM_MODEL='llama-3.1-8b-instant'`
-- [ ] Machine size: `shared-cpu-1x` 512 MB RAM (per env)
-- [ ] Internal-only networking; not exposed to public internet
+Replaces Sprint 1's deterministic hash-projection stub in `backend/src/services/help/embedClient.js` with a real OpenAI client. Contract is unchanged (`Array<string>` → `Array<Vector<384>>`) so callers (`corpusSeeder`, `helpService.search`) stay identical.
 
-### 2.2 `xo-llm` endpoints
+- [ ] Implement OpenAI client in `embedClient.js`:
+  - `POST https://api.openai.com/v1/embeddings` with `model='text-embedding-3-small'`, `dimensions=384`, `input=texts`
+  - Reads `OPENAI_API_KEY` from env; throws clearly if missing in non-test environments
+  - Batches up to 100 inputs per call (OpenAI request-size limit headroom); paginate if caller passes more
+  - Test stub remains: when `process.env.NODE_ENV === 'test'` (or `HELP_EMBED_STUB=1`), keep the existing hash-projection so the seeder test suite stays hermetic
+- [ ] Add `embedClient.health()` that does a single 1-token embed against OpenAI; returns `{ ok, latencyMs, model }`. Used by `/api/v1/admin/health` aggregator.
+- [ ] Update `embedClient.test.js`:
+  - Existing stub tests stay green (run under `NODE_ENV=test`)
+  - New mocked-fetch tests covering: happy path, batch-of-100, OpenAI 5xx → throws clearly, OpenAI 429 → throws `RateLimitError` (caller decides degradation), API-key missing → throws on first call
+- [ ] **Corpus re-embed**: on backend boot, if the seeder finds any chunk whose `embedding` was produced under the stub (we'll add a sentinel column or version marker), call `reindexAll()`. One-time. Logged.
+- [ ] Fly secret: add `OPENAI_API_KEY` to `xo-backend-staging` and `xo-backend-prod` (manual via `flyctl secrets set` before deploy)
 
-- [ ] `GET /health` — returns `{ ok: true, model, embedDim }`
-- [ ] `POST /generate` — SSE stream; takes `{ messages: [{ role, content }, ...], maxTokens, stop[] }`; forwards to Groq's chat-completions API; re-streams tokens as SSE
-- [ ] `POST /embed` — sync; takes `{ texts: string[] }`; runs MiniLM-L6 in-process; returns `{ embeddings: number[][] }` (each 384-dim)
-- [ ] All endpoints reject without `Authorization: Bearer <INTERNAL_SECRET>` header
-- [ ] Tests: `/health` smoke; `/generate` against a Groq mock; `/embed` returns correct dim; auth rejection works
+### 2.2 Graceful degradation when OpenAI is unreachable
 
-### 2.3 `helpService.ask`
+The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pure full-text retrieval a viable fallback when embeddings can't be generated.
+
+- [ ] Migration: add `degraded BOOLEAN NOT NULL DEFAULT FALSE` and `degradedReason TEXT NULL` to `help_queries`. Backfill not needed (new column).
+- [ ] `helpService.search` catches `embedClient` errors and falls back to a `tsv @@ plainto_tsquery` query (no vector ranking). Returns the same shape.
+- [ ] Logs `degraded=true` on every `HelpQuery` row when the fallback fires, with the upstream error captured (truncated to 200 chars).
+- [ ] Tests: with `embedClient` mocked to throw, `helpService.search('how do I train a bot')` still returns chunks; the `HelpQuery` persists with `degraded=true`.
+- [ ] Admin Health page surfaces the degraded-rate over the last 1 h / 24 h so vendor incidents are visible quickly. Add to the existing `/admin/health` aggregator (a new tile reading `SELECT COUNT(*) FILTER (WHERE degraded) / COUNT(*) FROM help_queries WHERE createdAt > NOW() - INTERVAL '24 hours'`).
+
+### 2.3 `helpService.ask` — direct Groq integration
 
 - [ ] `POST /api/v1/help/ask` route in backend
 - [ ] Request validation via zod (`question` text + `context` allow-list per §4.5 of plan)
 - [ ] Server-derives `journeyStep` from `journeyService`; strips client value if sent
 - [ ] Logs stripped unknown context keys as warning
-- [ ] Calls `helpService.search(question)` → top-5 chunks
-- [ ] Persists `HelpQuery` row (with `text`, `embedding`, `retrievedChunkIds`, `retrievalScore`, `context`, `promptTemplate='help.v1'`, `modelVersion`)
+- [ ] Calls `helpService.search(question)` → top-5 chunks (uses the new OpenAI-backed embed under the hood)
+- [ ] Persists `HelpQuery` row (with `text`, `embedding`, `retrievedChunkIds`, `retrievalScore`, `context`, `promptTemplate='help.v1'`, `modelVersion`, `degraded` if fallback fired)
 - [ ] Builds `help.v1` prompt (system + user messages with XML delimiters) per §7.5 of plan
-- [ ] Calls `xo-llm /generate` SSE; re-streams to client
+- [ ] Calls **Groq chat-completions directly** (`POST https://api.groq.com/openai/v1/chat/completions` with `model='llama-3.1-8b-instant'`, `stream=true`); re-streams SSE tokens to client
+- [ ] `GROQ_API_KEY` read from backend env (Fly secret, per env)
 - [ ] Accumulates streamed output server-side for filter pass and persistence
 - [ ] On stream complete, runs content filter; if triggered, replaces `rendered` with refusal phrase; sets `contentFilterTriggered`, `contentFilterTerms`
 - [ ] Persists `HelpAnswer` row
 - [ ] Returns SSE stream to client (refusal replacement happens at end-of-stream — first version is "wait for full stream, then return")
-- [ ] Tests: happy path; empty source returns rule 1 phrase; off-topic question returns rule 4b phrase; hostile question returns rule 4a phrase; meta question returns rule 4b phrase
+- [ ] On Groq 5xx or timeout: return a clean 502 `{ error: 'llm_unavailable' }` and persist `HelpQuery` with `degraded=true`. No partial answer.
+- [ ] Tests: happy path; empty source returns rule 1 phrase; off-topic question returns rule 4b phrase; hostile question returns rule 4a phrase; meta question returns rule 4b phrase; Groq 5xx → 502 + HelpQuery row; OpenAI embed 5xx → answer still streams (fallback retrieval), `degraded=true`
 
 ### 2.4 Adversarial prompt fixtures
 
@@ -218,11 +232,16 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 
 ### 2.8 Sprint 2 acceptance
 
-- [ ] `xo-llm` deployed on staging; `/health` returns ok
-- [ ] Authed user can `POST /help/ask` and receive a streamed answer grounded in corpus
+- [ ] `OPENAI_API_KEY` + `GROQ_API_KEY` set as Fly secrets on `xo-backend-staging` + `xo-backend-prod`
+- [ ] `embedClient.health()` returns ok in admin health page on staging
+- [ ] Authed user can `POST /help/ask` on staging and receive a streamed answer grounded in corpus (real Groq response)
+- [ ] Help corpus re-embedded against OpenAI on first boot after the deploy; `degraded` rate during normal operation is 0% over 24 h
+- [ ] OpenAI outage simulation (env override forces embed failure) → answers still stream via tsv fallback, `HelpQuery.degraded=true`
+- [ ] Groq outage simulation (env override forces fetch failure) → 502 with `{ error: 'llm_unavailable' }`, `HelpQuery` persists for postmortem
 - [ ] Rate limiter enforces 50/day and 5/min
 - [ ] All adversarial fixtures green
 - [ ] Backend tests pass; CI green
+- [ ] PlayVsBot (§2.0) target met: warm-anon p50 ≤ 500 ms desktop / ≤ 800 ms mobile in re-baseline
 - [ ] Manual smoke: sign in, hit `/api/v1/help/ask` via curl, get a real Groq response for "how do I train a bot"
 
 ---

@@ -1,8 +1,89 @@
 # Learnable Help System — Implementation Plan
 
-**Status:** v1 Draft (Sprint 1 ready)
+**Status:** v1 (Sprint 1 shipped to prod 2026-05-13; Sprint 2 plan revised per ADR-001)
 **Author:** Joe Pruskowski (with Claude)
 **Date:** 2026-05-13
+
+---
+
+## ADR-001 — Managed inference for v1 (2026-05-13)
+
+**Status:** Accepted
+**Decision:** v1 calls **Groq directly from the backend** for `/generate` and **OpenAI `text-embedding-3-small` at 384 dim** for `/embed`. The originally planned `xo-llm` Fly app (with bundled MiniLM-L6-v2) is **not** built for v1.
+
+This supersedes earlier sections of this doc that describe the `xo-llm` proxy as the v1 implementation. Those sections are retained below for historical context (and as the migration target if/when we revisit) — see §6.2 and §7.1 for the "originally planned" architecture, and §7.1a for the architecture actually shipped.
+
+### Context
+
+Sprint 1 shipped the schema, role, corpus seeder, hybrid retrieval, and admin editor with a stub embedding function (deterministic hash-projection, not semantic). Sprint 2 was originally scoped to (a) stand up `xo-llm-staging` + `xo-llm-prod` Fly apps, (b) bundle MiniLM-L6-v2 inside that proxy for embeddings, (c) implement `/help/ask` via the proxy. While planning Sprint 2 we revisited the proxy decision and chose a lighter-weight path.
+
+### Alternatives considered
+
+**A. `xo-llm` proxy with bundled MiniLM** (original §7.1 plan)
+- **Pros:** Embedding sovereignty (we own the model, no SaaS vendor on the embed path), centralized AI gateway for future features, embedding latency is in-process.
+- **Cons:** Two new Fly apps to operate (staging + prod), new runtime in the stack (Bun + transformers.js / ONNX), ~80 MB model bundled into image, INTERNAL_SECRET rotation overhead, cold-start tax of 2–5 s after scale-to-zero, ~$5–10/mo infra cost.
+- **Why not:** Operational surface area is large for a v1 feature that hasn't proven user demand. The "centralized AI gateway" argument depends on future LLM features that aren't on the near-term roadmap.
+
+**B. Direct Groq + managed embeddings (chosen)**
+- **Pros:** No new Fly apps. No new runtime. ~2–3 fewer dev days for Sprint 2. Critical-path latency comparable. Schema-compatible (OpenAI `text-embedding-3-small` supports a `dimensions` parameter, can be set to 384 to match the existing `vector(384)` column without migration).
+- **Cons:** Two external SaaS deps on the critical path (Groq + OpenAI) instead of one. Embedding cost is per-call (~$0.000001/question; trivial at v1 scale, see cost table below). Vendor lock-in on the embedding semantics (switching providers later requires re-embedding the corpus; tiny — ~300 chunks at v1).
+- **Mitigation for embedding outage:** the schema retains the `tsv` (GIN-indexed tsvector) column alongside `vector`, so retrieval can fall back to pure full-text search if OpenAI's embedding endpoint is unavailable. Quality drops; service stays up.
+
+**C. MiniLM inside the backend process**
+- **Pros:** Sovereignty + no new Fly app.
+- **Cons:** ~150 MB extra backend RAM, embedding calls block the Node event loop for 100–200 ms on `shared-cpu-1x` (impacts unrelated request latency under burst), bigger backend image, Node-side transformer runtime is slower than Python/Bun.
+- **Why not:** Worst-of-both: managed-embeddings simplicity is gone, but backend now competes with embedding work for CPU/memory. Only justifies itself at horizontal scale, which v1 won't reach.
+
+### Cost projections (Option B)
+
+| Help questions/day | OpenAI embed | Groq generate | **Total monthly** |
+|---|---|---|---|
+| 10 (alpha-private) | $0.0003 | $0.012 | **~$0.01** |
+| 100 | $0.003 | $0.12 | **~$0.12** |
+| 1,000 | $0.03 | $1.20 | **~$1.25** |
+| 10,000 | $0.30 | $12 | **~$12** |
+| 100,000 | $3 | $120 | **~$125** |
+
+One-time corpus embed (~300 chunks × ~500 tokens): **~$0.003**, runs once.
+
+**Crossover to Option A favor**: ~30–50K sustained questions/day. v1 will not reach this.
+
+Per-question token math: ~50 tokens to embed the question + ~500 input tokens to Groq (system prompt + 5 retrieved chunks + question) + ~200 output tokens. Pricing as of 2026: OpenAI `text-embedding-3-small` $0.02/1M tokens, Groq `llama-3.1-8b-instant` $0.05/1M input + $0.08/1M output.
+
+### Latency profile
+
+First-token-after-question:
+- Question embed via OpenAI: ~200–300 ms
+- Top-5 retrieval (Postgres hybrid SQL): ~20–50 ms
+- Groq TTFT: ~300–500 ms
+- **Total to first streamed token: ~500–850 ms**
+
+Comparable to the original `xo-llm` plan (~400–700 ms via in-region MiniLM + Groq), within ~100–200 ms.
+
+### Operational surface
+
+- **No new Fly apps.** Backend gains two outbound HTTPS deps. No new CI deploy targets, no INTERNAL_SECRET shared service, no new runtime to learn.
+- **Two new secrets** in backend Fly config: `GROQ_API_KEY`, `OPENAI_API_KEY` (per env).
+- **One graceful-degradation branch** in `helpService.search`: if OpenAI embed fails, return FTS-only results with a logged warning. Same path is exercised by tests via env-flag override.
+- **No new monitoring**: existing backend logs/metrics cover the outbound calls. Groq and OpenAI both expose usage dashboards if needed.
+
+### Migration path back to Option A (if ever needed)
+
+If volume crosses the crossover point or a vendor risk materializes:
+
+1. Build the `xo-llm` Fly app per the original §7.1 plan.
+2. Swap `embedClient.js`'s OpenAI call for an `xo-llm /embed` POST. Same shape (`Array<string>` → `Array<Vector<384>>`).
+3. Run `um help-reindex` to re-embed the corpus through MiniLM. ~10 minute one-time job.
+4. Swap `helpService.ask`'s Groq call for `xo-llm /generate`.
+
+The schema, retrieval SQL, admin UI, and content-filter pipeline all stay identical. The proxy boundary that the original plan described is preserved as a "future option," just not built today.
+
+### When to revisit
+
+- Help volume sustained >30K questions/day across a calendar month (cost crossover).
+- Embedding-vendor incident causes >24 hr of degraded retrieval.
+- Sprint 3+ adds a second LLM-driven feature (game commentary, bot personality dialog, etc.) — at two callers the gateway argument starts to pay.
+- Embedding-quality complaint patterns emerge that point at the OpenAI model specifically (very unlikely given its track record).
 
 ---
 
@@ -10,7 +91,7 @@
 
 Replace the placeholder Search/Help slot in the Guide drawer with an **always-available, learnable help system**. Users type a question into the existing footer text box on `GuidePanel.jsx:160-174`; the system retrieves relevant content from a curated corpus using **hybrid retrieval (FTS + semantic embeddings)** from day one, streams a grounded answer from a small LLM, and captures structured feedback so quality improves over time.
 
-The LLM lives behind a thin internal proxy (`xo-llm-*`) so the model can be swapped without touching `helpService`. **For v1 the proxy calls Groq's hosted API** (free tier covers expected traffic, ~1s latency). Self-hosted execution is a one-Dockerfile swap whenever data residency or vendor risk pushes us off Groq.
+**v1 implementation note (per ADR-001 above):** the LLM is **Groq, called directly from the backend**, and embeddings are **OpenAI `text-embedding-3-small` at 384 dim**. The thin internal proxy (`xo-llm-*`) described later in this doc was the originally planned architecture and is preserved as a documented future option — see §7.1 for the original plan and §7.1a for the architecture actually shipped. Self-hosted execution remains a future migration path whenever data residency or vendor risk justifies the investment.
 
 **What this doc is:** the architecture, data model, UX, hosting plan, and sprint breakdown for v1. v1 ships hybrid retrieval and a content-filter backstop from day one.
 
@@ -333,16 +414,29 @@ v1 ships hybrid retrieval from day one. FTS catches keyword-shaped questions; ve
 
 ### 6.2 Embedding model choice
 
+**v1 (shipped, per ADR-001):**
+
+| Aspect | Value |
+|---|---|
+| Model | OpenAI `text-embedding-3-small` |
+| Dimension | **384** (set via the `dimensions` parameter — matches our `vector(384)` schema exactly, no migration) |
+| Native dimension of model | 1536 (we down-project at the API; preserves most of the quality) |
+| Inference latency | ~200–300 ms per call (round-trip from `iad` region) |
+| Cost | $0.02 / 1M tokens — ~$0.000001 per question embed at v1 query size |
+| Quality | Strong general-purpose embeddings; outperforms MiniLM-L6 on retrieval benchmarks |
+
+**Originally planned (preserved as a future option, per ADR-001):**
+
 | Aspect | Value |
 |---|---|
 | Model | sentence-transformers/all-MiniLM-L6-v2 |
 | Dimension | 384 |
-| Size on disk | ~80 MB |
+| Size on disk | ~80 MB (bundled in `xo-llm` image) |
 | Inference latency | ~50 ms per text on shared-cpu-1x |
 | Cost | Free (self-hosted in xo-llm) |
-| Quality | "Good enough" tier — suitable for help-corpus scale |
+| Quality | "Good enough" tier |
 
-When/if quality plateaus, the swap path is: upgrade to BGE-small (still 384, better quality, same column) or migrate to a larger dim (1536 OpenAI / 1024 BGE-large) via a column-type migration.
+If/when we re-evaluate (criteria in ADR-001 "When to revisit"), the swap is described in ADR-001 step (2)–(3): change `embedClient.js`, run `um help-reindex`. Schema stays at 384 either way. If a future upgrade wants higher quality at a different dim (e.g., 1536 native OpenAI, 1024 BGE-large), that requires a column-type migration.
 
 ### 6.3 v2 — learned reranker (deferred)
 
@@ -352,7 +446,9 @@ Once `HelpFeedback` accumulates ~1k+ rows of `(query, chunk, signal)` triples, t
 
 ## 7. LLM Hosting
 
-### 7.1 v1 — Groq behind a thin proxy
+### 7.1 Originally planned — Groq behind a thin proxy (NOT BUILT in v1; see ADR-001 + §7.1a)
+
+This was the original v1 plan; it is preserved as a documented future option but **not implemented**. Section 7.1a describes the architecture actually shipped.
 
 ```
 xo-llm-prod / xo-llm-staging      new Fly app, one shared-cpu machine each
@@ -368,6 +464,34 @@ xo-llm-prod / xo-llm-staging      new Fly app, one shared-cpu machine each
 └─ No DB
 ```
 
+### 7.1a v1 — direct Groq + OpenAI embeddings (shipped, per ADR-001)
+
+```
+backend (existing Fly app — xo-backend-{staging,prod})
+├─ helpService.search(question)
+│  ├─ embedClient.embedText(question)   → POST https://api.openai.com/v1/embeddings
+│  │                                       model='text-embedding-3-small', dimensions=384
+│  │                                       (cached identity-scoped at the query layer in Sprint 3)
+│  ├─ hybrid SQL: tsv + vector cosine    → top-5 HelpChunks
+│  └─ (degraded path: if OpenAI embed fails, run pure tsv query, log warning, mark
+│     HelpQuery.degraded=true so the admin dashboard can surface vendor incidents)
+│
+├─ helpService.ask(question, context)
+│  ├─ helpService.search(question)        → top-5 chunks
+│  ├─ build help.v1 prompt (§7.5)
+│  ├─ POST https://api.groq.com/openai/v1/chat/completions  (SSE stream)
+│  │   model=llama-3.1-8b-instant, max_tokens=400
+│  ├─ accumulate stream → content filter (§4)
+│  └─ persist HelpQuery + HelpAnswer
+│
+└─ Env
+   ├─ GROQ_API_KEY      (in backend Fly secrets, per env)
+   ├─ OPENAI_API_KEY    (in backend Fly secrets, per env)
+   └─ LLM_MODEL         'llama-3.1-8b-instant'   (logged into HelpQuery.modelVersion)
+```
+
+Both vendors are called over public HTTPS from the backend container. Outbound egress is negligible (~3 KB/question). No internal `.internal` DNS, no shared INTERNAL_SECRET, no new Fly machines.
+
 ### 7.2 Model choice — Llama-3.1-8B-Instant via Groq
 
 | Aspect | Value |
@@ -380,18 +504,29 @@ xo-llm-prod / xo-llm-staging      new Fly app, one shared-cpu machine each
 
 ### 7.3 Hardware
 
-- **shared-cpu-1x** Fly machine, **512 MB RAM** (to hold MiniLM in-process) — ~$3/mo per environment
-- One machine each for staging + prod = ~$6/mo total
-- No GPU. Generation runs on Groq's LPU infrastructure; embeddings run on the proxy's CPU
+**v1 (shipped, per ADR-001):** no dedicated hardware. The existing backend Fly machines (`xo-backend-{staging,prod}`) gain outbound HTTPS calls to Groq + OpenAI. Generation runs on Groq's LPU infrastructure; embeddings run on OpenAI's. No GPU, no model files, no new machines.
 
-### 7.4 Self-hosting swap path (deferred)
+**Originally planned (preserved as future option):** **shared-cpu-1x** Fly machine, **512 MB RAM** (to hold MiniLM in-process) — ~$3/mo per environment, one machine each for staging + prod = ~$6/mo total.
 
-The proxy boundary is what makes this reversible. When/if data-residency, vendor risk, or scale economics push us off Groq, the swap is:
+### 7.4 Migration paths from v1
 
-1. Replace `xo-llm` Dockerfile to bundle `node-llama-cpp` + a GGUF model (e.g. Qwen2.5-1.5B Q4_K_M)
-2. Re-implement `/generate` to call llama.cpp instead of Groq
-3. Bump the Fly machine to `performance-2x` (4 vCPU, 8 GB) — ~$30/mo per env
-4. `helpService`, prompt template, schema, and feedback loop are all unchanged
+There are two distinct migration paths worth tracking separately:
+
+**(a) Move embeddings/generation back behind `xo-llm`** (Option A — see ADR-001). Triggered by sustained >30K Q/day, an OpenAI incident pattern, or vendor-strategy reasons:
+
+1. Build `xo-llm` per §7.1.
+2. Swap `embedClient.js`'s OpenAI call for `xo-llm /embed`. Same `Array<string>` → `Array<Vector<384>>` contract.
+3. Run `um help-reindex` (re-embed every chunk through MiniLM). ~10 min one-time job.
+4. Swap `helpService.ask`'s Groq fetch for `xo-llm /generate`. Same SSE shape.
+
+**(b) Move off Groq to self-hosted llama.cpp.** Triggered by data-residency, Groq pricing change, or scale economics. This path assumes (a) already happened (since `xo-llm` is the container):
+
+1. Replace `xo-llm` Dockerfile to bundle `node-llama-cpp` + a GGUF model (e.g. Qwen2.5-1.5B Q4_K_M).
+2. Re-implement `/generate` to call llama.cpp instead of Groq.
+3. Bump the Fly machine to `performance-2x` (4 vCPU, 8 GB) — ~$30/mo per env.
+4. `helpService`, prompt template, schema, and feedback loop are all unchanged.
+
+In v1 (per ADR-001), the abstraction boundary that makes path (b) cheap is `helpService.ask`'s outbound-call function, not a separate proxy app.
 
 ### 7.5 Prompt template (`help.v1`)
 
