@@ -157,19 +157,30 @@ export async function search(query, opts = {}) {
     }
   }
 
-  // Query expansion — append canonical phrasings for known spelling
-  // variants (see QUERY_ALIASES). Both retrieval branches use the
-  // expanded query; HelpQuery.text (logged in /help/ask) persists the
-  // ORIGINAL user-typed string so analytics see what the user typed.
-  const effective = expandQuery(trimmed)
+  // Query expansion is asymmetric across the two branches:
+  //
+  // - FTS uses the ORIGINAL query. Postgres' websearch_to_tsquery joins
+  //   tokens with AND, so appending alias text would force the chunk to
+  //   match every appended token — usually shrinking the result set to
+  //   zero. Let the user's literal terms drive lexical matching.
+  //
+  // - Vector retrieval uses the EXPANDED query. The 384-dim downsampled
+  //   embedding doesn't know "tictactoe" == "tic tac toe", so appending
+  //   the canonical phrasing gives the embedding model the form it
+  //   actually recognises. Cosine similarity is permissive, not AND-y,
+  //   so additional context only helps.
+  //
+  // HelpQuery.text (logged in /help/ask) persists the ORIGINAL user
+  // string so analytics show what the user actually typed.
+  const expanded = expandQuery(trimmed)
 
   // Run both branches concurrently; capture rejections independently so a
   // failing vector branch doesn't abort the FTS branch. The FTS branch is
   // expected never to throw against a healthy DB — if it does, surface
   // the error normally (the caller's catch logs it; the route returns 5xx).
   const [ftsRes, vecRes] = await Promise.allSettled([
-    runFtsQuery(effective),
-    runVectorQuery(effective),
+    runFtsQuery(trimmed),       // original
+    runVectorQuery(expanded),   // expanded
   ])
 
   if (ftsRes.status === 'rejected') throw ftsRes.reason

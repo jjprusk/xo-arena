@@ -1,25 +1,23 @@
 ---
 slug: future-games
-title: Future games — what's coming, what's not yet playable
+title: Future games — Connect 4, connect4, and others not yet available
 category: games
-tags: [games, future, planned, connect4, roadmap, upcoming]
+tags: [games, future, planned, connect4, connect-4, roadmap, upcoming, coming-soon]
 status: PUBLISHED
 admin_only: false
 ---
 
-# Future games — what's coming, what's not yet playable
+# Future games — Connect 4, connect4, and others not yet available
 
-AI Arena currently has **two playable games**: Tic-Tac-Toe (XO) and Pong (experimental). Anything else you've heard about — including Connect 4 — is on the roadmap but **not yet available to play, train against, or enter a tournament for.**
+**Short answer for "how do I play Connect 4 / connect4 / connect-4":** Connect 4 is **not playable on AI Arena yet**. It's on the roadmap, alongside a small board-game family, but no release date is set — check back later. The only games you can play, train bots for, or enter tournaments for today are **Tic-Tac-Toe (XO)** and **Pong** (experimental). If you typed "connect4" or "connect 4" or "Connect-Four" — same answer for all spellings: not yet available.
 
-If you typed something like "how do I play connect4" or "where's Connect 4" or "can I train a bot for [game]" and landed on this doc: the short answer is **that game isn't playable yet — check back later.** No date is published; releases are announced via the changelog and the Guide's What's Next surface when they ship.
+If you arrived at this doc looking for Connect 4 gameplay, training, or tournaments, none of those exist on AI Arena yet. There is no Connect 4 board, no Connect 4 bot to challenge, no Connect 4 skill in the Gym, and no Connect 4 tournament template. The same applies to any other game name you might recognise that isn't XO or Pong.
 
 ## Games planned but not yet shipped
 
-| Game | Status | Notes |
-|---|---|---|
-| **Connect 4** | Planned, not yet playable | The most-asked-about next game. Not in the platform yet. Also typed as "connect4", "connect-4", or "c4" — same answer for all spellings: not yet available. |
-| **A small board-game family** | Planned, not yet playable | Several short-form board games are on the candidate list (think Reversi, Nim-likes). None are shipped yet. |
-| **Other games** | Open — community input welcome | The Game SDK makes adding a new game a moderate-cost effort. If you have a strong opinion about what should come next, use the Feedback button on any page. |
+- **Connect 4** (also spelled "connect4", "connect-4", "Connect Four"). The most-asked-about next game. Not in the platform yet. There is no published ETA. Same answer for every spelling: not available — check back later.
+- **A small board-game family.** Several short-form board games are on the candidate list (think Reversi, Nim-likes). None are shipped yet.
+- **Other games.** The Game SDK makes adding a new game a moderate-cost effort. If you have a strong opinion about what should come next, use the Feedback button on any page.
 
 ## Why XO and Pong come first
 
@@ -35,4 +33,4 @@ Tic-Tac-Toe is the foundation for the AI training experience: short games, deter
 
 ## Bottom line
 
-If you asked about Connect 4, or any game that isn't Tic-Tac-Toe / XO or Pong: it isn't ready yet. The platform's currently-playable list is short by design. Watch the changelog and the Guide for announcements.
+Connect 4 and any game that isn't Tic-Tac-Toe / XO or Pong: not playable yet — check back later. The platform's currently-playable list is short by design.
