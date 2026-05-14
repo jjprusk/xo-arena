@@ -1,6 +1,6 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); Sprint 2 feature-complete on `dev` — §2.1 through §2.7 all done, plus §2.8 vendor groundwork (OpenAI project + 3 keys + staging Fly secret deployed v103 2026-05-14 + spend caps). Ready to `/stage`. §2.8 validation paths (auto-reindex on first boot, real-LLM smoke, outage simulations, Admin Health UI tile) need the Sprint 2 code on staging to exercise — they close after the deploy.
+**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); **Sprint 2 deployed to staging as v1.4.0-alpha-5.0 (2026-05-14)**. §2.1–§2.7 all done. §2.8: vendor groundwork done (OpenAI project + 3 keys + staging Fly secret + spend caps); auto-reindex verified on staging (569/569 chunks re-tagged `text-embedding-3-small@384`); `embedClient.health()` returns ok on staging. The remaining §2.8 items (end-to-end manual smoke, outage simulations, Admin Health UI tile) are **deferred to the Sprint 3 acceptance pass** — they all benefit from running against the real chat-input UI (Sprint 3 §3.1) rather than curl, so we'd re-do the work otherwise. Prod (§2.8 OPENAI_API_KEY on `xo-backend-prod`) sets at /promote.
 **Last updated:** 2026-05-14
 **Companion to:** `Help_System_Plan.md`
 
@@ -251,19 +251,19 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 
 **Validation paths that need the Sprint 2 code on staging (post-/stage):**
 
-- [ ] Help corpus re-embedded against OpenAI `text-embedding-3-small` on first boot after the deploy; `degraded` rate during normal operation is 0% over 24 h (auto-reindex on boot is wired — fires automatically when chunks are tagged with a stale embedding model)
-- [ ] Authed user can `POST /help/ask` on staging and receive a streamed answer grounded in corpus (real `gpt-4o-mini` response)
-- [ ] Manual smoke: sign in, hit `/api/v1/help/ask` via curl, get a real `gpt-4o-mini` response for "how do I train a bot"
-- [ ] OpenAI embed outage simulation (env override forces embed failure) → answers still stream via tsv fallback, `HelpQuery.degraded=true`
-- [ ] OpenAI chat outage simulation (env override forces fetch failure) → SSE `error` frame `{ error: 'llm_unavailable' }`, `HelpQuery` persists for postmortem
-- [ ] OpenAI 429 simulation (spend cap hit / RPM hit) → SSE `error` frame `rate_limited` with `source: 'provider'` (distinct from app-level 429)
-- [ ] Rate limiter enforces 50/day and 5/min (app-level, distinct from provider 429) — code green; verify via real /help/ask traffic on staging
+- [x] Help corpus re-embedded against OpenAI `text-embedding-3-small` on first boot after the deploy — verified 569/569 chunks tagged `text-embedding-3-small@384` on staging post-/stage v1.4.0-alpha-5.0 (2026-05-14). 24 h degraded-rate observation rolls in once real traffic lands.
+- [→ Sprint 3] Authed user can `POST /help/ask` on staging and receive a streamed answer grounded in corpus (real `gpt-4o-mini` response) — deferred. The Sprint 2 chat input UI isn't built yet (Sprint 3 §3.1); validating via curl right now would re-discover any bug we'll find anyway through the real surface. Smoke moves to the Sprint 3 acceptance pass.
+- [→ Sprint 3] Manual smoke: sign in, ask the Guide "how do I train a bot", get a real `gpt-4o-mini` response — deferred to Sprint 3 §3.1 UI landing (same reason as above).
+- [→ Sprint 3] OpenAI embed outage simulation (env override forces embed failure) → answers still stream via tsv fallback, `HelpQuery.degraded=true` — deferred; needs the Sprint 3 UI to observe streamed answer behavior end-to-end.
+- [→ Sprint 3] OpenAI chat outage simulation (env override forces fetch failure) → SSE `error` frame `{ error: 'llm_unavailable' }`, `HelpQuery` persists for postmortem — deferred to Sprint 3.
+- [→ Sprint 3] OpenAI 429 simulation (spend cap hit / RPM hit) → SSE `error` frame `rate_limited` with `source: 'provider'` (distinct from app-level 429) — deferred to Sprint 3.
+- [→ Sprint 3] Rate limiter enforces 50/day and 5/min (app-level, distinct from provider 429) — code green locally and on staging code paths; observation under real traffic deferred to Sprint 3 once the UI sends real `/help/ask` requests.
 
 **Admin Health UI (lands inside §2.8, post-/stage):**
 
-- [ ] `embedClient.health()` returns ok in admin health page on staging
-- [ ] Admin Health page surfaces the degraded-rate over the last 1 h / 24 h (`helpService.getDegradedRate` already exists; this is the UI tile)
-- [ ] Admin Health page tile for OpenAI embed health (latency + provider) — same surface as the degraded-rate tile above
+- [x] `embedClient.health()` returns ok on staging — verified via `fly ssh` post-deploy (`{ ok: true, latencyMs: 484, model: 'text-embedding-3-small', provider: 'openai' }`, 2026-05-14). UI tile still pending below.
+- [→ Sprint 3] Admin Health page surfaces the degraded-rate over the last 1 h / 24 h (`helpService.getDegradedRate` already exists; this is the UI tile) — deferred to Sprint 3 alongside the Guide UI work.
+- [→ Sprint 3] Admin Health page tile for OpenAI embed health (latency + provider) — same surface as the degraded-rate tile above; deferred to Sprint 3.
 
 **Code gates — done pre-/stage:**
 
