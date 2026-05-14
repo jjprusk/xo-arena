@@ -9,6 +9,7 @@ import logger from './logger.js'
 import db from './lib/db.js'
 import { runSeed } from '../prisma/seed.js'
 import { seedCorpus as seedHelpCorpus, reindexAllIfStale as reindexHelpCorpusIfStale } from './services/help/corpusSeeder.js'
+import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -151,6 +152,7 @@ startIdleSessionPurgeJob()
 startDispatcher()
 startExpiredNotificationPruner()
 startMetricsSnapshotCron()
+startHelpRateLimitSweep()
 
 // SSE+POST is the only realtime transport (Realtime_Migration_Plan.md
 // Phase 8). socket.io was removed in this commit.

@@ -54,6 +54,8 @@ vi.mock('../../logger.js', () => ({
 
 const helpRouter = (await import('../help.js')).default
 const { ask: askMock } = await import('../../services/help/helpService.js')
+const { _resetHelpRateLimitState, HELP_PER_MINUTE_LIMIT } =
+  await import('../../middleware/helpRateLimit.js')
 
 function makeApp() {
   const app = express()
@@ -80,6 +82,9 @@ beforeEach(() => {
   isCliBypass = false
   askScenario = null
   askMock.mockClear()
+  // Sprint 2 §2.5 — limiter has module-level state. Clear between tests
+  // so the same AUTHED_USER_ID doesn't accumulate hits across cases.
+  _resetHelpRateLimitState()
 })
 
 describe('POST /api/v1/help/ask — auth', () => {
@@ -254,5 +259,42 @@ describe('POST /api/v1/help/ask — SSE stream', () => {
       .send({ question: 'q' })
     const events = parseSseChunks(res.text)
     expect(events.at(-1)).toEqual({ event: 'error', data: { error: 'internal' } })
+  })
+})
+
+describe('POST /api/v1/help/ask — rate limiter (§2.5)', () => {
+  it('returns 429 with retryAfter after exceeding the per-minute limit', async () => {
+    askScenario = async function* () {
+      yield { kind: 'done', answerId: 'a-x', queryId: 'q-x', rendered: 'ok', contentFilterTriggered: false, degraded: false, latencyMs: 1 }
+    }
+    const app = makeApp()
+
+    // First N requests should pass.
+    for (let i = 0; i < HELP_PER_MINUTE_LIMIT; i++) {
+      const res = await request(app).post('/api/v1/help/ask').send({ question: 'q' })
+      expect(res.status, `request ${i + 1} should pass`).toBe(200)
+    }
+
+    // (N+1)-th request should 429 BEFORE reaching the SSE handler.
+    const limited = await request(app).post('/api/v1/help/ask').send({ question: 'q' })
+    expect(limited.status).toBe(429)
+    expect(limited.body).toMatchObject({ error: 'rate_limited' })
+    expect(limited.body.retryAfter).toBeGreaterThan(0)
+    expect(limited.headers['retry-after']).toBe(String(limited.body.retryAfter))
+    // The limiter short-circuits the route — askMock should have been called
+    // exactly N times (once per allowed request), not N+1.
+    expect(askMock).toHaveBeenCalledTimes(HELP_PER_MINUTE_LIMIT)
+  })
+
+  it('CLI bypass requests are exempt from the per-minute limit', async () => {
+    isCliBypass = true
+    askScenario = async function* () {
+      yield { kind: 'done', answerId: 'a-cli', queryId: 'q-cli', rendered: 'ok', contentFilterTriggered: false, degraded: false, latencyMs: 1 }
+    }
+    const app = makeApp()
+    for (let i = 0; i < HELP_PER_MINUTE_LIMIT + 3; i++) {
+      const res = await request(app).post('/api/v1/help/ask').send({ question: 'q' })
+      expect(res.status, `cli request ${i + 1}`).toBe(200)
+    }
   })
 })

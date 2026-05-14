@@ -23,6 +23,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { requireAuthOrInternalSecret } from '../middleware/auth.js'
+import { helpRateLimit } from '../middleware/helpRateLimit.js'
 import logger from '../logger.js'
 import { ask } from '../services/help/helpService.js'
 import { getJourneyProgress, deriveCurrentPhase } from '../services/journeyService.js'
@@ -63,7 +64,7 @@ async function deriveJourneyStepTag(userId) {
  * Body: { question: string, context?: { route, currentSlot, sessionId, gameType } }
  * Response: text/event-stream
  */
-router.post('/ask', requireAuthOrInternalSecret, async (req, res, next) => {
+router.post('/ask', requireAuthOrInternalSecret, helpRateLimit(), async (req, res, next) => {
   const parse = AskBodySchema.safeParse(req.body)
   if (!parse.success) {
     return res.status(400).json({ error: 'invalid_request', detail: parse.error.flatten() })
