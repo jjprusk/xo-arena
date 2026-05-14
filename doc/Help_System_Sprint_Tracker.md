@@ -234,8 +234,11 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 
 ### 2.8 Sprint 2 acceptance
 
-- [ ] `OPENAI_API_KEY` set as Fly secret on `xo-backend-staging` + `xo-backend-prod` (single new secret — no `GROQ_API_KEY` per ADR-001 revised)
-- [ ] OpenAI Project spend caps configured per ADR-001: $10/$25 email alerts, $100/mo hard cap on staging+prod; $5/mo hard cap on the local-dev key
+- [ ] OpenAI Project `aiarena` created in the OpenAI console
+- [ ] Three restricted API keys created (Chat completions + Embeddings only, everything else None): `aiarena-backend-prod`, `aiarena-backend-staging`, `aiarena-backend-local-<dev>`
+- [ ] `OPENAI_API_KEY` set as Fly secret on `xo-backend-staging` (using the `aiarena-backend-staging` key) and `xo-backend-prod` (using the `aiarena-backend-prod` key). Single new secret — no `GROQ_API_KEY` per ADR-001 revised
+- [ ] Local-dev `aiarena-backend-local-<dev>` key added to `backend/.env` for docker-compose
+- [ ] OpenAI Project spend caps configured per ADR-001: $10/$25 email alerts, $100/mo hard cap on the `aiarena` project; $5/mo hard cap on the local-dev key
 - [ ] `embedClient.health()` returns ok in admin health page on staging
 - [ ] Authed user can `POST /help/ask` on staging and receive a streamed answer grounded in corpus (real `gpt-4o-mini` response)
 - [ ] Help corpus re-embedded against OpenAI `text-embedding-3-small` on first boot after the deploy; `degraded` rate during normal operation is 0% over 24 h

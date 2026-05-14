@@ -82,14 +82,26 @@ Vs Option B (Groq+OpenAI): ~500–850 ms — Option D is ~120–150 ms slower to
 
 ### Spend caps (OpenAI Project → Limits)
 
-Defense-in-depth in case the in-app rate limiter (50/day/user, 5/min/user — §2.5 of tracker) is bypassed:
+**Project name in the OpenAI console:** `aiarena` (single project, all envs).
+
+**API key naming convention (one per environment, all restricted to Chat completions + Embeddings only):**
+
+| Key | Used by | Stored in |
+|---|---|---|
+| `aiarena-backend-prod` | `xo-backend-prod` Fly app | `flyctl secrets set OPENAI_API_KEY=…` on the prod app |
+| `aiarena-backend-staging` | `xo-backend-staging` Fly app | `flyctl secrets set OPENAI_API_KEY=…` on the staging app |
+| `aiarena-backend-local-<dev-handle>` | Local docker-compose backend | `backend/.env` (gitignored) |
+
+Three separate keys → independent rotation, per-key usage attribution, per-key spend caps.
+
+**Spend caps**, defense-in-depth in case the in-app rate limiter (50/day/user, 5/min/user — §2.5 of tracker) is bypassed:
 
 | Tier | $ / mo | Action |
 |---|---|---|
 | Email alert #1 | $10 | Heads-up that the feature is seeing real use |
 | Email alert #2 | $25 | Pay attention — ~4× expected v1 traffic. Either growth or a bug. |
 | **Hard cap** | **$100** | Block further API calls. Equivalent to ~15K Q/day sustained. Requires human-in-the-loop before lifting. |
-| Local-dev key cap | $5 | Separate key for `backend/.env` local; bounds accidental dev cost. |
+| Local-dev key cap | $5 | Per-key hard cap on `aiarena-backend-local-*`; bounds accidental dev cost. |
 
 Re-baseline the cap quarterly. Bump to $300/$50/$100 if sustained ≥1K Q/day.
 
