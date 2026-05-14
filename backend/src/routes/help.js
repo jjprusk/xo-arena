@@ -22,7 +22,7 @@
 
 import { Router } from 'express'
 import { z } from 'zod'
-import { requireAuth } from '../middleware/auth.js'
+import { requireAuthOrInternalSecret } from '../middleware/auth.js'
 import logger from '../logger.js'
 import { ask } from '../services/help/helpService.js'
 import { getJourneyProgress, deriveCurrentPhase } from '../services/journeyService.js'
@@ -63,7 +63,7 @@ async function deriveJourneyStepTag(userId) {
  * Body: { question: string, context?: { route, currentSlot, sessionId, gameType } }
  * Response: text/event-stream
  */
-router.post('/ask', requireAuth, async (req, res, next) => {
+router.post('/ask', requireAuthOrInternalSecret, async (req, res, next) => {
   const parse = AskBodySchema.safeParse(req.body)
   if (!parse.success) {
     return res.status(400).json({ error: 'invalid_request', detail: parse.error.flatten() })
@@ -88,7 +88,11 @@ router.post('/ask', requireAuth, async (req, res, next) => {
   }
 
   // Always derive journeyStep server-side. Any client value is ignored.
-  cleanedContext.journeyStep = await deriveJourneyStepTag(req.auth.userId)
+  // CLI bypass callers don't have a real user → journey-step lookup would
+  // miss; emit a stable '(cli)' tag so the prompt stays renderable.
+  cleanedContext.journeyStep = req.auth.cliBypass
+    ? '(cli)'
+    : await deriveJourneyStepTag(req.auth.userId)
 
   // SSE plumbing.
   res.writeHead(200, {

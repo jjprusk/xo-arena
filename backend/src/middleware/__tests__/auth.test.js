@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
@@ -32,8 +32,15 @@ vi.mock('../../lib/db.js', () => ({
 }))
 
 // dynamic import after mocks so the module sees the mocked dependencies
-const { requireAuth, optionalAuth, requireAdmin, requireTournament, isAdmin, isTournament } =
-  await import('../auth.js')
+const {
+  requireAuth,
+  optionalAuth,
+  requireAdmin,
+  requireTournament,
+  isAdmin,
+  isTournament,
+  requireAuthOrInternalSecret,
+} = await import('../auth.js')
 
 import db from '../../lib/db.js'
 import { jwtVerify } from 'jose'
@@ -306,5 +313,63 @@ describe('requireTournament', () => {
     const app = makeChainApp(requireAuth, requireTournament)
     const res = await request(app).get('/test').set('Authorization', `Bearer ${VALID_JWT}`)
     expect(res.status).toBe(200)
+  })
+})
+
+// ── requireAuthOrInternalSecret ──────────────────────────────────────────────
+
+describe('requireAuthOrInternalSecret', () => {
+  const app = makeApp(requireAuthOrInternalSecret)
+  let origSecret
+
+  beforeEach(() => {
+    origSecret = process.env.INTERNAL_SECRET
+    process.env.INTERNAL_SECRET = 'test-internal-secret'
+  })
+  afterEach(() => {
+    if (origSecret === undefined) delete process.env.INTERNAL_SECRET
+    else process.env.INTERNAL_SECRET = origSecret
+  })
+
+  it('accepts a valid X-Internal-Secret and synthesises cli userId', async () => {
+    const res = await request(app)
+      .get('/test')
+      .set('X-Internal-Secret', 'test-internal-secret')
+    expect(res.status).toBe(200)
+    expect(res.body.auth.userId).toBe('cli:um')
+    expect(res.body.auth.cliBypass).toBe(true)
+  })
+
+  it('rejects a wrong X-Internal-Secret (does NOT fall through to JWT check)', async () => {
+    const res = await request(app)
+      .get('/test')
+      .set('X-Internal-Secret', 'wrong-secret')
+      // Even with a valid Authorization header, the wrong secret hard-fails.
+      .set('Authorization', `Bearer ${VALID_JWT}`)
+    expect(res.status).toBe(401)
+    expect(res.body.error).toMatch(/invalid internal secret/)
+  })
+
+  it('rejects when X-Internal-Secret sent but env var is unset', async () => {
+    delete process.env.INTERNAL_SECRET
+    const res = await request(app)
+      .get('/test')
+      .set('X-Internal-Secret', 'anything')
+    expect(res.status).toBe(401)
+  })
+
+  it('falls through to JWT auth when no X-Internal-Secret is sent', async () => {
+    const res = await request(app)
+      .get('/test')
+      .set('Authorization', `Bearer ${VALID_JWT}`)
+    expect(res.status).toBe(200)
+    // Regular auth synthesises req.auth from the JWT payload (sub).
+    expect(res.body.auth).toBeTruthy()
+    expect(res.body.auth.cliBypass).toBeUndefined()
+  })
+
+  it('401s with no header and no auth (guest)', async () => {
+    const res = await request(app).get('/test')
+    expect(res.status).toBe(401)
   })
 })

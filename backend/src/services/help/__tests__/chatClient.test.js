@@ -148,8 +148,9 @@ describe('chatClient — OpenAI path', () => {
     ))).rejects.toMatchObject({ name: 'RateLimitError', retryAfter: 7 })
   })
 
-  it('throws on 5xx with status in message', async () => {
-    fetchSpy.mockResolvedValueOnce({
+  it('throws on 5xx with status in message (after retries exhaust)', async () => {
+    // fetchWithRetry retries 5xx; mock has to persist across all attempts.
+    fetchSpy.mockResolvedValue({
       ok: false, status: 503,
       text: async () => 'unavailable',
       headers: new Headers(),
@@ -157,7 +158,7 @@ describe('chatClient — OpenAI path', () => {
     await expect(collect(streamChatCompletion(
       [{ role: 'user', content: 'q' }],
     ))).rejects.toThrow(/openai chat 503/)
-  })
+  }, 10_000)
 
   it('throws if OPENAI_API_KEY is missing', async () => {
     delete process.env.OPENAI_API_KEY
@@ -235,12 +236,12 @@ describe('chatClient — OpenAI path', () => {
   })
 
   it('health() returns ok=false with error on failure (never throws)', async () => {
-    fetchSpy.mockResolvedValueOnce({
+    fetchSpy.mockResolvedValue({
       ok: false, status: 500,
       text: async () => 'boom', headers: new Headers(),
     })
     const h = await health()
     expect(h.ok).toBe(false)
     expect(h.error).toMatch(/openai chat 500/)
-  })
+  }, 10_000)
 })

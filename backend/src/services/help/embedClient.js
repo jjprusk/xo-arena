@@ -16,6 +16,8 @@
  *     where NODE_ENV != 'test' and HELP_EMBED_STUB is unset.
  */
 
+import { fetchWithRetry } from './fetchWithRetry.js'
+
 export const EMBED_DIM = 384
 
 const OPENAI_EMBED_URL   = 'https://api.openai.com/v1/embeddings'
@@ -124,7 +126,7 @@ async function openaiEmbed(texts) {
   const out = new Array(texts.length)
   for (let i = 0; i < texts.length; i += MAX_BATCH) {
     const batch = texts.slice(i, i + MAX_BATCH)
-    const res = await fetch(OPENAI_EMBED_URL, {
+    const res = await fetchWithRetry(OPENAI_EMBED_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -135,7 +137,7 @@ async function openaiEmbed(texts) {
         input:      batch,
         dimensions: EMBED_DIM,
       }),
-    })
+    }, { context: 'openai embed' })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       if (res.status === 429) {

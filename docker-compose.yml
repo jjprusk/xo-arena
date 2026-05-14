@@ -37,6 +37,18 @@ services:
       context: .
       dockerfile: backend/Dockerfile.dev
     restart: unless-stopped
+    # Bypass Docker's embedded DNS (127.0.0.11) and talk to public
+    # resolvers directly. The embedded resolver intermittently emits
+    # EAI_AGAIN under burst — observed repeatedly while hitting OpenAI's
+    # API from this container. macOS hosts running Docker Desktop are
+    # particularly prone to the forwarder backing up. Public DNS removes
+    # the forwarder from the critical path entirely. Internal Compose
+    # service names (postgres, redis, tournament) keep working via
+    # Docker's networking layer below DNS resolution.
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
     env_file:
       - ./backend/.env
     environment:

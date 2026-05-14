@@ -74,6 +74,10 @@ const QUERY_ALIASES = [
   // Tic-Tac-Toe spelling variants.
   { match: /\btictactoe\b/gi,    add: 'tic tac toe' },
   { match: /\btic-tac-toe\b/gi,  add: 'tic tac toe' },
+  // Connect 4 spelling variants — surfaces the future-games doc which
+  // documents "not yet playable" status for this and other planned games.
+  { match: /\bconnect ?4\b/gi,   add: 'connect four future games planned not available yet' },
+  { match: /\bconnect-?four\b/gi, add: 'connect four future games planned not available yet' },
   // Add new aliases here as retrieval misses surface.
 ]
 

@@ -10,11 +10,22 @@ import request from 'supertest'
 
 const AUTHED_USER_ID = 'ba_user_1'
 
-// requireAuth swap: a global flag lets individual tests force "guest" mode
-// (the route should 401). By default authenticated.
+// requireAuthOrInternalSecret swap: a global flag lets individual tests
+// force "guest" mode (route should 401). By default authenticated.
+// A second flag (isCliBypass) emulates the X-Internal-Secret path.
 let isGuest = false
+let isCliBypass = false
 vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req, res, next) => {
+    if (isGuest) return res.status(401).json({ error: 'Authentication required' })
+    req.auth = { userId: AUTHED_USER_ID }
+    next()
+  },
+  requireAuthOrInternalSecret: (req, res, next) => {
+    if (isCliBypass) {
+      req.auth = { userId: 'cli:um', cliBypass: true }
+      return next()
+    }
     if (isGuest) return res.status(401).json({ error: 'Authentication required' })
     req.auth = { userId: AUTHED_USER_ID }
     next()
@@ -66,6 +77,7 @@ function parseSseChunks(text) {
 
 beforeEach(() => {
   isGuest = false
+  isCliBypass = false
   askScenario = null
   askMock.mockClear()
 })
@@ -78,6 +90,23 @@ describe('POST /api/v1/help/ask — auth', () => {
       .send({ question: 'hello' })
     expect(res.status).toBe(401)
     expect(askMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts CLI bypass (X-Internal-Secret) and uses synthetic userId', async () => {
+    isCliBypass = true
+    askScenario = async function* () {
+      yield { kind: 'done', answerId: 'a-1', queryId: 'q-1', contentFilterTriggered: false, rendered: 'ok', degraded: false, latencyMs: 1 }
+    }
+    const res = await request(makeApp())
+      .post('/api/v1/help/ask')
+      .send({ question: 'hello' })
+    expect(res.status).toBe(200)
+    expect(askMock).toHaveBeenCalled()
+    const args = askMock.mock.calls[0][0]
+    expect(args.userId).toBe('cli:um')
+    // journeyStep auto-derivation must be skipped for CLI callers — the
+    // route emits a stable '(cli)' tag instead of looking up a journey.
+    expect(args.context.journeyStep).toBe('(cli)')
   })
 })
 

@@ -164,15 +164,19 @@ describe('embedClient — OpenAI path', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('throws on 5xx with status code in the message', async () => {
-    fetchSpy.mockResolvedValueOnce({
+  it('throws on 5xx with status code in the message (after retries exhaust)', async () => {
+    // fetchWithRetry will retry 5xx up to maxRetries=3 (4 attempts total),
+    // so the mock has to keep returning 503. Use mockResolvedValue (no Once)
+    // so every call sees the same response. Once retries exhaust, the
+    // embed client surfaces the final non-2xx as a thrown Error.
+    fetchSpy.mockResolvedValue({
       ok: false,
       status: 503,
       text: async () => '{"error":{"message":"service unavailable"}}',
       headers: new Headers(),
     })
     await expect(embedTexts(['hello'])).rejects.toThrow(/openai embed 503/)
-  })
+  }, 10_000)
 
   it('throws RateLimitError with retryAfter on 429', async () => {
     fetchSpy.mockResolvedValueOnce({
@@ -251,7 +255,7 @@ describe('embedClient — OpenAI path', () => {
   })
 
   it('health() returns ok=false with error on failure (never throws)', async () => {
-    fetchSpy.mockResolvedValueOnce({
+    fetchSpy.mockResolvedValue({
       ok: false,
       status: 500,
       text: async () => 'server error',
@@ -260,5 +264,5 @@ describe('embedClient — OpenAI path', () => {
     const h = await health()
     expect(h.ok).toBe(false)
     expect(h.error).toMatch(/openai embed 500/)
-  })
+  }, 10_000)
 })

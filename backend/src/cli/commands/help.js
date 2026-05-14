@@ -12,7 +12,11 @@ import { join } from 'node:path'
 import db from '../lib/db.js'
 import { ok, fail } from '../lib/safety.js'
 import { reindexDoc, reindexAll } from '../../services/help/corpusSeeder.js'
-import { ask } from '../../services/help/helpService.js'
+// NOTE: help-ask intentionally does NOT import helpService directly. Per
+// the refactor on 2026-05-13, the CLI calls the same HTTP endpoint
+// (/api/v1/help/ask) the application uses, so the CLI exercises the
+// exact same code path — auth middleware, rate limiter (when added),
+// retry logic, content filter, persistence. See helpAskHttp below.
 
 const RESET = '\x1b[0m'
 const BOLD  = '\x1b[1m'
@@ -105,70 +109,97 @@ export function helpCommand(program) {
 
   program
     .command('help-ask <question...>')
-    .description('Run a help question through the real RAG pipeline (search → prompt → OpenAI → filter → persist). Streams the answer to stdout; persists a HelpQuery + HelpAnswer just like the HTTP route would. Use --user <id> to attribute the query to a real user (defaults to a synthetic CLI marker).')
-    .option('--user <userId>', 'Attribute HelpQuery to this user id', null)
+    .description('Run a help question through the real /api/v1/help/ask endpoint (same path the Help UI uses). Streams the SSE response and prints the result. Uses the X-Internal-Secret bypass auth so no session is required.')
+    // Default `http://localhost:3000` works from both contexts:
+    //   - host: docker-compose exposes 3000 → reaches the running backend
+    //   - inside the backend container: the same process loopback address
+    // Set BACKEND_URL to override (e.g., point at staging).
+    .option('--backend <url>', 'Backend base URL', process.env.BACKEND_URL ?? 'http://localhost:3000')
+    .option('--secret <s>',    'X-Internal-Secret header value', process.env.INTERNAL_SECRET ?? 'xo-arena-internal-dev-secret')
     .option('--route <path>',  'Context: route the user is "on"',     '/cli')
     .option('--slot <name>',   'Context: panel slot',                 'um:help-ask')
     .option('--game <id>',     'Context: gameType (xo or pong)',      'xo')
-    .option('--journey <tag>', 'Override journeyStep tag in context (default "(unknown)")', null)
     .option('--no-stream',     'Skip live token output; only print the final accumulated answer')
     .option('--json',          'Emit structured frames as JSON lines instead of plain text')
     .action(async (questionWords, opts) => {
       const question = questionWords.join(' ').trim()
       if (!question) fail('help-ask: question must not be empty')
 
-      const context = {
-        route:       opts.route,
-        currentSlot: opts.slot,
-        gameType:    opts.game,
-        journeyStep: opts.journey ?? '(unknown)',
-      }
-
-      const t0 = Date.now()
+      const url = `${opts.backend.replace(/\/$/, '')}/api/v1/help/ask`
+      const t0  = Date.now()
       let tokenCount = 0
       let doneFrame  = null
       let errorFrame = null
 
+      let res
       try {
-        for await (const frame of ask({
-          question,
-          userId:  opts.user ?? `cli:um:help-ask`,
-          context,
-        })) {
-          if (opts.json) {
-            console.log(JSON.stringify(frame))
-            continue
-          }
-          if (frame.kind === 'token') {
-            tokenCount++
-            if (opts.stream !== false) {
-              process.stdout.write(frame.text)
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type':      'application/json',
+            'X-Internal-Secret': opts.secret,
+            'Accept':            'text/event-stream',
+          },
+          body: JSON.stringify({
+            question,
+            context: {
+              route:       opts.route,
+              currentSlot: opts.slot,
+              gameType:    opts.game,
+            },
+          }),
+        })
+      } catch (err) {
+        fail(`help-ask: cannot reach ${url} — ${err?.cause?.code ?? err.message}`)
+      }
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        fail(`help-ask: HTTP ${res.status} — ${body.slice(0, 200)}`)
+      }
+
+      // Parse SSE incrementally. Frames are `event: <name>\ndata: <json>\n\n`.
+      const decoder = new TextDecoder()
+      let pending = ''
+      try {
+        for await (const chunk of res.body) {
+          pending += decoder.decode(chunk, { stream: true })
+          let idx
+          while ((idx = pending.indexOf('\n\n')) !== -1) {
+            const block = pending.slice(0, idx); pending = pending.slice(idx + 2)
+            const evLine = block.split('\n').find(l => l.startsWith('event: '))
+            const dlLine = block.split('\n').find(l => l.startsWith('data: '))
+            if (!evLine || !dlLine) continue
+            const event = evLine.slice(7)
+            const data  = JSON.parse(dlLine.slice(6))
+            const frame = { kind: event, ...data }
+
+            if (opts.json) { console.log(JSON.stringify(frame)); continue }
+
+            if (event === 'token') {
+              tokenCount++
+              if (opts.stream !== false) process.stdout.write(data.text)
+            } else if (event === 'done') {
+              doneFrame = frame
+            } else if (event === 'error') {
+              errorFrame = frame
             }
-          } else if (frame.kind === 'done') {
-            doneFrame = frame
-          } else if (frame.kind === 'error') {
-            errorFrame = frame
           }
         }
       } catch (err) {
-        fail(`help-ask: ${err.message}`)
+        fail(`help-ask: SSE read failed — ${err.message}`)
       }
 
       if (opts.json) return
 
-      // Trailing newline after streamed output, before metadata banner.
       if (tokenCount > 0 && opts.stream !== false) process.stdout.write('\n')
 
-      if (errorFrame) {
-        fail(`help-ask: error frame: ${JSON.stringify(errorFrame)}`)
-      }
-
-      if (!doneFrame) {
-        fail('help-ask: pipeline finished without a terminal frame (shouldn\'t happen)')
-      }
+      if (errorFrame) fail(`help-ask: error frame: ${JSON.stringify(errorFrame)}`)
+      if (!doneFrame) fail('help-ask: stream ended without a terminal frame')
 
       console.log()
       console.log(`${DIM}── result ─────────────────────────────────────────────${RESET}`)
+      console.log(`  endpoint              ${url}`)
       console.log(`  queryId               ${doneFrame.queryId}`)
       console.log(`  answerId              ${doneFrame.answerId ?? '(persist failed)'}`)
       console.log(`  tokens streamed       ${tokenCount}`)

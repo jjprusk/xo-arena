@@ -24,6 +24,7 @@
 
 import logger from '../../logger.js'
 import { RateLimitError } from './embedClient.js'
+import { fetchWithRetry } from './fetchWithRetry.js'
 
 const OPENAI_CHAT_URL   = 'https://api.openai.com/v1/chat/completions'
 const OPENAI_CHAT_MODEL = 'gpt-4o-mini'
@@ -108,7 +109,7 @@ export async function* streamChatCompletion(messages, opts = {}) {
     )
   }
 
-  const res = await fetch(OPENAI_CHAT_URL, {
+  const res = await fetchWithRetry(OPENAI_CHAT_URL, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -122,6 +123,13 @@ export async function* streamChatCompletion(messages, opts = {}) {
       stream:      true,
     }),
     signal: opts.signal,
+  }, {
+    context:        'openai chat',
+    // Chat is a stream; once the stream begins, retrying would re-issue
+    // the whole completion. We only retry on PRE-stream failures (errors
+    // before any bytes have flowed). The body-iteration path below is
+    // not retried.
+    perTryTimeoutMs: 60_000,
   })
 
   if (!res.ok) {

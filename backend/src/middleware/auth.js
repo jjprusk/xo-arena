@@ -268,6 +268,36 @@ export async function isSupport(userId) {
 }
 
 /**
+ * Middleware: accept either a real session OR a valid `X-Internal-Secret`
+ * header. The latter case synthesises `req.auth = { userId: 'cli:um',
+ * cliBypass: true }` so service-level callers (the `um` CLI, ops scripts)
+ * can hit user-facing routes without standing up a session.
+ *
+ * Use sparingly — only on routes that are safe for internal-tooling
+ * callers. The intent is "ergonomically debug an authed user-facing route
+ * end-to-end without auth ceremony"; it is NOT a general bypass for
+ * production traffic. Any caller using this is identifiable via
+ * `req.auth.cliBypass === true` so downstream logic can disclaim
+ * personalization (no journey-step lookup, no real userId for analytics).
+ *
+ * When the secret is sent but doesn't match, we treat that as a hard
+ * 401 — don't silently fall through to JWT verification, because a stale
+ * shared secret deserves a clear error.
+ */
+export async function requireAuthOrInternalSecret(req, res, next) {
+  const provided = req.header('x-internal-secret')
+  const expected = process.env.INTERNAL_SECRET
+  if (provided != null) {
+    if (!expected || provided !== expected) {
+      return res.status(401).json({ error: 'invalid internal secret' })
+    }
+    req.auth = { userId: 'cli:um', cliBypass: true }
+    return next()
+  }
+  return requireAuth(req, res, next)
+}
+
+/**
  * Middleware: requires auth AND support (or admin) role.
  */
 export async function requireSupport(req, res, next) {
