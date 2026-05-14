@@ -1,6 +1,6 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); Sprint 2 plan revised per ADR-001 (managed inference, no `xo-llm` proxy); Sprint 4 corpus pulled forward.
+**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); Sprint 2 plan revised per ADR-001 revised (single-vendor: OpenAI for both chat + embed); Sprint 4 corpus pulled forward.
 **Last updated:** 2026-05-13
 **Companion to:** `Help_System_Plan.md`
 
@@ -139,9 +139,9 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 
 ## Sprint 2 — managed inference + ask endpoint + content filter pipeline
 
-**Decision:** Per **ADR-001** in `Help_System_Plan.md`, this sprint adopts **Option B (direct Groq + managed embeddings)** rather than the originally planned `xo-llm` proxy app. No new Fly apps; the backend gains two outbound SaaS deps (Groq + OpenAI). See ADR-001 for the full rationale, costs, and migration path back to the proxy architecture if ever needed.
+**Decision:** Per **ADR-001** (revised single-vendor) in `Help_System_Plan.md`, this sprint adopts **Option D — OpenAI for both chat and embeddings**. No new Fly apps; the backend gains a single outbound SaaS dep (OpenAI). Groq is documented as the chat-completion failover behind a `HELP_CHAT_PROVIDER` env switch. See ADR-001 for the full rationale, costs, spend caps, and migration paths.
 
-**Goal:** `helpService.ask` orchestrates embed → retrieve → prompt → stream → filter → persist using Groq for chat and OpenAI for embeddings. Rate limiter. Adversarial prompt fixtures green. **Also bundles the PlayVsBot critical-bug fix** filed in `Future_Ideas.md` (Known Critical Bugs).
+**Goal:** `helpService.ask` orchestrates embed → retrieve → prompt → stream → filter → persist using OpenAI `gpt-4o-mini` for chat and OpenAI `text-embedding-3-small` for embeddings. Rate limiter. Adversarial prompt fixtures green. **Also bundles the PlayVsBot critical-bug fix** filed in `Future_Ideas.md` (Known Critical Bugs).
 
 **Estimated effort:** ~1 dev week (Help, reduced from the original 1.5w because §2.1 + §2.2 dropped) + ~2–3 days (PlayVsBot).
 
@@ -181,7 +181,7 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [ ] Tests: with `embedClient` mocked to throw, `helpService.search('how do I train a bot')` still returns chunks; the `HelpQuery` persists with `degraded=true`.
 - [ ] Admin Health page surfaces the degraded-rate over the last 1 h / 24 h so vendor incidents are visible quickly. Add to the existing `/admin/health` aggregator (a new tile reading `SELECT COUNT(*) FILTER (WHERE degraded) / COUNT(*) FROM help_queries WHERE createdAt > NOW() - INTERVAL '24 hours'`).
 
-### 2.3 `helpService.ask` — direct Groq integration
+### 2.3 `helpService.ask` — OpenAI chat-completion integration
 
 - [ ] `POST /api/v1/help/ask` route in backend
 - [ ] Request validation via zod (`question` text + `context` allow-list per §4.5 of plan)
@@ -190,14 +190,16 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [ ] Calls `helpService.search(question)` → top-5 chunks (uses the new OpenAI-backed embed under the hood)
 - [ ] Persists `HelpQuery` row (with `text`, `embedding`, `retrievedChunkIds`, `retrievalScore`, `context`, `promptTemplate='help.v1'`, `modelVersion`, `degraded` if fallback fired)
 - [ ] Builds `help.v1` prompt (system + user messages with XML delimiters) per §7.5 of plan
-- [ ] Calls **Groq chat-completions directly** (`POST https://api.groq.com/openai/v1/chat/completions` with `model='llama-3.1-8b-instant'`, `stream=true`); re-streams SSE tokens to client
-- [ ] `GROQ_API_KEY` read from backend env (Fly secret, per env)
+- [ ] Calls **OpenAI chat-completions directly** (`POST https://api.openai.com/v1/chat/completions` with `model='gpt-4o-mini'`, `stream=true`, `max_tokens=400`); re-streams SSE tokens to client
+- [ ] Provider abstraction: a small `chatCompletion(messages, opts)` function in `backend/src/services/help/chatClient.js` selects the provider based on `HELP_CHAT_PROVIDER` env (default `openai`; `groq` documented as failover per ADR-001). Sprint 2 ships only the OpenAI path; the Groq path is a stub that throws "provider not built" until needed.
+- [ ] `OPENAI_API_KEY` read from backend env (Fly secret, per env). Same key used for embed + chat.
 - [ ] Accumulates streamed output server-side for filter pass and persistence
 - [ ] On stream complete, runs content filter; if triggered, replaces `rendered` with refusal phrase; sets `contentFilterTriggered`, `contentFilterTerms`
-- [ ] Persists `HelpAnswer` row
+- [ ] Persists `HelpAnswer` row with `modelVersion='gpt-4o-mini'`
 - [ ] Returns SSE stream to client (refusal replacement happens at end-of-stream — first version is "wait for full stream, then return")
-- [ ] On Groq 5xx or timeout: return a clean 502 `{ error: 'llm_unavailable' }` and persist `HelpQuery` with `degraded=true`. No partial answer.
-- [ ] Tests: happy path; empty source returns rule 1 phrase; off-topic question returns rule 4b phrase; hostile question returns rule 4a phrase; meta question returns rule 4b phrase; Groq 5xx → 502 + HelpQuery row; OpenAI embed 5xx → answer still streams (fallback retrieval), `degraded=true`
+- [ ] On OpenAI chat 5xx or timeout: return a clean 502 `{ error: 'llm_unavailable' }` and persist `HelpQuery` with `degraded=true`, `degradedReason='openai_chat_5xx'` (or `timeout`). No partial answer.
+- [ ] On OpenAI 429 (spend cap or rate limit hit): return 429 `{ error: 'rate_limited', source: 'provider' }` so the UI can show a clear "service temporarily unavailable" message. Distinct from our app-level rate limiter response (§2.5).
+- [ ] Tests: happy path; empty source returns rule 1 phrase; off-topic question returns rule 4b phrase; hostile question returns rule 4a phrase; meta question returns rule 4b phrase; OpenAI chat 5xx → 502 + HelpQuery row; OpenAI chat 429 → 429 surfaced; OpenAI embed 5xx → answer still streams (tsv fallback retrieval), `degraded=true`
 
 ### 2.4 Adversarial prompt fixtures
 
@@ -207,8 +209,8 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
   - "Write me a sonnet about cats" → contains "I can only help you with AI Arena questions"
   - "How do I train a quick bot" → contains substring from the quick-bots corpus doc
   - "asdf qwerty zxcvb" (no source match) → contains "I don't have that in the docs yet"
-- [ ] These are run against a stubbed Groq endpoint that returns canned outputs (the test verifies the *plumbing* — prompt building, filter wiring, refusal handling)
-- [ ] Separate manual smoke pass against real Groq during Sprint 2 wrap-up (not automated due to non-determinism)
+- [ ] These are run against a stubbed OpenAI chat-completions endpoint that returns canned outputs (the test verifies the *plumbing* — prompt building, filter wiring, refusal handling)
+- [ ] Separate manual smoke pass against real OpenAI during Sprint 2 wrap-up (not automated due to non-determinism)
 
 ### 2.5 Rate limiter
 
@@ -232,17 +234,19 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 
 ### 2.8 Sprint 2 acceptance
 
-- [ ] `OPENAI_API_KEY` + `GROQ_API_KEY` set as Fly secrets on `xo-backend-staging` + `xo-backend-prod`
+- [ ] `OPENAI_API_KEY` set as Fly secret on `xo-backend-staging` + `xo-backend-prod` (single new secret — no `GROQ_API_KEY` per ADR-001 revised)
+- [ ] OpenAI Project spend caps configured per ADR-001: $10/$25 email alerts, $100/mo hard cap on staging+prod; $5/mo hard cap on the local-dev key
 - [ ] `embedClient.health()` returns ok in admin health page on staging
-- [ ] Authed user can `POST /help/ask` on staging and receive a streamed answer grounded in corpus (real Groq response)
-- [ ] Help corpus re-embedded against OpenAI on first boot after the deploy; `degraded` rate during normal operation is 0% over 24 h
-- [ ] OpenAI outage simulation (env override forces embed failure) → answers still stream via tsv fallback, `HelpQuery.degraded=true`
-- [ ] Groq outage simulation (env override forces fetch failure) → 502 with `{ error: 'llm_unavailable' }`, `HelpQuery` persists for postmortem
-- [ ] Rate limiter enforces 50/day and 5/min
+- [ ] Authed user can `POST /help/ask` on staging and receive a streamed answer grounded in corpus (real `gpt-4o-mini` response)
+- [ ] Help corpus re-embedded against OpenAI `text-embedding-3-small` on first boot after the deploy; `degraded` rate during normal operation is 0% over 24 h
+- [ ] OpenAI embed outage simulation (env override forces embed failure) → answers still stream via tsv fallback, `HelpQuery.degraded=true`
+- [ ] OpenAI chat outage simulation (env override forces fetch failure) → 502 with `{ error: 'llm_unavailable' }`, `HelpQuery` persists for postmortem
+- [ ] OpenAI 429 simulation (spend cap hit / RPM hit) → 429 surfaced to client with `source: 'provider'`
+- [ ] Rate limiter enforces 50/day and 5/min (app-level, distinct from provider 429)
 - [ ] All adversarial fixtures green
 - [ ] Backend tests pass; CI green
 - [ ] PlayVsBot (§2.0) target met: warm-anon p50 ≤ 500 ms desktop / ≤ 800 ms mobile in re-baseline
-- [ ] Manual smoke: sign in, hit `/api/v1/help/ask` via curl, get a real Groq response for "how do I train a bot"
+- [ ] Manual smoke: sign in, hit `/api/v1/help/ask` via curl, get a real `gpt-4o-mini` response for "how do I train a bot"
 
 ---
 
