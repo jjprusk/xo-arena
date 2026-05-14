@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mergeRanked } from '../helpService.js'
+import { mergeRanked, expandQuery } from '../helpService.js'
 
 describe('mergeRanked', () => {
   it('returns empty array when both sources are empty', () => {
@@ -94,6 +94,35 @@ describe('mergeRanked', () => {
     expect(merged[0].score).toBeGreaterThan(merged[1].score)
     // The gap is exactly the boost (0.08) since base scores are equal.
     expect(merged[0].score - merged[1].score).toBeCloseTo(0.08, 5)
+  })
+
+  it('expandQuery passes through queries without alias hits', () => {
+    expect(expandQuery('how do I train a bot')).toBe('how do I train a bot')
+    expect(expandQuery('what is a tournament')).toBe('what is a tournament')
+    expect(expandQuery('')).toBe('')
+  })
+
+  it('expandQuery appends canonical phrasing for "tictactoe"', () => {
+    expect(expandQuery('how do i play tictactoe')).toBe('how do i play tictactoe tic tac toe')
+    // Case-insensitive: matches TicTacToe / TICTACTOE too.
+    expect(expandQuery('TicTacToe rules')).toBe('TicTacToe rules tic tac toe')
+  })
+
+  it('expandQuery appends canonical phrasing for hyphenated "tic-tac-toe"', () => {
+    expect(expandQuery('tic-tac-toe strategy')).toBe('tic-tac-toe strategy tic tac toe')
+  })
+
+  it('expandQuery does not duplicate the canonical when multiple variants are present', () => {
+    // Both "tictactoe" and "tic-tac-toe" map to the same canonical;
+    // dedup via the Set inside expandQuery.
+    expect(expandQuery('tictactoe vs tic-tac-toe')).toBe('tictactoe vs tic-tac-toe tic tac toe')
+  })
+
+  it('expandQuery is safe to call repeatedly (no regex .lastIndex pollution)', () => {
+    expandQuery('tictactoe')
+    expandQuery('plain query')
+    // The /g regex's lastIndex must reset between calls.
+    expect(expandQuery('tictactoe')).toBe('tictactoe tic tac toe')
   })
 
   it('first-chunk boost does not flip a clearly stronger non-first chunk', () => {

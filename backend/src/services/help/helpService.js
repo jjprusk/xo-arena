@@ -54,6 +54,48 @@ const MAX_ANSWER_TOKENS = 400
 // keep small so it doesn't dominate genuine ranking signal.
 const FIRST_CHUNK_BOOST = 0.08
 
+// Query-side aliases — maps spelling variants users commonly type to the
+// canonical phrasing the corpus uses. We APPEND the canonical form to the
+// raw query (rather than replacing) so FTS still matches the user's term
+// if it appears literally somewhere in the corpus, while the embedding
+// model also sees the canonical phrasing it recognizes.
+//
+// Why this is needed: OpenAI's tokenizer treats "tictactoe" as a single
+// token; the 384-dim embedding doesn't preserve the equivalence to "tic
+// tac toe" the way the native 1536-dim embedding would. So a user typing
+// "how do I play tictactoe" gets a cosine score of ~0.45 against the
+// canonical playing-tic-tac-toe chunks, vs ~0.63 for "how do I play tic
+// tac toe". Expansion closes that gap without a column-type migration.
+//
+// Keep this map small and additive. As the corpus grows, the right
+// long-term solution is either query rewriting via the LLM (Sprint 5+
+// optimization) or per-doc alias fields surfaced into the chunk text.
+const QUERY_ALIASES = [
+  // Tic-Tac-Toe spelling variants.
+  { match: /\btictactoe\b/gi,    add: 'tic tac toe' },
+  { match: /\btic-tac-toe\b/gi,  add: 'tic tac toe' },
+  // Add new aliases here as retrieval misses surface.
+]
+
+/**
+ * Returns a query string suitable for embedding + FTS. Original user text
+ * is preserved (we APPEND canonical forms when an alias matches) so FTS
+ * still recognizes the literal user term if it appears anywhere in the
+ * corpus. Used internally by `search`; HelpQuery.text persists the ORIGINAL
+ * user-typed query, not the expanded form — analytics should see what the
+ * user actually typed.
+ */
+export function expandQuery(raw) {
+  let out = String(raw ?? '')
+  const additions = new Set()
+  for (const { match, add } of QUERY_ALIASES) {
+    if (match.test(out)) additions.add(add)
+    match.lastIndex = 0  // reset stateful /g regex between calls
+  }
+  if (additions.size === 0) return out
+  return `${out} ${[...additions].join(' ')}`
+}
+
 /**
  * Returns the current FTS weight α from SystemConfig, clamped to [0, 1].
  * α=0 → vector-only; α=1 → FTS-only.
@@ -111,13 +153,19 @@ export async function search(query, opts = {}) {
     }
   }
 
+  // Query expansion — append canonical phrasings for known spelling
+  // variants (see QUERY_ALIASES). Both retrieval branches use the
+  // expanded query; HelpQuery.text (logged in /help/ask) persists the
+  // ORIGINAL user-typed string so analytics see what the user typed.
+  const effective = expandQuery(trimmed)
+
   // Run both branches concurrently; capture rejections independently so a
   // failing vector branch doesn't abort the FTS branch. The FTS branch is
   // expected never to throw against a healthy DB — if it does, surface
   // the error normally (the caller's catch logs it; the route returns 5xx).
   const [ftsRes, vecRes] = await Promise.allSettled([
-    runFtsQuery(trimmed),
-    runVectorQuery(trimmed),
+    runFtsQuery(effective),
+    runVectorQuery(effective),
   ])
 
   if (ftsRes.status === 'rejected') throw ftsRes.reason
