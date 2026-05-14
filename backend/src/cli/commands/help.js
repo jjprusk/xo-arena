@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import db from '../lib/db.js'
 import { ok, fail } from '../lib/safety.js'
 import { reindexDoc, reindexAll } from '../../services/help/corpusSeeder.js'
+import { ask } from '../../services/help/helpService.js'
 
 const RESET = '\x1b[0m'
 const BOLD  = '\x1b[1m'
@@ -100,5 +101,86 @@ export function helpCommand(program) {
         written++
       }
       ok(`wrote ${written} doc(s) to ${opts.out}`)
+    })
+
+  program
+    .command('help-ask <question...>')
+    .description('Run a help question through the real RAG pipeline (search → prompt → OpenAI → filter → persist). Streams the answer to stdout; persists a HelpQuery + HelpAnswer just like the HTTP route would. Use --user <id> to attribute the query to a real user (defaults to a synthetic CLI marker).')
+    .option('--user <userId>', 'Attribute HelpQuery to this user id', null)
+    .option('--route <path>',  'Context: route the user is "on"',     '/cli')
+    .option('--slot <name>',   'Context: panel slot',                 'um:help-ask')
+    .option('--game <id>',     'Context: gameType (xo or pong)',      'xo')
+    .option('--journey <tag>', 'Override journeyStep tag in context (default "(unknown)")', null)
+    .option('--no-stream',     'Skip live token output; only print the final accumulated answer')
+    .option('--json',          'Emit structured frames as JSON lines instead of plain text')
+    .action(async (questionWords, opts) => {
+      const question = questionWords.join(' ').trim()
+      if (!question) fail('help-ask: question must not be empty')
+
+      const context = {
+        route:       opts.route,
+        currentSlot: opts.slot,
+        gameType:    opts.game,
+        journeyStep: opts.journey ?? '(unknown)',
+      }
+
+      const t0 = Date.now()
+      let tokenCount = 0
+      let doneFrame  = null
+      let errorFrame = null
+
+      try {
+        for await (const frame of ask({
+          question,
+          userId:  opts.user ?? `cli:um:help-ask`,
+          context,
+        })) {
+          if (opts.json) {
+            console.log(JSON.stringify(frame))
+            continue
+          }
+          if (frame.kind === 'token') {
+            tokenCount++
+            if (opts.stream !== false) {
+              process.stdout.write(frame.text)
+            }
+          } else if (frame.kind === 'done') {
+            doneFrame = frame
+          } else if (frame.kind === 'error') {
+            errorFrame = frame
+          }
+        }
+      } catch (err) {
+        fail(`help-ask: ${err.message}`)
+      }
+
+      if (opts.json) return
+
+      // Trailing newline after streamed output, before metadata banner.
+      if (tokenCount > 0 && opts.stream !== false) process.stdout.write('\n')
+
+      if (errorFrame) {
+        fail(`help-ask: error frame: ${JSON.stringify(errorFrame)}`)
+      }
+
+      if (!doneFrame) {
+        fail('help-ask: pipeline finished without a terminal frame (shouldn\'t happen)')
+      }
+
+      console.log()
+      console.log(`${DIM}── result ─────────────────────────────────────────────${RESET}`)
+      console.log(`  queryId               ${doneFrame.queryId}`)
+      console.log(`  answerId              ${doneFrame.answerId ?? '(persist failed)'}`)
+      console.log(`  tokens streamed       ${tokenCount}`)
+      console.log(`  contentFilterTriggered ${doneFrame.contentFilterTriggered}`)
+      console.log(`  degraded (embed)      ${doneFrame.degraded}`)
+      console.log(`  latency (server)      ${doneFrame.latencyMs}ms`)
+      console.log(`  wall clock            ${Date.now() - t0}ms`)
+      if (opts.stream === false) {
+        console.log()
+        console.log(`${BOLD}── answer ─────────────────────────────────────────────${RESET}`)
+        console.log(doneFrame.rendered)
+      }
+      ok('help-ask complete')
     })
 }
