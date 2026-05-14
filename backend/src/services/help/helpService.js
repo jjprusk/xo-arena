@@ -183,16 +183,29 @@ async function runVectorQuery(query) {
   const lit = toPgVectorLiteral(vec)
   // pgvector's `<=>` operator returns cosine *distance* (0 = identical,
   // 2 = opposite). Convert to similarity via 1 - distance.
-  const rows = await db.$queryRaw`
-    SELECT
-      c.id, c."docId", c.position, c.content,
-      (1 - (c.embedding <=> ${lit}::vector)) AS sim
-    FROM help_chunks c
-    JOIN help_docs d ON d.id = c."docId"
-    WHERE d.status = 'PUBLISHED' AND c.embedding IS NOT NULL
-    ORDER BY c.embedding <=> ${lit}::vector ASC
-    LIMIT 50
-  `
+  //
+  // ivfflat tuning: the help_chunks index was created with lists=100 (per
+  // the v1 migration), which suits a multi-thousand-row corpus. With our
+  // current ~550 chunks each list holds ~5 vectors; the default probes=1
+  // scans only one list, dropping recall to ~1% of the corpus and causing
+  // canonical chunks to be entirely absent from top-K results. Bumping
+  // probes=10 visits ~10% per query — still fast (<5 ms for our size) and
+  // brings recall close to exhaustive. Tune up if recall complaints
+  // resurface; lists can be lowered (or HNSW adopted) once the corpus
+  // grows past ~10K chunks. SET LOCAL scopes to the transaction only.
+  const rows = await db.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('SET LOCAL ivfflat.probes = 10')
+    return await tx.$queryRaw`
+      SELECT
+        c.id, c."docId", c.position, c.content,
+        (1 - (c.embedding <=> ${lit}::vector)) AS sim
+      FROM help_chunks c
+      JOIN help_docs d ON d.id = c."docId"
+      WHERE d.status = 'PUBLISHED' AND c.embedding IS NOT NULL
+      ORDER BY c.embedding <=> ${lit}::vector ASC
+      LIMIT 50
+    `
+  })
   return rows.map(r => ({
     id: r.id,
     docId: r.docId,

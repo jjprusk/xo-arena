@@ -129,13 +129,26 @@ describe('search (mocked DB)', () => {
     expect(r.counts).toEqual({ fts: 0, vec: 0, merged: 0 })
   })
 
+  // Shared mock factory for the search-path tests below. The vector
+  // branch in helpService.runVectorQuery wraps its SQL in $transaction so
+  // it can issue a SET LOCAL ivfflat.probes before the SELECT — so the db
+  // mock has to expose $transaction in addition to $queryRaw. The mock
+  // forwards the inner $queryRaw call to the outer one to keep test
+  // setup terse.
+  function makeDbMock({ systemConfigValue = null, queryRawResult = [] } = {}) {
+    const queryRaw = vi.fn(async () => queryRawResult)
+    return {
+      systemConfig: { findUnique: vi.fn(async () => systemConfigValue) },
+      $queryRaw: queryRaw,
+      $transaction: vi.fn(async (cb) => cb({
+        $queryRaw: queryRaw,
+        $executeRawUnsafe: vi.fn(async () => 0),
+      })),
+    }
+  }
+
   it('falls back to default α when SystemConfig is missing', async () => {
-    vi.doMock('../../../lib/db.js', () => ({
-      default: {
-        systemConfig: { findUnique: vi.fn(async () => null) },
-        $queryRaw: vi.fn(async () => []),
-      },
-    }))
+    vi.doMock('../../../lib/db.js', () => ({ default: makeDbMock() }))
     vi.doMock('../../../logger.js', () => ({ default: { warn: vi.fn(), info: vi.fn() } }))
     const { search } = await import('../helpService.js')
     const r = await search('anything')
@@ -144,10 +157,7 @@ describe('search (mocked DB)', () => {
 
   it('clamps α from SystemConfig to [0, 1]', async () => {
     vi.doMock('../../../lib/db.js', () => ({
-      default: {
-        systemConfig: { findUnique: vi.fn(async () => ({ value: 2.5 })) },
-        $queryRaw: vi.fn(async () => []),
-      },
+      default: makeDbMock({ systemConfigValue: { value: 2.5 } }),
     }))
     vi.doMock('../../../logger.js', () => ({ default: { warn: vi.fn(), info: vi.fn() } }))
     const { search } = await import('../helpService.js')
@@ -156,12 +166,7 @@ describe('search (mocked DB)', () => {
   })
 
   it('reports degraded=false when both branches succeed', async () => {
-    vi.doMock('../../../lib/db.js', () => ({
-      default: {
-        systemConfig: { findUnique: vi.fn(async () => null) },
-        $queryRaw: vi.fn(async () => []),
-      },
-    }))
+    vi.doMock('../../../lib/db.js', () => ({ default: makeDbMock() }))
     vi.doMock('../../../logger.js', () => ({ default: { warn: vi.fn(), info: vi.fn() } }))
     const { search } = await import('../helpService.js')
     const r = await search('hello world')
