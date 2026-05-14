@@ -44,6 +44,16 @@ const DEFAULT_TOP_K = 5
 const DEFAULT_ASK_TOP_K = 5
 const MAX_ANSWER_TOKENS = 400
 
+// First-chunk-of-doc boost. Most docs in /doc/Help_Corpus open with a
+// definitional sentence ("A bot on AI Arena is..."). Without a boost, the
+// definitional chunk loses to long-tail chunks that have higher
+// term-frequency for keywords like "bot" or "tournament". A small additive
+// nudge to position=0 chunks brings definitional content into top-K for
+// "what is X" style queries without crowding out specifically-relevant
+// chunks for narrower questions. Tuned by inspection on the seeded corpus;
+// keep small so it doesn't dominate genuine ranking signal.
+const FIRST_CHUNK_BOOST = 0.08
+
 /**
  * Returns the current FTS weight α from SystemConfig, clamped to [0, 1].
  * α=0 → vector-only; α=1 → FTS-only.
@@ -256,7 +266,10 @@ export function mergeRanked(ftsRows, vecRows, alpha) {
   for (const r of byId.values()) {
     const ftsN = ftsMax > 0 && r.ftsScore != null ? r.ftsScore / ftsMax : 0
     const cosN = vecMax > 0 && r.cosScore != null ? r.cosScore / vecMax : 0
-    r.score = alpha * ftsN + (1 - alpha) * cosN
+    const base = alpha * ftsN + (1 - alpha) * cosN
+    // First-chunk-of-doc boost: see FIRST_CHUNK_BOOST comment for why.
+    const boost = (r.position === 0) ? FIRST_CHUNK_BOOST : 0
+    r.score = base + boost
     out.push(r)
   }
   out.sort((a, b) => b.score - a.score)

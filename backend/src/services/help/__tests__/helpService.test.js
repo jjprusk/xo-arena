@@ -28,8 +28,11 @@ describe('mergeRanked', () => {
   })
 
   it('with α=0, ranks by vector only (FTS ignored)', () => {
+    // 'a' uses position=3 to keep it out of the first-chunk-boost zone —
+    // the goal of this test is to verify that α=0 zeros the FTS half,
+    // not to exercise the boost (boost is covered by its own test).
     const fts = [
-      { id: 'a', docId: 'd', position: 0, content: 'a', ftsScore: 1.0, cosScore: null },
+      { id: 'a', docId: 'd', position: 3, content: 'a', ftsScore: 1.0, cosScore: null },
     ]
     const vec = [
       { id: 'b', docId: 'd', position: 1, content: 'b', ftsScore: null, cosScore: 0.9 },
@@ -63,18 +66,46 @@ describe('mergeRanked', () => {
 
   it('normalizes per-source — different scales should not penalize one source', () => {
     // FTS scores are tiny floats (ts_rank_cd ~0.0001); cosine in [0, 1].
+    // Both rows have position!=0 so the first-chunk boost doesn't fire.
     const fts = [
-      { id: 'a', docId: 'd', position: 0, content: 'a', ftsScore: 0.0001, cosScore: null },
+      { id: 'a', docId: 'd', position: 5, content: 'a', ftsScore: 0.0001, cosScore: null },
     ]
     const vec = [
-      { id: 'b', docId: 'd', position: 1, content: 'b', ftsScore: null, cosScore: 0.9 },
+      { id: 'b', docId: 'd', position: 6, content: 'b', ftsScore: null, cosScore: 0.9 },
     ]
     const merged = mergeRanked(fts, vec, 0.5)
     const a = merged.find(r => r.id === 'a')
     const b = merged.find(r => r.id === 'b')
-    // After normalization, both should have score ≈ 0.5
+    // After normalization (no boost on either), both should have score ≈ 0.5
     expect(a.score).toBeCloseTo(0.5, 5)
     expect(b.score).toBeCloseTo(0.5, 5)
+  })
+
+  it('boosts first chunk of doc (position=0) so definitional content surfaces', () => {
+    // Two chunks tied on raw signal; the position=0 chunk should out-rank
+    // the position=5 chunk thanks to FIRST_CHUNK_BOOST.
+    const fts = []
+    const vec = [
+      { id: 'definition',     docId: 'd', position: 0, content: 'A bot is...', ftsScore: null, cosScore: 0.5 },
+      { id: 'detail-chunk',   docId: 'd', position: 5, content: 'Bot tournaments...', ftsScore: null, cosScore: 0.5 },
+    ]
+    const merged = mergeRanked(fts, vec, 0)  // pure-vector to isolate the boost
+    expect(merged[0].id).toBe('definition')
+    expect(merged[0].score).toBeGreaterThan(merged[1].score)
+    // The gap is exactly the boost (0.08) since base scores are equal.
+    expect(merged[0].score - merged[1].score).toBeCloseTo(0.08, 5)
+  })
+
+  it('first-chunk boost does not flip a clearly stronger non-first chunk', () => {
+    // Without the boost being too aggressive, a chunk with much higher
+    // base score must still win even when the competitor is position=0.
+    const fts = []
+    const vec = [
+      { id: 'weak-first', docId: 'd', position: 0, content: 'intro',  ftsScore: null, cosScore: 0.2 },
+      { id: 'strong-mid', docId: 'd', position: 4, content: 'detail', ftsScore: null, cosScore: 0.95 },
+    ]
+    const merged = mergeRanked(fts, vec, 0)
+    expect(merged[0].id).toBe('strong-mid')
   })
 })
 
