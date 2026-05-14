@@ -247,7 +247,7 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [x] Local-dev `aiarena-backend-local-<dev>` key added to `backend/.env` for docker-compose
 - [x] OpenAI Project spend caps configured per ADR-001: $10/$25 email alerts, $100/mo hard cap on the `aiarena` project; $5/mo hard cap on the local-dev key
 - [x] `OPENAI_API_KEY` set as Fly secret on `xo-backend-staging` (release v103, deployed 2026-05-14, digest `f460b5d12a593129`). No `GROQ_API_KEY` per ADR-001 revised
-- [ ] `OPENAI_API_KEY` set as Fly secret on `xo-backend-prod` — deferred to /promote
+- [x] `OPENAI_API_KEY` set as Fly secret on `xo-backend-prod` (deployed 2026-05-14, digest `db8c9aee9acd84e0` — distinct from staging's key as it should be). Auto-reindex will fire on first prod boot post-/promote, same as it did on staging
 
 **Validation paths that need the Sprint 2 code on staging (post-/stage):**
 
