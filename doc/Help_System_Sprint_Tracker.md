@@ -1,6 +1,6 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); Sprint 2 plan revised per ADR-001 revised (single-vendor: OpenAI for both chat + embed); Sprint 4 corpus pulled forward.
+**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); Sprint 2 in progress on `dev` — §2.1 (embed client + auto-reindex) and §2.2 (graceful degradation + health helper) complete; §2.3 (helpService.ask) next; Admin Health UI tile deferred to §2.8 acceptance.
 **Last updated:** 2026-05-13
 **Companion to:** `Help_System_Plan.md`
 
@@ -155,31 +155,31 @@ Terminology aligned to "skill" (vs older "Brain") across corpus and the in-app t
 - [ ] Add `[data-perf-ready]` marker to PlayPage that flips when the spinner detaches, and update `perf/perf-v2.js` to prefer per-route ready markers when present (drops the bimodal `.animate-spin` artifact).
 - [ ] Re-baseline PlayVsBot warm-anon: target p50 ≤ 500 ms desktop / ≤ 800 ms mobile.
 
-### 2.1 Embedding client — swap stub for OpenAI
+### 2.1 Embedding client — swap stub for OpenAI — COMPLETE
 
 Replaces Sprint 1's deterministic hash-projection stub in `backend/src/services/help/embedClient.js` with a real OpenAI client. Contract is unchanged (`Array<string>` → `Array<Vector<384>>`) so callers (`corpusSeeder`, `helpService.search`) stay identical.
 
-- [ ] Implement OpenAI client in `embedClient.js`:
+- [x] Implement OpenAI client in `embedClient.js`:
   - `POST https://api.openai.com/v1/embeddings` with `model='text-embedding-3-small'`, `dimensions=384`, `input=texts`
   - Reads `OPENAI_API_KEY` from env; throws clearly if missing in non-test environments
-  - Batches up to 100 inputs per call (OpenAI request-size limit headroom); paginate if caller passes more
-  - Test stub remains: when `process.env.NODE_ENV === 'test'` (or `HELP_EMBED_STUB=1`), keep the existing hash-projection so the seeder test suite stays hermetic
-- [ ] Add `embedClient.health()` that does a single 1-token embed against OpenAI; returns `{ ok, latencyMs, model }`. Used by `/api/v1/admin/health` aggregator.
-- [ ] Update `embedClient.test.js`:
-  - Existing stub tests stay green (run under `NODE_ENV=test`)
-  - New mocked-fetch tests covering: happy path, batch-of-100, OpenAI 5xx → throws clearly, OpenAI 429 → throws `RateLimitError` (caller decides degradation), API-key missing → throws on first call
-- [ ] **Corpus re-embed**: on backend boot, if the seeder finds any chunk whose `embedding` was produced under the stub (we'll add a sentinel column or version marker), call `reindexAll()`. One-time. Logged.
-- [ ] Fly secret: add `OPENAI_API_KEY` to `xo-backend-staging` and `xo-backend-prod` (manual via `flyctl secrets set` before deploy)
+  - Batches up to 100 inputs per call; defensively sorts response by `index` to preserve input order
+  - Test stub remains: when `NODE_ENV=test`, `VITEST=true`, or `HELP_EMBED_STUB=1`, keeps the hash-projection so the seeder test suite stays hermetic (commit `bcd0a87`)
+- [x] Add `embedClient.health()` that does a single 1-token embed against OpenAI; returns `{ ok, latencyMs, model, provider, error? }`. Never throws. Used by `/api/v1/admin/health` aggregator (commit `bcd0a87`)
+- [x] Update `embedClient.test.js`: now 22 tests covering happy path, batch-of-100, out-of-order data, API-key missing, 5xx, 429 with/without retry-after, malformed response, dim mismatch, `HELP_EMBED_STUB` override, health success + failure (commit `bcd0a87`)
+- [x] **Corpus re-embed**: migration `20260513200000_help_chunk_embedding_model` adds `help_chunks.embeddingModel`. New `reindexAllIfStale()` runs at boot, detects rows tagged with a different model than the current process would write, and reindexes once. Validated on dev: 554 chunks re-embedded against real OpenAI in ~16 s, tagged `text-embedding-3-small@384` (commit `c039296`)
+- [ ] Fly secret: add `OPENAI_API_KEY` to `xo-backend-staging` and `xo-backend-prod` (manual via `flyctl secrets set` before §2.8 deploy)
 
-### 2.2 Graceful degradation when OpenAI is unreachable
+### 2.2 Graceful degradation when OpenAI is unreachable — COMPLETE
 
 The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pure full-text retrieval a viable fallback when embeddings can't be generated.
 
-- [ ] Migration: add `degraded BOOLEAN NOT NULL DEFAULT FALSE` and `degradedReason TEXT NULL` to `help_queries`. Backfill not needed (new column).
-- [ ] `helpService.search` catches `embedClient` errors and falls back to a `tsv @@ plainto_tsquery` query (no vector ranking). Returns the same shape.
-- [ ] Logs `degraded=true` on every `HelpQuery` row when the fallback fires, with the upstream error captured (truncated to 200 chars).
-- [ ] Tests: with `embedClient` mocked to throw, `helpService.search('how do I train a bot')` still returns chunks; the `HelpQuery` persists with `degraded=true`.
-- [ ] Admin Health page surfaces the degraded-rate over the last 1 h / 24 h so vendor incidents are visible quickly. Add to the existing `/admin/health` aggregator (a new tile reading `SELECT COUNT(*) FILTER (WHERE degraded) / COUNT(*) FROM help_queries WHERE createdAt > NOW() - INTERVAL '24 hours'`).
+- [x] Migration `20260513210000_help_query_degraded`: adds `degraded BOOLEAN NOT NULL DEFAULT FALSE` and `degradedReason TEXT NULL` to `help_queries`, plus covering index on `(degraded, createdAt)` (commit `cd6aa98`)
+- [x] `helpService.search` catches `embedClient` errors via `Promise.allSettled` and falls back to FTS-only (effective α snaps to 1.0 so single-source chunks aren't discounted). Returns the same shape plus `degraded` + `degradedReason` fields (commit `cd6aa98`)
+- [x] On degradation, logs `warn` with the truncated upstream-error message (200 chars). Caller is responsible for persisting `degraded`/`degradedReason` on the `HelpQuery` row (wired in §2.3)
+- [x] Tests: with `embedClient` mocked to throw, search returns chunks + `degraded=true`; 200-char truncation; RateLimitError treated identically; FTS-branch DB error propagates (not "degraded"); empty-fallback returns empty chunks (commit `cd6aa98`)
+- [x] `helpService.getDegradedRate(windowMinutes)` helper returns `{ totalQueries, degradedQueries, ratio }` over the last N minutes — wired into admin health tile in §2.8 below (commit `cd6aa98`)
+
+(Admin Health page **UI tile** is deferred to §2.8 acceptance — the backend helper is ready; the landing-side dashboard surface lands during the Sprint 2 wrap-up validation pass.)
 
 ### 2.3 `helpService.ask` — OpenAI chat-completion integration
 
@@ -239,7 +239,9 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [ ] `OPENAI_API_KEY` set as Fly secret on `xo-backend-staging` (using the `aiarena-backend-staging` key) and `xo-backend-prod` (using the `aiarena-backend-prod` key). Single new secret — no `GROQ_API_KEY` per ADR-001 revised
 - [ ] Local-dev `aiarena-backend-local-<dev>` key added to `backend/.env` for docker-compose
 - [ ] OpenAI Project spend caps configured per ADR-001: $10/$25 email alerts, $100/mo hard cap on the `aiarena` project; $5/mo hard cap on the local-dev key
+- [ ] Admin Health page surfaces the degraded-rate over the last 1 h / 24 h (`helpService.getDegradedRate` already exists; this is the UI tile). Lands during Sprint 2 wrap-up validation so admins can watch vendor-incident rate post-launch.
 - [ ] `embedClient.health()` returns ok in admin health page on staging
+- [ ] Admin Health page tile for OpenAI embed health (latency + provider) — same surface as the degraded-rate tile above
 - [ ] Authed user can `POST /help/ask` on staging and receive a streamed answer grounded in corpus (real `gpt-4o-mini` response)
 - [ ] Help corpus re-embedded against OpenAI `text-embedding-3-small` on first boot after the deploy; `degraded` rate during normal operation is 0% over 24 h
 - [ ] OpenAI embed outage simulation (env override forces embed failure) → answers still stream via tsv fallback, `HelpQuery.degraded=true`
