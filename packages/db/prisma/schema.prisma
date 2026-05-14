@@ -961,17 +961,24 @@ model HelpDoc {
 /// indexes (GIN on tsv, ivfflat on embedding) are created in the migration
 /// since Prisma cannot express them in schema.prisma.
 model HelpChunk {
-  id          String                 @id @default(cuid())
-  docId       String
-  position    Int
-  content     String
-  tsv         Unsupported("tsvector")?
-  embedding   Unsupported("vector(384)")?
-  docVersion  Int
-  createdAt   DateTime               @default(now())
-  doc         HelpDoc                @relation(fields: [docId], references: [id], onDelete: Cascade)
+  id             String                  @id @default(cuid())
+  docId          String
+  position       Int
+  content        String
+  tsv            Unsupported("tsvector")?
+  embedding      Unsupported("vector(384)")?
+  docVersion     Int
+  /// Embedding provider+model+dim that produced `embedding`. Used by the
+  /// boot-time auto-reindex check (`reindexAllIfStale`) to detect rows
+  /// embedded under a different model and reindex them once. Sprint 1
+  /// rows are backfilled to 'stub'; Sprint 2's OpenAI embeds write
+  /// 'text-embedding-3-small@384'.
+  embeddingModel String                  @default("stub")
+  createdAt      DateTime                @default(now())
+  doc            HelpDoc                 @relation(fields: [docId], references: [id], onDelete: Cascade)
 
   @@index([docId])
+  @@index([embeddingModel])
   @@map("help_chunks")
 }
 
@@ -991,11 +998,19 @@ model HelpQuery {
   promptTemplate     String?
   modelVersion       String?
   latencyMs          Int?
+  /// True when retrieval ran in fts-only fallback (embedding generation
+  /// failed). Set by helpService.search on embedClient error. Surfaced in
+  /// the admin Health dashboard so vendor incidents are visible quickly.
+  degraded           Boolean                      @default(false)
+  /// Short upstream-error message (truncated to 200 chars) explaining the
+  /// degradation. Null when degraded=false.
+  degradedReason     String?
   createdAt          DateTime                     @default(now())
   answers            HelpAnswer[]
 
   @@index([userId])
   @@index([createdAt])
+  @@index([degraded, createdAt])
   @@map("help_queries")
 }
 
