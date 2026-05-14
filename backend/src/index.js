@@ -8,7 +8,7 @@ import app, { registerRoutes } from './app.js'
 import logger from './logger.js'
 import db from './lib/db.js'
 import { runSeed } from '../prisma/seed.js'
-import { seedCorpus as seedHelpCorpus } from './services/help/corpusSeeder.js'
+import { seedCorpus as seedHelpCorpus, reindexAllIfStale as reindexHelpCorpusIfStale } from './services/help/corpusSeeder.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -123,6 +123,20 @@ try {
   if (r.inserted > 0) logger.info(r, 'Help corpus seeded')
 } catch (err) {
   logger.warn({ err: err.message }, 'Help corpus seed failed (non-fatal)')
+}
+
+// Auto-reindex if the corpus contains chunks embedded under a different
+// model than the one this process would write. Triggers on the first boot
+// after Sprint 2's stub → OpenAI cutover (all Sprint-1 chunks tagged
+// 'stub') and again on any future embedding-model upgrade. No-op in stub
+// mode (test/offline). See corpusSeeder.reindexAllIfStale for details.
+try {
+  const r = await reindexHelpCorpusIfStale()
+  if (!r.skipped) {
+    logger.info(r, 'Help corpus: auto-reindex complete on boot')
+  }
+} catch (err) {
+  logger.warn({ err: err.message }, 'Help corpus auto-reindex failed (non-fatal — old vectors remain in place)')
 }
 
 // Pre-warm the DB connection pool so first requests don't pay connection cost

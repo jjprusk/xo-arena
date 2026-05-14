@@ -21,6 +21,28 @@ export const EMBED_DIM = 384
 const OPENAI_EMBED_URL   = 'https://api.openai.com/v1/embeddings'
 const OPENAI_EMBED_MODEL = 'text-embedding-3-small'
 
+/**
+ * Stable identifier for the embedding model that produced a given vector.
+ * Stored on every help_chunks row in `embeddingModel`; checked at boot by
+ * `reindexAllIfStale` so a model swap (or the Sprint 2 stub → OpenAI cutover)
+ * triggers a one-time corpus reindex.
+ *
+ * Format: '<provider>:<model>@<dim>' for live; 'stub' for the hermetic stub.
+ * Bump this constant whenever the live model identity changes (e.g. moving
+ * to text-embedding-3-large, or to 512-dim).
+ */
+export const EMBED_MODEL_VERSION_LIVE = `${OPENAI_EMBED_MODEL}@${EMBED_DIM}`
+export const EMBED_MODEL_VERSION_STUB = 'stub'
+
+/**
+ * Returns the model version tag that THIS process will write into the
+ * `help_chunks.embeddingModel` column when it embeds new content.
+ * Switches based on stub vs. live (see `shouldUseStub`).
+ */
+export function currentEmbedModelVersion() {
+  return shouldUseStub() ? EMBED_MODEL_VERSION_STUB : EMBED_MODEL_VERSION_LIVE
+}
+
 // OpenAI's documented per-request input cap is 2048, but we batch at 100 to
 // stay well under the request-size ceiling (~8MB) and keep retry granularity
 // reasonable if a batch fails.

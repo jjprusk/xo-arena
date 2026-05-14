@@ -961,17 +961,24 @@ model HelpDoc {
 /// indexes (GIN on tsv, ivfflat on embedding) are created in the migration
 /// since Prisma cannot express them in schema.prisma.
 model HelpChunk {
-  id          String                 @id @default(cuid())
-  docId       String
-  position    Int
-  content     String
-  tsv         Unsupported("tsvector")?
-  embedding   Unsupported("vector(384)")?
-  docVersion  Int
-  createdAt   DateTime               @default(now())
-  doc         HelpDoc                @relation(fields: [docId], references: [id], onDelete: Cascade)
+  id             String                  @id @default(cuid())
+  docId          String
+  position       Int
+  content        String
+  tsv            Unsupported("tsvector")?
+  embedding      Unsupported("vector(384)")?
+  docVersion     Int
+  /// Embedding provider+model+dim that produced `embedding`. Used by the
+  /// boot-time auto-reindex check (`reindexAllIfStale`) to detect rows
+  /// embedded under a different model and reindex them once. Sprint 1
+  /// rows are backfilled to 'stub'; Sprint 2's OpenAI embeds write
+  /// 'text-embedding-3-small@384'.
+  embeddingModel String                  @default("stub")
+  createdAt      DateTime                @default(now())
+  doc            HelpDoc                 @relation(fields: [docId], references: [id], onDelete: Cascade)
 
   @@index([docId])
+  @@index([embeddingModel])
   @@map("help_chunks")
 }
 
