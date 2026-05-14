@@ -413,6 +413,22 @@ describe('ask() — happy path + plumbing', () => {
     expect(frames).toEqual([{ kind: 'error', error: 'empty_question' }])
   })
 
+  it('promotes platform terms to Markdown links in the rendered answer (bold preserved)', async () => {
+    const { svc, helpAnswerCreate, searchStub } = await setupAsk({
+      chatGenerator: async function* () {
+        yield 'Head to the **Gym** and check your **Profile**.'
+      },
+    })
+    const frames = []
+    for await (const f of svc.ask({ question: 'q', userId: 'u-1', _search: searchStub })) frames.push(f)
+    const done = frames.at(-1)
+    expect(done.rendered).toBe('Head to the **[Gym](/gym)** and check your **[Profile](/profile)**.')
+    // The persisted HelpAnswer.rendered is the linked form.
+    expect(helpAnswerCreate.mock.calls[0][0].data.rendered).toBe(
+      'Head to the **[Gym](/gym)** and check your **[Profile](/profile)**.'
+    )
+  })
+
   it('emits done frame even if HelpAnswer persistence fails (answer already streamed)', async () => {
     const { svc, helpAnswerCreate, searchStub } = await setupAsk({
       helpAnswerCreate: vi.fn(async () => { throw new Error('db down') }),

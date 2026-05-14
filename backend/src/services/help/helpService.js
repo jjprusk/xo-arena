@@ -36,6 +36,7 @@ import {
 } from './chatClient.js'
 import { buildPromptMessages, PROMPT_TEMPLATE_VERSION, REFUSAL } from './promptBuilder.js'
 import { scan as scanContent } from './contentFilter.js'
+import { rewriteLinks } from './linkRewriter.js'
 
 const DEGRADED_REASON_MAX = 200
 
@@ -401,6 +402,7 @@ export async function* ask({
   _search = search,
   _streamChatCompletion = streamChatCompletion,
   _scanContent = scanContent,
+  _rewriteLinks = rewriteLinks,
 } = {}) {
   const askStart = Date.now()
   const trimmedQ = String(question ?? '').trim()
@@ -489,7 +491,15 @@ export async function* ask({
   // 6. Content filter (§2.7 / §7.7 of plan). On trigger, swap the rendered
   //    text for the refusal phrase and record the terms.
   const filter = _scanContent(rawAnswer)
-  const finalRendered = filter.triggered ? REFUSAL.HOSTILE : rawAnswer
+  // Link rewriting: promote `**Gym**`/`**Profile**`/etc. to real Markdown
+  // links so the Sprint 3 HelpAnswer renderer can wire them up as
+  // clickable navigation (which already tracks doc-link clickthroughs as
+  // implicit feedback per §3.2 of the plan). Skipped when the filter
+  // triggered — refusal text has no platform terms to link, and we
+  // want to preserve the canonical refusal phrase exactly.
+  const finalRendered = filter.triggered
+    ? REFUSAL.HOSTILE
+    : _rewriteLinks(rawAnswer)
 
   // 7. Persist HelpAnswer.
   let answer
