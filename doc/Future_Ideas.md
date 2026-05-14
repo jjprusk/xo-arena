@@ -128,6 +128,35 @@ Also folded into Phase 3.7a for the same "easier empty than later" reason (not i
 
 ---
 
+## Research Log for users — in-platform training journal
+
+**What:** A persistent training journal owned by each user that automatically captures every training session's hyperparameters, results, and per-session notes. Sits alongside the Gym → Sessions tab; surfaces in Profile and (eventually) in the Guide's What's Next recommendations.
+
+Today the corpus (onboarding-after-the-journey.md, gym-sessions-tab.md) explicitly recommends users keep a research log **outside the platform** — a markdown file or notebook of "what I tried, what worked, what didn't." That advice is the right pattern for serious bot training, but pushing the burden onto the user externally guarantees the data never accrues into anything the platform can learn from. Bringing it in-platform produces three compounding wins.
+
+**Why:**
+
+1. **User memory.** Sessions tab already records every training run; users still can't remember why they picked a given learning rate three weeks ago. Notes attached to each session row close that gap with zero extra workflow — type a sentence, the platform remembers.
+2. **Training-data goldmine.** Per-session notes plus their hyperparameters plus the resulting benchmark/ELO are exactly the shape of data the reranker and (eventually) fine-tuning will love. A user writes "this run plateaued because epsilon decay too aggressive"; six months later that's a labelled example for a "training-advice" assistant.
+3. **Onboarding accelerator.** New users see what experienced users wrote about similar runs (privacy-gated; opt-in shared notes only). Shortens the "how do I think about hyperparameters" curve from months to days.
+
+**What it would take:**
+
+- **Schema:** `TrainingSessionNote` table keyed by `(userId, sessionId)`. Fields: `note` (text, ~2 KB cap), `tags` (text[]), `outcome` (enum: success / plateau / regression / inconclusive), `parentNoteId` (nullable — chain follow-ups), `sharedWithCommunity` (bool, default false), timestamps. A separate `ResearchLogEntry` table for ad-hoc entries not tied to a session (planning, retrospectives).
+- **Auto-captured fields:** every training session already stores algorithm, hyperparameters (lr, gamma, epsilon, episodes, etc.), pre/post benchmark, ELO delta. The note layer attaches structured commentary to that existing data — nothing duplicated.
+- **UI surface (3 places):**
+  - **Gym → Sessions tab:** inline "Add note" affordance on each row. Expanding shows prior notes plus a small textarea + outcome dropdown.
+  - **Profile → Training journal tab:** all notes chronologically, filterable by algorithm/outcome/tag. Markdown supported. Export to .md for backup.
+  - **Help System integration:** when the user asks the Guide a training question, the retrieval pipeline can surface their own past notes (and, post-opt-in, related public notes from other users) as ranked chunks alongside the corpus. Closes the loop on point #2.
+- **Privacy:** notes are private by default. Sharing is opt-in per-note; a "publish" toggle scrubs `userId` and adds the note to a public training-notes corpus that the Help System indexes.
+- **Streak / habit nudges:** the Guide's What's Next surface can prompt "you've trained 5 times this week — add a note about what you tried" to drive accrual. Discovery reward eligible.
+
+**Complexity:** Medium. Schema and auto-capture are straightforward (Sessions tab already has the data). UI is 2–3 dev days for the basic version. The cross-cutting Help System integration (point 2) is what makes this transformative; that's another ~1 week and depends on the reranker work currently scoped for Sprint 5+.
+
+**Sequencing dependency:** ships best after Sprint 3 of the Help System (so user-private notes can be a retrieval source via the same FTS+pgvector path) and after the §2.5 rate limiter (so a "publish your note as community context" action can be safely opt-in without abuse vectors). The auto-capture-only version (notes attached to sessions, no Help integration) is a clean v1 deliverable any time after Sprint 2.
+
+---
+
 ## Real-Time Games Against Bots (e.g. Pong)
 
 **What:** Support games with a continuous real-time loop — not turn-based. A classic example is Pong, where the bot controls a paddle and reacts to ball position in real time rather than waiting for a discrete move prompt.
