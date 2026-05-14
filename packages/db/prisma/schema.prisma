@@ -998,11 +998,19 @@ model HelpQuery {
   promptTemplate     String?
   modelVersion       String?
   latencyMs          Int?
+  /// True when retrieval ran in fts-only fallback (embedding generation
+  /// failed). Set by helpService.search on embedClient error. Surfaced in
+  /// the admin Health dashboard so vendor incidents are visible quickly.
+  degraded           Boolean                      @default(false)
+  /// Short upstream-error message (truncated to 200 chars) explaining the
+  /// degradation. Null when degraded=false.
+  degradedReason     String?
   createdAt          DateTime                     @default(now())
   answers            HelpAnswer[]
 
   @@index([userId])
   @@index([createdAt])
+  @@index([degraded, createdAt])
   @@map("help_queries")
 }
 
