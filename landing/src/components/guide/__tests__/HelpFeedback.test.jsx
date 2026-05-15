@@ -203,7 +203,7 @@ describe('HelpFeedback — comment input', () => {
     expect(submitFeedback.mock.calls[0][0]).toMatchObject({ comment: 'great answer' })
   })
 
-  it('blur on the textarea POSTs comment', async () => {
+  it('blur on the textarea does NOT POST (save is explicit)', async () => {
     const submitFeedback = vi.fn(async () => ({}))
     renderFeedback({}, { submitFeedback })
     await act(async () => { fireEvent.click(screen.getByTestId('thumb-up')) })
@@ -211,10 +211,32 @@ describe('HelpFeedback — comment input', () => {
     submitFeedback.mockClear()
 
     const ta = screen.getByTestId('comment-input')
-    fireEvent.change(ta, { target: { value: 'great answer' } })
+    fireEvent.change(ta, { target: { value: 'typed but didn\'t save' } })
     await act(async () => { fireEvent.blur(ta) })
 
-    expect(submitFeedback).toHaveBeenCalledOnce()
-    expect(submitFeedback.mock.calls[0][0]).toMatchObject({ comment: 'great answer' })
+    // Comment is only sent when the user clicks Save — blur is no longer
+    // a save trigger (was surprising users who wanted to back out).
+    expect(submitFeedback).not.toHaveBeenCalled()
+  })
+
+  it('Cancel button discards the typed comment and closes the textarea', async () => {
+    const submitFeedback = vi.fn(async () => ({}))
+    renderFeedback({}, { submitFeedback })
+    await act(async () => { fireEvent.click(screen.getByTestId('thumb-up')) })
+    await act(async () => { fireEvent.click(screen.getByText(/Add a comment/i)) })
+    submitFeedback.mockClear()
+
+    fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'never mind' } })
+    await act(async () => { fireEvent.click(screen.getByTestId('comment-cancel')) })
+
+    // No POST.
+    expect(submitFeedback).not.toHaveBeenCalled()
+    // Textarea collapses back to the "Add a comment →" link.
+    expect(screen.queryByTestId('comment-input')).not.toBeInTheDocument()
+    expect(screen.getByText(/Add a comment/i)).toBeInTheDocument()
+
+    // Re-opening it shows an empty textarea — the typed text was discarded.
+    await act(async () => { fireEvent.click(screen.getByText(/Add a comment/i)) })
+    expect(screen.getByTestId('comment-input')).toHaveValue('')
   })
 })
