@@ -1,7 +1,7 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); **Sprint 2 deployed to staging as v1.4.0-alpha-5.0 (2026-05-14)**; **Sprint 3 batch 1 deployed to staging as v1.4.0-alpha-5.1 (2026-05-14)** — §3.1, §3.2, §3.4 live on staging with 12/12 smoke green. **Sprint 3 batch 2 on `dev`** completes §3.3 (HelpFeedback UI), §3.5 (implicit signals — followUpWithin60s + docLinkClicked from §3.2), §3.6 (`/help/feedback` upsert endpoint + GET), §3.7 (public browse pages at `/help` and `/help/:slug` with backend endpoints), §3.8 (E2E spec `help-basic.spec.js` — 3 scenarios). **§3.1–§3.8 all done**. Prompt at `help.v3`. 10/10 user-supplied backlog questions ingested. §2.8 acceptance items (manual smoke, outage simulations, Admin Health UI) carry over and close naturally once Sprint 3 batch 2 lands on staging. Sprint 3 acceptance (§3.9) effectively complete pending the next /stage + staging E2E run.
-**Last updated:** 2026-05-14
+**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); Sprint 2 + Sprint 3 deployed to staging as v1.4.0-alpha-5.3 (2026-05-15). **Sprint 3 — COMPLETE** — §3.1 Guide drawer help input, §3.2 help thread + answer with link tracking, §3.3 HelpFeedback UI, §3.4 helpStore (zustand), §3.5 implicit signals (followUpWithin60s + docLinkClicked), §3.6 `/help/feedback` upsert + GET endpoints, §3.7 public browse pages at `/help` and `/help/:slug`, §3.8 E2E spec `help-basic.spec.js` (3 scenarios green on staging), §3.9 acceptance ratified. Prompt at `help.v3`. 10/10 user-supplied backlog questions ingested. §2.8 acceptance items (manual smoke, outage simulations, Admin Health UI) carry over to Sprint 4 alongside the curation/metrics work.
+**Last updated:** 2026-05-15
 **Companion to:** `Help_System_Plan.md`
 
 This is the checkbox-form task tracker for the Help System implementation. The architectural rationale for each item lives in `Help_System_Plan.md`. Check items off as they ship.
@@ -365,13 +365,13 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [x] Note on test granularity: we bundle "thumbs-up → thumbs-down → category → flip-back" into the unit suite (HelpFeedback.test.jsx — 13 cases) rather than the E2E. Running 4× ask-then-flip rotations against real `gpt-4o-mini` per spec bullet would multiply E2E runtime by ~4× and add OpenAI cost per CI run. The E2E covers wire-up; the granular state machine is unit-tested.
 - [x] Spec uses 120s timeout for the OpenAI-streaming scenario (sign-up + 3.5s anti-bot guard + GPT response budget) and 30s for the static-page scenarios.
 
-### 3.9 Sprint 3 acceptance — IN PROGRESS (closes after Sprint 3 batch 2 deploys)
+### 3.9 Sprint 3 acceptance — COMPLETE (v1.4.0-alpha-5.3 on staging, 2026-05-15)
 
-- [ ] Guide drawer fully wired; can ask and feedback round-trips
-- [ ] Public browse pages live and styled
-- [ ] E2E happy path green
-- [ ] Component tests green
-- [ ] Ready for `/stage` and broader QA
+- [x] Guide drawer fully wired; can ask and feedback round-trips (E2E §3.8 scenario 1 green on staging)
+- [x] Public browse pages live and styled (E2E §3.8 scenarios 2+3 green on staging)
+- [x] E2E happy path green — `help-basic.spec.js` 3/3 against staging
+- [x] Component tests green — 436/436 frontend + 1812/1812 backend
+- [x] Ready for `/stage` and broader QA — deployed to staging in v1.4.0-alpha-5.3
 
 ---
 
