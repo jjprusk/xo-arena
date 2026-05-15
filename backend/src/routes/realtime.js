@@ -503,6 +503,12 @@ router.post('/tables', async (req, res) => {
 
     return res.json({
       slug:        result.slug,
+      // Surface the canonical Table.id directly so the client doesn't need
+      // a follow-up `/rt/tables/:slug/join` solely to discover it. This is
+      // the cheapest slice of the Future_Ideas PlayVsBot start-flow fix:
+      // removes one full HTTP round-trip (~170 ms in the prod trace) from
+      // the warm-anon vs-community-bot landing path.
+      tableId:     result.table?.id ?? null,
       label:       result.label,
       mark:        result.mark,
       action:      result.action ?? 'created',
