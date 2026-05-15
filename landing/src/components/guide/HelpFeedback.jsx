@@ -227,7 +227,6 @@ export default function HelpFeedback({ turn }) {
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                onBlur={onCommentSave}
                 placeholder="Anything else you want to share?"
                 rows={2}
                 maxLength={2000}
@@ -240,6 +239,44 @@ export default function HelpFeedback({ turn }) {
                   color:      'var(--text-primary)',
                 }}
               />
+              <div className="flex items-center gap-1.5 self-end">
+                <button
+                  type="button"
+                  onClick={() => { setComment(''); setCommentOpen(false) }}
+                  disabled={busy}
+                  data-testid="comment-cancel"
+                  className="text-[11px] px-2 py-0.5 rounded-md font-medium"
+                  style={{
+                    background: 'transparent',
+                    color:      'var(--text-muted)',
+                    border:     '1px solid var(--border-default)',
+                    cursor:     busy ? 'default' : 'pointer',
+                    opacity:    busy ? 0.6 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={onCommentSave}
+                  disabled={busy || comment.trim().length === 0}
+                  data-testid="comment-save"
+                  className="text-[11px] px-2 py-0.5 rounded-md font-medium"
+                  style={{
+                    background: comment.trim().length > 0 && !busy
+                      ? 'var(--color-blue-50)'
+                      : 'transparent',
+                    color: comment.trim().length > 0 && !busy
+                      ? 'var(--color-blue-700)'
+                      : 'var(--text-muted)',
+                    border:  '1px solid var(--border-default)',
+                    cursor:  comment.trim().length > 0 && !busy ? 'pointer' : 'default',
+                    opacity: busy ? 0.6 : 1,
+                  }}
+                >
+                  Save
+                </button>
+              </div>
             </>
           )}
         </div>

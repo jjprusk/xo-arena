@@ -1,6 +1,6 @@
 {
   "name": "@xo-arena/tournament-svc",
-  "version": "1.4.0-alpha-5.4",
+  "version": "1.4.0-alpha-5.5",
   "private": true,
   "type": "module",
   "scripts": {
