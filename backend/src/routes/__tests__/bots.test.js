@@ -52,7 +52,7 @@ vi.mock('../../services/creditService.js', () => ({
 }))
 
 vi.mock('../../utils/cache.js', () => ({
-  default: { get: vi.fn(), set: vi.fn(), invalidate: vi.fn() },
+  default: { get: vi.fn(), set: vi.fn(), invalidate: vi.fn(), invalidatePrefix: vi.fn() },
 }))
 
 // hasRole from ../../utils/roles.js is NOT mocked — runs real
@@ -199,25 +199,63 @@ describe('GET /api/v1/bots', () => {
     expect(getTierLimit).not.toHaveBeenCalled()
   })
 
-  it('gameId filter → returns only bots whose playableGameIds include that game; bypasses cache', async () => {
+  it('gameId filter cache MISS → DB call + cache.set under per-gameId key', async () => {
+    // Cache miss: cache.get returns null, route falls through to listBots
+    // and stores the filtered result under `bots:gameId:<x>`.
+    cache.get.mockReturnValue(null)
     listBots.mockResolvedValue([
       { id: 'bot_xo_a',  displayName: 'A', playableGameIds: ['xo'] },
       { id: 'bot_xo_b',  displayName: 'B', playableGameIds: ['xo', 'connect4'] },
       { id: 'bot_other', displayName: 'C', playableGameIds: ['connect4'] },
       { id: 'bot_none',  displayName: 'D', playableGameIds: [] },
     ])
-    cache.get.mockReturnValue('SHOULD-NOT-BE-USED')
 
     const res = await request(app).get('/api/v1/bots?gameId=xo')
 
     expect(res.status).toBe(200)
     expect(res.body.bots).toHaveLength(2)
     expect(res.body.bots.map(b => b.id)).toEqual(['bot_xo_a', 'bot_xo_b'])
-    // Cache untouched
+    expect(res.headers['x-cache']).toBe('MISS')
+    // The cached value is the *filtered* list, not the full bot table.
+    expect(cache.set).toHaveBeenCalledWith(
+      'bots:gameId:xo',
+      [
+        expect.objectContaining({ id: 'bot_xo_a' }),
+        expect.objectContaining({ id: 'bot_xo_b' }),
+      ],
+      60_000,
+    )
+  })
+
+  it('gameId filter cache HIT → returns cached bots, no listBots call', async () => {
+    const cached = [{ id: 'bot_cached', displayName: 'Cached', playableGameIds: ['xo'] }]
+    cache.get.mockImplementation(key => (key === 'bots:gameId:xo' ? cached : null))
+
+    const res = await request(app).get('/api/v1/bots?gameId=xo')
+
+    expect(res.status).toBe(200)
+    expect(res.body.bots).toEqual(cached)
+    expect(res.headers['x-cache']).toBe('HIT')
+    expect(listBots).not.toHaveBeenCalled()
+  })
+
+  it('gameId filter with includeInactive=true bypasses cache entirely', async () => {
+    // Admin path: skip cache so an admin querying inactive bots gets a
+    // fresh result and doesn't bloat the key space.
+    listBots.mockResolvedValue([{ id: 'bot_a', playableGameIds: ['xo'], botActive: false }])
+    cache.get.mockReturnValue('SHOULD-NOT-BE-USED')
+
+    const res = await request(app).get('/api/v1/bots?gameId=xo&includeInactive=true')
+
+    expect(res.status).toBe(200)
+    expect(listBots).toHaveBeenCalledWith(expect.objectContaining({ includeInactive: true }))
+    // Neither get nor set should fire for the gameId key when admin is asking.
     expect(cache.set).not.toHaveBeenCalled()
+    expect(res.headers['x-cache']).toBeUndefined()
   })
 
   it('gameId filter with no matching skills → empty list', async () => {
+    cache.get.mockReturnValue(null)
     listBots.mockResolvedValue([
       { id: 'bot_a', playableGameIds: ['xo'] },
     ])
@@ -383,7 +421,7 @@ describe('POST /api/v1/bots', () => {
 
     expect(res.status).toBe(201)
     expect(res.body.bot).toEqual(newBot)
-    expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+    expect(cache.invalidatePrefix).toHaveBeenCalledWith('bots:')
     // ownerBaId must be the BA user ID so the gym's ownership check passes
     expect(createBot).toHaveBeenCalledWith('usr_1', expect.objectContaining({ ownerBaId: 'ba_user_1' }))
     expect(getTierLimit).toHaveBeenCalledWith('usr_1', 'bots')
@@ -618,7 +656,7 @@ describe('PATCH /api/v1/bots/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.bot.displayName).toBe('NewName')
-    expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+    expect(cache.invalidatePrefix).toHaveBeenCalledWith('bots:')
   })
 
   it('empty displayName → 400', async () => {
@@ -842,7 +880,7 @@ describe('DELETE /api/v1/bots/:id', () => {
     // botId sweep always runs; id-scoped sweep only when botModelId set
     expect(txSkillDeleteMany).toHaveBeenCalledTimes(1)
     expect(txSkillDeleteMany).toHaveBeenCalledWith({ where: { botId: 'bot_1' } })
-    expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+    expect(cache.invalidatePrefix).toHaveBeenCalledWith('bots:')
   })
 
   it('deletes bot with model → both botId and id sweeps run inside transaction', async () => {
@@ -941,7 +979,7 @@ describe('POST /api/v1/bots/:id/skills', () => {
       where: { id: 'bot_1' },
       data:  { botModelId: 'skill_new', botModelType: 'minimax' },
     })
-    expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+    expect(cache.invalidatePrefix).toHaveBeenCalledWith('bots:')
   })
 
   it('idempotent: existing skill for (botId, gameId) → 200, created:false, no create, no botModelId update', async () => {
@@ -1061,7 +1099,7 @@ describe('DELETE /api/v1/bots/:id/skills/:skillId', () => {
     expect(res.status).toBe(204)
     expect(txDelete).toHaveBeenCalledWith({ where: { id: 'skill_c4' } })
     expect(txUserUpdate).not.toHaveBeenCalled()
-    expect(cache.invalidate).toHaveBeenCalledWith('bots:public')
+    expect(cache.invalidatePrefix).toHaveBeenCalledWith('bots:')
   })
 
   it('deletes the primary skill, repoints botModelId to remaining skill', async () => {

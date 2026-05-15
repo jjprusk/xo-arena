@@ -11,6 +11,7 @@ vi.mock('../../utils/cache.js', () => ({
     get: vi.fn(),
     set: vi.fn(),
     invalidate: vi.fn(),
+    invalidatePrefix: vi.fn(),
   },
 }))
 
