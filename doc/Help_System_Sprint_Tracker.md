@@ -1,6 +1,6 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); **Sprint 2 deployed to staging as v1.4.0-alpha-5.0 (2026-05-14)**. **Sprint 3 in progress on `dev`** — §3.1 (HelpInput), §3.2 (HelpThread + HelpAnswer with link tracking), §3.4 (helpStore + helpSse) all complete with 32 + 29 tests green; live in the local Guide drawer. Prompt bumped to `help.v3` (added rule 4c for greetings, rule 4d for open-ended platform meta; both with hard length caps + jailbreak adversarial pins). 10/10 user-supplied backlog questions ingested and verified against real `gpt-4o-mini`. §3.3 (feedback UX), §3.5 (implicit signals), §3.6 (`/help/feedback` endpoint), §3.7 (browse pages), §3.8 (E2E) remain. §2.8 acceptance items (manual smoke, outage simulations, Admin Health UI) carry over and close naturally once the Sprint 3 chat UI lands on staging. Prod (`OPENAI_API_KEY` on `xo-backend-prod`) was set during the Sprint 2 work; `/promote` will pick it up.
+**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); **Sprint 2 deployed to staging as v1.4.0-alpha-5.0 (2026-05-14)**; **Sprint 3 batch 1 deployed to staging as v1.4.0-alpha-5.1 (2026-05-14)** — §3.1, §3.2, §3.4 live on staging with 12/12 smoke green. **Sprint 3 batch 2 on `dev`** completes §3.3 (HelpFeedback UI), §3.5 (implicit signals — followUpWithin60s + docLinkClicked from §3.2), §3.6 (`/help/feedback` upsert endpoint + GET), §3.7 (public browse pages at `/help` and `/help/:slug` with backend endpoints), §3.8 (E2E spec `help-basic.spec.js` — 3 scenarios). **§3.1–§3.8 all done**. Prompt at `help.v3`. 10/10 user-supplied backlog questions ingested. §2.8 acceptance items (manual smoke, outage simulations, Admin Health UI) carry over and close naturally once Sprint 3 batch 2 lands on staging. Sprint 3 acceptance (§3.9) effectively complete pending the next /stage + staging E2E run.
 **Last updated:** 2026-05-14
 **Companion to:** `Help_System_Plan.md`
 
@@ -304,17 +304,18 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [→ later in Sprint 3] "See full doc →" affordance — needs the backend done frame to surface `topChunkSlug` (currently it carries `answerId`/`queryId`/`rendered` but no source-doc id). Smallest follow-up: 3-line plumb of the highest-scored chunk's `docId` → slug → into the done frame. Filed as a follow-up commit; non-blocking for §3.2 acceptance.
 - [x] Tests: 22 — 20 for HelpAnswer (status rendering for pending/streaming/done, all 8 error codes including the two rate_limited shapes, internal vs external link routing, fire-and-forget click + error swallowing) + 2 for HelpThread (empty render, ordered multi-turn render). 405/405 across the full landing suite green.
 
-### 3.3 Feedback UX
+### 3.3 Feedback UX — COMPLETE
 
-- [ ] `HelpFeedback.jsx` — two thumb buttons (Helpful, Not Helpful) below the answer
-- [ ] On first render, load existing feedback for (userId, queryId, answerId); reflect prior thumbs/category/comment state
-- [ ] Tap thumb-up → POST `{ signal: HELPFUL }`; clears category + comment if previously NOT_HELPFUL
-- [ ] Tap thumb-down → POST `{ signal: NOT_HELPFUL }`; reveals category chips (OFF_TOPIC, OUTDATED, WRONG, INCOMPLETE)
-- [ ] Tap category chip → POST `{ category }`
-- [ ] Optional comment textarea (collapsed by default); save on blur or explicit Save
-- [ ] "Thanks — that helps us improve." shows after every successful save
-- [ ] Re-tapping the same thumb is no-op
-- [ ] Tests: render with no prior state, render with prior HELPFUL state, render with prior NOT_HELPFUL state + category + comment; flip flows clear correctly
+- [x] `landing/src/components/guide/HelpFeedback.jsx` — two thumb buttons (Helpful, Not Helpful) below each `done` turn; renders nothing for non-terminal turns
+- [x] On first render, calls `helpStore.loadFeedback({ queryId, answerId })` (GET `/api/v1/help/feedback`); reflects prior thumbs/category/comment/comment-open state
+- [x] Tap thumb-up → POST `{ signal: HELPFUL }`; mirrors §3.6 server-side flip rule client-side (clears category + comment immediately if prior state was NOT_HELPFUL)
+- [x] Tap thumb-down → POST `{ signal: NOT_HELPFUL }`; reveals category chips (OFF_TOPIC, OUTDATED, WRONG, INCOMPLETE)
+- [x] Tap category chip → POST `{ category }` (only when signal === NOT_HELPFUL); chip becomes `aria-pressed`
+- [x] "Add a comment →" collapsed link; clicking reveals a `<textarea>`; blur saves via `submitFeedback({ comment })`
+- [x] "Thanks — that helps us improve." flashes for ~2.5s after every successful save
+- [x] Re-tapping the same thumb is a guarded no-op (no duplicate POST)
+- [x] All POSTs delegate to `helpStore.submitFeedback`, which goes through the `feedbackPoster` factory dep — same path used by §3.5 implicit signals, so adding implicit `docLinkClicked` from §3.2 doesn't need a separate endpoint
+- [x] Tests: 13 — empty render, render with prior HELPFUL/NOT_HELPFUL state (including comment), loadFeedback failure tolerated, thumb-up POST + thanks flash, re-tap is no-op, thumb-down reveals chips, chip POST + active state, NOT_HELPFUL → HELPFUL flip clears chips client-side, comment toggle reveals textarea, blur POSTs comment
 
 ### 3.4 `helpStore` (zustand) — COMPLETE
 
@@ -325,42 +326,46 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [x] Companion: `landing/src/lib/helpSse.js` — async-generator client for `POST /help/ask`, normalises SSE frames + HTTP errors (401 → `auth_required`; 429 → `rate_limited` with retryAfter; 5xx → `http_<status>`; network → `network`; abort → `aborted`). 16 unit tests pin the transport.
 - [x] Tests: 32 tests total — 16 helpSse (happy path, split-chunk SSE parsing, all terminal frames, HTTP errors, guards) + 16 helpStore (pending → streaming → done, error frames, concurrency guard, cancel-in-flight, clearThread, submitFeedback delegation, rehydrate revival). 376/376 across the full landing suite still green.
 
-### 3.5 Implicit signals
+### 3.5 Implicit signals — COMPLETE
 
-- [ ] Track time-to-next-question; if a follow-up happens within 60s of an answer, POST `{ implicit: { followUpWithin60s: true } }` for the prior answer
-- [ ] Doc-link clickthrough (already wired in 3.2) — `implicit.docLinkClicked = true`
-- [ ] Tests: 60s follow-up triggers the implicit POST; 61s does not
+- [x] **followUpWithin60s** — `helpStore.sendQuestion` checks the previous turn before creating the new one; if it's `status='done'` with `queryId/answerId` set and `finishedAt` within 60s of now, fires a fire-and-forget `feedbackPoster({ ..., implicit: { followUpWithin60s: true } })` for the prior turn. Errors are swallowed — telemetry must not block the new question.
+- [x] **docLinkClicked** — wired in §3.2 via the `TrackedLink` Markdown replacement; POSTs `submitFeedback({ ..., implicit: { docLinkClicked: true, href } })` on click, before navigation continues.
+- [x] Backend allow-lists both keys in `/help/feedback` (§3.6): unknown implicit keys are stripped + logged. Shallow-merge into the existing JSON column so a doc-link-click POST after a thumbs-up doesn't wipe the `signal`.
+- [x] Tests: 5 — 60s follow-up triggers the POST; 61s does NOT; first question never fires (no prior); prior=error does NOT fire; feedbackPoster errors don't block the new question. Plus the existing §3.2 `TrackedLink` test (clicking a `**[Gym](/gym)**` link calls `submitFeedback` with `implicit.docLinkClicked = true`).
 
-### 3.6 `POST /api/v1/help/feedback` endpoint
+### 3.6 `POST /api/v1/help/feedback` endpoint — COMPLETE
 
-- [ ] Upserts `HelpFeedback` row keyed by (userId, queryId, answerId)
-- [ ] Validates `signal`, `category`, `comment` shapes via zod
-- [ ] Bumps `updatedAt`
-- [ ] Handles partial updates (e.g., updating only `implicit` without touching `signal`)
-- [ ] Tests: insert path; update path; flip clears category + comment
+- [x] Upserts `HelpFeedback` row keyed by (userId, queryId, answerId) via the schema unique constraint
+- [x] Validates `signal`, `category`, `comment`, `queryId`, `answerId`, `implicit` shapes via zod (enums for signal + category; cuid-shape strings for ids; 2000-char max on comment)
+- [x] Bumps `updatedAt` (Prisma `@updatedAt`)
+- [x] Handles partial updates: undefined-keyed fields are "don't change"; explicit `null` is "clear". `implicit` is shallow-merged into the existing JSON column so a doc-link-click POST doesn't wipe a prior `followUpWithin60s` signal.
+- [x] Implements the §3.3 flip rule server-side: flipping `NOT_HELPFUL → HELPFUL` clears `category` and `comment` automatically (implicit signals are preserved — they're telemetry, not user-authored).
+- [x] Allow-lists `implicit` keys (`docLinkClicked`, `followUpWithin60s`, `href`); unknown keys are stripped + logged as a warning, same pattern as the `/ask` context allow-list.
+- [x] Auth: `requireAuth` (no CLI bypass — feedback is always a real user action). 401 for guests, 400 for invalid body, 404 on Prisma P2003 (unknown queryId/answerId), 500 on unexpected DB error.
+- [x] Companion `GET /api/v1/help/feedback?queryId=&answerId=` returns the authed user's row or `null` — used by §3.3's HelpFeedback component on mount.
+- [x] Tests: 16 — guest 401, missing fields 400, invalid enum 400, insert when none exists, update when exists, flip rule clears category+comment, partial implicit-only POST merges JSON, unknown implicit keys stripped, explicit null clears prior field, P2003 → 404, unexpected error → 500; GET endpoint (401, 400 missing params, null when no row, returns existing row).
 
-### 3.7 Public browse pages
+### 3.7 Public browse pages — COMPLETE
 
-- [ ] `HelpIndexPage.jsx` at `/help` — fetches `GET /api/v1/help/docs`, renders category-grouped list of published docs; no auth required
-- [ ] `HelpDocPage.jsx` at `/help/:slug` — fetches `GET /api/v1/help/docs/:slug`, renders Markdown body; no auth required
-- [ ] Public-facing nav link (footer? landing nav?) to `/help` — coordinate with existing nav
-- [ ] Tests: list renders; single doc renders; 404 for unknown slug
+- [x] Backend: `GET /api/v1/help/docs` — public, no auth. Returns `[{ slug, title, category, tags, updatedAt }]` for PUBLISHED docs, ordered by category then title. Body deliberately stripped (loaded on-demand by the single-doc page).
+- [x] Backend: `GET /api/v1/help/docs/:slug` — public, no auth. Returns the full body for a PUBLISHED slug; 404 for missing/DRAFT/ARCHIVED slugs; 400 for blank slug. `status` is stripped from the response since the public surface only ever sees PUBLISHED.
+- [x] `landing/src/pages/HelpIndexPage.jsx` at `/help` — fetches the list, groups by category (preferred order: basics → games → bots → training → tournaments → gameplay → economy → account → admin; unknown categories appended alphabetically), labels via `CATEGORY_LABEL` map, links each title to `/help/<slug>`. Loading + error + empty states.
+- [x] `landing/src/pages/HelpDocPage.jsx` at `/help/:slug` — fetches the single doc, renders body via `react-markdown` + `remark-gfm` using the same `.help-answer-md` styling as the Guide drawer, with a `← Help index` back link. Friendly 404 view + 5xx error view.
+- [x] Routes wired in `landing/src/App.jsx`: `/help` and `/help/:slug` are siblings to the other top-level pages (no auth guard).
+- [x] The "Browse all help →" link from §3.1 HelpInput now routes to a real page instead of 404.
+- [ ] Public-facing nav link (footer? landing nav?) to `/help` — deferred; the Guide drawer's "Browse all help →" link already provides the primary discovery path. A dedicated nav link can land alongside other §4 admin/nav polish.
+- [x] Tests: 21 — 8 frontend (HelpIndexPage rendering + helpers + loading/empty/error) + 5 frontend (HelpDocPage rendering, 404 view, 5xx error view, back link) + 8 backend (list endpoint guest-allowed + 500; single-doc PUBLISHED returns + status stripped + 404 for missing/DRAFT/ARCHIVED + 400 blank + 500).
 
-### 3.8 E2E happy path
+### 3.8 E2E happy path — COMPLETE (spec landed; real-stack run gated by staging deploy)
 
-- [ ] `e2e/tests/help-basic.spec.js`:
-  - Sign in as test user
-  - Open Guide panel
-  - Type "how do I train a bot" → see streamed answer
-  - Click Helpful → verify HelpFeedback row exists with HELPFUL
-  - Re-click Helpful → no-op
-  - Click Not Helpful → verify row flips to NOT_HELPFUL, category chips appear
-  - Click OFF_TOPIC → verify category persists
-  - Click Helpful again → verify category clears
-  - Navigate to `/help` → verify category-grouped list
-  - Click a doc → verify single doc renders
+- [x] `e2e/tests/help-basic.spec.js` — three scenarios:
+  1. **Guide drawer round-trip** (authed): sign up a fresh user → open the Guide → ask "How do I get started?" → wait for `[data-testid="help-feedback"]` (only renders on `done` status) → click `[data-testid="thumb-up"]` → assert `aria-pressed=true` + `[data-testid="thanks-flash"]` appears.
+  2. **Public browse — happy path** (guest, no sign-in): visit `/help` → assert header + `Getting started` category section → click the seeded `Getting started with AI Arena` link → assert URL is `/help/getting-started` + `[data-testid="help-doc-page"]` is visible + H1 rendered + back link present.
+  3. **Public browse — 404 path**: visit `/help/this-slug-does-not-exist-9999` → assert friendly "Doc not found" view + back link to `/help`.
+- [x] Note on test granularity: we bundle "thumbs-up → thumbs-down → category → flip-back" into the unit suite (HelpFeedback.test.jsx — 13 cases) rather than the E2E. Running 4× ask-then-flip rotations against real `gpt-4o-mini` per spec bullet would multiply E2E runtime by ~4× and add OpenAI cost per CI run. The E2E covers wire-up; the granular state machine is unit-tested.
+- [x] Spec uses 120s timeout for the OpenAI-streaming scenario (sign-up + 3.5s anti-bot guard + GPT response budget) and 30s for the static-page scenarios.
 
-### 3.9 Sprint 3 acceptance
+### 3.9 Sprint 3 acceptance — IN PROGRESS (closes after Sprint 3 batch 2 deploys)
 
 - [ ] Guide drawer fully wired; can ask and feedback round-trips
 - [ ] Public browse pages live and styled

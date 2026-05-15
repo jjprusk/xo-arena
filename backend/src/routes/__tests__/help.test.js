@@ -52,6 +52,21 @@ vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+// db mock — feedback routes use db.helpFeedback. §3.7 public browse
+// routes use db.helpDoc. Each test stubs the behaviour it needs.
+const dbHelpFeedback = {
+  findUnique: vi.fn(),
+  create:     vi.fn(),
+  update:     vi.fn(),
+}
+const dbHelpDoc = {
+  findMany:   vi.fn(),
+  findUnique: vi.fn(),
+}
+vi.mock('../../lib/db.js', () => ({
+  default: { helpFeedback: dbHelpFeedback, helpDoc: dbHelpDoc },
+}))
+
 const helpRouter = (await import('../help.js')).default
 const { ask: askMock } = await import('../../services/help/helpService.js')
 const { _resetHelpRateLimitState, HELP_PER_MINUTE_LIMIT } =
@@ -82,6 +97,11 @@ beforeEach(() => {
   isCliBypass = false
   askScenario = null
   askMock.mockClear()
+  dbHelpFeedback.findUnique.mockReset()
+  dbHelpFeedback.create.mockReset()
+  dbHelpFeedback.update.mockReset()
+  dbHelpDoc.findMany.mockReset()
+  dbHelpDoc.findUnique.mockReset()
   // Sprint 2 §2.5 — limiter has module-level state. Clear between tests
   // so the same AUTHED_USER_ID doesn't accumulate hits across cases.
   _resetHelpRateLimitState()
@@ -296,5 +316,290 @@ describe('POST /api/v1/help/ask — rate limiter (§2.5)', () => {
       const res = await request(app).post('/api/v1/help/ask').send({ question: 'q' })
       expect(res.status, `cli request ${i + 1}`).toBe(200)
     }
+  })
+})
+
+describe('POST /api/v1/help/feedback (§3.6)', () => {
+  it('returns 401 for guests', async () => {
+    isGuest = true
+    const res = await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', signal: 'HELPFUL' })
+    expect(res.status).toBe(401)
+    expect(dbHelpFeedback.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('400 on missing queryId or answerId', async () => {
+    const res = await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ signal: 'HELPFUL' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_request')
+  })
+
+  it('400 on invalid enum value (signal=YOLO)', async () => {
+    const res = await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', signal: 'YOLO' })
+    expect(res.status).toBe(400)
+  })
+
+  it('inserts a new HelpFeedback row when none exists', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce(null)
+    dbHelpFeedback.create.mockResolvedValueOnce({
+      id: 'fb-1', userId: AUTHED_USER_ID, queryId: 'q-1', answerId: 'a-1',
+      signal: 'HELPFUL', category: null, comment: null, implicit: {},
+    })
+    const res = await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', signal: 'HELPFUL' })
+    expect(res.status).toBe(200)
+    expect(res.body.feedback.id).toBe('fb-1')
+    expect(dbHelpFeedback.create).toHaveBeenCalledOnce()
+    const { data } = dbHelpFeedback.create.mock.calls[0][0]
+    expect(data).toMatchObject({
+      userId: AUTHED_USER_ID, queryId: 'q-1', answerId: 'a-1',
+      signal: 'HELPFUL', category: null, comment: null, implicit: {},
+    })
+  })
+
+  it('updates an existing row when one exists', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce({
+      id: 'fb-1', userId: AUTHED_USER_ID, queryId: 'q-1', answerId: 'a-1',
+      signal: 'HELPFUL', category: null, comment: null, implicit: {},
+    })
+    dbHelpFeedback.update.mockResolvedValueOnce({
+      id: 'fb-1', signal: 'NOT_HELPFUL', category: null, comment: null, implicit: {},
+    })
+    const res = await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', signal: 'NOT_HELPFUL' })
+    expect(res.status).toBe(200)
+    expect(dbHelpFeedback.update).toHaveBeenCalledOnce()
+    expect(dbHelpFeedback.update.mock.calls[0][0].data.signal).toBe('NOT_HELPFUL')
+  })
+
+  it('flipping NOT_HELPFUL → HELPFUL clears category + comment (§3.3 rule)', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce({
+      id: 'fb-1', userId: AUTHED_USER_ID, queryId: 'q-1', answerId: 'a-1',
+      signal: 'NOT_HELPFUL', category: 'WRONG', comment: 'this was off-base',
+      implicit: { docLinkClicked: true },
+    })
+    dbHelpFeedback.update.mockResolvedValueOnce({})
+    await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', signal: 'HELPFUL' })
+    const { data } = dbHelpFeedback.update.mock.calls[0][0]
+    expect(data.signal).toBe('HELPFUL')
+    expect(data.category).toBeNull()
+    expect(data.comment).toBeNull()
+    // Implicit signals are preserved across the flip — they're transport
+    // telemetry, not user-authored content.
+    expect(data.implicit).toEqual({ docLinkClicked: true })
+  })
+
+  it('flipping HELPFUL → NOT_HELPFUL preserves prior category if any', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce({
+      id: 'fb-1', userId: AUTHED_USER_ID, queryId: 'q-1', answerId: 'a-1',
+      signal: 'HELPFUL', category: null, comment: null, implicit: {},
+    })
+    dbHelpFeedback.update.mockResolvedValueOnce({})
+    await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', signal: 'NOT_HELPFUL' })
+    const { data } = dbHelpFeedback.update.mock.calls[0][0]
+    expect(data.signal).toBe('NOT_HELPFUL')
+    // No category to preserve in this case, but the flip rule didn't fire.
+    expect(data.category).toBeNull()
+  })
+
+  it('partial update — implicit-only POST merges into existing implicit json', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce({
+      id: 'fb-1', userId: AUTHED_USER_ID, queryId: 'q-1', answerId: 'a-1',
+      signal: 'HELPFUL', category: null, comment: null,
+      implicit: { docLinkClicked: true },
+    })
+    dbHelpFeedback.update.mockResolvedValueOnce({})
+    await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', implicit: { followUpWithin60s: true } })
+    const { data } = dbHelpFeedback.update.mock.calls[0][0]
+    // Signal/category/comment unchanged.
+    expect(data.signal).toBe('HELPFUL')
+    expect(data.category).toBeNull()
+    expect(data.comment).toBeNull()
+    // implicit merged.
+    expect(data.implicit).toEqual({
+      docLinkClicked: true,
+      followUpWithin60s: true,
+    })
+  })
+
+  it('strips unknown implicit keys and logs a warning', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce(null)
+    dbHelpFeedback.create.mockResolvedValueOnce({})
+    await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({
+        queryId: 'q-1', answerId: 'a-1',
+        implicit: { docLinkClicked: true, sneaky: 'value', alsoSneaky: 'value' },
+      })
+    const { data } = dbHelpFeedback.create.mock.calls[0][0]
+    expect(data.implicit).toEqual({ docLinkClicked: true })
+    expect(data.implicit.sneaky).toBeUndefined()
+  })
+
+  it('explicit null clears the prior field (signal, category, or comment)', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce({
+      id: 'fb-1', userId: AUTHED_USER_ID, queryId: 'q-1', answerId: 'a-1',
+      signal: 'NOT_HELPFUL', category: 'WRONG', comment: 'meh', implicit: {},
+    })
+    dbHelpFeedback.update.mockResolvedValueOnce({})
+    await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', category: null })
+    const { data } = dbHelpFeedback.update.mock.calls[0][0]
+    expect(data.category).toBeNull()
+    // Signal + comment untouched.
+    expect(data.signal).toBe('NOT_HELPFUL')
+    expect(data.comment).toBe('meh')
+  })
+
+  it('returns 404 on Prisma P2003 (queryId/answerId not real)', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce(null)
+    const err = new Error('FK violation')
+    err.code = 'P2003'
+    dbHelpFeedback.create.mockRejectedValueOnce(err)
+    const res = await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-ghost', answerId: 'a-ghost', signal: 'HELPFUL' })
+    expect(res.status).toBe(404)
+    expect(res.body.error).toBe('unknown_query_or_answer')
+  })
+
+  it('returns 500 on unexpected db error', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce(null)
+    dbHelpFeedback.create.mockRejectedValueOnce(new Error('boom'))
+    const res = await request(makeApp())
+      .post('/api/v1/help/feedback')
+      .send({ queryId: 'q-1', answerId: 'a-1', signal: 'HELPFUL' })
+    expect(res.status).toBe(500)
+  })
+})
+
+describe('GET /api/v1/help/feedback (§3.6)', () => {
+  it('returns 401 for guests', async () => {
+    isGuest = true
+    const res = await request(makeApp())
+      .get('/api/v1/help/feedback?queryId=q-1&answerId=a-1')
+    expect(res.status).toBe(401)
+  })
+
+  it('400 on missing queryId or answerId', async () => {
+    const res = await request(makeApp())
+      .get('/api/v1/help/feedback')
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('missing_query_params')
+  })
+
+  it('returns null when no row exists', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce(null)
+    const res = await request(makeApp())
+      .get('/api/v1/help/feedback?queryId=q-1&answerId=a-1')
+    expect(res.status).toBe(200)
+    expect(res.body.feedback).toBeNull()
+  })
+
+  it('returns the existing row when one exists for the authed user', async () => {
+    dbHelpFeedback.findUnique.mockResolvedValueOnce({
+      id: 'fb-1', signal: 'HELPFUL', category: null, comment: null, implicit: {},
+    })
+    const res = await request(makeApp())
+      .get('/api/v1/help/feedback?queryId=q-1&answerId=a-1')
+    expect(res.status).toBe(200)
+    expect(res.body.feedback.id).toBe('fb-1')
+  })
+})
+
+describe('GET /api/v1/help/docs — public browse (§3.7)', () => {
+  it('returns PUBLISHED docs (no auth required)', async () => {
+    isGuest = true  // explicitly guest — endpoint must allow
+    dbHelpDoc.findMany.mockResolvedValueOnce([
+      { slug: 'a', title: 'A',  category: 'basics',  tags: ['x'], updatedAt: new Date() },
+      { slug: 'b', title: 'B',  category: 'bots',    tags: ['y'], updatedAt: new Date() },
+    ])
+    const res = await request(makeApp()).get('/api/v1/help/docs')
+    expect(res.status).toBe(200)
+    expect(res.body.docs).toHaveLength(2)
+    expect(res.body.docs[0]).toMatchObject({ slug: 'a', title: 'A', category: 'basics' })
+    // Body is NOT included in the list response.
+    expect(res.body.docs[0].body).toBeUndefined()
+    // Filter args: status PUBLISHED, ordered by category then title.
+    const args = dbHelpDoc.findMany.mock.calls[0][0]
+    expect(args.where).toEqual({ status: 'PUBLISHED' })
+    expect(args.orderBy).toEqual([{ category: 'asc' }, { title: 'asc' }])
+  })
+
+  it('returns 500 on db error', async () => {
+    dbHelpDoc.findMany.mockRejectedValueOnce(new Error('db down'))
+    const res = await request(makeApp()).get('/api/v1/help/docs')
+    expect(res.status).toBe(500)
+  })
+})
+
+describe('GET /api/v1/help/docs/:slug — public browse (§3.7)', () => {
+  it('returns the doc body for a PUBLISHED slug (no auth required)', async () => {
+    isGuest = true
+    dbHelpDoc.findUnique.mockResolvedValueOnce({
+      slug: 'getting-started', title: 'Getting started', body: '# Hello', category: 'basics',
+      tags: ['onboarding'], status: 'PUBLISHED', updatedAt: new Date(),
+    })
+    const res = await request(makeApp()).get('/api/v1/help/docs/getting-started')
+    expect(res.status).toBe(200)
+    expect(res.body.doc).toMatchObject({
+      slug: 'getting-started', title: 'Getting started', body: '# Hello',
+      category: 'basics', tags: ['onboarding'],
+    })
+    // Status is stripped — clients only ever see PUBLISHED here.
+    expect(res.body.doc.status).toBeUndefined()
+  })
+
+  it('404 for unknown slug', async () => {
+    dbHelpDoc.findUnique.mockResolvedValueOnce(null)
+    const res = await request(makeApp()).get('/api/v1/help/docs/missing')
+    expect(res.status).toBe(404)
+    expect(res.body.error).toBe('not_found')
+  })
+
+  it('404 for DRAFT slug (status hides from public surface)', async () => {
+    dbHelpDoc.findUnique.mockResolvedValueOnce({
+      slug: 'wip', title: 'WIP', body: 'work in progress', category: 'basics',
+      tags: [], status: 'DRAFT', updatedAt: new Date(),
+    })
+    const res = await request(makeApp()).get('/api/v1/help/docs/wip')
+    expect(res.status).toBe(404)
+  })
+
+  it('404 for ARCHIVED slug', async () => {
+    dbHelpDoc.findUnique.mockResolvedValueOnce({
+      slug: 'old', title: 'Old', body: 'old', category: 'basics',
+      tags: [], status: 'ARCHIVED', updatedAt: new Date(),
+    })
+    const res = await request(makeApp()).get('/api/v1/help/docs/old')
+    expect(res.status).toBe(404)
+  })
+
+  it('400 on blank slug', async () => {
+    // Hitting /docs/ would hit a 404 from the router itself rather than
+    // our handler; /docs/%20 sends a literal space which our handler
+    // trims to empty.
+    const res = await request(makeApp()).get('/api/v1/help/docs/%20')
+    expect(res.status).toBe(400)
+  })
+
+  it('500 on db error', async () => {
+    dbHelpDoc.findUnique.mockRejectedValueOnce(new Error('db down'))
+    const res = await request(makeApp()).get('/api/v1/help/docs/x')
+    expect(res.status).toBe(500)
   })
 })

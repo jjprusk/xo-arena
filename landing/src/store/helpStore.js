@@ -95,6 +95,27 @@ async function defaultFeedbackPoster({ queryId, answerId, signal, category, comm
 }
 
 /**
+ * Default feedback loader. GETs the authed user's existing feedback row
+ * for a (queryId, answerId) pair, returning the row or null. The §3.3
+ * UI calls this on mount so it can reflect prior thumb/category/comment
+ * state without forcing the user to redo their click.
+ */
+async function defaultFeedbackLoader({ queryId, answerId }, { token } = {}) {
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const url = `${BASE}/api/v1/help/feedback?queryId=${encodeURIComponent(queryId)}&answerId=${encodeURIComponent(answerId)}`
+  const res = await fetch(url, { method: 'GET', headers })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw Object.assign(new Error(body.error || `feedback GET http ${res.status}`), {
+      status: res.status,
+    })
+  }
+  const body = await res.json()
+  return body?.feedback ?? null
+}
+
+/**
  * Build the zustand creator. Exported separately so tests can construct a
  * fresh store per test without polluting module state.
  *
@@ -105,6 +126,7 @@ async function defaultFeedbackPoster({ queryId, answerId, signal, category, comm
 export function createHelpStoreImpl(deps = {}) {
   const streamer        = deps.streamer        ?? streamHelpAsk
   const feedbackPoster  = deps.feedbackPoster  ?? defaultFeedbackPoster
+  const feedbackLoader  = deps.feedbackLoader  ?? defaultFeedbackLoader
 
   return (set, get) => ({
     thread:           [],
@@ -119,12 +141,41 @@ export function createHelpStoreImpl(deps = {}) {
      * already a turn in flight — the UI is expected to gate via
      * `inFlightTurnId`, this is a defensive belt-and-braces guard.
      *
+     * Sprint 3 §3.5 — if a previous turn finished within 60 seconds, fire
+     * a fire-and-forget `submitFeedback({ implicit: { followUpWithin60s:
+     * true } })` for it. The signal means "the user asked a follow-up
+     * quickly, which often correlates with the prior answer being
+     * incomplete". Errors are swallowed; the new question must not wait.
+     *
      * Returns the new turn's id, or null if the call was rejected.
      */
     async sendQuestion({ question, context, token } = {}) {
       const trimmed = String(question ?? '').trim()
       if (!trimmed) return null
       if (get().inFlightTurnId) return null
+
+      // §3.5 — emit followUpWithin60s for the prior turn if eligible.
+      // We fire BEFORE creating the new turn (so the "prior" lookup is
+      // unambiguous) but don't await — the implicit POST is telemetry,
+      // not a precondition for the new question.
+      const prior = get().thread[get().thread.length - 1]
+      if (prior
+          && prior.status === TURN_STATUS.DONE
+          && prior.queryId
+          && prior.answerId
+          && prior.finishedAt
+          && Date.now() - prior.finishedAt <= 60_000) {
+        try {
+          feedbackPoster(
+            {
+              queryId:  prior.queryId,
+              answerId: prior.answerId,
+              implicit: { followUpWithin60s: true },
+            },
+            { token },
+          ).catch(() => {})
+        } catch {}
+      }
 
       const turn = emptyTurn({ question: trimmed })
       const abort = new AbortController()
@@ -242,6 +293,15 @@ export function createHelpStoreImpl(deps = {}) {
         },
         { token: args.token },
       )
+    },
+
+    /**
+     * GET the authed user's existing feedback row for a (queryId, answerId).
+     * Returns the row or null. Used by §3.3's HelpFeedback component on
+     * mount so the thumbs reflect prior state.
+     */
+    async loadFeedback({ queryId, answerId, token } = {}) {
+      return feedbackLoader({ queryId, answerId }, { token })
     },
 
     clearThread() {
