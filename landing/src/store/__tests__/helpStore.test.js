@@ -194,6 +194,109 @@ describe('helpStore — cancelInFlight', () => {
   })
 })
 
+describe('helpStore — §3.5 implicit followUpWithin60s', () => {
+  it('fires followUpWithin60s for the prior turn when next question arrives within 60s', async () => {
+    const streamer = vi.fn(async function* () { yield { kind: 'done', rendered: 'a' } })
+    const feedbackPoster = vi.fn(async () => ({}))
+    const store = makeStore({ streamer, feedbackPoster })
+
+    // First turn done.
+    await store.getState().sendQuestion({ question: 'q1' })
+    const prior = store.getState().thread[0]
+    expect(prior.status).toBe(TURN_STATUS.DONE)
+    expect(prior.finishedAt).toBeTruthy()
+
+    // Inject queryId/answerId since the canned done frame didn't include
+    // them — needed for the followUpWithin60s POST to fire.
+    useHelpStoreLike(store, t => ({ ...t, queryId: 'q-1', answerId: 'a-1' }))
+
+    // Now ask a follow-up immediately (well within 60s).
+    feedbackPoster.mockClear()
+    await store.getState().sendQuestion({ question: 'q2' })
+
+    // Implicit POST fired for the prior turn — fire-and-forget so we
+    // don't await it; just verify the call shape.
+    expect(feedbackPoster).toHaveBeenCalled()
+    const [body] = feedbackPoster.mock.calls[0]
+    expect(body).toMatchObject({
+      queryId:  'q-1',
+      answerId: 'a-1',
+      implicit: { followUpWithin60s: true },
+    })
+  })
+
+  it('does NOT fire followUpWithin60s when prior turn finished more than 60s ago', async () => {
+    const streamer = vi.fn(async function* () { yield { kind: 'done', rendered: 'a' } })
+    const feedbackPoster = vi.fn(async () => ({}))
+    const store = makeStore({ streamer, feedbackPoster })
+
+    await store.getState().sendQuestion({ question: 'q1' })
+    // Reach into the turn and back-date its finishedAt to 61s ago.
+    useHelpStoreLike(store, t => ({
+      ...t,
+      queryId:    'q-1',
+      answerId:   'a-1',
+      finishedAt: Date.now() - 61_000,
+    }))
+
+    feedbackPoster.mockClear()
+    await store.getState().sendQuestion({ question: 'q2' })
+
+    // The followUpWithin60s POST should not have fired.
+    const followUpCall = feedbackPoster.mock.calls.find(
+      c => c[0]?.implicit?.followUpWithin60s === true,
+    )
+    expect(followUpCall).toBeUndefined()
+  })
+
+  it('does NOT fire followUpWithin60s when prior turn was an error', async () => {
+    const streamer = vi.fn(async function* () { yield { kind: 'error', error: 'llm_unavailable' } })
+    const feedbackPoster = vi.fn(async () => ({}))
+    const store = makeStore({ streamer, feedbackPoster })
+
+    await store.getState().sendQuestion({ question: 'q1' })
+    expect(store.getState().thread[0].status).toBe(TURN_STATUS.ERROR)
+
+    // Now ask a follow-up — but prior was an error, not done.
+    const streamer2 = vi.fn(async function* () { yield { kind: 'done', rendered: 'b' } })
+    store.setState({ /* swap streamer impossible — we just verify no fire */ })
+
+    feedbackPoster.mockClear()
+    await store.getState().sendQuestion({ question: 'q2' })
+    expect(feedbackPoster).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire followUpWithin60s on the first question (no prior)', async () => {
+    const streamer = vi.fn(async function* () { yield { kind: 'done', rendered: 'a' } })
+    const feedbackPoster = vi.fn(async () => ({}))
+    const store = makeStore({ streamer, feedbackPoster })
+    await store.getState().sendQuestion({ question: 'first' })
+    expect(feedbackPoster).not.toHaveBeenCalled()
+  })
+
+  it('swallows feedbackPoster errors so the new question still proceeds', async () => {
+    const streamer = vi.fn(async function* () { yield { kind: 'done', rendered: 'a' } })
+    const feedbackPoster = vi.fn(async () => { throw new Error('endpoint down') })
+    const store = makeStore({ streamer, feedbackPoster })
+
+    await store.getState().sendQuestion({ question: 'q1' })
+    useHelpStoreLike(store, t => ({ ...t, queryId: 'q-1', answerId: 'a-1' }))
+
+    // Should not throw; should still create the new turn.
+    const newId = await store.getState().sendQuestion({ question: 'q2' })
+    expect(newId).not.toBeNull()
+    expect(store.getState().thread).toHaveLength(2)
+  })
+})
+
+// Tiny helper for the §3.5 tests — patches the LAST turn in the thread
+// with the result of `fn(turn)`. Keeps the test bodies tidy.
+function useHelpStoreLike(store, fn) {
+  store.setState(s => ({
+    thread: s.thread.map((t, i, arr) => (i === arr.length - 1 ? fn(t) : t)),
+  }))
+}
+
 describe('helpStore — clearThread', () => {
   it('empties the thread and aborts any in-flight stream', async () => {
     let aborted = false

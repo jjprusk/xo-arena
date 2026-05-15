@@ -26,6 +26,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link } from 'react-router-dom'
 import { useHelpStore } from '../../store/helpStore.js'
+import HelpFeedback from './HelpFeedback.jsx'
 
 const ERROR_COPY = {
   auth_required:    'Sign in to ask Guide questions.',
@@ -183,6 +184,12 @@ export default function HelpAnswer({ turn, innerRef = null }) {
           (Answered with limited search — embedding service was briefly unavailable.)
         </div>
       )}
+
+      {/* Sprint 3 §3.3 — thumbs + categories + comment. HelpFeedback
+          renders nothing if the turn doesn't have a persisted
+          queryId/answerId yet, so this is safe to mount unconditionally
+          on done turns. */}
+      {status === 'done' && <HelpFeedback turn={turn} />}
     </div>
   )
 }
