@@ -11,6 +11,14 @@ admin_only: false
 
 This page answers the questions new players ask most. If your specific question isn't here, click "Ask Guide anything…" in the Guide drawer or use the 💬 feedback button.
 
+## Getting started
+
+**How do I get started?** Sign up (top-right), click Quick Play on the home page, and follow the Guide drawer's 7-step onboarding journey. The full first-time walkthrough lives in the "Getting started" doc — that's the single best place to start.
+
+**Where do I begin / I'm new, what should I do first?** Same answer — sign up, then Quick Play, then the Guide. About 30 minutes for the full onboarding.
+
+**Do I have to register to use AI Arena?** No — you can browse the Bot Directory, browse Tournaments, watch the bot-vs-bot demo, and spectate public Tables as a guest. You need an account (free, ~15 seconds to create) to play a game yourself, train a bot, or enter a tournament.
+
 ## Account and sign-in
 
 **Do I need to verify my email?** Most of the platform works without verification. Tournament entry requires a verified email; the soft "verify email" banner reminds you. Verification email is sent on signup; you can resend from the banner.

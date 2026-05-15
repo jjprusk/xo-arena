@@ -724,3 +724,43 @@ body {
   .forming-dots span                  { animation: none; opacity: 1; }
   .table-starting .table-center       { animation: none; }
 }
+
+/* Help System — link styling inside answer bodies.
+   linkRewriter strips bold from platform-page mentions and promotes
+   them to Markdown links; this CSS makes those links visually distinct
+   as links (blue underlined + → callout) rather than relying on bold. */
+.help-answer-md a {
+  color: var(--color-blue-600, #2563eb);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.help-answer-md a:hover {
+  text-decoration-thickness: 2px;
+}
+.help-answer-md a::after {
+  content: ' →';
+  display: inline-block;
+  margin-left: 1px;
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0.75;
+}
+/* Tighter list/paragraph spacing in answer bodies — react-markdown's
+   defaults push spaces that look excessive in a narrow drawer. */
+.help-answer-md p { margin: 0 0 0.5rem 0; }
+.help-answer-md p:last-child { margin-bottom: 0; }
+.help-answer-md ul, .help-answer-md ol { margin: 0 0 0.5rem 1.25rem; }
+.help-answer-md li { margin: 0.125rem 0; }
+
+/* Body scroll-lock — when the Guide drawer is open, the main page is
+   greyed out by the backdrop. Locking body scroll prevents two
+   competing scrollbars (panel + main page) which is visually
+   confusing per user feedback (2026-05-14). GuidePanel toggles the
+   `.guide-open` class on `<body>` via a useEffect when panelOpen
+   flips. */
+body.guide-open {
+  overflow: hidden;
+}

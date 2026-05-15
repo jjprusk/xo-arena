@@ -7,8 +7,14 @@ import {
 } from '../promptBuilder.js'
 
 describe('promptBuilder', () => {
-  it('exposes the help.v1 template version', () => {
-    expect(PROMPT_TEMPLATE_VERSION).toBe('help.v1')
+  it('exposes the current template version (help.v3)', () => {
+    // help.v3 (2026-05-14) added rules 4c (greetings) and 4d (open-ended
+    // platform meta-questions) so "hello" and "is this fun?" don't refuse
+    // like rule 4b off-topics. Both new rules have hard length caps + a
+    // no-humor / no-hyperbole constraint. Jailbreak attempts that prefix a
+    // greeting still route to rule 4a. Historical HelpQuery rows from
+    // help.v1/v2 remain replayable against their original templates.
+    expect(PROMPT_TEMPLATE_VERSION).toBe('help.v3')
   })
 
   it('REFUSAL phrases are pinned and frozen', () => {

@@ -403,7 +403,7 @@ describe('ask() — happy path + plumbing', () => {
     expect(data.retrievalScore.c1).toEqual({ fts: 0.3, vector: null, hybrid: 0.5 })
     expect(data.degraded).toBe(true)
     expect(data.degradedReason).toBe('openai embed 503')
-    expect(data.promptTemplate).toBe('help.v1')
+    expect(data.promptTemplate).toBe('help.v3')
     expect(data.modelVersion).toBe('stub:chat')
   })
 
@@ -413,7 +413,7 @@ describe('ask() — happy path + plumbing', () => {
     expect(frames).toEqual([{ kind: 'error', error: 'empty_question' }])
   })
 
-  it('promotes platform terms to Markdown links in the rendered answer (bold preserved)', async () => {
+  it('promotes platform terms to Markdown links in the rendered answer (bold stripped — link is the callout)', async () => {
     const { svc, helpAnswerCreate, searchStub } = await setupAsk({
       chatGenerator: async function* () {
         yield 'Head to the **Gym** and check your **Profile**.'
@@ -422,10 +422,11 @@ describe('ask() — happy path + plumbing', () => {
     const frames = []
     for await (const f of svc.ask({ question: 'q', userId: 'u-1', _search: searchStub })) frames.push(f)
     const done = frames.at(-1)
-    expect(done.rendered).toBe('Head to the **[Gym](/gym)** and check your **[Profile](/profile)**.')
-    // The persisted HelpAnswer.rendered is the linked form.
+    // help.v2 + linkRewriter strip the bold wrapping so the link is the
+    // visual callout (per user feedback 2026-05-14).
+    expect(done.rendered).toBe('Head to the [Gym](/gym) and check your [Profile](/profile).')
     expect(helpAnswerCreate.mock.calls[0][0].data.rendered).toBe(
-      'Head to the **[Gym](/gym)** and check your **[Profile](/profile)**.'
+      'Head to the [Gym](/gym) and check your [Profile](/profile).'
     )
   })
 
