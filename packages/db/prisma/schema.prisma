@@ -1028,11 +1028,17 @@ model HelpAnswer {
   stopReason              String?
   contentFilterTriggered  Boolean        @default(false)
   contentFilterTerms      String[]       @default([])
+  /// Curation review stamps (Sprint 4 §4.2). `reviewedById` is the User.id
+  /// of the HELP_ADMIN who marked this answer reviewed in the curation
+  /// queue. No `@relation` to User — mirrors `HelpDoc.lastEditedById`.
+  reviewedAt              DateTime?
+  reviewedById            String?
   createdAt               DateTime       @default(now())
   query                   HelpQuery      @relation(fields: [queryId], references: [id], onDelete: Cascade)
   feedback                HelpFeedback[]
 
   @@index([queryId])
+  @@index([reviewedAt])
   @@map("help_answers")
 }
 

@@ -240,6 +240,26 @@ export default function HelpFeedback({ turn }) {
                   color:      'var(--text-primary)',
                 }}
               />
+              <button
+                type="button"
+                onClick={onCommentSave}
+                disabled={busy || comment.trim().length === 0}
+                data-testid="comment-save"
+                className="self-end text-[11px] px-2 py-0.5 rounded-md font-medium"
+                style={{
+                  background: comment.trim().length > 0 && !busy
+                    ? 'var(--color-blue-50)'
+                    : 'transparent',
+                  color: comment.trim().length > 0 && !busy
+                    ? 'var(--color-blue-700)'
+                    : 'var(--text-muted)',
+                  border: '1px solid var(--border-default)',
+                  cursor: comment.trim().length > 0 && !busy ? 'pointer' : 'default',
+                  opacity: busy ? 0.6 : 1,
+                }}
+              >
+                Save
+              </button>
             </>
           )}
         </div>

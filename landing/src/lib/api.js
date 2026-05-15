@@ -336,6 +336,28 @@ export const api = {
       updateDoc: (id, body, token)       => request('PUT', `/admin/help/docs/${id}`, body, token),
       archiveDoc: (id, token)            => request('DELETE', `/admin/help/docs/${id}`, null, token),
       reindex:   (docId, token)          => api.post(`/admin/help/reindex${docId ? `?docId=${docId}` : ''}`, {}, token),
+
+      // ── Sprint 4 §4.1 + §4.2 — curation queue ────────────────────────
+      listQueries: (token, opts = {}) => {
+        const p = new URLSearchParams()
+        if (opts.signal)                              p.set('signal',                 opts.signal)
+        if (opts.category)                            p.set('category',               opts.category)
+        if (opts.contentFilterTriggered !== undefined) p.set('contentFilterTriggered', String(opts.contentFilterTriggered))
+        if (opts.unreviewed)                          p.set('unreviewed',             'true')
+        if (opts.since)                               p.set('since',                  opts.since)
+        if (opts.until)                               p.set('until',                  opts.until)
+        if (opts.limit)                               p.set('limit',                  opts.limit)
+        if (opts.offset)                              p.set('offset',                 opts.offset)
+        const qs = p.toString()
+        return api.get(`/admin/help/queries${qs ? `?${qs}` : ''}`, token)
+      },
+      getQuery:   (id, token)        => api.get(`/admin/help/queries/${id}`, token),
+      markReviewed: (answerId, token) =>
+        api.post(`/admin/help/answers/${answerId}/review`, {}, token),
+
+      // §4.3 metrics dashboard
+      getMetrics: (token, days) =>
+        api.get(`/admin/help/metrics${days ? `?days=${days}` : ''}`, token),
     },
   },
 

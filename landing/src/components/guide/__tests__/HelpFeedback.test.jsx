@@ -177,6 +177,32 @@ describe('HelpFeedback — comment input', () => {
     expect(screen.getByTestId('comment-input')).toBeInTheDocument()
   })
 
+  it('Save button is visible and disabled until text is entered', async () => {
+    renderFeedback()
+    await act(async () => { fireEvent.click(screen.getByTestId('thumb-up')) })
+    await act(async () => { fireEvent.click(screen.getByText(/Add a comment/i)) })
+    const btn = screen.getByTestId('comment-save')
+    expect(btn).toBeInTheDocument()
+    expect(btn).toBeDisabled()
+
+    fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'hi' } })
+    expect(btn).not.toBeDisabled()
+  })
+
+  it('clicking Save POSTs the comment', async () => {
+    const submitFeedback = vi.fn(async () => ({}))
+    renderFeedback({}, { submitFeedback })
+    await act(async () => { fireEvent.click(screen.getByTestId('thumb-up')) })
+    await act(async () => { fireEvent.click(screen.getByText(/Add a comment/i)) })
+    submitFeedback.mockClear()
+
+    fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'great answer' } })
+    await act(async () => { fireEvent.click(screen.getByTestId('comment-save')) })
+
+    expect(submitFeedback).toHaveBeenCalledOnce()
+    expect(submitFeedback.mock.calls[0][0]).toMatchObject({ comment: 'great answer' })
+  })
+
   it('blur on the textarea POSTs comment', async () => {
     const submitFeedback = vi.fn(async () => ({}))
     renderFeedback({}, { submitFeedback })

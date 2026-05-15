@@ -22,6 +22,7 @@ import { useJourneyAutoOpen } from '../../lib/useJourneyAutoOpen.js'
 import { useEventStream, reopenSharedStream } from '../../lib/useEventStream.js'
 import { useHeartbeat } from '../../lib/useHeartbeat.js'
 import { AppNav } from '@xo-arena/nav'
+import { filterNavForRoles } from './adminNavConfig.js'
 
 // Kick off the game-xo chunk download immediately on app load — by the time
 // the user navigates to /play the module graph is already compiled and cached.
@@ -135,6 +136,29 @@ export default function AppLayout() {
   const isAdmin = location.pathname.startsWith('/admin')
   const [showSignIn, setShowSignIn] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+
+  // §4.0: lazy-fetch domain roles when the user lands on an admin path,
+  // so the sub-nav can hide links they aren't gated for. Cached for the
+  // AppLayout lifetime; refetched when the BA user id changes.
+  const [domainRoles, setDomainRoles] = useState(null)  // null = not yet loaded
+  useEffect(() => {
+    if (!isAdmin || !user?.id) return
+    if (domainRoles !== null) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = await getToken()
+        if (!token) { if (!cancelled) setDomainRoles([]); return }
+        const { roles } = await api.me.getRoles(token)
+        if (!cancelled) setDomainRoles(Array.isArray(roles) ? roles : [])
+      } catch {
+        if (!cancelled) setDomainRoles([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isAdmin, user?.id, domainRoles])
+  // Reset when identity changes so a fresh sign-in re-fetches.
+  useEffect(() => { setDomainRoles(null) }, [user?.id])
 
   // Mirror of session?.user?.id (the betterAuthId) so the long-lived
   // guide:notification listener — registered once on mount — can filter
@@ -545,9 +569,10 @@ export default function AppLayout() {
       {/* ── Email verify soft banner — non-blocking ──────────── */}
       <EmailVerifyBanner />
 
-      {/* ── Admin sub-nav ────────────────────────────────────── */}
+      {/* ── Admin sub-nav (§4.0: grouped + role-filtered) ─────── */}
       {isAdmin && (
         <nav
+          data-testid="admin-subnav"
           className="flex items-center gap-1 px-4 overflow-x-auto"
           style={{
             backgroundColor: 'var(--bg-surface)',
@@ -555,39 +580,46 @@ export default function AppLayout() {
             minHeight: '38px',
           }}
         >
-          {[
-            { to: '/admin',             label: 'Dashboard'   },
-            { to: '/admin/users',       label: 'Users'       },
-            { to: '/admin/games',       label: 'Games'       },
-            { to: '/admin/tournaments', label: 'Tournaments' },
-            { to: '/admin/ml-models',   label: 'ML Models'   },
-            { to: '/admin/bots',        label: 'Bots'        },
-            { to: '/admin/feedback',    label: 'Feedback'    },
-            { to: '/admin/logs',        label: 'Logs'        },
-            { to: '/admin/health',      label: 'Health'      },
-            // Content group — currently single-item. When more
-            // content-team surfaces ship (curation queue, metrics in
-            // Sprint 4), they go here. Per-role filtering of the rest of
-            // the sub-nav for HELP_ADMIN-only users is a follow-up.
-            { to: '/admin/help',        label: 'Help'        },
-          ].map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/admin'}
-              className={({ isActive }) =>
-                `px-3 py-2 text-xs font-medium whitespace-nowrap no-underline border-b-2 transition-colors ${
-                  isActive
-                    ? 'border-[var(--color-amber-500)]'
-                    : 'border-transparent hover:border-[var(--border-default)]'
-                }`
-              }
-              style={({ isActive }) => ({
-                color: isActive ? 'var(--color-amber-700)' : 'var(--text-secondary)',
-              })}
-            >
-              {label}
-            </NavLink>
+          {filterNavForRoles({
+            isBaAdmin:   user?.role === 'admin',
+            domainRoles: domainRoles ?? [],
+          }).map((section, sectionIdx) => (
+            <React.Fragment key={section.id}>
+              {sectionIdx > 0 && (
+                <span
+                  data-testid={`admin-subnav-divider-${section.id}`}
+                  aria-hidden="true"
+                  className="mx-2 h-4 w-px"
+                  style={{ backgroundColor: 'var(--border-default)' }}
+                />
+              )}
+              <span
+                data-testid={`admin-subnav-label-${section.id}`}
+                className="text-[10px] uppercase tracking-wide font-semibold px-1"
+                style={{ color: 'var(--text-secondary)', opacity: 0.7 }}
+              >
+                {section.label}
+              </span>
+              {section.links.map(({ to, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/admin'}
+                  className={({ isActive }) =>
+                    `px-3 py-2 text-xs font-medium whitespace-nowrap no-underline border-b-2 transition-colors ${
+                      isActive
+                        ? 'border-[var(--color-amber-500)]'
+                        : 'border-transparent hover:border-[var(--border-default)]'
+                    }`
+                  }
+                  style={({ isActive }) => ({
+                    color: isActive ? 'var(--color-amber-700)' : 'var(--text-secondary)',
+                  })}
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </React.Fragment>
           ))}
         </nav>
       )}

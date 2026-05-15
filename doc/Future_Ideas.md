@@ -191,19 +191,23 @@ Today the corpus (onboarding-after-the-journey.md, gym-sessions-tab.md) explicit
 
 ---
 
-## Guide Help Subsystem (Chat Interface)
+## Help System — post-launch enhancements (Sprint 5)
 
-**What:** Wire up the "Ask Guide anything…" input at the bottom of the Guide panel so users can ask natural-language questions and get contextual answers from an LLM.
+**Status:** Sprint 4 closed all v1 scope of the Learnable Help System (corpus + retrieval + admin editor + OpenAI-backed `/help/ask` + Guide drawer UI + feedback + browse pages + curation queue + metrics dashboard). The items below were originally tracked as "Sprint 5+" in `archive/Help_System_Sprint_Tracker.md` and moved here so the tracker stops at v1 scope. Most are data-driven — they want a few weeks of real prod traffic before they pay off.
 
-**Why deferred:** The panel footer placeholder exists but is not connected to any backend. Building it well requires deciding on context injection strategy, conversation persistence, and cost controls.
+**Source of truth for the v1 build:** `archive/Help_System_Sprint_Tracker.md` (closed sprints 1–4). For shipping new data, edit corpus docs via the admin editor at `/admin/help` (HELP_ADMIN gated). Gap-filling candidates surface on the new `/admin/help/metrics` dashboard under "Recent no-source queries".
 
-**What it would take:**
-- **Backend endpoint:** `POST /api/guide/chat` — accepts `{ message, context }` and streams or returns an LLM response. Context should include the user's journey progress, current page, bot name/config, and recent activity so answers are relevant.
-- **Conversation state:** local component state (or `guideStore`) to hold message history for the current session. No persistence needed initially.
-- **UI:** replace the placeholder `div` in `GuidePanel.jsx:153–167` with a real `<textarea>` + send button, and a scrollable message thread above it inside the panel body.
-- **Rate limiting / cost control:** per-user request throttle on the backend to prevent runaway LLM spend.
+**Triage order** (in roughly the order they'd pay off once we have prod data):
 
-**Complexity:** Medium (~2 days). The panel, orb, and store are all wired up — chat is the only missing piece.
+- **Corpus gap-filling from real traffic.** Mine `HelpQuery` (especially the `topNoSourceQueries` rollup from §4.3) for unanswered questions and write gap-filling docs. The "+ Doc" affordances on the curation page + metrics dashboard already seed the editor with the question text — this is editorial work, not new code. Wait until the curation queue has ~2–4 weeks of prod feedback before the first pass.
+- **Reranker (v2).** Train a small ranker over (query, chunk, signal) triples once ~1k feedback rows are available. Deploy as a `HelpReranker` model behind a `SystemConfig` flag so we can A/B against the current hybrid (FTS + cosine) retrieval.
+- **Embedding upgrade.** If `text-embedding-3-small@384` quality plateaus, evaluate BGE-small (same 384 dim — drop-in) or a larger-dim model (requires a `help_chunks.embedding` column-type migration + full reindex). The auto-reindex-on-model-change path from Sprint 2 §2.1 already handles drop-in swaps; the dim change is the only real lift.
+- **Streaming content filter.** Today's filter runs post-stream — if the model emits a banned term mid-answer the UI sees it briefly before the replacement lands. Move filtering to the token-buffer level so banned tokens never reach the wire. Trade-off: filter cost per chunk vs. per response.
+- **LoRA fine-tuning (v3).** Once high-quality Q&A pairs accumulate (target ~5k HELPFUL-graded pairs), fine-tune a small model on the best of them as a vendor-independent fallback. Complementary to the reranker, not a replacement.
+- **Voice input.** Speech-to-text on the Guide chat input. Cheap once the streaming UI is stable; relevant for mobile.
+- **Cross-session help history.** Profile-page view of past Q&A so users can revisit a previous answer. Schema is already there (`HelpQuery.userId` + answers); this is purely UI.
+- **Per-IP rate limit.** Add an IP-keyed limiter alongside the existing per-user limiter from Sprint 2 §2.5, gated on detecting shared-account abuse in the wild. Until that signal appears, the per-user limiter is sufficient.
+- **Auto-redact PII in question text.** Regex scrubber for emails / phone numbers / addresses in the user's question before it goes to OpenAI. Belt-and-suspenders: the existing disclosure ("Don't include personal details") covers the policy side; this would cover the slip.
 
 ---
 
@@ -345,6 +349,18 @@ Trigger on any of:
 # Appendix — Resolved & Obsolete
 
 Entries that were once "future ideas" or open bugs but have since been fixed, superseded, or rendered obsolete. Kept for archaeology — they often explain *why* the current architecture looks the way it does. Newest at top.
+
+## ✅ Guide Help Subsystem (Chat Interface) — shipped 2026-05-15 (Help_System Sprints 1–4)
+
+**Problem (as originally filed):** the "Ask Guide anything…" input at the bottom of the Guide panel was an unconnected placeholder. Wiring it up required deciding on context injection, conversation persistence, and cost controls.
+
+**What shipped:** the full **Learnable Help System** — corpus + retrieval + admin editor + OpenAI-backed Q&A + browse pages + feedback + curation + metrics — over four sprints culminating in `v1.4.0-alpha-5.4` on prod (2026-05-15). The placeholder `div` in `GuidePanel.jsx` is now a real `HelpInput` + streamed `HelpAnswer` thread. The originally-proposed `POST /api/guide/chat` endpoint became `POST /api/v1/help/ask` (SSE-streamed, grounded in the corpus, not a free-form chat). Source of truth: `archive/Help_System_Sprint_Tracker.md` (Sprints 1–4 closed) + `archive/Help_System_Plan.md`.
+
+**Key deltas from the original sketch:**
+- **Architecture:** the actual system is retrieval-augmented (corpus of 43 versioned `HelpDoc` rows + pgvector + FTS hybrid retrieval) rather than free-form chat. Cheaper, deterministic, easier to curate. Conversation persistence was scoped *out* — each turn is independent and grounded in the docs.
+- **Cost controls:** in-process per-user rate limiter (5/min, 50/day) in `helpRateLimit.js`. OpenAI project `aiarena` has a $100/mo hard cap + $10/$25 alerts, $5/mo on the local-dev key.
+- **Surfaces beyond the chat input:** Sprint 3 also shipped public `/help` + `/help/:slug` browse pages, and Sprint 4 shipped the admin curation queue + metrics dashboard so the corpus can be edited and grown from real traffic feedback.
+- **Post-launch follow-ups** live in the "Help System — post-launch enhancements (Sprint 5)" section above (reranker v2, embedding upgrade, streaming filter, gap-filling from prod data, etc.).
 
 ## ✅ Tournament admin UX overhaul — shipped 2026-05-10
 

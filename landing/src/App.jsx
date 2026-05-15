@@ -30,6 +30,8 @@ import LogViewerPage from './pages/admin/LogViewerPage.jsx'
 import GuideMetricsPage from './pages/admin/GuideMetricsPage.jsx'
 import AdminHelpDocsPage from './pages/admin/AdminHelpDocsPage.jsx'
 import AdminHelpDocEditPage from './pages/admin/AdminHelpDocEditPage.jsx'
+import AdminHelpQueriesPage from './pages/admin/AdminHelpQueriesPage.jsx'
+import AdminHelpMetricsPage from './pages/admin/AdminHelpMetricsPage.jsx'
 import RankingsPage from './pages/RankingsPage.jsx'
 import StatsPage from './pages/StatsPage.jsx'
 import BotProfilePage from './pages/BotProfilePage.jsx'
@@ -78,9 +80,11 @@ export default function App() {
               uses AdminLandingRoute so HELP_ADMIN-only users land on their
               section instead of being bounced home. */}
           <Route path="/admin" element={<AdminLandingRoute><AdminDashboard /></AdminLandingRoute>} />
-          <Route path="/admin/help"        element={<HelpAdminRoute><AdminHelpDocsPage /></HelpAdminRoute>} />
-          <Route path="/admin/help/new"    element={<HelpAdminRoute><AdminHelpDocEditPage /></HelpAdminRoute>} />
-          <Route path="/admin/help/:id"    element={<HelpAdminRoute><AdminHelpDocEditPage /></HelpAdminRoute>} />
+          <Route path="/admin/help"         element={<HelpAdminRoute><AdminHelpDocsPage /></HelpAdminRoute>} />
+          <Route path="/admin/help/queries" element={<HelpAdminRoute><AdminHelpQueriesPage /></HelpAdminRoute>} />
+          <Route path="/admin/help/metrics" element={<HelpAdminRoute><AdminHelpMetricsPage /></HelpAdminRoute>} />
+          <Route path="/admin/help/new"     element={<HelpAdminRoute><AdminHelpDocEditPage /></HelpAdminRoute>} />
+          <Route path="/admin/help/:id"     element={<HelpAdminRoute><AdminHelpDocEditPage /></HelpAdminRoute>} />
           <Route path="/admin/tournaments" element={<AdminRoute><AdminTournamentsPage /></AdminRoute>} />
           <Route path="/admin/templates"       element={<AdminRoute><AdminTemplatesPage      /></AdminRoute>} />
           <Route path="/admin/templates/:id"   element={<AdminRoute><AdminTemplateDetailPage /></AdminRoute>} />
