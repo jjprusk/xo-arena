@@ -8,7 +8,8 @@ import app, { registerRoutes } from './app.js'
 import logger from './logger.js'
 import db from './lib/db.js'
 import { runSeed } from '../prisma/seed.js'
-import { seedCorpus as seedHelpCorpus } from './services/help/corpusSeeder.js'
+import { seedCorpus as seedHelpCorpus, reindexAllIfStale as reindexHelpCorpusIfStale } from './services/help/corpusSeeder.js'
+import { startHelpRateLimitSweep } from './middleware/helpRateLimit.js'
 import aiRouter from './routes/ai.js'
 import logsRouter from './routes/logs.js'
 import usersRouter from './routes/users.js'
@@ -22,6 +23,7 @@ import puzzlesRouter from './routes/puzzles.js'
 import adminRouter from './routes/admin.js'
 import adminPerfBaselinesRouter from './routes/adminPerfBaselines.js'
 import helpAdminRouter from './routes/helpAdmin.js'
+import helpRouter from './routes/help.js'
 import botsRouter from './routes/bots.js'
 import botGamesRouter from './routes/botGames.js'
 import feedbackRouter from './routes/feedback.js'
@@ -56,6 +58,7 @@ registerRoutes(app, {
   '/admin/ai': adminAiRouter,
   '/admin/perf': adminPerfBaselinesRouter,
   '/admin/help': helpAdminRouter,
+  '/help':       helpRouter,
   '/games': gamesRouter,
   '/ml': mlRouter,
   '/skills': skillsRouter,
@@ -125,6 +128,20 @@ try {
   logger.warn({ err: err.message }, 'Help corpus seed failed (non-fatal)')
 }
 
+// Auto-reindex if the corpus contains chunks embedded under a different
+// model than the one this process would write. Triggers on the first boot
+// after Sprint 2's stub → OpenAI cutover (all Sprint-1 chunks tagged
+// 'stub') and again on any future embedding-model upgrade. No-op in stub
+// mode (test/offline). See corpusSeeder.reindexAllIfStale for details.
+try {
+  const r = await reindexHelpCorpusIfStale()
+  if (!r.skipped) {
+    logger.info(r, 'Help corpus: auto-reindex complete on boot')
+  }
+} catch (err) {
+  logger.warn({ err: err.message }, 'Help corpus auto-reindex failed (non-fatal — old vectors remain in place)')
+}
+
 // Pre-warm the DB connection pool so first requests don't pay connection cost
 db.$connect().catch((err) => logger.warn('DB pre-connect failed', { err }))
 
@@ -135,6 +152,7 @@ startIdleSessionPurgeJob()
 startDispatcher()
 startExpiredNotificationPruner()
 startMetricsSnapshotCron()
+startHelpRateLimitSweep()
 
 // SSE+POST is the only realtime transport (Realtime_Migration_Plan.md
 // Phase 8). socket.io was removed in this commit.

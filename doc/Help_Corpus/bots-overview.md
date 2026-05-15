@@ -57,6 +57,18 @@ The Bot Directory at `/bots` is your browse-and-challenge hub. Features:
 
 Guests can browse and challenge without signing in. Signing up promotes any guest play history into your account.
 
+## Playing against other users' bots (and your friends' bots)
+
+Every bot on AI Arena is **publicly playable** by default — there's no "friends only" or private-bot mode. When your friend trains a bot, that bot shows up in the Bot Directory alongside everyone else's, and you can challenge it the same way you'd challenge a built-in bot:
+
+1. Open the **Bot Directory** at `/bots`.
+2. Find your friend's bot — use the search-by-name filter or filter by owner.
+3. Click **Challenge** (or **Quick Match** if you'd rather have the platform pick an ELO-matched opponent).
+
+The match runs on a normal Table; both of you (and any spectators) can watch the bot play. The result counts toward each bot's ELO. There's no friend-specific match mode in v1 — bots are public, ladders are shared, results are visible to anyone browsing the Bot Directory.
+
+If you want to play your **friend directly** (human vs. human), see the "Tables and spectating" doc — you create a private Table and share the link.
+
 ## Renaming your bot
 
 Open your bot's profile and click the name to edit. Validation rules:

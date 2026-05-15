@@ -608,6 +608,7 @@ export default function AppLayout() {
         <span>© 2026 AI Arena · callidity.com</span>
         <Link to="/about" className="underline" style={{ color: 'var(--text-secondary)' }}>About</Link>
         <Link to="/faq" className="underline" style={{ color: 'var(--text-secondary)' }}>FAQ</Link>
+        <Link to="/help" className="underline" style={{ color: 'var(--text-secondary)' }}>Help</Link>
       </footer>
 
       <GuidePanel isAdmin={user?.role === 'admin'} />

@@ -1,6 +1,6 @@
 // Copyright © 2026 Joe Pruskowski. All rights reserved.
 import React, { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useGuideStore } from '../../store/guideStore.js'
 import { POST_JOURNEY_SLOTS } from './slotActions.js'
 import NotificationStack from './NotificationStack.jsx'
@@ -8,6 +8,8 @@ import JourneyCard from './JourneyCard.jsx'
 import SlotGrid from './SlotGrid.jsx'
 import SlotPicker from './SlotPicker.jsx'
 import OnlineStrip from './OnlineStrip.jsx'
+import HelpInput from './HelpInput.jsx'
+import HelpThread from './HelpThread.jsx'
 import JourneyCompletePopup from '../ui/JourneyCompletePopup.jsx'
 
 /**
@@ -20,6 +22,7 @@ import JourneyCompletePopup from '../ui/JourneyCompletePopup.jsx'
 
 export default function GuidePanel({ isAdmin = false }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { panelOpen, close, onlineUsers } = useGuideStore()
   const [editMode,            setEditMode]            = useState(false)
   const [pickerOpen,          setPickerOpen]          = useState(false)
@@ -43,6 +46,19 @@ export default function GuidePanel({ isAdmin = false }) {
   useEffect(() => {
     if (panelOpen && panelRef.current) {
       panelRef.current.focus()
+    }
+  }, [panelOpen])
+
+  // Body scroll-lock — when the drawer is open, the main page is greyed
+  // out by the backdrop, but its scrollbar stays interactive otherwise.
+  // Two scrolls (drawer + main page) is confusing; lock body scroll
+  // while the drawer is up. Class-based so reduced-motion / a11y CSS
+  // can override if needed.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (panelOpen) {
+      document.body.classList.add('guide-open')
+      return () => document.body.classList.remove('guide-open')
     }
   }, [panelOpen])
 
@@ -144,34 +160,29 @@ export default function GuidePanel({ isAdmin = false }) {
         {/* Online strip — fixed between notifications and scroll body */}
         <OnlineStrip onlineUsers={onlineUsers} />
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex flex-col gap-5 p-4">
-            <JourneyCard />
-            <SlotGrid
-              editMode={editMode}
-              onAddSlot={() => setPickerOpen(true)}
-              isAdmin={isAdmin}
-              onSlotAction={key => { if (key === 'journey_complete') setJourneyCompleteOpen(true) }}
-            />
-          </div>
+        {/* Pinned primary surface — journey + slot buttons never scroll
+            off the panel. These are the user's main nav inside the
+            drawer, so they're always at hand. */}
+        <div className="shrink-0 flex flex-col gap-5 px-4 pt-4">
+          <JourneyCard />
+          <SlotGrid
+            editMode={editMode}
+            onAddSlot={() => setPickerOpen(true)}
+            isAdmin={isAdmin}
+            onSlotAction={key => { if (key === 'journey_complete') setJourneyCompleteOpen(true) }}
+          />
         </div>
 
-        {/* Chat input footer (placeholder — Phase 4+) */}
-        <div
-          className="shrink-0 px-4 py-3"
-          style={{ borderTop: '1px solid var(--border-default)' }}
-        >
-          <div
-            className="flex items-center gap-2 rounded-full px-3 py-2"
-            style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border-default)' }}
-          >
-            <span style={{ fontSize: 16 }}>🤖</span>
-            <span className="flex-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-              Ask Guide anything…
-            </span>
-          </div>
+        {/* Help thread — the only region inside the panel body that
+            scrolls. Latest answer stays adjacent to the input below
+            it (chat-app convention). Empty thread → just a blank
+            spacer waiting for the first question. */}
+        <div className="flex-1 overflow-y-auto px-4 pt-5 pb-4">
+          <HelpThread />
         </div>
+
+        {/* Help input — wired to /api/v1/help/ask (Sprint 3 §3.1) */}
+        <HelpInput context={{ route: location?.pathname }} />
       </div>
 
       {/* Slot picker overlay */}

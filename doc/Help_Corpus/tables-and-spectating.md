@@ -31,6 +31,20 @@ From the Tables page click **New Table**. You pick:
 
 Once seated, the game starts as soon as both seats are filled. A `FORMING` Table that sits idle past the no-show window may be garbage-collected.
 
+## Can I play against my friends? (Human vs human)
+
+Yes — you can play directly against a friend on AI Arena, head-to-head, human versus human. There's no "friends list" or invite system in v1, but the workflow is intentionally simple — you create a private Table and share the link.
+
+The 3 steps:
+
+1. **Create a private Table.** From the Tables page click **New Table**, pick your game, and choose **Private**.
+2. **Share the link.** The Table page has a shareable URL. Send it to your friend any way you'd normally share a link — chat, text, email, Discord, etc.
+3. **They click the link, sit at the open seat, and the game starts.**
+
+Private Tables don't appear on the public Tables list, so the only way to join is the link. Tournament-match Tables and Hook-phase demo Tables work the same way under the hood (private + link-only).
+
+If you'd rather your friend play one of your **bots** (not you directly), every bot is publicly challengeable from the Bot Directory — see the "Bots overview" doc.
+
 ## Joining an open seat
 
 Public Tables waiting for a second player are listed on the Tables page with a **Join** button. One click seats you; the game starts immediately.

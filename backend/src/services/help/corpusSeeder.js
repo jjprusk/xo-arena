@@ -24,7 +24,7 @@ import { join } from 'node:path'
 import db from '../../lib/db.js'
 import logger from '../../logger.js'
 import { chunk } from './chunker.js'
-import { embedTexts, toPgVectorLiteral } from './embedClient.js'
+import { embedTexts, toPgVectorLiteral, currentEmbedModelVersion } from './embedClient.js'
 
 const DEFAULT_CORPUS_DIR = '/app/doc/Help_Corpus'
 
@@ -72,7 +72,8 @@ async function insertChunks(docId, docVersion, body) {
   const chunks = chunk(body)
   if (chunks.length === 0) return 0
 
-  const embeddings = await embedTexts(chunks.map(c => c.content))
+  const embeddings    = await embedTexts(chunks.map(c => c.content))
+  const embeddingModel = currentEmbedModelVersion()
 
   for (let i = 0; i < chunks.length; i++) {
     const { position, content } = chunks[i]
@@ -81,7 +82,7 @@ async function insertChunks(docId, docVersion, body) {
     // supported — so we do one $executeRaw per row. Tiny corpus, no perf
     // concern in v1.
     await db.$executeRaw`
-      INSERT INTO "help_chunks" ("id", "docId", "position", "content", "embedding", "docVersion", "createdAt")
+      INSERT INTO "help_chunks" ("id", "docId", "position", "content", "embedding", "docVersion", "embeddingModel", "createdAt")
       VALUES (
         gen_random_uuid()::text,
         ${docId},
@@ -89,6 +90,7 @@ async function insertChunks(docId, docVersion, body) {
         ${content},
         ${vec}::vector,
         ${docVersion},
+        ${embeddingModel},
         CURRENT_TIMESTAMP
       )
     `
@@ -120,6 +122,65 @@ export async function reindexAll() {
     results.push(await reindexDoc(id))
   }
   return results
+}
+
+/**
+ * Boot-time auto-reindex: if any help_chunks row was embedded under a
+ * different model than the one the current process would write, reindex
+ * the entire corpus once.
+ *
+ * Triggers in two real situations:
+ *   1. First boot under Sprint 2 after the v1.4.0-alpha-4.x deploy — all
+ *      Sprint-1 chunks have embeddingModel='stub' and the new process
+ *      writes 'text-embedding-3-small@384'.
+ *   2. After a future embedding-model upgrade (e.g. switching to
+ *      text-embedding-3-large@1024) — EMBED_MODEL_VERSION_LIVE changes
+ *      and stale rows trigger a full reindex on the next deploy.
+ *
+ * No-op in stub mode (NODE_ENV=test / VITEST / HELP_EMBED_STUB) so the
+ * test suite never thrashes the corpus.
+ *
+ * Returns { skipped: bool, reason, currentModel, staleCount?, reindexed? }.
+ */
+export async function reindexAllIfStale() {
+  const currentModel = currentEmbedModelVersion()
+
+  // Stub mode never reindexes — we deliberately don't churn the corpus
+  // through fake vectors when the process is in test/offline mode.
+  if (currentModel === 'stub') {
+    return { skipped: true, reason: 'stub-mode', currentModel }
+  }
+
+  const staleCount = await db.helpChunk.count({
+    where: { embeddingModel: { not: currentModel } },
+  })
+
+  if (staleCount === 0) {
+    return { skipped: true, reason: 'no-stale-chunks', currentModel }
+  }
+
+  logger.info(
+    { staleCount, currentModel },
+    'Help corpus: stale embeddings detected — running reindexAll()',
+  )
+  const t0 = Date.now()
+  const results = await reindexAll()
+  const elapsedMs = Date.now() - t0
+  logger.info(
+    {
+      currentModel,
+      docCount:   results.length,
+      chunkCount: results.reduce((s, r) => s + r.chunkCount, 0),
+      elapsedMs,
+    },
+    'Help corpus: reindexAll complete',
+  )
+  return {
+    skipped:    false,
+    currentModel,
+    staleCount,
+    reindexed:  { docCount: results.length, elapsedMs },
+  }
 }
 
 /**

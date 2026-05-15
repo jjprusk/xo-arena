@@ -41,6 +41,8 @@ import GymGuidePage from './pages/GymGuidePage.jsx'
 import PuzzlePage from './pages/PuzzlePage.jsx'
 import TablesPage from './pages/TablesPage.jsx'
 import TableDetailPage from './pages/TableDetailPage.jsx'
+import HelpIndexPage from './pages/HelpIndexPage.jsx'
+import HelpDocPage from './pages/HelpDocPage.jsx'
 
 export default function App() {
   return (
@@ -69,6 +71,8 @@ export default function App() {
           <Route path="/puzzles" element={<PuzzlePage />} />
           <Route path="/tables" element={<TablesPage />} />
           <Route path="/tables/:id" element={<TableDetailPage />} />
+          <Route path="/help" element={<HelpIndexPage />} />
+          <Route path="/help/:slug" element={<HelpDocPage />} />
 
           {/* Admin routes — all guarded by AdminRoute, except /admin which
               uses AdminLandingRoute so HELP_ADMIN-only users land on their

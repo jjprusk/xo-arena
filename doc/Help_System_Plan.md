@@ -1,8 +1,137 @@
 # Learnable Help System — Implementation Plan
 
-**Status:** v1 Draft (Sprint 1 ready)
+**Status:** v1 (Sprint 1 shipped to prod 2026-05-13; Sprint 2 plan revised per ADR-001)
 **Author:** Joe Pruskowski (with Claude)
 **Date:** 2026-05-13
+
+---
+
+## ADR-001 — Managed inference for v1 (2026-05-13, revised single-vendor 2026-05-13)
+
+**Status:** Accepted
+**Decision:** v1 uses **OpenAI as the sole external inference vendor**. Embeddings via `text-embedding-3-small` at 384 dim; chat-completion via `gpt-4o-mini`. The originally planned `xo-llm` Fly app (with bundled MiniLM-L6-v2) is **not** built for v1, and an earlier draft of this ADR that chose Groq + OpenAI was revised after explicit vendor-count weighing.
+
+This supersedes earlier sections of this doc that describe the `xo-llm` proxy + Groq as the v1 implementation. Those sections are retained below for historical context (and as the migration target if/when we revisit) — see §7.1 for the original proxy plan and §7.1a for the architecture actually shipped.
+
+### Context
+
+Sprint 1 shipped the schema, role, corpus seeder, hybrid retrieval, and admin editor with a stub embedding function (deterministic hash-projection, not semantic). Sprint 2 was originally scoped to (a) stand up `xo-llm-staging` + `xo-llm-prod` Fly apps, (b) bundle MiniLM-L6-v2 inside that proxy for embeddings, (c) implement `/help/ask` via the proxy with Groq behind it.
+
+While planning Sprint 2 we first chose a lighter-weight path (direct Groq + OpenAI embeddings). On re-evaluation the **vendor-count** consideration outweighed the chat-latency / cost benefit of Groq, and we consolidated to OpenAI for both endpoints.
+
+### Alternatives considered
+
+**A. `xo-llm` proxy with bundled MiniLM + Groq** (original §7.1 plan)
+- **Pros:** Embedding sovereignty (no SaaS vendor on embed), centralized AI gateway for future features, in-process embed latency (~50 ms).
+- **Cons:** Two new Fly apps to operate, new runtime in the stack (Bun + transformers.js / ONNX), ~80 MB model bundled into image, INTERNAL_SECRET rotation overhead, cold-start tax of 2–5 s after scale-to-zero, ~$5–10/mo infra cost. Also still requires Groq as an external vendor — proxy buys sovereignty over embeddings, not over generation.
+- **Why not:** Operational surface area is large for a v1 feature that hasn't proven user demand. The "centralized AI gateway" argument depends on future LLM features that aren't on the near-term roadmap.
+
+**B. Direct Groq + OpenAI embeddings** (rejected — earlier draft of this ADR briefly chose this)
+- **Pros:** Fastest critical-path TTFT (~500–850 ms; Groq LPU is genuinely fast at ~250 tok/sec). Cheapest per-question (~$0.00004). No new Fly apps.
+- **Cons:** **Two external SaaS vendors** on the critical path. Two API keys, two billing relationships, two SLAs, two consoles, two rate-limit pools.
+- **Why not:** the user's explicit preference (logged 2026-05-13) is to minimize the number of outside-vendor relationships. The dollar savings vs. Option D are immaterial at v1 scale (under $5/mo across all realistic traffic for the next year); the latency advantage is real but not large enough to justify a permanent second vendor.
+
+**C. MiniLM inside the backend process** (rejected)
+- **Pros:** Sovereignty + no new Fly app.
+- **Cons:** ~150 MB extra backend RAM, embedding calls block the Node event loop for 100–200 ms on `shared-cpu-1x` (impacts unrelated request latency under burst), bigger backend image, Node-side transformer runtime is slower than Python/Bun.
+- **Why not:** Worst-of-both: managed-embeddings simplicity is gone, but backend now competes with embedding work for CPU/memory. Only justifies itself at horizontal scale, which v1 won't reach.
+
+**D. OpenAI for both embeddings and chat (chosen)**
+- **Pros:** **Single external vendor** for the Help System (vs two in B, two in A). One API key, one bill, one console, one SLA, one rate-limit pool, one outage to monitor. Schema-compatible (OpenAI `text-embedding-3-small` supports a `dimensions` parameter, set to 384 to match the existing `vector(384)` column without migration). `gpt-4o-mini` is widely regarded as higher quality than llama-3.1-8b-instant on grounded Q&A.
+- **Cons:** Chat is slower than Groq (~600–900 ms TTFT vs ~400 ms) and roughly 5× more expensive per question (~$0.0002 vs ~$0.00004). At v1 scale (≤1K Q/day) the cost delta is dollars per month; the latency delta is detectable in streaming UI but not painful.
+- **Mitigation for embedding outage:** the schema retains the `tsv` (GIN-indexed tsvector) column alongside `vector`, so retrieval can fall back to pure full-text search if OpenAI's embedding endpoint is unavailable. Quality drops; service stays up. A simultaneous chat-completion outage at OpenAI would block `/help/ask` — Groq is documented (in "When to revisit") as the obvious failover.
+
+### Cost projections (Option D — single-vendor OpenAI)
+
+Per-question = ~50 input tokens (embed) + ~500 input tokens (chat: system + 5 retrieved chunks + question) + ~200 output tokens (answer).
+
+- Embed: 50 × $0.02/1M = $0.000001
+- Chat input: 500 × $0.15/1M = $0.000075
+- Chat output: 200 × $0.60/1M = $0.00012
+- **Per question total: ~$0.0002** (chat output dominates)
+
+| Help questions/day | Daily cost | **Monthly cost** |
+|---|---|---|
+| 10 (alpha-private) | $0.002 | **~$0.06** |
+| 100 | $0.02 | **~$0.60** |
+| 1,000 | $0.20 | **~$6** |
+| 10,000 | $2.00 | **~$60** |
+| 100,000 | $20 | **~$600** |
+
+One-time corpus embed (~300 chunks × ~500 tokens): **~$0.003**, runs once.
+
+Pricing as of 2026: OpenAI `text-embedding-3-small` $0.02/1M tokens; OpenAI `gpt-4o-mini` $0.15/1M input + $0.60/1M output. Per-question cost is ~5× Option B (Groq+OpenAI) — at 1K Q/day that's $6/mo vs $1.25/mo — but well inside the budget envelope the project can absorb without re-architecting.
+
+### Latency profile
+
+First-token-after-question on Option D:
+- Question embed via OpenAI: ~200–300 ms
+- Top-5 retrieval (Postgres hybrid SQL): ~20–50 ms
+- OpenAI chat-completions TTFT: ~400–600 ms
+- **Total to first streamed token: ~620–950 ms**
+
+Vs Option B (Groq+OpenAI): ~500–850 ms — Option D is ~120–150 ms slower to first token. Token-streaming rate after first token: OpenAI `gpt-4o-mini` ~100 tok/sec vs Groq llama-3.1-8b ~250 tok/sec — Groq is genuinely snappier on long answers (5 seconds vs 2 seconds for a 500-token response). Acceptable for the Help System UX; not acceptable for, say, real-time game commentary.
+
+### Operational surface
+
+- **No new Fly apps.** Backend gains one outbound HTTPS dependency.
+- **One new secret** per env: `OPENAI_API_KEY` in backend Fly config.
+- **OpenAI spend caps** (set at Project level in the OpenAI console — see ADR-001 §"Spend caps" below).
+- **One graceful-degradation branch** in `helpService.search`: if OpenAI embed fails, return FTS-only results with `degraded=true` logged. If OpenAI chat-completions fails, `/help/ask` returns 502; retrieval still works via `/help/browse` (Sprint 3).
+- **No new monitoring**: existing backend logs/metrics cover the outbound calls. OpenAI's usage dashboard surfaces per-model token consumption.
+
+### Spend caps (OpenAI Project → Limits)
+
+**Project name in the OpenAI console:** `aiarena` (single project, all envs).
+
+**API key naming convention (one per environment, all restricted to Chat completions + Embeddings only):**
+
+| Key | Used by | Stored in |
+|---|---|---|
+| `aiarena-backend-prod` | `xo-backend-prod` Fly app | `flyctl secrets set OPENAI_API_KEY=…` on the prod app |
+| `aiarena-backend-staging` | `xo-backend-staging` Fly app | `flyctl secrets set OPENAI_API_KEY=…` on the staging app |
+| `aiarena-backend-local-<dev-handle>` | Local docker-compose backend | `backend/.env` (gitignored) |
+
+Three separate keys → independent rotation, per-key usage attribution, per-key spend caps.
+
+**Spend caps**, defense-in-depth in case the in-app rate limiter (50/day/user, 5/min/user — §2.5 of tracker) is bypassed:
+
+| Tier | $ / mo | Action |
+|---|---|---|
+| Email alert #1 | $10 | Heads-up that the feature is seeing real use |
+| Email alert #2 | $25 | Pay attention — ~4× expected v1 traffic. Either growth or a bug. |
+| **Hard cap** | **$100** | Block further API calls. Equivalent to ~15K Q/day sustained. Requires human-in-the-loop before lifting. |
+| Local-dev key cap | $5 | Per-key hard cap on `aiarena-backend-local-*`; bounds accidental dev cost. |
+
+Re-baseline the cap quarterly. Bump to $300/$50/$100 if sustained ≥1K Q/day.
+
+### Migration path back to Option B (Groq for chat) — failover or speed-recovery
+
+If OpenAI chat-completions has a multi-hour outage, or if Help UX feels too sluggish in practice:
+
+1. Add `GROQ_API_KEY` to backend Fly secrets + `backend/.env`.
+2. Add a feature flag (`HELP_CHAT_PROVIDER=openai|groq`, default `openai`) to `helpService.ask`. Switching is a single env var change.
+3. Embeddings stay on OpenAI. No corpus re-embed needed.
+
+Estimated effort: half a day, mostly the test surface. The abstraction boundary is `helpService.ask`'s `chatCompletion()` function.
+
+### Migration path back to Option A (full self-hosted `xo-llm`)
+
+If volume sustained crosses the crossover point or a single-vendor outage pattern motivates a second-source policy:
+
+1. Build the `xo-llm` Fly app per the original §7.1 plan.
+2. Swap `embedClient.js`'s OpenAI call for an `xo-llm /embed` POST. Same shape (`Array<string>` → `Array<Vector<384>>`).
+3. Run `um help-reindex` to re-embed the corpus through MiniLM. ~10 min one-time job.
+4. Add `xo-llm /generate` as a third option behind the `HELP_CHAT_PROVIDER` flag.
+
+The schema, retrieval SQL, admin UI, content-filter pipeline, and `helpService.ask` orchestration all stay identical.
+
+### When to revisit
+
+- Help volume sustained >10K questions/day across a calendar month (the $60/mo line) — at that point Groq's 5× cost advantage starts to be visible on the budget.
+- OpenAI experiences >24 hr of degraded service in a quarter — adopt Option B's chat failover.
+- Streaming-UX feedback consistently complains about slow answers — switch to Groq for `/generate`, keep OpenAI for embed.
+- Sprint 3+ adds a second LLM-driven feature (game commentary, bot personality dialog) — at two callers, building the gateway (Option A) starts to amortize.
 
 ---
 
@@ -10,7 +139,7 @@
 
 Replace the placeholder Search/Help slot in the Guide drawer with an **always-available, learnable help system**. Users type a question into the existing footer text box on `GuidePanel.jsx:160-174`; the system retrieves relevant content from a curated corpus using **hybrid retrieval (FTS + semantic embeddings)** from day one, streams a grounded answer from a small LLM, and captures structured feedback so quality improves over time.
 
-The LLM lives behind a thin internal proxy (`xo-llm-*`) so the model can be swapped without touching `helpService`. **For v1 the proxy calls Groq's hosted API** (free tier covers expected traffic, ~1s latency). Self-hosted execution is a one-Dockerfile swap whenever data residency or vendor risk pushes us off Groq.
+**v1 implementation note (per ADR-001 above):** the Help System uses **OpenAI as its sole external inference vendor**. Embeddings are `text-embedding-3-small` at 384 dim; chat-completion is `gpt-4o-mini`. The thin internal proxy (`xo-llm-*`) described later in this doc was the originally planned architecture and is preserved as a documented future option — see §7.1 for the original plan and §7.1a for the architecture actually shipped. Groq is documented as the recommended chat-completion failover (and the speed-upgrade path) but is not used by default. Self-hosted execution remains a future migration path whenever data residency or vendor risk justifies the investment.
 
 **What this doc is:** the architecture, data model, UX, hosting plan, and sprint breakdown for v1. v1 ships hybrid retrieval and a content-filter backstop from day one.
 
@@ -18,7 +147,7 @@ The LLM lives behind a thin internal proxy (`xo-llm-*`) so the model can be swap
 
 ### Non-goals for v1
 
-- Self-hosted model execution. v1 uses Groq behind the swappable proxy; self-hosting is preserved as a near-zero-cost migration path (see §7).
+- Self-hosted model execution. v1 uses OpenAI for both embed and chat (see ADR-001); self-hosting is preserved as a migration path (see §7.4).
 - Voice / audio input.
 - Multi-turn dialog state beyond the current panel session.
 - Personalization beyond the page/journey context already on hand.
@@ -333,16 +462,29 @@ v1 ships hybrid retrieval from day one. FTS catches keyword-shaped questions; ve
 
 ### 6.2 Embedding model choice
 
+**v1 (shipped, per ADR-001):**
+
+| Aspect | Value |
+|---|---|
+| Model | OpenAI `text-embedding-3-small` |
+| Dimension | **384** (set via the `dimensions` parameter — matches our `vector(384)` schema exactly, no migration) |
+| Native dimension of model | 1536 (we down-project at the API; preserves most of the quality) |
+| Inference latency | ~200–300 ms per call (round-trip from `iad` region) |
+| Cost | $0.02 / 1M tokens — ~$0.000001 per question embed at v1 query size |
+| Quality | Strong general-purpose embeddings; outperforms MiniLM-L6 on retrieval benchmarks |
+
+**Originally planned (preserved as a future option, per ADR-001):**
+
 | Aspect | Value |
 |---|---|
 | Model | sentence-transformers/all-MiniLM-L6-v2 |
 | Dimension | 384 |
-| Size on disk | ~80 MB |
+| Size on disk | ~80 MB (bundled in `xo-llm` image) |
 | Inference latency | ~50 ms per text on shared-cpu-1x |
 | Cost | Free (self-hosted in xo-llm) |
-| Quality | "Good enough" tier — suitable for help-corpus scale |
+| Quality | "Good enough" tier |
 
-When/if quality plateaus, the swap path is: upgrade to BGE-small (still 384, better quality, same column) or migrate to a larger dim (1536 OpenAI / 1024 BGE-large) via a column-type migration.
+If/when we re-evaluate (criteria in ADR-001 "When to revisit"), the swap is described in ADR-001 step (2)–(3): change `embedClient.js`, run `um help-reindex`. Schema stays at 384 either way. If a future upgrade wants higher quality at a different dim (e.g., 1536 native OpenAI, 1024 BGE-large), that requires a column-type migration.
 
 ### 6.3 v2 — learned reranker (deferred)
 
@@ -352,7 +494,9 @@ Once `HelpFeedback` accumulates ~1k+ rows of `(query, chunk, signal)` triples, t
 
 ## 7. LLM Hosting
 
-### 7.1 v1 — Groq behind a thin proxy
+### 7.1 Originally planned — Groq behind a thin proxy (NOT BUILT in v1; see ADR-001 + §7.1a)
+
+This was the original v1 plan; it is preserved as a documented future option but **not implemented**. Section 7.1a describes the architecture actually shipped.
 
 ```
 xo-llm-prod / xo-llm-staging      new Fly app, one shared-cpu machine each
@@ -368,30 +512,90 @@ xo-llm-prod / xo-llm-staging      new Fly app, one shared-cpu machine each
 └─ No DB
 ```
 
-### 7.2 Model choice — Llama-3.1-8B-Instant via Groq
+### 7.1a v1 — OpenAI only (shipped, per ADR-001 revised)
+
+```
+backend (existing Fly app — xo-backend-{staging,prod})
+├─ helpService.search(question)
+│  ├─ embedClient.embedText(question)   → POST https://api.openai.com/v1/embeddings
+│  │                                       model='text-embedding-3-small', dimensions=384
+│  │                                       (cached identity-scoped at the query layer in Sprint 3)
+│  ├─ hybrid SQL: tsv + vector cosine    → top-5 HelpChunks
+│  └─ (degraded path: if OpenAI embed fails, run pure tsv query, log warning, mark
+│     HelpQuery.degraded=true so the admin dashboard can surface vendor incidents)
+│
+├─ helpService.ask(question, context)
+│  ├─ helpService.search(question)        → top-5 chunks
+│  ├─ build help.v1 prompt (§7.5)
+│  ├─ POST https://api.openai.com/v1/chat/completions  (SSE stream)
+│  │   model=gpt-4o-mini, max_tokens=400, stream=true
+│  ├─ accumulate stream → content filter (§4)
+│  └─ persist HelpQuery + HelpAnswer
+│
+└─ Env
+   ├─ OPENAI_API_KEY        (in backend Fly secrets, per env — single new secret)
+   ├─ HELP_CHAT_PROVIDER    'openai' (default) | 'groq' | 'xo-llm'
+   │                        Failover lever per ADR-001 migration paths.
+   └─ LLM_MODEL             'gpt-4o-mini'   (logged into HelpQuery.modelVersion)
+```
+
+Single vendor. One outbound HTTPS dependency from the backend container. Outbound egress is negligible (~3 KB/question). No internal `.internal` DNS, no shared INTERNAL_SECRET, no new Fly machines.
+
+### 7.2 Model choice
+
+**v1 (shipped, per ADR-001 revised):**
+
+| Aspect | Value |
+|---|---|
+| Chat model | OpenAI `gpt-4o-mini` |
+| Latency, 200 tok | ~2 s end-to-end (TTFT ~500 ms + ~100 tok/s streaming) |
+| Quality on grounded Q&A | Very good — handles RAG context cleanly, strong "answer only from source" adherence |
+| Cost | $0.15/1M input + $0.60/1M output — ~$0.0002/question (chat output dominates) |
+| Spend caps | $10/$25 alerts, $100/mo hard cap (see ADR-001) |
+
+**Originally planned (preserved as future option / failover):**
 
 | Aspect | Value |
 |---|---|
 | Model | Llama-3.1-8B-Instant (Meta, hosted by Groq) |
-| Latency, 200 tok | ~1s end-to-end including network |
-| Quality on grounded Q&A | Very good — handles RAG context cleanly, follows "answer only from source" |
-| Cost (v1 traffic, ~500 q/day) | $0 (well under Groq's 14,400 req/day free tier) |
-| Cost ceiling (paid tier) | ~$0.05–$0.10 per million tokens — pennies/month even at 10× growth |
+| Latency, 200 tok | ~1 s end-to-end (Groq LPU at ~250 tok/s) |
+| Cost | ~$0.00004/question (5× cheaper than `gpt-4o-mini`) |
+
+Groq remains documented as the chat-completion failover and the speed-recovery path — switching is a single env-var change (`HELP_CHAT_PROVIDER=groq`), no schema or corpus migration needed.
 
 ### 7.3 Hardware
 
-- **shared-cpu-1x** Fly machine, **512 MB RAM** (to hold MiniLM in-process) — ~$3/mo per environment
-- One machine each for staging + prod = ~$6/mo total
-- No GPU. Generation runs on Groq's LPU infrastructure; embeddings run on the proxy's CPU
+**v1 (shipped, per ADR-001):** no dedicated hardware. The existing backend Fly machines (`xo-backend-{staging,prod}`) gain a single outbound HTTPS dependency to OpenAI. Both generation and embedding run on OpenAI's infrastructure. No GPU, no model files, no new machines.
 
-### 7.4 Self-hosting swap path (deferred)
+**Originally planned (preserved as future option):** **shared-cpu-1x** Fly machine, **512 MB RAM** (to hold MiniLM in-process) — ~$3/mo per environment, one machine each for staging + prod = ~$6/mo total.
 
-The proxy boundary is what makes this reversible. When/if data-residency, vendor risk, or scale economics push us off Groq, the swap is:
+### 7.4 Migration paths from v1
 
-1. Replace `xo-llm` Dockerfile to bundle `node-llama-cpp` + a GGUF model (e.g. Qwen2.5-1.5B Q4_K_M)
-2. Re-implement `/generate` to call llama.cpp instead of Groq
-3. Bump the Fly machine to `performance-2x` (4 vCPU, 8 GB) — ~$30/mo per env
-4. `helpService`, prompt template, schema, and feedback loop are all unchanged
+Three distinct migration paths worth tracking separately:
+
+**(a) Add Groq for chat — failover or speed-recovery.** Triggered by an OpenAI chat-completion outage, persistent latency complaints, or to cut chat cost at scale:
+
+1. Add `GROQ_API_KEY` to backend Fly secrets + `backend/.env`.
+2. Set `HELP_CHAT_PROVIDER=groq` (or `gpt-4o-mini`/`groq`/A-B test).
+3. Embeddings stay on OpenAI. No corpus re-embed.
+
+Estimated effort: half a day (mostly tests around the second provider's SSE shape).
+
+**(b) Move embeddings/generation back behind `xo-llm`.** Triggered by sustained >30K Q/day, a multi-vendor incident pattern, or vendor-strategy reasons:
+
+1. Build `xo-llm` per §7.1.
+2. Swap `embedClient.js`'s OpenAI call for `xo-llm /embed`. Same `Array<string>` → `Array<Vector<384>>` contract.
+3. Run `um help-reindex` (re-embed every chunk through MiniLM). ~10 min one-time job.
+4. Add `xo-llm` as a `HELP_CHAT_PROVIDER` option (already a feature flag from path (a) if it's been built).
+
+**(c) Move off all SaaS to self-hosted llama.cpp.** Triggered by data-residency, scale economics, or compliance. Assumes (b) already happened (since `xo-llm` is the container):
+
+1. Replace `xo-llm` Dockerfile to bundle `node-llama-cpp` + a GGUF model (e.g. Qwen2.5-1.5B Q4_K_M).
+2. Re-implement `/generate` to call llama.cpp instead of Groq.
+3. Bump the Fly machine to `performance-2x` (4 vCPU, 8 GB) — ~$30/mo per env.
+4. `helpService`, prompt template, schema, and feedback loop are all unchanged.
+
+In v1 (per ADR-001), the abstraction boundary that makes paths (a)–(b) cheap is `helpService.ask`'s `chatCompletion()` function + `HELP_CHAT_PROVIDER` env switch.
 
 ### 7.5 Prompt template (`help.v1`)
 
