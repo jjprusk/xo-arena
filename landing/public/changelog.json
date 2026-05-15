@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.3",
+    "date": "2026-05-15",
+    "description": "help system batch 3"
+  },
+  {
     "version": "1.4.0-alpha-5.1",
     "date": "2026-05-14",
     "description": "Help System Sprint 3 batch 1 — Guide chat input live (streaming gpt-4o-mini answers, link tracking), prompt help.v3, 10 backlog questions ingested"
