@@ -228,7 +228,7 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 
 - [x] `POST /help/ask` returns 401 with `{ error: 'Authentication required' }` for unauthed (platform-standard 401 shape from `requireAuth` middleware; the spec's `auth_required` literal was aspirational — UI will key off the 401 status, not the body text)
 - [x] CLI bypass: `X-Internal-Secret` header is honored via `requireAuthOrInternalSecret` so `um help-ask` runs through the same code path as the production UI without needing a real user session
-- [ ] Client UI in Sprint 3 will render "Sign in to ask Guide questions" placeholder
+- [x] Client UI renders "Sign in to ask Guide questions." placeholder — `helpSse.js` maps backend 401 → `{ kind: 'error', error: 'auth_required' }`; `HelpAnswer.jsx` `ERROR_COPY.auth_required` renders the placeholder copy; unit-tested in `HelpAnswer.test.jsx` (`auth_required` → /Sign in/i)
 
 ### 2.7 Content filter pipeline integration
 
