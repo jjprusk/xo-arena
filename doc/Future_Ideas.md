@@ -5,57 +5,59 @@ Deferred features and improvements that are worth revisiting but not currently p
 
 ## Known Critical Bugs
 
-### PlayVsBot start-flow — partial fix shipped 2026-05-15; tail-end shaping still open (filed 2026-05-13)
+### PlayVsBot start-flow — cheap wins shipped 2026-05-15; one big architectural lift left (filed 2026-05-13)
 
-**Status — partial fix on prod v1.4.0-alpha-5.5:** the redundant `POST /rt/tables/:slug/join` round-trip that closed the chain pre-fix is gone end-to-end. Measured on prod with `perf/perf-playvsbot.js` (5 warm-anon runs):
+**Status — cheap wins on staging v1.4.0-alpha-5.6:** three of the four originally-filed CTA items are closed (HvB join-trim, server-side gameId cache, honest measurement marker). The fourth — "eager initial-state event" — turned out to be **fictional** and has been struck. Only the full `POST /play/bot` collapse remains.
 
-| Metric | Pre-fix (alpha-4.15, 2026-05-13) | Post-fix (alpha-5.5, 2026-05-15) | Delta |
+**Measured on staging-5.6 via two independent methods:**
+
+| Metric | Pre-fix (alpha-4.15 prod, 2026-05-13) | Now (alpha-5.6 staging) | Delta |
 |---|---:|---:|---:|
-| `tReady` p50 | ~900 ms | **833 ms** | −67 ms (−7%) |
-| `tReady` worst | **1189 ms** | **856 ms** | −333 ms (−28%) |
-| Run spread | 411 ms (778–1189) | **25 ms** (831–856) | spread collapsed |
-| Follow-up join POSTs | 1 × 174 ms | **0** | RTT eliminated |
-| `POST /rt/tables` create | 92 ms | 66 ms | −26 ms |
+| `tReady` p50 (perf-playvsbot.js) | ~900 ms | **849 ms** | −51 ms (−6%) |
+| `tReady` p95 (perf-playvsbot.js) | 1189 ms (worst) | **856 ms** | −333 ms (−28%) |
+| Run spread (perf-playvsbot.js) | 411 ms (778–1189) | **7 ms** (849–856) | spread collapsed |
+| `Ready` p50 desktop (perf-v2 with marker) | bimodal artifact | **910 ms** | honest first measurement |
+| `Ready` p50 mobile warm (perf-v2 with marker) | bimodal artifact | **912 ms** | mobile ≈ desktop here |
+| `Ready` p50 desktop cold-anon (perf-v2) | bimodal artifact | **1297 ms** | cold-JS-chunk overhead |
+| Follow-up join POSTs per landing | 1 × 174 ms | **0** | RTT eliminated |
+| Server `X-Cache` on `/bots?gameId=xo` | (uncacheable) | **HIT** within 60 s window | second visitor warmed |
 
-The biggest user-perceivable win was the **tail**, not the median: the page is now consistently ready in ~830 ms regardless of which side of the SSE-race the prior version landed on. The full 174 ms of join-RTT didn't show up at p50 because some of the join-window overlapped with the SSE state-event pipeline in the old code path.
+The perf-playvsbot harness and perf-v2's marker agree the warm-anon ready time is ~850-910 ms (the ~60 ms gap is the `page.goto('load')` wait perf-v2 includes). No hidden post-create wait. Pre-fix worst-case 1189 ms is dead.
 
-**Trace (warm-anon, prod v1.4.0-alpha-5.5, captured 2026-05-15):**
+**Trace (warm-anon, staging v1.4.0-alpha-5.6, captured 2026-05-15):**
 
 ```
    0ms  navigate
    …    HTML + lazy JS chunk
-  ~Xms  GET /api/v1/bots?gameId=xo     (warm hit via communityBotCache.js)
-  ~Yms  GET /api/token
-  ~Zms  POST /api/v1/rt/tables  (kind=hvb)  ← carries tableId in response now
+   ~    GET /api/v1/bots?gameId=xo     (server X-Cache: HIT within 60s)
+   ~    GET /api/token
+   ~    POST /api/v1/rt/tables  (kind=hvb)  ← carries tableId in response
         applyCreateResultHvb → setPhase('playing') synchronously
- 833ms  board cell rendered (tReady)
+ 849ms  board cell rendered (tReady)
 ```
 
 **What shipped (commits + measurement tooling):**
 
-- `perf(rt): drop redundant follow-up join on HvB table create` — `POST /rt/tables` now surfaces `tableId` directly in the response so `useGameSDK` skips the follow-up `/rt/tables/:slug/join` purely-for-the-id round-trip. One-line server change in `backend/src/routes/realtime.js`, small client change in `landing/src/lib/useGameSDK.js`.
-- `perf/perf-playvsbot.js` — focused Playwright benchmark of the warm-anon `/play?action=vs-community-bot` path. Captures `tReady` + create duration + `joinPOSTs` count + full waterfall for the slowest run. Asserts 0 join POSTs post-fix. Wired into `npm run qa` under the new "Perf" section (local / staging / prod entries).
-- Verified `joinPOSTs = 0` on staging-5.5 (5 runs) and prod-5.5 (5 runs).
+- **`perf(rt): drop redundant follow-up join on HvB table create`** (commit `5105eed`, v1.4.0-alpha-5.5) — `POST /rt/tables` surfaces `tableId` directly; `useGameSDK` no longer issues `/rt/tables/:slug/join` after create. Closes original CTA item from the 6-step chain.
+- **`perf(playvsbot): add [data-perf-ready] marker + teach perf-v2 to prefer it`** (commit `765f3fe`, v1.4.0-alpha-5.6) — `PlayPage.jsx` renders `<span data-perf-ready="play" hidden />` alongside the XOGame mount; `perf-v2.js` races the marker against the legacy `.animate-spin` probe. Closes original CTA item 2. **Confirmed CTA item 4 fictional** — first honest perf-v2 number for this route is 910 ms warm-anon, well below the 1200 ms the bimodal artifact was reporting.
+- **`perf(bots): cache GET /bots?gameId=<x> with 60s TTL`** (commit `9e60e30`, v1.4.0-alpha-5.6) — drops the cache bypass in `bots.js:44-53`; per-gameId cache keys share the existing 60 s TTL; all 8 bot-mutation sites switched to `cache.invalidatePrefix('bots:')`. Closes original CTA item 1. `X-Cache: HIT` confirmed on staging-5.6.
+- **`perf/perf-playvsbot.js`** (commit `2b3c8a2`) — focused Playwright harness. `tReady` + create duration + `joinPOSTs` count + waterfall. Wired into `npm run qa` under the new "Perf" section. Asserts `joinPOSTs === 0` as a regression guard.
 
 **Why this is still open:**
 
-We're at **833 ms p50 on prod** — better than ~900 ms but still well outside the platform's **200 ms desktop / 500 ms mobile** target. The remaining 600+ ms is dominated by serial RTTs the join-trim didn't touch. On mobile + slow networks every 75 ms RTT becomes ~450 ms across the chain, so the structural cost compounds.
+Warm-anon ~850-910 ms is still well outside the platform's **200 ms desktop / 500 ms mobile** target. The remaining ~600 ms is dominated by serial RTTs the cheap wins didn't touch: the JS chunk download, the `GET /api/token` round-trip, and `POST /rt/tables` itself running back-to-back rather than in parallel. The cold-anon mobile number is ~2 s, which is the real first-impression number on phones over LTE.
 
 This route powers the **Journey step 1 (Hook) experience for anon visitors** — first-impression speed matters most here.
 
 ---
 
-**CTA — remaining work, ordered cheapest first (~1–2 dev days for items 1–2; full collapse is 2–3 days):**
+**CTA — one item left:**
 
-1. **Server-side cache for `/api/v1/bots?gameId=xo`** — the `gameId=` branch in `backend/src/routes/bots.js:44-53` explicitly bypasses the existing `BOTS_CACHE_KEY` cache with the comment *"relatively rare query path"* — that's stale, since `getCommunityBot()` is now the hottest caller. Add a per-gameId cache key with 30–60 s TTL. Removes one RTT on cold visitors (HomePage prefetch hides it for warm visitors via `landing/src/lib/communityBotCache.js`). **~30 min.**
+**Collapse `/api/token` + `POST /rt/tables` into `POST /api/v1/play/bot`** — a single endpoint that internally issues the SSE-session token, creates the HvB table, and returns `{ tableId, sseChannel, initialState }` in one round-trip. Saves ~2 more RTTs (~150-200 ms on warm-anon desktop, **~450 ms on slow mobile**, which is where the mobile target is mostly out of reach today). Adds a new client path in `useGameSDK` keyed on `action === 'vs-community-bot'`; the existing multi-step path stays for non-bot flows. **~2 dev days**, real architectural blast radius (touches token issuance + table create + the SSE-session lookup chain). Worth it for the mobile cold-anon number specifically — desktop warm-anon is already close enough to the target that the lift may not be worth it on its own.
 
-2. **Add `[data-perf-ready]` marker to `PlayPage`** + update `perf/perf-v2.js` to prefer per-route ready markers over the bimodal `.animate-spin` detector. This is a *measurement* fix, not a perf fix — but it lets the rebaseline trend doc finally track this route honestly. **~1 hour.**
+**Decision point before doing this:** check Sprint roadmap priorities — if Hook UX is the next sprint focus, ship this; otherwise it's a reasonable backlog item. The cheap wins already brought worst-case latency down 28 % and collapsed variance from 411 ms to 7 ms, which is the biggest perceivable improvement on this route.
 
-3. **Collapse `/api/token` + `POST /rt/tables` into `POST /api/v1/play/bot`** — single endpoint that internally issues the SSE-session token, creates the HvB table, and returns `{ tableId, sseChannel, initialState }` in one round-trip. Saves ~2 more RTTs (~150–200 ms on warm-anon, ~450 ms on slow mobile). Adds a new client path in `useGameSDK` keyed on `action === 'vs-community-bot'`; the multi-step path stays for non-bot flows. **~2 days.**
-
-4. **Eager initial-state event on table-create.** My 2026-05-15 review concluded this is likely fully shipped already (`applyCreateResultHvb` synthesizes a synchronous start event from the create response), and the original 411 ms post-join idle wait in the old trace was a perf-v2 measurement artifact — but item 2 above will confirm or refute this once the honest marker lands.
-
-**Files involved:** `backend/src/routes/bots.js`, `backend/src/routes/realtime.js`, `landing/src/lib/useGameSDK.js`, `landing/src/lib/communityBotCache.js`, `landing/src/pages/PlayPage.jsx`, `perf/perf-v2.js`, `perf/perf-playvsbot.js` (the regression-detection harness — already in place).
+**Files involved (if/when we do it):** `backend/src/routes/realtime.js` (new `/play/bot` handler), `backend/src/services/tableFlowService.js` (`createHvbTable` already returns the right shape, just needs to compose with token issuance), `backend/src/lib/sseSessions.js` (token + session creation path), `landing/src/lib/useGameSDK.js` (new branch), `landing/src/pages/PlayPage.jsx` (route-action wiring). Regression coverage already in place via `perf/perf-playvsbot.js` (`joinPOSTs === 0`) and the new `[data-perf-ready]` marker (`perf-v2.js` Ready column for the `PlayVsBot` route in `doc/Performance_Trend.md`).
 
 ---
 
