@@ -167,7 +167,7 @@ Replaces Sprint 1's deterministic hash-projection stub in `backend/src/services/
 - [x] Add `embedClient.health()` that does a single 1-token embed against OpenAI; returns `{ ok, latencyMs, model, provider, error? }`. Never throws. Used by `/api/v1/admin/health` aggregator (commit `bcd0a87`)
 - [x] Update `embedClient.test.js`: now 22 tests covering happy path, batch-of-100, out-of-order data, API-key missing, 5xx, 429 with/without retry-after, malformed response, dim mismatch, `HELP_EMBED_STUB` override, health success + failure (commit `bcd0a87`)
 - [x] **Corpus re-embed**: migration `20260513200000_help_chunk_embedding_model` adds `help_chunks.embeddingModel`. New `reindexAllIfStale()` runs at boot, detects rows tagged with a different model than the current process would write, and reindexes once. Validated on dev: 554 chunks re-embedded against real OpenAI in ~16 s, tagged `text-embedding-3-small@384` (commit `c039296`)
-- [ ] Fly secret: add `OPENAI_API_KEY` to `xo-backend-staging` and `xo-backend-prod` (manual via `flyctl secrets set` before §2.8 deploy)
+- [x] Fly secret: `OPENAI_API_KEY` deployed on `xo-backend-staging` (digest `f460b5d12a593129`) and `xo-backend-prod` (digest `db8c9aee9acd84e0`) — verified via `flyctl secrets list` 2026-05-15
 
 ### 2.2 Graceful degradation when OpenAI is unreachable — COMPLETE
 
