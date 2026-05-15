@@ -131,7 +131,8 @@ test.describe('Help System — public browse pages (§3.7 / §3.8)', () => {
   test('unknown slug renders a friendly 404 view', async ({ page }) => {
     await page.goto('/help/this-slug-does-not-exist-9999')
     await expect(page.getByText(/Doc not found/i)).toBeVisible({ timeout: 10_000 })
-    // Back link to /help is offered.
-    await expect(page.getByRole('link', { name: /help index/i })).toBeVisible()
+    // Back link to /help is offered (the header "← Help index" link, not
+    // the inline body link).
+    await expect(page.getByRole('link', { name: '← Help index' })).toBeVisible()
   })
 })

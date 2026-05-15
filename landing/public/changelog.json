@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.4",
+    "date": "2026-05-15",
+    "description": "Sprint 3 close + /help footer link"
+  },
+  {
     "version": "1.4.0-alpha-5.3",
     "date": "2026-05-15",
     "description": "help system batch 3"
