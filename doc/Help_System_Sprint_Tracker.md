@@ -353,7 +353,7 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [x] `landing/src/pages/HelpDocPage.jsx` at `/help/:slug` — fetches the single doc, renders body via `react-markdown` + `remark-gfm` using the same `.help-answer-md` styling as the Guide drawer, with a `← Help index` back link. Friendly 404 view + 5xx error view.
 - [x] Routes wired in `landing/src/App.jsx`: `/help` and `/help/:slug` are siblings to the other top-level pages (no auth guard).
 - [x] The "Browse all help →" link from §3.1 HelpInput now routes to a real page instead of 404.
-- [ ] Public-facing nav link (footer? landing nav?) to `/help` — deferred; the Guide drawer's "Browse all help →" link already provides the primary discovery path. A dedicated nav link can land alongside other §4 admin/nav polish.
+- [x] Public-facing nav link to `/help` — `Help` link added to the global footer in `AppLayout.jsx` alongside `About` and `FAQ`. The Guide drawer's "Browse all help →" link remains the primary in-app discovery path; the footer link provides a stable URL-bar-style entry point for visitors who haven't opened the drawer.
 - [x] Tests: 21 — 8 frontend (HelpIndexPage rendering + helpers + loading/empty/error) + 5 frontend (HelpDocPage rendering, 404 view, 5xx error view, back link) + 8 backend (list endpoint guest-allowed + 500; single-doc PUBLISHED returns + status stripped + 404 for missing/DRAFT/ARCHIVED + 400 blank + 500).
 
 ### 3.8 E2E happy path — COMPLETE (spec landed; real-stack run gated by staging deploy)
