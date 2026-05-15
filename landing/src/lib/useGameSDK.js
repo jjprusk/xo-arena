@@ -427,12 +427,11 @@ export function useGameSDK({
           })
           if (cancelled) return
           applyCreateResultHvb(res)
-          // The HTTP response carries slug but not the canonical Table.id;
-          // a follow-up join is idempotent for the creator and yields the id.
-          const joined = await rtFetch(`/rt/tables/${res.slug}/join`, { body: { role: 'player' } })
-            .catch(() => null)
-          if (cancelled) return
-          if (joined?.tableId) setTableId(joined.tableId)
+          // POST /rt/tables now surfaces `tableId` directly (see realtime.js).
+          // The previous follow-up `/rt/tables/:slug/join` existed solely to
+          // discover the id — dropping it saves ~170 ms on warm-anon
+          // vs-community-bot landings (Future_Ideas PlayVsBot start-flow fix).
+          if (res?.tableId) setTableId(res.tableId)
         } else if (tournamentMatchId) {
           // HvH tournament: discover/seat through the match-table endpoint,
           // then complete the join to surface the room shape + tableId.

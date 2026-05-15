@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom'
 import { api } from '../../lib/api.js'
 import { getToken } from '../../lib/getToken.js'
 
@@ -21,9 +21,17 @@ export default function AdminHelpDocEditPage() {
   // The /admin/help/new route doesn't declare :id, so useParams().id is
   // undefined there. Detect new mode from the pathname instead.
   const isNew = location.pathname.endsWith('/admin/help/new') || id === 'new'
+  const [searchParams] = useSearchParams()
+  // §4.1: when launched from the curation queue's "Create doc from this
+  // query" affordance, seed the body field with the question as a
+  // commented-out TODO so the author can see the gap they're filling.
+  const seedQuestion = isNew ? (searchParams.get('seedQuestion') ?? '') : ''
+  const seededBody = seedQuestion
+    ? `<!-- Seeded from curation query: "${seedQuestion}" -->\n\n`
+    : ''
 
   const [form, setForm] = useState({
-    slug: '', title: '', body: '', category: '', tagsText: '', status: 'PUBLISHED',
+    slug: '', title: '', body: seededBody, category: '', tagsText: '', status: 'PUBLISHED',
   })
   const [version, setVersion] = useState(null)   // null when isNew
   const [loading, setLoading] = useState(!isNew)

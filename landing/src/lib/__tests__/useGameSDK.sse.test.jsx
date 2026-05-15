@@ -93,16 +93,17 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
   })
 
   it('POSTs /rt/tables {kind:"hvb"} when botUserId is provided', async () => {
-    rtFetchMock
-      .mockResolvedValueOnce({
-        slug: 'hvb1', label: 'A vs Bot', mark: 'X',
-        action: 'created', board: Array(9).fill(null), currentTurn: 'X',
-      })
-      .mockResolvedValueOnce({ tableId: 'tbl_h', mark: 'X', action: 'host_reattach' })
+    // POST /rt/tables now surfaces `tableId` directly — the previous
+    // follow-up `/rt/tables/:slug/join` was solely there to discover it
+    // and has been removed. The test pins both halves of that change.
+    rtFetchMock.mockResolvedValueOnce({
+      slug: 'hvb1', tableId: 'tbl_h', label: 'A vs Bot', mark: 'X',
+      action: 'created', board: Array(9).fill(null), currentTurn: 'X',
+    })
 
     // Phase 3.8.5.2 — picker payload is identity-scoped; the hook never
     // forwards a botSkillId, even if a caller (legacy) tries to pass one.
-    renderHook(() =>
+    const { result } = renderHook(() =>
       useGameSDK({ gameId: 'xo', botUserId: 'bot_1', currentUser: { id: 'u1' } }),
     )
 
@@ -114,6 +115,18 @@ describe('useGameSDK SSE+POST gameflow branch', () => {
     // Confirm the legacy field is gone from the request payload.
     const hvbCall = rtFetchMock.mock.calls.find(c => c[0] === '/rt/tables' && c[1]?.body?.kind === 'hvb')
     expect(hvbCall[1].body).not.toHaveProperty('botSkillId')
+
+    // Session is populated from the create response alone (session.tableId
+    // exposes the slug — the canonical Table.id is plumbed internally for
+    // the SSE channel filter from `res.tableId`).
+    await waitFor(() => expect(result.current.session?.tableId).toBe('hvb1'))
+
+    // The previous follow-up `/rt/tables/:slug/join` POST is GONE — the
+    // create response now carries `tableId` directly so the client doesn't
+    // need a second RTT to discover it. This saves ~170 ms on warm-anon
+    // vs-community-bot landings (Future_Ideas PlayVsBot start-flow fix).
+    const joinCalls = rtFetchMock.mock.calls.filter(c => /^\/rt\/tables\/.+\/join$/.test(c[0]))
+    expect(joinCalls).toHaveLength(0)
   })
 
   it('SDK.submitMove POSTs to /rt/tables/:slug/move when on the SSE transport', async () => {

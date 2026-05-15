@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.4.0-alpha-5.5",
+    "date": "2026-05-15",
+    "description": "Sprint 4 close + HvB join-chain trim"
+  },
+  {
     "version": "1.4.0-alpha-5.4",
     "date": "2026-05-15",
     "description": "Sprint 3 close + /help footer link"
