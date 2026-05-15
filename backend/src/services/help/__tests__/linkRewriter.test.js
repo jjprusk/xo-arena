@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { rewriteLinks, LINK_MAP } from '../linkRewriter.js'
 
 describe('linkRewriter', () => {
-  it('rewrites a single bold term — bold preserved, link added inside', () => {
+  it('rewrites a single bold term — bold STRIPPED, link is the callout', () => {
     const out = rewriteLinks('Head to the **Gym** to train.')
-    expect(out).toBe('Head to the **[Gym](/gym)** to train.')
+    expect(out).toBe('Head to the [Gym](/gym) to train.')
   })
 
-  it('rewrites all known terms in a single pass', () => {
+  it('rewrites all known bold terms in a single pass (bolds stripped)', () => {
     const input = 'From the **Gym** or your **Profile**, open the **Bot Directory** and visit **Settings**.'
     const out = rewriteLinks(input)
-    expect(out).toBe('From the **[Gym](/gym)** or your **[Profile](/profile)**, open the **[Bot Directory](/bots)** and visit **[Settings](/settings)**.')
+    expect(out).toBe('From the [Gym](/gym) or your [Profile](/profile), open the [Bot Directory](/bots) and visit [Settings](/settings).')
   })
 
   // Case-insensitive matching was removed (one-pass approach is case
@@ -20,14 +20,15 @@ describe('linkRewriter', () => {
     expect(out).toBe('she walked into the gym today')
   })
 
-  it('links the inner term inside a longer bold span', () => {
-    // Bold is preserved; the platform term gets a link.
+  it('links the inner term inside a longer bold span (wider bold stays)', () => {
+    // The wider phrase is bold; only `Gym` is a link target. We can't
+    // strip the bold (it spans more than the term), so it stays.
     const out = rewriteLinks('My **Custom Gym** has bots.')
     expect(out).toBe('My **Custom [Gym](/gym)** has bots.')
   })
 
-  it('links the inner term inside a bold step heading', () => {
-    // Realistic LLM-style heading.
+  it('links the inner term inside a bold step heading (wider bold stays)', () => {
+    // Realistic LLM-style heading — bold wraps the whole line.
     const out = rewriteLinks('1. **Open the Gym**: train your bots.')
     expect(out).toBe('1. **Open the [Gym](/gym)**: train your bots.')
   })
@@ -61,26 +62,33 @@ describe('linkRewriter', () => {
     // "Bot Directory" appears in LINK_MAP before "Bots", so we should NOT
     // see "**Bot** Directory" being half-rewritten.
     const out = rewriteLinks('Open the **Bot Directory** to browse.')
-    expect(out).toBe('Open the **[Bot Directory](/bots)** to browse.')
+    expect(out).toBe('Open the [Bot Directory](/bots) to browse.')
   })
 
   it('leaves fenced code blocks untouched', () => {
     const input = '```\nclick **Gym** to play\n```\nThen visit **Gym**.'
     const out = rewriteLinks(input)
-    // Inside the fence: unchanged. Outside: rewritten.
-    expect(out).toBe('```\nclick **Gym** to play\n```\nThen visit **[Gym](/gym)**.')
+    // Inside the fence: unchanged. Outside: rewritten with bold stripped.
+    expect(out).toBe('```\nclick **Gym** to play\n```\nThen visit [Gym](/gym).')
   })
 
   it('is idempotent on already-linked output', () => {
     const once = rewriteLinks('Open the **Gym**.')
     const twice = rewriteLinks(once)
     expect(twice).toBe(once)
-    expect(twice).toBe('Open the **[Gym](/gym)**.')
+    expect(twice).toBe('Open the [Gym](/gym).')
   })
 
   it('handles plural terms registered in LINK_MAP (Bots, Tables, Rankings)', () => {
     const out = rewriteLinks('See **Bots**, **Tables**, **Rankings**.')
-    expect(out).toBe('See **[Bots](/bots)**, **[Tables](/tables)**, **[Rankings](/rankings)**.')
+    expect(out).toBe('See [Bots](/bots), [Tables](/tables), [Rankings](/rankings).')
+  })
+
+  it('new LINK_MAP entries (Cup, Tournament, Quick Bot, Play) link correctly', () => {
+    expect(rewriteLinks('Join a **Cup**.')).toBe('Join a [Cup](/tournaments).')
+    expect(rewriteLinks('Enter a **Tournament**.')).toBe('Enter a [Tournament](/tournaments).')
+    expect(rewriteLinks('Train a **Quick Bot**.')).toBe('Train a [Quick Bot](/bots).')
+    expect(rewriteLinks('Click **Play** to begin.')).toBe('Click [Play](/play) to begin.')
   })
 
   it('returns input untouched when no terms present', () => {
@@ -107,8 +115,8 @@ describe('linkRewriter', () => {
     expect(out).toContain('[Profile](/profile)')
     expect(out).toContain('[Gym](/gym)')
     expect(out).toContain('[Bot Directory](/bots)')
-    // Bold wrapping is preserved (it's now `**[Tables](/tables)**`).
-    expect(out).toContain('**[Tables](/tables)**')
+    // Bold wrapping is stripped — link is the callout.
+    expect(out).not.toContain('**[Tables](/tables)**')
   })
 
   it('helpful "AI Arena Gym" exception remains intact even with bold', () => {

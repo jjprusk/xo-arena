@@ -79,6 +79,21 @@ const QUERY_ALIASES = [
   // documents "not yet playable" status for this and other planned games.
   { match: /\bconnect ?4\b/gi,   add: 'connect four future games planned not available yet' },
   { match: /\bconnect-?four\b/gi, add: 'connect four future games planned not available yet' },
+  // Algorithm shorthand — "mc" is commonly used for Monte Carlo, "q" for
+  // Q-learning, "rl" for reinforcement learning.
+  { match: /\bmc\b/gi,           add: 'monte carlo algorithm' },
+  { match: /\bdqn\b/gi,          add: 'deep q network algorithm' },
+  { match: /\brl\b/gi,           add: 'reinforcement learning' },
+  // Legacy brand name — XO Arena is the prior name of AI Arena. Users who
+  // remember the old branding should land on the same overview docs.
+  { match: /\bxo\s*arena\b/gi,   add: 'AI Arena platform overview' },
+  // Onboarding queries — "how do I get started / begin / start" tends to
+  // semantically match procedural tournament docs more strongly than the
+  // dedicated getting-started doc. Aliasing toward the canonical
+  // onboarding vocabulary pulls retrieval toward the right surface.
+  { match: /\b(get|getting)\s*started\b/gi, add: 'first time new user welcome onboarding tutorial walkthrough quick play guide drawer' },
+  { match: /\bwhere\s*do\s*i\s*(begin|start)\b/gi, add: 'first time new user welcome onboarding' },
+  { match: /\bhow\s*do\s*i\s*begin\b/gi, add: 'first time new user welcome onboarding' },
   // Add new aliases here as retrieval misses surface.
 ]
 

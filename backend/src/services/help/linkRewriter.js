@@ -32,9 +32,15 @@
 
 export const LINK_MAP = {
   // Order matters: multi-word terms first so they match before substring
-  // single-word terms (e.g., "Bot Directory" should rewrite before "Bots").
+  // single-word terms (e.g., "Bot Directory" should rewrite before "Bots",
+  // "Quick Bots" before "Bots", "Tournaments" before "Tournament").
   'Bot Directory': '/bots',
+  'Quick Bots':    '/bots',
+  'Quick Bot':     '/bots',
   'Tournaments':   '/tournaments',
+  'Tournament':    '/tournaments',
+  'Cups':          '/tournaments',
+  'Cup':           '/tournaments',
   'Rankings':      '/rankings',
   'Tables':        '/tables',
   'Stats':         '/stats',
@@ -43,6 +49,7 @@ export const LINK_MAP = {
   'Puzzles':       '/puzzles',
   'Gym':           '/gym',
   'Spar':          '/play?action=vs-community-bot',
+  'Play':          '/play',
   'Bots':          '/bots',
   'FAQ':           '/faq',
 }
@@ -77,6 +84,26 @@ const TERMS_PATTERN = Object.keys(LINK_MAP)
 // Case-sensitive on purpose. The corpus and the LLM both use canonical
 // capitalisation; rewriting lowercase "gym" in casual prose would be
 // over-eager (consider "she walked into the gym" — not navigation).
+//
+// Two passes:
+//   1. BOLD_TERM_RE matches `**Term**` (exact wrapping, whitespace-tolerant)
+//      and replaces with `[Term](/route)`, stripping the bold. Per user
+//      feedback (2026-05-14): links should look like links, not bold-
+//      plus-link — the `→` callout + colour in HelpAnswer's CSS makes
+//      the link obvious without bold.
+//   2. TERM_RE matches the term as a standalone word. After pass 1, any
+//      remaining `**...Term...**` is a wider bold (e.g., `**Open the
+//      Gym**`); pass 2 links the inner term while leaving the bold
+//      intact — graceful degradation of the user's "every bold is a
+//      link" goal.
+//
+// Lookarounds intentionally do NOT exclude `*` so pass 2 can still link
+// `Gym` inside `**Open the Gym**`. Already-linked text is excluded via
+// `[` and `](`.
+const BOLD_TERM_RE = new RegExp(
+  `\\*\\*\\s*(${TERMS_PATTERN})\\s*\\*\\*`,
+  'g',
+)
 const TERM_RE = new RegExp(
   `(?<![\\w\\[])(?<!AI Arena )(${TERMS_PATTERN})(?![\\w]|\\]\\()`,
   'g',
@@ -97,10 +124,10 @@ function pathForTerm(matchedAsWritten) {
  * Rewrites platform-term mentions into Markdown links.
  *
  *   `Gym`         → `[Gym](/gym)`
- *   `**Gym**`     → `**[Gym](/gym)**`            (bold preserved)
- *   `**Open the Gym**` → `**Open the [Gym](/gym)**`
- *   `AI Arena Gym`     → unchanged                (brand phrase)
- *   `[Gym](/gym)`      → unchanged                (already a link)
+ *   `**Gym**`     → `[Gym](/gym)`                 (bold stripped — link is the callout)
+ *   `**Open the Gym**` → `**Open the [Gym](/gym)**`  (wider bold stays; inner term linked)
+ *   `AI Arena Gym`     → unchanged                 (brand phrase)
+ *   `[Gym](/gym)`      → unchanged                 (already a link)
  *   inside code fences → unchanged
  *
  * Idempotent on already-linked output.
@@ -116,6 +143,16 @@ export function rewriteLinks(markdown) {
   const parts = markdown.split(/(```[\s\S]*?```)/g)
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) continue  // inside a fence — leave alone
+
+    // Pass 1: `**Term**` → `[Term](/route)`, stripping the bold wrap.
+    parts[i] = parts[i].replace(BOLD_TERM_RE, (_match, inner) => {
+      const hit = pathForTerm(inner)
+      return hit ? `[${hit.canon}](${hit.path})` : `**${inner}**`
+    })
+
+    // Pass 2: standalone `Term` → `[Term](/route)`. The TERM_RE
+    // lookarounds exclude `[` (already-linked) and `*` (inside bold) so
+    // this pass won't double-link the output of pass 1.
     parts[i] = parts[i].replace(TERM_RE, (match) => {
       const hit = pathForTerm(match)
       return hit ? `[${hit.canon}](${hit.path})` : match

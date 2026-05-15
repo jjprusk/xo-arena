@@ -1,6 +1,6 @@
 # Learnable Help System — Sprint Tracker
 
-**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); **Sprint 2 deployed to staging as v1.4.0-alpha-5.0 (2026-05-14)**. §2.1–§2.7 all done. §2.8: vendor groundwork done (OpenAI project + 3 keys + staging Fly secret + spend caps); auto-reindex verified on staging (569/569 chunks re-tagged `text-embedding-3-small@384`); `embedClient.health()` returns ok on staging. The remaining §2.8 items (end-to-end manual smoke, outage simulations, Admin Health UI tile) are **deferred to the Sprint 3 acceptance pass** — they all benefit from running against the real chat-input UI (Sprint 3 §3.1) rather than curl, so we'd re-do the work otherwise. Prod (§2.8 OPENAI_API_KEY on `xo-backend-prod`) sets at /promote.
+**Status:** Sprint 1 complete on `prod` (v1.4.0-alpha-4.15); **Sprint 2 deployed to staging as v1.4.0-alpha-5.0 (2026-05-14)**. **Sprint 3 in progress on `dev`** — §3.1 (HelpInput), §3.2 (HelpThread + HelpAnswer with link tracking), §3.4 (helpStore + helpSse) all complete with 32 + 29 tests green; live in the local Guide drawer. Prompt bumped to `help.v3` (added rule 4c for greetings, rule 4d for open-ended platform meta; both with hard length caps + jailbreak adversarial pins). 10/10 user-supplied backlog questions ingested and verified against real `gpt-4o-mini`. §3.3 (feedback UX), §3.5 (implicit signals), §3.6 (`/help/feedback` endpoint), §3.7 (browse pages), §3.8 (E2E) remain. §2.8 acceptance items (manual smoke, outage simulations, Admin Health UI) carry over and close naturally once the Sprint 3 chat UI lands on staging. Prod (`OPENAI_API_KEY` on `xo-backend-prod`) was set during the Sprint 2 work; `/promote` will pick it up.
 **Last updated:** 2026-05-14
 **Companion to:** `Help_System_Plan.md`
 
@@ -279,20 +279,30 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 
 **Estimated effort:** ~1.5 dev weeks.
 
-### 3.1 Guide drawer help input
+### 3.1 Guide drawer help input — COMPLETE
 
-- [ ] Replace placeholder div on `GuidePanel.jsx:160-174` with `HelpInput.jsx`
-- [ ] Enter submits; Shift+Enter newline; growable textarea (max ~4 rows)
-- [ ] Disabled state when streaming a response (one in flight at a time per panel)
-- [ ] Small grey-text disclosure below input: "Questions are processed by our AI service. Don't include personal details."
-- [ ] "Browse all help →" link below the disclosure, routes to `/help`
+- [x] Replaced placeholder div on `GuidePanel.jsx:160-174` with `HelpInput.jsx`. GuidePanel now also passes `context={{ route: location.pathname }}` so the prompt sees where the question was asked from.
+- [x] Enter submits; Shift+Enter inserts a newline; growable textarea auto-sized 1 → 4 rows (line-break-based row count); scrolls past 4 rows. Ask button mirrors the submit path so trackpad-only users have a click target.
+- [x] Disabled state when `helpStore.inFlightTurnId` is set (one in flight at a time per panel; defensive — the store also rejects overlapping sends). Placeholder switches to "Thinking…" while disabled.
+- [x] Small grey-text disclosure below the input: "Questions are processed by our AI service. Don't include personal details."
+- [x] "Browse all help →" link below the disclosure, routes to `/help` (Sprint 3 §3.7 lands the page; the link is wired now).
+- [x] Caps input at 1000 chars (matches backend zod limit). Tests: 7 — Enter submit, Shift+Enter newline, Ask button gating, disabled-while-in-flight, whitespace-only no-op, 1000-char cap, disclosure + browse link present.
 
-### 3.2 Help thread + answer
+### 3.2 Help thread + answer — COMPLETE
 
-- [ ] `HelpThread.jsx` — renders above `JourneyCard`/`SlotGrid` in the panel; stacks multiple Q&A turns
-- [ ] `HelpAnswer.jsx` — renders streaming Markdown (markdown-it or react-markdown), shows "Thinking…" pre-first-token, streams tokens as they arrive
-- [ ] All inline links in rendered Markdown wrapped with a tracker that POSTs to `/api/v1/help/feedback` with `implicit.docLinkClicked = true`
-- [ ] "See full doc →" affordance when the top chunk is from a single doc
+- [x] `HelpThread.jsx` — reads `thread` from `helpStore`; renders one `HelpAnswer` per turn; empty thread → renders nothing (additive on top of the existing journey/slots surface). Mounted above `JourneyCard` inside the GuidePanel scroll body.
+- [x] `HelpAnswer.jsx` — renders the question + the answer per turn status:
+  - `pending` → "Thinking…" placeholder
+  - `streaming` → live Markdown of `partial` plus a blinking ▍ caret
+  - `done` → Markdown of `rendered` (the post-content-filter + link-rewriter text)
+  - `error` → friendly inline copy mapped from `error` code (rate_limited / llm_unavailable / aborted / interrupted / network / invalid_request / incomplete_stream / auth_required / internal). `rate_limited` differentiates app-level (short retryAfter → "wait a bit") vs provider-level (long retryAfter → "rate-limited by the AI service") with a tiny heuristic.
+- [x] `react-markdown` + `remark-gfm` for rendering (matches existing FAQ/Gym Markdown surfaces). The `<a>` component is replaced with a `TrackedLink` that:
+  - For internal paths (`/foo`): renders react-router `<Link>` so navigation stays in-SPA.
+  - For external URLs (`http(s)://`): renders plain `<a target="_blank" rel="noopener noreferrer">`.
+  - Both fire `helpStore.submitFeedback({ implicit: { docLinkClicked: true, href } })` on click — fire-and-forget; errors are swallowed so the click-through still navigates. Until §3.6 lands, the POST fails harmlessly; once §3.6 ships, the implicit feedback loop activates automatically.
+- [x] Degraded-mode footnote on `done` turns when `degraded === true` (FTS-fallback retrieval): "(Answered with limited search — embedding service was briefly unavailable.)"
+- [→ later in Sprint 3] "See full doc →" affordance — needs the backend done frame to surface `topChunkSlug` (currently it carries `answerId`/`queryId`/`rendered` but no source-doc id). Smallest follow-up: 3-line plumb of the highest-scored chunk's `docId` → slug → into the done frame. Filed as a follow-up commit; non-blocking for §3.2 acceptance.
+- [x] Tests: 22 — 20 for HelpAnswer (status rendering for pending/streaming/done, all 8 error codes including the two rate_limited shapes, internal vs external link routing, fire-and-forget click + error swallowing) + 2 for HelpThread (empty render, ordered multi-turn render). 405/405 across the full landing suite green.
 
 ### 3.3 Feedback UX
 
@@ -306,12 +316,14 @@ The schema retains the `tsv` (GIN-indexed) column from Sprint 1, which makes pur
 - [ ] Re-tapping the same thumb is no-op
 - [ ] Tests: render with no prior state, render with prior HELPFUL state, render with prior NOT_HELPFUL state + category + comment; flip flows clear correctly
 
-### 3.4 `helpStore` (zustand)
+### 3.4 `helpStore` (zustand) — COMPLETE
 
-- [ ] Holds current thread (array of `{ query, answer, queryId, answerId, status }`)
-- [ ] Persists thread to `sessionStorage` per browser session (cleared on new session)
-- [ ] Actions: `sendQuestion`, `submitFeedback`, `clearThread`
-- [ ] Tests: store actions; sessionStorage round-trip
+- [x] `landing/src/store/helpStore.js` — zustand store; thread is an array of `{ id, question, status, partial, rendered, queryId, answerId, contentFilterTriggered, degraded, latencyMs, error, retryAfter, startedAt, finishedAt }`. `status` is one of `pending / streaming / done / error`.
+- [x] Persists `thread` only (via `partialize`) to `sessionStorage` (zustand `persist` middleware + `createJSONStorage(() => sessionStorage)`). One in-flight turn at a time, guarded by `inFlightTurnId`.
+- [x] Rehydration demotes any persisted non-terminal turn to `status='error', error='interrupted'` — a stream from a prior page lifetime can't resume.
+- [x] Actions: `sendQuestion({ question, context, token })`, `cancelInFlight()`, `submitFeedback({ queryId, answerId, signal, category, comment, implicit, token })`, `clearThread()`. Test seam: `createHelpStoreImpl({ streamer, feedbackPoster })` constructs an unpersisted store with injectable deps.
+- [x] Companion: `landing/src/lib/helpSse.js` — async-generator client for `POST /help/ask`, normalises SSE frames + HTTP errors (401 → `auth_required`; 429 → `rate_limited` with retryAfter; 5xx → `http_<status>`; network → `network`; abort → `aborted`). 16 unit tests pin the transport.
+- [x] Tests: 32 tests total — 16 helpSse (happy path, split-chunk SSE parsing, all terminal frames, HTTP errors, guards) + 16 helpStore (pending → streaming → done, error frames, concurrency guard, cancel-in-flight, clearThread, submitFeedback delegation, rehydrate revival). 376/376 across the full landing suite still green.
 
 ### 3.5 Implicit signals
 
