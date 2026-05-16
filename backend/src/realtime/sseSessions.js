@@ -119,6 +119,38 @@ export function get(sessionId) {
   return _sessions.get(sessionId) || null
 }
 
+/**
+ * Pre-allocation upgrade — attach the live SSE response + onDispose to a
+ * session that was registered earlier with `res: null`. Used by the SSE
+ * handler when the client supplies `?sseSession=<id>` claiming a session
+ * pre-allocated by `POST /api/v1/play/bot`. Returns `true` on a successful
+ * claim and `false` if the session id is unknown or already claimed.
+ *
+ * Preserves `joinedTables` set by the pre-allocator so the disconnect-forfeit
+ * handler still sees the table membership when the SSE later closes.
+ */
+export function attachRes(sessionId, { res, onDispose = null, userId = undefined } = {}) {
+  const entry = _sessions.get(sessionId)
+  if (!entry) return false
+  if (entry.res)  return false   // already claimed
+  entry.res = res
+  entry.lastSeenAt = Date.now()
+  if (userId !== undefined && userId !== entry.userId) {
+    _removeFromUserIndex(sessionId, entry.userId)
+    entry.userId = userId
+    _addToUserIndex(sessionId, userId)
+  }
+  if (onDispose) _onDispose.set(sessionId, onDispose)
+  // Fresh connection for this user — cancel any pending disposal that may
+  // have been queued by a prior reconnect race.
+  if (entry.userId && _pendingDispose.has(entry.userId)) {
+    const { timerId } = _pendingDispose.get(entry.userId)
+    clearTimeout(timerId)
+    _pendingDispose.delete(entry.userId)
+  }
+  return true
+}
+
 export function forUser(userId) {
   const set = _byUser.get(userId)
   if (!set) return []

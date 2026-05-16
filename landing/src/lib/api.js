@@ -97,6 +97,20 @@ export const api = {
     putNotifPref:     (eventType, body, token) => request('PUT', `/users/notification-preferences/${eventType}`, body, token),
   },
 
+  play: {
+    /**
+     * One-shot HvB start (Future_Ideas PlayVsBot CTA item 3).
+     *
+     * Bundles the community-bot resolution, SSE session pre-allocation and
+     * HvB table create into a single POST. The response carries everything
+     * needed to render the opening board immediately — no SSE bootstrap on
+     * the perf-ready critical path. The shared EventSource opens in
+     * parallel using `?sseSession=<id>` to claim the pre-allocated session.
+     */
+    startBot: ({ gameId = 'xo', botUserId } = {}) =>
+      api.post('/play/bot', { gameId, ...(botUserId ? { botUserId } : {}) }),
+  },
+
   guide: {
     getPreferences:   (token)       => api.get('/guide/preferences', token),
     patchPreferences: (body, token) => api.patch('/guide/preferences', body, token),

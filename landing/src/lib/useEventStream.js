@@ -49,6 +49,25 @@ let _es = null
 const _callers = new Set()
 const _listeners = new Map()
 
+// Pre-allocated SSE session id staged by `POST /api/v1/play/bot` before this
+// singleton opens its connection. When set, openStream() includes it via
+// `?sseSession=<id>` so the server's events handler claims it via attachRes()
+// instead of minting a fresh one. Cleared after the next openStream call —
+// claim is a one-shot per stream open. (Future_Ideas PlayVsBot CTA item 3.)
+let _pendingClaimSessionId = null
+
+/**
+ * Stage an SSE session id to be claimed by the next openStream() call. Used
+ * by the PlayPage vs-community-bot bootstrap when the server pre-allocated a
+ * session inside POST /play/bot. No-op if a stream is already open (the id
+ * already-claimed-or-minted on that connection wins).
+ */
+export function claimSseSession(sessionId) {
+  if (_es) return        // existing connection already has a session
+  if (typeof sessionId !== 'string' || !sessionId) return
+  _pendingClaimSessionId = sessionId
+}
+
 function dispatchToCallers(eventType, payload, eventId) {
   for (const c of _callers) {
     if (c.channels.length === 0) {
@@ -104,6 +123,11 @@ function openStream() {
   const params = new URLSearchParams()
   const lastId = loadLastId()
   if (lastId) params.set('lastEventId', lastId)
+  // One-shot pre-allocated session claim — see claimSseSession() above.
+  if (_pendingClaimSessionId) {
+    params.set('sseSession', _pendingClaimSessionId)
+    _pendingClaimSessionId = null
+  }
 
   const url = `/api/v1/events/stream${params.toString() ? `?${params}` : ''}`
   console.info('[useEventStream] opening shared SSE:', url)
