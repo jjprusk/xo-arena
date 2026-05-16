@@ -11,6 +11,7 @@ import { ListTable, ListTh, ListTr, ListTd } from '../components/ui/ListTable.js
 import BotCreatedPopup from '../components/ui/BotCreatedPopup.jsx'
 import AddSkillModal from '../components/ui/AddSkillModal.jsx'
 import QuickBotWizard from '../components/guide/QuickBotWizard.jsx'
+import TrainingJournalTab from '../components/research/TrainingJournalTab.jsx'
 import { GAMES } from '../lib/gameRegistry.js'
 
 const BOT_MODEL_LABELS = {
@@ -83,6 +84,7 @@ export default function ProfilePage() {
     profile: false, stats: true, credits: true, merits: true,
     bots: searchParams.get('action') === 'create-bot' || searchParams.get('section') === 'bots',
     recurring: searchParams.get('section') === 'recurring',
+    journal: searchParams.get('section') === 'journal',
     danger: false,
   }))
   const toggle = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
@@ -1096,6 +1098,15 @@ export default function ProfilePage() {
             </ListTable>
           )}
         </div>
+      </AccordionSection>
+
+      {/* Training Journal — Sprint 2 of doc/Research_Log_Plan.md §3 */}
+      <AccordionSection
+        title="Training Journal"
+        open={openSections.journal}
+        onToggle={() => toggle('journal')}
+      >
+        <TrainingJournalTab />
       </AccordionSection>
 
       {/* Danger Zone — hidden for admins */}

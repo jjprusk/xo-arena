@@ -48,6 +48,7 @@ const dbEntry = {
 }
 const dbHelpDoc   = { deleteMany: vi.fn() }
 const dbHelpChunk = { deleteMany: vi.fn() }
+const dbUser = { findUnique: vi.fn(), update: vi.fn() }
 vi.mock('../../lib/db.js', () => ({
   default: {
     trainingSession:     dbTrainingSession,
@@ -55,6 +56,7 @@ vi.mock('../../lib/db.js', () => ({
     researchLogEntry:    dbEntry,
     helpDoc:             dbHelpDoc,
     helpChunk:           dbHelpChunk,
+    user:                dbUser,
   },
 }))
 
@@ -690,6 +692,84 @@ describe('GET /research/export.md', () => {
   it('rejects unauthenticated callers (401)', async () => {
     isGuest = true
     const res = await request(makeApp()).get('/api/v1/research/export.md')
+    expect(res.status).toBe(401)
+  })
+})
+
+// ── shareNotesWithGuide preference (Sprint 2 §2.4) ────────────────────────
+
+describe('GET /research/preferences', () => {
+  it('returns shareNotesWithGuide=false when the key is absent', async () => {
+    dbUser.findUnique.mockResolvedValue({ preferences: {} })
+    const res = await request(makeApp()).get('/api/v1/research/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ shareNotesWithGuide: false })
+  })
+
+  it('returns the stored boolean when present', async () => {
+    dbUser.findUnique.mockResolvedValue({ preferences: { shareNotesWithGuide: true } })
+    const res = await request(makeApp()).get('/api/v1/research/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.shareNotesWithGuide).toBe(true)
+  })
+
+  it('handles a null preferences blob gracefully', async () => {
+    dbUser.findUnique.mockResolvedValue({ preferences: null })
+    const res = await request(makeApp()).get('/api/v1/research/preferences')
+    expect(res.status).toBe(200)
+    expect(res.body.shareNotesWithGuide).toBe(false)
+  })
+
+  it('returns 404 when the user record is missing', async () => {
+    dbUser.findUnique.mockResolvedValue(null)
+    const res = await request(makeApp()).get('/api/v1/research/preferences')
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('PATCH /research/preferences', () => {
+  it('flips the key from false → true and preserves other prefs', async () => {
+    dbUser.findUnique.mockResolvedValue({
+      preferences: { emailAchievements: true, shareNotesWithGuide: false },
+    })
+    dbUser.update.mockResolvedValue({})
+    const res = await request(makeApp())
+      .patch('/api/v1/research/preferences')
+      .send({ shareNotesWithGuide: true })
+    expect(res.status).toBe(200)
+    expect(res.body.shareNotesWithGuide).toBe(true)
+    const data = dbUser.update.mock.calls[0][0].data
+    expect(data.preferences).toEqual({
+      emailAchievements:   true,
+      shareNotesWithGuide: true,
+    })
+  })
+
+  it('seeds the key when the blob was previously empty', async () => {
+    dbUser.findUnique.mockResolvedValue({ preferences: {} })
+    dbUser.update.mockResolvedValue({})
+    const res = await request(makeApp())
+      .patch('/api/v1/research/preferences')
+      .send({ shareNotesWithGuide: true })
+    expect(res.status).toBe(200)
+    expect(dbUser.update.mock.calls[0][0].data.preferences)
+      .toEqual({ shareNotesWithGuide: true })
+  })
+
+  it('rejects non-boolean values (400)', async () => {
+    const res = await request(makeApp())
+      .patch('/api/v1/research/preferences')
+      .send({ shareNotesWithGuide: 'yes' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_body')
+    expect(dbUser.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects unauthenticated callers (401)', async () => {
+    isGuest = true
+    const res = await request(makeApp())
+      .patch('/api/v1/research/preferences')
+      .send({ shareNotesWithGuide: true })
     expect(res.status).toBe(401)
   })
 })

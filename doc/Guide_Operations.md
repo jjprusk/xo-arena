@@ -265,6 +265,80 @@ Re-enable by upserting `value: true` (or deleting the row, since the default is 
 
 **Verification:** open DevTools → Application → Service Workers on a tab you know had the SW registered; within 30s of flipping `sw.enabled=false`, the SW should disappear and `caches.keys()` in the console should return `[]`.
 
+### 5.9 Research-Log community publishing toggle
+
+The Profile-page Training Journal lets users publish their own notes and
+research-log entries to a shared community lane (see
+`doc/Research_Log_Plan.md` Sprint 2). The publish surface is gated by a
+SystemConfig key — when the row is absent the flag is **OFF** and every
+publish/unpublish endpoint returns `503 { error: 'publish_disabled' }`
+without touching the DB. Flipping is a one-row upsert, no redeploy
+required.
+
+**Default state is OFF.** Ship the feature dark, watch metrics + abuse
+reports for a few days, then flip ON. The frontend modal handles 503 by
+rendering "Community publishing is currently disabled."
+
+**To enable community publishing:**
+
+```sh
+docker compose exec -T backend node --experimental-transform-types --no-warnings -e "
+  import('./src/lib/db.js').then(async ({ default: db }) => {
+    await db.systemConfig.upsert({
+      where:  { key: 'researchLog.publishEnabled' },
+      create: { key: 'researchLog.publishEnabled', value: { enabled: true } },
+      update: { value: { enabled: true } },
+    })
+    console.log('researchLog.publishEnabled = true')
+    await db.\$disconnect()
+  })
+"
+```
+
+The `isPublishEnabled` helper accepts any of `value: true`,
+`value: 'true'`, or `value: { enabled: true }` — pick whichever feels
+clearest. The `{ enabled: <bool> }` shape leaves room for adjacent
+sub-flags later without a key rename.
+
+**To disable (emergency stop):**
+
+```sh
+docker compose exec -T backend node --experimental-transform-types --no-warnings -e "
+  import('./src/lib/db.js').then(async ({ default: db }) => {
+    await db.systemConfig.upsert({
+      where:  { key: 'researchLog.publishEnabled' },
+      create: { key: 'researchLog.publishEnabled', value: { enabled: false } },
+      update: { value: { enabled: false } },
+    })
+    console.log('researchLog.publishEnabled = false')
+    await db.\$disconnect()
+  })
+"
+```
+
+Disabling does **not** retroactively unpublish anything — existing
+`HelpDoc` rows with `source = 'community-note'` stay in place and remain
+visible to the Sprint 3 retrieval mixer. To purge the community lane,
+delete those rows directly:
+
+```sh
+docker compose exec -T backend node --experimental-transform-types --no-warnings -e "
+  import('./src/lib/db.js').then(async ({ default: db }) => {
+    const docs = await db.helpDoc.findMany({ where: { source: 'community-note' }, select: { id: true } })
+    if (docs.length === 0) { console.log('nothing to purge'); return await db.\$disconnect() }
+    await db.helpChunk.deleteMany({ where: { docId: { in: docs.map(d => d.id) } } })
+    await db.helpDoc.deleteMany({ where: { id: { in: docs.map(d => d.id) } } })
+    console.log('purged ' + docs.length + ' community docs + their chunks')
+    await db.\$disconnect()
+  })
+"
+```
+
+**Per-user rate limit:** 50 publishes/user/rolling-7-days, enforced in
+`backend/src/middleware/researchPublishRateLimit.js`. Unpublish is not
+rate-limited. The 429 response carries
+`{ error: 'rate_limited', scope: 'week', retryAfter, limit }`.
+
 ---
 
 ## 6. References

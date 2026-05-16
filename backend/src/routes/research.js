@@ -387,6 +387,61 @@ function sendPublishError(res, err, ctx) {
   return res.status(500).json({ error: 'internal_error' })
 }
 
+// ── Research-Log preferences (Sprint 2 §2.4 / task #160) ──────────────────
+//
+// shareNotesWithGuide controls whether the user's own private + published
+// notes flow into the Sprint 3 retrieval mixer's private-notes lane. Stored
+// as a key inside the existing User.preferences Json column — no schema
+// change. Absent key === default OFF.
+
+const SHARE_PREF_KEY = 'shareNotesWithGuide'
+
+const PreferencesPatchSchema = z.object({
+  shareNotesWithGuide: z.boolean(),
+})
+
+router.get('/preferences', requireAuth, async (req, res) => {
+  try {
+    const user = await db.user.findUnique({
+      where:  { id: req.auth.userId },
+      select: { preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'user_not_found' })
+    const prefs = (user.preferences && typeof user.preferences === 'object') ? user.preferences : {}
+    return res.json({
+      shareNotesWithGuide: prefs[SHARE_PREF_KEY] === true,
+    })
+  } catch (err) {
+    logger.error({ err: err.message, userId: req.auth.userId }, 'research.prefs.get failed')
+    return res.status(500).json({ error: 'internal_error' })
+  }
+})
+
+router.patch('/preferences', requireAuth, async (req, res) => {
+  const parsed = PreferencesPatchSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'invalid_body', detail: parsed.error.issues })
+  }
+  try {
+    const user = await db.user.findUnique({
+      where:  { id: req.auth.userId },
+      select: { preferences: true },
+    })
+    if (!user) return res.status(404).json({ error: 'user_not_found' })
+    const current = (user.preferences && typeof user.preferences === 'object')
+      ? user.preferences : {}
+    const next = { ...current, [SHARE_PREF_KEY]: parsed.data.shareNotesWithGuide }
+    await db.user.update({
+      where: { id: req.auth.userId },
+      data:  { preferences: next },
+    })
+    return res.json({ shareNotesWithGuide: parsed.data.shareNotesWithGuide })
+  } catch (err) {
+    logger.error({ err: err.message, userId: req.auth.userId }, 'research.prefs.patch failed')
+    return res.status(500).json({ error: 'internal_error' })
+  }
+})
+
 // ── Community feed + export (Sprint 2 §3 steps 5–6) ───────────────────────
 
 const CommunityQuerySchema = z.object({

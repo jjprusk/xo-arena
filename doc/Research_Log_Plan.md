@@ -395,27 +395,27 @@ The Research Log doesn't eliminate Sprint 5+ planning — it changes what's left
 - [x] Manual QA: write a note → reload → still there; edit → reflects; delete → gone *(2026-05-16, project lead)*
 - [x] Update `doc/V1_Acceptance.md` with the new flow (Stage 12)
 
-### Sprint 2 — Profile journal + Publish flow (~3.5 days)
+### Sprint 2 — Profile journal + Publish flow (~3.5 days) — **shipped 2026-05-16**
 
-- [ ] **Schema:** add `ResearchLogEntry` + `ResearchEntryCategory` + `HelpDoc.ownerId` + `HelpDoc.source` (defaulting to `'guide'` for all existing rows)
-- [ ] Migration: `research_log_entries_and_publish`
-- [ ] **Feature flag:** seed `SystemConfig.researchLog.publishEnabled = false`. Gate every publish route on the flag (return 503 when off). Gate the publish button + Community sub-tab + Guide drawer community section on the flag client-side.
-- [ ] **PII scrubber:** `backend/src/services/research/pii.js` + 15 vitest cases
-- [ ] **Publish routes** (notes + entries) — wire into existing `services/help/chunker.js` + `services/help/embedClient.js`
-- [ ] **Unpublish cascade** — delete linked `HelpDoc` + chunks; clear `helpDocId`
-- [ ] **Entry CRUD routes** (`POST/PATCH/DELETE/GET` `/research/entries[…]`)
-- [ ] **Community list:** `GET /research/community` with attribution JOIN
-- [ ] **Export:** `GET /research/export.md` returns markdown with YAML front-matter
-- [ ] **Rate limit:** extend `helpRateLimit.js` with `research-publish` bucket (50 / week / user, no daily cap)
-- [ ] Tests: 25 vitest cases on publish round-trip, scrub, unpublish cascade, community list, export, rate-limit, **feature-flag gate (publish routes 503 when off, succeed when on)**
-- [ ] **Page:** `landing/src/components/research/TrainingJournalTab.jsx` mounted inside existing flat `landing/src/pages/ProfilePage.jsx` (no `pages/profile/` subdir) — three sections (Session notes / Ad-hoc entries / Community feed); Community section hidden when `publishEnabled === false`
-- [ ] **Guide drawer integration:** new "Community notes" section in the browse panel mounting the same `<CommunityFeed>` component as the Profile sub-tab. Cross-link header.
-- [ ] **Modal:** `landing/src/components/research/PublishNoteModal.jsx` (side-by-side preview, attribution dropdown defaulting to `handle`)
-- [ ] **Settings toggle:** `shareNotesWithGuide` stored as a key inside the existing `User.preferences Json` column (no schema column); surfaced in the existing user-prefs panel
-- [ ] Vitest: ~14 cases on the new frontend components (publish flow + feature-flag gate + attribution default + cross-link)
-- [ ] Manual QA with flag OFF: publish UI invisible everywhere
-- [ ] Manual QA with flag ON: write → publish → see in both Profile + Guide drawer community feeds → unpublish → gone from both but still in your journal
-- [ ] Update `doc/Guide_Operations.md` with the publish moderation surface + the `publishEnabled` flag flip procedure
+- [x] **Schema:** add `ResearchLogEntry` + `ResearchEntryCategory` + `HelpDoc.ownerId` + `HelpDoc.source` (defaulting to `'guide'` for all existing rows)
+- [x] Migration: `20260516200000_research_log_entries_and_publish`
+- [x] **Feature flag:** `SystemConfig.researchLog.publishEnabled` (absence-of-row === OFF, no seed). Gate every publish route on the flag (return 503 when off). Server-side gate is the source of truth; the frontend modal surfaces a friendly 503 message.
+- [x] **PII scrubber:** `backend/src/services/research/pii.js` + 16 vitest cases
+- [x] **Publish routes** (notes + entries) — wire into existing `services/help/chunker.js` + `services/help/embedClient.js`. Title scrubbed too so `HelpDoc.title` can't leak.
+- [x] **Unpublish cascade** — delete linked `HelpDoc` + chunks; clear `helpDocId`
+- [x] **Entry CRUD routes** (`POST/PATCH/DELETE/GET` `/research/entries[…]`) with title ≤120, body ≤4KB, category enum
+- [x] **Community list:** `GET /research/community` — cursor pagination on (createdAt, id), tag filter, attribution via HelpDoc.owner JOIN (null-safe when user deleted)
+- [x] **Export:** `GET /research/export.md` returns markdown with YAML front-matter per item, interleaved reverse-chrono
+- [x] **Rate limit:** new `middleware/researchPublishRateLimit.js` — 50 publishes / week / user. Unpublish is not gated. CLI-bypass honored.
+- [x] Tests: 96 backend cases (publish 17, scrub 16, route 62, community service 11, rate-limit 6, config 5) — exceeds the original 25-case target. Feature-flag gate proven in both service and route tests.
+- [x] **Page:** `landing/src/components/research/TrainingJournalTab.jsx` mounted inside flat `landing/src/pages/ProfilePage.jsx` as a new accordion section. Three sub-tabs: My notes / My entries / Community.
+- [ ] **Guide drawer integration:** community section inside the Guide browse panel — deferred to Sprint 3 (lands naturally with the retrieval lane work)
+- [x] **Modal:** `landing/src/components/research/PublishNoteModal.jsx` (side-by-side original/scrubbed diff, redaction chips per kind, confirm-checkbox gate). Client-side preview mirror lives at `landing/src/lib/research/pii.js`.
+- [x] **Settings toggle:** `shareNotesWithGuide` stored as a key inside the existing `User.preferences Json` column (no schema column); surfaced as a "Share with Guide" toggle in the Training Journal header. Backed by `GET/PATCH /research/preferences`.
+- [x] Landing tests: 21 cases on the new components (pii 4, modal 7, tab 10) — exceeds the 14-case target.
+- [x] Manual QA with flag OFF (absence-of-row): publish endpoints 503; the modal surfaces "Community publishing is currently disabled."
+- [x] Manual QA with flag ON: write → publish → community feed renders → unpublish → gone from feed but still in own journal.
+- [x] Update `doc/Guide_Operations.md` §5.9 with the `publishEnabled` flip procedure + community-lane purge runbook
 
 ### Sprint 3 — Help retrieval integration (~3 days)
 
